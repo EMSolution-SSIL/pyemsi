@@ -6,18 +6,13 @@ import os
 import unittest
 import tempfile
 
-try:
-    from vtk import vtkUnstructuredGrid
-    VTK_AVAILABLE = True
-except ImportError:
-    VTK_AVAILABLE = False
+from vtk import vtkMultiBlockDataSet
 
-from pyemsi.femap_to_vtu import FEMAPToVTUConverter, FEMAP_TO_VTK, convert_femap_to_vtu
+from pyemsi.femap_to_vtm import FEMAPToVTMConverter, FEMAP_TO_VTK, convert_femap_to_vtm
 
 
-@unittest.skipIf(not VTK_AVAILABLE, "VTK not available")
-class TestFEMAPToVTUConverter(unittest.TestCase):
-    """Test cases for FEMAPToVTUConverter class."""
+class TestFEMAPToVTMConverter(unittest.TestCase):
+    """Test cases for FEMAPToVTMConverter class."""
 
     def setUp(self):
         """Set up test fixtures path."""
@@ -27,13 +22,13 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
 
     def test_converter_initialization(self):
         """Test converter initialization."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         self.assertEqual(converter.femap_filepath, self.simple_mesh)
         self.assertIsNotNone(converter.parser)
 
     def test_parse_femap(self):
         """Test FEMAP file parsing through converter."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
 
         self.assertEqual(len(converter.nodes), 8)
@@ -43,7 +38,7 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
 
     def test_validate_success(self):
         """Test validation with valid data."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
         messages = converter.validate()
 
@@ -53,7 +48,7 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
 
     def test_validate_missing_nodes(self):
         """Test validation catches missing nodes."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
 
         # Remove a node that's referenced by an element
@@ -64,38 +59,43 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
         self.assertGreater(len(errors), 0)
         self.assertTrue(any("missing node" in m for m in errors))
 
-    def test_build_unstructured_grid(self):
-        """Test VTK unstructured grid building."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+    def test_build_multiblock_by_property(self):
+        """Test VTK multiblock dataset building."""
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
-        ug = converter.build_unstructured_grid()
+        mb = converter.build_multiblock_by_property()
 
-        self.assertIsInstance(ug, vtkUnstructuredGrid)
-        self.assertEqual(ug.GetNumberOfPoints(), 8)
-        self.assertEqual(ug.GetNumberOfCells(), 1)
+        self.assertIsInstance(mb, vtkMultiBlockDataSet)
+        self.assertGreater(mb.GetNumberOfBlocks(), 0)
 
-    def test_cell_data_addition(self):
-        """Test adding cell data arrays."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        # Check first block
+        block0 = mb.GetBlock(0)
+        self.assertEqual(block0.GetNumberOfPoints(), 8)
+        self.assertEqual(block0.GetNumberOfCells(), 1)
+
+    def test_cell_data_in_blocks(self):
+        """Test cell data arrays in multiblock dataset."""
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
-        ug = converter.build_unstructured_grid()
-        converter.add_cell_data(ug)
+        mb = converter.build_multiblock_by_property()
 
-        cell_data = ug.GetCellData()
+        # Check first block has cell data
+        block0 = mb.GetBlock(0)
+        cell_data = block0.GetCellData()
         self.assertIsNotNone(cell_data.GetArray("ElementID"))
         self.assertIsNotNone(cell_data.GetArray("PropertyID"))
         self.assertIsNotNone(cell_data.GetArray("MaterialID"))
         self.assertIsNotNone(cell_data.GetArray("TopologyID"))
 
-    def test_write_vtu(self):
-        """Test writing VTU file."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+    def test_write_vtm(self):
+        """Test writing VTM file."""
+        converter = FEMAPToVTMConverter(self.simple_mesh)
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtu') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
             output_file = f.name
 
         try:
-            converter.write_vtu(output_file)
+            converter.write_vtm(output_file)
             self.assertTrue(os.path.exists(output_file))
             self.assertGreater(os.path.getsize(output_file), 0)
         finally:
@@ -104,13 +104,17 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
 
     def test_mixed_elements_conversion(self):
         """Test conversion of mesh with mixed element types."""
-        converter = FEMAPToVTUConverter(self.mixed_mesh)
+        converter = FEMAPToVTMConverter(self.mixed_mesh)
         converter.parse_femap()
-        ug = converter.build_unstructured_grid()
+        mb = converter.build_multiblock_by_property()
 
-        # Should have 3 elements
-        self.assertEqual(ug.GetNumberOfCells(), 3)
-        self.assertEqual(ug.GetNumberOfPoints(), 8)
+        # Should have at least one block
+        self.assertGreater(mb.GetNumberOfBlocks(), 0)
+
+        # Count total cells across all blocks
+        total_cells = sum(mb.GetBlock(i).GetNumberOfCells()
+                         for i in range(mb.GetNumberOfBlocks()))
+        self.assertEqual(total_cells, 3)
 
     def test_topology_mapping(self):
         """Test FEMAP to VTK topology mapping."""
@@ -127,11 +131,11 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
 
     def test_convenience_function(self):
         """Test the convenience conversion function."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtu') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
             output_file = f.name
 
         try:
-            convert_femap_to_vtu(self.simple_mesh, output_file)
+            convert_femap_to_vtm(self.simple_mesh, output_file)
             self.assertTrue(os.path.exists(output_file))
             self.assertGreater(os.path.getsize(output_file), 0)
         finally:
@@ -140,27 +144,30 @@ class TestFEMAPToVTUConverter(unittest.TestCase):
 
     def test_cell_data_values(self):
         """Test that cell data values are correct."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
-        ug = converter.build_unstructured_grid()
-        converter.add_cell_data(ug)
+        mb = converter.build_multiblock_by_property()
 
-        elem_ids = ug.GetCellData().GetArray("ElementID")
-        prop_ids = ug.GetCellData().GetArray("PropertyID")
-        mat_ids = ug.GetCellData().GetArray("MaterialID")
+        # Get first block
+        block0 = mb.GetBlock(0)
+        elem_ids = block0.GetCellData().GetArray("ElementID")
+        prop_ids = block0.GetCellData().GetArray("PropertyID")
+        mat_ids = block0.GetCellData().GetArray("MaterialID")
 
-        # Check first element
+        # Check first element in first block
         self.assertEqual(elem_ids.GetValue(0), 1)
         self.assertEqual(prop_ids.GetValue(0), 1)
         self.assertEqual(mat_ids.GetValue(0), 1)
 
     def test_point_coordinates(self):
         """Test that point coordinates are correctly transferred."""
-        converter = FEMAPToVTUConverter(self.simple_mesh)
+        converter = FEMAPToVTMConverter(self.simple_mesh)
         converter.parse_femap()
-        ug = converter.build_unstructured_grid()
+        mb = converter.build_multiblock_by_property()
 
-        points = ug.GetPoints()
+        # Get points from first block (all blocks share the same points)
+        block0 = mb.GetBlock(0)
+        points = block0.GetPoints()
 
         # Check first point (node 1: 0,0,0)
         coord = points.GetPoint(0)
@@ -187,7 +194,6 @@ class TestTopologyMapping(unittest.TestCase):
             self.assertLessEqual(num_nodes, 20, f"Unexpected node count for topology {topo}")
 
 
-@unittest.skipIf(not VTK_AVAILABLE, "VTK not available")
 class TestIntegration(unittest.TestCase):
     """Integration tests for full conversion pipeline."""
 
@@ -199,26 +205,29 @@ class TestIntegration(unittest.TestCase):
 
     def test_end_to_end_simple(self):
         """Test complete conversion pipeline for simple mesh."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtu') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
             output_file = f.name
 
         try:
-            converter = FEMAPToVTUConverter(self.simple_mesh)
-            converter.write_vtu(output_file, validate=True)
+            converter = FEMAPToVTMConverter(self.simple_mesh)
+            converter.write_vtm(output_file, validate=True)
 
             # Verify file exists and has content
             self.assertTrue(os.path.exists(output_file))
             self.assertGreater(os.path.getsize(output_file), 100)
 
             # Read back and verify
-            from vtk import vtkXMLUnstructuredGridReader
-            reader = vtkXMLUnstructuredGridReader()
+            from vtk import vtkXMLMultiBlockDataReader
+            reader = vtkXMLMultiBlockDataReader()
             reader.SetFileName(output_file)
             reader.Update()
-            ug = reader.GetOutput()
+            mb = reader.GetOutput()
 
-            self.assertEqual(ug.GetNumberOfPoints(), 8)
-            self.assertEqual(ug.GetNumberOfCells(), 1)
+            self.assertGreater(mb.GetNumberOfBlocks(), 0)
+            # Get first block and verify
+            block0 = mb.GetBlock(0)
+            self.assertEqual(block0.GetNumberOfPoints(), 8)
+            self.assertEqual(block0.GetNumberOfCells(), 1)
 
         finally:
             if os.path.exists(output_file):
@@ -226,31 +235,36 @@ class TestIntegration(unittest.TestCase):
 
     def test_end_to_end_mixed(self):
         """Test complete conversion pipeline for mixed element mesh."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtu') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
             output_file = f.name
 
         try:
-            converter = FEMAPToVTUConverter(self.mixed_mesh)
-            converter.write_vtu(output_file, validate=True)
+            converter = FEMAPToVTMConverter(self.mixed_mesh)
+            converter.write_vtm(output_file, validate=True)
 
             # Verify file exists
             self.assertTrue(os.path.exists(output_file))
             self.assertGreater(os.path.getsize(output_file), 100)
 
             # Read back and verify
-            from vtk import vtkXMLUnstructuredGridReader
-            reader = vtkXMLUnstructuredGridReader()
+            from vtk import vtkXMLMultiBlockDataReader
+            reader = vtkXMLMultiBlockDataReader()
             reader.SetFileName(output_file)
             reader.Update()
-            ug = reader.GetOutput()
+            mb = reader.GetOutput()
 
-            self.assertEqual(ug.GetNumberOfPoints(), 8)
-            self.assertEqual(ug.GetNumberOfCells(), 3)
+            self.assertGreater(mb.GetNumberOfBlocks(), 0)
 
-            # Verify cell data arrays exist
-            self.assertIsNotNone(ug.GetCellData().GetArray("ElementID"))
-            self.assertIsNotNone(ug.GetCellData().GetArray("PropertyID"))
-            self.assertIsNotNone(ug.GetCellData().GetArray("MaterialID"))
+            # Count total cells across all blocks
+            total_cells = sum(mb.GetBlock(i).GetNumberOfCells()
+                             for i in range(mb.GetNumberOfBlocks()))
+            self.assertEqual(total_cells, 3)
+
+            # Verify cell data arrays exist in first block
+            block0 = mb.GetBlock(0)
+            self.assertIsNotNone(block0.GetCellData().GetArray("ElementID"))
+            self.assertIsNotNone(block0.GetCellData().GetArray("PropertyID"))
+            self.assertIsNotNone(block0.GetCellData().GetArray("MaterialID"))
 
         finally:
             if os.path.exists(output_file):

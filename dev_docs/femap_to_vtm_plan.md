@@ -1,8 +1,8 @@
-# FEMAP Neutral File to VTU Conversion Plan
+# FEMAP Neutral File to VTM Conversion Plan
 
 ## Overview
 
-This document outlines the implementation plan for reading a FEMAP Neutral file (`post_geom`) and converting it to a VTK Unstructured Grid (`.vtu`) file format for visualization in ParaView.
+This document outlines the implementation plan for reading a FEMAP Neutral file (`post_geom`) and converting it to a VTK MultiBlock UnstructuredGrid (`.vtm`) file format for visualization in ParaView. The converter creates a MultiBlock dataset where each block is an UnstructuredGrid containing elements organized by property ID.
 
 ## Input File Structure
 
@@ -197,86 +197,99 @@ FEMAP_TO_VTK = {
 
 ---
 
-### 8. Build vtkUnstructuredGrid
+### 8. Build vtkMultiBlockDataSet by Property ID
 
-**Goal**: Create a VTK unstructured grid from parsed nodes and elements.
+**Goal**: Create a VTK MultiBlock UnstructuredGrid with separate UnstructuredGrid blocks for each property ID.
 
 **Steps**:
 
-1. **Create vtkPoints**:
+1. **Group elements by property ID**:
+   ```python
+   elements_by_prop = {}
+   for elem in elements:
+       prop_id = elem['prop_id']
+       if prop_id not in elements_by_prop:
+           elements_by_prop[prop_id] = []
+       elements_by_prop[prop_id].append(elem)
+   ```
+
+2. **Create shared vtkPoints** (used by all blocks):
    - Iterate through nodes dictionary
    - Map FEMAP node IDs to VTK 0-based indices
    - Insert point coordinates: `pts.InsertNextPoint(x, y, z)`
 
-2. **Create ID mapping**:
+3. **Create ID mapping**:
    ```python
    femap_to_vtk_id = {femap_id: vtk_idx for vtk_idx, femap_id in enumerate(sorted(nodes.keys()))}
    ```
 
-3. **Initialize vtkUnstructuredGrid**:
+4. **Initialize vtkMultiBlockDataSet**:
    ```python
-   ug = vtkUnstructuredGrid()
-   ug.SetPoints(pts)
-   ug.Allocate(len(elements))
+   mb = vtkMultiBlockDataSet()
+   mb.SetNumberOfBlocks(len(elements_by_prop))
    ```
 
-4. **Insert cells**:
-   - For each element:
-     - Get VTK cell type from topology mapping
-     - Extract required number of nodes
-     - Convert FEMAP node IDs to VTK indices
-     - Create vtkIdList and insert cell
+5. **Create a block for each property**:
+   - For each property ID:
+     - Create new vtkUnstructuredGrid
+     - Set shared points
+     - Insert cells for elements with this property
+     - Add cell data arrays (ElementID, PropertyID, MaterialID, TopologyID)
+     - Set block in multiblock dataset
+     - Name the block as `Property_{ID}_{Title}`
 
 **Code skeleton**:
 ```python
-for elem in elements:
-    vtk_type, num_nodes = FEMAP_TO_VTK[elem['topology']]
-    idlist = vtkIdList()
-    for femap_node_id in elem['nodes'][:num_nodes]:
-        vtk_idx = femap_to_vtk_id[femap_node_id]
-        idlist.InsertNextId(vtk_idx)
-    ug.InsertNextCell(vtk_type, idlist)
+for block_idx, prop_id in enumerate(sorted(elements_by_prop.keys())):
+    elements = elements_by_prop[prop_id]
+
+    ug = vtkUnstructuredGrid()
+    ug.SetPoints(pts)
+    ug.Allocate(len(elements))
+
+    for elem in elements:
+        vtk_type, num_nodes = FEMAP_TO_VTK[elem['topology']]
+        idlist = vtkIdList()
+        for femap_node_id in elem['nodes'][:num_nodes]:
+            vtk_idx = femap_to_vtk_id[femap_node_id]
+            idlist.InsertNextId(vtk_idx)
+        ug.InsertNextCell(vtk_type, idlist)
+
+    # Add cell data arrays
+    add_cell_data(ug, elements)
+
+    # Add to multiblock
+    mb.SetBlock(block_idx, ug)
+    mb.GetMetaData(block_idx).Set(mb.NAME(), f"Property_{prop_id}")
 ```
 
 ---
 
 ### 9. Attach Property and Material IDs as Cell Data
 
-**Goal**: Add metadata to cells for visualization and filtering.
+**Goal**: Add metadata to cells in each block for visualization and filtering.
 
-**Cell Data Arrays**:
+**Cell Data Arrays** (per block):
 1. **Element ID**: Original FEMAP element ID
 2. **Property ID**: Property assignment for each element
 3. **Material ID**: Material assignment (via property lookup)
+4. **Topology ID**: FEMAP topology code for debugging
 
-**Implementation**:
-```python
-# Element IDs
-elem_ids = [elem['id'] for elem in elements]
-add_cell_scalar(ug, "ElementID", elem_ids)
-
-# Property IDs
-prop_ids = [elem['prop_id'] for elem in elements]
-add_cell_scalar(ug, "PropertyID", prop_ids)
-
-# Material IDs (lookup via properties)
-mat_ids = [properties[elem['prop_id']]['material_id'] for elem in elements]
-add_cell_scalar(ug, "MaterialID", mat_ids)
-```
+**Implementation**: Each block contains its own cell data arrays populated during block creation.
 
 ---
 
-### 10. Write vtkUnstructuredGrid to .vtu File
+### 10. Write vtkMultiBlockDataSet to .vtm File
 
-**Goal**: Export the grid to VTK XML format.
+**Goal**: Export the multiblock dataset to VTK XML format.
 
 **Implementation**:
 ```python
-from vtk import vtkXMLUnstructuredGridWriter
+from vtk import vtkXMLMultiBlockDataWriter
 
-writer = vtkXMLUnstructuredGridWriter()
-writer.SetFileName("output.vtu")
-writer.SetInputData(ug)
+writer = vtkXMLMultiBlockDataWriter()
+writer.SetFileName("output.vtm")
+writer.SetInputData(mb)
 writer.Write()
 ```
 
@@ -284,16 +297,20 @@ writer.Write()
 
 ## Expected Output
 
-**File**: `output.vtu`
+**File**: `output.vtm`
 
 **Contents**:
-- Geometry: All nodes and elements from FEMAP file
-- Cell Data:
-  - `ElementID`: FEMAP element IDs
-  - `PropertyID`: Property assignments
-  - `MaterialID`: Material assignments
+- VTK MultiBlock UnstructuredGrid with one UnstructuredGrid block per property ID
+- Each UnstructuredGrid block contains:
+  - Geometry: Nodes and elements for that property
+  - Cell Data:
+    - `ElementID`: FEMAP element IDs
+    - `PropertyID`: Property assignments
+    - `MaterialID`: Material assignments
+    - `TopologyID`: FEMAP topology codes
+- Block names: `Property_{ID}_{Title}`
 
-**Visualization**: Open in ParaView and color by PropertyID or MaterialID to verify correct import.
+**Visualization**: Open in ParaView to see separate UnstructuredGrid blocks for each property. Toggle visibility of individual blocks or color by PropertyID/MaterialID.
 
 ---
 
@@ -313,7 +330,11 @@ writer.Write()
 
 7. **Special strings**: `<NULL>` represents empty strings in FEMAP format.
 
-8. **Mixed element types**: vtkUnstructuredGrid supports mixed topologies in a single grid—this is expected and correct.
+8. **Mixed element types**: vtkUnstructuredGrid supports mixed topologies in a single grid—this is expected and correct. Each UnstructuredGrid block can contain mixed element types.
+
+9. **Shared points**: All UnstructuredGrid blocks in the MultiBlock dataset share the same point set, ensuring consistency and reducing memory usage.
+
+10. **MultiBlock structure**: The output is a vtkMultiBlockDataSet where each block is a vtkUnstructuredGrid, not a simple collection of grids.
 
 ---
 

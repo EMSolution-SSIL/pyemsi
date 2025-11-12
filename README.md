@@ -10,7 +10,8 @@ Python tools for EMSI file format conversions, specifically for converting FEMAP
   - Properties (Block 402)
   - Materials (Block 601)
   - Header information (Block 100)
-- Convert FEMAP meshes to VTK Unstructured Grid (`.vtu`) format
+- Convert FEMAP meshes to VTK MultiBlock UnstructuredGrid (`.vtm`) format
+- Organize elements by property ID into separate UnstructuredGrid blocks
 - Support for mixed element types in a single mesh
 - Handles repeated blocks and blocks in any order
 - Comprehensive validation and error checking
@@ -52,19 +53,19 @@ pip install -e .
 ### Simple Conversion
 
 ```python
-from pyemsi import convert_femap_to_vtu
+from pyemsi import convert_femap_to_vtm
 
-# Convert FEMAP file to VTU in one line
-convert_femap_to_vtu("input.neu", "output.vtu")
+# Convert FEMAP file to VTK MultiBlock UnstructuredGrid in one line
+convert_femap_to_vtm("input.neu", "output.vtm")
 ```
 
 ### Advanced Usage
 
 ```python
-from pyemsi import FEMAPToVTUConverter
+from pyemsi import FEMAPToVTMConverter
 
 # Create converter
-converter = FEMAPToVTUConverter("input.neu")
+converter = FEMAPToVTMConverter("input.neu")
 
 # Parse FEMAP file
 converter.parse_femap()
@@ -79,18 +80,18 @@ messages = converter.validate()
 for msg in messages:
     print(msg)
 
-# Convert to VTU
-converter.write_vtu("output.vtu")
+# Convert to VTK MultiBlock UnstructuredGrid (one block per property)
+multiblock = converter.write_vtm("output.vtm")
 ```
 
 ### Using the Example Script
 
 ```bash
 # Simple conversion
-python examples/convert_femap.py input.neu output.vtu
+python examples/convert_femap.py input.neu output.vtm
 
 # Detailed conversion with intermediate information
-python examples/convert_femap.py input.neu output.vtu --detailed
+python examples/convert_femap.py input.neu output.vtm --detailed
 ```
 
 ## Parsing Only (No VTK Required)
@@ -116,22 +117,26 @@ for node_id, (x, y, z) in nodes.items():
     print(f"Node {node_id}: ({x}, {y}, {z})")
 ```
 
-## Cell Data Arrays
+## MultiBlock UnstructuredGrid Organization
 
-The converted VTU file includes the following cell data arrays for filtering and visualization:
+The converted VTM file is a MultiBlock dataset containing separate UnstructuredGrid blocks for each property ID, making it easy to work with different parts of your model. Each block includes the following cell data arrays for filtering and visualization:
 
 - **ElementID**: Original FEMAP element ID
 - **PropertyID**: Property assignment for each element
 - **MaterialID**: Material assignment (via property lookup)
 - **TopologyID**: FEMAP topology code for debugging
 
+Blocks are named as `Property_{ID}_{Title}` (e.g., `Property_1_Shell_Part`, `Property_2_Solid_Part`)
+
 ## Visualization in ParaView
 
 1. Open ParaView
-2. File > Open > select your `.vtu` file
+2. File > Open > select your `.vtm` file
 3. Click "Apply" in the Properties panel
-4. In the top toolbar, change coloring from "Solid Color" to "PropertyID" or "MaterialID"
-5. Use filters like "Threshold" or "Extract Cells by Region" to filter by property/material
+4. You'll see separate blocks for each property in the Pipeline Browser
+5. Toggle visibility of individual blocks, or select blocks to work with specific parts
+6. In the top toolbar, change coloring from "Solid Color" to "PropertyID" or "MaterialID"
+7. Use filters like "Threshold" or "Extract Block" to work with specific parts
 
 ## Testing
 
@@ -155,18 +160,18 @@ pyemsi/
 ├── pyemsi/
 │   ├── __init__.py           # Package initialization
 │   ├── femap_parser.py       # FEMAP Neutral file parser
-│   └── femap_to_vtu.py       # VTK converter
+│   └── femap_to_vtm.py       # VTK converter
 ├── tests/
 │   ├── __init__.py
 │   ├── test_femap_parser.py  # Parser tests
-│   ├── test_femap_to_vtu.py  # Converter tests
+│   ├── test_femap_to_vtm.py  # Converter tests
 │   └── fixtures/             # Test data files
 │       ├── simple_mesh.neu
+│       ├── post_geom_single_hex.neu
 │       └── mixed_elements.neu
-├── examples/
-│   └── convert_femap.py      # Example usage script
 ├── dev_docs/                 # Development documentation
-│   ├── femap_to_vtu_plan.md
+│   ├── femap_to_vtm_plan.md
+│   ├── femap.md
 │   └── vtk.md
 ├── requirements.txt
 ├── setup.py
@@ -191,17 +196,16 @@ properties = parser.get_properties()    # Returns {prop_id: {...}}
 materials = parser.get_materials()      # Returns {mat_id: {...}}
 ```
 
-### FEMAPToVTUConverter
+### FEMAPToVTMConverter
 
-Convert FEMAP files to VTK Unstructured Grid format.
+Convert FEMAP files to VTK MultiBlock UnstructuredGrid format.
 
 ```python
-converter = FEMAPToVTUConverter(femap_filepath)
-converter.parse_femap()                 # Parse the file
-messages = converter.validate()         # Validate parsed data
-ug = converter.build_unstructured_grid()  # Build VTK grid
-converter.add_cell_data(ug)             # Add metadata arrays
-converter.write_vtu(output_filepath)    # Write to disk
+converter = FEMAPToVTMConverter(femap_filepath)
+converter.parse_femap()                      # Parse the file
+messages = converter.validate()              # Validate parsed data
+mb = converter.build_multiblock_by_property()  # Build MultiBlock UnstructuredGrid
+converter.write_vtm(output_filepath)         # Write to disk
 ```
 
 ## Requirements
