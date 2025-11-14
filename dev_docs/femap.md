@@ -281,7 +281,7 @@ value,
 | **3** | min_val  | always 0. | 8 byte, double precision |
 |       | max_val  | always -1. | 8 byte, double precision |
 |       | abs_max  | always 0. | 8 byte, double precision |
-| **4** | comp[0..9] | always vecID,0,0,0,0,0,0,0,0,0, | 4 byte, long integers    |
+| **4** | comp[0..9] | always 0,0,0,0,0,0,0,0,0,0, | 4 byte, long integers    |
 | **5** | comp[10..19] | always 0,0,0,0,0,0,0,0,0,0, | 4 byte, long integers    |
 | **6** | id_min   | always 0 | 4 byte, long integers    |
 |       | id_max   | always 0 | 4 byte, long integers    |
@@ -317,14 +317,24 @@ template:
 ```
    -1
    1051
-setID,vecID,1,
-title,
+setID1,vecID1,1,
+title1,
 0.,-1.,0.,
-vecID,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,
-0,0,3,ent_type,
+0,0,0,0,0,0,0,0,0,0,
+0,0,3,ent_type1,
 0,1,1,
 <result records in Format 1 or Format 2>
+-1,0.,
+setID2,vecID2,1,
+title2,
+0.,-1.,0.,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,3,ent_type2,
+0,1,1,
+<result records in Format 1 or Format 2>
+-1,0.,
 ...
    -1
 ```

@@ -6,7 +6,6 @@ FEMAP files contain blocks identified by IDs, and blocks can appear in any order
 """
 
 from typing import Dict, List, Tuple, Optional
-import re
 
 
 class FEMAPBlock:
