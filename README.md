@@ -53,45 +53,35 @@ pip install -e .
 ### Simple Conversion
 
 ```python
-from pyemsi import read_mesh, save
+from pyemsi import convert_femap_to_vtm
 
-# Convert FEMAP file to VTK MultiBlock UnstructuredGrid
-multiblock = read_mesh("input.neu", validate=True)
-
-# Write to VTM file
-save(multiblock, "output.vtm")
+# Convert FEMAP file to VTK MultiBlock UnstructuredGrid in one line
+convert_femap_to_vtm("input.neu", "output.vtm")
 ```
 
 ### Advanced Usage
 
 ```python
-from pyemsi import read_mesh, save, validate_femap_data
-from pyemsi.femap_parser import FEMAPParser
+from pyemsi import FEMAPToVTMConverter
+
+# Create converter
+converter = FEMAPToVTMConverter("input.neu")
 
 # Parse FEMAP file
-parser = FEMAPParser("input.neu")
-parser.parse()
+converter.parse_femap()
 
 # Inspect parsed data
-nodes = parser.get_nodes()
-elements = parser.get_elements()
-properties = parser.get_properties()
-materials = parser.get_materials()
+print(f"Nodes: {len(converter.nodes)}")
+print(f"Elements: {len(converter.elements)}")
+print(f"Properties: {len(converter.properties)}")
 
-print(f"Nodes: {len(nodes)}")
-print(f"Elements: {len(elements)}")
-print(f"Properties: {len(properties)}")
-
-# Validate data manually
-messages = validate_femap_data(nodes, elements, properties)
+# Validate data
+messages = converter.validate()
 for msg in messages:
     print(msg)
 
 # Convert to VTK MultiBlock UnstructuredGrid (one block per property)
-multiblock = read_mesh("input.neu", validate=True)
-
-# Write with custom options
-save(multiblock, "output.vtm", data_mode="binary")
+multiblock = converter.write_vtm("output.vtm")
 ```
 
 ### Using the Example Script
@@ -195,8 +185,6 @@ pyemsi/
 Parse FEMAP Neutral files and extract structured data.
 
 ```python
-from pyemsi.femap_parser import FEMAPParser
-
 parser = FEMAPParser(filepath)
 blocks = parser.parse()  # Returns dict of block_id -> [FEMAPBlock]
 
@@ -208,33 +196,16 @@ properties = parser.get_properties()    # Returns {prop_id: {...}}
 materials = parser.get_materials()      # Returns {mat_id: {...}}
 ```
 
-### FEMAP to VTM Conversion Functions
+### FEMAPToVTMConverter
 
-Pure functions for converting FEMAP files to VTK MultiBlock UnstructuredGrid format.
+Convert FEMAP files to VTK MultiBlock UnstructuredGrid format.
 
 ```python
-from pyemsi import read_mesh, save, validate_femap_data
-
-# Convert FEMAP file to MultiBlock dataset
-mb = read_mesh(
-    mesh_filepath,      # Path to FEMAP Neutral file
-    validate=True       # Run validation checks before conversion
-)
-
-# Write MultiBlock dataset to VTM file
-save(
-    multiblock,         # vtkMultiBlockDataSet object
-    output_filepath,    # Output .vtm file path
-    data_mode="ascii"   # "ascii" or "binary"
-)
-
-# Validate parsed FEMAP data
-messages = validate_femap_data(
-    nodes,              # Dict of node_id -> (x, y, z)
-    elements,           # List of element dicts
-    properties,         # Dict of prop_id -> {...}
-    header=None         # Optional header dict
-)
+converter = FEMAPToVTMConverter(femap_filepath)
+converter.parse_femap()                      # Parse the file
+messages = converter.validate()              # Validate parsed data
+mb = converter.build_multiblock_by_property()  # Build MultiBlock UnstructuredGrid
+converter.write_vtm(output_filepath)         # Write to disk
 ```
 
 ## Requirements

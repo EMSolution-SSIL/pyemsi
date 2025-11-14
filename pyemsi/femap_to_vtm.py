@@ -38,246 +38,254 @@ FEMAP_TO_VTK = {
 }
 
 
-def validate_femap_data(
-    nodes: Dict[int, Tuple[float, float, float]],
-    elements: List[Dict],
-    properties: Dict[int, Dict],
-    header: Optional[Dict[str, str]] = None
-) -> List[str]:
+class FEMAPToVTMConverter:
     """
-    Validate parsed FEMAP data and return list of warnings/errors.
-
-    Args:
-        nodes: Dictionary mapping node IDs to (x, y, z) coordinates
-        elements: List of element dictionaries
-        properties: Dictionary mapping property IDs to property data
-        header: Optional header information
-
-    Returns:
-        List of validation messages
+    Converts FEMAP Neutral files to VTK MultiBlock UnstructuredGrid format.
+    Elements are organized by property ID into separate UnstructuredGrid blocks.
     """
-    messages = []
 
-    if not nodes:
-        messages.append("ERROR: No nodes found in FEMAP file")
+    def __init__(self, femap_filepath: str):
+        """
+        Initialize converter with FEMAP file path.
 
-    if not elements:
-        messages.append("ERROR: No elements found in FEMAP file")
+        Args:
+            femap_filepath: Path to FEMAP Neutral file
+        """
+        self.femap_filepath = femap_filepath
+        self.parser = FEMAPParser(femap_filepath)
+        self.nodes: Dict[int, Tuple[float, float, float]] = {}
+        self.elements: List[Dict] = []
+        self.properties: Dict[int, Dict] = {}
+        self.materials: Dict[int, Dict] = {}
+        self.header: Optional[Dict[str, str]] = None
+        self._parsed: bool = False  # Track if parsing has been done
 
-    # Check for unsupported element topologies
-    for elem in elements:
-        topo = elem['topology']
-        if topo not in FEMAP_TO_VTK:
-            messages.append(
-                f"WARNING: Unsupported topology {topo} in element {elem['id']}"
-            )
+    def parse_femap(self):
+        """Parse the FEMAP file and extract all data."""
+        if self._parsed:
+            return  # Already parsed, skip
 
-    # Check for missing nodes in elements
-    for elem in elements:
-        for node_id in elem['nodes']:
-            if node_id not in nodes:
+        self.parser.parse()
+        self.header = self.parser.get_header()
+        self.nodes = self.parser.get_nodes()
+        self.elements = self.parser.get_elements()
+        self.properties = self.parser.get_properties()
+        self.materials = self.parser.get_materials()
+        self._parsed = True
+
+    def validate(self) -> List[str]:
+        """
+        Validate parsed data and return list of warnings/errors.
+
+        Returns:
+            List of validation messages
+        """
+        messages = []
+
+        if not self.nodes:
+            messages.append("ERROR: No nodes found in FEMAP file")
+
+        if not self.elements:
+            messages.append("ERROR: No elements found in FEMAP file")
+
+        # Check for unsupported element topologies
+        for elem in self.elements:
+            topo = elem['topology']
+            if topo not in FEMAP_TO_VTK:
                 messages.append(
-                    f"ERROR: Element {elem['id']} references missing node {node_id}"
+                    f"WARNING: Unsupported topology {topo} in element {elem['id']}"
                 )
 
-    # Check version
-    if header and header.get('version') != '4.41':
-        messages.append(
-            f"WARNING: Expected FEMAP version 4.41, got {header.get('version')}"
-        )
+        # Check for missing nodes in elements
+        for elem in self.elements:
+            for node_id in elem['nodes']:
+                if node_id not in self.nodes:
+                    messages.append(
+                        f"ERROR: Element {elem['id']} references missing node {node_id}"
+                    )
 
-    return messages
+        # Check version
+        if self.header and self.header.get('version') != '4.41':
+            messages.append(
+                f"WARNING: Expected FEMAP version 4.41, got {self.header.get('version')}"
+            )
+
+        return messages
 
 
-def read_mesh(mesh_filepath: str, validate: bool = True) -> vtkMultiBlockDataSet:
-    """
-    Convert FEMAP Neutral file to VTK MultiBlock UnstructuredGrid.
+    def build_multiblock_by_property(self) -> 'vtkMultiBlockDataSet':
+        """
+        Build VTK MultiBlock UnstructuredGrid with separate blocks for each property ID.
 
-    Elements are organized by property ID into separate UnstructuredGrid blocks.
-    Each block is a vtkUnstructuredGrid containing elements with the same property ID.
-    All blocks share the same point set.
+        Each block is a vtkUnstructuredGrid containing elements with the same property ID.
+        All blocks share the same point set.
 
-    Args:
-        mesh_filepath: Path to FEMAP Neutral file
-        validate: If True, run validation checks before conversion
+        Returns:
+            vtkMultiBlockDataSet containing one vtkUnstructuredGrid per property
+        """
+        # Ensure data is parsed before building
+        if not self._parsed:
+            raise RuntimeError(
+                "Data has not been parsed yet. Call parse_femap() before building multiblock."
+            )
 
-    Returns:
-        vtkMultiBlockDataSet containing one vtkUnstructuredGrid per property
+        # Group elements by property ID
+        elements_by_prop = {}
+        for elem in self.elements:
+            prop_id = elem['prop_id']
+            if prop_id not in elements_by_prop:
+                elements_by_prop[prop_id] = []
+            elements_by_prop[prop_id].append(elem)
 
-    Raises:
-        ValueError: If validation fails with errors
-    """
-    # Parse FEMAP mesh file
-    print(f"Parsing FEMAP mesh file: {mesh_filepath}")
-    parser = FEMAPParser(mesh_filepath)
-    parser.parse()
+        # Create VTK points and ID mapping (shared across all blocks)
+        pts = vtkPoints()
+        femap_to_vtk_id = {}
 
-    header = parser.get_header()
-    nodes = parser.get_nodes()
-    elements = parser.get_elements()
-    properties = parser.get_properties()
-    materials = parser.get_materials()
+        for vtk_idx, femap_id in enumerate(sorted(self.nodes.keys())):
+            x, y, z = self.nodes[femap_id]
+            pts.InsertNextPoint(x, y, z)
+            femap_to_vtk_id[femap_id] = vtk_idx
 
-    print(f"Found {len(nodes)} nodes, {len(elements)} elements")
-    print(f"Found {len(properties)} properties, {len(materials)} materials")
+        # Create multiblock dataset
+        mb = vtkMultiBlockDataSet()
+        mb.SetNumberOfBlocks(len(elements_by_prop))
 
-    # Validate if requested
-    if validate:
-        messages = validate_femap_data(nodes, elements, properties, header)
-        if messages:
-            print("\nValidation messages:")
-            for msg in messages:
-                print(f"  {msg}")
+        # Create a block for each property
+        block_idx = 0
+        for prop_id in sorted(elements_by_prop.keys()):
+            elements = elements_by_prop[prop_id]
 
-            # Check for errors
-            errors = [m for m in messages if m.startswith("ERROR")]
-            if errors:
-                raise ValueError(f"Validation failed with {len(errors)} error(s)")
+            # Create unstructured grid for this property
+            ug = vtkUnstructuredGrid()
+            ug.SetPoints(pts)
+            ug.Allocate(len(elements))
 
-    # Build multiblock unstructured grid
-    print("\nBuilding VTK MultiBlock UnstructuredGrid by Property ID...")
+            # Arrays for cell data
+            elem_ids = vtkIntArray()
+            elem_ids.SetName("ElementID")
+            elem_ids.SetNumberOfComponents(1)
 
-    # Group elements by property ID
-    elements_by_prop = {}
-    for elem in elements:
-        prop_id = elem['prop_id']
-        if prop_id not in elements_by_prop:
-            elements_by_prop[prop_id] = []
-        elements_by_prop[prop_id].append(elem)
+            prop_ids = vtkIntArray()
+            prop_ids.SetName("PropertyID")
+            prop_ids.SetNumberOfComponents(1)
 
-    # Create VTK points and ID mapping (shared across all blocks)
-    pts = vtkPoints()
-    femap_to_vtk_id = {}
+            mat_ids = vtkIntArray()
+            mat_ids.SetName("MaterialID")
+            mat_ids.SetNumberOfComponents(1)
 
-    for vtk_idx, femap_id in enumerate(sorted(nodes.keys())):
-        x, y, z = nodes[femap_id]
-        pts.InsertNextPoint(x, y, z)
-        femap_to_vtk_id[femap_id] = vtk_idx
+            topo_ids = vtkIntArray()
+            topo_ids.SetName("TopologyID")
+            topo_ids.SetNumberOfComponents(1)
 
-    # Create multiblock dataset
-    mb = vtkMultiBlockDataSet()
-    mb.SetNumberOfBlocks(len(elements_by_prop))
+            # Insert cells for this property
+            skipped = 0
+            for elem in elements:
+                topo = elem['topology']
 
-    # Create a block for each property
-    block_idx = 0
-    for prop_id in sorted(elements_by_prop.keys()):
-        elements_in_prop = elements_by_prop[prop_id]
-
-        # Create unstructured grid for this property
-        ug = vtkUnstructuredGrid()
-        ug.SetPoints(pts)
-        ug.Allocate(len(elements_in_prop))
-
-        # Arrays for cell data
-        elem_ids = vtkIntArray()
-        elem_ids.SetName("ElementID")
-        elem_ids.SetNumberOfComponents(1)
-
-        prop_ids = vtkIntArray()
-        prop_ids.SetName("PropertyID")
-        prop_ids.SetNumberOfComponents(1)
-
-        mat_ids = vtkIntArray()
-        mat_ids.SetName("MaterialID")
-        mat_ids.SetNumberOfComponents(1)
-
-        topo_ids = vtkIntArray()
-        topo_ids.SetName("TopologyID")
-        topo_ids.SetNumberOfComponents(1)
-
-        # Insert cells for this property
-        skipped = 0
-        for elem in elements_in_prop:
-            topo = elem['topology']
-
-            if topo not in FEMAP_TO_VTK:
-                skipped += 1
-                continue
-
-            vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
-            elem_nodes = elem['nodes'][:num_nodes_required]
-
-            if len(elem_nodes) < num_nodes_required:
-                skipped += 1
-                continue
-
-            # Create ID list as Python list for the overload
-            idlist = []
-            valid = True
-            for femap_node_id in elem_nodes:
-                if femap_node_id in femap_to_vtk_id:
-                    vtk_idx = femap_to_vtk_id[femap_node_id]
-                    idlist.append(vtk_idx)
-                else:
-                    valid = False
+                if topo not in FEMAP_TO_VTK:
                     skipped += 1
-                    break
+                    continue
 
-            if valid:
-                # Insert cell using sequence overload
-                ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
+                vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
+                elem_nodes = elem['nodes'][:num_nodes_required]
 
-                # Add cell data
-                elem_ids.InsertNextValue(elem['id'])
-                prop_ids.InsertNextValue(elem['prop_id'])
-                topo_ids.InsertNextValue(elem['topology'])
+                if len(elem_nodes) < num_nodes_required:
+                    skipped += 1
+                    continue
 
-                # Get material ID from property
-                mat_id = 0
-                if elem['prop_id'] in properties:
-                    mat_id = properties[elem['prop_id']].get('material_id', 0)
-                mat_ids.InsertNextValue(mat_id)
+                # Create ID list as Python list for the overload
+                idlist = []
+                valid = True
+                for femap_node_id in elem_nodes:
+                    if femap_node_id in femap_to_vtk_id:
+                        vtk_idx = femap_to_vtk_id[femap_node_id]
+                        idlist.append(vtk_idx)
+                    else:
+                        valid = False
+                        skipped += 1
+                        break
 
-        # Add arrays to grid
-        ug.GetCellData().AddArray(elem_ids)
-        ug.GetCellData().AddArray(prop_ids)
-        ug.GetCellData().AddArray(mat_ids)
-        ug.GetCellData().AddArray(topo_ids)
+                if valid:
+                    # Insert cell using sequence overload
+                    ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
 
-        # Set block in multiblock dataset
-        mb.SetBlock(block_idx, ug)
+                    # Add cell data
+                    elem_ids.InsertNextValue(elem['id'])
+                    prop_ids.InsertNextValue(elem['prop_id'])
+                    topo_ids.InsertNextValue(elem['topology'])
 
-        # Set block name
-        prop_name = f"Property_{prop_id}"
-        if prop_id in properties:
-            prop_title = properties[prop_id].get('title', '')
-            if prop_title:
-                prop_name = f"{prop_name}_{prop_title}"
-        mb.GetMetaData(block_idx).Set(mb.NAME(), prop_name)
+                    # Get material ID from property
+                    mat_id = 0
+                    if elem['prop_id'] in self.properties:
+                        mat_id = self.properties[elem['prop_id']].get('material_id', 0)
+                    mat_ids.InsertNextValue(mat_id)
 
-        print(f"Block {block_idx}: {prop_name} - {ug.GetNumberOfCells()} cells" +
-              (f" ({skipped} skipped)" if skipped > 0 else ""))
+            # Add arrays to grid
+            ug.GetCellData().AddArray(elem_ids)
+            ug.GetCellData().AddArray(prop_ids)
+            ug.GetCellData().AddArray(mat_ids)
+            ug.GetCellData().AddArray(topo_ids)
 
-        block_idx += 1
+            # Set block in multiblock dataset
+            mb.SetBlock(block_idx, ug)
 
-    print(f"Created MultiBlock UnstructuredGrid with {mb.GetNumberOfBlocks()} blocks")
-    return mb
+            # Set block name
+            prop_name = f"Property_{prop_id}"
+            if prop_id in self.properties:
+                prop_title = self.properties[prop_id].get('title', '')
+                if prop_title:
+                    prop_name = f"{prop_name}_{prop_title}"
+            mb.GetMetaData(block_idx).Set(mb.NAME(), prop_name)
 
+            print(f"Block {block_idx}: {prop_name} - {ug.GetNumberOfCells()} cells" +
+                  (f" ({skipped} skipped)" if skipped > 0 else ""))
 
-def save(
-    multiblock: vtkMultiBlockDataSet,
-    output_filepath: str,
-    data_mode: str = "ascii"
-):
-    """
-    Write VTK MultiBlock dataset to .vtm file.
+            block_idx += 1
 
-    Args:
-        multiblock: vtkMultiBlockDataSet to write
-        output_filepath: Output .vtm file path
-        data_mode: Data mode - "ascii" (human-readable) or "binary" (default: "ascii")
-    """
-    print(f"\nWriting VTM file: {output_filepath}")
-    writer = vtkXMLMultiBlockDataWriter()
-    writer.SetFileName(output_filepath)
-    writer.SetInputData(multiblock)
+        return mb
 
-    if data_mode.lower() == "ascii":
-        writer.SetDataModeToAscii()
-    elif data_mode.lower() == "binary":
-        writer.SetDataModeToBinary()
-    else:
-        raise ValueError(f"Invalid data_mode: {data_mode}. Must be 'ascii' or 'binary'")
+    def write_vtm(self, output_filepath: str, validate: bool = True):
+        """
+        Convert FEMAP file to VTK MultiBlock UnstructuredGrid and write to disk.
+        Creates one UnstructuredGrid block per property ID.
 
-    writer.Write()
-    print("Write complete!")
+        Args:
+            output_filepath: Output .vtm file path
+            validate: If True, run validation checks before conversion
+        """
+        # Parse FEMAP file
+        print(f"Parsing FEMAP file: {self.femap_filepath}")
+        self.parse_femap()
+
+        print(f"Found {len(self.nodes)} nodes, {len(self.elements)} elements")
+        print(f"Found {len(self.properties)} properties, {len(self.materials)} materials")
+
+        # Validate if requested
+        if validate:
+            messages = self.validate()
+            if messages:
+                print("\nValidation messages:")
+                for msg in messages:
+                    print(f"  {msg}")
+
+                # Check for errors
+                errors = [m for m in messages if m.startswith("ERROR")]
+                if errors:
+                    raise ValueError(f"Validation failed with {len(errors)} error(s)")
+
+        # Build multiblock unstructured grid
+        print("\nBuilding VTK MultiBlock UnstructuredGrid by Property ID...")
+        mb = self.build_multiblock_by_property()
+        print(f"Created MultiBlock UnstructuredGrid with {mb.GetNumberOfBlocks()} blocks")
+
+        # Write to file
+        print(f"\nWriting VTM file: {output_filepath}")
+        writer = vtkXMLMultiBlockDataWriter()
+        writer.SetFileName(output_filepath)
+        writer.SetInputData(mb)
+        writer.SetDataModeToAscii()  # Make VTU files human-readable
+        writer.Write()
+
+        print("Conversion complete!")
+
+        return mb
