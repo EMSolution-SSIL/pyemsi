@@ -16,6 +16,7 @@ from vtk import (
     VTK_QUADRATIC_TRIANGLE, VTK_QUADRATIC_QUAD, VTK_QUADRATIC_TETRA,
     VTK_QUADRATIC_HEXAHEDRON, VTK_QUADRATIC_WEDGE
 )
+import pyvista as pv
 
 from .femap_parser import FEMAPParser
 
@@ -38,7 +39,7 @@ FEMAP_TO_VTK = {
 }
 
 
-class FEMAPToVTMConverter:
+class FemapConverter:
     """
     Converts FEMAP Neutral files to VTK MultiBlock UnstructuredGrid format.
     Elements are organized by property ID into separate UnstructuredGrid blocks.
@@ -59,6 +60,7 @@ class FEMAPToVTMConverter:
         self.materials: Dict[int, Dict] = {}
         self.header: Optional[Dict[str, str]] = None
         self._parsed: bool = False  # Track if parsing has been done
+        self.multiblock: Optional[pv.MultiBlock] = None
 
     def parse_femap(self):
         """Parse the FEMAP file and extract all data."""
@@ -113,7 +115,7 @@ class FEMAPToVTMConverter:
         return messages
 
 
-    def build_multiblock_by_property(self) -> 'vtkMultiBlockDataSet':
+    def build_mesh(self) -> 'pv.MultiBlock':
         """
         Build VTK MultiBlock UnstructuredGrid with separate blocks for each property ID.
 
@@ -121,7 +123,7 @@ class FEMAPToVTMConverter:
         All blocks share the same point set.
 
         Returns:
-            vtkMultiBlockDataSet containing one vtkUnstructuredGrid per property
+            pv.MultiBlock containing one pv.UnstructuredGrid per property
         """
         # Ensure data is parsed before building
         if not self._parsed:
@@ -242,9 +244,10 @@ class FEMAPToVTMConverter:
 
             block_idx += 1
 
-        return mb
+        self.multiblock = pv.MultiBlock(mb)
+        return self.multiblock
 
-    def write_vtm(self, output_filepath: str, validate: bool = True):
+    def write_vtm(self, output_filepath: str, validate: bool = True) -> 'pv.MultiBlock':
         """
         Convert FEMAP file to VTK MultiBlock UnstructuredGrid and write to disk.
         Creates one UnstructuredGrid block per property ID.
@@ -275,17 +278,17 @@ class FEMAPToVTMConverter:
 
         # Build multiblock unstructured grid
         print("\nBuilding VTK MultiBlock UnstructuredGrid by Property ID...")
-        mb = self.build_multiblock_by_property()
-        print(f"Created MultiBlock UnstructuredGrid with {mb.GetNumberOfBlocks()} blocks")
+        self.build_mesh()
+        print(f"Created MultiBlock UnstructuredGrid with {self.multiblock.GetNumberOfBlocks()} blocks")
 
         # Write to file
         print(f"\nWriting VTM file: {output_filepath}")
         writer = vtkXMLMultiBlockDataWriter()
         writer.SetFileName(output_filepath)
-        writer.SetInputData(mb)
+        writer.SetInputData(self.multiblock)
         writer.SetDataModeToAscii()  # Make VTU files human-readable
         writer.Write()
 
         print("Conversion complete!")
 
-        return mb
+        return self.multiblock

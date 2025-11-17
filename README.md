@@ -62,10 +62,10 @@ convert_femap_to_vtm("input.neu", "output.vtm")
 ### Advanced Usage
 
 ```python
-from pyemsi import FEMAPToVTMConverter
+from pyemsi import FemapConverter
 
 # Create converter
-converter = FEMAPToVTMConverter("input.neu")
+converter = FemapConverter("input.neu")
 
 # Parse FEMAP file
 converter.parse_femap()
@@ -196,15 +196,15 @@ properties = parser.get_properties()    # Returns {prop_id: {...}}
 materials = parser.get_materials()      # Returns {mat_id: {...}}
 ```
 
-### FEMAPToVTMConverter
+### FemapConverter
 
 Convert FEMAP files to VTK MultiBlock UnstructuredGrid format.
 
 ```python
-converter = FEMAPToVTMConverter(femap_filepath)
+converter = FemapConverter(femap_filepath)
 converter.parse_femap()                      # Parse the file
 messages = converter.validate()              # Validate parsed data
-mb = converter.build_multiblock_by_property()  # Build MultiBlock UnstructuredGrid
+mb = converter.build_mesh()  # Build MultiBlock UnstructuredGrid
 converter.write_vtm(output_filepath)         # Write to disk
 ```
 

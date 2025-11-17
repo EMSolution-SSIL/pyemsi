@@ -8,11 +8,11 @@ import tempfile
 
 from vtk import vtkMultiBlockDataSet
 
-from pyemsi.femap_to_vtm import FEMAPToVTMConverter, FEMAP_TO_VTK, convert_femap_to_vtm
+from pyemsi.femap_to_vtm import FemapConverter, FEMAP_TO_VTK, convert_femap_to_vtm
 
 
-class TestFEMAPToVTMConverter(unittest.TestCase):
-    """Test cases for FEMAPToVTMConverter class."""
+class TestFemapConverter(unittest.TestCase):
+    """Test cases for FemapConverter class."""
 
     def setUp(self):
         """Set up test fixtures path."""
@@ -22,13 +22,13 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_converter_initialization(self):
         """Test converter initialization."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         self.assertEqual(converter.femap_filepath, self.simple_mesh)
         self.assertIsNotNone(converter.parser)
 
     def test_parse_femap(self):
         """Test FEMAP file parsing through converter."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
 
         self.assertEqual(len(converter.nodes), 8)
@@ -38,7 +38,7 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_validate_success(self):
         """Test validation with valid data."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
         messages = converter.validate()
 
@@ -48,7 +48,7 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_validate_missing_nodes(self):
         """Test validation catches missing nodes."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
 
         # Remove a node that's referenced by an element
@@ -59,11 +59,11 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
         self.assertGreater(len(errors), 0)
         self.assertTrue(any("missing node" in m for m in errors))
 
-    def test_build_multiblock_by_property(self):
+    def test_build_mesh(self):
         """Test VTK multiblock dataset building."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
-        mb = converter.build_multiblock_by_property()
+        mb = converter.build_mesh()
 
         self.assertIsInstance(mb, vtkMultiBlockDataSet)
         self.assertGreater(mb.GetNumberOfBlocks(), 0)
@@ -75,9 +75,9 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_cell_data_in_blocks(self):
         """Test cell data arrays in multiblock dataset."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
-        mb = converter.build_multiblock_by_property()
+        mb = converter.build_mesh()
 
         # Check first block has cell data
         block0 = mb.GetBlock(0)
@@ -89,7 +89,7 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_write_vtm(self):
         """Test writing VTM file."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
             output_file = f.name
@@ -104,9 +104,9 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_mixed_elements_conversion(self):
         """Test conversion of mesh with mixed element types."""
-        converter = FEMAPToVTMConverter(self.mixed_mesh)
+        converter = FemapConverter(self.mixed_mesh)
         converter.parse_femap()
-        mb = converter.build_multiblock_by_property()
+        mb = converter.build_mesh()
 
         # Should have at least one block
         self.assertGreater(mb.GetNumberOfBlocks(), 0)
@@ -144,9 +144,9 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_cell_data_values(self):
         """Test that cell data values are correct."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
-        mb = converter.build_multiblock_by_property()
+        mb = converter.build_mesh()
 
         # Get first block
         block0 = mb.GetBlock(0)
@@ -161,9 +161,9 @@ class TestFEMAPToVTMConverter(unittest.TestCase):
 
     def test_point_coordinates(self):
         """Test that point coordinates are correctly transferred."""
-        converter = FEMAPToVTMConverter(self.simple_mesh)
+        converter = FemapConverter(self.simple_mesh)
         converter.parse_femap()
-        mb = converter.build_multiblock_by_property()
+        mb = converter.build_mesh()
 
         # Get points from first block (all blocks share the same points)
         block0 = mb.GetBlock(0)
@@ -209,7 +209,7 @@ class TestIntegration(unittest.TestCase):
             output_file = f.name
 
         try:
-            converter = FEMAPToVTMConverter(self.simple_mesh)
+            converter = FemapConverter(self.simple_mesh)
             converter.write_vtm(output_file, validate=True)
 
             # Verify file exists and has content
@@ -239,7 +239,7 @@ class TestIntegration(unittest.TestCase):
             output_file = f.name
 
         try:
-            converter = FEMAPToVTMConverter(self.mixed_mesh)
+            converter = FemapConverter(self.mixed_mesh)
             converter.write_vtm(output_file, validate=True)
 
             # Verify file exists
