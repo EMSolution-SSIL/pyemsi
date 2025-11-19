@@ -61,6 +61,7 @@ class FemapConverter:
         self.header: Optional[Dict[str, str]] = None
         self._parsed: bool = False  # Track if parsing has been done
         self.multiblock: Optional[pv.MultiBlock] = None
+        self.elem_to_block_map: Dict[int, Tuple[int, int]] = {}  # elem_id -> (block_idx, elem_idx_in_block)
 
     def parse_femap(self):
         """Parse the FEMAP file and extract all data."""
@@ -181,6 +182,7 @@ class FemapConverter:
 
             # Insert cells for this property
             skipped = 0
+            elem_idx_in_block = 0
             for elem in elements:
                 topo = elem['topology']
 
@@ -221,6 +223,10 @@ class FemapConverter:
                     if elem['prop_id'] in self.properties:
                         mat_id = self.properties[elem['prop_id']].get('material_id', 0)
                     mat_ids.InsertNextValue(mat_id)
+
+                    # Store mapping: elem_id -> (block_idx, elem_idx_in_block)
+                    self.elem_to_block_map[elem['id']] = (block_idx, elem_idx_in_block)
+                    elem_idx_in_block += 1
 
             # Add arrays to grid
             ug.GetCellData().AddArray(elem_ids)
@@ -292,3 +298,46 @@ class FemapConverter:
         print("Conversion complete!")
 
         return self.multiblock
+
+    def get_element_location(self, elem_id: int) -> Optional[Tuple[int, int]]:
+        """
+        Get the multiblock location for a given element ID.
+
+        Args:
+            elem_id: The FEMAP element ID
+
+        Returns:
+            Tuple of (block_index, element_index_in_block) if found, None otherwise
+        """
+        return self.elem_to_block_map.get(elem_id)
+
+    def get_element_range_locations(self, start_elem_id: int, end_elem_id: int) -> Tuple[List[int], List[int]]:
+        """
+        Get multiblock locations for a range of element IDs.
+
+        Args:
+            start_elem_id: Starting element ID (inclusive)
+            end_elem_id: Ending element ID (inclusive), must be > start_elem_id
+
+        Returns:
+            Tuple of (block_indices, element_indices) where:
+            - block_indices: List of block indices for elements in range
+            - element_indices: List of element indices within their blocks
+
+        Raises:
+            ValueError: If end_elem_id <= start_elem_id
+        """
+        if end_elem_id <= start_elem_id:
+            raise ValueError(f"end_elem_id ({end_elem_id}) must be greater than start_elem_id ({start_elem_id})")
+
+        block_indices = []
+        element_indices = []
+
+        for elem_id in range(start_elem_id, end_elem_id + 1):
+            location = self.elem_to_block_map.get(elem_id)
+            if location is not None:
+                block_idx, elem_idx = location
+                block_indices.append(block_idx)
+                element_indices.append(elem_idx)
+
+        return block_indices, element_indices
