@@ -276,3 +276,142 @@ class FEMAPParser:
                     i += 1
 
         return materials
+
+    def get_output_sets(self) -> Dict[int, Dict[str, any]]:
+        """
+        Extract all output sets from Block 450.
+
+        Returns:
+            Dictionary mapping output set IDs to metadata
+        """
+        output_sets = {}
+
+        for block in self.get_blocks(450):
+            i = 0
+            while i < len(block.lines):
+                # Line 1: ID
+                parts = self.parse_csv_line(block.lines[i])
+                if len(parts) >= 1:
+                    try:
+                        set_id = int(parts[0])
+                        
+                        # Line 2: title
+                        title = ''
+                        if i + 1 < len(block.lines):
+                            title = block.lines[i + 1].strip().rstrip(',')
+                            if title == '<NULL>':
+                                title = ''
+                        
+                        # Line 3: from_prog, ProcessType (skip)
+                        
+                        # Line 4: value (time or frequency)
+                        value = 0.0
+                        if i + 3 < len(block.lines):
+                            value_parts = self.parse_csv_line(block.lines[i + 3])
+                            if len(value_parts) >= 1:
+                                value = float(value_parts[0])
+                        
+                        output_sets[set_id] = {
+                            'title': title,
+                            'value': value
+                        }
+                        
+                        # Skip to next output set (6 lines per set)
+                        i += 6
+                    except (ValueError, IndexError):
+                        i += 1
+                else:
+                    i += 1
+
+        return output_sets
+
+    def get_output_vectors(self) -> List[Dict[str, any]]:
+        """
+        Extract all output data vectors from Block 1051.
+
+        Returns:
+            List of output vector dictionaries with metadata and results
+        """
+        output_vectors = []
+
+        for block in self.get_blocks(1051):
+            i = 0
+            while i < len(block.lines):
+                # Line 1: setID, vecID, flag
+                parts = self.parse_csv_line(block.lines[i])
+                if len(parts) >= 2:
+                    try:
+                        set_id = int(parts[0])
+                        vec_id = int(parts[1])
+                        
+                        # Line 2: title
+                        title = ''
+                        if i + 1 < len(block.lines):
+                            title = block.lines[i + 1].strip().rstrip(',')
+                            if title == '<NULL>':
+                                title = ''
+                        
+                        # Line 6: id_min, id_max, out_type, ent_type
+                        ent_type = None
+                        if i + 5 < len(block.lines):
+                            line6_parts = self.parse_csv_line(block.lines[i + 5])
+                            if len(line6_parts) >= 4:
+                                ent_type = int(line6_parts[3])  # 7=nodal, 8=elemental
+                        
+                        # Skip header lines (7 lines)
+                        i += 7
+                        
+                        # Read result records until we hit -1,0. end marker
+                        results = {}
+                        while i < len(block.lines):
+                            result_parts = self.parse_csv_line(block.lines[i])
+                            
+                            # Check for end marker (-1,0.)
+                            if len(result_parts) >= 2 and result_parts[0] == '-1' and result_parts[1] == '0.':
+                                i += 1
+                                break
+                            
+                            # Format 1: entityID, value
+                            if len(result_parts) == 2:
+                                entity_id = int(result_parts[0])
+                                value = float(result_parts[1])
+                                results[entity_id] = value
+                                i += 1
+                            
+                            # Format 2: start_entityID, end_entityID, values...
+                            elif len(result_parts) > 2:
+                                start_id = int(result_parts[0])
+                                end_id = int(result_parts[1])
+                                values = [float(v) for v in result_parts[2:]]
+                                
+                                # Read continuation lines if needed
+                                entity_count = end_id - start_id + 1
+                                i += 1
+                                while len(values) < entity_count and i < len(block.lines):
+                                    cont_parts = self.parse_csv_line(block.lines[i])
+                                    # Check if this is the end marker
+                                    if len(cont_parts) >= 2 and cont_parts[0] == '-1' and cont_parts[1] == '0.':
+                                        break
+                                    values.extend([float(v) for v in cont_parts])
+                                    i += 1
+                                
+                                # Assign values to entity IDs
+                                for offset, value in enumerate(values[:entity_count]):
+                                    results[start_id + offset] = value
+                            else:
+                                i += 1
+                        
+                        output_vectors.append({
+                            'set_id': set_id,
+                            'vec_id': vec_id,
+                            'title': title,
+                            'ent_type': ent_type,  # 7=nodal, 8=elemental
+                            'results': results
+                        })
+                        
+                    except (ValueError, IndexError):
+                        i += 1
+                else:
+                    i += 1
+
+        return output_vectors

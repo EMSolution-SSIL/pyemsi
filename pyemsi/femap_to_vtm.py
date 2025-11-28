@@ -5,10 +5,12 @@ This module converts FEMAP Neutral files to VTK MultiBlock UnstructuredGrid (.vt
 Elements are organized by property ID into separate UnstructuredGrid blocks.
 """
 
+from pathlib import Path
+import re
 from typing import Dict, List, Tuple, Optional
 from vtk import (
     vtkPoints, vtkUnstructuredGrid,
-    vtkIntArray,
+    vtkIntArray, vtkDoubleArray,
     vtkMultiBlockDataSet,
     vtkXMLMultiBlockDataWriter,
     VTK_VERTEX, VTK_LINE, VTK_TRIANGLE, VTK_QUAD, VTK_TETRA,
@@ -62,6 +64,7 @@ class FemapConverter:
         self._parsed: bool = False  # Track if parsing has been done
         self.multiblock: Optional[pv.MultiBlock] = None
         self.elem_to_block_map: Dict[int, Tuple[int, int]] = {}  # elem_id -> (block_idx, elem_idx_in_block)
+        self.data: Dict[str, Dict] = {}  # Store appended data arrays
 
     def parse_femap(self):
         """Parse the FEMAP file and extract all data."""
@@ -253,7 +256,7 @@ class FemapConverter:
         self.multiblock = pv.MultiBlock(mb)
         return self.multiblock
 
-    def write_vtm(self, output_filepath: str, validate: bool = True) -> 'pv.MultiBlock':
+    def write_vtm(self, output_filepath: str = ".pyemsi", validate: bool = True) -> 'pv.MultiBlock':
         """
         Convert FEMAP file to VTK MultiBlock UnstructuredGrid and write to disk.
         Creates one UnstructuredGrid block per property ID.
@@ -341,3 +344,194 @@ class FemapConverter:
                 element_indices.append(elem_idx)
 
         return block_indices, element_indices
+
+    def _write_vtm_file(self, output_path: Path, ascii_mode: bool = True) -> None:
+        """
+        Write the multiblock dataset to a VTM file.
+
+        Args:
+            output_path: Path to write the VTM file
+            ascii_mode: If True, write in ASCII format (human-readable but larger).
+                       If False, write in binary format (smaller but not human-readable).
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        writer = vtkXMLMultiBlockDataWriter()
+        writer.SetFileName(str(output_path))
+        writer.SetInputData(self.multiblock)
+        if ascii_mode:
+            writer.SetDataModeToAscii()
+        else:
+            writer.SetDataModeToBinary()
+        writer.Write()
+
+    def append_data(self, data_path: str) -> None:
+        """
+        Append additional data from a VTK file to the multiblock dataset.
+
+        Args:
+            data_path: Path to VTK file containing data arrays
+        """
+        if self.multiblock is None:
+            raise RuntimeError("Multiblock dataset not built yet. Call build_mesh() first.")
+
+        parser = FEMAPParser(data_path)
+        parser.parse()
+        sets = parser.get_output_sets()
+        vectors = parser.get_output_vectors()
+        self.data[data_path] = {"sets": sets, "vectors": vectors}
+
+    def write_pvd(self, output_filepath: str = ".pyemsi/output.pvd", ascii_mode: bool = True) -> None:
+        """
+        Write a PVD file referencing the VTM file for time series data.
+
+        Args:
+            output_filepath: Output .pvd file path
+            ascii_mode: If True, write VTM/VTU files in ASCII format (human-readable but larger).
+                       If False, write in binary format (smaller but not human-readable).
+        """
+        if self.multiblock is None:
+            raise RuntimeError("Multiblock dataset not built yet. Call build_mesh() first.")
+        
+        pvd_path = Path(output_filepath)
+        pvd_path.parent.mkdir(parents=True, exist_ok=True)
+
+        pvd_lines = [
+        '<?xml version="1.0"?>',
+        '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
+        "  <Collection>",
+        ]
+
+        if self.data == {}:
+            # Single time step
+            vtm_name = Path(pvd_path.stem + "_vtms") / "t_0.000000e+00.vtm"
+            pvd_lines.append(
+                f'    <DataSet timestep="0.000000" group="" part="0" file="{vtm_name}"/>'
+            )
+            self._write_vtm_file(pvd_path.parent / vtm_name, ascii_mode=ascii_mode)
+        else:
+            # Multiple time steps
+            first_data_path = list(self.data.keys())[0]
+            for step, val in self.data[first_data_path]["sets"].items():
+                file_name = re.sub(r'[<>:"/\\|?*!]', '', val["title"])
+                vtm_name = Path(pvd_path.stem + "_vtms") / f"{file_name}.vtm"
+                pvd_lines.append(
+                    f'    <DataSet timestep="{val["value"]}" group="" part="0" file="{vtm_name}"/>'
+                )
+                self._assign_data_to_multiblock(step)
+                self._write_vtm_file(pvd_path.parent / vtm_name, ascii_mode=ascii_mode)
+        
+        pvd_lines.extend([
+            "  </Collection>",
+            "</VTKFile>"
+        ])
+
+        with open(pvd_path, "w") as f:
+            f.write("\n".join(pvd_lines))
+
+    def _assign_data_to_multiblock(self, step: int) -> None:
+        """
+        Assign output data arrays to the multiblock dataset for a specific output set.
+
+        This method iterates through all output vectors that belong to the specified
+        output set (step) and adds them as cell data (elemental) or point data (nodal)
+        arrays to the appropriate blocks in the multiblock dataset.
+
+        Args:
+            step: The output set ID to assign data for
+        """
+        if self.multiblock is None:
+            raise RuntimeError("Multiblock dataset not built yet. Call build_mesh() first.")
+
+        # Collect all vectors for this step from all data sources
+        vectors_for_step = []
+        for data_path, data_info in self.data.items():
+            for vector in data_info["vectors"]:
+                if vector["set_id"] == step:
+                    vectors_for_step.append(vector)
+
+        if not vectors_for_step:
+            return
+
+        # Get number of blocks
+        num_blocks = self.multiblock.GetNumberOfBlocks()
+
+        # Build reverse mapping: block_idx -> list of (elem_id, elem_idx_in_block)
+        block_elements: Dict[int, List[Tuple[int, int]]] = {i: [] for i in range(num_blocks)}
+        for elem_id, (block_idx, elem_idx) in self.elem_to_block_map.items():
+            block_elements[block_idx].append((elem_id, elem_idx))
+
+        # Sort by element index within each block
+        for block_idx in block_elements:
+            block_elements[block_idx].sort(key=lambda x: x[1])
+
+        # Process each vector
+        for vector in vectors_for_step:
+            title = vector["title"]
+            ent_type = vector["ent_type"]
+            results = vector["results"]
+
+            # Sanitize title for use as array name
+            safe_title = re.sub(r'[<>:"/\\|?*!]', '_', title) if title else f"Vector_{vector['vec_id']}"
+
+            if ent_type == 8:  # Elemental data
+                # Add as cell data to each block
+                for block_idx in range(num_blocks):
+                    block = self.multiblock.GetBlock(block_idx)
+                    if block is None:
+                        continue
+
+                    num_cells = block.GetNumberOfCells()
+                    if num_cells == 0:
+                        continue
+
+                    # Create array for this block
+                    data_array = vtkDoubleArray()
+                    data_array.SetName(safe_title)
+                    data_array.SetNumberOfComponents(1)
+                    data_array.SetNumberOfTuples(num_cells)
+
+                    # Fill with NaN initially (for missing data)
+                    for i in range(num_cells):
+                        data_array.SetValue(i, float('nan'))
+
+                    # Assign values based on element mapping
+                    for elem_id, elem_idx in block_elements[block_idx]:
+                        if elem_id in results:
+                            data_array.SetValue(elem_idx, results[elem_id])
+
+                    block.GetCellData().AddArray(data_array)
+
+            elif ent_type == 7:  # Nodal data
+                # Add as point data to each block
+                # All blocks share the same points, so we only need to build the mapping once
+                femap_to_vtk_id = {}
+                for vtk_idx, femap_id in enumerate(sorted(self.nodes.keys())):
+                    femap_to_vtk_id[femap_id] = vtk_idx
+
+                for block_idx in range(num_blocks):
+                    block = self.multiblock.GetBlock(block_idx)
+                    if block is None:
+                        continue
+
+                    num_points = block.GetNumberOfPoints()
+                    if num_points == 0:
+                        continue
+
+                    # Create array for this block
+                    data_array = vtkDoubleArray()
+                    data_array.SetName(safe_title)
+                    data_array.SetNumberOfComponents(1)
+                    data_array.SetNumberOfTuples(num_points)
+
+                    # Fill with NaN initially (for missing data)
+                    for i in range(num_points):
+                        data_array.SetValue(i, float('nan'))
+
+                    # Assign values based on node mapping
+                    for femap_node_id, value in results.items():
+                        if femap_node_id in femap_to_vtk_id:
+                            vtk_idx = femap_to_vtk_id[femap_node_id]
+                            if vtk_idx < num_points:
+                                data_array.SetValue(vtk_idx, value)
+
+                    block.GetPointData().AddArray(data_array)
