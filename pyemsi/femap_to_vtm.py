@@ -63,7 +63,7 @@ class FemapConverter:
         self.header: Optional[Dict[str, str]] = None
         self._parsed: bool = False  # Track if parsing has been done
         self.multiblock: Optional[pv.MultiBlock] = None
-        self.elem_to_block_map: Dict[int, Tuple[int, int]] = {}  # elem_id -> (block_idx, elem_idx_in_block)
+        self.block_to_elements_map: Dict[int, List[Tuple[int, int]]] = {}  # block_idx -> [(elem_id, elem_idx_in_block), ...]
         self.data: Dict[str, Dict] = {}  # Store appended data arrays
 
     def parse_femap(self):
@@ -156,6 +156,9 @@ class FemapConverter:
         mb = vtkMultiBlockDataSet()
         mb.SetNumberOfBlocks(len(elements_by_prop))
 
+        # Initialize block_to_elements_map
+        self.block_to_elements_map = {}
+
         # Create a block for each property
         block_idx = 0
         for prop_id in sorted(elements_by_prop.keys()):
@@ -186,6 +189,7 @@ class FemapConverter:
             # Insert cells for this property
             skipped = 0
             elem_idx_in_block = 0
+            block_elements = []  # Collect (elem_id, elem_idx) for this block
             for elem in elements:
                 topo = elem['topology']
 
@@ -227,9 +231,12 @@ class FemapConverter:
                         mat_id = self.properties[elem['prop_id']].get('material_id', 0)
                     mat_ids.InsertNextValue(mat_id)
 
-                    # Store mapping: elem_id -> (block_idx, elem_idx_in_block)
-                    self.elem_to_block_map[elem['id']] = (block_idx, elem_idx_in_block)
+                    # Track element mapping for this block
+                    block_elements.append((elem['id'], elem_idx_in_block))
                     elem_idx_in_block += 1
+
+            # Store block_to_elements mapping
+            self.block_to_elements_map[block_idx] = block_elements
 
             # Add arrays to grid
             ug.GetCellData().AddArray(elem_ids)
@@ -301,49 +308,6 @@ class FemapConverter:
         print("Conversion complete!")
 
         return self.multiblock
-
-    def get_element_location(self, elem_id: int) -> Optional[Tuple[int, int]]:
-        """
-        Get the multiblock location for a given element ID.
-
-        Args:
-            elem_id: The FEMAP element ID
-
-        Returns:
-            Tuple of (block_index, element_index_in_block) if found, None otherwise
-        """
-        return self.elem_to_block_map.get(elem_id)
-
-    def get_element_range_locations(self, start_elem_id: int, end_elem_id: int) -> Tuple[List[int], List[int]]:
-        """
-        Get multiblock locations for a range of element IDs.
-
-        Args:
-            start_elem_id: Starting element ID (inclusive)
-            end_elem_id: Ending element ID (inclusive), must be > start_elem_id
-
-        Returns:
-            Tuple of (block_indices, element_indices) where:
-            - block_indices: List of block indices for elements in range
-            - element_indices: List of element indices within their blocks
-
-        Raises:
-            ValueError: If end_elem_id <= start_elem_id
-        """
-        if end_elem_id <= start_elem_id:
-            raise ValueError(f"end_elem_id ({end_elem_id}) must be greater than start_elem_id ({start_elem_id})")
-
-        block_indices = []
-        element_indices = []
-
-        for elem_id in range(start_elem_id, end_elem_id + 1):
-            location = self.elem_to_block_map.get(elem_id)
-            if location is not None:
-                block_idx, elem_idx = location
-                block_indices.append(block_idx)
-                element_indices.append(elem_idx)
-
-        return block_indices, element_indices
 
     def _write_vtm_file(self, output_path: Path, ascii_mode: bool = True) -> None:
         """
@@ -455,15 +419,6 @@ class FemapConverter:
         # Get number of blocks
         num_blocks = self.multiblock.GetNumberOfBlocks()
 
-        # Build reverse mapping: block_idx -> list of (elem_id, elem_idx_in_block)
-        block_elements: Dict[int, List[Tuple[int, int]]] = {i: [] for i in range(num_blocks)}
-        for elem_id, (block_idx, elem_idx) in self.elem_to_block_map.items():
-            block_elements[block_idx].append((elem_id, elem_idx))
-
-        # Sort by element index within each block
-        for block_idx in block_elements:
-            block_elements[block_idx].sort(key=lambda x: x[1])
-
         # Process each vector
         for vector in vectors_for_step:
             title = vector["title"]
@@ -495,7 +450,7 @@ class FemapConverter:
                         data_array.SetValue(i, float('nan'))
 
                     # Assign values based on element mapping
-                    for elem_id, elem_idx in block_elements[block_idx]:
+                    for elem_id, elem_idx in self.block_to_elements_map[block_idx]:
                         if elem_id in results:
                             data_array.SetValue(elem_idx, results[elem_id])
 
