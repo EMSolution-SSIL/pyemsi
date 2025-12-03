@@ -6,8 +6,11 @@ import pyvista as pv
 converter = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\post_geom")
 converter.parse_femap()
 converter.build_mesh()
-converter.append_data(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\magnetic")
-converter.write_pvd()
+sets, vectors = converter.parse_data_file("magnetic")
+converter.init_pvd(sets=sets, vectors=vectors, force=True)
+converter.append_magnetic()
+# converter.append_data(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\magnetic")
+# converter.write_pvd()
 
 # # Parse FEMAP file
 # converter.parse_femap()
