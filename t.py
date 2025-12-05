@@ -1,14 +1,21 @@
-from pyemsi import FemapConverter
-import pyvista as pv
+from pyemsi.FemapConverter import FemapConverter2
 
-# Create converter
-# converter = FemapConverter("tests/post_geom_single_hex")
-converter = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\post_geom")
-converter.parse_femap()
-converter.build_mesh()
-sets, vectors = converter.parse_data_file("magnetic")
-converter.init_pvd(sets=sets, vectors=vectors, force=True)
-converter.append_magnetic()
+# converter = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage")
+converter = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient")
+
+# from pyemsi import FemapConverter
+# import pyvista as pv
+
+# # Create converter
+# # converter = FemapConverter("tests/post_geom_single_hex")
+# converter = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\post_geom")
+# converter.parse_femap()
+# converter.build_mesh()
+# sets, vectors = converter.parse_data_file("magnetic")
+# converter.init_pvd(sets=sets, vectors=vectors, force=True)
+# converter.append_magnetic()
+
+
 # converter.append_data(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\magnetic")
 # converter.write_pvd()
 
@@ -44,6 +51,3 @@ converter.append_magnetic()
 # p.add_legend()
 # p.reset_camera()
 # p.show(title="All blocks in one scene")
-
-
-

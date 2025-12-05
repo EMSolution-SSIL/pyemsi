@@ -10,14 +10,23 @@ import re
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 from vtk import (
-    vtkPoints, vtkUnstructuredGrid,
-    vtkIntArray, vtkDoubleArray,
+    vtkPoints,
+    vtkUnstructuredGrid,
+    vtkDoubleArray,
     vtkMultiBlockDataSet,
     vtkXMLMultiBlockDataWriter,
-    VTK_VERTEX, VTK_LINE, VTK_TRIANGLE, VTK_QUAD, VTK_TETRA,
-    VTK_HEXAHEDRON, VTK_WEDGE,
-    VTK_QUADRATIC_TRIANGLE, VTK_QUADRATIC_QUAD, VTK_QUADRATIC_TETRA,
-    VTK_QUADRATIC_HEXAHEDRON, VTK_QUADRATIC_WEDGE
+    VTK_VERTEX,
+    VTK_LINE,
+    VTK_TRIANGLE,
+    VTK_QUAD,
+    VTK_TETRA,
+    VTK_HEXAHEDRON,
+    VTK_WEDGE,
+    VTK_QUADRATIC_TRIANGLE,
+    VTK_QUADRATIC_QUAD,
+    VTK_QUADRATIC_TETRA,
+    VTK_QUADRATIC_HEXAHEDRON,
+    VTK_QUADRATIC_WEDGE,
 )
 import pyvista as pv
 
@@ -27,18 +36,18 @@ from .femap_parser import FEMAPParser
 # FEMAP topology to VTK cell type mapping
 # Format: femap_topology_id -> (vtk_cell_type, num_nodes)
 FEMAP_TO_VTK = {
-    9: (VTK_VERTEX, 1),                    # Point -> VTK_VERTEX
-    0: (VTK_LINE, 2),                      # Line2 -> VTK_LINE
-    2: (VTK_TRIANGLE, 3),                  # Tri3 -> VTK_TRIANGLE
-    3: (VTK_QUADRATIC_TRIANGLE, 6),       # Tri6 -> VTK_QUADRATIC_TRIANGLE
-    4: (VTK_QUAD, 4),                      # Quad4 -> VTK_QUAD
-    5: (VTK_QUADRATIC_QUAD, 8),           # Quad8 -> VTK_QUADRATIC_QUAD
-    6: (VTK_TETRA, 4),                     # Tetra4 -> VTK_TETRA
-    10: (VTK_QUADRATIC_TETRA, 10),        # Tetra10 -> VTK_QUADRATIC_TETRA
-    7: (VTK_WEDGE, 6),                     # Wedge6 -> VTK_WEDGE
-    11: (VTK_QUADRATIC_WEDGE, 15),        # Wedge15 -> VTK_QUADRATIC_WEDGE
-    8: (VTK_HEXAHEDRON, 8),                # Brick8 -> VTK_HEXAHEDRON
-    12: (VTK_QUADRATIC_HEXAHEDRON, 20),   # Brick20 -> VTK_QUADRATIC_HEXAHEDRON
+    9: (VTK_VERTEX, 1),  # Point -> VTK_VERTEX
+    0: (VTK_LINE, 2),  # Line2 -> VTK_LINE
+    2: (VTK_TRIANGLE, 3),  # Tri3 -> VTK_TRIANGLE
+    3: (VTK_QUADRATIC_TRIANGLE, 6),  # Tri6 -> VTK_QUADRATIC_TRIANGLE
+    4: (VTK_QUAD, 4),  # Quad4 -> VTK_QUAD
+    5: (VTK_QUADRATIC_QUAD, 8),  # Quad8 -> VTK_QUADRATIC_QUAD
+    6: (VTK_TETRA, 4),  # Tetra4 -> VTK_TETRA
+    10: (VTK_QUADRATIC_TETRA, 10),  # Tetra10 -> VTK_QUADRATIC_TETRA
+    7: (VTK_WEDGE, 6),  # Wedge6 -> VTK_WEDGE
+    11: (VTK_QUADRATIC_WEDGE, 15),  # Wedge15 -> VTK_QUADRATIC_WEDGE
+    8: (VTK_HEXAHEDRON, 8),  # Brick8 -> VTK_HEXAHEDRON
+    12: (VTK_QUADRATIC_HEXAHEDRON, 20),  # Brick20 -> VTK_QUADRATIC_HEXAHEDRON
 }
 
 
@@ -65,7 +74,9 @@ class FemapConverter:
         self.header: Optional[Dict[str, str]] = None
         self._parsed: bool = False  # Track if parsing has been done
         self.multiblock: Optional[pv.MultiBlock] = None
-        self.block_to_elements_map: Dict[int, List[Tuple[int, int]]] = {}  # block_idx -> [(elem_id, elem_idx_in_block), ...]
+        self.block_to_elements_map: Dict[
+            int, List[Tuple[int, int]]
+        ] = {}  # block_idx -> [(elem_id, elem_idx_in_block), ...]
         self.data: Dict[str, Dict] = {}  # Store appended data arrays
 
     def parse_femap(self):
@@ -98,29 +109,23 @@ class FemapConverter:
 
         # Check for unsupported element topologies
         for elem in self.elements:
-            topo = elem['topology']
+            topo = elem["topology"]
             if topo not in FEMAP_TO_VTK:
-                messages.append(
-                    f"WARNING: Unsupported topology {topo} in element {elem['id']}"
-                )
+                messages.append(f"WARNING: Unsupported topology {topo} in element {elem['id']}")
 
         # Check for missing nodes in elements
         for elem in self.elements:
-            for node_id in elem['nodes']:
+            for node_id in elem["nodes"]:
                 if node_id not in self.nodes:
-                    messages.append(
-                        f"ERROR: Element {elem['id']} references missing node {node_id}"
-                    )
+                    messages.append(f"ERROR: Element {elem['id']} references missing node {node_id}")
 
         # Check version
-        if self.header and self.header.get('version') != '4.41':
-            messages.append(
-                f"WARNING: Expected FEMAP version 4.41, got {self.header.get('version')}"
-            )
+        if self.header and self.header.get("version") != "4.41":
+            messages.append(f"WARNING: Expected FEMAP version 4.41, got {self.header.get('version')}")
 
         return messages
 
-    def build_mesh(self) -> 'pv.MultiBlock':
+    def build_mesh(self) -> "pv.MultiBlock":
         """
         Build VTK MultiBlock UnstructuredGrid with separate blocks for each property ID.
 
@@ -132,14 +137,12 @@ class FemapConverter:
         """
         # Ensure data is parsed before building
         if not self._parsed:
-            raise RuntimeError(
-                "Data has not been parsed yet. Call parse_femap() before building multiblock."
-            )
+            raise RuntimeError("Data has not been parsed yet. Call parse_femap() before building multiblock.")
 
         # Group elements by property ID
         elements_by_prop = {}
         for elem in self.elements:
-            prop_id = elem['prop_id']
+            prop_id = elem["prop_id"]
             if prop_id not in elements_by_prop:
                 elements_by_prop[prop_id] = []
             elements_by_prop[prop_id].append(elem)
@@ -170,36 +173,19 @@ class FemapConverter:
             ug.SetPoints(pts)
             ug.Allocate(len(elements))
 
-            # Arrays for cell data
-            elem_ids = vtkIntArray()
-            elem_ids.SetName("ElementID")
-            elem_ids.SetNumberOfComponents(1)
-
-            prop_ids = vtkIntArray()
-            prop_ids.SetName("PropertyID")
-            prop_ids.SetNumberOfComponents(1)
-
-            mat_ids = vtkIntArray()
-            mat_ids.SetName("MaterialID")
-            mat_ids.SetNumberOfComponents(1)
-
-            topo_ids = vtkIntArray()
-            topo_ids.SetName("TopologyID")
-            topo_ids.SetNumberOfComponents(1)
-
             # Insert cells for this property
             skipped = 0
             elem_idx_in_block = 0
             block_elements = []  # Collect (elem_id, elem_idx) for this block
             for elem in elements:
-                topo = elem['topology']
+                topo = elem["topology"]
 
                 if topo not in FEMAP_TO_VTK:
                     skipped += 1
                     continue
 
                 vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
-                elem_nodes = elem['nodes'][:num_nodes_required]
+                elem_nodes = elem["nodes"][:num_nodes_required]
 
                 if len(elem_nodes) < num_nodes_required:
                     skipped += 1
@@ -221,29 +207,12 @@ class FemapConverter:
                     # Insert cell using sequence overload
                     ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
 
-                    # Add cell data
-                    elem_ids.InsertNextValue(elem['id'])
-                    prop_ids.InsertNextValue(elem['prop_id'])
-                    topo_ids.InsertNextValue(elem['topology'])
-
-                    # Get material ID from property
-                    mat_id = 0
-                    if elem['prop_id'] in self.properties:
-                        mat_id = self.properties[elem['prop_id']].get('material_id', 0)
-                    mat_ids.InsertNextValue(mat_id)
-
                     # Track element mapping for this block
-                    block_elements.append((elem['id'], elem_idx_in_block))
+                    block_elements.append((elem["id"], elem_idx_in_block))
                     elem_idx_in_block += 1
 
             # Store block_to_elements mapping
             self.block_to_elements_map[block_idx] = block_elements
-
-            # Add arrays to grid
-            ug.GetCellData().AddArray(elem_ids)
-            ug.GetCellData().AddArray(prop_ids)
-            ug.GetCellData().AddArray(mat_ids)
-            ug.GetCellData().AddArray(topo_ids)
 
             # Set block in multiblock dataset
             mb.SetBlock(block_idx, ug)
@@ -251,20 +220,22 @@ class FemapConverter:
             # Set block name
             prop_name = f"Property_{prop_id}"
             if prop_id in self.properties:
-                prop_title = self.properties[prop_id].get('title', '')
+                prop_title = self.properties[prop_id].get("title", "")
                 if prop_title:
                     prop_name = f"{prop_name}_{prop_title}"
             mb.GetMetaData(block_idx).Set(mb.NAME(), prop_name)
 
-            print(f"Block {block_idx}: {prop_name} - {ug.GetNumberOfCells()} cells" +
-                  (f" ({skipped} skipped)" if skipped > 0 else ""))
+            print(
+                f"Block {block_idx}: {prop_name} - {ug.GetNumberOfCells()} cells"
+                + (f" ({skipped} skipped)" if skipped > 0 else "")
+            )
 
             block_idx += 1
 
         self.multiblock = pv.MultiBlock(mb)
         return self.multiblock
 
-    def write_vtm(self, output_filepath: str = ".pyemsi", validate: bool = True) -> 'pv.MultiBlock':
+    def write_vtm(self, output_filepath: str = ".pyemsi", validate: bool = True) -> "pv.MultiBlock":
         """
         Convert FEMAP file to VTK MultiBlock UnstructuredGrid and write to disk.
         Creates one UnstructuredGrid block per property ID.
@@ -344,13 +315,13 @@ class FemapConverter:
         sets = parser.get_output_sets()
         vectors = parser.get_output_vectors()
         self.data[data_path] = {"sets": sets, "vectors": vectors}
-    
+
     def parse_data_file(self, file_name: str) -> Tuple[Dict[int, Dict], List[Dict]]:
         """
         Static method to parse a data file and extract output sets and vectors.
 
         Args:
-            file_name: Path to data file    
+            file_name: Path to data file
 
         Returns:
             Tuple containing:
@@ -370,7 +341,7 @@ class FemapConverter:
         name: str = "output",
         force: bool = False,
         output_dir: str = ".pyemsi",
-        ascii_mode: bool = True
+        ascii_mode: bool = True,
     ) -> Path:
         """
         Initialize a PVD file structure based on output sets and vectors.
@@ -418,6 +389,7 @@ class FemapConverter:
                 pvd_path.unlink()
             if vtm_folder.exists():
                 import shutil
+
                 shutil.rmtree(vtm_folder)
 
         # Create directories
@@ -431,12 +403,14 @@ class FemapConverter:
             value = set_info.get("value", 0.0)
             # Check if there are any vectors for this step
             vectors_for_step = [v for v in vectors if v.get("set_id") == step_id]
-            time_steps.append({
-                "step_id": step_id,
-                "title": title,
-                "value": value,
-                "num_vectors": len(vectors_for_step)
-            })
+            time_steps.append(
+                {
+                    "step_id": step_id,
+                    "title": title,
+                    "value": value,
+                    "num_vectors": len(vectors_for_step),
+                }
+            )
 
         if not time_steps:
             raise ValueError("No valid time steps found in output sets.")
@@ -450,20 +424,15 @@ class FemapConverter:
 
         for ts in time_steps:
             # Sanitize filename
-            safe_title = re.sub(r'[<>:"/\\|?*!]', '', ts["title"])
+            safe_title = re.sub(r'[<>:"/\\|?*!]', "", ts["title"])
             vtm_name = f"{name}_vtms/{safe_title}.vtm"
-            pvd_lines.append(
-                f'    <DataSet timestep="{ts["value"]}" group="" part="0" file="{vtm_name}"/>'
-            )
-            
+            pvd_lines.append(f'    <DataSet timestep="{ts["value"]}" group="" part="0" file="{vtm_name}"/>')
+
             # Write VTM file for this timestep
             vtm_path = output_path / vtm_name
             self._write_vtm_file(vtm_path, ascii_mode=ascii_mode)
 
-        pvd_lines.extend([
-            "  </Collection>",
-            "</VTKFile>"
-        ])
+        pvd_lines.extend(["  </Collection>", "</VTKFile>"])
 
         # Write PVD file
         with open(pvd_path, "w") as f:
@@ -486,43 +455,36 @@ class FemapConverter:
         """
         if self.multiblock is None:
             raise RuntimeError("Multiblock dataset not built yet. Call build_mesh() first.")
-        
+
         pvd_path = Path(output_filepath)
         pvd_path.parent.mkdir(parents=True, exist_ok=True)
 
         pvd_lines = [
-        '<?xml version="1.0"?>',
-        '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
-        "  <Collection>",
+            '<?xml version="1.0"?>',
+            '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
+            "  <Collection>",
         ]
 
         if self.data == {}:
             # Single time step
             vtm_name = Path(pvd_path.stem + "_vtms") / "t_0.000000e+00.vtm"
-            pvd_lines.append(
-                f'    <DataSet timestep="0.000000" group="" part="0" file="{vtm_name}"/>'
-            )
+            pvd_lines.append(f'    <DataSet timestep="0.000000" group="" part="0" file="{vtm_name}"/>')
             self._write_vtm_file(pvd_path.parent / vtm_name, ascii_mode=ascii_mode)
         else:
             # Multiple time steps
             first_data_path = list(self.data.keys())[0]
             vectors = self.data[first_data_path]["vectors"]
             for step, val in self.data[first_data_path]["sets"].items():
-                file_name = re.sub(r'[<>:"/\\|?*!]', '', val["title"])
+                file_name = re.sub(r'[<>:"/\\|?*!]', "", val["title"])
                 vtm_name = Path(pvd_path.stem + "_vtms") / f"{file_name}.vtm"
-                pvd_lines.append(
-                    f'    <DataSet timestep="{val["value"]}" group="" part="0" file="{vtm_name}"/>'
-                )
+                pvd_lines.append(f'    <DataSet timestep="{val["value"]}" group="" part="0" file="{vtm_name}"/>')
                 # self._assign_data_to_multiblock(step)
                 # self._write_vtm_file(pvd_path.parent / vtm_name, ascii_mode=ascii_mode)
 
                 data_arrays = self.get_data_array(step, vectors=vectors)
                 print(f"Writing VTM for step {step} with data array '{data_arrays}'")
-        
-        pvd_lines.extend([
-            "  </Collection>",
-            "</VTKFile>"
-        ])
+
+        pvd_lines.extend(["  </Collection>", "</VTKFile>"])
 
         with open(pvd_path, "w") as f:
             f.write("\n".join(pvd_lines))
@@ -561,7 +523,7 @@ class FemapConverter:
             results = vector["results"]
 
             # Sanitize title for use as array name
-            safe_title = re.sub(r'[<>:"/\\|?*!]', '_', title) if title else f"Vector_{vector['vec_id']}"
+            safe_title = re.sub(r'[<>:"/\\|?*!]', "_", title) if title else f"Vector_{vector['vec_id']}"
 
             if ent_type == 8:  # Elemental data
                 # Add as cell data to each block
@@ -582,7 +544,7 @@ class FemapConverter:
 
                     # Fill with NaN initially (for missing data)
                     for i in range(num_cells):
-                        data_array.SetValue(i, float('nan'))
+                        data_array.SetValue(i, float("nan"))
 
                     # Assign values based on element mapping
                     for elem_id, elem_idx in self.block_to_elements_map[block_idx]:
@@ -615,7 +577,7 @@ class FemapConverter:
 
                     # Fill with NaN initially (for missing data)
                     for i in range(num_points):
-                        data_array.SetValue(i, float('nan'))
+                        data_array.SetValue(i, float("nan"))
 
                     # Assign values based on node mapping
                     for femap_node_id, value in results.items():
@@ -671,7 +633,7 @@ class FemapConverter:
             results = matching_vector["results"]
 
             # Sanitize title for use as array name
-            safe_title = re.sub(r'[<>:"/\\|?*!]', '_', title) if title else f"Vector_{matching_vector['vec_id']}"
+            safe_title = re.sub(r'[<>:"/\\|?*!]', "_", title) if title else f"Vector_{matching_vector['vec_id']}"
 
             data_arrays: Dict[int, np.ndarray] = {}
 
@@ -717,10 +679,13 @@ class FemapConverter:
 
                     data_arrays[block_idx] = arr
 
-            results_dict[safe_title] = {"ent_type": ent_type, "data_arrays": data_arrays}
+            results_dict[safe_title] = {
+                "ent_type": ent_type,
+                "data_arrays": data_arrays,
+            }
 
         return results_dict
-    
+
     def append_magnetic(self, data_path: Optional[str] = None) -> None:
         """
         Append magnetic data from a specified file or default location.
@@ -730,9 +695,9 @@ class FemapConverter:
         """
         if data_path is None:
             data_path = str(Path(self.directory) / "magnetic")
-        
+
         # load the multiblock pvd data
-        reader = pv.PVDReader('.pyemsi/output.pvd')
+        reader = pv.PVDReader(".pyemsi/output.pvd")
 
         sets, vectors = self.parse_data_file("magnetic")
 
@@ -741,7 +706,7 @@ class FemapConverter:
             current_dataset = reader.datasets[step]
             vtm_path = Path(".pyemsi") / current_dataset.path
             multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(step+1, vectors=vectors)
+            data_arrays = self.get_data_array(step + 1, vectors=vectors)
             for index, block in enumerate(multiblock):
                 node_1 = data_arrays["BMAG-node-1"]["data_arrays"].get(index)
                 node_2 = data_arrays["BMAG-node-2"]["data_arrays"].get(index)
@@ -757,7 +722,7 @@ class FemapConverter:
                 block.cell_data["B-Vector"] = element_vec
                 element_4 = data_arrays["BMAG-elem-4"]["data_arrays"].get(index)
                 block.cell_data["B-Magnitude"] = element_4
-            
+
             writer = vtkXMLMultiBlockDataWriter()
             writer.SetFileName(str(vtm_path))
             writer.SetInputData(multiblock)
@@ -766,7 +731,3 @@ class FemapConverter:
             else:
                 writer.SetDataModeToBinary()
             writer.Write()
-
-        
-        
-    

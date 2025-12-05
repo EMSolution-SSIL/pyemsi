@@ -32,6 +32,7 @@ class FEMAPParser:
     def __init__(self, filepath: str):
         self.filepath = filepath
         self.blocks: Dict[int, List[FEMAPBlock]] = {}
+        self.parse()
 
     def parse(self) -> Dict[int, List[FEMAPBlock]]:
         """
@@ -40,12 +41,12 @@ class FEMAPParser:
         Returns:
             Dictionary mapping block IDs to lists of blocks
         """
-        with open(self.filepath, 'r') as f:
+        with open(self.filepath, "r") as f:
             lines = f.readlines()
 
         i = 0
         while i < len(lines):
-            line = lines[i].rstrip('\n')
+            line = lines[i].rstrip("\n")
 
             # Check for block delimiter
             if line == self.BLOCK_DELIMITER:
@@ -66,7 +67,7 @@ class FEMAPParser:
 
                         # Read until next delimiter
                         while i < len(lines):
-                            line = lines[i].rstrip('\n')
+                            line = lines[i].rstrip("\n")
                             if line == self.BLOCK_DELIMITER:
                                 # Skip to after this delimiter
                                 i += 1
@@ -102,11 +103,11 @@ class FEMAPParser:
             List of field values as strings
         """
         # Remove trailing comma if present
-        line = line.rstrip(',').strip()
+        line = line.rstrip(",").strip()
 
         # Try comma separation first
-        if ',' in line:
-            parts = [p.strip() for p in line.split(',') if p.strip()]
+        if "," in line:
+            parts = [p.strip() for p in line.split(",") if p.strip()]
         else:
             # Fall back to space separation
             parts = line.split()
@@ -135,10 +136,7 @@ class FEMAPParser:
         title = block.lines[0].strip()
         version = block.lines[1].strip()
 
-        return {
-            'title': title if title != '<NULL>' else '',
-            'version': version
-        }
+        return {"title": title if title != "<NULL>" else "", "version": version}
 
     def get_nodes(self) -> Dict[int, Tuple[float, float, float]]:
         """
@@ -184,16 +182,13 @@ class FEMAPParser:
                         mat_id = int(parts[2])
 
                         # Second line has title
-                        title = ''
+                        title = ""
                         if i + 1 < len(block.lines):
-                            title = block.lines[i + 1].strip().rstrip(',')
-                            if title == '<NULL>':
-                                title = ''
+                            title = block.lines[i + 1].strip().rstrip(",")
+                            if title == "<NULL>":
+                                title = ""
 
-                        properties[prop_id] = {
-                            'material_id': mat_id,
-                            'title': title
-                        }
+                        properties[prop_id] = {"material_id": mat_id, "title": title}
 
                         # Skip to next property (7 lines per property)
                         i += 7
@@ -234,12 +229,14 @@ class FEMAPParser:
                             nodes2 = self.parse_csv_line(block.lines[i + 2])
                             nodes.extend([int(n) for n in nodes2 if n and int(n) != 0])
 
-                        elements.append({
-                            'id': elem_id,
-                            'prop_id': prop_id,
-                            'topology': topology,
-                            'nodes': nodes
-                        })
+                        elements.append(
+                            {
+                                "id": elem_id,
+                                "prop_id": prop_id,
+                                "topology": topology,
+                                "nodes": nodes,
+                            }
+                        )
 
                         # Skip to next element (7 lines per element)
                         i += 7
@@ -267,7 +264,7 @@ class FEMAPParser:
                 if len(parts) >= 1:
                     try:
                         mat_id = int(parts[0])
-                        materials[mat_id] = {'id': mat_id}
+                        materials[mat_id] = {"id": mat_id}
                         # Skip material block (structure varies)
                         i += 1
                     except (ValueError, IndexError):
@@ -294,28 +291,25 @@ class FEMAPParser:
                 if len(parts) >= 1:
                     try:
                         set_id = int(parts[0])
-                        
+
                         # Line 2: title
-                        title = ''
+                        title = ""
                         if i + 1 < len(block.lines):
-                            title = block.lines[i + 1].strip().rstrip(',')
-                            if title == '<NULL>':
-                                title = ''
-                        
+                            title = block.lines[i + 1].strip().rstrip(",")
+                            if title == "<NULL>":
+                                title = ""
+
                         # Line 3: from_prog, ProcessType (skip)
-                        
+
                         # Line 4: value (time or frequency)
                         value = 0.0
                         if i + 3 < len(block.lines):
                             value_parts = self.parse_csv_line(block.lines[i + 3])
                             if len(value_parts) >= 1:
                                 value = float(value_parts[0])
-                        
-                        output_sets[set_id] = {
-                            'title': title,
-                            'value': value
-                        }
-                        
+
+                        output_sets[set_id] = {"title": title, "value": value}
+
                         # Skip to next output set (6 lines per set)
                         i += 6
                     except (ValueError, IndexError):
@@ -343,72 +337,84 @@ class FEMAPParser:
                     try:
                         set_id = int(parts[0])
                         vec_id = int(parts[1])
-                        
+
                         # Line 2: title
-                        title = ''
+                        title = ""
                         if i + 1 < len(block.lines):
-                            title = block.lines[i + 1].strip().rstrip(',')
-                            if title == '<NULL>':
-                                title = ''
-                        
+                            title = block.lines[i + 1].strip().rstrip(",")
+                            if title == "<NULL>":
+                                title = ""
+
                         # Line 6: id_min, id_max, out_type, ent_type
                         ent_type = None
                         if i + 5 < len(block.lines):
                             line6_parts = self.parse_csv_line(block.lines[i + 5])
                             if len(line6_parts) >= 4:
                                 ent_type = int(line6_parts[3])  # 7=nodal, 8=elemental
-                        
+
                         # Skip header lines (7 lines)
                         i += 7
-                        
+
                         # Read result records until we hit -1,0. end marker
                         results = {}
                         while i < len(block.lines):
                             result_parts = self.parse_csv_line(block.lines[i])
-                            
+
                             # Check for end marker (-1,0.)
-                            if len(result_parts) >= 2 and result_parts[0] == '-1' and result_parts[1] == '0.':
+                            if (
+                                len(result_parts) >= 2
+                                and result_parts[0] == "-1"
+                                and result_parts[1] == "0."
+                            ):
                                 i += 1
                                 break
-                            
+
                             # Format 1: entityID, value
                             if len(result_parts) == 2:
                                 entity_id = int(result_parts[0])
                                 value = float(result_parts[1])
                                 results[entity_id] = value
                                 i += 1
-                            
+
                             # Format 2: start_entityID, end_entityID, values...
                             elif len(result_parts) > 2:
                                 start_id = int(result_parts[0])
                                 end_id = int(result_parts[1])
                                 values = [float(v) for v in result_parts[2:]]
-                                
+
                                 # Read continuation lines if needed
                                 entity_count = end_id - start_id + 1
                                 i += 1
-                                while len(values) < entity_count and i < len(block.lines):
+                                while len(values) < entity_count and i < len(
+                                    block.lines
+                                ):
                                     cont_parts = self.parse_csv_line(block.lines[i])
                                     # Check if this is the end marker
-                                    if len(cont_parts) >= 2 and cont_parts[0] == '-1' and cont_parts[1] == '0.':
+                                    if (
+                                        len(cont_parts) >= 2
+                                        and cont_parts[0] == "-1"
+                                        and cont_parts[1] == "0."
+                                    ):
                                         break
                                     values.extend([float(v) for v in cont_parts])
                                     i += 1
-                                
+
                                 # Assign values to entity IDs
                                 for offset, value in enumerate(values[:entity_count]):
                                     results[start_id + offset] = value
                             else:
                                 i += 1
-                        
-                        output_vectors.append({
-                            'set_id': set_id,
-                            'vec_id': vec_id,
-                            'title': title,
-                            'ent_type': ent_type,  # 7=nodal, 8=elemental
-                            'results': results
-                        })
-                        
+
+                        output_vectors.append(
+                            {
+                                "set_id": set_id,
+                                "vec_id": vec_id,
+                                "title": title,
+                                "ent_type": ent_type,  # 7=nodal, 8=elemental
+                                "results": results,
+                            }
+                        )
+
                     except (ValueError, IndexError):
                         i += 1
                 else:
