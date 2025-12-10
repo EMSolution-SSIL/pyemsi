@@ -1,11 +1,11 @@
 import pyvista as pv
-from pyemsi.FemapConverter import FemapConverter2
+from pyemsi.FemapConverter import FemapConverter
 import cProfile
 import pstats
 
 # converter = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage")
 with cProfile.Profile() as pr:
-    x = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient")
+    x = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient")
 
 
 stats = pstats.Stats(pr)

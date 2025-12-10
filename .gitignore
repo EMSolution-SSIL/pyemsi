@@ -6,6 +6,10 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
+*.pxd
+*.c
+*.prof
 
 # Distribution / packaging
 .Python

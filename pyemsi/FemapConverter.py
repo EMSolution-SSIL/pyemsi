@@ -42,7 +42,7 @@ FEMAP_TO_VTK = {
 }
 
 
-class FemapConverter2:
+class FemapConverter:
     """
     Converts EMSolution's FEMAP Neutral files to VTK MultiBlock UnstructuredGrid format.
     """
@@ -185,7 +185,7 @@ class FemapConverter2:
         return mb
 
     def _build_mesh(self, mesh_file: str | Path):
-        parser = FEMAPParser(mesh_file)
+        parser = FEMAPParser(str(mesh_file))
         nodes = parser.get_nodes()
         elements = parser.get_elements()
 
