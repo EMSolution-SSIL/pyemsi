@@ -1,10 +1,18 @@
+import pyvista as pv
 from pyemsi.FemapConverter import FemapConverter2
+import cProfile
+import pstats
 
 # converter = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage")
-converter = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient")
+with cProfile.Profile() as pr:
+    x = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient")
+
+
+stats = pstats.Stats(pr)
+stats.sort_stats(pstats.SortKey.CUMULATIVE)
+stats.dump_stats("femap_profile.prof")
 
 # from pyemsi import FemapConverter
-# import pyvista as pv
 
 # # Create converter
 # # converter = FemapConverter("tests/post_geom_single_hex")

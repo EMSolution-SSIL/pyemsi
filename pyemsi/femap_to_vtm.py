@@ -648,7 +648,7 @@ class FemapConverter:
                         continue
 
                     # Create numpy array filled with NaN
-                    arr = np.full(num_cells, np.nan, dtype=np.float64)
+                    arr = np.full(num_cells, np.nan, dtype=np.float32)
 
                     # Assign values based on element mapping
                     for elem_id, elem_idx in self.block_to_elements_map[block_idx]:
@@ -668,7 +668,7 @@ class FemapConverter:
                         continue
 
                     # Create numpy array filled with NaN
-                    arr = np.full(num_points, np.nan, dtype=np.float64)
+                    arr = np.full(num_points, np.nan, dtype=np.float32)
 
                     # Assign values based on node mapping
                     for femap_node_id, value in results.items():

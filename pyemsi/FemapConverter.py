@@ -1,8 +1,8 @@
+import re
 import shutil
 from pathlib import Path
-import re
-import numpy as np
 
+import numpy as np
 import pyvista as pv
 from vtk import (
     VTK_HEXAHEDRON,
@@ -17,7 +17,6 @@ from vtk import (
     VTK_TRIANGLE,
     VTK_VERTEX,
     VTK_WEDGE,
-    vtkMultiBlockDataSet,
     vtkPoints,
     vtkUnstructuredGrid,
     vtkXMLMultiBlockDataWriter,
@@ -61,12 +60,14 @@ class FemapConverter2:
         heat: str | Path | None = "heat",
         displacement: str | Path = "disp",
     ):
-        self.block_to_elements_map = {}
+        self.elements_map = {}
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.output_name = output_name
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
-        multiblock = self._build_mesh(mesh_file)
+        self.sets: dict[int, dict[int, dict]] = {}
+        self.vectors: dict[str, list[dict]] = {}
+        self._build_mesh(mesh_file)
 
         # Clean up existing output files
         pvd_file = self.output_dir / f"{self.output_name}.pvd"
@@ -74,36 +75,48 @@ class FemapConverter2:
             pvd_file.unlink()
         if self.output_folder.exists():
             shutil.rmtree(self.output_folder)
-        # Add magnetic
-        if magnetic is not None:
-            magnetic_file = Path(magnetic) if Path(magnetic).is_file() else self.input_dir / magnetic
-            if magnetic_file.exists():
-                self.add_magnetic_field(multiblock, magnetic_file)
-        # Add current
-        if current is not None:
-            current_file = Path(current) if Path(current).is_file() else self.input_dir / current
-            if current_file.exists():
-                self.add_current_field(multiblock, current_file)
-        # Add force
-        if force is not None:
-            force_file = Path(force) if Path(force).is_file() else self.input_dir / force
-            if force_file.exists():
-                self.add_force_field(multiblock, force_file)
-        # Add force_J_B
-        if force_J_B is not None:
-            force_J_B_file = Path(force_J_B) if Path(force_J_B).is_file() else self.input_dir / force_J_B
-            if force_J_B_file.exists():
-                self.add_force_J_B_field(multiblock, force_J_B_file)
-        # Add heat
-        if heat is not None:
-            heat_file = Path(heat) if Path(heat).is_file() else self.input_dir / heat
-            if heat_file.exists():
-                self.add_heat_field(multiblock, heat_file)
+
         # Add displacement
+        self.displacement_file = None
         if displacement is not None:
             displacement_file = Path(displacement) if Path(displacement).is_file() else self.input_dir / displacement
             if displacement_file.exists():
-                self.add_displacement_field(multiblock, displacement_file)
+                self.displacement_file = displacement_file
+
+        # Add magnetic
+        self.magnetic_file = None
+        if magnetic is not None:
+            magnetic_file = Path(magnetic) if Path(magnetic).is_file() else self.input_dir / magnetic
+            if magnetic_file.exists():
+                self.magnetic_file = magnetic_file
+        # Add current
+        self.current_file = None
+        if current is not None:
+            current_file = Path(current) if Path(current).is_file() else self.input_dir / current
+            if current_file.exists():
+                self.current_file = current_file
+        # Add force
+        self.force_file = None
+        if force is not None:
+            force_file = Path(force) if Path(force).is_file() else self.input_dir / force
+            if force_file.exists():
+                self.force_file = force_file
+        # Add force_J_B
+        self.force_J_B_file = None
+        if force_J_B is not None:
+            force_J_B_file = Path(force_J_B) if Path(force_J_B).is_file() else self.input_dir / force_J_B
+            if force_J_B_file.exists():
+                self.force_J_B_file = force_J_B_file
+        # Add heat
+        self.heat_file = None
+        if heat is not None:
+            heat_file = Path(heat) if Path(heat).is_file() else self.input_dir / heat
+            if heat_file.exists():
+                self.heat_file = heat_file
+
+        self.parse_data_files()
+        self.init_pvd()
+        self.time_stepping()
 
     @property
     def output_folder(self) -> Path:
@@ -113,7 +126,7 @@ class FemapConverter2:
     def pvd_file(self) -> Path:
         return self.output_dir / f"{self.output_name}.pvd"
 
-    def init_pvd(self, multiblock: pv.MultiBlock, sets: dict[int, dict], ascii_mode: bool = False) -> None:
+    def init_pvd(self) -> None:
         """
         Initializes the PVD file with the converted mesh and associated vector fields.
         """
@@ -128,44 +141,55 @@ class FemapConverter2:
             '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
             "  <Collection>",
         ]
-        for ts in sets.values():
+        for ts in self.sets.values():
             safe_title = re.sub(r'[<>:"/\\|?*!]', "", ts["title"])
-            vtm_path = self.output_folder / f"{safe_title}.vtm"
+            # vtm_path = self.output_folder / f"{safe_title}.vtm"
             pvd_lines.append(
                 f'    <DataSet timestep="{ts["value"]}" group="" part="0" file="{self.output_name}/{safe_title}.vtm"/>'
             )
-            self._write_vtm_file(multiblock, vtm_path, ascii_mode=ascii_mode)
         pvd_lines.append("  </Collection>")
         pvd_lines.append("</VTKFile>")
 
         with open(self.pvd_file, "w") as f:
             f.write("\n".join(pvd_lines))
 
-    def _write_vtm_file(self, multiblock: pv.MultiBlock, path: str | Path, ascii_mode: bool = False) -> None:
+    def _write_vtm_file(
+        self, mesh: pv.MultiBlock | pv.UnstructuredGrid, path: str | Path, ascii_mode: bool = False
+    ) -> None:
+        if isinstance(mesh, pv.UnstructuredGrid):
+            mesh = self._vtu_to_vtm(mesh)
         writer = vtkXMLMultiBlockDataWriter()
         writer.SetFileName(str(path))
-        writer.SetInputData(multiblock)
+        writer.SetInputData(mesh)
         if ascii_mode:
             writer.SetDataModeToAscii()
-        # else:
-        #     writer.SetDataModeToBinary()
         writer.Write()
 
-    def _build_mesh(self, mesh_file: str | Path) -> "pv.MultiBlock":
+    def _vtu_to_vtm(self, unstructured_grid: pv.UnstructuredGrid) -> pv.MultiBlock:
+        # Create a new MultiBlock dataset based on the PropertyID cell data
+        # Create a MultiBlock dataset and add the subgrid
+        mb = pv.MultiBlock()
+        for prop_id in self.unique_props:
+            # Extract cells with the current property ID
+            cell_indices = np.where(unstructured_grid.cell_data["PropertyID"] == prop_id)[0]
+            if len(cell_indices) == 0:
+                continue
+
+            # Create a new UnstructuredGrid for this property
+            subgrid = unstructured_grid.extract_cells(cell_indices)
+
+            # Set block name
+            subgrid_name = str(prop_id)
+            mb[subgrid_name] = subgrid
+
+        return mb
+
+    def _build_mesh(self, mesh_file: str | Path):
         parser = FEMAPParser(mesh_file)
         nodes = parser.get_nodes()
         elements = parser.get_elements()
-        properties = parser.get_properties()
 
-        # Group elements by property ID
-        elements_by_prop = {}
-        for elem in elements:
-            prop_id = elem["prop_id"]
-            if prop_id not in elements_by_prop:
-                elements_by_prop[prop_id] = []
-            elements_by_prop[prop_id].append(elem)
-
-        # Create VTK points and ID mapping (shared across all blocks)
+        # Create VTK points and ID mapping
         pts = vtkPoints()
         self.femap_to_vtk_id = {}
 
@@ -174,80 +198,57 @@ class FemapConverter2:
             pts.InsertNextPoint(x, y, z)
             self.femap_to_vtk_id[femap_id] = vtk_idx
 
-        # Create multiblock dataset
-        mb = vtkMultiBlockDataSet()
-        mb.SetNumberOfBlocks(len(elements_by_prop))
+        # Create single unstructured grid
+        ug = vtkUnstructuredGrid()
+        ug.SetPoints(pts)
+        ug.Allocate(len(elements))
 
-        # Create a block for each property
-        block_idx = 0
-        for prop_id in sorted(elements_by_prop.keys()):
-            elements = elements_by_prop[prop_id]
+        # Track property IDs for each cell
+        property_ids = []
+        skipped = 0
+        vtk_cell_idx = 0
 
-            # Create unstructured grid for this property
-            ug = vtkUnstructuredGrid()
-            ug.SetPoints(pts)
-            ug.Allocate(len(elements))
+        for elem in elements:
+            topo = elem["topology"]
 
-            # Insert cells for this property
-            skipped = 0
-            elem_idx_in_block = 0
-            block_elements = []  # Collect (elem_id, elem_idx) for this block
-            for elem in elements:
-                topo = elem["topology"]
+            if topo not in FEMAP_TO_VTK:
+                skipped += 1
+                continue
 
-                if topo not in FEMAP_TO_VTK:
+            vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
+            elem_nodes = elem["nodes"][:num_nodes_required]
+
+            if len(elem_nodes) < num_nodes_required:
+                skipped += 1
+                continue
+            # Create ID list for the cell
+            idlist = []
+            valid = True
+            for femap_node_id in elem_nodes:
+                if femap_node_id in self.femap_to_vtk_id:
+                    vtk_idx = self.femap_to_vtk_id[femap_node_id]
+                    idlist.append(vtk_idx)
+                else:
+                    valid = False
                     skipped += 1
-                    continue
+                    break
 
-                vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
-                elem_nodes = elem["nodes"][:num_nodes_required]
+            if valid:
+                ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
+                property_ids.append(elem["prop_id"])
+                # Store mapping: FEMAP element ID -> VTK cell index
+                self.elements_map[elem["id"]] = vtk_cell_idx
+                vtk_cell_idx += 1
 
-                if len(elem_nodes) < num_nodes_required:
-                    skipped += 1
-                    continue
+        # Convert to PyVista UnstructuredGrid
+        self.mesh = pv.wrap(ug)
+        self.init_points = self.mesh.points.copy()
 
-                # Create ID list as Python list for the overload
-                idlist = []
-                valid = True
-                for femap_node_id in elem_nodes:
-                    if femap_node_id in self.femap_to_vtk_id:
-                        vtk_idx = self.femap_to_vtk_id[femap_node_id]
-                        idlist.append(vtk_idx)
-                    else:
-                        valid = False
-                        skipped += 1
-                        break
+        # Add property IDs as cell data
+        self.mesh.cell_data["PropertyID"] = np.array(property_ids, dtype=np.int32)
 
-                if valid:
-                    # Insert cell using sequence overload
-                    ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
-
-                    # Track element mapping for this block
-                    block_elements.append((elem["id"], elem_idx_in_block))
-                    elem_idx_in_block += 1
-
-            # Store block_to_elements mapping
-            self.block_to_elements_map[block_idx] = block_elements
-
-            # Set block in multiblock dataset
-            mb.SetBlock(block_idx, ug)
-
-            # Set block name
-            prop_name = f"Property_{prop_id}"
-            if prop_id in properties:
-                prop_title = properties[prop_id].get("title", "")
-                if prop_title:
-                    prop_name = f"{prop_name}_{prop_title}"
-            mb.GetMetaData(block_idx).Set(mb.NAME(), prop_name)
-
-            print(
-                f"Block {block_idx}: {prop_name} - {ug.GetNumberOfCells()} cells"
-                + (f" ({skipped} skipped)" if skipped > 0 else "")
-            )
-
-            block_idx += 1
-
-        return pv.MultiBlock(mb)
+        # uniqe property IDs
+        self.unique_props = np.unique(property_ids)
 
     def parse_data_file(self, file_path: str | Path) -> tuple[dict[int, dict], list[dict]]:
         parser = FEMAPParser(str(file_path))
@@ -256,16 +257,38 @@ class FemapConverter2:
         vectors = parser.get_output_vectors()
         return sets, vectors
 
-    def get_data_array(self, multiblock: pv.MultiBlock, step: int, vectors: list[dict]) -> dict[str, dict]:
+    def parse_data_files(self) -> None:
+        if self.displacement_file is not None:
+            self.sets, self.vectors["displacement"] = self.parse_data_file(self.displacement_file)
+        if self.magnetic_file is not None:
+            self.sets, self.vectors["magnetic"] = self.parse_data_file(self.magnetic_file)
+        if self.current_file is not None:
+            self.sets, self.vectors["current"] = self.parse_data_file(self.current_file)
+        if self.force_file is not None:
+            self.sets, self.vectors["force"] = self.parse_data_file(self.force_file)
+        if self.force_J_B_file is not None:
+            self.sets, self.vectors["force_J_B"] = self.parse_data_file(self.force_J_B_file)
+        if self.heat_file is not None:
+            self.sets, self.vectors["heat"] = self.parse_data_file(self.heat_file)
+
+    def get_data_array(self, step: int, vectors: list[dict]) -> dict[str, np.ndarray]:
+        """
+        Get data arrays for a single UnstructuredGrid mesh.
+
+        Args:
+            mesh: PyVista UnstructuredGrid mesh
+            step: Time step / output set ID
+            vectors: List of vector dictionaries from parser
+
+        Returns:
+            Dictionary mapping sanitized vector titles to numpy arrays
+        """
         matching_vectors = [v for v in vectors if v["set_id"] == step]
 
         if not matching_vectors:
             raise ValueError(f"No vectors found for step={step}")
 
-        # Get number of blocks
-        num_blocks = multiblock.GetNumberOfBlocks()
-
-        results_dict: dict[str, dict] = {}
+        results_dict: dict[str, np.ndarray] = {}
 
         for matching_vector in matching_vectors:
             title = matching_vector["title"]
@@ -275,241 +298,145 @@ class FemapConverter2:
             # Sanitize title for use as array name
             safe_title = re.sub(r'[<>:"/\\|?*!]', "_", title) if title else f"Vector_{matching_vector['vec_id']}"
 
-            data_arrays: dict[int, np.ndarray] = {}
-
             if ent_type == 8:  # Elemental data
-                for block_idx in range(num_blocks):
-                    block = multiblock.GetBlock(block_idx)
-                    if block is None:
-                        continue
+                num_cells = self.mesh.n_cells
+                if num_cells == 0:
+                    continue
 
-                    num_cells = block.GetNumberOfCells()
-                    if num_cells == 0:
-                        continue
+                # Create numpy array filled with zeros
+                arr = np.zeros(num_cells, dtype=np.float32)
 
-                    # Create numpy array filled with zeros
-                    arr = np.zeros(num_cells, dtype=np.float64)  # Assign values based on element mapping
-                    for elem_id, elem_idx in self.block_to_elements_map[block_idx]:
-                        if elem_id in results:
-                            arr[elem_idx] = results[elem_id]
+                # Assign values based on FEMAP element ID using elements_map
+                for elem_id, value in results.items():
+                    if elem_id in self.elements_map:
+                        vtk_idx = self.elements_map[elem_id]
+                        if 0 <= vtk_idx < num_cells:
+                            arr[vtk_idx] = value
 
-                    data_arrays[block_idx] = arr
+                results_dict[safe_title] = arr
 
             elif ent_type == 7:  # Nodal data
-                for block_idx in range(num_blocks):
-                    block = multiblock.GetBlock(block_idx)
-                    if block is None:
-                        continue
+                num_points = self.mesh.n_points
+                if num_points == 0:
+                    continue
 
-                    num_points = block.GetNumberOfPoints()
-                    if num_points == 0:
-                        continue
+                # Create numpy array filled with zeros
+                arr = np.zeros(num_points, dtype=np.float32)
 
-                    # Create numpy array filled with zeros
-                    arr = np.zeros(num_points, dtype=np.float64)
+                # Assign values based on FEMAP node ID using femap_to_vtk_id
+                for node_id, value in results.items():
+                    if node_id in self.femap_to_vtk_id:
+                        vtk_idx = self.femap_to_vtk_id[node_id]
+                        if 0 <= vtk_idx < num_points:
+                            arr[vtk_idx] = value
 
-                    # Assign values based on node mapping
-                    for femap_node_id, value in results.items():
-                        if femap_node_id in self.femap_to_vtk_id:
-                            vtk_idx = self.femap_to_vtk_id[femap_node_id]
-                            if vtk_idx < num_points:
-                                arr[vtk_idx] = value
-
-                    data_arrays[block_idx] = arr
-
-            results_dict[safe_title] = {
-                "ent_type": ent_type,
-                "data_arrays": data_arrays,
-            }
+                results_dict[safe_title] = arr
 
         return results_dict
 
-    def add_magnetic_field(self, multiblock: pv.MultiBlock, magnetic_file: str | Path) -> None:
-        sets, vectors = self.parse_data_file(magnetic_file)
+    def time_stepping(self) -> None:
+        for step, ts in self.sets.items():
+            print(f"Processing time step {step} - {ts['title']}")
+            safe_title = re.sub(r'[<>:"/\\|?*!]', "", ts["title"])
+            vtm_path = self.output_dir / self.output_name / f"{safe_title}.vtm"
+            self._process_time_step(step)
+            self._write_vtm_file(self.mesh, vtm_path)
 
-        if not self.output_folder.exists() or not self.pvd_file.exists():
-            self.init_pvd(multiblock, sets)
+    def _process_time_step(self, step: int) -> None:
+        if "displacement" in self.vectors:
+            self._process_displacement_field(step)
+        if "magnetic" in self.vectors:
+            self._process_magnetic_field(step)
+        if "current" in self.vectors:
+            self._process_current_field(step)
 
-        # load the multiblock pvd data
-        reader = pv.PVDReader(self.pvd_file)
+    def _process_displacement_field(self, step: int) -> None:
+        data_arrays = self.get_data_array(step, self.vectors["displacement"])
+        node_1 = data_arrays["DISP-node-1"]
+        node_2 = data_arrays["DISP-node-2"]
+        node_3 = data_arrays["DISP-node-3"]
+        node_vec = np.vstack((node_1, node_2, node_3)).T
+        self.mesh.points = self.init_points + node_vec
 
-        for step in range(reader.number_time_points):
-            reader.set_active_time_point(step)
-            current_dataset = reader.datasets[step]
-            vtm_path = self.output_dir / current_dataset.path
-            multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(multiblock, step + 1, vectors=vectors)
-            for index, block in enumerate(multiblock):
-                node_1 = data_arrays["BMAG-node-1"]["data_arrays"].get(index)
-                node_2 = data_arrays["BMAG-node-2"]["data_arrays"].get(index)
-                node_3 = data_arrays["BMAG-node-3"]["data_arrays"].get(index)
-                node_vec = np.vstack((node_1, node_2, node_3)).T
-                block.point_data["B-Vec (T)"] = node_vec
-                node_4 = data_arrays["BMAG-node-4"]["data_arrays"].get(index)
-                block.point_data["B-Mag (T)"] = node_4
-                if "BMAG-node-5" in data_arrays:
-                    node_5 = data_arrays["BMAG-node-5"]["data_arrays"].get(index)
-                    block.point_data["Flux (Wb)"] = node_5
-                element_1 = data_arrays["BMAG-elem-1"]["data_arrays"].get(index)
-                element_2 = data_arrays["BMAG-elem-2"]["data_arrays"].get(index)
-                element_3 = data_arrays["BMAG-elem-3"]["data_arrays"].get(index)
-                element_vec = np.vstack((element_1, element_2, element_3)).T
-                block.cell_data["B-Vec (T)"] = element_vec
-                element_4 = data_arrays["BMAG-elem-4"]["data_arrays"].get(index)
-                block.cell_data["B-Mag (T)"] = element_4
+    def _process_magnetic_field(self, step: int) -> None:
+        data_arrays = self.get_data_array(step, self.vectors["magnetic"])
+        node_1 = data_arrays["BMAG-node-1"]
+        node_2 = data_arrays["BMAG-node-2"]
+        node_3 = data_arrays["BMAG-node-3"]
+        node_vec = np.vstack((node_1, node_2, node_3)).T
+        self.mesh.point_data["B-Vec (T)"] = node_vec
+        node_4 = data_arrays["BMAG-node-4"]
+        self.mesh.point_data["B-Mag (T)"] = node_4
+        element_1 = data_arrays["BMAG-elem-1"]
+        element_2 = data_arrays["BMAG-elem-2"]
+        element_3 = data_arrays["BMAG-elem-3"]
+        element_vec = np.vstack((element_1, element_2, element_3)).T
+        self.mesh.cell_data["B-Vec (T)"] = element_vec
+        element_4 = data_arrays["BMAG-elem-4"]
+        self.mesh.cell_data["B-Mag (T)"] = element_4
 
-            self._write_vtm_file(multiblock, vtm_path)
+    def _process_current_field(self, step: int) -> None:
+        data_arrays = self.get_data_array(step, self.vectors["current"])
+        node_1 = data_arrays["CURR-node-1"]
+        node_2 = data_arrays["CURR-node-2"]
+        node_3 = data_arrays["CURR-node-3"]
+        node_vec = np.vstack((node_1, node_2, node_3)).T
+        self.mesh.point_data["J-Vec (A/m^2)"] = node_vec
+        node_4 = data_arrays["CURR-node-4"]
+        self.mesh.point_data["J-Mag (A/m^2)"] = node_4
+        node_5 = data_arrays["CURR-node-5"]
+        self.mesh.point_data["Loss (W/m^3)"] = node_5
+        element_1 = data_arrays["CURR-elem-1"]
+        element_2 = data_arrays["CURR-elem-2"]
+        element_3 = data_arrays["CURR-elem-3"]
+        element_vec = np.vstack((element_1, element_2, element_3)).T
+        self.mesh.cell_data["J-Vec (A/m^2)"] = element_vec
+        element_4 = data_arrays["CURR-elem-4"]
+        self.mesh.cell_data["J-Mag (A/m^2)"] = element_4
+        element_5 = data_arrays["CURR-elem-5"]
+        self.mesh.cell_data["Loss (W/m^3)"] = element_5
 
-    def add_current_field(self, multiblock: pv.MultiBlock, current_file: str | Path) -> None:
-        sets, vectors = self.parse_data_file(current_file)
+    def _process_force_field(self, step: int) -> None:
+        data_arrays = self.get_data_array(step, self.vectors["force"])
+        node_1 = data_arrays["NFOR-node-1"]
+        node_2 = data_arrays["NFOR-node-2"]
+        node_3 = data_arrays["NFOR-node-3"]
+        node_vec = np.vstack((node_1, node_2, node_3)).T
+        self.mesh.point_data["F Nodal-Vec (N/m^3)"] = node_vec
+        node_4 = data_arrays["NFOR-node-4"]
+        self.mesh.point_data["F Nodal-Mag (N/m^3)"] = node_4
+        element_1 = data_arrays["NFOR-elem-1"]
+        element_2 = data_arrays["NFOR-elem-2"]
+        element_3 = data_arrays["NFOR-elem-3"]
+        element_vec = np.vstack((element_1, element_2, element_3)).T
+        self.mesh.cell_data["F Nodal-Vec (N/m^3)"] = element_vec
+        element_4 = data_arrays["NFOR-elem-4"]
+        self.mesh.cell_data["F Nodal-Mag (N/m^3)"] = element_4
 
-        if not self.output_folder.exists() or not self.pvd_file.exists():
-            self.init_pvd(multiblock, sets)
+    def _process_force_J_B_field(self, step: int) -> None:
+        data_arrays = self.get_data_array(step, self.vectors["force_J_B"])
+        node_1 = data_arrays["LFOR-node-1"]
+        node_2 = data_arrays["LFOR-node-2"]
+        node_3 = data_arrays["LFOR-node-3"]
+        node_vec = np.vstack((node_1, node_2, node_3)).T
+        self.mesh.point_data["F Lorents-Vec (N/m^3)"] = node_vec
+        node_4 = data_arrays["LFOR-node-4"]
+        self.mesh.point_data["F Lorents-Mag (N/m^3)"] = node_4
+        element_1 = data_arrays["LFOR-elem-1"]
+        element_2 = data_arrays["LFOR-elem-2"]
+        element_3 = data_arrays["LFOR-elem-3"]
+        element_vec = np.vstack((element_1, element_2, element_3)).T
+        self.mesh.cell_data["F Lorents-Vec (N/m^3)"] = element_vec
+        element_4 = data_arrays["LFOR-elem-4"]
+        self.mesh.cell_data["F Lorents-Mag (N/m^3)"] = element_4
 
-        # load the multiblock pvd data
-        reader = pv.PVDReader(str(self.pvd_file))
-
-        for step in range(reader.number_time_points):
-            reader.set_active_time_point(step)
-            current_dataset = reader.datasets[step]
-            vtm_path = self.output_dir / current_dataset.path
-            multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(multiblock, step + 1, vectors=vectors)
-            for index, block in enumerate(multiblock):
-                node_1 = data_arrays["CURR-node-1"]["data_arrays"].get(index)
-                node_2 = data_arrays["CURR-node-2"]["data_arrays"].get(index)
-                node_3 = data_arrays["CURR-node-3"]["data_arrays"].get(index)
-                node_vec = np.vstack((node_1, node_2, node_3)).T
-                block.point_data["J-Vec (A/m^2)"] = node_vec
-                node_4 = data_arrays["CURR-node-4"]["data_arrays"].get(index)
-                block.point_data["J-Mag (A/m^2)"] = node_4
-                node_5 = data_arrays["CURR-node-5"]["data_arrays"].get(index)
-                block.point_data["Loss (W/m^3)"] = node_5
-                element_1 = data_arrays["CURR-elem-1"]["data_arrays"].get(index)
-                element_2 = data_arrays["CURR-elem-2"]["data_arrays"].get(index)
-                element_3 = data_arrays["CURR-elem-3"]["data_arrays"].get(index)
-                element_vec = np.vstack((element_1, element_2, element_3)).T
-                block.cell_data["J-Vec (A/m^2)"] = element_vec
-                element_4 = data_arrays["CURR-elem-4"]["data_arrays"].get(index)
-                block.cell_data["J-Mag (A/m^2)"] = element_4
-                element_5 = data_arrays["CURR-elem-5"]["data_arrays"].get(index)
-                block.cell_data["Loss (W/m^3)"] = element_5
-
-            self._write_vtm_file(multiblock, vtm_path)
-
-    def add_force_field(self, multiblock: pv.MultiBlock, force_file: str | Path) -> None:
-        sets, vectors = self.parse_data_file(force_file)
-
-        if not self.output_folder.exists() or not self.pvd_file.exists():
-            self.init_pvd(multiblock, sets)
-
-        # load the multiblock pvd data
-        reader = pv.PVDReader(str(self.pvd_file))
-
-        for step in range(reader.number_time_points):
-            reader.set_active_time_point(step)
-            current_dataset = reader.datasets[step]
-            vtm_path = self.output_dir / current_dataset.path
-            multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(multiblock, step + 1, vectors=vectors)
-            for index, block in enumerate(multiblock):
-                node_1 = data_arrays["NFOR-node-1"]["data_arrays"].get(index)
-                node_2 = data_arrays["NFOR-node-2"]["data_arrays"].get(index)
-                node_3 = data_arrays["NFOR-node-3"]["data_arrays"].get(index)
-                node_vec = np.vstack((node_1, node_2, node_3)).T
-                block.point_data["F Nodal-Vec (N/m^3)"] = node_vec
-                node_4 = data_arrays["NFOR-node-4"]["data_arrays"].get(index)
-                block.point_data["F Nodal-Mag (N/m^3)"] = node_4
-                element_1 = data_arrays["EFOR-elem-1"]["data_arrays"].get(index)
-                element_2 = data_arrays["EFOR-elem-2"]["data_arrays"].get(index)
-                element_3 = data_arrays["EFOR-elem-3"]["data_arrays"].get(index)
-                element_vec = np.vstack((element_1, element_2, element_3)).T
-                block.cell_data["F Nodal-Vec (N/m^3)"] = element_vec
-                element_4 = data_arrays["EFOR-elem-4"]["data_arrays"].get(index)
-                block.cell_data["F Nodal-Mag (N/m^3)"] = element_4
-
-            self._write_vtm_file(multiblock, vtm_path)
-
-    def add_force_J_B_field(self, multiblock: pv.MultiBlock, force_J_B_file: str | Path) -> None:
-        sets, vectors = self.parse_data_file(force_J_B_file)
-
-        if not self.output_folder.exists() or not self.pvd_file.exists():
-            self.init_pvd(multiblock, sets)
-
-        # load the multiblock pvd data
-        reader = pv.PVDReader(str(self.pvd_file))
-
-        for step in range(reader.number_time_points):
-            reader.set_active_time_point(step)
-            current_dataset = reader.datasets[step]
-            vtm_path = self.output_dir / current_dataset.path
-            multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(multiblock, step + 1, vectors=vectors)
-            for index, block in enumerate(multiblock):
-                node_1 = data_arrays["LFOR-node-1"]["data_arrays"].get(index)
-                node_2 = data_arrays["LFOR-node-2"]["data_arrays"].get(index)
-                node_3 = data_arrays["LFOR-node-3"]["data_arrays"].get(index)
-                node_vec = np.vstack((node_1, node_2, node_3)).T
-                block.point_data["F Lorents-Vec (N/m^3)"] = node_vec
-                node_4 = data_arrays["LFOR-node-4"]["data_arrays"].get(index)
-                block.point_data["F Lorents-Mag (N/m^3)"] = node_4
-                element_1 = data_arrays["ELFOR-elem-1"]["data_arrays"].get(index)
-                element_2 = data_arrays["ELFOR-elem-2"]["data_arrays"].get(index)
-                element_3 = data_arrays["ELFOR-elem-3"]["data_arrays"].get(index)
-                element_vec = np.vstack((element_1, element_2, element_3)).T
-                block.cell_data["F Lorents-Vec (N/m^3)"] = element_vec
-                element_4 = data_arrays["ELFOR-elem-4"]["data_arrays"].get(index)
-                block.cell_data["F Lorents-Mag (N/m^3)"] = element_4
-
-            self._write_vtm_file(multiblock, vtm_path)
-
-    def add_heat_field(self, multiblock: pv.MultiBlock, heat_file: str | Path) -> None:
-        sets, vectors = self.parse_data_file(heat_file)
-
-        if not self.output_folder.exists() or not self.pvd_file.exists():
-            self.init_pvd(multiblock, sets)
-
-        # load the multiblock pvd data
-        reader = pv.PVDReader(str(self.pvd_file))
-
-        for step in range(reader.number_time_points):
-            reader.set_active_time_point(step)
-            current_dataset = reader.datasets[step]
-            vtm_path = self.output_dir / current_dataset.path
-            multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(multiblock, step + 1, vectors=vectors)
-            for index, block in enumerate(multiblock):
-                node_1 = data_arrays["HEAT-node-1"]["data_arrays"].get(index)
-                block.point_data["Heat Density (W/m^3)"] = node_1
-                node_2 = data_arrays["HEAT-node-2"]["data_arrays"].get(index)
-                block.point_data["Heat (W)"] = node_2
-                element_1 = data_arrays["HEAT-elem-1"]["data_arrays"].get(index)
-                block.cell_data["Heat Density (W/m^3)"] = element_1
-                element_2 = data_arrays["HEAT-elem-2"]["data_arrays"].get(index)
-                block.cell_data["Heat (W)"] = element_2
-
-            self._write_vtm_file(multiblock, vtm_path)
-
-    def add_displacement_field(self, multiblock: pv.MultiBlock, displacement_file: str | Path) -> None:
-        sets, vectors = self.parse_data_file(displacement_file)
-
-        if not self.output_folder.exists() or not self.pvd_file.exists():
-            self.init_pvd(multiblock, sets)
-
-        # load the multiblock pvd data
-        reader = pv.PVDReader(str(self.pvd_file))
-
-        for step in range(reader.number_time_points):
-            reader.set_active_time_point(step)
-            current_dataset = reader.datasets[step]
-            vtm_path = self.output_dir / current_dataset.path
-            multiblock = reader.read()[0]
-            data_arrays = self.get_data_array(multiblock, step + 1, vectors=vectors)
-            for index, block in enumerate(multiblock):
-                node_1 = data_arrays["DISP-node-1"]["data_arrays"].get(index)
-                node_2 = data_arrays["DISP-node-2"]["data_arrays"].get(index)
-                node_3 = data_arrays["DISP-node-3"]["data_arrays"].get(index)
-                node_vec = np.vstack((node_1, node_2, node_3)).T
-                block.points += node_vec
-
-            self._write_vtm_file(multiblock, vtm_path)
+    def _process_heat_field(self, step: int) -> None:
+        data_arrays = self.get_data_array(step, self.vectors["heat"])
+        node_1 = data_arrays["HEAT-node-1"]
+        self.mesh.point_data["Heat Density (W/m^3)"] = node_1
+        node_2 = data_arrays["HEAT-node-2"]
+        self.mesh.point_data["Heat (W)"] = node_2
+        element_1 = data_arrays["HEAT-elem-1"]
+        self.mesh.cell_data["Heat Density (W/m^3)"] = element_1
+        element_2 = data_arrays["HEAT-elem-2"]
+        self.mesh.cell_data["Heat (W)"] = element_2
