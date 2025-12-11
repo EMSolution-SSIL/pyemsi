@@ -1,5 +1,6 @@
 import re
 import shutil
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -262,26 +263,32 @@ class FemapConverter:
         # uniqe property IDs
         self.unique_props = np.unique(property_ids)
 
-    def parse_data_file(self, file_path: str | Path) -> tuple[dict[int, dict], list[dict]]:
+    def parse_data_file(self, name: str, file_path: str | Path):
+        print(f"Parsing data file: {file_path}")
         parser = FEMAPParser(str(file_path))
         parser.parse()
         sets = parser.get_output_sets()
-        vectors = parser.get_output_vectors()
-        return sets, vectors
+        self.vectors[name] = parser.get_output_vectors()
+        if not self.sets:
+            self.sets = sets
 
     def parse_data_files(self) -> None:
-        if self.displacement_file is not None:
-            self.sets, self.vectors["displacement"] = self.parse_data_file(self.displacement_file)
-        if self.magnetic_file is not None:
-            self.sets, self.vectors["magnetic"] = self.parse_data_file(self.magnetic_file)
-        if self.current_file is not None:
-            self.sets, self.vectors["current"] = self.parse_data_file(self.current_file)
-        if self.force_file is not None:
-            self.sets, self.vectors["force"] = self.parse_data_file(self.force_file)
-        if self.force_J_B_file is not None:
-            self.sets, self.vectors["force_J_B"] = self.parse_data_file(self.force_J_B_file)
-        if self.heat_file is not None:
-            self.sets, self.vectors["heat"] = self.parse_data_file(self.heat_file)
+        file_map = {
+            "displacement": self.displacement_file,
+            "magnetic": self.magnetic_file,
+            "current": self.current_file,
+            "force": self.force_file,
+            "force_J_B": self.force_J_B_file,
+            "heat": self.heat_file,
+        }
+        threads = []
+        for name, file_path in file_map.items():
+            if file_path is not None:
+                thread = threading.Thread(target=self.parse_data_file, args=(name, file_path))
+                thread.start()
+                threads.append(thread)
+        for thread in threads:
+            thread.join()
 
     def get_data_array(self, step: int, vectors: list[dict]) -> dict[str, np.ndarray]:
         """
@@ -347,117 +354,126 @@ class FemapConverter:
         return results_dict
 
     def time_stepping(self) -> None:
+        threads = []
         for step, ts in self.sets.items():
             print(f"Processing time step {step} - {ts['title']}")
             safe_title = re.sub(r'[<>:"/\\|?*!]', "", ts["title"])
             vtm_path = self.output_dir / self.output_name / f"{safe_title}.vtm"
-            self._process_time_step(step)
-            self._write_vtm_file(self.mesh, vtm_path)
+            thread = threading.Thread(target=self._process_time_step, args=(step, vtm_path))
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
 
-    def _process_time_step(self, step: int) -> None:
+    def _process_time_step(self, step: int, vtm_path: str | Path) -> None:
+        # Create a copy of the mesh for thread safety
+        mesh_copy = self.mesh.copy()
+        mesh_copy.points = self.init_points.copy()
+
         if "displacement" in self.vectors:
-            self._process_displacement_field(step)
+            self._process_displacement_field(step, mesh_copy)
         if "magnetic" in self.vectors:
-            self._process_magnetic_field(step)
+            self._process_magnetic_field(step, mesh_copy)
         if "current" in self.vectors:
-            self._process_current_field(step)
+            self._process_current_field(step, mesh_copy)
         if "force" in self.vectors:
-            self._process_force_field(step)
+            self._process_force_field(step, mesh_copy)
         if "force_J_B" in self.vectors:
-            self._process_force_J_B_field(step)
+            self._process_force_J_B_field(step, mesh_copy)
         if "heat" in self.vectors:
-            self._process_heat_field(step)
+            self._process_heat_field(step, mesh_copy)
+        self._write_vtm_file(mesh_copy, vtm_path)
 
-    def _process_displacement_field(self, step: int) -> None:
+    def _process_displacement_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         data_arrays = self.get_data_array(step, self.vectors["displacement"])
         node_1 = data_arrays["DISP-node-1"]
         node_2 = data_arrays["DISP-node-2"]
         node_3 = data_arrays["DISP-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
-        self.mesh.points = self.init_points + node_vec
+        mesh.points = self.init_points + node_vec
 
-    def _process_magnetic_field(self, step: int) -> None:
+    def _process_magnetic_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         data_arrays = self.get_data_array(step, self.vectors["magnetic"])
         node_1 = data_arrays["BMAG-node-1"]
         node_2 = data_arrays["BMAG-node-2"]
         node_3 = data_arrays["BMAG-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
-        self.mesh.point_data["B-Vec (T)"] = node_vec
+        mesh.point_data["B-Vec (T)"] = node_vec
         node_4 = data_arrays["BMAG-node-4"]
-        self.mesh.point_data["B-Mag (T)"] = node_4
+        mesh.point_data["B-Mag (T)"] = node_4
         if "BMAG-node-5" in data_arrays:
             node_5 = data_arrays["BMAG-node-5"]
-            self.mesh.point_data["Flux (A/m)"] = node_5
+            mesh.point_data["Flux (A/m)"] = node_5
         element_1 = data_arrays["BMAG-elem-1"]
         element_2 = data_arrays["BMAG-elem-2"]
         element_3 = data_arrays["BMAG-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
-        self.mesh.cell_data["B-Vec (T)"] = element_vec
+        mesh.cell_data["B-Vec (T)"] = element_vec
         element_4 = data_arrays["BMAG-elem-4"]
-        self.mesh.cell_data["B-Mag (T)"] = element_4
+        mesh.cell_data["B-Mag (T)"] = element_4
 
-    def _process_current_field(self, step: int) -> None:
+    def _process_current_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         data_arrays = self.get_data_array(step, self.vectors["current"])
         node_1 = data_arrays["CURR-node-1"]
         node_2 = data_arrays["CURR-node-2"]
         node_3 = data_arrays["CURR-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
-        self.mesh.point_data["J-Vec (A/m^2)"] = node_vec
+        mesh.point_data["J-Vec (A/m^2)"] = node_vec
         node_4 = data_arrays["CURR-node-4"]
-        self.mesh.point_data["J-Mag (A/m^2)"] = node_4
+        mesh.point_data["J-Mag (A/m^2)"] = node_4
         node_5 = data_arrays["CURR-node-5"]
-        self.mesh.point_data["Loss (W/m^3)"] = node_5
+        mesh.point_data["Loss (W/m^3)"] = node_5
         element_1 = data_arrays["CURR-elem-1"]
         element_2 = data_arrays["CURR-elem-2"]
         element_3 = data_arrays["CURR-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
-        self.mesh.cell_data["J-Vec (A/m^2)"] = element_vec
+        mesh.cell_data["J-Vec (A/m^2)"] = element_vec
         element_4 = data_arrays["CURR-elem-4"]
-        self.mesh.cell_data["J-Mag (A/m^2)"] = element_4
+        mesh.cell_data["J-Mag (A/m^2)"] = element_4
         element_5 = data_arrays["CURR-elem-5"]
-        self.mesh.cell_data["Loss (W/m^3)"] = element_5
+        mesh.cell_data["Loss (W/m^3)"] = element_5
 
-    def _process_force_field(self, step: int) -> None:
+    def _process_force_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         data_arrays = self.get_data_array(step, self.vectors["force"])
         node_1 = data_arrays["NFOR-node-1"]
         node_2 = data_arrays["NFOR-node-2"]
         node_3 = data_arrays["NFOR-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
-        self.mesh.point_data["F Nodal-Vec (N/m^3)"] = node_vec
+        mesh.point_data["F Nodal-Vec (N/m^3)"] = node_vec
         node_4 = data_arrays["NFOR-node-4"]
-        self.mesh.point_data["F Nodal-Mag (N/m^3)"] = node_4
+        mesh.point_data["F Nodal-Mag (N/m^3)"] = node_4
         element_1 = data_arrays["NFOR-elem-1"]
         element_2 = data_arrays["NFOR-elem-2"]
         element_3 = data_arrays["NFOR-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
-        self.mesh.cell_data["F Nodal-Vec (N/m^3)"] = element_vec
+        mesh.cell_data["F Nodal-Vec (N/m^3)"] = element_vec
         element_4 = data_arrays["NFOR-elem-4"]
-        self.mesh.cell_data["F Nodal-Mag (N/m^3)"] = element_4
+        mesh.cell_data["F Nodal-Mag (N/m^3)"] = element_4
 
-    def _process_force_J_B_field(self, step: int) -> None:
+    def _process_force_J_B_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         data_arrays = self.get_data_array(step, self.vectors["force_J_B"])
         node_1 = data_arrays["LFOR-node-1"]
         node_2 = data_arrays["LFOR-node-2"]
         node_3 = data_arrays["LFOR-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
-        self.mesh.point_data["F Lorents-Vec (N/m^3)"] = node_vec
+        mesh.point_data["F Lorents-Vec (N/m^3)"] = node_vec
         node_4 = data_arrays["LFOR-node-4"]
-        self.mesh.point_data["F Lorents-Mag (N/m^3)"] = node_4
+        mesh.point_data["F Lorents-Mag (N/m^3)"] = node_4
         element_1 = data_arrays["LFOR-elem-1"]
         element_2 = data_arrays["LFOR-elem-2"]
         element_3 = data_arrays["LFOR-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
-        self.mesh.cell_data["F Lorents-Vec (N/m^3)"] = element_vec
+        mesh.cell_data["F Lorents-Vec (N/m^3)"] = element_vec
         element_4 = data_arrays["LFOR-elem-4"]
-        self.mesh.cell_data["F Lorents-Mag (N/m^3)"] = element_4
+        mesh.cell_data["F Lorents-Mag (N/m^3)"] = element_4
 
-    def _process_heat_field(self, step: int) -> None:
+    def _process_heat_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         data_arrays = self.get_data_array(step, self.vectors["heat"])
         node_1 = data_arrays["HEAT-node-1"]
-        self.mesh.point_data["Heat Density (W/m^3)"] = node_1
+        mesh.point_data["Heat Density (W/m^3)"] = node_1
         node_2 = data_arrays["HEAT-node-2"]
-        self.mesh.point_data["Heat (W)"] = node_2
+        mesh.point_data["Heat (W)"] = node_2
         element_1 = data_arrays["HEAT-elem-1"]
-        self.mesh.cell_data["Heat Density (W/m^3)"] = element_1
+        mesh.cell_data["Heat Density (W/m^3)"] = element_1
         element_2 = data_arrays["HEAT-elem-2"]
-        self.mesh.cell_data["Heat (W)"] = element_2
+        mesh.cell_data["Heat (W)"] = element_2
