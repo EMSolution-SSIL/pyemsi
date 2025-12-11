@@ -254,7 +254,8 @@ class FemapConverter:
         # uniqe property IDs
         self.unique_props = np.unique(property_ids)
 
-    def parse_data_file(self, name: str, file_path: str | Path):
+    def parse_data_file(self, name: str, file_path: str | Path) -> None:
+        """Parse a single FEMAP data file and cache its vectors/sets."""
         print(f"Parsing data file: {file_path}")
         parser = FEMAPParser(str(file_path))
         parser.parse()
@@ -264,6 +265,7 @@ class FemapConverter:
             self.sets = sets
 
     def parse_data_files(self) -> None:
+        """Parse all configured FEMAP data files in parallel."""
         file_map = {
             "displacement": self.displacement_file,
             "magnetic": self.magnetic_file,
@@ -345,6 +347,7 @@ class FemapConverter:
         return results_dict
 
     def time_stepping(self) -> None:
+        """Convert every FEMAP output set into a VTK multiblock file."""
         threads = []
         for step, ts in self.sets.items():
             print(f"Processing time step {step} - {ts['title']}")

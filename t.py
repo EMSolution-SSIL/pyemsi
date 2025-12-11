@@ -4,8 +4,8 @@ import cProfile
 import pstats
 
 with cProfile.Profile() as pr:
-    # FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage")
-    FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient", force_2d=True)
+    FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage", output_name="transient", current=None)
+    # FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient", force_2d=True)
 
 
 stats = pstats.Stats(pr)
