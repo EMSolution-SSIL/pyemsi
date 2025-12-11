@@ -169,9 +169,12 @@ cdef class FEMAPParser:
 
         return {"title": title if title != "<NULL>" else "", "version": version}
 
-    cpdef dict get_nodes(self):
+    cpdef dict get_nodes(self, bint force_2d=False):
         """
         Extract all nodes from Block 403.
+
+        Args:
+            force_2d: If True, skip nodes where z != 0.0
 
         Returns:
             Dictionary mapping node IDs to (x, y, z) coordinates
@@ -193,6 +196,9 @@ cdef class FEMAPParser:
                         x = float(parts[11])
                         y = float(parts[12])
                         z = float(parts[13])
+                        if force_2d:
+                            if z > 0.0:
+                                continue
                         nodes[node_id] = (x, y, z)
                     except (ValueError, IndexError):
                         continue

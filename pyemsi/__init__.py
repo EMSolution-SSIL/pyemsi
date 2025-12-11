@@ -6,7 +6,7 @@ Main functionality:
 - FEMAP to VTK MultiBlock UnstructuredGrid (.vtm) conversion for ParaView visualization
 """
 
-from .femap_to_vtm import FemapConverter
+from .FemapConverter import FemapConverter
 
 __version__ = "0.1.0"
 

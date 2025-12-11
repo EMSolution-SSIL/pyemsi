@@ -52,6 +52,7 @@ class FemapConverter:
         input_dir: str | Path,
         output_dir: str | Path = "./.pyemsi",
         output_name: str = "output",
+        force_2d: bool = False,
         mesh: str | Path = "post_geom",
         magnetic: str | Path | None = "magnetic",
         current: str | Path | None = "current",
@@ -67,7 +68,7 @@ class FemapConverter:
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
-        self._build_mesh(mesh_file)
+        self._build_mesh(mesh_file, force_2d=force_2d)
 
         # Clean up existing output files
         pvd_file = self.output_dir / f"{self.output_name}.pvd"
@@ -184,9 +185,9 @@ class FemapConverter:
 
         return mb
 
-    def _build_mesh(self, mesh_file: str | Path):
+    def _build_mesh(self, mesh_file: str | Path, force_2d: bool = False) -> None:
         parser = FEMAPParser(str(mesh_file))
-        nodes = parser.get_nodes()
+        nodes = parser.get_nodes(force_2d)
         elements = parser.get_elements()
 
         # Create VTK points and ID mapping
@@ -210,6 +211,17 @@ class FemapConverter:
 
         for elem in elements:
             topo = elem["topology"]
+            if force_2d:
+                if topo == 8:  # Brick8
+                    topo = 4  # Quad4
+                elif topo == 12:  # Brick20
+                    topo = 5  # Quad8
+                elif topo == 7:  # Wedge6
+                    topo = 2  # Tri3
+                elif topo == 11:  # Wedge15
+                    topo = 3  # Tri6
+                else:
+                    raise ValueError(f"Cannot force 2D for element topology {topo}")
 
             if topo not in FEMAP_TO_VTK:
                 skipped += 1
@@ -349,6 +361,12 @@ class FemapConverter:
             self._process_magnetic_field(step)
         if "current" in self.vectors:
             self._process_current_field(step)
+        if "force" in self.vectors:
+            self._process_force_field(step)
+        if "force_J_B" in self.vectors:
+            self._process_force_J_B_field(step)
+        if "heat" in self.vectors:
+            self._process_heat_field(step)
 
     def _process_displacement_field(self, step: int) -> None:
         data_arrays = self.get_data_array(step, self.vectors["displacement"])
@@ -367,6 +385,9 @@ class FemapConverter:
         self.mesh.point_data["B-Vec (T)"] = node_vec
         node_4 = data_arrays["BMAG-node-4"]
         self.mesh.point_data["B-Mag (T)"] = node_4
+        if "BMAG-node-5" in data_arrays:
+            node_5 = data_arrays["BMAG-node-5"]
+            self.mesh.point_data["Flux (A/m)"] = node_5
         element_1 = data_arrays["BMAG-elem-1"]
         element_2 = data_arrays["BMAG-elem-2"]
         element_3 = data_arrays["BMAG-elem-3"]

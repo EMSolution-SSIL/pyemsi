@@ -3,9 +3,9 @@ from pyemsi.FemapConverter import FemapConverter
 import cProfile
 import pstats
 
-# converter = FemapConverter2(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage")
 with cProfile.Profile() as pr:
-    x = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient")
+    # FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage")
+    FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient", force_2d=True)
 
 
 stats = pstats.Stats(pr)

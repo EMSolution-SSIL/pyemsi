@@ -138,7 +138,7 @@ class FEMAPParser:
 
         return {"title": title if title != "<NULL>" else "", "version": version}
 
-    def get_nodes(self) -> Dict[int, Tuple[float, float, float]]:
+    def get_nodes(self, force_2d: bool = False) -> Dict[int, Tuple[float, float, float]]:
         """
         Extract all nodes from Block 403.
 
@@ -156,6 +156,9 @@ class FEMAPParser:
                         x = float(parts[11])
                         y = float(parts[12])
                         z = float(parts[13])
+                        if force_2d:
+                            if z != 0.0:
+                                continue
                         nodes[node_id] = (x, y, z)
                     except (ValueError, IndexError):
                         continue
@@ -361,11 +364,7 @@ class FEMAPParser:
                             result_parts = self.parse_csv_line(block.lines[i])
 
                             # Check for end marker (-1,0.)
-                            if (
-                                len(result_parts) >= 2
-                                and result_parts[0] == "-1"
-                                and result_parts[1] == "0."
-                            ):
+                            if len(result_parts) >= 2 and result_parts[0] == "-1" and result_parts[1] == "0.":
                                 i += 1
                                 break
 
@@ -385,16 +384,10 @@ class FEMAPParser:
                                 # Read continuation lines if needed
                                 entity_count = end_id - start_id + 1
                                 i += 1
-                                while len(values) < entity_count and i < len(
-                                    block.lines
-                                ):
+                                while len(values) < entity_count and i < len(block.lines):
                                     cont_parts = self.parse_csv_line(block.lines[i])
                                     # Check if this is the end marker
-                                    if (
-                                        len(cont_parts) >= 2
-                                        and cont_parts[0] == "-1"
-                                        and cont_parts[1] == "0."
-                                    ):
+                                    if len(cont_parts) >= 2 and cont_parts[0] == "-1" and cont_parts[1] == "0.":
                                         break
                                     values.extend([float(v) for v in cont_parts])
                                     i += 1

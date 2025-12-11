@@ -1,238 +1,177 @@
 # pyemsi
 
-Python tools for EMSI file format conversions, specifically for converting FEMAP Neutral files to VTK format for visualization in ParaView.
+Python tooling for converting EMSolution FEMAP Neutral exports into VTK data sets that can be inspected in ParaView, PyVista, or downstream post-processing scripts. The project is built around two core pieces:
 
-## Features
+- A Cython implementation of the FEMAP Neutral parser (`pyemsi.femap_parser`) that reads blocks 100/402/403/404/450/601/1051 and exposes both Python and NumPy-array friendly accessors.
+- A PyVista/Vtk powered `pyemsi.FemapConverter` class that creates MultiBlock `.vtm` files grouped by property ID, tracks FEMAP→VTK ID relationships, and decorates the mesh with nodal/elemental result vectors (displacement, magnetic flux, currents, nodal forces, Lorentz forces, and heat).
 
-- Parse FEMAP Neutral files (`.neu`) with support for:
-  - Nodes (Block 403)
-  - Elements (Block 404)
-  - Properties (Block 402)
-  - Materials (Block 601)
-  - Header information (Block 100)
-- Convert FEMAP meshes to VTK MultiBlock UnstructuredGrid (`.vtm`) format
-- Organize elements by property ID into separate UnstructuredGrid blocks
-- Support for mixed element types in a single mesh
-- Handles repeated blocks and blocks in any order
-- Comprehensive validation and error checking
-- Preserves element metadata (IDs, properties, materials)
+## Key capabilities
 
-## Supported Element Types
+- 12 FEMAP topologies (points through Brick20) are mapped to their VTK counterparts and can be mixed inside a single mesh.
+- Property IDs become block boundaries, preserving IDs, properties, materials, and topology metadata as cell data arrays.
+- Optional `force_2d` mode flattens 3D solid elements into their 2D equivalents for planar studies.
+- Output set post-processing injects nodal or elemental vectors back into the mesh, with helper routines (`parse_data_files`, `get_data_array`, `time_stepping`) to produce one `.vtm` per time step and an accompanying `.pvd` file.
+- The parser exposes both dictionary-based helpers (`get_nodes`, `get_elements`, …) and zero-copy NumPy views (`get_nodes_arrays`, `get_elements_arrays`, `get_output_vectors_arrays`) for high-throughput workflows.
 
-| FEMAP Type | Element | VTK Type | Nodes |
-|------------|---------|----------|-------|
-| 9 | Point | VTK_VERTEX | 1 |
-| 0 | Line2 | VTK_LINE | 2 |
-| 2 | Tri3 | VTK_TRIANGLE | 3 |
-| 3 | Tri6 | VTK_QUADRATIC_TRIANGLE | 6 |
-| 4 | Quad4 | VTK_QUAD | 4 |
-| 5 | Quad8 | VTK_QUADRATIC_QUAD | 8 |
-| 6 | Tetra4 | VTK_TETRA | 4 |
-| 10 | Tetra10 | VTK_QUADRATIC_TETRA | 10 |
-| 7 | Wedge6 | VTK_WEDGE | 6 |
-| 11 | Wedge15 | VTK_QUADRATIC_WEDGE | 15 |
-| 8 | Brick8 | VTK_HEXAHEDRON | 8 |
-| 12 | Brick20 | VTK_QUADRATIC_HEXAHEDRON | 20 |
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/pyemsi.git
-cd pyemsi
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install in development mode
-pip install -e .
-```
-
-## Quick Start
-
-### Simple Conversion
-
-```python
-from pyemsi import convert_femap_to_vtm
-
-# Convert FEMAP file to VTK MultiBlock UnstructuredGrid in one line
-convert_femap_to_vtm("input.neu", "output.vtm")
-```
-
-### Advanced Usage
-
-```python
-from pyemsi import FemapConverter
-
-# Create converter
-converter = FemapConverter("input.neu")
-
-# Parse FEMAP file
-converter.parse_femap()
-
-# Inspect parsed data
-print(f"Nodes: {len(converter.nodes)}")
-print(f"Elements: {len(converter.elements)}")
-print(f"Properties: {len(converter.properties)}")
-
-# Validate data
-messages = converter.validate()
-for msg in messages:
-    print(msg)
-
-# Convert to VTK MultiBlock UnstructuredGrid (one block per property)
-multiblock = converter.write_vtm("output.vtm")
-```
-
-### Using the Example Script
-
-```bash
-# Simple conversion
-python examples/convert_femap.py input.neu output.vtm
-
-# Detailed conversion with intermediate information
-python examples/convert_femap.py input.neu output.vtm --detailed
-```
-
-## Parsing Only (No VTK Required)
-
-You can parse FEMAP files without VTK installed:
-
-```python
-from pyemsi import FEMAPParser
-
-# Parse FEMAP file
-parser = FEMAPParser("input.neu")
-parser.parse()
-
-# Extract data
-nodes = parser.get_nodes()
-elements = parser.get_elements()
-properties = parser.get_properties()
-materials = parser.get_materials()
-header = parser.get_header()
-
-# Work with parsed data
-for node_id, (x, y, z) in nodes.items():
-    print(f"Node {node_id}: ({x}, {y}, {z})")
-```
-
-## MultiBlock UnstructuredGrid Organization
-
-The converted VTM file is a MultiBlock dataset containing separate UnstructuredGrid blocks for each property ID, making it easy to work with different parts of your model. Each block includes the following cell data arrays for filtering and visualization:
-
-- **ElementID**: Original FEMAP element ID
-- **PropertyID**: Property assignment for each element
-- **MaterialID**: Material assignment (via property lookup)
-- **TopologyID**: FEMAP topology code for debugging
-
-Blocks are named as `Property_{ID}_{Title}` (e.g., `Property_1_Shell_Part`, `Property_2_Solid_Part`)
-
-## Visualization in ParaView
-
-1. Open ParaView
-2. File > Open > select your `.vtm` file
-3. Click "Apply" in the Properties panel
-4. You'll see separate blocks for each property in the Pipeline Browser
-5. Toggle visibility of individual blocks, or select blocks to work with specific parts
-6. In the top toolbar, change coloring from "Solid Color" to "PropertyID" or "MaterialID"
-7. Use filters like "Threshold" or "Extract Block" to work with specific parts
-
-## Testing
-
-Run the test suite:
-
-```bash
-# Run all tests
-python -m pytest tests/
-
-# Run with coverage
-python -m pytest tests/ --cov=pyemsi --cov-report=html
-
-# Run specific test file
-python -m pytest tests/test_femap_parser.py -v
-```
-
-## Project Structure
+## Repository layout
 
 ```
 pyemsi/
 ├── pyemsi/
-│   ├── __init__.py           # Package initialization
-│   ├── femap_parser.py       # FEMAP Neutral file parser
-│   └── femap_to_vtm.py       # VTK converter
+│   ├── __init__.py              # Package exports (FemapConverter)
+│   ├── FemapConverter.py        # PyVista/Vtk conversion pipeline
+│   ├── femap_parser.pyx         # Cython parser implementation
+│   ├── femap_parser.pxd         # Shared declarations
+│   ├── femap_parser.c           # Generated C source (checked in for convenience)
+│   ├── femap_parser.cp313-*.pyd # Prebuilt wheel for Windows dev
+│   └── femap_parser_bak.py      # Pure-Python reference parser
 ├── tests/
-│   ├── __init__.py
-│   ├── test_femap_parser.py  # Parser tests
-│   ├── test_femap_to_vtm.py  # Converter tests
-│   └── fixtures/             # Test data files
-│       ├── simple_mesh.neu
-│       ├── post_geom_single_hex.neu
-│       └── mixed_elements.neu
-├── dev_docs/                 # Development documentation
-│   ├── femap_to_vtm_plan.md
-│   ├── femap.md
-│   └── vtk.md
+│   ├── fixtures/                # Sample FEMAP Neutral files
+│   ├── test_femap_parser.py
+│   └── test_femap_to_vtm.py     # Legacy tests kept for reference
+├── dev_docs/                    # Format notes and planning docs
 ├── requirements.txt
 ├── setup.py
 └── README.md
 ```
 
-## API Reference
+## Requirements and installation
 
-### FEMAPParser
+- Python 3.8+
+- NumPy ≥ 1.21, PyVista, VTK ≥ 9.0
+- A C/C++ compiler capable of building Cython extensions
 
-Parse FEMAP Neutral files and extract structured data.
-
-```python
-parser = FEMAPParser(filepath)
-blocks = parser.parse()  # Returns dict of block_id -> [FEMAPBlock]
-
-# Extract specific data
-header = parser.get_header()           # Returns dict with title, version
-nodes = parser.get_nodes()              # Returns {node_id: (x, y, z)}
-elements = parser.get_elements()        # Returns list of element dicts
-properties = parser.get_properties()    # Returns {prop_id: {...}}
-materials = parser.get_materials()      # Returns {mat_id: {...}}
+```bash
+git clone https://github.com/yourusername/pyemsi.git
+cd pyemsi
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .[dev]
 ```
 
-### FemapConverter
+## Building `femap_parser.pyx`
 
-Convert FEMAP files to VTK MultiBlock UnstructuredGrid format.
+The `pyemsi.femap_parser` module is implemented in Cython for speed. Rebuild it any time you change `femap_parser.pyx/.pxd`, or when you set up a fresh clone:
 
-```python
-converter = FemapConverter(femap_filepath)
-converter.parse_femap()                      # Parse the file
-messages = converter.validate()              # Validate parsed data
-mb = converter.build_mesh()  # Build MultiBlock UnstructuredGrid
-converter.write_vtm(output_filepath)         # Write to disk
+```bash
+python setup.py build_ext --inplace
 ```
 
-## Requirements
+The command generates `pyemsi/femap_parser.*.pyd` (Windows) or `.so` (Linux/macOS) alongside the sources so that `from pyemsi.femap_parser import FEMAPParser` works without packaging an external wheel. The build uses the NumPy headers declared in `setup.py`; make sure your compiler toolchain is discoverable (MSVC on Windows, clang/gcc elsewhere). Because `setup.py` cythonizes the extension only when Cython is present, keeping `Cython>=3.0` installed is recommended even if you rely on the checked-in C file.
 
-- Python >= 3.7
-- VTK >= 9.0.0 (only required for VTU conversion, not for parsing)
+## Preparing a FEMAP case
 
-## License
+FemapConverter expects a directory that contains a neutral mesh plus optional result files. A typical export looks like:
 
-MIT License
+```
+project/
+├── post_geom            # Neutral mesh (Block 403/404/etc.)
+├── disp                 # Displacements (Block 1051)
+├── magnetic             # Magnetic flux density vectors
+├── current              # Current density and Joule loss
+├── force                # Mechanical nodal forces
+├── force_J_B            # Lorentz forces
+└── heat                 # Heat generation
+```
 
-## Contributing
+File names are configurable via the FemapConverter constructor. If a file is missing or `None`, that data channel is skipped.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Using `FemapConverter`
 
-## Known Limitations
+```python
+from pyemsi import FemapConverter
 
-- Node ordering is assumed to match VTK canonical ordering (verify for your specific FEMAP export)
-- Some specialized FEMAP element types may not be supported
-- Result data (Block 450, 1051) is not yet implemented
+converter = FemapConverter(
+    input_dir="project",
+    output_dir=".pyemsi",
+    output_name="transient_run",
+    mesh="post_geom",        # mesh file or absolute path
+    force_2d=False,          # flatten Bricks/Wedges into Quads/Tris when True
+    displacement="disp",
+    magnetic="magnetic",
+    current="current",
+    force="force",
+    force_J_B="force_J_B",
+    heat="heat",
+)
 
-## Development Documentation
+# Build a clean mesh grouped by PropertyID; initial_mesh.vtm is written automatically
+converter.parse_data_files()   # read optional result files
+converter.init_pvd()           # create <output_name>.pvd referencing each time step
+converter.time_stepping()      # writes one VTM per set title inside <output_dir>/<output_name>/
+```
 
-See [dev_docs/](dev_docs/) for detailed implementation plans and format specifications:
-- [femap_to_vtu_plan.md](dev_docs/femap_to_vtu_plan.md) - Implementation plan
-- [vtk.md](dev_docs/vtk.md) - VTK Unstructured Grid reference
+Key behaviors:
 
-## Contact
+- Nodes are deduplicated by FEMAP ID and stored with a FEMAP→VTK lookup so nodal vectors can be mapped back on demand.
+- Elements unsupported by `FEMAP_TO_VTK` are skipped with their IDs logged in-memory so that result arrays only target valid cells.
+- `get_data_array(step, vectors)` sanitizes vector titles (illegal filename characters are removed) and supports both nodal (`ent_type == 7`) and elemental (`ent_type == 8`) payloads.
+- During `time_stepping` the converter applies displacements (updating mesh points), writes point/cell data arrays such as `B-Vec (T)`, `J-Vec (A/m^2)`, `F Lorents-Vec (N/m^3)` or `Heat Density (W/m^3)`, and exports each sanitized time-step title as `output/<title>.vtm`.
+- Use PyVista/ParaView to open `.pyemsi/transient_run/initial_mesh.vtm` for static geometry or `transient_run.pvd` for the full time-series.
 
-For questions, issues, or contributions, please open an issue on GitHub.
+### Visualizing with PyVista
+
+```python
+import pyvista as pv
+
+m = pv.read(".pyemsi/transient_run/initial_mesh.vtm")
+p = pv.Plotter()
+for name, block in m.blocks.items():
+    p.add_mesh(block, show_edges=True, opacity=0.4, label=f"Property {name}")
+p.add_legend()
+p.show()
+```
+
+## Working directly with `FEMAPParser`
+
+```python
+from pyemsi.femap_parser import FEMAPParser
+
+parser = FEMAPParser("tests/fixtures/simple_mesh.neu")
+header = parser.get_header()
+nodes = parser.get_nodes()
+elements = parser.get_elements()
+properties = parser.get_properties()
+materials = parser.get_materials()
+output_sets = parser.get_output_sets()
+output_vectors = parser.get_output_vectors()
+
+node_ids, coords = parser.get_nodes_arrays()
+elem_ids, prop_ids, topos, connectivity, offsets = parser.get_elements_arrays()
+ids, values, set_id, vec_id, ent_type = parser.get_output_vectors_arrays(set_id_filter=1)
+```
+
+These helpers make it easy to plug FEMAP data into other pipelines, perform validation prior to visualization, or prototype new analysis routines without touching VTK.
+
+## Supported topology mapping
+
+| FEMAP topology | Element             | VTK constant                | Nodes |
+|----------------|---------------------|-----------------------------|-------|
+| 9              | Point               | `VTK_VERTEX`                | 1     |
+| 0              | Line2               | `VTK_LINE`                  | 2     |
+| 2              | Tri3                | `VTK_TRIANGLE`              | 3     |
+| 3              | Tri6                | `VTK_QUADRATIC_TRIANGLE`    | 6     |
+| 4              | Quad4               | `VTK_QUAD`                  | 4     |
+| 5              | Quad8               | `VTK_QUADRATIC_QUAD`        | 8     |
+| 6              | Tetra4              | `VTK_TETRA`                 | 4     |
+| 10             | Tetra10             | `VTK_QUADRATIC_TETRA`       | 10    |
+| 7              | Wedge6              | `VTK_WEDGE`                 | 6     |
+| 11             | Wedge15             | `VTK_QUADRATIC_WEDGE`       | 15    |
+| 8              | Brick8              | `VTK_HEXAHEDRON`            | 8     |
+| 12             | Brick20             | `VTK_QUADRATIC_HEXAHEDRON`  | 20    |
+
+Elements with fewer nodes than required are skipped to avoid corrupt cells; check `FemapConverter.elements_map` if you need to trace which FEMAP IDs were retained.
+
+## Testing
+
+```bash
+python -m pytest
+```
+
+The parser tests use the fixtures under `tests/fixtures/` to ensure that repeated blocks, mixed topologies, and CSV parsing edge cases behave consistently. Converter tests currently target the legacy API but still validate the FEMAP→VTK mappings and VTK output structure.
+
+## Contributing & license
+
+MIT License. Issues and pull requests are welcome—particularly around expanded output vector coverage, CLI tooling, or platform-specific build scripts. When modifying the parser, remember to rerun `python setup.py build_ext --inplace` so the compiled extension matches the `.pyx` source.
