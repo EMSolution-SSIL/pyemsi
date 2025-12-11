@@ -42,6 +42,13 @@ FEMAP_TO_VTK = {
     12: (VTK_QUADRATIC_HEXAHEDRON, 20),  # Brick20 -> VTK_QUADRATIC_HEXAHEDRON
 }
 
+FORCE_2D_TOPOLOGY = {
+    8: 4,  # Brick8 -> Quad4
+    12: 5,  # Brick20 -> Quad8
+    7: 2,  # Wedge6 -> Tri3
+    11: 3,  # Wedge15 -> Tri6
+}
+
 
 class FemapConverter:
     """
@@ -207,51 +214,35 @@ class FemapConverter:
 
         # Track property IDs for each cell
         property_ids = []
-        skipped = 0
         vtk_cell_idx = 0
 
         for elem in elements:
             topo = elem["topology"]
             if force_2d:
-                if topo == 8:  # Brick8
-                    topo = 4  # Quad4
-                elif topo == 12:  # Brick20
-                    topo = 5  # Quad8
-                elif topo == 7:  # Wedge6
-                    topo = 2  # Tri3
-                elif topo == 11:  # Wedge15
-                    topo = 3  # Tri6
-                else:
-                    raise ValueError(f"Cannot force 2D for element topology {topo}")
+                try:
+                    topo = FORCE_2D_TOPOLOGY[topo]
+                except KeyError as exc:
+                    raise ValueError(f"Cannot force 2D for element topology {topo}") from exc
 
             if topo not in FEMAP_TO_VTK:
-                skipped += 1
                 continue
 
             vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
             elem_nodes = elem["nodes"][:num_nodes_required]
 
             if len(elem_nodes) < num_nodes_required:
-                skipped += 1
                 continue
-            # Create ID list for the cell
-            idlist = []
-            valid = True
-            for femap_node_id in elem_nodes:
-                if femap_node_id in self.femap_to_vtk_id:
-                    vtk_idx = self.femap_to_vtk_id[femap_node_id]
-                    idlist.append(vtk_idx)
-                else:
-                    valid = False
-                    skipped += 1
-                    break
 
-            if valid:
-                ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
-                property_ids.append(elem["prop_id"])
-                # Store mapping: FEMAP element ID -> VTK cell index
-                self.elements_map[elem["id"]] = vtk_cell_idx
-                vtk_cell_idx += 1
+            try:
+                idlist = [self.femap_to_vtk_id[n] for n in elem_nodes]
+            except KeyError:
+                continue
+
+            ug.InsertNextCell(vtk_type, num_nodes_required, idlist)
+            property_ids.append(elem["prop_id"])
+            # Store mapping: FEMAP element ID -> VTK cell index
+            self.elements_map[elem["id"]] = vtk_cell_idx
+            vtk_cell_idx += 1
 
         # Convert to PyVista UnstructuredGrid
         self.mesh = pv.wrap(ug)
