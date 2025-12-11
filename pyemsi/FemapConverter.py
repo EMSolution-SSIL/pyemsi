@@ -1,3 +1,4 @@
+import logging
 import re
 import shutil
 import threading
@@ -24,6 +25,9 @@ from vtk import (
 )
 
 from pyemsi.femap_parser import FEMAPParser
+
+# Module-level logger
+logger = logging.getLogger(__name__)
 
 # FEMAP topology to VTK cell type mapping
 # Format: femap_topology_id -> (vtk_cell_type, num_nodes)
@@ -69,6 +73,13 @@ class FemapConverter:
         heat: str | Path | None = "heat",
         displacement: str | Path = "disp",
     ):
+        logger.info("Initializing FemapConverter for input_dir=%s", input_dir)
+        logger.debug(
+            "Configuration: output_dir=%s, output_name=%s, force_2d=%s",
+            output_dir,
+            output_name,
+            force_2d,
+        )
         self.elements_map = {}
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
@@ -81,8 +92,10 @@ class FemapConverter:
         # Clean up existing output files
         pvd_file = self.output_dir / f"{self.output_name}.pvd"
         if pvd_file.exists():
+            logger.debug("Removing existing PVD file: %s", pvd_file)
             pvd_file.unlink()
         if self.output_folder.exists():
+            logger.debug("Removing existing output folder: %s", self.output_folder)
             shutil.rmtree(self.output_folder)
 
         # Add displacement
@@ -140,8 +153,10 @@ class FemapConverter:
         Initializes the PVD file with the converted mesh and associated vector fields.
         """
         if self.output_folder.exists():
+            logger.debug("Output folder already exists, skipping PVD initialization")
             return
 
+        logger.debug("Creating output folder: %s", self.output_folder)
         self.output_folder.mkdir(parents=True, exist_ok=True)
 
         # Build PVD file content
@@ -161,6 +176,7 @@ class FemapConverter:
 
         with open(self.pvd_file, "w") as f:
             f.write("\n".join(pvd_lines))
+        logger.info("Created PVD file: %s with %d time steps", self.pvd_file, len(self.sets))
 
     def _write_vtm_file(
         self, mesh: pv.MultiBlock | pv.UnstructuredGrid, path: str | Path, ascii_mode: bool = False
@@ -173,10 +189,12 @@ class FemapConverter:
         if ascii_mode:
             writer.SetDataModeToAscii()
         writer.Write()
+        logger.debug("Written VTM file: %s", path)
 
     def _vtu_to_vtm(self, unstructured_grid: pv.UnstructuredGrid) -> pv.MultiBlock:
         # Create a new MultiBlock dataset based on the PropertyID cell data
         # Create a MultiBlock dataset and add the subgrid
+        logger.debug("Converting UnstructuredGrid to MultiBlock by PropertyID")
         mb = pv.MultiBlock()
         for prop_id in self.unique_props:
             # Extract cells with the current property ID
@@ -191,12 +209,15 @@ class FemapConverter:
             subgrid_name = str(prop_id)
             mb[subgrid_name] = subgrid
 
+        logger.debug("Created MultiBlock with %d blocks", len(mb))
         return mb
 
     def _build_mesh(self, mesh_file: str | Path, force_2d: bool = False) -> None:
+        logger.info("Building mesh from: %s", mesh_file)
         parser = FEMAPParser(str(mesh_file))
         nodes = parser.get_nodes(force_2d)
         elements = parser.get_elements()
+        logger.debug("Loaded %d nodes and %d elements from parser", len(nodes), len(elements))
 
         # Create VTK points and ID mapping
         pts = vtkPoints()
@@ -254,15 +275,28 @@ class FemapConverter:
         # uniqe property IDs
         self.unique_props = np.unique(property_ids)
 
+        logger.debug(
+            "Mesh built: %d nodes, %d elements, %d unique properties",
+            self.mesh.n_points,
+            self.mesh.n_cells,
+            len(self.unique_props),
+        )
+
     def parse_data_file(self, name: str, file_path: str | Path) -> None:
         """Parse a single FEMAP data file and cache its vectors/sets."""
-        print(f"Parsing data file: {file_path}")
+        logger.info("Parsing data file: %s", file_path)
         parser = FEMAPParser(str(file_path))
         parser.parse()
         sets = parser.get_output_sets()
         self.vectors[name] = parser.get_output_vectors()
         if not self.sets:
             self.sets = sets
+        logger.debug(
+            "Parsed %s: %d output sets, %d vectors",
+            name,
+            len(sets),
+            len(self.vectors[name]),
+        )
 
     def parse_data_files(self) -> None:
         """Parse all configured FEMAP data files in parallel."""
@@ -274,6 +308,8 @@ class FemapConverter:
             "force_J_B": self.force_J_B_file,
             "heat": self.heat_file,
         }
+        active_files = {k: v for k, v in file_map.items() if v is not None}
+        logger.info("Parsing %d data files in parallel: %s", len(active_files), list(active_files.keys()))
         threads = []
         for name, file_path in file_map.items():
             if file_path is not None:
@@ -282,6 +318,7 @@ class FemapConverter:
                 threads.append(thread)
         for thread in threads:
             thread.join()
+        logger.debug("All data files parsed successfully")
 
     def get_data_array(self, step: int, vectors: list[dict]) -> dict[str, np.ndarray]:
         """
@@ -298,8 +335,10 @@ class FemapConverter:
         matching_vectors = [v for v in vectors if v["set_id"] == step]
 
         if not matching_vectors:
+            logger.warning("No vectors found for step=%d", step)
             raise ValueError(f"No vectors found for step={step}")
 
+        logger.debug("Processing %d vectors for step %d", len(matching_vectors), step)
         results_dict: dict[str, np.ndarray] = {}
 
         for matching_vector in matching_vectors:
@@ -344,13 +383,15 @@ class FemapConverter:
 
                 results_dict[safe_title] = arr
 
+        logger.debug("Extracted %d data arrays for step %d", len(results_dict), step)
         return results_dict
 
     def time_stepping(self) -> None:
         """Convert every FEMAP output set into a VTK multiblock file."""
+        logger.info("Starting time stepping for %d output sets", len(self.sets))
         threads = []
         for step, ts in self.sets.items():
-            print(f"Processing time step {step} - {ts['title']}")
+            logger.info("Processing time step %d - %s", step, ts["title"])
             safe_title = re.sub(r'[<>:"/\\|?*!]', "", ts["title"])
             vtm_path = self.output_dir / self.output_name / f"{safe_title}.vtm"
             thread = threading.Thread(target=self._process_time_step, args=(step, vtm_path))
@@ -358,6 +399,7 @@ class FemapConverter:
             threads.append(thread)
         for thread in threads:
             thread.join()
+        logger.info("Time stepping complete: %d VTM files written", len(self.sets))
 
     def _process_time_step(self, step: int, vtm_path: str | Path) -> None:
         # Create a copy of the mesh for thread safety
@@ -377,16 +419,20 @@ class FemapConverter:
         if "heat" in self.vectors:
             self._process_heat_field(step, mesh_copy)
         self._write_vtm_file(mesh_copy, vtm_path)
+        logger.debug("Written time step %d to %s", step, vtm_path)
 
     def _process_displacement_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing displacement field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["displacement"])
         node_1 = data_arrays["DISP-node-1"]
         node_2 = data_arrays["DISP-node-2"]
         node_3 = data_arrays["DISP-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
         mesh.points = self.init_points + node_vec
+        logger.debug("Applied displacement to %d mesh points", mesh.n_points)
 
     def _process_magnetic_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing magnetic field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["magnetic"])
         node_1 = data_arrays["BMAG-node-1"]
         node_2 = data_arrays["BMAG-node-2"]
@@ -405,8 +451,14 @@ class FemapConverter:
         mesh.cell_data["B-Vec (T)"] = element_vec
         element_4 = data_arrays["BMAG-elem-4"]
         mesh.cell_data["B-Mag (T)"] = element_4
+        logger.debug(
+            "Added magnetic field data: point_data=%s, cell_data=%s",
+            list(mesh.point_data.keys()),
+            list(mesh.cell_data.keys()),
+        )
 
     def _process_current_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing current field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["current"])
         node_1 = data_arrays["CURR-node-1"]
         node_2 = data_arrays["CURR-node-2"]
@@ -426,8 +478,10 @@ class FemapConverter:
         mesh.cell_data["J-Mag (A/m^2)"] = element_4
         element_5 = data_arrays["CURR-elem-5"]
         mesh.cell_data["Loss (W/m^3)"] = element_5
+        logger.debug("Added current field data for step %d", step)
 
     def _process_force_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing force field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["force"])
         node_1 = data_arrays["NFOR-node-1"]
         node_2 = data_arrays["NFOR-node-2"]
@@ -443,8 +497,10 @@ class FemapConverter:
         mesh.cell_data["F Nodal-Vec (N/m^3)"] = element_vec
         element_4 = data_arrays["NFOR-elem-4"]
         mesh.cell_data["F Nodal-Mag (N/m^3)"] = element_4
+        logger.debug("Added nodal force field data for step %d", step)
 
     def _process_force_J_B_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing Lorentz force field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["force_J_B"])
         node_1 = data_arrays["LFOR-node-1"]
         node_2 = data_arrays["LFOR-node-2"]
@@ -460,8 +516,10 @@ class FemapConverter:
         mesh.cell_data["F Lorents-Vec (N/m^3)"] = element_vec
         element_4 = data_arrays["LFOR-elem-4"]
         mesh.cell_data["F Lorents-Mag (N/m^3)"] = element_4
+        logger.debug("Added Lorentz force field data for step %d", step)
 
     def _process_heat_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing heat field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["heat"])
         node_1 = data_arrays["HEAT-node-1"]
         mesh.point_data["Heat Density (W/m^3)"] = node_1
@@ -471,3 +529,4 @@ class FemapConverter:
         mesh.cell_data["Heat Density (W/m^3)"] = element_1
         element_2 = data_arrays["HEAT-elem-2"]
         mesh.cell_data["Heat (W)"] = element_2
+        logger.debug("Added heat field data for step %d", step)

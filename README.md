@@ -111,6 +111,36 @@ Key behaviors:
 - During `time_stepping` the converter applies displacements (updating mesh points), writes point/cell data arrays such as `B-Vec (T)`, `J-Vec (A/m^2)`, `F Lorents-Vec (N/m^3)` or `Heat Density (W/m^3)`, and exports each sanitized time-step title as `output/<title>.vtm`.
 - Use PyVista/ParaView to open `.pyemsi/transient_run/initial_mesh.vtm` for static geometry or `transient_run.pvd` for the full time-series.
 
+### Logging
+
+pyemsi uses Python's standard `logging` module. By default, the library is silent (uses `NullHandler`). Enable logging with the `configure_logging` helper:
+
+```python
+import logging
+import pyemsi
+
+# Enable INFO level to console
+pyemsi.configure_logging(logging.INFO)
+
+# Enable DEBUG level for detailed output (mesh stats, vector counts, file writes)
+pyemsi.configure_logging(logging.DEBUG)
+
+# Custom file handler
+file_handler = logging.FileHandler("pyemsi.log")
+pyemsi.configure_logging(logging.DEBUG, handler=file_handler)
+
+# Custom format string
+pyemsi.configure_logging(
+    logging.INFO,
+    format_string="%(asctime)s - %(message)s"
+)
+```
+
+The default format includes timestamps and thread names for debugging parallel processing:
+```
+%(asctime)s [%(levelname)s] %(name)s (%(threadName)s): %(message)s
+```
+
 ### Visualizing with PyVista
 
 ```python

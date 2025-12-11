@@ -2,6 +2,11 @@ import pyvista as pv
 from pyemsi.FemapConverter import FemapConverter
 import cProfile
 import pstats
+import pyemsi
+import logging
+
+file_handler = logging.FileHandler("pyemsi.log")
+pyemsi.configure_logging(logging.DEBUG, handler=file_handler)
 
 with cProfile.Profile() as pr:
     FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage", output_name="transient", current=None)
