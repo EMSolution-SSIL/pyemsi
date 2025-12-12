@@ -65,6 +65,7 @@ class FemapConverter:
         output_dir: str | Path = "./.pyemsi",
         output_name: str = "output",
         force_2d: bool = False,
+        ascii_mode: bool = False,
         mesh: str | Path = "post_geom",
         magnetic: str | Path | None = "magnetic",
         current: str | Path | None = "current",
@@ -75,15 +76,17 @@ class FemapConverter:
     ):
         logger.info("Initializing FemapConverter for input_dir=%s", input_dir)
         logger.debug(
-            "Configuration: output_dir=%s, output_name=%s, force_2d=%s",
+            "Configuration: output_dir=%s, output_name=%s, force_2d=%s, ascii_mode=%s",
             output_dir,
             output_name,
             force_2d,
+            ascii_mode,
         )
         self.elements_map = {}
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.output_name = output_name
+        self.ascii_mode = ascii_mode
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
@@ -178,15 +181,13 @@ class FemapConverter:
             f.write("\n".join(pvd_lines))
         logger.info("Created PVD file: %s with %d time steps", self.pvd_file, len(self.sets))
 
-    def _write_vtm_file(
-        self, mesh: pv.MultiBlock | pv.UnstructuredGrid, path: str | Path, ascii_mode: bool = False
-    ) -> None:
+    def _write_vtm_file(self, mesh: pv.MultiBlock | pv.UnstructuredGrid, path: str | Path) -> None:
         if isinstance(mesh, pv.UnstructuredGrid):
             mesh = self._vtu_to_vtm(mesh)
         writer = vtkXMLMultiBlockDataWriter()
         writer.SetFileName(str(path))
         writer.SetInputData(mesh)
-        if ascii_mode:
+        if self.ascii_mode:
             writer.SetDataModeToAscii()
         writer.Write()
         logger.debug("Written VTM file: %s", path)
