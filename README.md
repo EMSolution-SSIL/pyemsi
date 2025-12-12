@@ -97,10 +97,14 @@ converter = FemapConverter(
     heat="heat",
 )
 
-# Build a clean mesh grouped by PropertyID; initial_mesh.vtm is written automatically
-converter.parse_data_files()   # read optional result files
-converter.init_pvd()           # create <output_name>.pvd referencing each time step
-converter.time_stepping()      # writes one VTM per set title inside <output_dir>/<output_name>/
+# Run the conversion pipeline:
+converter.run()
+#
+# This executes:
+# 1. Builds a clean mesh grouped by PropertyID
+# 2. Parses optional result files
+# 3. Creates <output_name>.pvd referencing each time step
+# 4. Writes one VTM per set title inside <output_dir>/<output_name>/
 ```
 
 Key behaviors:

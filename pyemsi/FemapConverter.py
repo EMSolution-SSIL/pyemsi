@@ -57,6 +57,14 @@ FORCE_2D_TOPOLOGY = {
 class FemapConverter:
     """
     Converts EMSolution's FEMAP Neutral files to VTK MultiBlock UnstructuredGrid format.
+
+    The conversion pipeline consists of four stages:
+    1. Builds a mesh from the FEMAP neutral file
+    2. Parses all configured data files (displacement, magnetic, current, force, etc.)
+    3. Initializes a PVD file referencing each time step
+    4. Performs time stepping to write individual VTM files for each time step
+
+    Call the `run()` method to execute the complete pipeline.
     """
 
     def __init__(
@@ -90,7 +98,6 @@ class FemapConverter:
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
-        self._build_mesh(mesh_file, force_2d=force_2d)
 
         # Clean up existing output files
         pvd_file = self.output_dir / f"{self.output_name}.pvd"
@@ -139,9 +146,9 @@ class FemapConverter:
             if heat_file.exists():
                 self.heat_file = heat_file
 
-        self.parse_data_files()
-        self.init_pvd()
-        self.time_stepping()
+        # Store parameters for run method
+        self._mesh_file = mesh_file
+        self._force_2d = force_2d
 
     @property
     def output_folder(self) -> Path:
@@ -150,6 +157,21 @@ class FemapConverter:
     @property
     def pvd_file(self) -> Path:
         return self.output_dir / f"{self.output_name}.pvd"
+
+    def run(self) -> None:
+        """
+        Executes the main conversion pipeline:
+        1. Builds the mesh from FEMAP file
+        2. Parses all data files
+        3. Initializes PVD file
+        4. Performs time stepping to write VTM files
+        """
+        logger.info("Starting FemapConverter pipeline")
+        self._build_mesh(self._mesh_file, force_2d=self._force_2d)
+        self.parse_data_files()
+        self.init_pvd()
+        self.time_stepping()
+        logger.info("FemapConverter pipeline complete")
 
     def init_pvd(self) -> None:
         """

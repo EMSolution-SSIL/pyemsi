@@ -1,66 +1,20 @@
-import pyvista as pv
 from pyemsi.FemapConverter import FemapConverter
-import cProfile
-import pstats
+import yappi
 import pyemsi
 import logging
 
 file_handler = logging.FileHandler("pyemsi.log")
 pyemsi.configure_logging(logging.DEBUG, handler=file_handler)
 
-with cProfile.Profile() as pr:
-    FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage", output_name="transient", current=None)
-    # FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient", force_2d=True)
+# Start yappi profiler (supports threading)
+yappi.set_clock_type("cpu")
+yappi.start()
 
+# cv = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage", output_name="transient", current=None)
+cv = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Project\transient", force_2d=True)
+cv.run()
 
-stats = pstats.Stats(pr)
-stats.sort_stats(pstats.SortKey.CUMULATIVE)
-stats.dump_stats("femap_profile.prof")
-
-# from pyemsi import FemapConverter
-
-# # Create converter
-# # converter = FemapConverter("tests/post_geom_single_hex")
-# converter = FemapConverter(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\post_geom")
-# converter.parse_femap()
-# converter.build_mesh()
-# sets, vectors = converter.parse_data_file("magnetic")
-# converter.init_pvd(sets=sets, vectors=vectors, force=True)
-# converter.append_magnetic()
-
-
-# converter.append_data(r"C:\Users\eskan\OneDrive\Desktop\delme\Trans_Voltage\magnetic")
-# converter.write_pvd()
-
-# # Parse FEMAP file
-# converter.parse_femap()
-
-# # Inspect parsed data
-# print(f"Nodes: {len(converter.nodes)}")
-# print(f"Elements: {len(converter.elements)}")
-# print(f"Properties: {len(converter.properties)}")
-
-# # Validate data
-# messages = converter.validate()
-# for msg in messages:
-#     print(msg)
-
-# Convert to VTK MultiBlock UnstructuredGrid (one block per property)
-# multiblock = converter.write_vtm(".pyemsi/output.vtm")
-# p = pv.Plotter()
-# for i, block in enumerate(multiblock):
-#     p.add_mesh(block, show_edges=True, opacity=0.5, label=f"block_{i}")
-# p.add_legend()
-# p.reset_camera()
-# p.show(title="All blocks in one scene")
-
-
-# import pyvista as pv
-
-# msh = pv.read("output.vtm")
-# p = pv.Plotter()
-# for i, block in enumerate(msh):
-#     p.add_mesh(block, show_edges=True, opacity=0.5, label=f"block_{i}")
-# p.add_legend()
-# p.reset_camera()
-# p.show(title="All blocks in one scene")
+# Stop profiler and save stats in cProfile format for compatibility with tuna
+yappi.stop()
+stats = yappi.get_func_stats()
+stats.save("femap_profile.prof", type="pstat")
