@@ -1,4 +1,4 @@
-pyvista
+pyvista[jupyter]
 PySide6
 pyvistaqt
 Cython>=3.0.0

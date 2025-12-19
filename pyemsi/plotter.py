@@ -7,43 +7,61 @@ with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 
 from typing import Optional, Tuple
 import pyvista as pv
-from PySide6.QtWidgets import QApplication, QMainWindow, QFrame, QVBoxLayout
-from pyvistaqt import QtInteractor
+
+# Qt imports are optional (only needed for desktop mode)
+try:
+    from PySide6.QtWidgets import QApplication, QMainWindow, QFrame, QVBoxLayout
+    from pyvistaqt import QtInteractor
+
+    HAS_QT = True
+except ImportError:
+    HAS_QT = False
 
 
-class Plotter(QMainWindow):
+class Plotter:
     """
-    Custom Qt-based plotter for interactive 3D visualization.
+    Custom plotter for interactive 3D visualization in desktop and Jupyter notebook environments.
 
-    This class inherits from QMainWindow and contains a QtInteractor widget
-    that provides PyVista plotting functionality with Qt rendering.
+    This class provides dual-mode support:
+    - Desktop mode (default): Uses Qt-based rendering with QtInteractor
+    - Notebook mode: Uses PyVista's native Jupyter backend (e.g., Trame)
 
     Parameters
     ----------
-    title : str, optional
-        Window title. Default is "pyemsi Plotter".
-    window_size : tuple of int, optional
-        Window size as (width, height) in pixels. Default is (1024, 768).
-    position : tuple of int, optional
-        Window position as (x, y) in screen coordinates. If None, uses OS default.
     mesh : pv.DataSet, optional
         PyVista mesh to visualize. Accepts single datasets (UnstructuredGrid, PolyData, etc.)
         or MultiBlock datasets. If provided, feature edges are automatically extracted and
         displayed, and the camera is reset to frame the mesh. Default is None.
+    title : str, optional
+        Window title (desktop mode only). Default is "pyemsi Plotter".
+    window_size : tuple of int, optional
+        Window size as (width, height) in pixels (desktop mode only). Default is (1024, 768).
+    position : tuple of int, optional
+        Window position as (x, y) in screen coordinates (desktop mode only). If None, uses OS default.
+    notebook : bool, optional
+        If True, uses PyVista's native notebook backend for Jupyter environments.
+        If False, uses Qt-based desktop rendering. Default is False.
+    backend : str, optional
+        PyVista backend to use in notebook mode (e.g., 'trame', 'static', 'panel').
+        If None, PyVista chooses the default. Default is None.
     **kwargs
-        Additional keyword arguments passed to QtInteractor.
+        Additional keyword arguments passed to the underlying plotter (QtInteractor or pv.Plotter).
 
     Attributes
     ----------
-    plotter : QtInteractor
-        The internal QtInteractor instance that handles PyVista plotting and Qt rendering.
-    app : QApplication
-        The Qt application instance.
+    plotter : QtInteractor or pv.Plotter
+        The internal plotter instance that handles rendering.
+    app : QApplication or None
+        The Qt application instance (desktop mode only).
     mesh : pv.DataSet or None
         The primary mesh provided during initialization, if any.
+    notebook : bool
+        Whether the plotter is in notebook mode.
 
     Examples
     --------
+    Desktop mode:
+
     >>> import pyvista as pv
     >>> from pyemsi import Plotter
     >>>
@@ -56,10 +74,20 @@ class Plotter(QMainWindow):
     >>> p = Plotter(title="My Visualization", window_size=(1200, 900))
     >>> p.add_mesh(pv.Cube(), color='red')
     >>> p.show()
+
+    Notebook mode:
+
+    >>> import pyvista as pv
+    >>> from pyemsi import Plotter
+    >>>
+    >>> # Use in Jupyter notebook with Trame backend
+    >>> p = Plotter(notebook=True)
+    >>> p.add_mesh(pv.Sphere(), show_edges=True)
+    >>> p.show()  # Returns interactive widget
     >>>
     >>> # Initialize with a mesh (automatically displays feature edges)
-    >>> mesh = pv.read("path/to/file.vtk")
-    >>> p = Plotter(mesh=mesh)
+    >>> mesh = pv.read("path/to/file.vtp")
+    >>> p = Plotter(mesh=mesh, notebook=True, backend='client')
     >>> p.show()
     """
 
@@ -69,22 +97,49 @@ class Plotter(QMainWindow):
         title: str = "pyemsi Plotter",
         window_size: Tuple[int, int] = (1024, 768),
         position: Optional[Tuple[int, int]] = None,
+        notebook: bool = False,
+        backend: Optional[str] = "client",
         **kwargs,
     ):
-        """Initialize the Qt-based plotter."""
+        """Initialize the plotter in desktop or notebook mode."""
+        self.notebook = notebook
+        self.backend = backend
+
+        # Initialize based on mode
+        if self.notebook:
+            self._init_notebook_mode(**kwargs)
+        else:
+            self._init_qt_mode(title, window_size, position, **kwargs)
+
+        # Store and plot mesh if provided
+        self.mesh = mesh
+        if self.mesh is not None:
+            self._plot_feature_edges()
+
+    def _init_qt_mode(
+        self,
+        title: str,
+        window_size: Tuple[int, int],
+        position: Optional[Tuple[int, int]],
+        **kwargs,
+    ) -> None:
+        """Initialize Qt-based desktop mode."""
+        if not HAS_QT:
+            raise ImportError("Qt dependencies not available. Install with: pip install PySide6 pyvistaqt")
+
         # Get or create QApplication instance
         self.app = QApplication.instance()
         if self.app is None:
             self.app = QApplication([])
 
-        # Initialize QMainWindow
-        super().__init__()
+        # Create QMainWindow
+        self._window = QMainWindow()
 
         # Set window properties
-        self.setWindowTitle(title)
-        self.resize(*window_size)
+        self._window.setWindowTitle(title)
+        self._window.resize(*window_size)
         if position is not None:
-            self.move(*position)
+            self._window.move(*position)
 
         # Create container frame and layout
         self.frame = QFrame()
@@ -97,12 +152,13 @@ class Plotter(QMainWindow):
         # Add QtInteractor to layout
         self.vlayout.addWidget(self.plotter)
         self.frame.setLayout(self.vlayout)
-        self.setCentralWidget(self.frame)
+        self._window.setCentralWidget(self.frame)
 
-        # Store and plot mesh if provided
-        self.mesh = mesh
-        if self.mesh is not None:
-            self._plot_feature_edges()
+    def _init_notebook_mode(self, **kwargs) -> None:
+        """Initialize PyVista native notebook mode."""
+        pv.set_jupyter_backend(self.backend)
+        self.plotter = pv.Plotter(**kwargs)
+        self.app = None
 
     def _plot_feature_edges(self) -> None:
         """
@@ -137,32 +193,43 @@ class Plotter(QMainWindow):
         # Reset camera to frame the mesh
         self.plotter.reset_camera()
 
-    def show(self) -> None:
+    def show(self):
         """
-        Display the plotter window and start the Qt event loop.
+        Display the plotter.
 
-        This method shows the QMainWindow and starts the Qt application event loop,
-        which will block until the window is closed.
+        In desktop mode, shows the QMainWindow and starts the Qt event loop (blocking).
+        In notebook mode, returns the interactive widget for display in Jupyter.
+
+        Returns
+        -------
+        None or widget
+            In notebook mode, returns the interactive widget. In desktop mode, returns None.
         """
-        # Show the QMainWindow
-        super().show()
-
-        # Start the Qt event loop
-        self.app.exec()
+        if self.notebook:
+            # Notebook mode: return the widget for Jupyter display
+            return self.plotter.show()
+        else:
+            # Desktop mode: show window and start Qt event loop
+            self._window.show()
+            self.app.exec()
 
     def close(self) -> None:
         """
-        Close the plotter window and clean up resources.
+        Close the plotter and clean up resources.
 
-        This method properly closes the QtInteractor, releases VTK resources,
-        and closes the QMainWindow.
+        In desktop mode, closes both the QtInteractor and QMainWindow.
+        In notebook mode, closes the PyVista plotter.
         """
-        # Close the QtInteractor and clean up VTK resources
-        if hasattr(self, "plotter") and self.plotter is not None:
-            self.plotter.close()
-
-        # Close the QMainWindow
-        super().close()
+        if self.notebook:
+            # Notebook mode: close PyVista plotter
+            if hasattr(self, "plotter") and self.plotter is not None:
+                self.plotter.close()
+        else:
+            # Desktop mode: close QtInteractor and QMainWindow
+            if hasattr(self, "plotter") and self.plotter is not None:
+                self.plotter.close()
+            if hasattr(self, "_window") and self._window is not None:
+                self._window.close()
 
     def __getattr__(self, name: str):
         """
