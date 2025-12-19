@@ -65,6 +65,9 @@ setup(
     install_requires=[
         "vtk>=9.0.0",
         "numpy>=1.21.0",
+        "pyvista>=0.43.0",
+        "pyvistaqt>=0.11.0",
+        "PySide6>=6.5.0",
     ],
     extras_require={
         "dev": [
