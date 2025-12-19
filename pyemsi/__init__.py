@@ -8,10 +8,7 @@ Main functionality:
 """
 
 import logging
-from pathlib import Path
-from typing import Optional, Union
-
-import pyvista as pv
+from typing import Optional
 
 from .FemapConverter import FemapConverter
 from .plotter import Plotter
@@ -68,39 +65,3 @@ def configure_logging(
     pkg_logger.addHandler(handler)
 
     return pkg_logger
-
-
-def read(filepath: Union[str, Path]) -> pv.DataSet:
-    """
-    Read a mesh file and return a PyVista mesh object.
-
-    This function uses PyVista's built-in reader to load various mesh formats
-    including VTK, VTM, STL, OBJ, PLY, and many others.
-
-    Args:
-        filepath: Path to the mesh file to read.
-
-    Returns:
-        A PyVista DataSet object (could be UnstructuredGrid, PolyData,
-        MultiBlock, or other PyVista mesh types depending on the file format).
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        ValueError: If the file format is not supported by PyVista.
-    Example:
-        >>> import pyemsi
-        >>> mesh = pyemsi.read("path/to/mesh.vtk")
-        >>> print(mesh)
-    """
-    filepath = Path(filepath)
-
-    if not filepath.exists():
-        raise FileNotFoundError(f"Mesh file not found: {filepath}")
-
-    try:
-        reader = pv.get_reader(str(filepath))
-        mesh = reader.read()
-        if isinstance(mesh, pv.MultiBlock):
-            return mesh[0]
-        return mesh
-    except Exception as e:
-        raise ValueError(f"Failed to read mesh file '{filepath}': {e}") from e

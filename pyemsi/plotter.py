@@ -5,8 +5,14 @@ Provides a custom Plotter class that composes PyVista plotting functionality
 with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 """
 
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING
+from pathlib import Path
 import pyvista as pv
+
+# TYPE_CHECKING imports (for type checkers only, not runtime)
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QApplication, QMainWindow, QFrame, QVBoxLayout
+    from pyvistaqt import QtInteractor
 
 # Qt imports are optional (only needed for desktop mode)
 try:
@@ -28,10 +34,6 @@ class Plotter:
 
     Parameters
     ----------
-    mesh : pv.DataSet, optional
-        PyVista mesh to visualize. Accepts single datasets (UnstructuredGrid, PolyData, etc.)
-        or MultiBlock datasets. If provided, feature edges are automatically extracted and
-        displayed, and the camera is reset to frame the mesh. Default is None.
     title : str, optional
         Window title (desktop mode only). Default is "pyemsi Plotter".
     window_size : tuple of int, optional
@@ -54,7 +56,9 @@ class Plotter:
     app : QApplication or None
         The Qt application instance (desktop mode only).
     mesh : pv.DataSet or None
-        The primary mesh provided during initialization, if any.
+        The mesh loaded via set_file(), if any.
+    reader : pv.BaseReader or None
+        The PyVista reader instance from set_file(), if any.
     notebook : bool
         Whether the plotter is in notebook mode.
 
@@ -85,25 +89,36 @@ class Plotter:
     >>> p.add_mesh(pv.Sphere(), show_edges=True)
     >>> p.show()  # Returns interactive widget
     >>>
-    >>> # Initialize with a mesh (automatically displays feature edges)
-    >>> mesh = pv.read("path/to/file.vtp")
-    >>> p = Plotter(mesh=mesh, notebook=True, backend='client')
-    >>> p.show()
+    >>> # Load mesh from file (automatically displays feature edges)
+    >>> p = Plotter(notebook=True, backend='client')
+    >>> p.set_file("path/to/file.vtp").show()
     """
+
+    # Type annotations for instance attributes
+    notebook: bool
+    backend: str | None
+    mesh: pv.DataSet | pv.MultiBlock | None
+    reader: pv.BaseReader | None
+    plotter: "QtInteractor | pv.Plotter"
+    app: "QApplication | None"
+    _window: "QMainWindow"
+    frame: "QFrame"
+    vlayout: "QVBoxLayout"
 
     def __init__(
         self,
-        mesh: Optional[pv.DataSet] = None,
         title: str = "pyemsi Plotter",
-        window_size: Tuple[int, int] = (1024, 768),
-        position: Optional[Tuple[int, int]] = None,
+        window_size: tuple[int, int] = (1024, 768),
+        position: tuple[int, int] | None = None,
         notebook: bool = False,
-        backend: Optional[str] = "client",
+        backend: str | None = "client",
         **kwargs,
     ):
         """Initialize the plotter in desktop or notebook mode."""
         self.notebook = notebook
         self.backend = backend
+        self.mesh = None
+        self.reader = None
 
         # Initialize based on mode
         if self.notebook:
@@ -111,16 +126,11 @@ class Plotter:
         else:
             self._init_qt_mode(title, window_size, position, **kwargs)
 
-        # Store and plot mesh if provided
-        self.mesh = mesh
-        if self.mesh is not None:
-            self._plot_feature_edges()
-
     def _init_qt_mode(
         self,
         title: str,
-        window_size: Tuple[int, int],
-        position: Optional[Tuple[int, int]],
+        window_size: tuple[int, int],
+        position: tuple[int, int] | None,
         **kwargs,
     ) -> None:
         """Initialize Qt-based desktop mode."""
@@ -159,6 +169,52 @@ class Plotter:
         pv.set_jupyter_backend(self.backend)
         self.plotter = pv.Plotter(**kwargs)
         self.app = None
+
+    def set_file(self, filepath: str | Path) -> "Plotter":
+        """
+        Load a mesh file and display its feature edges.
+
+        This method reads a mesh file using PyVista's reader, stores both the reader
+        and the loaded mesh, extracts feature edges, and updates the visualization.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the mesh file to load. Supports various formats including VTK,
+            VTM, STL, OBJ, PLY, and others supported by PyVista.
+
+        Returns
+        -------
+        Plotter
+            Returns self to enable method chaining.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the specified file does not exist.
+        ValueError
+            If the file format is not supported or the file cannot be read.
+
+        Examples
+        --------
+        >>> p = Plotter()
+        >>> p.set_file("mesh.vtm").show()
+        >>>
+        >>> # Method chaining with additional customization
+        >>> p = Plotter(notebook=True)
+        >>> p.set_file("model.vtp").add_axes().show()
+        """
+        filepath = Path(filepath)
+
+        if not filepath.exists():
+            raise FileNotFoundError(f"Mesh file not found: {filepath}")
+
+        try:
+            self.reader = pv.get_reader(str(filepath))
+        except Exception as e:
+            raise ValueError(f"Failed to read mesh file '{filepath}': {e}") from e
+
+        return self
 
     def _plot_feature_edges(self) -> None:
         """
@@ -205,6 +261,11 @@ class Plotter:
         None or widget
             In notebook mode, returns the interactive widget. In desktop mode, returns None.
         """
+        if isinstance(self.reader, pv.PVDReader):
+            self.mesh = self.reader.read()[0]
+        else:
+            self.mesh = self.reader.read()
+        self._plot_feature_edges()
         if self.notebook:
             # Notebook mode: return the widget for Jupyter display
             return self.plotter.show()
