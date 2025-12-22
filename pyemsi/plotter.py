@@ -70,29 +70,32 @@ class Plotter:
     >>> import pyvista as pv
     >>> from pyemsi import Plotter
     >>>
-    >>> # Create plotter and add a sphere
+    >>> # Create plotter and add a sphere directly
     >>> p = Plotter()
-    >>> p.add_mesh(pv.Sphere(), show_edges=True)
+    >>> p.plotter.add_mesh(pv.Sphere())
     >>> p.show()
     >>>
-    >>> # Customize window properties
-    >>> p = Plotter(title="My Visualization", window_size=(1200, 900))
-    >>> p.add_mesh(pv.Cube(), color='red')
-    >>> p.show()
+    >>> # Load and visualize a mesh file with scalar field
+    >>> p = Plotter("mesh.vtm")
+    >>> p.set_scalar("Temperature", mode="element").show()
+    >>>
+    >>> # Method chaining for complex visualizations
+    >>> Plotter("model.pvd").set_scalar("Flux (A/m)", mode="node").show()
 
     Notebook mode:
 
     >>> import pyvista as pv
     >>> from pyemsi import Plotter
     >>>
-    >>> # Use in Jupyter notebook with Trame backend
-    >>> p = Plotter(notebook=True)
-    >>> p.add_mesh(pv.Sphere(), show_edges=True)
-    >>> p.show()  # Returns interactive widget
+    >>> # Use in Jupyter notebook
+    >>> p = Plotter("data.vtu", notebook=True)
+    >>> p.set_scalar("B-Mag (T)", mode="element", cell2point=True).show()
     >>>
-    >>> # Load mesh from file (automatically displays feature edges)
-    >>> p = Plotter(notebook=True, backend='client')
-    >>> p.set_file("path/to/file.vtp").show()
+    >>> # Access time-series data
+    >>> p = Plotter("transient.pvd", notebook=True)
+    >>> p.reader.set_active_time_point(-1)  # Last time step
+    >>> p.plotter.view_xy()
+    >>> p.set_scalar("Voltage").show()
     """
 
     # Type annotations for instance attributes
@@ -112,6 +115,7 @@ class Plotter:
 
     def __init__(
         self,
+        filepath: str | Path | None = None,
         title: str = "pyemsi Plotter",
         window_size: tuple[int, int] = (1024, 768),
         position: tuple[int, int] | None = None,
@@ -119,7 +123,28 @@ class Plotter:
         backend: str | None = "html",
         **kwargs,
     ):
-        """Initialize the plotter in desktop or notebook mode."""
+        """
+        Initialize the plotter in desktop or notebook mode.
+
+        Parameters
+        ----------
+        filepath : str or Path, optional
+            Path to a mesh file to load immediately. If provided, calls set_file() automatically.
+        title : str, optional
+            Window title (desktop mode only). Default is "pyemsi Plotter".
+        window_size : tuple of int, optional
+            Window size as (width, height) in pixels (desktop mode only). Default is (1024, 768).
+        position : tuple of int, optional
+            Window position as (x, y) in screen coordinates (desktop mode only). If None, uses OS default.
+        notebook : bool, optional
+            If True, uses PyVista's native notebook backend for Jupyter environments.
+            If False, uses Qt-based desktop rendering. Default is False.
+        backend : str, optional
+            PyVista backend to use in notebook mode (e.g., 'html', 'trame', 'static', 'panel').
+            If None, PyVista chooses the default. Default is 'html'.
+        **kwargs
+            Additional keyword arguments passed to the underlying plotter (QtInteractor or pv.Plotter).
+        """
         self.notebook = notebook
         self.backend = backend
         self._mesh = None
@@ -135,6 +160,8 @@ class Plotter:
         }
         self._vector_props = {}
         self._contour_props = {}
+        if filepath is not None:
+            self.set_file(filepath)
         # Initialize based on mode
         if self.notebook:
             self._init_notebook_mode(**kwargs)
@@ -159,6 +186,7 @@ class Plotter:
 
         # Create QMainWindow
         self._window = QMainWindow()
+        self._window.closeEvent = lambda event: self._on_window_closed(event)
 
         # Set window properties
         self._window.setWindowTitle(title)
@@ -215,9 +243,12 @@ class Plotter:
         >>> p = Plotter()
         >>> p.set_file("mesh.vtm").show()
         >>>
-        >>> # Method chaining with additional customization
-        >>> p = Plotter(notebook=True)
-        >>> p.set_file("model.vtp").add_axes().show()
+        >>> # Method chaining with scalar field
+        >>> p = Plotter()
+        >>> p.set_file("model.vtu").set_scalar("Flux (A/m)", mode="node").show()
+        >>>
+        >>> # Preferred: Use filepath in constructor
+        >>> Plotter("model.vtu").set_scalar("Temperature").show()
         """
         filepath = Path(filepath)
 
@@ -247,6 +278,9 @@ class Plotter:
         """
         Set properties for feature edges visualization.
 
+        Feature edges are extracted and displayed when show() is called on a loaded mesh.
+        This method stores the visualization properties for later use.
+
         Parameters
         ----------
         color : str, optional
@@ -256,7 +290,12 @@ class Plotter:
         opacity : float, optional
             Opacity of the feature edges (0.0 to 1.0). Default is 1.0.
         **kwargs
-            Additional keyword arguments for future extensions.
+            Additional keyword arguments passed to add_mesh() for feature edges.
+
+        Returns
+        -------
+        Plotter
+            Returns self to enable method chaining.
         """
         self._feature_edges_props = {
             "color": color,
@@ -299,16 +338,34 @@ class Plotter:
         """
         Set properties for scalar field visualization.
 
+        The scalar field is displayed when show() is called on a loaded mesh.
+        This method stores the visualization properties for later use.
+
         Parameters
         ----------
         name : str
-            Name of the scalar field to visualize.
+            Name of the scalar field to visualize (must exist in mesh arrays).
         mode : {'node', 'element'}, optional
             Whether the scalar field is defined on nodes or elements. Default is 'element'.
         cell2point : bool, optional
-            If True and mode is 'element', convert cell data to point data. Default is True.
+            If True and mode is 'element', convert cell data to point data for smoother visualization.
+            Default is True.
         **kwargs
-            Additional keyword arguments for future extensions.
+            Additional keyword arguments passed to add_mesh() for scalar visualization.
+            Common options include: show_edges, edge_color, edge_opacity, cmap, clim.
+
+        Returns
+        -------
+        Plotter
+            Returns self to enable method chaining.
+
+        Examples
+        --------
+        >>> p = Plotter("mesh.vtm")
+        >>> p.set_scalar("Temperature", mode="element", cell2point=True).show()
+        >>>
+        >>> # Customize edge display
+        >>> p.set_scalar("Pressure", show_edges=True, edge_color="black").show()
         """
         self._scalar_props["name"] = name
         self._scalar_props["mode"] = mode
@@ -360,6 +417,11 @@ class Plotter:
         """
         Display the plotter.
 
+        If a mesh was loaded via set_file() or the filepath parameter, this method:
+        1. Plots scalar fields (if set_scalar() was called)
+        2. Extracts and plots feature edges (automatically)
+        3. Resets the camera to frame the mesh
+
         In desktop mode, shows the QMainWindow and starts the Qt event loop (blocking).
         In notebook mode, returns the interactive widget for display in Jupyter.
 
@@ -367,13 +429,21 @@ class Plotter:
         -------
         None or widget
             In notebook mode, returns the interactive widget. In desktop mode, returns None.
+
+        Examples
+        --------
+        >>> # Simple visualization
+        >>> Plotter("mesh.vtm").show()
+        >>>
+        >>> # With scalar field
+        >>> Plotter("data.vtu").set_scalar("Temperature").show()
         """
-        self._mesh = None  # Reset mesh to ensure fresh load
-        self._plot_scalar_field()
-        self._plot_feature_edges()
-        self.plotter.render()
-        # Reset camera to frame the mesh
-        self.plotter.reset_camera()
+        if self.reader is not None:
+            self._mesh = None  # Reset mesh to ensure fresh load
+            self._plot_scalar_field()
+            self._plot_feature_edges()
+            self.plotter.reset_camera()
+
         if self.notebook:
             # Notebook mode: return the widget for Jupyter display
             return self.plotter.show()
@@ -382,20 +452,20 @@ class Plotter:
             self._window.show()
             self.app.exec()
 
-    # def close(self) -> None:
-    #     """
-    #     Close the plotter and clean up resources.
+    def _on_window_closed(self, _) -> None:
+        """
+        Close the plotter and clean up resources.
 
-    #     In desktop mode, closes both the QtInteractor and QMainWindow.
-    #     In notebook mode, closes the PyVista plotter.
-    #     """
-    #     if self.notebook:
-    #         # Notebook mode: close PyVista plotter
-    #         if hasattr(self, "plotter") and self.plotter is not None:
-    #             self.plotter.close()
-    #     else:
-    #         # Desktop mode: close QtInteractor and QMainWindow
-    #         if hasattr(self, "plotter") and self.plotter is not None:
-    #             self.plotter.close()
-    #         if hasattr(self, "_window") and self._window is not None:
-    #             self._window.close()
+        In desktop mode, closes both the QtInteractor and QMainWindow.
+        In notebook mode, closes the PyVista plotter.
+        """
+        if self.notebook:
+            # Notebook mode: close PyVista plotter
+            if hasattr(self, "plotter") and self.plotter is not None:
+                self.plotter.close()
+        else:
+            # Desktop mode: close QtInteractor and QMainWindow
+            if hasattr(self, "plotter") and self.plotter is not None:
+                self.plotter.close()
+            if hasattr(self, "_window") and self._window is not None:
+                self._window.close()
