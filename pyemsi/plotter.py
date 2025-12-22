@@ -5,18 +5,19 @@ Provides a custom Plotter class that composes PyVista plotting functionality
 with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 """
 
-from typing import TYPE_CHECKING
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
 import pyvista as pv
 
 # TYPE_CHECKING imports (for type checkers only, not runtime)
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QApplication, QMainWindow, QFrame, QVBoxLayout
+    from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
     from pyvistaqt import QtInteractor
 
 # Qt imports are optional (only needed for desktop mode)
 try:
-    from PySide6.QtWidgets import QApplication, QMainWindow, QFrame, QVBoxLayout
+    from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
     from pyvistaqt import QtInteractor
 
     HAS_QT = True
@@ -97,13 +98,17 @@ class Plotter:
     # Type annotations for instance attributes
     notebook: bool
     backend: str | None
-    mesh: pv.DataSet | pv.MultiBlock | None
+    _mesh: pv.DataSet | pv.MultiBlock | None
     reader: pv.BaseReader | None
     plotter: "QtInteractor | pv.Plotter"
     app: "QApplication | None"
     _window: "QMainWindow"
     frame: "QFrame"
     vlayout: "QVBoxLayout"
+    _feature_edges_props: dict[str, object]
+    _scalar_props: dict[str, object]
+    _vector_props: dict[str, object]
+    _contour_props: dict[str, object]
 
     def __init__(
         self,
@@ -111,15 +116,25 @@ class Plotter:
         window_size: tuple[int, int] = (1024, 768),
         position: tuple[int, int] | None = None,
         notebook: bool = False,
-        backend: str | None = "client",
+        backend: str | None = "html",
         **kwargs,
     ):
         """Initialize the plotter in desktop or notebook mode."""
         self.notebook = notebook
         self.backend = backend
-        self.mesh = None
+        self._mesh = None
         self.reader = None
-
+        self._feature_edges_props = {"color": "white", "line_width": 1, "opacity": 1.0}
+        self._scalar_props = {
+            "name": None,
+            "mode": "element",
+            "cell2point": True,
+            "show_edges": True,
+            "edge_color": "white",
+            "edge_opacity": 0.25,
+        }
+        self._vector_props = {}
+        self._contour_props = {}
         # Initialize based on mode
         if self.notebook:
             self._init_notebook_mode(**kwargs)
@@ -216,6 +231,41 @@ class Plotter:
 
         return self
 
+    @property
+    def mesh(self) -> pv.DataSet | pv.MultiBlock | None:
+        """Get the current mesh."""
+        if self._mesh is None:
+            if self.reader is None:
+                raise ValueError("No reader available. Call set_file() first.")
+            if isinstance(self.reader, pv.PVDReader):
+                self._mesh = self.reader.read()[0]
+            else:
+                self._mesh = self.reader.read()
+        return self._mesh
+
+    def set_feature_edges(self, color: str = "black", line_width: int = 1, opacity: float = 1.0, **kwargs) -> "Plotter":
+        """
+        Set properties for feature edges visualization.
+
+        Parameters
+        ----------
+        color : str, optional
+            Color of the feature edges. Default is "black".
+        line_width : int, optional
+            Width of the feature edges lines. Default is 1.
+        opacity : float, optional
+            Opacity of the feature edges (0.0 to 1.0). Default is 1.0.
+        **kwargs
+            Additional keyword arguments for future extensions.
+        """
+        self._feature_edges_props = {
+            "color": color,
+            "line_width": line_width,
+            "opacity": opacity,
+            **kwargs,
+        }
+        return self
+
     def _plot_feature_edges(self) -> None:
         """
         Extract and plot feature edges from the stored mesh.
@@ -224,9 +274,6 @@ class Plotter:
         For single datasets, creates a single feature edges actor.
         Automatically resets the camera to frame the mesh after plotting.
         """
-        if self.mesh is None:
-            return
-
         # Handle MultiBlock datasets
         if isinstance(self.mesh, pv.MultiBlock):
             for i, block in enumerate(self.mesh):
@@ -238,16 +285,76 @@ class Plotter:
                 edges = block.extract_feature_edges()
                 if edges.n_points > 0:
                     self.plotter.add_mesh(
-                        edges, name=f"feature_edges_block_{self.mesh.get_block_name(i)}", color="black"
+                        edges, name=f"feature_edges_block_{self.mesh.get_block_name(i)}", **self._feature_edges_props
                     )
         else:
             # Handle single dataset
             edges = self.mesh.extract_feature_edges()
             if edges.n_points > 0:
-                self.plotter.add_mesh(edges, name="feature_edges", color="black")
+                self.plotter.add_mesh(edges, name="feature_edges", **self._feature_edges_props)
 
-        # Reset camera to frame the mesh
-        self.plotter.reset_camera()
+    def set_scalar(
+        self, name: str, mode: Literal["node", "element"] = "element", cell2point: bool = True, **kwargs
+    ) -> "Plotter":
+        """
+        Set properties for scalar field visualization.
+
+        Parameters
+        ----------
+        name : str
+            Name of the scalar field to visualize.
+        mode : {'node', 'element'}, optional
+            Whether the scalar field is defined on nodes or elements. Default is 'element'.
+        cell2point : bool, optional
+            If True and mode is 'element', convert cell data to point data. Default is True.
+        **kwargs
+            Additional keyword arguments for future extensions.
+        """
+        self._scalar_props["name"] = name
+        self._scalar_props["mode"] = mode
+        self._scalar_props["cell2point"] = cell2point
+        for key, value in kwargs.items():
+            self._scalar_props[key] = value
+        return self
+
+    def _plot_scalar_field(self) -> None:
+        """
+        Plot the scalar field on the mesh based on the stored scalar properties.
+        """
+        if self._scalar_props.get("name") is None:
+            return  # No scalar properties set
+        name = self._scalar_props.get("name")
+        mode = self._scalar_props.get("mode", "element")
+        cell2point = self._scalar_props.get("cell2point", True)
+
+        # Handle MultiBlock datasets
+        if isinstance(self.mesh, pv.MultiBlock):
+            for i, block in enumerate(self.mesh):
+                if block is None or block.n_points == 0:
+                    continue
+                if mode == "element" and cell2point:
+                    block = block.cell_data_to_point_data()
+                if name in block.array_names:
+                    self.plotter.add_mesh(
+                        block,
+                        scalars=name,
+                        preference="cell" if mode == "element" else "point",
+                        name=f"scalar_field_block_{self.mesh.get_block_name(i)}",
+                        **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
+                    )
+        else:
+            # Handle single dataset
+            block = self.mesh
+            if mode == "element" and cell2point:
+                block = block.cell_data_to_point_data()
+            if name in block.array_names:
+                self.plotter.add_mesh(
+                    block,
+                    scalars=name,
+                    preference="cell" if mode == "element" else "point",
+                    name="scalar_field",
+                    **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
+                )
 
     def show(self):
         """
@@ -261,11 +368,12 @@ class Plotter:
         None or widget
             In notebook mode, returns the interactive widget. In desktop mode, returns None.
         """
-        if isinstance(self.reader, pv.PVDReader):
-            self.mesh = self.reader.read()[0]
-        else:
-            self.mesh = self.reader.read()
+        self._mesh = None  # Reset mesh to ensure fresh load
+        self._plot_scalar_field()
         self._plot_feature_edges()
+        self.plotter.render()
+        # Reset camera to frame the mesh
+        self.plotter.reset_camera()
         if self.notebook:
             # Notebook mode: return the widget for Jupyter display
             return self.plotter.show()
@@ -274,53 +382,20 @@ class Plotter:
             self._window.show()
             self.app.exec()
 
-    def close(self) -> None:
-        """
-        Close the plotter and clean up resources.
+    # def close(self) -> None:
+    #     """
+    #     Close the plotter and clean up resources.
 
-        In desktop mode, closes both the QtInteractor and QMainWindow.
-        In notebook mode, closes the PyVista plotter.
-        """
-        if self.notebook:
-            # Notebook mode: close PyVista plotter
-            if hasattr(self, "plotter") and self.plotter is not None:
-                self.plotter.close()
-        else:
-            # Desktop mode: close QtInteractor and QMainWindow
-            if hasattr(self, "plotter") and self.plotter is not None:
-                self.plotter.close()
-            if hasattr(self, "_window") and self._window is not None:
-                self._window.close()
-
-    def __getattr__(self, name: str):
-        """
-        Delegate attribute access to the internal QtInteractor plotter.
-
-        This allows seamless access to all PyVista plotting methods
-        (e.g., add_mesh, remove_actor, reset_camera, clear, etc.)
-        directly on the Plotter instance.
-
-        Parameters
-        ----------
-        name : str
-            The attribute name to access.
-
-        Returns
-        -------
-        Any
-            The attribute from the QtInteractor instance.
-
-        Raises
-        ------
-        AttributeError
-            If the attribute is not found in either the Plotter or QtInteractor.
-        """
-        # Avoid infinite recursion for plotter attribute itself
-        if name == "plotter":
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-
-        # Delegate to the QtInteractor
-        try:
-            return getattr(self.plotter, name)
-        except AttributeError:
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+    #     In desktop mode, closes both the QtInteractor and QMainWindow.
+    #     In notebook mode, closes the PyVista plotter.
+    #     """
+    #     if self.notebook:
+    #         # Notebook mode: close PyVista plotter
+    #         if hasattr(self, "plotter") and self.plotter is not None:
+    #             self.plotter.close()
+    #     else:
+    #         # Desktop mode: close QtInteractor and QMainWindow
+    #         if hasattr(self, "plotter") and self.plotter is not None:
+    #             self.plotter.close()
+    #         if hasattr(self, "_window") and self._window is not None:
+    #             self._window.close()
