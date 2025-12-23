@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import pyvista as pv
+import numpy as np
 
 # TYPE_CHECKING imports (for type checkers only, not runtime)
 if TYPE_CHECKING:
@@ -159,7 +160,7 @@ class Plotter:
             "edge_opacity": 0.25,
         }
         self._vector_props = {}
-        self._contour_props = {}
+        self._contour_props = {"name": None, "n_contours": 10, "color": "red", "line_width": 3}
         if filepath is not None:
             self.set_file(filepath)
         # Initialize based on mode
@@ -413,6 +414,94 @@ class Plotter:
                     **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
                 )
 
+    def set_contour(
+        self,
+        name: str,
+        n_contours: int = 10,
+        color: str = "red",
+        line_width: int = 3,
+        **kwargs,
+    ) -> "Plotter":
+        """
+        Set properties for contour visualization.
+
+        Parameters
+        ----------
+        name : str
+            Name of the scalar field to contour.
+        n_contours : int, optional
+            Number of contour levels to generate. Default is 10.
+        color : str, optional
+            Color of the contour lines/surfaces. Default is "red".
+        line_width : int, optional
+            Width of the contour lines. Default is 3.
+        **kwargs
+            Additional keyword arguments passed to add_mesh() when rendering the contours.
+
+        Returns
+        -------
+        Plotter
+            Returns self to enable method chaining.
+        """
+        self._contour_props["name"] = name
+        self._contour_props["n_contours"] = n_contours
+        self._contour_props["color"] = color
+        self._contour_props["line_width"] = line_width
+        for key, value in kwargs.items():
+            self._contour_props[key] = value
+        return self
+
+    def _plot_contours(self) -> None:
+        """
+        Plot contour lines/surfaces for the configured scalar field.
+        """
+        if self._contour_props.get("name") is None:
+            return
+
+        name = self._contour_props.get("name")
+        n_contours = max(1, int(self._contour_props.get("n_contours", 10)))
+        color = self._contour_props.get("color", "red")
+        line_width = self._contour_props.get("line_width", 3)
+        contour_kwargs = {
+            k: v for k, v in self._contour_props.items() if k not in ["name", "n_contours", "color", "line_width"]
+        }
+
+        # Collect prepared blocks and global scalar range
+        global_min: float | None = None
+        global_max: float | None = None
+
+        if isinstance(self.mesh, pv.MultiBlock):
+            iter_blocks = [
+                (i, block, self.mesh.get_block_name(i)) for i, block in enumerate(self.mesh) if block is not None
+            ]
+        else:
+            iter_blocks = [(0, self.mesh, None)]
+
+        for idx, block, _ in iter_blocks:
+            if name not in block.array_names:
+                continue
+            values = block[name]
+            if values.size == 0:
+                continue
+            block_min = float(np.min(values))
+            block_max = float(np.max(values))
+            global_min = block_min if global_min is None else min(global_min, block_min)
+            global_max = block_max if global_max is None else max(global_max, block_max)
+
+        if np.isclose(global_min, global_max):
+            levels = np.array([global_min])
+        else:
+            levels = np.linspace(global_min, global_max, num=n_contours)
+
+        for idx, block, block_name in iter_blocks:
+            if name not in block.array_names:
+                continue
+            contours = block.contour(isosurfaces=levels, scalars=name)
+            if contours.n_points == 0:
+                continue
+            actor_name = f"contour_block_{block_name}" if block_name else "contour"
+            self.plotter.add_mesh(contours, name=actor_name, color=color, line_width=line_width, **contour_kwargs)
+
     def show(self):
         """
         Display the plotter.
@@ -441,6 +530,7 @@ class Plotter:
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._plot_scalar_field()
+            self._plot_contours()
             self._plot_feature_edges()
             self.plotter.reset_camera()
 
@@ -490,6 +580,7 @@ class Plotter:
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._plot_scalar_field()
+            self._plot_contours()
             self._plot_feature_edges()
             self.plotter.reset_camera()
 
