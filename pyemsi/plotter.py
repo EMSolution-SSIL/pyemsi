@@ -452,6 +452,52 @@ class Plotter:
             self._window.show()
             self.app.exec()
 
+    def export(
+        self,
+        filename: str | Path,
+        transparent_background: bool = False,
+        window_size: tuple[int, int] = (800, 600),
+        scale: float | None = None,
+    ) -> "Plotter":
+        """
+        Export the current plot to an image file.
+        This method captures a screenshot of the current visualization and saves it to the
+        specified file. If a reader is available, the mesh is reset and plot elements are
+        refreshed before exporting to ensure a clean render.
+        Parameters
+        ----------
+        filename : str | Path
+            The path and filename where the screenshot will be saved. Can be a string or
+            pathlib.Path object. Supported formats include '.png', '.jpeg', '.jpg', '.bmp', '.tif', '.tiff'.
+        transparent_background : bool, optional
+            If True, the background will be transparent in the exported image. Default is False.
+        window_size : tuple[int, int], optional
+            The width and height of the export window in pixels. Default is (800, 600).
+        scale : float | None, optional
+            Scaling factor for the image resolution. If None, uses the default scale.
+            Default is None.
+        Returns
+        -------
+        Plotter
+            Returns the Plotter instance to allow method chaining.
+        Examples
+        --------
+        >>> plotter.export('output.png')
+        >>> plotter.export('output.png', transparent_background=True, window_size=(1920, 1080))
+        >>> plotter.export('output.png', scale=2.0)
+        """
+
+        if self.reader is not None:
+            self._mesh = None  # Reset mesh to ensure fresh load
+            self._plot_scalar_field()
+            self._plot_feature_edges()
+            self.plotter.reset_camera()
+
+        self.plotter.screenshot(
+            filename=str(filename), transparent_background=transparent_background, window_size=window_size, scale=scale
+        )
+        return self
+
     def _on_window_closed(self, _) -> None:
         """
         Close the plotter and clean up resources.

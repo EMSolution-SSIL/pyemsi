@@ -22,7 +22,7 @@ Plotter(file_path).set_scalar("Flux (A/m)", mode="node").show()
 plt1 = Plotter(file_path)
 plt1.reader.set_active_time_point(-1)
 plt1.plotter.view_xy()
-plt1.set_scalar("B-Mag (T)", mode="element", cell2point=True).show()
+plt1.set_scalar("B-Mag (T)", mode="element", cell2point=True).export("bmag_plot.png", scale=4).show()
 
 
 plt3 = Plotter()
