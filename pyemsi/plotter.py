@@ -275,6 +275,26 @@ class Plotter:
                 self._mesh = self.reader.read()
         return self._mesh
 
+    def _iter_blocks(self, skip_empty: bool = True):
+        """Yield (index, block, name) for single or MultiBlock meshes."""
+        if isinstance(self.mesh, pv.MultiBlock):
+            for idx, block in enumerate(self.mesh):
+                if block is None:
+                    continue
+                if skip_empty and getattr(block, "n_points", 0) == 0:
+                    continue
+                name = self.mesh.get_block_name(idx)
+                if not name:
+                    name = str(idx)
+                yield idx, block, name
+        else:
+            block = self.mesh
+            if block is None:
+                return
+            if skip_empty and block.n_points == 0:
+                return
+            yield 0, block, None
+
     def set_feature_edges(self, color: str = "black", line_width: int = 1, opacity: float = 1.0, **kwargs) -> "Plotter":
         """
         Set properties for feature edges visualization.
@@ -314,24 +334,12 @@ class Plotter:
         For single datasets, creates a single feature edges actor.
         Automatically resets the camera to frame the mesh after plotting.
         """
-        # Handle MultiBlock datasets
-        if isinstance(self.mesh, pv.MultiBlock):
-            for i, block in enumerate(self.mesh):
-                # Skip empty or None blocks silently
-                if block is None or block.n_points == 0:
-                    continue
-
-                # Extract and plot feature edges for this block
-                edges = block.extract_feature_edges()
-                if edges.n_points > 0:
-                    self.plotter.add_mesh(
-                        edges, name=f"feature_edges_block_{self.mesh.get_block_name(i)}", **self._feature_edges_props
-                    )
-        else:
-            # Handle single dataset
-            edges = self.mesh.extract_feature_edges()
-            if edges.n_points > 0:
-                self.plotter.add_mesh(edges, name="feature_edges", **self._feature_edges_props)
+        for idx, block, block_name in self._iter_blocks():
+            edges = block.extract_feature_edges()
+            if edges.n_points == 0:
+                continue
+            actor_name = f"feature_edges_block_{block_name}" if block_name else "feature_edges"
+            self.plotter.add_mesh(edges, name=actor_name, **self._feature_edges_props)
 
     def set_scalar(
         self, name: str, mode: Literal["node", "element"] = "element", cell2point: bool = True, **kwargs
@@ -384,35 +392,18 @@ class Plotter:
         name = self._scalar_props.get("name")
         mode = self._scalar_props.get("mode", "element")
         cell2point = self._scalar_props.get("cell2point", True)
-
-        # Handle MultiBlock datasets
-        if isinstance(self.mesh, pv.MultiBlock):
-            for i, block in enumerate(self.mesh):
-                if block is None or block.n_points == 0:
-                    continue
-                if mode == "element" and cell2point:
-                    block = block.cell_data_to_point_data()
-                if name in block.array_names:
-                    self.plotter.add_mesh(
-                        block,
-                        scalars=name,
-                        preference="cell" if mode == "element" else "point",
-                        name=f"scalar_field_block_{self.mesh.get_block_name(i)}",
-                        **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
-                    )
-        else:
-            # Handle single dataset
-            block = self.mesh
-            if mode == "element" and cell2point:
-                block = block.cell_data_to_point_data()
-            if name in block.array_names:
-                self.plotter.add_mesh(
-                    block,
-                    scalars=name,
-                    preference="cell" if mode == "element" else "point",
-                    name="scalar_field",
-                    **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
-                )
+        for idx, block, block_name in self._iter_blocks():
+            block_to_plot = block.cell_data_to_point_data() if mode == "element" and cell2point else block
+            if name not in block_to_plot.array_names:
+                continue
+            actor_name = f"scalar_field_block_{block_name}" if block_name else "scalar_field"
+            self.plotter.add_mesh(
+                block_to_plot,
+                scalars=name,
+                preference="cell" if mode == "element" else "point",
+                name=actor_name,
+                **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
+            )
 
     def set_contour(
         self,
@@ -470,12 +461,7 @@ class Plotter:
         global_min: float | None = None
         global_max: float | None = None
 
-        if isinstance(self.mesh, pv.MultiBlock):
-            iter_blocks = [
-                (i, block, self.mesh.get_block_name(i)) for i, block in enumerate(self.mesh) if block is not None
-            ]
-        else:
-            iter_blocks = [(0, self.mesh, None)]
+        iter_blocks = list(self._iter_blocks())
 
         for idx, block, _ in iter_blocks:
             if name not in block.array_names:
@@ -487,6 +473,9 @@ class Plotter:
             block_max = float(np.max(values))
             global_min = block_min if global_min is None else min(global_min, block_min)
             global_max = block_max if global_max is None else max(global_max, block_max)
+
+        if global_min is None or global_max is None:
+            return
 
         if np.isclose(global_min, global_max):
             levels = np.array([global_min])
