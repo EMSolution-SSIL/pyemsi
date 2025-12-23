@@ -22,9 +22,10 @@ Plotter(file_path).set_scalar("Flux (A/m)", mode="node", show_scalar_bar=False).
 plt1 = Plotter(file_path)
 plt1.reader.set_active_time_point(-1)
 plt1.plotter.view_xy()
-plt1.set_scalar(
-    "B-Mag (T)", mode="element", cell2point=True, scalar_bar_args={"interactive": True, "shadow": True}
-).export("bmag_plot.png", scale=4).show()
+plt1.set_scalar("B-Mag (T)", mode="element", cell2point=True, scalar_bar_args={"interactive": True, "shadow": True})
+plt1.set_vector(name="B-Vec (T)", scale="B-Mag (T)", factor=5e-3, opacity=0.5)
+plt1.export("bmag_plot.png", scale=4)
+plt1.show()
 
 
 Plotter(file_path).set_scalar("B-Mag (T)", mode="element", cell2point=True).set_contour(

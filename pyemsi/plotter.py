@@ -82,6 +82,15 @@ class Plotter:
     >>>
     >>> # Method chaining for complex visualizations
     >>> Plotter("model.pvd").set_scalar("Flux (A/m)", mode="node").show()
+    >>>
+    >>> # Vector field visualization with arrows
+    >>> Plotter("flow.vtu").set_vector("Velocity").show()
+    >>>
+    >>> # Combine scalar and vector fields
+    >>> p = Plotter("simulation.vtm")
+    >>> p.set_scalar("Temperature", cell2point=True)
+    >>> p.set_vector("Flow", scale=False, factor=0.5, glyph_type="cone")
+    >>> p.show()
 
     Notebook mode:
 
@@ -159,7 +168,14 @@ class Plotter:
             "edge_color": "white",
             "edge_opacity": 0.25,
         }
-        self._vector_props = {}
+        self._vector_props = {
+            "name": None,
+            "scale": None,
+            "glyph_type": "arrow",
+            "factor": 1.0,
+            "tolerance": None,
+            "color_mode": "scale",
+        }
         self._contour_props = {"name": None, "n_contours": 10, "color": "red", "line_width": 3}
         if filepath is not None:
             self.set_file(filepath)
@@ -491,14 +507,175 @@ class Plotter:
             actor_name = f"contour_block_{block_name}" if block_name else "contour"
             self.plotter.add_mesh(contours, name=actor_name, color=color, line_width=line_width, **contour_kwargs)
 
+    def set_vector(
+        self,
+        name: str,
+        scale: str | bool | None = None,
+        glyph_type: str = "arrow",
+        factor: float = 1.0,
+        tolerance: float | None = None,
+        color_mode: str = "scale",
+        **kwargs,
+    ) -> "Plotter":
+        """
+        Set properties for vector field visualization using glyphs.
+
+        Vector fields are displayed as glyphs (arrows, cones, or spheres) when show() is called.
+        Each glyph is oriented along the vector direction and optionally scaled by magnitude.
+
+        Parameters
+        ----------
+        name : str
+            Name of the vector field to visualize (must exist in mesh arrays as 3-component array).
+        scale : str, bool, or None, optional
+            Controls glyph scaling:
+            - None (default): Scale by vector magnitude (uses `name` field)
+            - str: Scale by the specified scalar array name
+            - False: Uniform glyph size (no scaling)
+        glyph_type : {'arrow', 'cone', 'sphere'}, optional
+            Type of glyph geometry to use. Default is 'arrow'.
+        factor : float, optional
+            Global scale multiplier for glyph size. Default is 1.0.
+        tolerance : float, optional
+            Fraction of bounding box (0-1) for reducing glyph density.
+            None means show all glyphs. Default is None.
+        color_mode : {'scale', 'scalar', 'vector'}, optional
+            How to color the glyphs:
+            - 'scale': Color by the scaling array (default)
+            - 'scalar': Color by scalar values
+            - 'vector': Color by vector magnitude
+            Default is 'scale'.
+        **kwargs
+            Additional keyword arguments passed to add_mesh() for glyph visualization.
+            Common options include: cmap, clim, opacity.
+
+        Returns
+        -------
+        Plotter
+            Returns self to enable method chaining.
+
+        Raises
+        ------
+        ValueError
+            If glyph_type is not one of 'arrow', 'cone', or 'sphere'.
+
+        Examples
+        --------
+        >>> # Basic vector field with arrows
+        >>> Plotter("flow.vtu").set_vector("Velocity").show()
+        >>>
+        >>> # Uniform arrow size, colored by magnitude
+        >>> p.set_vector("Force", scale=False, factor=0.5).show()
+        >>>
+        >>> # Cone glyphs with reduced density
+        >>> p.set_vector("Flux", glyph_type="cone", tolerance=0.1).show()
+        >>>
+        >>> # Scale by custom field
+        >>> p.set_vector("Direction", scale="Magnitude", factor=2.0).show()
+        """
+        valid_types = {"arrow", "cone", "sphere"}
+        if glyph_type not in valid_types:
+            raise ValueError(f"glyph_type must be one of {valid_types}, got '{glyph_type}'")
+
+        # Default scale to name (vector magnitude) if not specified
+        if scale is None:
+            scale = name
+
+        self._vector_props["name"] = name
+        self._vector_props["scale"] = scale
+        self._vector_props["glyph_type"] = glyph_type
+        self._vector_props["factor"] = factor
+        self._vector_props["tolerance"] = tolerance
+        self._vector_props["color_mode"] = color_mode
+        for key, value in kwargs.items():
+            self._vector_props[key] = value
+        return self
+
+    def _plot_vector_field(self) -> None:
+        """
+        Plot vector field glyphs based on the stored vector properties.
+
+        Creates oriented glyphs (arrows, cones, or spheres) at each point/cell
+        in the mesh, with optional scaling and density control.
+        """
+        if self._vector_props.get("name") is None:
+            return  # No vector properties set
+
+        name = self._vector_props.get("name")
+        scale = self._vector_props.get("scale", name)
+        glyph_type = self._vector_props.get("glyph_type", "arrow")
+        factor = self._vector_props.get("factor", 1.0)
+        tolerance = self._vector_props.get("tolerance")
+        color_mode = self._vector_props.get("color_mode", "scale")
+
+        # Create glyph geometry based on type
+        if glyph_type == "arrow":
+            geom = pv.Arrow()
+        elif glyph_type == "cone":
+            geom = pv.Cone()
+        elif glyph_type == "sphere":
+            geom = pv.Sphere()
+        else:
+            raise ValueError(f"Unknown glyph_type: {glyph_type}")
+
+        vector_kwargs = {
+            k: v
+            for k, v in self._vector_props.items()
+            if k not in ["name", "scale", "glyph_type", "factor", "tolerance", "color_mode"]
+        }
+
+        for idx, block, block_name in self._iter_blocks():
+            # Validate vector array exists
+            if name not in block.array_names:
+                continue
+
+            # Validate vector array is 3-component
+            vector_array = block[name]
+            if vector_array.ndim != 2 or vector_array.shape[1] != 3:
+                raise ValueError(
+                    f"Vector array '{name}' must be a 3-component array, "
+                    f"got shape {vector_array.shape} in block '{block_name or idx}'"
+                )
+
+            # Validate scale array exists if specified
+            if isinstance(scale, str) and scale != name and scale not in block.array_names:
+                raise ValueError(
+                    f"Scale array '{scale}' not found in block '{block_name or idx}'. "
+                    f"Available arrays: {block.array_names}"
+                )
+
+            # Generate glyphs
+            try:
+                glyphs = block.glyph(
+                    orient=name,
+                    scale=scale,
+                    factor=factor,
+                    geom=geom,
+                    tolerance=tolerance,
+                    absolute=False,
+                    color_mode=color_mode,
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to generate glyphs for vector '{name}' in block '{block_name or idx}': {e}"
+                ) from e
+
+            if glyphs.n_points == 0:
+                continue
+
+            actor_name = f"vector_field_block_{block_name}" if block_name else "vector_field"
+            self.plotter.add_mesh(glyphs, name=actor_name, **vector_kwargs)
+
     def show(self):
         """
         Display the plotter.
 
         If a mesh was loaded via set_file() or the filepath parameter, this method:
         1. Plots scalar fields (if set_scalar() was called)
-        2. Extracts and plots feature edges (automatically)
-        3. Resets the camera to frame the mesh
+        2. Plots contours (if set_contour() was called)
+        3. Plots vector fields (if set_vector() was called)
+        4. Extracts and plots feature edges (automatically)
+        5. Resets the camera to frame the mesh
 
         In desktop mode, shows the QMainWindow and starts the Qt event loop (blocking).
         In notebook mode, returns the interactive widget for display in Jupyter.
@@ -515,11 +692,15 @@ class Plotter:
         >>>
         >>> # With scalar field
         >>> Plotter("data.vtu").set_scalar("Temperature").show()
+        >>>
+        >>> # With vector field
+        >>> Plotter("flow.vtu").set_vector("Velocity").show()
         """
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._plot_scalar_field()
             self._plot_contours()
+            self._plot_vector_field()
             self._plot_feature_edges()
             self.plotter.reset_camera()
 
@@ -540,9 +721,12 @@ class Plotter:
     ) -> "Plotter":
         """
         Export the current plot to an image file.
+
         This method captures a screenshot of the current visualization and saves it to the
-        specified file. If a reader is available, the mesh is reset and plot elements are
-        refreshed before exporting to ensure a clean render.
+        specified file. If a reader is available, the mesh is reset and plot elements
+        (scalar fields, contours, vector fields, and feature edges) are refreshed before
+        exporting to ensure a clean render.
+
         Parameters
         ----------
         filename : str | Path
@@ -555,10 +739,12 @@ class Plotter:
         scale : float | None, optional
             Scaling factor for the image resolution. If None, uses the default scale.
             Default is None.
+
         Returns
         -------
         Plotter
             Returns the Plotter instance to allow method chaining.
+
         Examples
         --------
         >>> plotter.export('output.png')
@@ -570,6 +756,7 @@ class Plotter:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._plot_scalar_field()
             self._plot_contours()
+            self._plot_vector_field()
             self._plot_feature_edges()
             self.plotter.reset_camera()
 
