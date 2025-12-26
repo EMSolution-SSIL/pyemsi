@@ -63,49 +63,6 @@ class Plotter:
         The PyVista reader instance from set_file(), if any.
     notebook : bool
         Whether the plotter is in notebook mode.
-
-    Examples
-    --------
-    Desktop mode:
-
-    >>> import pyvista as pv
-    >>> from pyemsi import Plotter
-    >>>
-    >>> # Create plotter and add a sphere directly
-    >>> p = Plotter()
-    >>> p.plotter.add_mesh(pv.Sphere())
-    >>> p.show()
-    >>>
-    >>> # Load and visualize a mesh file with scalar field
-    >>> p = Plotter("mesh.vtm")
-    >>> p.set_scalar("Temperature", mode="element").show()
-    >>>
-    >>> # Method chaining for complex visualizations
-    >>> Plotter("model.pvd").set_scalar("Flux (A/m)", mode="node").show()
-    >>>
-    >>> # Vector field visualization with arrows
-    >>> Plotter("flow.vtu").set_vector("Velocity").show()
-    >>>
-    >>> # Combine scalar and vector fields
-    >>> p = Plotter("simulation.vtm")
-    >>> p.set_scalar("Temperature", cell2point=True)
-    >>> p.set_vector("Flow", scale=False, factor=0.5, glyph_type="cone")
-    >>> p.show()
-
-    Notebook mode:
-
-    >>> import pyvista as pv
-    >>> from pyemsi import Plotter
-    >>>
-    >>> # Use in Jupyter notebook
-    >>> p = Plotter("data.vtu", notebook=True)
-    >>> p.set_scalar("B-Mag (T)", mode="element", cell2point=True).show()
-    >>>
-    >>> # Access time-series data
-    >>> p = Plotter("transient.pvd", notebook=True)
-    >>> p.reader.set_active_time_point(-1)  # Last time step
-    >>> p.plotter.view_xy()
-    >>> p.set_scalar("Voltage").show()
     """
 
     # Type annotations for instance attributes
@@ -254,18 +211,6 @@ class Plotter:
             If the specified file does not exist.
         ValueError
             If the file format is not supported or the file cannot be read.
-
-        Examples
-        --------
-        >>> p = Plotter()
-        >>> p.set_file("mesh.vtm").show()
-        >>>
-        >>> # Method chaining with scalar field
-        >>> p = Plotter()
-        >>> p.set_file("model.vtu").set_scalar("Flux (A/m)", mode="node").show()
-        >>>
-        >>> # Preferred: Use filepath in constructor
-        >>> Plotter("model.vtu").set_scalar("Temperature").show()
         """
         filepath = Path(filepath)
 
@@ -383,14 +328,6 @@ class Plotter:
         -------
         Plotter
             Returns self to enable method chaining.
-
-        Examples
-        --------
-        >>> p = Plotter("mesh.vtm")
-        >>> p.set_scalar("Temperature", mode="element", cell2point=True).show()
-        >>>
-        >>> # Customize edge display
-        >>> p.set_scalar("Pressure", show_edges=True, edge_color="black").show()
         """
         self._scalar_props["name"] = name
         self._scalar_props["mode"] = mode
@@ -558,20 +495,6 @@ class Plotter:
         ------
         ValueError
             If glyph_type is not one of 'arrow', 'cone', or 'sphere'.
-
-        Examples
-        --------
-        >>> # Basic vector field with arrows
-        >>> Plotter("flow.vtu").set_vector("Velocity").show()
-        >>>
-        >>> # Uniform arrow size, colored by magnitude
-        >>> p.set_vector("Force", scale=False, factor=0.5).show()
-        >>>
-        >>> # Cone glyphs with reduced density
-        >>> p.set_vector("Flux", glyph_type="cone", tolerance=0.1).show()
-        >>>
-        >>> # Scale by custom field
-        >>> p.set_vector("Direction", scale="Magnitude", factor=2.0).show()
         """
         valid_types = {"arrow", "cone", "sphere"}
         if glyph_type not in valid_types:
@@ -684,17 +607,6 @@ class Plotter:
         -------
         None or widget
             In notebook mode, returns the interactive widget. In desktop mode, returns None.
-
-        Examples
-        --------
-        >>> # Simple visualization
-        >>> Plotter("mesh.vtm").show()
-        >>>
-        >>> # With scalar field
-        >>> Plotter("data.vtu").set_scalar("Temperature").show()
-        >>>
-        >>> # With vector field
-        >>> Plotter("flow.vtu").set_vector("Velocity").show()
         """
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
@@ -744,12 +656,6 @@ class Plotter:
         -------
         Plotter
             Returns the Plotter instance to allow method chaining.
-
-        Examples
-        --------
-        >>> plotter.export('output.png')
-        >>> plotter.export('output.png', transparent_background=True, window_size=(1920, 1080))
-        >>> plotter.export('output.png', scale=2.0)
         """
 
         if self.reader is not None:

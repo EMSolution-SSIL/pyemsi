@@ -3,6 +3,8 @@ import yappi
 import logging
 import pyvista as pv
 
+pv.set_plot_theme("paraview")
+
 file_handler = logging.FileHandler("pyemsi.log")
 configure_logging(logging.DEBUG, handler=file_handler)
 
