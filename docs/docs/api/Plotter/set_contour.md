@@ -1,31 +1,35 @@
 ---
-title: set_contour
+title: set_contour()
 sidebar_position: 4
 ---
-
-## `set_contour(name, n_contours=10, color="red", line_width=3, **kwargs)`
-
 Adds contour lines/surfaces derived from a scalar field.
 
-For `MultiBlock` datasets, `Plotter` computes a global min/max across blocks and generates shared contour levels so contours are consistent across the full model.
+For [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.multiblock) datasets, [`Plotter`](/docs/api/Plotter/index.md) computes a global min/max across blocks and generates shared contour levels so contours are consistent across the full model.
 
-### Parameters
+:::tip[Parameters]
+- **`name`** (`Literal[...]`, default: `"Flux (A/m)"`) — Name of the scalar field to visualize (must exist in mesh arrays).
+  - `"B-Mag (T)"`
+  - `"Flux (A/m)"`
+  - `"J-Mag (A/m^2)"`
+  - `"Loss (W/m^3)"`
+  - `"F Nodal-Mag (N/m^3)"`
+  - `"F Lorents-Mag (N/m^3)"`
+  - `"Heat Density (W/m^3)"`
+  - `"Heat (W)"`
+- **`n_contours`** (`int`, default: `10`) — Number of contour levels to generate.
+- **`color`** (`str`, default: `"red"`) — Color of the contour lines/surfaces.
+- **`line_width`** (`int`, default: `3`) — Width of the contour lines.
+- **`**kwargs`** — Additional keyword arguments passed to [`add_mesh()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.add_mesh) when rendering the contours.
+:::
 
-- **`name`** (`str`) — Scalar array name to contour.
-- **`n_contours`** (`int`, default: `10`) — Number of contour levels (clamped to at least `1`).
-- **`color`** (`str`, default: `"red"`) — Contour color.
-- **`line_width`** (`int`, default: `3`) — Contour line width.
-- **`**kwargs`** — Forwarded to `plotter.add_mesh(...)` for the contour actor(s).
-
-### Returns
-
-- `Plotter` — returns `self` to enable chaining.
+:::info[Returns]
+- [`Plotter`](/docs/api/Plotter/index.md) — Returns `self` to enable method chaining.
+:::
 
 ### Example
 
 ```python
 from pyemsi import Plotter
 
-Plotter("mesh.vtm").set_scalar("B-Mag (T)").set_contour("Flux (A/m)", n_contours=20).show()
+Plotter("mesh.vtm").set_contour("Flux (A/m)", n_contours=20).show()
 ```
-

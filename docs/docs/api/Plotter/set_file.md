@@ -1,26 +1,23 @@
 ---
-title: set_file
+title: set_file()
 sidebar_position: 1
 ---
+Loads a mesh file by creating a PyVista reader via [`pyvista.get_reader(...)`](https://docs.pyvista.org/api/readers/_autosummary/pyvista.get_reader) and storing it on [`Plotter.reader`](/docs/api/Plotter/reader.md).
 
-## `set_file(filepath)`
+The dataset itself is loaded lazily (via the [`mesh`](/docs/api/Plotter/mesh.md) property or when [`show()`](/docs/api/Plotter/mesh.md) / [`export()`](/docs/api/Plotter/export.md) rebuild the scene).
 
-Loads a mesh file by creating a PyVista reader via `pyvista.get_reader(...)` and storing it on `Plotter.reader`.
-
-The dataset itself is loaded lazily (via the `mesh` property or when `show()` / `export()` rebuild the scene).
-
-### Parameters
-
+:::tip[Parameters]
 - **`filepath`** (`str | Path`) — Path to a mesh file supported by PyVista (e.g. `*.vtu`, `*.vtm`, `*.pvd`, `*.stl`, ...).
+:::
 
-### Returns
-
+:::info[Returns]
 - `Plotter` — returns `self` to enable chaining.
+:::
 
-### Raises
-
+:::danger[Raises]
 - `FileNotFoundError` — if `filepath` does not exist.
 - `ValueError` — if PyVista cannot create a reader for the file.
+:::
 
 ### Examples
 

@@ -8,6 +8,8 @@ with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from collections.abc import Sequence
+
 import pyvista as pv
 import numpy as np
 
@@ -66,15 +68,16 @@ class Plotter:
     """
 
     # Type annotations for instance attributes
-    notebook: bool
-    backend: str | None
+    _notebook: bool
+    _backend: str | None
     _mesh: pv.DataSet | pv.MultiBlock | None
     reader: pv.BaseReader | None
     plotter: "QtInteractor | pv.Plotter"
-    app: "QApplication | None"
+    _app: "QApplication | None"
     _window: "QMainWindow"
-    frame: "QFrame"
-    vlayout: "QVBoxLayout"
+    _frame: "QFrame"
+    _vlayout: "QVBoxLayout"
+    _qt_props: dict[str, object]
     _feature_edges_props: dict[str, object]
     _scalar_props: dict[str, object]
     _vector_props: dict[str, object]
@@ -112,41 +115,25 @@ class Plotter:
         **kwargs
             Additional keyword arguments passed to the underlying plotter (QtInteractor or pv.Plotter).
         """
-        self.notebook = notebook
-        self.backend = backend
+        self._notebook = notebook
+        self._backend = backend
         self._mesh = None
         self.reader = None
+        self._qt_props = {"title": title, "window_size": window_size, "position": position}
         self._feature_edges_props = {"color": "white", "line_width": 1, "opacity": 1.0}
-        self._scalar_props = {
-            "name": None,
-            "mode": "element",
-            "cell2point": True,
-            "show_edges": True,
-            "edge_color": "white",
-            "edge_opacity": 0.25,
-        }
-        self._vector_props = {
-            "name": None,
-            "scale": None,
-            "glyph_type": "arrow",
-            "factor": 1.0,
-            "tolerance": None,
-            "color_mode": "scale",
-        }
-        self._contour_props = {"name": None, "n_contours": 10, "color": "red", "line_width": 3}
+        self._scalar_props = {}
+        self._vector_props = {}
+        self._contour_props = {}
         if filepath is not None:
             self.set_file(filepath)
         # Initialize based on mode
-        if self.notebook:
+        if self._notebook:
             self._init_notebook_mode(**kwargs)
         else:
-            self._init_qt_mode(title, window_size, position, **kwargs)
+            self._init_qt_mode(**kwargs)
 
     def _init_qt_mode(
         self,
-        title: str,
-        window_size: tuple[int, int],
-        position: tuple[int, int] | None,
         **kwargs,
     ) -> None:
         """Initialize Qt-based desktop mode."""
@@ -154,38 +141,38 @@ class Plotter:
             raise ImportError("Qt dependencies not available. Install with: pip install PySide6 pyvistaqt")
 
         # Get or create QApplication instance
-        self.app = QApplication.instance()
-        if self.app is None:
-            self.app = QApplication([])
+        self._app = QApplication.instance()
+        if self._app is None:
+            self._app = QApplication([])
 
         # Create QMainWindow
         self._window = QMainWindow()
         self._window.closeEvent = lambda event: self._on_window_closed(event)
 
         # Set window properties
-        self._window.setWindowTitle(title)
-        self._window.resize(*window_size)
-        if position is not None:
-            self._window.move(*position)
+        self._window.setWindowTitle(self._qt_props.get("title", "pyemsi Plotter"))
+        self._window.resize(*self._qt_props.get("window_size", (1024, 768)))
+        if self._qt_props.get("position") is not None:
+            self._window.move(*self._qt_props.get("position"))
 
         # Create container frame and layout
-        self.frame = QFrame()
-        self.vlayout = QVBoxLayout()
-        self.vlayout.setContentsMargins(0, 0, 0, 0)
+        self._frame = QFrame()
+        self._vlayout = QVBoxLayout()
+        self._vlayout.setContentsMargins(0, 0, 0, 0)
 
         # Create QtInteractor (the rendering widget that IS the plotter)
-        self.plotter = QtInteractor(parent=self.frame, off_screen=False, **kwargs)
+        self.plotter = QtInteractor(parent=self._frame, off_screen=False, **kwargs)
 
         # Add QtInteractor to layout
-        self.vlayout.addWidget(self.plotter)
-        self.frame.setLayout(self.vlayout)
-        self._window.setCentralWidget(self.frame)
+        self._vlayout.addWidget(self.plotter)
+        self._frame.setLayout(self._vlayout)
+        self._window.setCentralWidget(self._frame)
 
     def _init_notebook_mode(self, **kwargs) -> None:
         """Initialize PyVista native notebook mode."""
-        pv.set_jupyter_backend(self.backend)
+        pv.set_jupyter_backend(self._backend)
         self.plotter = pv.Plotter(**kwargs)
-        self.app = None
+        self._app = None
 
     def set_file(self, filepath: str | Path) -> "Plotter":
         """
@@ -224,6 +211,54 @@ class Plotter:
 
         return self
 
+    def _time_reader(self):
+        """Return the underlying TimeReader when available, else None."""
+        time_reader_type = getattr(pv, "TimeReader", None)
+        if time_reader_type is None:
+            return None
+        if self.reader is None:
+            return None
+        return self.reader if isinstance(self.reader, time_reader_type) else None
+
+    @property
+    def active_time_value(self) -> float | None:
+        """Active time value if the reader is time-aware, otherwise None."""
+        time_reader = self._time_reader()
+        return None if time_reader is None else time_reader.active_time_value
+
+    @property
+    def number_time_points(self) -> int | None:
+        """Number of time points if the reader is time-aware, otherwise None."""
+        time_reader = self._time_reader()
+        return None if time_reader is None else time_reader.number_time_points
+
+    @property
+    def time_values(self) -> Sequence[float] | None:
+        """Time values if the reader is time-aware, otherwise None."""
+        time_reader = self._time_reader()
+        return None if time_reader is None else time_reader.time_values
+
+    def set_active_time_point(self, time_point: int) -> None:
+        """Set the active time point when time-aware; otherwise silently no-op."""
+        time_reader = self._time_reader()
+        if time_reader is None:
+            return None
+        time_reader.set_active_time_point(time_point)
+        return None
+
+    def set_active_time_value(self, time_value: float) -> None:
+        """Set the active time value when time-aware; otherwise silently no-op."""
+        time_reader = self._time_reader()
+        if time_reader is None:
+            return None
+        time_reader.set_active_time_value(time_value)
+        return None
+
+    def time_point_value(self, time_point: int) -> float | None:
+        """Return the time value for a time point when time-aware; otherwise None."""
+        time_reader = self._time_reader()
+        return None if time_reader is None else time_reader.time_point_value(time_point)
+
     @property
     def mesh(self) -> pv.DataSet | pv.MultiBlock | None:
         """Get the current mesh."""
@@ -256,7 +291,7 @@ class Plotter:
                 return
             yield 0, block, None
 
-    def set_feature_edges(self, color: str = "black", line_width: int = 1, opacity: float = 1.0, **kwargs) -> "Plotter":
+    def set_feature_edges(self, color: str = "white", line_width: int = 1, opacity: float = 1.0, **kwargs) -> "Plotter":
         """
         Set properties for feature edges visualization.
 
@@ -266,7 +301,7 @@ class Plotter:
         Parameters
         ----------
         color : str, optional
-            Color of the feature edges. Default is "black".
+            Color of the feature edges. Default is "white".
         line_width : int, optional
             Width of the feature edges lines. Default is 1.
         opacity : float, optional
@@ -303,7 +338,20 @@ class Plotter:
             self.plotter.add_mesh(edges, name=actor_name, **self._feature_edges_props)
 
     def set_scalar(
-        self, name: str, mode: Literal["node", "element"] = "element", cell2point: bool = True, **kwargs
+        self,
+        name: Literal[
+            "B-Mag (T)",
+            "Flux (A/m)",
+            "J-Mag (A/m^2)",
+            "Loss (W/m^3)",
+            "F Nodal-Mag (N/m^3)",
+            "F Lorents-Mag (N/m^3)",
+            "Heat Density (W/m^3)",
+            "Heat (W)",
+        ],
+        mode: Literal["node", "element"] = "element",
+        cell2point: bool = True,
+        **kwargs,
     ) -> "Plotter":
         """
         Set properties for scalar field visualization.
@@ -313,7 +361,9 @@ class Plotter:
 
         Parameters
         ----------
-        name : str
+        name : {'B-Mag (T)', 'Flux (A/m)', 'J-Mag (A/m^2)',
+                'Loss (W/m^3)', 'F Nodal-Mag (N/m^3)', 'F Lorents-Mag (N/m^3)',
+                'Heat Density (W/m^3)', 'Heat (W)'},
             Name of the scalar field to visualize (must exist in mesh arrays).
         mode : {'node', 'element'}, optional
             Whether the scalar field is defined on nodes or elements. Default is 'element'.
@@ -334,13 +384,16 @@ class Plotter:
         self._scalar_props["cell2point"] = cell2point
         for key, value in kwargs.items():
             self._scalar_props[key] = value
+        self._scalar_props["show_edges"] = kwargs.get("show_edges", True)
+        self._scalar_props["edge_color"] = kwargs.get("edge_color", "white")
+        self._scalar_props["edge_opacity"] = kwargs.get("edge_opacity", 0.25)
         return self
 
     def _plot_scalar_field(self) -> None:
         """
         Plot the scalar field on the mesh based on the stored scalar properties.
         """
-        if self._scalar_props.get("name") is None:
+        if self._scalar_props is None:
             return  # No scalar properties set
         name = self._scalar_props.get("name")
         mode = self._scalar_props.get("mode", "element")
@@ -360,7 +413,16 @@ class Plotter:
 
     def set_contour(
         self,
-        name: str,
+        name: Literal[
+            "B-Mag (T)",
+            "Flux (A/m)",
+            "J-Mag (A/m^2)",
+            "Loss (W/m^3)",
+            "F Nodal-Mag (N/m^3)",
+            "F Lorents-Mag (N/m^3)",
+            "Heat Density (W/m^3)",
+            "Heat (W)",
+        ] = "Flux (A/m)",
         n_contours: int = 10,
         color: str = "red",
         line_width: int = 3,
@@ -371,8 +433,10 @@ class Plotter:
 
         Parameters
         ----------
-        name : str
-            Name of the scalar field to contour.
+        name : {'B-Mag (T)', 'Flux (A/m)', 'J-Mag (A/m^2)',
+                'Loss (W/m^3)', 'F Nodal-Mag (N/m^3)', 'F Lorents-Mag (N/m^3)',
+                'Heat Density (W/m^3)', 'Heat (W)'},
+            Name of the scalar field to visualize (must exist in mesh arrays).
         n_contours : int, optional
             Number of contour levels to generate. Default is 10.
         color : str, optional
@@ -393,13 +457,14 @@ class Plotter:
         self._contour_props["line_width"] = line_width
         for key, value in kwargs.items():
             self._contour_props[key] = value
+
         return self
 
     def _plot_contours(self) -> None:
         """
         Plot contour lines/surfaces for the configured scalar field.
         """
-        if self._contour_props.get("name") is None:
+        if self._contour_props is None:
             return
 
         name = self._contour_props.get("name")
@@ -446,7 +511,20 @@ class Plotter:
 
     def set_vector(
         self,
-        name: str,
+        name: Literal[
+            "B-Mag (T)",
+            "B-Vec (T)",
+            "Flux (A/m)",
+            "J-Mag (A/m^2)",
+            "J-Vec (A/m^2)",
+            "Loss (W/m^3)",
+            "F Nodal-Mag (N/m^3)",
+            "F Nodal-Vec (N/m^3)",
+            "F Lorents-Mag (N/m^3)",
+            "F Lorents-Vec (N/m^3)",
+            "Heat Density (W/m^3)",
+            "Heat (W)",
+        ],
         scale: str | bool | None = None,
         glyph_type: str = "arrow",
         factor: float = 1.0,
@@ -462,7 +540,11 @@ class Plotter:
 
         Parameters
         ----------
-        name : str
+        name : {'B-Mag (T)', 'B-Vec (T)', 'Flux (A/m)',
+                'J-Mag (A/m^2)', 'J-Vec (A/m^2)', 'Loss (W/m^3)',
+                'F Nodal-Mag (N/m^3)', 'F Nodal-Vec (N/m^3)',
+                'F Lorents-Mag (N/m^3)', 'F Lorents-Vec (N/m^3)',
+                'Heat Density (W/m^3)', 'Heat (W)'},
             Name of the vector field to visualize (must exist in mesh arrays as 3-component array).
         scale : str, bool, or None, optional
             Controls glyph scaling:
@@ -521,7 +603,7 @@ class Plotter:
         Creates oriented glyphs (arrows, cones, or spheres) at each point/cell
         in the mesh, with optional scaling and density control.
         """
-        if self._vector_props.get("name") is None:
+        if self._vector_props is None:
             return  # No vector properties set
 
         name = self._vector_props.get("name")
@@ -608,6 +690,8 @@ class Plotter:
         None or widget
             In notebook mode, returns the interactive widget. In desktop mode, returns None.
         """
+        if getattr(self.plotter, "_closed", False):
+            self._init_qt_mode()
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._plot_scalar_field()
@@ -616,13 +700,13 @@ class Plotter:
             self._plot_feature_edges()
             self.plotter.reset_camera()
 
-        if self.notebook:
+        if self._notebook:
             # Notebook mode: return the widget for Jupyter display
             return self.plotter.show()
         else:
             # Desktop mode: show window and start Qt event loop
             self._window.show()
-            self.app.exec()
+            self._app.exec()
 
     def export(
         self,
@@ -657,6 +741,8 @@ class Plotter:
         Plotter
             Returns the Plotter instance to allow method chaining.
         """
+        if getattr(self.plotter, "_closed", False):
+            self._init_qt_mode()
 
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
@@ -678,7 +764,7 @@ class Plotter:
         In desktop mode, closes both the QtInteractor and QMainWindow.
         In notebook mode, closes the PyVista plotter.
         """
-        if self.notebook:
+        if self._notebook:
             # Notebook mode: close PyVista plotter
             if hasattr(self, "plotter") and self.plotter is not None:
                 self.plotter.close()

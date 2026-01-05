@@ -1,17 +1,25 @@
 ---
-title: set_vector
+title: set_vector()
 sidebar_position: 5
 ---
-
-## `set_vector(name, scale=None, glyph_type="arrow", factor=1.0, tolerance=None, color_mode="scale", **kwargs)`
-
 Adds vector glyphs (arrows/cones/spheres) for a 3-component vector array.
 
-Glyphs are generated per-block for `MultiBlock` datasets and are added during `show()` / `export()`.
+Glyphs are generated per-block for [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.multiblock) datasets and are added during [`show()`](/docs/api/Plotter/show.md) / [`export()`](/docs/api/Plotter/export.md).
 
-### Parameters
-
-- **`name`** (`str`) — Vector array name (must exist and be 3-component).
+:::tip[Parameters]
+- **`name`** (`Literal[...]`) — Vector array name (must exist and be 3-component).
+  - `"B-Mag (T)"`
+  - `"B-Vec (T)"`
+  - `"Flux (A/m)"`
+  - `"J-Mag (A/m^2)"`
+  - `"J-Vec (A/m^2)"`
+  - `"Loss (W/m^3)"`
+  - `"F Nodal-Mag (N/m^3)"`
+  - `"F Nodal-Vec (N/m^3)"`
+  - `"F Lorents-Mag (N/m^3)"`
+  - `"F Lorents-Vec (N/m^3)"`
+  - `"Heat Density (W/m^3)"`
+  - `"Heat (W)"`
 - **`scale`** (`str | bool | None`, default: `None`) — Controls glyph scaling:
   - `None`: scale by vector magnitude (internally uses `name`)
   - `str`: scale by a separate scalar array
@@ -20,11 +28,12 @@ Glyphs are generated per-block for `MultiBlock` datasets and are added during `s
 - **`factor`** (`float`, default: `1.0`) — Global size multiplier.
 - **`tolerance`** (`float | None`, default: `None`) — Reduce glyph density (fraction of bounding box). `None` shows all glyphs.
 - **`color_mode`** (`str`, default: `"scale"`) — Passed to PyVista’s glyph coloring (typically `"scale"`, `"scalar"`, or `"vector"`).
-- **`**kwargs`** — Forwarded to `plotter.add_mesh(...)` for the glyph actor(s) (examples: `cmap`, `clim`, `opacity`).
+- **`**kwargs`** — Forwarded to [`add_mesh()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.add_mesh) for the glyph actor(s) (examples: `cmap`, `clim`, `opacity`).
+:::
 
-### Returns
-
+:::info[Returns]
 - `Plotter` — returns `self` to enable chaining.
+:::
 
 ### Examples
 
