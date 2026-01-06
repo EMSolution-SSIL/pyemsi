@@ -15,13 +15,13 @@ import numpy as np
 
 # TYPE_CHECKING imports (for type checkers only, not runtime)
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
     from pyvistaqt import QtInteractor
+    from pyemsi.qt_window import QtPlotterWindow
 
 # Qt imports are optional (only needed for desktop mode)
 try:
-    from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
     from pyvistaqt import QtInteractor
+    from pyemsi.qt_window import QtPlotterWindow
 
     HAS_QT = True
 except ImportError:
@@ -73,11 +73,9 @@ class Plotter:
     _mesh: pv.DataSet | pv.MultiBlock | None
     reader: pv.BaseReader | None
     plotter: "QtInteractor | pv.Plotter"
-    _app: "QApplication | None"
-    _window: "QMainWindow"
-    _frame: "QFrame"
-    _vlayout: "QVBoxLayout"
+    _window: "QtPlotterWindow | None"
     _qt_props: dict[str, object]
+    _qt_interactor_kwargs: dict[str, object]
     _feature_edges_props: dict[str, object]
     _scalar_props: dict[str, object]
     _vector_props: dict[str, object]
@@ -120,6 +118,7 @@ class Plotter:
         self._mesh = None
         self.reader = None
         self._qt_props = {"title": title, "window_size": window_size, "position": position}
+        self._qt_interactor_kwargs = kwargs
         self._feature_edges_props = {"color": "white", "line_width": 1, "opacity": 1.0}
         self._scalar_props = {}
         self._vector_props = {}
@@ -140,39 +139,23 @@ class Plotter:
         if not HAS_QT:
             raise ImportError("Qt dependencies not available. Install with: pip install PySide6 pyvistaqt")
 
-        # Get or create QApplication instance
-        self._app = QApplication.instance()
-        if self._app is None:
-            self._app = QApplication([])
+        # Create QtPlotterWindow with stored properties
+        self._window = QtPlotterWindow(
+            title=self._qt_props.get("title", "pyemsi Plotter"),
+            window_size=self._qt_props.get("window_size", (1024, 768)),
+            position=self._qt_props.get("position"),
+            parent_plotter=self,
+            **self._qt_interactor_kwargs,
+        )
 
-        # Create QMainWindow
-        self._window = QMainWindow()
-        self._window.closeEvent = lambda event: self._on_window_closed(event)
-
-        # Set window properties
-        self._window.setWindowTitle(self._qt_props.get("title", "pyemsi Plotter"))
-        self._window.resize(*self._qt_props.get("window_size", (1024, 768)))
-        if self._qt_props.get("position") is not None:
-            self._window.move(*self._qt_props.get("position"))
-
-        # Create container frame and layout
-        self._frame = QFrame()
-        self._vlayout = QVBoxLayout()
-        self._vlayout.setContentsMargins(0, 0, 0, 0)
-
-        # Create QtInteractor (the rendering widget that IS the plotter)
-        self.plotter = QtInteractor(parent=self._frame, off_screen=False, **kwargs)
-
-        # Add QtInteractor to layout
-        self._vlayout.addWidget(self.plotter)
-        self._frame.setLayout(self._vlayout)
-        self._window.setCentralWidget(self._frame)
+        # Extract plotter reference from window
+        self.plotter = self._window.plotter
 
     def _init_notebook_mode(self, **kwargs) -> None:
         """Initialize PyVista native notebook mode."""
         pv.set_jupyter_backend(self._backend)
         self.plotter = pv.Plotter(**kwargs)
-        self._app = None
+        self._window = None
 
     def set_file(self, filepath: str | Path) -> "Plotter":
         """
@@ -690,8 +673,10 @@ class Plotter:
         None or widget
             In notebook mode, returns the interactive widget. In desktop mode, returns None.
         """
-        if getattr(self.plotter, "_closed", False):
+        # Re-initialize if window was closed
+        if not self._notebook and self._window is not None and self._window.is_closed:
             self._init_qt_mode()
+
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._plot_scalar_field()
@@ -706,7 +691,6 @@ class Plotter:
         else:
             # Desktop mode: show window and start Qt event loop
             self._window.show()
-            self._app.exec()
 
     def export(
         self,
@@ -741,7 +725,8 @@ class Plotter:
         Plotter
             Returns the Plotter instance to allow method chaining.
         """
-        if getattr(self.plotter, "_closed", False):
+        # Re-initialize if window was closed
+        if not self._notebook and self._window is not None and self._window.is_closed:
             self._init_qt_mode()
 
         if self.reader is not None:
@@ -761,16 +746,8 @@ class Plotter:
         """
         Close the plotter and clean up resources.
 
-        In desktop mode, closes both the QtInteractor and QMainWindow.
+        In desktop mode, closes the QtInteractor plotter (window cleanup handled by QtPlotterWindow).
         In notebook mode, closes the PyVista plotter.
         """
-        if self._notebook:
-            # Notebook mode: close PyVista plotter
-            if hasattr(self, "plotter") and self.plotter is not None:
-                self.plotter.close()
-        else:
-            # Desktop mode: close QtInteractor and QMainWindow
-            if hasattr(self, "plotter") and self.plotter is not None:
-                self.plotter.close()
-            if hasattr(self, "_window") and self._window is not None:
-                self._window.close()
+        if hasattr(self, "plotter") and self.plotter is not None:
+            self.plotter.close()
