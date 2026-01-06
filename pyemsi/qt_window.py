@@ -12,8 +12,11 @@ if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
     from pyemsi.plotter import Plotter
 
-from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import QSize, Qt
 from pyvistaqt import QtInteractor
+import pyemsi.resources.resources  # noqa: F401
 
 
 class QtPlotterWindow:
@@ -52,6 +55,7 @@ class QtPlotterWindow:
     _window: "QMainWindow"
     _frame: "QFrame"
     _vlayout: "QVBoxLayout"
+    _toolbar: "QToolBar"
     plotter: "QtInteractor"
     parent_plotter: "Plotter | None"
 
@@ -107,8 +111,77 @@ class QtPlotterWindow:
         self._frame.setLayout(self._vlayout)
         self._window.setCentralWidget(self._frame)
 
+        # Create camera view toolbar
+        self._create_camera_toolbar()
+
         # Attach close event handler
         self._window.closeEvent = lambda event: self._on_close(event)
+
+    def _create_camera_toolbar(self) -> None:
+        """
+        Create and configure the camera view control toolbar.
+
+        Adds a movable toolbar with buttons for reset camera, isometric view,
+        and six orthogonal axis views (±X, ±Y, ±Z) using icons from Qt resources.
+        """
+        self._toolbar = QToolBar("Camera Controls")
+        self._toolbar.setMovable(True)
+        self._toolbar.setIconSize(QSize(24, 24))
+
+        # Reset Camera action
+        reset_action = QAction(QIcon(":/icons/ResetCamera.svg"), "Reset Camera", self._window)
+        reset_action.setToolTip("Reset camera to frame all objects")
+        reset_action.triggered.connect(self.plotter.reset_camera)
+        self._toolbar.addAction(reset_action)
+
+        self._toolbar.addSeparator()
+
+        # Isometric view action
+        iso_action = QAction(QIcon(":/icons/IsometricView.svg"), "Isometric", self._window)
+        iso_action.setToolTip("Isometric view")
+        iso_action.triggered.connect(self.plotter.view_isometric)
+        self._toolbar.addAction(iso_action)
+
+        self._toolbar.addSeparator()
+
+        # +X view (Right)
+        xplus_action = QAction(QIcon(":/icons/XPlus.svg"), "+X View", self._window)
+        xplus_action.setToolTip("View from +X axis (Right)")
+        xplus_action.triggered.connect(lambda: self.plotter.view_xy())
+        self._toolbar.addAction(xplus_action)
+
+        # -X view (Left)
+        xminus_action = QAction(QIcon(":/icons/XMinus.svg"), "-X View", self._window)
+        xminus_action.setToolTip("View from -X axis (Left)")
+        xminus_action.triggered.connect(lambda: self.plotter.view_yx(negative=True))
+        self._toolbar.addAction(xminus_action)
+
+        # +Y view (Front)
+        yplus_action = QAction(QIcon(":/icons/YPlus.svg"), "+Y View", self._window)
+        yplus_action.setToolTip("View from +Y axis (Front)")
+        yplus_action.triggered.connect(lambda: self.plotter.view_xz())
+        self._toolbar.addAction(yplus_action)
+
+        # -Y view (Back)
+        yminus_action = QAction(QIcon(":/icons/YMinus.svg"), "-Y View", self._window)
+        yminus_action.setToolTip("View from -Y axis (Back)")
+        yminus_action.triggered.connect(lambda: self.plotter.view_xz(negative=True))
+        self._toolbar.addAction(yminus_action)
+
+        # +Z view (Top)
+        zplus_action = QAction(QIcon(":/icons/ZPlus.svg"), "+Z View", self._window)
+        zplus_action.setToolTip("View from +Z axis (Top)")
+        zplus_action.triggered.connect(lambda: self.plotter.view_yz())
+        self._toolbar.addAction(zplus_action)
+
+        # -Z view (Bottom)
+        zminus_action = QAction(QIcon(":/icons/ZMinus.svg"), "-Z View", self._window)
+        zminus_action.setToolTip("View from -Z axis (Bottom)")
+        zminus_action.triggered.connect(lambda: self.plotter.view_yz(negative=True))
+        self._toolbar.addAction(zminus_action)
+
+        # Add toolbar to main window
+        self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._toolbar)
 
     @property
     def is_closed(self) -> bool:
