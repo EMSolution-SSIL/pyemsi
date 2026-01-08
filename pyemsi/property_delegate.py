@@ -347,26 +347,29 @@ class PropertyDelegate(QStyledItemDelegate):
             super().setModelData(editor, model, index)
             return
 
-        # Run validator if present
+        # Run validator if present - validate BEFORE changing value
         validator = index.data(self.VALIDATOR_ROLE)
         self.parent().blockSignals(True)
-        if callable(validator):
-            error_msg = validator(value)
-            if error_msg:  # Non-empty string means validation failed
-                model.setData(index, error_msg, self.VALIDATION_ERROR_ROLE)
-                # Set tooltip to show error
-                item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
-                if item:
-                    item.setToolTip(1, error_msg)
-            else:  # Empty string means validation passed
-                model.setData(index, "", self.VALIDATION_ERROR_ROLE)
-                item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
-                if item:
-                    item.setToolTip(1, "")
-        self.parent().blockSignals(False)
+        try:
+            if callable(validator):
+                error_msg = validator(value)
+                if error_msg:  # Validation FAILED - don't update value
+                    model.setData(index, error_msg, self.VALIDATION_ERROR_ROLE)
+                    # Set tooltip to show error
+                    item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
+                    if item:
+                        item.setToolTip(1, error_msg)
+                    return  # Exit early - keep old value
+                else:  # Validation PASSED - clear error state
+                    model.setData(index, "", self.VALIDATION_ERROR_ROLE)
+                    item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
+                    if item:
+                        item.setToolTip(1, "")
 
-        # Set the value
-        model.setData(index, value, Qt.ItemDataRole.EditRole)
+            # Only set value if no validator OR validation passed
+            model.setData(index, value, Qt.ItemDataRole.EditRole)
+        finally:
+            self.parent().blockSignals(False)
 
     def paint(self, painter, option: QStyleOptionViewItem, index: QModelIndex):
         """Custom paint to show validation errors and read-only styling.
@@ -426,23 +429,23 @@ class PropertyDelegate(QStyledItemDelegate):
                 # Convert to hex string
                 hex_color = color.name()  # Returns #RRGGBB format
 
-                # Run validator if present
+                # Run validator if present - validate BEFORE changing value
                 validator = index.data(self.VALIDATOR_ROLE)
                 if callable(validator):
                     error_msg = validator(hex_color)
-                    if error_msg:
+                    if error_msg:  # Validation FAILED - don't update value
                         model.setData(index, error_msg, self.VALIDATION_ERROR_ROLE)
                         item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
                         if item:
                             item.setToolTip(1, error_msg)
-                        return True
-                    else:
+                        return True  # Consume event but don't change value
+                    else:  # Validation PASSED - clear error state
                         model.setData(index, "", self.VALIDATION_ERROR_ROLE)
                         item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
                         if item:
                             item.setToolTip(1, "")
 
-                # Set the value
+                # Only set value if no validator OR validation passed
                 model.setData(index, hex_color, Qt.ItemDataRole.EditRole)
                 return True
 
