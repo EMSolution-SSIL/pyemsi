@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
 )
-from PySide6.QtCore import Qt, QModelIndex, QEvent
+from PySide6.QtCore import Qt, QModelIndex, QEvent, QRect
 from PySide6.QtGui import QColor, QPalette
 
 
@@ -371,6 +371,77 @@ class PropertyDelegate(QStyledItemDelegate):
         finally:
             self.parent().blockSignals(False)
 
+    def _paint_color_cell(self, painter, option: QStyleOptionViewItem, index: QModelIndex):
+        """Custom paint for color cells with colored box preview.
+        
+        Args:
+            painter: QPainter instance
+            option: Style options
+            index: Model index of the item
+        """
+        painter.save()
+        
+        try:
+            # Get cell rectangle
+            cell_rect = option.rect
+            
+            # Draw selection background if selected
+            if option.state & option.state.State_Selected:
+                painter.fillRect(cell_rect, option.palette.highlight())
+            
+            # Check for validation error - draw red background
+            error_msg = index.data(self.VALIDATION_ERROR_ROLE)
+            if error_msg:
+                painter.fillRect(cell_rect, QColor(255, 200, 200))
+            
+            # Get color value
+            color_value = index.data(Qt.ItemDataRole.DisplayRole)
+            color = QColor(color_value) if color_value and QColor(color_value).isValid() else QColor(Qt.GlobalColor.white)
+            
+            # Calculate color box rectangle (left-aligned with margins)
+            box_size = cell_rect.height() - 4  # 2px margin top/bottom
+            box_rect = QRect(
+                cell_rect.left() + 2,  # 2px left margin
+                cell_rect.top() + 2,   # 2px top margin
+                box_size,
+                box_size
+            )
+            
+            # Draw colored box
+            painter.fillRect(box_rect, color)
+            
+            # Draw black border around box
+            painter.setPen(QColor(0, 0, 0))
+            painter.drawRect(box_rect)
+            
+            # Calculate text rectangle (to the right of the box)
+            text_rect = QRect(
+                box_rect.right() + 4,  # 4px spacing after box
+                cell_rect.top(),
+                cell_rect.width() - box_size - 6,  # Account for margins
+                cell_rect.height()
+            )
+            
+            # Set text color (gray for read-only)
+            readonly = index.data(self.READONLY_ROLE)
+            if readonly:
+                text_color = QColor(128, 128, 128)
+                font = option.font
+                font.setItalic(True)
+                painter.setFont(font)
+            elif option.state & option.state.State_Selected:
+                text_color = option.palette.highlightedText().color()
+            else:
+                text_color = option.palette.text().color()
+            
+            painter.setPen(text_color)
+            
+            # Draw text
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(color_value) if color_value else "")
+            
+        finally:
+            painter.restore()
+
     def paint(self, painter, option: QStyleOptionViewItem, index: QModelIndex):
         """Custom paint to show validation errors and read-only styling.
 
@@ -379,6 +450,13 @@ class PropertyDelegate(QStyledItemDelegate):
             option: Style options
             index: Model index of the item
         """
+        # Check if this is a color cell - use custom painting
+        editor_type = index.data(self.EDITOR_TYPE_ROLE)
+        if editor_type == "color" and index.column() == 1:
+            self._paint_color_cell(painter, option, index)
+            return
+        
+        # For all other cells, use existing logic
         # Check for validation error
         error_msg = index.data(self.VALIDATION_ERROR_ROLE)
 
