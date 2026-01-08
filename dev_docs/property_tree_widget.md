@@ -15,6 +15,7 @@
 - **Visibility control**: Show/hide properties dynamically
 - **Programmatic updates**: Update values without triggering callbacks
 - **Built-in validators**: Common validation patterns included
+- **Checkable groups**: Groups with checkbox control for conditional property sections
 
 ## Architecture
 
@@ -221,6 +222,75 @@ tree.add_property(
 
 ---
 
+#### add_checkable_group()
+
+```python
+add_checkable_group(
+    name: str,
+    checked: bool = True,
+    callback: Optional[Callable[[bool], None]] = None
+) -> QTreeWidgetItem
+```
+
+Adds a checkable property group with checkbox control in column 1.
+
+When checked, children are visible and group auto-expands. When unchecked, children are hidden while the group itself remains expanded for visual consistency.
+
+**Parameters:**
+- `name` (str): Group name (cannot contain `:`)
+- `checked` (bool): Initial checked state (default: True)
+- `callback` (callable, optional): Function called when checkbox state changes, receives bool
+
+**Returns:**
+- `QTreeWidgetItem`: The created checkable group item
+
+**Raises:**
+- `ValueError`: If name contains colon or address already exists
+
+**Address System:**
+- Group address: `"name"` (stored in `_property_items`)
+- Child properties: `"name:property_name"` (same as regular groups)
+
+**Behavior:**
+- **Checked**: Group auto-expands, children visible
+- **Unchecked**: Children hidden, group stays expanded
+- **Programmatic updates**: Use `update_property_value("GroupName", True/False)` to toggle state without triggering callback
+
+**Examples:**
+```python
+# Basic checkable group
+group = tree.add_checkable_group(
+    "Advanced Settings",
+    checked=False,
+    callback=lambda checked: print(f"Advanced mode: {checked}")
+)
+
+tree.add_property("debug_mode", False, "bool", parent=group)
+tree.add_property("log_level", "INFO", "enum", parent=group, choices=["DEBUG", "INFO", "WARN", "ERROR"])
+
+# Conditional visualization settings
+viz_group = tree.add_checkable_group(
+    "Vector Field",
+    checked=True,
+    callback=lambda checked: toggle_vectors(checked)
+)
+
+tree.add_property("scale", 1.0, "float", parent=viz_group, min=0.1, max=10.0)
+tree.add_property("glyph_type", "arrow", "enum", parent=viz_group, choices=["arrow", "cone", "sphere"])
+
+# Programmatically control group state
+tree.update_property_value("Advanced Settings", True)  # Check and show children
+tree.update_property_value("Vector Field", False)     # Uncheck and hide children
+```
+
+**Use Cases:**
+- Optional feature sections (e.g., "Show Advanced Options")
+- Conditional rendering settings (e.g., "Enable Shadows")
+- Toggleable analysis parameters (e.g., "Apply Smoothing")
+- Debug/developer modes
+
+---
+
 #### get_property_item()
 
 ```python
@@ -256,9 +326,11 @@ update_property_value(
 
 Updates a property value programmatically without triggering the callback. Useful for synchronizing external state changes back to the UI.
 
+For checkable groups, pass a boolean value to toggle the checkbox state and children visibility.
+
 **Parameters:**
 - `address_or_item` (str or QTreeWidgetItem): Property address or item
-- `value` (Any): New value to set
+- `value` (Any): New value to set (for checkable groups, pass bool for checked state)
 
 **Raises:**
 - `ValueError`: If address not found
@@ -267,6 +339,10 @@ Updates a property value programmatically without triggering the callback. Usefu
 ```python
 # Update by address
 tree.update_property_value("opacity", 0.5)
+
+# For checkable groups
+tree.update_property_value("Advanced Settings", True)  # Check and show children
+tree.update_property_value("Vector Field", False)     # Uncheck and hide children
 
 # Update by item
 item = tree.get_property_item("opacity")
@@ -622,12 +698,37 @@ tree.add_property(
     readonly=True
 )
 
+# Create checkable group for optional features
+advanced_group = tree.add_checkable_group(
+    "Advanced Options",
+    checked=False,
+    callback=lambda checked: print(f"Advanced mode: {checked}")
+)
+
+tree.add_property(
+    "cache_size", 100, "int",
+    callback=lambda v: print(f"Cache: {v}"),
+    validator=range_validator(10, 1000),
+    parent=advanced_group,
+    min=10, max=1000
+)
+
+tree.add_property(
+    "log_level", "INFO", "enum",
+    callback=lambda v: print(f"Log level: {v}"),
+    parent=advanced_group,
+    choices=["DEBUG", "INFO", "WARN", "ERROR"]
+)
+
 # Show tree
 tree.show()
 
 # Programmatic updates
 def update_status():
     tree.update_property_value("render_time", "14.2 ms")
+
+# Toggle checkable group programmatically
+tree.update_property_value("Advanced Options", True)  # Check and show children
 
 # Get all properties
 addresses = tree.get_all_addresses()
@@ -653,6 +754,13 @@ app.exec()
 - **Font**: Bold
 - **Expandable**: Click to collapse/expand children
 - **Non-editable**: Value column is empty and non-editable
+
+### Checkable Groups
+- **Font**: Bold
+- **Checkbox**: Displayed in column 1 (value column)
+- **Checked**: Group auto-expands, children visible
+- **Unchecked**: Children hidden, group remains expanded
+- **Interaction**: Click checkbox to toggle state and children visibility
 
 ## Notes
 

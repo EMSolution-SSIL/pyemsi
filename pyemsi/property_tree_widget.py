@@ -142,6 +142,8 @@ class PropertyTreeWidget(QTreeWidget):
     READONLY_ROLE = Qt.ItemDataRole.UserRole + 8
     ADDRESS_ROLE = Qt.ItemDataRole.UserRole + 9
     STEP_ROLE = Qt.ItemDataRole.UserRole + 10
+    GROUP_CHECKABLE_ROLE = Qt.ItemDataRole.UserRole + 11
+    GROUP_CHECKED_ROLE = Qt.ItemDataRole.UserRole + 12
 
     def __init__(self, parent=None):
         """Initialize the property tree widget.
@@ -312,6 +314,98 @@ class PropertyTreeWidget(QTreeWidget):
 
         return group
 
+    def add_checkable_group(
+        self,
+        name: str,
+        checked: bool = True,
+        callback: Optional[Callable[[bool], None]] = None,
+    ) -> QTreeWidgetItem:
+        """Add a checkable property group with checkbox control.
+
+        When checked, children are visible and group auto-expands.
+        When unchecked, children are hidden (group remains expanded for visual consistency).
+
+        Args:
+            name: Group name (colon ':' is reserved and will raise ValueError)
+            checked: Initial checked state (default: True)
+            callback: Optional callable invoked when checkbox state changes (receives bool)
+
+        Returns:
+            Created QTreeWidgetItem for the checkable group
+
+        Raises:
+            ValueError: If name contains colon character or if address already exists
+
+        Example:
+            >>> tree = PropertyTreeWidget()
+            >>> group = tree.add_checkable_group(
+            ...     "Advanced Settings",
+            ...     checked=False,
+            ...     callback=lambda checked: print(f"Advanced: {checked}")
+            ... )
+            >>> tree.add_property("debug_mode", False, "bool", parent=group)
+        """
+        # Validate name doesn't contain colon
+        if ":" in name:
+            raise ValueError(f"Group name cannot contain colon ':' character: {name}")
+
+        # Check if address already exists
+        if name in self._property_items:
+            raise ValueError(f"Property with address '{name}' already exists")
+
+        # Create group item
+        group = QTreeWidgetItem([name, ""])
+        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsEditable)  # Make non-editable
+        group.setExpanded(True)  # Expand by default
+
+        # Apply bold font
+        font = group.font(0)
+        font.setBold(True)
+        group.setFont(0, font)
+
+        # Store checkbox metadata in column 1
+        group.setData(1, self.GROUP_CHECKABLE_ROLE, True)
+        group.setData(1, self.GROUP_CHECKED_ROLE, checked)
+
+        if callback is not None:
+            group.setData(1, self.CALLBACK_ROLE, callback)
+
+        # Add to tree
+        self.addTopLevelItem(group)
+        # Note: Do NOT call setFirstColumnSpanned() for checkable groups
+
+        # Store in dictionary
+        self._property_items[name] = group
+
+        # Apply initial visibility state to children (may be none yet)
+        self._set_group_children_visible(group, checked)
+
+        return group
+
+    def _get_group_children(self, group_item: QTreeWidgetItem) -> List[QTreeWidgetItem]:
+        """Get all direct children of a group item.
+
+        Args:
+            group_item: The group item
+
+        Returns:
+            List of child QTreeWidgetItem instances
+        """
+        children = []
+        for i in range(group_item.childCount()):
+            children.append(group_item.child(i))
+        return children
+
+    def _set_group_children_visible(self, group_item: QTreeWidgetItem, visible: bool):
+        """Set visibility for all children of a group.
+
+        Args:
+            group_item: The group item
+            visible: If True, show children; if False, hide children
+        """
+        for child in self._get_group_children(group_item):
+            child.setHidden(not visible)
+
     def get_property_item(self, address: str) -> Optional[QTreeWidgetItem]:
         """Get property item by address (case-sensitive).
 
@@ -333,13 +427,15 @@ class PropertyTreeWidget(QTreeWidget):
 
         Args:
             address_or_item: Property address string or QTreeWidgetItem
-            value: New value to set
+            value: New value to set (for checkable groups, pass bool for checked state)
 
         Raises:
             ValueError: If address not found
 
         Example:
             >>> tree.update_property_value("opacity", 0.5)
+            >>> # For checkable groups
+            >>> tree.update_property_value("Advanced Settings", True)
             >>> # Or using item directly
             >>> item = tree.get_property_item("opacity")
             >>> tree.update_property_value(item, 0.5)
@@ -356,22 +452,39 @@ class PropertyTreeWidget(QTreeWidget):
         self.blockSignals(True)
 
         try:
-            # Update text
-            item.setText(1, str(value))
+            # Check if this is a checkable group
+            if item.data(1, self.GROUP_CHECKABLE_ROLE):
+                # Handle as checkable group
+                checked = bool(value)
+                item.setData(1, self.GROUP_CHECKED_ROLE, checked)
 
-            # Run validation
-            validator = item.data(1, self.VALIDATOR_ROLE)
-            if callable(validator):
-                error_msg = validator(value)
-                if error_msg:
-                    item.setData(1, self.VALIDATION_ERROR_ROLE, error_msg)
-                    item.setToolTip(1, error_msg)
-                else:
-                    item.setData(1, self.VALIDATION_ERROR_ROLE, "")
-                    item.setToolTip(1, "")
+                # Auto-expand if checked
+                if checked:
+                    item.setExpanded(True)
 
-            # Trigger repaint to update visual state
-            self.viewport().update()
+                # Set children visibility
+                self._set_group_children_visible(item, checked)
+
+                # Trigger repaint to update checkbox visual state
+                self.viewport().update()
+            else:
+                # Handle as regular property
+                # Update text
+                item.setText(1, str(value))
+
+                # Run validation
+                validator = item.data(1, self.VALIDATOR_ROLE)
+                if callable(validator):
+                    error_msg = validator(value)
+                    if error_msg:
+                        item.setData(1, self.VALIDATION_ERROR_ROLE, error_msg)
+                        item.setToolTip(1, error_msg)
+                    else:
+                        item.setData(1, self.VALIDATION_ERROR_ROLE, "")
+                        item.setToolTip(1, "")
+
+                # Trigger repaint to update visual state
+                self.viewport().update()
         finally:
             # Unblock signals
             self.blockSignals(False)

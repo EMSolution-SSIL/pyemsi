@@ -168,6 +168,8 @@ class PropertyDelegate(QStyledItemDelegate):
     READONLY_ROLE = Qt.ItemDataRole.UserRole + 8
     ADDRESS_ROLE = Qt.ItemDataRole.UserRole + 9
     STEP_ROLE = Qt.ItemDataRole.UserRole + 10
+    GROUP_CHECKABLE_ROLE = Qt.ItemDataRole.UserRole + 11
+    GROUP_CHECKED_ROLE = Qt.ItemDataRole.UserRole + 12
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         """Create appropriate editor widget based on item data.
@@ -448,6 +450,41 @@ class PropertyDelegate(QStyledItemDelegate):
             option: Style options
             index: Model index of the item
         """
+        # Check if this is a checkable group in column 1
+        if index.column() == 1 and index.data(self.GROUP_CHECKABLE_ROLE):
+            painter.save()
+            try:
+                # Get checkbox state
+                checked = index.data(self.GROUP_CHECKED_ROLE)
+
+                # Create checkbox style option
+                from PySide6.QtWidgets import QStyleOptionButton, QStyle
+                checkbox_opt = QStyleOptionButton()
+                checkbox_opt.rect = option.rect
+                checkbox_opt.state = option.state | QStyle.StateFlag.State_Enabled
+
+                if checked:
+                    checkbox_opt.state |= QStyle.StateFlag.State_On
+                else:
+                    checkbox_opt.state |= QStyle.StateFlag.State_Off
+
+                # Calculate checkbox rectangle (left portion of column 1)
+                checkbox_size = option.widget.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+                checkbox_rect = QRect(
+                    option.rect.left() + 4,
+                    option.rect.top() + (option.rect.height() - checkbox_size) // 2,
+                    checkbox_size,
+                    checkbox_size,
+                )
+                checkbox_opt.rect = checkbox_rect
+
+                # Draw checkbox
+                option.widget.style().drawControl(QStyle.ControlElement.CE_CheckBox, checkbox_opt, painter, option.widget)
+
+            finally:
+                painter.restore()
+            return
+
         # Check if this is a color cell - use custom painting
         editor_type = index.data(self.EDITOR_TYPE_ROLE)
         if editor_type == "color" and index.column() == 1:
@@ -480,7 +517,7 @@ class PropertyDelegate(QStyledItemDelegate):
         super().paint(painter, opt, index)
 
     def editorEvent(self, event, model, option: QStyleOptionViewItem, index: QModelIndex) -> bool:
-        """Handle color picker dialog for color type properties.
+        """Handle color picker dialog for color type properties and checkbox clicks for checkable groups.
 
         Args:
             event: Qt event
@@ -491,9 +528,61 @@ class PropertyDelegate(QStyledItemDelegate):
         Returns:
             True if event was handled
         """
+        # Handle checkable group checkbox clicks
+        if index.column() == 1 and index.data(self.GROUP_CHECKABLE_ROLE):
+            if event.type() == QEvent.Type.MouseButtonRelease:
+                from PySide6.QtWidgets import QStyle
+
+                # Calculate checkbox bounds
+                checkbox_size = option.widget.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+                checkbox_rect = QRect(
+                    option.rect.left() + 4,
+                    option.rect.top() + (option.rect.height() - checkbox_size) // 2,
+                    checkbox_size,
+                    checkbox_size,
+                )
+
+                # Check if click is within checkbox bounds
+                if checkbox_rect.contains(event.pos()):
+                    # Toggle checked state
+                    current_checked = index.data(self.GROUP_CHECKED_ROLE)
+                    new_checked = not current_checked
+
+                    # Update model
+                    model.setData(index, new_checked, self.GROUP_CHECKED_ROLE)
+
+                    # Get the tree widget
+                    tree = self.parent()
+
+                    # Get the group item
+                    if hasattr(model, "itemFromIndex"):
+                        group_item = model.itemFromIndex(index)
+                    else:
+                        # For QTreeWidget, get item directly
+                        group_item = tree.itemFromIndex(index)
+
+                    if group_item:
+                        # Auto-expand if checked
+                        if new_checked:
+                            group_item.setExpanded(True)
+
+                        # Toggle children visibility
+                        tree._set_group_children_visible(group_item, new_checked)
+
+                        # Invoke callback if present
+                        callback = index.data(self.CALLBACK_ROLE)
+                        if callable(callback):
+                            callback(new_checked)
+
+                    # Trigger repaint
+                    tree.viewport().update()
+
+                    return True
+
+        # Handle color picker for color type
         editor_type = index.data(self.EDITOR_TYPE_ROLE)
 
-        if editor_type == "color" and event.type() == QEvent.MouseButtonDblClick:
+        if editor_type == "color" and event.type() == QEvent.Type.MouseButtonDblClick:
             # Get current color value
             current_value = index.data(Qt.ItemDataRole.EditRole)
             current_color = QColor(current_value) if current_value else QColor(Qt.GlobalColor.white)
