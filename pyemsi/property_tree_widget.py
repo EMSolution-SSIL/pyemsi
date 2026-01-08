@@ -1,6 +1,6 @@
 """Property tree widget with editable values and validation support."""
 
-from typing import Callable, Any, Optional, Union, List
+from typing import Callable, Any, Optional, Union, List, Literal
 import re
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 from PySide6.QtCore import Qt
@@ -160,9 +160,9 @@ class PropertyTreeWidget(QTreeWidget):
         # Set proportional column widths
         self.header().setStretchLastSection(True)
 
-        # Set custom delegate for value column
+        # Set custom delegate for all columns (handles column 0 non-editability)
         self._delegate = PropertyDelegate(self)
-        self.setItemDelegateForColumn(1, self._delegate)
+        self.setItemDelegate(self._delegate)
 
         # Dictionary to store property items by address
         self._property_items = {}
@@ -174,7 +174,7 @@ class PropertyTreeWidget(QTreeWidget):
         self,
         name: str,
         value: Any,
-        editor_type: str,
+        editor_type: Literal["string", "int", "float", "bool", "enum", "color", "slider"],
         callback: Optional[Callable[[Any], None]] = None,
         validator: Optional[Callable[[Any], str]] = None,
         parent: Optional[QTreeWidgetItem] = None,
@@ -424,10 +424,6 @@ class PropertyTreeWidget(QTreeWidget):
             item: Changed item
             column: Changed column
         """
-        # Only handle value column changes
-        if column != 1:
-            return
-
         # Get editor type and callback
         editor_type = item.data(1, self.EDITOR_TYPE_ROLE)
         callback = item.data(1, self.CALLBACK_ROLE)
@@ -447,7 +443,6 @@ class PropertyTreeWidget(QTreeWidget):
             elif editor_type == "slider":
                 # Check if original value was float or int
                 try:
-                    original_value = float(item.text(1))
                     if "." in item.text(1) or "e" in item.text(1).lower():
                         value = float(value)
                     else:

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
 )
 from PySide6.QtCore import Qt, QModelIndex, QEvent
-from PySide6.QtGui import QColor, QPalette, QFont
+from PySide6.QtGui import QColor, QPalette
 
 
 class SliderLineEditWidget(QWidget):
@@ -50,6 +50,9 @@ class SliderLineEditWidget(QWidget):
             ValueError: If max_val <= min_val or steps <= 0
         """
         super().__init__(parent)
+
+        # Ensure opaque background to hide cell content during editing
+        self.setAutoFillBackground(True)
 
         # Validate inputs
         if max_val <= min_val:
@@ -148,7 +151,7 @@ class PropertyDelegate(QStyledItemDelegate):
     - bool: QCheckBox
     - enum: QComboBox with predefined choices
     - color: QColorDialog for hex color selection
-    - slider: Composite widget with QSlider + QSpinBox/QDoubleSpinBox for dual input
+    - slider: Composite widget with QSlider + QDoubleSpinBox for dual input
 
     Features:
     - Red background highlighting for validation errors
@@ -180,6 +183,10 @@ class PropertyDelegate(QStyledItemDelegate):
         Returns:
             Editor widget or None if read-only or color type
         """
+        # Only allow editing in column 1 (value column)
+        if index.column() != 1:
+            return None
+
         # Check if read-only
         if index.data(self.READONLY_ROLE):
             return None
@@ -198,6 +205,7 @@ class PropertyDelegate(QStyledItemDelegate):
                 editor.setMaximum(max_val)
             else:
                 editor.setMaximum(2147483647)  # Default int max
+            editor.setAutoFillBackground(True)
             return editor
 
         elif editor_type == "float":
@@ -217,6 +225,7 @@ class PropertyDelegate(QStyledItemDelegate):
                 editor.setDecimals(decimals)
             else:
                 editor.setDecimals(2)  # Default 2 decimal places
+            editor.setAutoFillBackground(True)
             return editor
 
         elif editor_type == "enum":
@@ -224,10 +233,12 @@ class PropertyDelegate(QStyledItemDelegate):
             choices = index.data(self.CHOICES_ROLE)
             if choices:
                 editor.addItems(choices)
+            editor.setAutoFillBackground(True)
             return editor
 
         elif editor_type == "bool":
             editor = QCheckBox(parent)
+            editor.setAutoFillBackground(True)
             return editor
 
         elif editor_type == "slider":
@@ -256,6 +267,7 @@ class PropertyDelegate(QStyledItemDelegate):
                 decimals=decimals,
                 parent=parent,
             )
+            editor.setAutoFillBackground(True)
             return editor
 
         elif editor_type == "color":
@@ -264,6 +276,7 @@ class PropertyDelegate(QStyledItemDelegate):
 
         elif editor_type == "string":
             editor = QLineEdit(parent)
+            editor.setAutoFillBackground(True)
             return editor
 
         return super().createEditor(parent, option, index)
