@@ -32,7 +32,6 @@ class SliderLineEditWidget(QWidget):
         min_val,
         max_val,
         steps=100,
-        orientation=Qt.Orientation.Horizontal,
         decimals=2,
         parent=None,
     ):
@@ -42,7 +41,6 @@ class SliderLineEditWidget(QWidget):
             min_val: Minimum value
             max_val: Maximum value
             steps: Number of discrete steps for slider (applies to both int and float)
-            orientation: Qt.Horizontal or Qt.Vertical for slider
             decimals: Number of decimal places for float spinbox
             parent: Parent widget
 
@@ -72,7 +70,7 @@ class SliderLineEditWidget(QWidget):
         layout.setSpacing(4)
 
         # Create slider
-        self.slider = QSlider(orientation, self)
+        self.slider = QSlider(Qt.Orientation.Horizontal, self)
         # Use normalized range [0, steps] for both int and float
         self.slider.setMinimum(0)
         self.slider.setMaximum(steps)
@@ -169,8 +167,7 @@ class PropertyDelegate(QStyledItemDelegate):
     CHOICES_ROLE = Qt.ItemDataRole.UserRole + 7
     READONLY_ROLE = Qt.ItemDataRole.UserRole + 8
     ADDRESS_ROLE = Qt.ItemDataRole.UserRole + 9
-    ORIENTATION_ROLE = Qt.ItemDataRole.UserRole + 11
-    STEP_ROLE = Qt.ItemDataRole.UserRole + 12
+    STEP_ROLE = Qt.ItemDataRole.UserRole + 10
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         """Create appropriate editor widget based on item data.
@@ -243,10 +240,6 @@ class PropertyDelegate(QStyledItemDelegate):
 
         elif editor_type == "slider":
             # Get parameters
-            orientation = index.data(self.ORIENTATION_ROLE)
-            if orientation is None:
-                orientation = Qt.Orientation.Horizontal
-
             min_val = index.data(self.MIN_VALUE_ROLE)
             max_val = index.data(self.MAX_VALUE_ROLE)
             steps = index.data(self.STEP_ROLE) or 1000
@@ -263,7 +256,6 @@ class PropertyDelegate(QStyledItemDelegate):
                 min_val=min_val,
                 max_val=max_val,
                 steps=steps,
-                orientation=orientation,
                 decimals=decimals,
                 parent=parent,
             )
@@ -373,55 +365,57 @@ class PropertyDelegate(QStyledItemDelegate):
 
     def _paint_color_cell(self, painter, option: QStyleOptionViewItem, index: QModelIndex):
         """Custom paint for color cells with colored box preview.
-        
+
         Args:
             painter: QPainter instance
             option: Style options
             index: Model index of the item
         """
         painter.save()
-        
+
         try:
             # Get cell rectangle
             cell_rect = option.rect
-            
+
             # Draw selection background if selected
             if option.state & option.state.State_Selected:
                 painter.fillRect(cell_rect, option.palette.highlight())
-            
+
             # Check for validation error - draw red background
             error_msg = index.data(self.VALIDATION_ERROR_ROLE)
             if error_msg:
                 painter.fillRect(cell_rect, QColor(255, 200, 200))
-            
+
             # Get color value
             color_value = index.data(Qt.ItemDataRole.DisplayRole)
-            color = QColor(color_value) if color_value and QColor(color_value).isValid() else QColor(Qt.GlobalColor.white)
-            
+            color = (
+                QColor(color_value) if color_value and QColor(color_value).isValid() else QColor(Qt.GlobalColor.white)
+            )
+
             # Calculate color box rectangle (left-aligned with margins)
             box_size = cell_rect.height() - 4  # 2px margin top/bottom
             box_rect = QRect(
                 cell_rect.left() + 2,  # 2px left margin
-                cell_rect.top() + 2,   # 2px top margin
+                cell_rect.top() + 2,  # 2px top margin
                 box_size,
-                box_size
+                box_size,
             )
-            
+
             # Draw colored box
             painter.fillRect(box_rect, color)
-            
+
             # Draw black border around box
             painter.setPen(QColor(0, 0, 0))
             painter.drawRect(box_rect)
-            
+
             # Calculate text rectangle (to the right of the box)
             text_rect = QRect(
                 box_rect.right() + 4,  # 4px spacing after box
                 cell_rect.top(),
                 cell_rect.width() - box_size - 6,  # Account for margins
-                cell_rect.height()
+                cell_rect.height(),
             )
-            
+
             # Set text color (gray for read-only)
             readonly = index.data(self.READONLY_ROLE)
             if readonly:
@@ -433,12 +427,16 @@ class PropertyDelegate(QStyledItemDelegate):
                 text_color = option.palette.highlightedText().color()
             else:
                 text_color = option.palette.text().color()
-            
+
             painter.setPen(text_color)
-            
+
             # Draw text
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(color_value) if color_value else "")
-            
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                str(color_value) if color_value else "",
+            )
+
         finally:
             painter.restore()
 
@@ -455,7 +453,7 @@ class PropertyDelegate(QStyledItemDelegate):
         if editor_type == "color" and index.column() == 1:
             self._paint_color_cell(painter, option, index)
             return
-        
+
         # For all other cells, use existing logic
         # Check for validation error
         error_msg = index.data(self.VALIDATION_ERROR_ROLE)

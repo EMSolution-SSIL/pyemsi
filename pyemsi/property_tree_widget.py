@@ -141,8 +141,7 @@ class PropertyTreeWidget(QTreeWidget):
     CHOICES_ROLE = Qt.ItemDataRole.UserRole + 7
     READONLY_ROLE = Qt.ItemDataRole.UserRole + 8
     ADDRESS_ROLE = Qt.ItemDataRole.UserRole + 9
-    ORIENTATION_ROLE = Qt.ItemDataRole.UserRole + 11
-    STEP_ROLE = Qt.ItemDataRole.UserRole + 12
+    STEP_ROLE = Qt.ItemDataRole.UserRole + 10
 
     def __init__(self, parent=None):
         """Initialize the property tree widget.
@@ -196,7 +195,6 @@ class PropertyTreeWidget(QTreeWidget):
                 - max: Maximum value for int/float/slider types
                 - decimals: Number of decimal places for float type
                 - choices: List of choices for enum type
-                - orientation: Qt.Horizontal or Qt.Vertical for slider type
                 - steps: Number of discrete steps for float slider (default: 1000)
 
         Returns:
@@ -254,8 +252,6 @@ class PropertyTreeWidget(QTreeWidget):
             item.setData(1, Qt.ItemDataRole.UserRole + 10, kwargs["decimals"])  # DECIMALS_ROLE
         if "choices" in kwargs:
             item.setData(1, self.CHOICES_ROLE, kwargs["choices"])
-        if "orientation" in kwargs:
-            item.setData(1, self.ORIENTATION_ROLE, kwargs["orientation"])
         if "steps" in kwargs:
             item.setData(1, self.STEP_ROLE, kwargs["steps"])
 

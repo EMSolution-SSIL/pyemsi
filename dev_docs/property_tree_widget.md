@@ -121,7 +121,6 @@ Adds a property to the tree.
   - `max` (float): Maximum value for int/float/slider types
   - `decimals` (int): Number of decimal places for float type (default: 2)
   - `choices` (List[str]): List of choices for enum type
-  - `orientation` (Qt.Orientation): Qt.Horizontal or Qt.Vertical for slider type
   - `steps` (int): Number of discrete slider positions for slider type (default: 100, applies to both int and float)
 
 **Returns:**
@@ -343,7 +342,7 @@ tree.set_property_visible("debug_mode", is_developer)
 | `"bool"` | QCheckBox | Checkbox | - |
 | `"enum"` | QComboBox | Dropdown selection | `choices` (required) |
 | `"color"` | QColorDialog | Color picker dialog (double-click) | - |
-| `"slider"` | QSlider + QSpinBox/QDoubleSpinBox | Slider with numeric input field (dual input) | `min`, `max`, `orientation`, `steps`, `decimals` |
+| `"slider"` | QSlider + QSpinBox/QDoubleSpinBox | Slider with numeric input field (dual input) | `min`, `max`, `steps`, `decimals` |
 
 ### Editor Behavior
 
@@ -459,7 +458,6 @@ The slider editor provides **dual input methods**:
 Both controls stay synchronized automatically using a unified normalized mapping approach.
 
 ```python
-from PySide6.QtCore import Qt
 from pyemsi.property_tree_widget import PropertyTreeWidget, range_validator
 
 tree = PropertyTreeWidget()
@@ -501,14 +499,6 @@ tree.add_property(
     callback=lambda v: set_frame(v),
     min=0, max=10000,
     steps=200  # 200 steps for 0-10000 range = 50 units per step
-)
-
-# Vertical slider
-tree.add_property(
-    "brightness", 75, "slider",
-    callback=lambda v: set_brightness(v),
-    min=0, max=100,
-    orientation=Qt.Vertical
 )
 ```
 
