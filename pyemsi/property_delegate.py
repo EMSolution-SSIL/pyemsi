@@ -344,26 +344,25 @@ class PropertyDelegate(QStyledItemDelegate):
         # Run validator if present - validate BEFORE changing value
         validator = index.data(self.VALIDATOR_ROLE)
         self.parent().blockSignals(True)
-        try:
-            if callable(validator):
-                error_msg = validator(value)
-                if error_msg:  # Validation FAILED - don't update value
-                    model.setData(index, error_msg, self.VALIDATION_ERROR_ROLE)
-                    # Set tooltip to show error
-                    item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
-                    if item:
-                        item.setToolTip(1, error_msg)
-                    return  # Exit early - keep old value
-                else:  # Validation PASSED - clear error state
-                    model.setData(index, "", self.VALIDATION_ERROR_ROLE)
-                    item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
-                    if item:
-                        item.setToolTip(1, "")
 
-            # Only set value if no validator OR validation passed
-            model.setData(index, value, Qt.ItemDataRole.EditRole)
-        finally:
-            self.parent().blockSignals(False)
+        if callable(validator):
+            error_msg = validator(value)
+            if error_msg:  # Validation FAILED - don't update value
+                model.setData(index, error_msg, self.VALIDATION_ERROR_ROLE)
+                # Set tooltip to show error
+                item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
+                if item:
+                    item.setToolTip(1, error_msg)
+                return  # Exit early - keep old value
+            else:  # Validation PASSED - clear error state
+                model.setData(index, "", self.VALIDATION_ERROR_ROLE)
+                item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
+                if item:
+                    item.setToolTip(1, "")
+
+        self.parent().blockSignals(False)
+        # Only set value if no validator OR validation passed
+        model.setData(index, value, Qt.ItemDataRole.EditRole)
 
     def _paint_color_cell(self, painter, option: QStyleOptionViewItem, index: QModelIndex):
         """Custom paint for color cells with colored box preview.
@@ -459,6 +458,7 @@ class PropertyDelegate(QStyledItemDelegate):
 
                 # Create checkbox style option
                 from PySide6.QtWidgets import QStyleOptionButton, QStyle
+
                 checkbox_opt = QStyleOptionButton()
                 checkbox_opt.rect = option.rect
                 checkbox_opt.state = option.state | QStyle.StateFlag.State_Enabled
@@ -479,7 +479,9 @@ class PropertyDelegate(QStyledItemDelegate):
                 checkbox_opt.rect = checkbox_rect
 
                 # Draw checkbox
-                option.widget.style().drawControl(QStyle.ControlElement.CE_CheckBox, checkbox_opt, painter, option.widget)
+                option.widget.style().drawControl(
+                    QStyle.ControlElement.CE_CheckBox, checkbox_opt, painter, option.widget
+                )
 
             finally:
                 painter.restore()
