@@ -501,6 +501,92 @@ class PropertyTreeWidget(QTreeWidget):
         """
         return list(self._property_items.keys())
 
+    def get_property_value(self, address: str) -> Any:
+        """Get the value of a property by address.
+
+        Args:
+            address: Property address (e.g., "opacity" or "Scalar Field:color_map")
+
+        Returns:
+            The property value, converted to the appropriate type based on editor_type.
+            For checkable groups, returns the boolean checked state.
+
+        Raises:
+            ValueError: If address not found
+
+        Example:
+            >>> tree = PropertyTreeWidget()
+            >>> tree.add_property("opacity", 0.5, "float")
+            >>> tree.get_property_value("opacity")
+            0.5
+            >>> group = tree.add_checkable_group("Advanced Settings", checked=True)
+            >>> tree.get_property_value("Advanced Settings")
+            True
+        """
+        item = self.get_property_item(address)
+        if item is None:
+            raise ValueError(f"Property with address '{address}' not found")
+
+        # Check if this is a checkable group
+        if item.data(1, self.GROUP_CHECKABLE_ROLE):
+            return item.data(1, self.GROUP_CHECKED_ROLE)
+
+        # Get editor type to determine how to convert the value
+        editor_type = item.data(1, self.EDITOR_TYPE_ROLE)
+        value = item.text(1)
+
+        # Convert to appropriate type
+        try:
+            if editor_type == "int":
+                return int(value)
+            elif editor_type == "float":
+                return float(value)
+            elif editor_type == "slider":
+                # Check if value is float or int
+                try:
+                    if "." in value or "e" in value.lower():
+                        return float(value)
+                    else:
+                        return int(value)
+                except (ValueError, TypeError):
+                    return float(value)
+            elif editor_type == "bool":
+                if isinstance(value, str):
+                    return value.lower() in ("true", "1", "yes")
+                else:
+                    return bool(value)
+            else:
+                # For string, enum, color - return as string
+                return value
+        except (ValueError, TypeError):
+            # If conversion fails, return as string
+            return value
+
+    def get_all_values(self) -> dict:
+        """Get dictionary of all property addresses and their values.
+
+        Returns:
+            Dictionary mapping address to value. Values are converted to appropriate types.
+            Checkable groups are included with their boolean checked state.
+
+        Example:
+            >>> tree = PropertyTreeWidget()
+            >>> tree.add_property("opacity", 0.5, "float")
+            >>> tree.add_property("name", "mesh1", "string")
+            >>> group = tree.add_checkable_group("Advanced", checked=True)
+            >>> tree.add_property("debug", False, "bool", parent=group)
+            >>> tree.get_all_values()
+            {'opacity': 0.5, 'name': 'mesh1', 'Advanced': True, 'Advanced:debug': False}
+        """
+        result = {}
+        for address in self._property_items.keys():
+            try:
+                result[address] = self.get_property_value(address)
+            except ValueError:
+                # Skip if we can't get the value for some reason
+                continue
+        return result
+
     def set_property_visible(self, address_or_item: Union[str, QTreeWidgetItem], visible: bool):
         """Toggle property visibility.
 
