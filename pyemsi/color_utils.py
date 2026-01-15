@@ -102,6 +102,7 @@ def parse_color(color: ColorType) -> Tuple[float, float, float, float]:
             - RGB tuple: (255, 87, 51) or (1.0, 0.34, 0.2)
             - RGBA tuple: (255, 87, 51, 255) or (1.0, 0.34, 0.2, 1.0)
             - Named color: "red", "blue", etc.
+            - PyVista Color object
 
     Returns:
         Normalized RGBA tuple (r, g, b, a) with values in 0-1 range
@@ -109,6 +110,15 @@ def parse_color(color: ColorType) -> Tuple[float, float, float, float]:
     Raises:
         ValueError: If color format is not recognized
     """
+    # Handle PyVista Color objects
+    try:
+        import pyvista as pv
+
+        if isinstance(color, pv.Color):
+            return color_from_pyvista(color)
+    except ImportError:
+        pass
+
     # Handle string (hex or named color)
     if isinstance(color, str):
         # Try hex format first

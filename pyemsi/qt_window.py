@@ -250,33 +250,32 @@ class QtPlotterWindow:
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._display_toolbar)
 
-    def _toggle_axes(self) -> None:
+    def _toggle_axes(self, input: bool) -> None:
         """Toggle axes orientation widget visibility."""
-        if self._axes_action.isChecked():
+        if input:
             self.plotter.show_axes()
         else:
             self.plotter.hide_axes()
 
-    def _toggle_axes_at_origin(self) -> None:
+    def _toggle_axes_at_origin(self, input: bool) -> None:
         """Toggle axes orientation widget at origin."""
-
-        if self._axes_at_origin_action.isChecked():
+        if input:
             self.plotter.add_axes_at_origin()
         else:
             for actor in list(self.plotter.renderer.actors.values()):
                 if actor.__class__.__name__ == "vtkAxesActor":
                     self.plotter.remove_actor(actor)
 
-    def _toggle_grid(self) -> None:
+    def _toggle_grid(self, input: bool) -> None:
         """Toggle grid and labeled axes display."""
-        if self._grid_action.isChecked():
+        if input:
             self.plotter.show_grid()
         else:
             self.plotter.remove_bounds_axes()
 
-    def _toggle_camera_orientation(self) -> None:
+    def _toggle_camera_orientation(self, input: bool) -> None:
         """Toggle camera orientation widget visibility."""
-        if self._camera_orientation_action.isChecked():
+        if input:
             self.plotter.add_camera_orientation_widget()
         else:
             for widget in self.plotter.camera_widgets:
