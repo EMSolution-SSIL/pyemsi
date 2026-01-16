@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
     from pyemsi.plotter import Plotter
 
-from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar
+from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar, QComboBox
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from pyvistaqt import QtInteractor
 import pyvista as pv
 import pyemsi.resources.resources  # noqa: F401
@@ -93,13 +93,22 @@ class QtPlotterWindow:
         # Initialize display settings dialog reference
         self._display_settings_dialog = None
 
+        # Animation state variables
+        self._is_playing = False
+        self._animation_direction = 1  # 1 for forward, -1 for reverse
+        self._animation_timer = None
+
         # Get or create QApplication instance (singleton pattern)
         self.app = QApplication.instance()
         if self.app is None:
             self.app = QApplication([])
 
+        # Initialize animation timer (will be configured after window creation)
+        self._animation_timer = QTimer()
+
         # Create QMainWindow
         self._window = QMainWindow()
+        self._window.setWindowIcon(QIcon(":/icons/Icon.svg"))
         self._window.setWindowTitle(title)
         self._window.resize(*window_size)
         if position is not None:
@@ -120,6 +129,7 @@ class QtPlotterWindow:
 
         # Create toolbars
         self._create_camera_toolbar()
+        self._create_animation_toolbar()
 
         # Attach close event handler
         self._window.closeEvent = lambda event: self._on_close(event)
@@ -188,7 +198,116 @@ class QtPlotterWindow:
         self._camera_toolbar.addAction(zminus_action)
 
         # Add toolbar to main window
-        self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._camera_toolbar)
+        self._window.addToolBar(Qt.ToolBarArea.LeftToolBarArea, self._camera_toolbar)
+
+    def _create_animation_toolbar(self) -> None:
+        """
+        Create and configure the animation control toolbar.
+
+        Adds a movable toolbar with buttons for play, pause, stop, and step
+        through animation frames.
+        """
+        self._animation_toolbar = QToolBar("Animation Controls")
+        self._animation_toolbar.setMovable(True)
+        self._animation_toolbar.setIconSize(QSize(24, 24))
+
+        # First action
+        first_action = QAction(QIcon(":/icons/First.svg"), "First Frame", self._window)
+        first_action.setToolTip("Go to first frame of animation")
+        first_action.triggered.connect(lambda: self.set_time_point(0))
+        self._animation_toolbar.addAction(first_action)
+
+        # Back action
+        back_action = QAction(QIcon(":/icons/Back.svg"), "Back Animation", self._window)
+        back_action.setToolTip("Back animation")
+        back_action.triggered.connect(lambda: self.set_time_point(-1, relative=True))
+        self._animation_toolbar.addAction(back_action)
+
+        # Reverse action
+        reverse_action = QAction(QIcon(":/icons/Reverse.svg"), "Reverse Animation", self._window)
+        reverse_action.setToolTip("Reverse animation")
+        reverse_action.triggered.connect(self.reverse)
+        self._animation_toolbar.addAction(reverse_action)
+
+        # Pause action
+        pause_action = QAction(QIcon(":/icons/Pause.svg"), "Pause Animation", self._window)
+        pause_action.setToolTip("Pause animation")
+        pause_action.triggered.connect(self.pause)
+        self._animation_toolbar.addAction(pause_action)
+
+        # Play action
+        play_action = QAction(QIcon(":/icons/Play.svg"), "Play Animation", self._window)
+        play_action.setToolTip("Play animation")
+        play_action.triggered.connect(self.play)
+        self._animation_toolbar.addAction(play_action)
+
+        # Forward action
+        forward_action = QAction(QIcon(":/icons/Forward.svg"), "Forward Animation", self._window)
+        forward_action.setToolTip("Forward animation")
+        forward_action.triggered.connect(lambda: self.set_time_point(1, relative=True))
+        self._animation_toolbar.addAction(forward_action)
+
+        # Last action
+        last_action = QAction(QIcon(":/icons/Last.svg"), "Last Frame", self._window)
+        last_action.setToolTip("Go to last frame of animation")
+        last_action.triggered.connect(lambda: self.set_time_point(-1))
+        self._animation_toolbar.addAction(last_action)
+
+        # Loop action
+        self.loop_action = QAction(QIcon(":/icons/Loop.svg"), "Loop Animation", self._window)
+        self.loop_action.setToolTip("Toggle animation looping")
+        self.loop_action.setCheckable(True)
+        self._animation_toolbar.addAction(self.loop_action)
+
+        # Add separator
+        self._animation_toolbar.addSeparator()
+
+        # Time value combobox
+        self._time_combobox = QComboBox(self._window)
+        self._time_combobox.setToolTip("Select time value")
+        self._time_combobox.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self._animation_toolbar.addWidget(self._time_combobox)
+
+        # Populate time combobox if parent plotter has time values
+        if self.parent_plotter and self.parent_plotter.time_values:
+            for i, time_val in enumerate(self.parent_plotter.time_values):
+                self._time_combobox.addItem(f"{i:<4}: {time_val:.5g}")
+            # Set current selection to active time value
+            if self.parent_plotter.active_time_point is not None:
+                self._time_combobox.setCurrentIndex(self.parent_plotter.active_time_point)
+        self._time_combobox.currentIndexChanged.connect(self._on_time_combobox_changed)
+
+        # Add toolbar to main window
+        self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._animation_toolbar)
+
+        # Configure animation timer
+        self._animation_timer.timeout.connect(self._animation_step)
+        self._animation_timer.setInterval(100)  # 100ms default interval
+
+    def set_time_point(self, time_point: int, relative: bool = False) -> None:
+        """
+        Set the active time point for animation.
+
+        Parameters
+        ----------
+        time_point : int
+            The time point index to set. If `relative` is True, this is an offset
+            from the current time point.
+        relative : bool, optional
+            If True, `time_point` is treated as an offset from the current time point.
+        """
+        if self.parent_plotter is None:
+            return
+
+        if relative:
+            current_time_point = self.parent_plotter.active_time_point or 0
+            new_time_point = current_time_point + time_point
+        else:
+            new_time_point = time_point
+
+        self.parent_plotter.set_active_time_point(new_time_point)
+        self.parent_plotter.render()
+        self._update_time_combobox()
 
     def _create_display_toolbar(self) -> None:
         """
@@ -317,12 +436,110 @@ class QtPlotterWindow:
         self._create_display_toolbar()
         self.app.exec()
 
+    def play(self) -> None:
+        """
+        Start playing animation in forward direction.
+        """
+        if self.parent_plotter is None:
+            return
+        if self.parent_plotter.number_time_points is None or self.parent_plotter.number_time_points <= 1:
+            return
+
+        self._animation_direction = 1
+        self._is_playing = True
+        self._animation_timer.start()
+
+    def pause(self) -> None:
+        """
+        Pause the animation.
+        """
+        self._is_playing = False
+        self._animation_timer.stop()
+
+    def reverse(self) -> None:
+        """
+        Start playing animation in reverse direction.
+        """
+        if self.parent_plotter is None:
+            return
+        if self.parent_plotter.number_time_points is None or self.parent_plotter.number_time_points <= 1:
+            return
+
+        self._animation_direction = -1
+        self._is_playing = True
+        self._animation_timer.start()
+
+    def _animation_step(self) -> None:
+        """
+        Timer callback to advance animation by one frame.
+        """
+        if self.parent_plotter is None or not self._is_playing:
+            return
+
+        current_time_point = self.parent_plotter.active_time_point
+        num_time_points = self.parent_plotter.number_time_points
+
+        if current_time_point is None or num_time_points is None:
+            return
+
+        # Calculate next time point
+        next_time_point = current_time_point + self._animation_direction
+
+        # Handle boundaries
+        if self._animation_direction > 0:  # Forward
+            if next_time_point >= num_time_points:
+                if self.loop_action.isChecked():
+                    next_time_point = 0
+                else:
+                    self.pause()
+                    return
+        else:  # Reverse
+            if next_time_point < 0:
+                if self.loop_action.isChecked():
+                    next_time_point = num_time_points - 1
+                else:
+                    self.pause()
+                    return
+
+        # Advance frame
+        self.set_time_point(next_time_point)
+
+    def _update_time_combobox(self) -> None:
+        """
+        Update the time combobox selection to match the current active time point.
+        """
+        if self.parent_plotter is None:
+            return
+        if self.parent_plotter.active_time_point is None:
+            return
+
+        # Block signals to prevent triggering _on_time_combobox_changed
+        self._time_combobox.blockSignals(True)
+        self._time_combobox.setCurrentIndex(self.parent_plotter.active_time_point)
+        self._time_combobox.blockSignals(False)
+
+    def _on_time_combobox_changed(self, index: int) -> None:
+        """
+        Handle time combobox selection change.
+
+        Parameters
+        ----------
+        index : int
+            The selected time point index.
+        """
+        if index >= 0:
+            self.set_time_point(index)
+
     def close(self) -> None:
         """
         Close the plotter and window, releasing resources.
 
         This method closes both the QtInteractor plotter and the QMainWindow.
         """
+        # Stop animation timer if running
+        if self._animation_timer and self._animation_timer.isActive():
+            self._animation_timer.stop()
+
         if hasattr(self, "plotter") and self.plotter is not None:
             self.plotter.close()
         if hasattr(self, "_window") and self._window is not None:

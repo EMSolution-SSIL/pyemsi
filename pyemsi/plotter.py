@@ -204,6 +204,12 @@ class Plotter:
         return self.reader if isinstance(self.reader, time_reader_type) else None
 
     @property
+    def active_time_point(self) -> int | None:
+        """Active time point if the reader is time-aware, otherwise None."""
+        time_reader = self._time_reader()
+        return None if time_reader is None else time_reader.time_values.index(time_reader.active_time_value)
+
+    @property
     def active_time_value(self) -> float | None:
         """Active time value if the reader is time-aware, otherwise None."""
         time_reader = self._time_reader()
@@ -683,7 +689,6 @@ class Plotter:
             self._plot_contours()
             self._plot_vector_field()
             self._plot_feature_edges()
-            self.plotter.reset_camera()
 
         if self._notebook:
             # Notebook mode: return the widget for Jupyter display
@@ -741,6 +746,31 @@ class Plotter:
             filename=str(filename), transparent_background=transparent_background, window_size=window_size, scale=scale
         )
         return self
+
+    def render(self) -> None:
+        """
+        Re-render the current scene without reopening the plot window.
+
+        When a reader is available, this method resets the mesh and re-plots all
+        visualization elements (scalar fields, contours, vector fields, and feature
+        edges) before triggering a render on the underlying PyVista/Qt plotter.
+
+        Unlike :meth:`show`, which is responsible for displaying the plot window
+        (or notebook view) and starting the interactive session, :meth:`render`
+        is intended for refreshing an already-initialized visualization, for
+        example after data or settings have changed or prior to exporting.
+
+        This method takes no parameters and returns nothing.
+        """
+        if self.reader is not None:
+            self.plotter.suppress_rendering = True
+            self._mesh = None  # Reset mesh to ensure fresh load
+            self._plot_scalar_field()
+            self._plot_contours()
+            self._plot_vector_field()
+            self._plot_feature_edges()
+            self.plotter.suppress_rendering = False
+            self.plotter.render()
 
     def _on_window_closed(self, _) -> None:
         """
