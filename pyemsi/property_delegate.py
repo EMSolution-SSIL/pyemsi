@@ -236,9 +236,9 @@ class PropertyDelegate(QStyledItemDelegate):
             return editor
 
         elif editor_type == "bool":
-            editor = QCheckBox(parent)
-            editor.setAutoFillBackground(True)
-            return editor
+            # Boolean properties are handled via checkbox rendering in paint()
+            # and mouse clicks in editorEvent() - no editor needed
+            return None
 
         elif editor_type == "slider":
             # Get parameters
@@ -449,8 +449,68 @@ class PropertyDelegate(QStyledItemDelegate):
             option: Style options
             index: Model index of the item
         """
-        # Check if this is a checkable group in column 1
-        if index.column() == 1 and index.data(self.GROUP_CHECKABLE_ROLE):
+        # Get editor type once at the beginning
+        editor_type = index.data(self.EDITOR_TYPE_ROLE)
+
+        # Check if this is a boolean property in column 1 - render checkbox
+        if editor_type == "bool" and index.column() == 1:
+            painter.save()
+            try:
+                # Get cell rectangle
+                cell_rect = option.rect
+
+                # Draw selection background if selected
+                if option.state & option.state.State_Selected:
+                    painter.fillRect(cell_rect, option.palette.highlight())
+
+                # Check for validation error - draw red background
+                error_msg = index.data(self.VALIDATION_ERROR_ROLE)
+                if error_msg:
+                    painter.fillRect(cell_rect, QColor(255, 200, 200))
+
+                # Get checkbox state from value
+                value = index.data(Qt.ItemDataRole.EditRole)
+                checked = bool(value) if value is not None else False
+
+                # Check if read-only
+                readonly = index.data(self.READONLY_ROLE)
+
+                # Create checkbox style option
+                from PySide6.QtWidgets import QStyleOptionButton, QStyle
+
+                checkbox_opt = QStyleOptionButton()
+                checkbox_opt.state = option.state | QStyle.StateFlag.State_Enabled
+
+                if checked:
+                    checkbox_opt.state |= QStyle.StateFlag.State_On
+                else:
+                    checkbox_opt.state |= QStyle.StateFlag.State_Off
+
+                if readonly:
+                    # Remove enabled flag for read-only checkboxes
+                    checkbox_opt.state &= ~QStyle.StateFlag.State_Enabled
+
+                # Calculate checkbox rectangle (left-aligned with padding)
+                checkbox_size = option.widget.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+                checkbox_rect = QRect(
+                    cell_rect.left() + 4,
+                    cell_rect.top() + (cell_rect.height() - checkbox_size) // 2,
+                    checkbox_size,
+                    checkbox_size,
+                )
+                checkbox_opt.rect = checkbox_rect
+
+                # Draw checkbox
+                option.widget.style().drawControl(
+                    QStyle.ControlElement.CE_CheckBox, checkbox_opt, painter, option.widget
+                )
+
+            finally:
+                painter.restore()
+            return
+
+        # Check if this is a checkable group in column 1 (but not a boolean property)
+        if index.column() == 1 and index.data(self.GROUP_CHECKABLE_ROLE) and editor_type != "bool":
             painter.save()
             try:
                 # Get checkbox state
@@ -488,7 +548,6 @@ class PropertyDelegate(QStyledItemDelegate):
             return
 
         # Check if this is a color cell - use custom painting
-        editor_type = index.data(self.EDITOR_TYPE_ROLE)
         if editor_type == "color" and index.column() == 1:
             self._paint_color_cell(painter, option, index)
             return
@@ -519,7 +578,7 @@ class PropertyDelegate(QStyledItemDelegate):
         super().paint(painter, opt, index)
 
     def editorEvent(self, event, model, option: QStyleOptionViewItem, index: QModelIndex) -> bool:
-        """Handle color picker dialog for color type properties and checkbox clicks for checkable groups.
+        """Handle color picker dialog for color type properties and checkbox clicks for checkable groups and boolean properties.
 
         Args:
             event: Qt event
@@ -530,8 +589,56 @@ class PropertyDelegate(QStyledItemDelegate):
         Returns:
             True if event was handled
         """
-        # Handle checkable group checkbox clicks
-        if index.column() == 1 and index.data(self.GROUP_CHECKABLE_ROLE):
+        # Handle boolean property checkbox clicks
+        editor_type = index.data(self.EDITOR_TYPE_ROLE)
+        if editor_type == "bool" and index.column() == 1 and event.type() == QEvent.Type.MouseButtonRelease:
+            # Check if read-only
+            if index.data(self.READONLY_ROLE):
+                return False
+
+            from PySide6.QtWidgets import QStyle
+
+            # Calculate checkbox bounds
+            checkbox_size = option.widget.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+            checkbox_rect = QRect(
+                option.rect.left() + 4,
+                option.rect.top() + (option.rect.height() - checkbox_size) // 2,
+                checkbox_size,
+                checkbox_size,
+            )
+
+            # Check if click is within checkbox bounds
+            if checkbox_rect.contains(event.pos()):
+                # Get current value and toggle it
+                current_value = index.data(Qt.ItemDataRole.EditRole)
+                new_value = not bool(current_value)
+
+                # Run validator if present
+                validator = index.data(self.VALIDATOR_ROLE)
+                if callable(validator):
+                    error_msg = validator(new_value)
+                    if error_msg:  # Validation FAILED - don't update value
+                        model.setData(index, error_msg, self.VALIDATION_ERROR_ROLE)
+                        item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
+                        if item:
+                            item.setToolTip(1, error_msg)
+                        return True
+                    else:  # Validation PASSED - clear error state
+                        model.setData(index, "", self.VALIDATION_ERROR_ROLE)
+                        item = model.itemFromIndex(index) if hasattr(model, "itemFromIndex") else None
+                        if item:
+                            item.setToolTip(1, "")
+
+                # Update model with new value
+                model.setData(index, new_value, Qt.ItemDataRole.EditRole)
+
+                # Trigger repaint
+                option.widget.viewport().update()
+
+                return True
+
+        # Handle checkable group checkbox clicks (but not boolean properties)
+        if index.column() == 1 and index.data(self.GROUP_CHECKABLE_ROLE) and editor_type != "bool":
             if event.type() == QEvent.Type.MouseButtonRelease:
                 from PySide6.QtWidgets import QStyle
 

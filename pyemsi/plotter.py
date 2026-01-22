@@ -280,6 +280,88 @@ class Plotter:
                 return
             yield 0, block, None
 
+    def get_block_names(self) -> list[str]:
+        """Return list of block names from the mesh.
+
+        For multi-block meshes, returns all block names (or string indices for
+        unnamed blocks). For single meshes, returns empty list.
+
+        Returns
+        -------
+        list[str]
+            List of block name strings.
+        """
+        block_names = []
+        if isinstance(self.mesh, pv.MultiBlock):
+            for idx, block, name in self._iter_blocks(skip_empty=False):
+                block_names.append(name if name else str(idx))
+        return block_names
+
+    def get_block_visibility(self, block_name: str) -> bool:
+        """Check if actors for a block are visible.
+
+        Checks visibility state of any actor associated with the specified block.
+        Returns True if any matching actor exists and is visible, False otherwise.
+
+        Parameters
+        ----------
+        block_name : str
+            The name of the block to check.
+
+        Returns
+        -------
+        bool
+            True if block actors are visible, False otherwise.
+        """
+        if not hasattr(self, "_window") or self._window is None:
+            return True  # Default visible if no window
+
+        # Check all possible actor patterns for this block
+        actor_patterns = [
+            f"feature_edges_block_{block_name}",
+            f"scalar_field_block_{block_name}",
+            f"contour_block_{block_name}",
+            f"vector_field_block_{block_name}",
+        ]
+
+        for actor_name in actor_patterns:
+            if actor_name in self.plotter.renderer.actors:
+                return bool(self.plotter.renderer.actors[actor_name].GetVisibility())
+
+        return True  # Default visible if no actors found
+
+    def set_block_visibility(self, block_name: str, visible: bool) -> None:
+        """Set visibility for all actors associated with a block.
+
+        Updates the visibility state of all actors (feature edges, scalar field,
+        contours, vector field) associated with the specified block, then renders
+        the scene.
+
+        Parameters
+        ----------
+        block_name : str
+            The name of the block to update.
+        visible : bool
+            True to show the block, False to hide it.
+        """
+        if not hasattr(self, "_window") or self._window is None:
+            return  # No window, nothing to update
+
+        # Update visibility for all actor patterns for this block
+        actor_patterns = [
+            f"feature_edges_block_{block_name}",
+            f"scalar_field_block_{block_name}",
+            f"contour_block_{block_name}",
+            f"vector_field_block_{block_name}",
+        ]
+
+        for actor_name in actor_patterns:
+            if actor_name in self.plotter.renderer.actors:
+                self.plotter.renderer.actors[actor_name].SetVisibility(visible)
+
+        # Render to update display
+        self.plotter.render()
+
     def set_feature_edges(self, color: str = "white", line_width: int = 1, opacity: float = 1.0, **kwargs) -> "Plotter":
         """
         Set properties for feature edges visualization.

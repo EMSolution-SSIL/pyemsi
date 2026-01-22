@@ -19,6 +19,7 @@ from pyvistaqt import QtInteractor
 import pyvista as pv
 import pyemsi.resources.resources  # noqa: F401
 from .display_settings_dialog import DisplaySettingsDialog
+from .block_visibility_dialog import BlockVisibilityDialog
 
 
 class QtPlotterWindow:
@@ -62,6 +63,7 @@ class QtPlotterWindow:
     plotter: "QtInteractor | pv.Plotter"
     parent_plotter: "Plotter | None"
     _display_settings_dialog: "DisplaySettingsDialog | None"
+    _block_visibility_dialog: "BlockVisibilityDialog | None"
 
     def __init__(
         self,
@@ -92,6 +94,7 @@ class QtPlotterWindow:
 
         # Initialize display settings dialog reference
         self._display_settings_dialog = None
+        self._block_visibility_dialog = None
 
         # Animation state variables
         self._is_playing = False
@@ -161,17 +164,17 @@ class QtPlotterWindow:
 
         self._camera_toolbar.addSeparator()
 
-        # +X view (Right)
-        xplus_action = QAction(QIcon(":/icons/XPlus.svg"), "+X View", self._window)
-        xplus_action.setToolTip("View from +X axis (Right)")
-        xplus_action.triggered.connect(lambda: self.plotter.view_xy())
-        self._camera_toolbar.addAction(xplus_action)
+        # +Z view (Right)
+        zplus_action = QAction(QIcon(":/icons/ZPlus.svg"), "+Z View", self._window)
+        zplus_action.setToolTip("View from +Z axis (Right)")
+        zplus_action.triggered.connect(lambda: self.plotter.view_xy())
+        self._camera_toolbar.addAction(zplus_action)
 
-        # -X view (Left)
-        xminus_action = QAction(QIcon(":/icons/XMinus.svg"), "-X View", self._window)
-        xminus_action.setToolTip("View from -X axis (Left)")
-        xminus_action.triggered.connect(lambda: self.plotter.view_yx(negative=True))
-        self._camera_toolbar.addAction(xminus_action)
+        # -Z view (Left)
+        zminus_action = QAction(QIcon(":/icons/ZMinus.svg"), "-Z View", self._window)
+        zminus_action.setToolTip("View from -Z axis (Left)")
+        zminus_action.triggered.connect(lambda: self.plotter.view_yx(negative=True))
+        self._camera_toolbar.addAction(zminus_action)
 
         # +Y view (Front)
         yplus_action = QAction(QIcon(":/icons/YPlus.svg"), "+Y View", self._window)
@@ -185,17 +188,17 @@ class QtPlotterWindow:
         yminus_action.triggered.connect(lambda: self.plotter.view_xz(negative=True))
         self._camera_toolbar.addAction(yminus_action)
 
-        # +Z view (Top)
-        zplus_action = QAction(QIcon(":/icons/ZPlus.svg"), "+Z View", self._window)
-        zplus_action.setToolTip("View from +Z axis (Top)")
-        zplus_action.triggered.connect(lambda: self.plotter.view_yz())
-        self._camera_toolbar.addAction(zplus_action)
+        # +X view (Top)
+        xplus_action = QAction(QIcon(":/icons/XPlus.svg"), "+X View", self._window)
+        xplus_action.setToolTip("View from +X axis (Top)")
+        xplus_action.triggered.connect(lambda: self.plotter.view_yz())
+        self._camera_toolbar.addAction(xplus_action)
 
-        # -Z view (Bottom)
-        zminus_action = QAction(QIcon(":/icons/ZMinus.svg"), "-Z View", self._window)
-        zminus_action.setToolTip("View from -Z axis (Bottom)")
-        zminus_action.triggered.connect(lambda: self.plotter.view_yz(negative=True))
-        self._camera_toolbar.addAction(zminus_action)
+        # -X view (Bottom)
+        xminus_action = QAction(QIcon(":/icons/XMinus.svg"), "-X View", self._window)
+        xminus_action.setToolTip("View from -X axis (Bottom)")
+        xminus_action.triggered.connect(lambda: self.plotter.view_yz(negative=True))
+        self._camera_toolbar.addAction(xminus_action)
 
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.LeftToolBarArea, self._camera_toolbar)
@@ -320,6 +323,14 @@ class QtPlotterWindow:
         self._display_toolbar.setMovable(True)
         self._display_toolbar.setIconSize(QSize(24, 24))
 
+        # Settings action
+        settings_action = QAction(QIcon(":/icons/Settings.svg"), "Settings", self._window)
+        settings_action.setToolTip("Open display settings")
+        settings_action.triggered.connect(self._open_display_settings)
+        self._display_toolbar.addAction(settings_action)
+
+        self._display_toolbar.addSeparator()
+
         # Axes toggle action
         self._axes_action = QAction("Axes", self._window)
         self._axes_action.setToolTip("Toggle axes orientation widget")
@@ -360,11 +371,19 @@ class QtPlotterWindow:
 
         self._display_toolbar.addSeparator()
 
-        # Settings action
-        settings_action = QAction(QIcon(":/icons/Settings.svg"), "Settings", self._window)
-        settings_action.setToolTip("Open display settings")
-        settings_action.triggered.connect(self._open_display_settings)
-        self._display_toolbar.addAction(settings_action)
+        # Block visibility action
+        # TODO: Replace text with QIcon(":/icons/Blocks.svg") when icon is available
+        self._block_visibility_action = QAction("Blocks", self._window)
+        self._block_visibility_action.setToolTip("Control individual block visibility")
+        self._block_visibility_action.triggered.connect(self._open_block_visibility_dialog)
+        # Enable only if parent plotter has multi-block mesh
+        is_multiblock = (
+            self.parent_plotter is not None
+            and self.parent_plotter.mesh is not None
+            and isinstance(self.parent_plotter.mesh, pv.MultiBlock)
+        )
+        self._block_visibility_action.setEnabled(is_multiblock)
+        self._display_toolbar.addAction(self._block_visibility_action)
 
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._display_toolbar)
@@ -378,12 +397,12 @@ class QtPlotterWindow:
 
     def _toggle_axes_at_origin(self, input: bool) -> None:
         """Toggle axes orientation widget at origin."""
-        if input:
-            self.plotter.add_axes_at_origin()
-        else:
-            for actor in list(self.plotter.renderer.actors.values()):
-                if actor.__class__.__name__ == "vtkAxesActor":
-                    self.plotter.remove_actor(actor)
+        actor = self.get_actor_by_name("AxesAtOriginActor")
+        if input and actor is None:
+            actor = self.plotter.add_axes_at_origin()
+            actor.SetObjectName("AxesAtOriginActor")
+        elif not input and actor is not None:
+            self.plotter.remove_actor(actor)
 
     def _toggle_grid(self, input: bool) -> None:
         """Toggle grid and labeled axes display."""
@@ -412,6 +431,40 @@ class QtPlotterWindow:
         self._display_settings_dialog.show()
         self._display_settings_dialog.raise_()
         self._display_settings_dialog.activateWindow()
+
+    def _open_block_visibility_dialog(self) -> None:
+        """Open block visibility dialog (non-blocking)."""
+        # Only open if parent plotter has multi-block mesh
+        if self.parent_plotter is None or not isinstance(self.parent_plotter.mesh, pv.MultiBlock):
+            return
+
+        # Create dialog if it doesn't exist or was closed
+        if self._block_visibility_dialog is None:
+            self._block_visibility_dialog = BlockVisibilityDialog(plotter=self.plotter, plotter_window=self)
+
+        # Show and raise dialog (non-blocking)
+        self._block_visibility_dialog.show()
+        self._block_visibility_dialog.raise_()
+        self._block_visibility_dialog.activateWindow()
+
+    def get_actor_by_name(self, name: str) -> pv.Actor | None:
+        """
+        Retrieve an actor by its assigned name.
+
+        Parameters
+        ----------
+        name : str
+            The name of the actor to retrieve.
+
+        Returns
+        -------
+        pv.Actor or None
+            The actor with the specified name, or None if not found.
+        """
+        for actor in self.plotter.renderer.actors.values():
+            if actor.GetObjectName() == name:
+                return actor
+        return None
 
     @property
     def is_closed(self) -> bool:

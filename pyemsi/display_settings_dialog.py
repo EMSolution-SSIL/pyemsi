@@ -98,7 +98,7 @@ class DisplaySettingsDialog(QDialog):
         # Store initial settings to allow reset if needed
         if self.plotter_window._axes_action.isChecked():
             self.initial_axes_settings = {
-                "enabled": self.plotter.renderer.axes_enabled,
+                "enabled": True,
                 "line_width": self.plotter.renderer.axes_actor.GetXAxisShaftProperty().GetLineWidth(),
                 "color": to_hex(
                     self.plotter.renderer.axes_actor.GetXAxisCaptionActor2D().GetCaptionTextProperty().GetColor()
@@ -125,7 +125,7 @@ class DisplaySettingsDialog(QDialog):
                 "labels_off": False,
             }
         if self.plotter_window._axes_at_origin_action.isChecked():
-            actor = next(x for x in self.plotter.renderer.actors.values() if x.__class__.__name__ == "vtkAxesActor")
+            actor = self.plotter_window.get_actor_by_name("AxesAtOriginActor")
             self.initial_axes_at_origin_settings = {
                 "enabled": True,
                 "line_width": actor.GetXAxisShaftProperty().GetLineWidth(),
@@ -566,9 +566,9 @@ class DisplaySettingsDialog(QDialog):
             self.plotter.renderer.axes_actor.SetYAxisLabelText(axes_settings["y_label"])
             self.plotter.renderer.axes_actor.SetZAxisLabelText(axes_settings["z_label"])
             if axes_settings["labels_off"]:
-                self.plotter.renderer.axes_actor.SetAxisLabels(0)
+                self.plotter.renderer.axes_actor.AxisLabelsOff()
             else:
-                self.plotter.renderer.axes_actor.SetAxisLabels(1)
+                self.plotter.renderer.axes_actor.AxisLabelsOn()
         else:
             self.plotter.hide_axes()
             self.plotter_window._axes_action.setChecked(False)
@@ -576,7 +576,7 @@ class DisplaySettingsDialog(QDialog):
         if axes_at_origin_settings["enabled"]:
             self.plotter_window._toggle_axes_at_origin(True)
             self.plotter_window._axes_at_origin_action.setChecked(True)
-            actor = next(x for x in self.plotter.renderer.actors.values() if x.__class__.__name__ == "vtkAxesActor")
+            actor = self.plotter_window.get_actor_by_name("AxesAtOriginActor")
             actor.GetXAxisShaftProperty().SetLineWidth(axes_at_origin_settings["line_width"])
             actor.GetYAxisShaftProperty().SetLineWidth(axes_at_origin_settings["line_width"])
             actor.GetZAxisShaftProperty().SetLineWidth(axes_at_origin_settings["line_width"])
@@ -593,9 +593,9 @@ class DisplaySettingsDialog(QDialog):
             actor.SetYAxisLabelText(axes_at_origin_settings["y_label"])
             actor.SetZAxisLabelText(axes_at_origin_settings["z_label"])
             if axes_at_origin_settings["labels_off"]:
-                actor.SetAxisLabels(0)
+                actor.AxisLabelsOff()
             else:
-                actor.SetAxisLabels(1)
+                actor.AxisLabelsOn()
         else:
             self.plotter_window._toggle_axes_at_origin(False)
             self.plotter_window._axes_at_origin_action.setChecked(False)

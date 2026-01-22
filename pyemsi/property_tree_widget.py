@@ -239,6 +239,10 @@ class PropertyTreeWidget(QTreeWidget):
         item.setData(1, self.ADDRESS_ROLE, address)
         item.setData(1, self.READONLY_ROLE, readonly)
 
+        # For boolean types, set EditRole with actual boolean value (not string)
+        if editor_type == "bool":
+            item.setData(1, Qt.ItemDataRole.EditRole, value)
+
         if callback is not None:
             item.setData(1, self.CALLBACK_ROLE, callback)
 
