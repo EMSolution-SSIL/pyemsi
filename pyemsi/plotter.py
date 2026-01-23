@@ -772,6 +772,10 @@ class Plotter:
             self._plot_vector_field()
             self._plot_feature_edges()
 
+        # actor = list(self.plotter.actors.values())[0]
+        # print(actor.name)
+        # self.plotter.add_scalar_bar("B-Mag (T)", mapper=actor.mapper, interactive=True, shadow=True)
+
         if self._notebook:
             # Notebook mode: return the widget for Jupyter display
             return self.plotter.show()

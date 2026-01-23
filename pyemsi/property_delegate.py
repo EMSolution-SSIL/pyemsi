@@ -67,7 +67,7 @@ class SliderLineEditWidget(QWidget):
         # Create layout with minimal margins
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(0)
 
         # Create slider
         self.slider = QSlider(Qt.Orientation.Horizontal, self)
@@ -77,9 +77,10 @@ class SliderLineEditWidget(QWidget):
 
         # Create spinbox
         self.spinbox = QDoubleSpinBox(self)
-        self.spinbox.setDecimals(decimals)
-        self.spinbox.setSingleStep((max_val - min_val) / steps)
         self.spinbox.setRange(min_val, max_val)
+        single_step = round((max_val - min_val) / steps, decimals)
+        self.spinbox.setSingleStep(single_step)
+        self.spinbox.setDecimals(decimals)
 
         # Add widgets to layout
         layout.addWidget(self.slider, stretch=70)
@@ -113,10 +114,9 @@ class SliderLineEditWidget(QWidget):
         try:
             # Block signals to prevent infinite loop
             self.slider.blockSignals(True)
-
             # Use normalized mapping for both int and float
             normalized = (spinbox_value - self.min_val) / (self.max_val - self.min_val)
-            slider_pos = round(normalized * self.steps)  # Use round() for symmetric precision
+            slider_pos = round(normalized * self.steps, self.decimals)  # Use round() for symmetric precision
             self.slider.setValue(slider_pos)
         finally:
             self.slider.blockSignals(False)
@@ -170,6 +170,7 @@ class PropertyDelegate(QStyledItemDelegate):
     STEP_ROLE = Qt.ItemDataRole.UserRole + 10
     GROUP_CHECKABLE_ROLE = Qt.ItemDataRole.UserRole + 11
     GROUP_CHECKED_ROLE = Qt.ItemDataRole.UserRole + 12
+    DECIMALS_ROLE = Qt.ItemDataRole.UserRole + 13
 
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         """Create appropriate editor widget based on item data.
@@ -244,8 +245,8 @@ class PropertyDelegate(QStyledItemDelegate):
             # Get parameters
             min_val = index.data(self.MIN_VALUE_ROLE)
             max_val = index.data(self.MAX_VALUE_ROLE)
-            steps = index.data(self.STEP_ROLE) or 1000
-            decimals = index.data(Qt.ItemDataRole.UserRole + 10) or 2  # DECIMALS_ROLE
+            steps = index.data(self.STEP_ROLE) or 100
+            decimals = index.data(self.DECIMALS_ROLE) or 2
 
             # Set defaults if not provided
             if min_val is None:

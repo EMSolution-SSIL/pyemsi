@@ -20,6 +20,7 @@ import pyvista as pv
 import pyemsi.resources.resources  # noqa: F401
 from .display_settings_dialog import DisplaySettingsDialog
 from .block_visibility_dialog import BlockVisibilityDialog
+from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
 
 
 class QtPlotterWindow:
@@ -64,6 +65,7 @@ class QtPlotterWindow:
     parent_plotter: "Plotter | None"
     _display_settings_dialog: "DisplaySettingsDialog | None"
     _block_visibility_dialog: "BlockVisibilityDialog | None"
+    _scalar_bar_settings_dialog: "ScalarBarSettingsDialog | None"
 
     def __init__(
         self,
@@ -95,6 +97,7 @@ class QtPlotterWindow:
         # Initialize display settings dialog reference
         self._display_settings_dialog = None
         self._block_visibility_dialog = None
+        self._scalar_bar_settings_dialog = None
 
         # Animation state variables
         self._is_playing = False
@@ -287,31 +290,6 @@ class QtPlotterWindow:
         self._animation_timer.timeout.connect(self._animation_step)
         self._animation_timer.setInterval(100)  # 100ms default interval
 
-    def set_time_point(self, time_point: int, relative: bool = False) -> None:
-        """
-        Set the active time point for animation.
-
-        Parameters
-        ----------
-        time_point : int
-            The time point index to set. If `relative` is True, this is an offset
-            from the current time point.
-        relative : bool, optional
-            If True, `time_point` is treated as an offset from the current time point.
-        """
-        if self.parent_plotter is None:
-            return
-
-        if relative:
-            current_time_point = self.parent_plotter.active_time_point or 0
-            new_time_point = current_time_point + time_point
-        else:
-            new_time_point = time_point
-
-        self.parent_plotter.set_active_time_point(new_time_point)
-        self.parent_plotter.render()
-        self._update_time_combobox()
-
     def _create_display_toolbar(self) -> None:
         """
         Create and configure the display control toolbar.
@@ -385,8 +363,39 @@ class QtPlotterWindow:
         self._block_visibility_action.setEnabled(is_multiblock)
         self._display_toolbar.addAction(self._block_visibility_action)
 
+        # Scalar bar action
+        scalar_bar_action = QAction("Scalar Bars", self._window)
+        scalar_bar_action.setToolTip("Control scalar bars")
+        scalar_bar_action.triggered.connect(self._open_scalar_bar_settings_dialog)
+        self._display_toolbar.addAction(scalar_bar_action)
+
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._display_toolbar)
+
+    def set_time_point(self, time_point: int, relative: bool = False) -> None:
+        """
+        Set the active time point for animation.
+
+        Parameters
+        ----------
+        time_point : int
+            The time point index to set. If `relative` is True, this is an offset
+            from the current time point.
+        relative : bool, optional
+            If True, `time_point` is treated as an offset from the current time point.
+        """
+        if self.parent_plotter is None:
+            return
+
+        if relative:
+            current_time_point = self.parent_plotter.active_time_point or 0
+            new_time_point = current_time_point + time_point
+        else:
+            new_time_point = time_point
+
+        self.parent_plotter.set_active_time_point(new_time_point)
+        self.parent_plotter.render()
+        self._update_time_combobox()
 
     def _toggle_axes(self, input: bool) -> None:
         """Toggle axes orientation widget visibility."""
@@ -432,6 +441,16 @@ class QtPlotterWindow:
         self._display_settings_dialog.raise_()
         self._display_settings_dialog.activateWindow()
 
+    def _open_scalar_bar_settings_dialog(self) -> None:
+        """Open the scalar bar settings dialog."""
+        if self._scalar_bar_settings_dialog is None:
+            self._scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
+
+        # Show and bring to front
+        self._scalar_bar_settings_dialog.show()
+        self._scalar_bar_settings_dialog.raise_()
+        self._scalar_bar_settings_dialog.activateWindow()
+
     def _open_block_visibility_dialog(self) -> None:
         """Open block visibility dialog (non-blocking)."""
         # Only open if parent plotter has multi-block mesh
@@ -446,6 +465,17 @@ class QtPlotterWindow:
         self._block_visibility_dialog.show()
         self._block_visibility_dialog.raise_()
         self._block_visibility_dialog.activateWindow()
+
+    def _open_scalar_bar_settings_dialog(self) -> None:
+        """Open scalar bar settings dialog (non-blocking)."""
+        # Create dialog if it doesn't exist or was closed
+        if self._scalar_bar_settings_dialog is None:
+            self._scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
+
+        # Show and raise dialog (non-blocking)
+        self._scalar_bar_settings_dialog.show()
+        self._scalar_bar_settings_dialog.raise_()
+        self._scalar_bar_settings_dialog.activateWindow()
 
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """

@@ -144,6 +144,7 @@ class PropertyTreeWidget(QTreeWidget):
     STEP_ROLE = Qt.ItemDataRole.UserRole + 10
     GROUP_CHECKABLE_ROLE = Qt.ItemDataRole.UserRole + 11
     GROUP_CHECKED_ROLE = Qt.ItemDataRole.UserRole + 12
+    DECIMALS_ROLE = Qt.ItemDataRole.UserRole + 13
 
     def __init__(self, parent=None):
         """Initialize the property tree widget.
@@ -255,7 +256,7 @@ class PropertyTreeWidget(QTreeWidget):
         if "max" in kwargs:
             item.setData(1, self.MAX_VALUE_ROLE, kwargs["max"])
         if "decimals" in kwargs:
-            item.setData(1, Qt.ItemDataRole.UserRole + 10, kwargs["decimals"])  # DECIMALS_ROLE
+            item.setData(1, self.DECIMALS_ROLE, kwargs["decimals"])  # DECIMALS_ROLE
         if "choices" in kwargs:
             item.setData(1, self.CHOICES_ROLE, kwargs["choices"])
         if "steps" in kwargs:
