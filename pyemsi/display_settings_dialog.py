@@ -23,6 +23,211 @@ TICK_LOCATION_DICT = {
     pv.CubeAxesActor.VTK_TICKS_BOTH: "both",
 }
 
+CMAP_NAMES = {
+    # Linear (Sequential)
+    "viridis": "linear",
+    "haline": "linear",
+    "imola": "linear",
+    "navia": "linear",
+    "davos": "linear",
+    "lapaz": "linear",
+    "cividis": "linear",
+    "nuuk": "linear",
+    "lipari": "linear",
+    "thermal": "linear",
+    "plasma": "linear",
+    "bmy": "linear",
+    "inferno": "linear",
+    "magma": "linear",
+    "lajolla": "linear",
+    "copper": "linear",
+    "gist_heat": "linear",
+    "fire": "linear",
+    "afmhot": "linear",
+    "hot": "linear",
+    "solar": "linear",
+    "bilbao": "linear",
+    "pink": "linear",
+    "tokyo": "linear",
+    "dimgray": "linear",
+    "grayC": "linear",
+    "gray": "linear",
+    "gist_gray": "linear",
+    "bone": "linear",
+    "oslo": "linear",
+    "ice": "linear",
+    "devon": "linear",
+    "kbc": "linear",
+    "winter": "linear",
+    "bmw": "linear",
+    "acton": "linear",
+    "cubehelix": "linear",
+    "batlowW": "linear",
+    "batlowK": "linear",
+    "batlow": "linear",
+    "turku": "linear",
+    "bamako": "linear",
+    "bgyw": "linear",
+    "kbgyw": "linear",
+    "gouldian": "linear",
+    "bgy": "linear",
+    "kgy": "linear",
+    "summer": "linear",
+    "oxy": "linear",
+    "hawaii": "linear",
+    "buda": "linear",
+    "spring": "linear",
+    "autumn": "linear",
+    "Wistia": "linear",
+    "Oranges": "linear",
+    "YlOrBr": "linear",
+    "OrRd": "linear",
+    "YlOrRd": "linear",
+    "Reds": "linear",
+    "amp": "linear",
+    "PuRd": "linear",
+    "RdPu": "linear",
+    "matter": "linear",
+    "BuPu": "linear",
+    "Purples": "linear",
+    "dense": "linear",
+    "Blues": "linear",
+    "PuBu": "linear",
+    "PuBuGn": "linear",
+    "blues": "linear",
+    "GnBu": "linear",
+    "YlGnBu": "linear",
+    "tempo": "linear",
+    "rain": "linear",
+    "deep": "linear",
+    "gist_yarg": "linear",
+    "binary": "linear",
+    "Grays": "linear",
+    "turbid": "linear",
+    "algae": "linear",
+    "speed": "linear",
+    "YlGn": "linear",
+    "Greens": "linear",
+    "BuGn": "linear",
+    "cool": "linear",
+    "glasgow": "linear",
+    "kg": "linear",
+    "kb": "linear",
+    "kr": "linear",
+    # Diverging
+    "coolwarm": "diverging",
+    "bkr": "diverging",
+    "bwr": "diverging",
+    "seismic": "diverging",
+    "balance": "diverging",
+    "berlin": "diverging",
+    "vik": "diverging",
+    "diff": "diverging",
+    "bky": "diverging",
+    "bwy": "diverging",
+    "lisbon": "diverging",
+    "bjy": "diverging",
+    "broc": "diverging",
+    "tofino": "diverging",
+    "cork": "diverging",
+    "delta": "diverging",
+    "PRGn": "diverging",
+    "vanimo": "diverging",
+    "bam": "diverging",
+    "PiYG": "diverging",
+    "RdYlGn": "diverging",
+    "Spectral": "diverging",
+    "BrBG": "diverging",
+    "RdYlBu": "diverging",
+    "RdBu": "diverging",
+    "roma": "diverging",
+    "PuOr": "diverging",
+    "managua": "diverging",
+    "tarn": "diverging",
+    "gwv": "diverging",
+    "RdGy": "diverging",
+    "curl": "diverging",
+    "cwr": "diverging",
+    # Multi-Sequential
+    "topo": "multi-sequential",
+    "bukavu": "multi-sequential",
+    "oleron": "multi-sequential",
+    "fes": "multi-sequential",
+    # Cyclic
+    "phase": "cyclic",
+    "cyclic_isoluminant": "cyclic",
+    "colorwheel": "cyclic",
+    "hsv": "cyclic",
+    "twilight": "cyclic",
+    "twilight_shifted": "cyclic",
+    "vikO": "cyclic",
+    "romaO": "cyclic",
+    "bamO": "cyclic",
+    "brocO": "cyclic",
+    "corkO": "cyclic",
+    # Categorical (Qualitative)
+    "glasbey": "categorical",
+    "glasbey_bw": "categorical",
+    "glasbey_cool": "categorical",
+    "glasbey_warm": "categorical",
+    "glasbey_dark": "categorical",
+    "glasbey_light": "categorical",
+    "glasbey_category10": "categorical",
+    "glasbey_hv": "categorical",
+    "grayCS": "categorical",
+    "bilbaoS": "categorical",
+    "lajollaS": "categorical",
+    "batlowWS": "categorical",
+    "budaS": "categorical",
+    "hawaiiS": "categorical",
+    "tokyoS": "categorical",
+    "nuukS": "categorical",
+    "naviaS": "categorical",
+    "davosS": "categorical",
+    "lapazS": "categorical",
+    "imolaS": "categorical",
+    "devonS": "categorical",
+    "osloS": "categorical",
+    "lipariS": "categorical",
+    "actonS": "categorical",
+    "turkuS": "categorical",
+    "batlowKS": "categorical",
+    "batlowS": "categorical",
+    "bamakoS": "categorical",
+    "glasgowS": "categorical",
+    "Accent": "categorical",
+    "Dark2": "categorical",
+    "Paired": "categorical",
+    "Pastel1": "categorical",
+    "Pastel2": "categorical",
+    "Set1": "categorical",
+    "Set2": "categorical",
+    "Set3": "categorical",
+    "tab10": "categorical",
+    "tab20": "categorical",
+    "tab20b": "categorical",
+    "tab20c": "categorical",
+    # Miscellaneous
+    "isolum": "miscellaneous",
+    "rainbow4": "miscellaneous",
+    "rainbow": "miscellaneous",
+    "gist_rainbow": "miscellaneous",
+    "jet": "miscellaneous",
+    "turbo": "miscellaneous",
+    "nipy_spectral": "miscellaneous",
+    "gist_ncar": "miscellaneous",
+    "CMRmap": "miscellaneous",
+    "brg": "miscellaneous",
+    "gist_stern": "miscellaneous",
+    "gnuplot": "miscellaneous",
+    "gnuplot2": "miscellaneous",
+    "ocean": "miscellaneous",
+    "gist_earth": "miscellaneous",
+    "terrain": "miscellaneous",
+    "prism": "miscellaneous",
+    "flag": "miscellaneous",
+}
+
 
 class DisplaySettingsDialog(QDialog):
     """
@@ -96,6 +301,88 @@ class DisplaySettingsDialog(QDialog):
         layout.addWidget(self.button_box)
 
         # Store initial settings to allow reset if needed
+        self.initialize_plotter_settings()
+        self.initialize_actors_settings()
+        self.initialize_axes_settings()
+        self.initialize_axes_at_origin_settings()
+        self.initialize_grid_settings()
+
+        # Populate the property tree with initial settings
+        self.populate_plotter_settings()
+        self.populate_axes()
+        self.populate_axes_at_origin()
+        self.populate_grid()
+        self.populate_actors_settings()
+
+    def initialize_plotter_settings(self):
+        self.initial_plotter_settings = {
+            "background_color": to_hex(self.plotter.renderer.background_color),
+        }
+
+    def initialize_actors_settings(self):
+        real_actors = [
+            actor
+            for actor in self.plotter.renderer.actors.values()
+            if (isinstance(actor, pv.Actor) and "scalar" in actor.name)
+        ]
+        # Style
+        self.initial_actors_settings = {"style": "surface"}
+        actors_styles = [actor.prop.style for actor in real_actors]
+        if actors_styles:
+            # If all actors have the same style, use it; otherwise, set to 'mixed'
+            if all(style == actors_styles[0] for style in actors_styles):
+                self.initial_actors_settings["style"] = actors_styles[0]
+            else:
+                self.initial_actors_settings["style"] = "mixed"
+        # Show edges
+        show_edges = [actor.prop.show_edges for actor in real_actors]
+        if show_edges:
+            if all(show for show in show_edges):
+                self.initial_actors_settings["show_edges"] = "True"
+            elif all(not show for show in show_edges):
+                self.initial_actors_settings["show_edges"] = "False"
+            else:
+                self.initial_actors_settings["show_edges"] = "mixed"
+        # Edge color
+        edge_colors = [to_hex(actor.prop.edge_color) for actor in real_actors]
+        if edge_colors:
+            if all(color == edge_colors[0] for color in edge_colors):
+                self.initial_actors_settings["edge_color"] = edge_colors[0]
+            else:
+                self.initial_actors_settings["edge_color"] = "mixed"
+        # Edge Opacity
+        edge_opacities = [actor.prop.edge_opacity for actor in real_actors]
+        if edge_opacities:
+            if all(opacity == edge_opacities[0] for opacity in edge_opacities):
+                self.initial_actors_settings["edge_opacity"] = edge_opacities[0]
+            else:
+                self.initial_actors_settings["edge_opacity"] = "mixed"
+        # Line Width
+        line_widths = [actor.prop.line_width for actor in real_actors]
+        if line_widths:
+            if all(width == line_widths[0] for width in line_widths):
+                self.initial_actors_settings["line_width"] = line_widths[0]
+            else:
+                self.initial_actors_settings["line_width"] = "mixed"
+        # Colormap
+        cmaps = [
+            actor.mapper.lookup_table.cmap.name for actor in real_actors if (actor.mapper.lookup_table.cmap is not None)
+        ]
+        if cmaps:
+            # If all actors have the same colormap, use it; otherwise, set to 'mixed'
+            if all(cmap == cmaps[0] for cmap in cmaps):
+                self.initial_actors_settings["colormap"] = f"{cmaps[0]} : {CMAP_NAMES.get(cmaps[0], 'unknown')}"
+            else:
+                self.initial_actors_settings["colormap"] = "mixed"
+        # Opacity
+        opacities = [actor.prop.opacity for actor in real_actors]
+        if opacities:
+            if all(opacity == opacities[0] for opacity in opacities):
+                self.initial_actors_settings["opacity"] = opacities[0]
+            else:
+                self.initial_actors_settings["opacity"] = "mixed"
+
+    def initialize_axes_settings(self):
         if self.plotter_window._axes_action.isChecked():
             self.initial_axes_settings = {
                 "enabled": True,
@@ -124,31 +411,8 @@ class DisplaySettingsDialog(QDialog):
                 "z_label": "Z",
                 "labels_off": False,
             }
-        if self.plotter_window._axes_at_origin_action.isChecked():
-            actor = self.plotter_window.get_actor_by_name("AxesAtOriginActor")
-            self.initial_axes_at_origin_settings = {
-                "enabled": True,
-                "line_width": actor.GetXAxisShaftProperty().GetLineWidth(),
-                "x_color": to_hex(actor.GetXAxisTipProperty().GetColor()),
-                "y_color": to_hex(actor.GetYAxisTipProperty().GetColor()),
-                "z_color": to_hex(actor.GetZAxisTipProperty().GetColor()),
-                "x_label": actor.GetXAxisLabelText(),
-                "y_label": actor.GetYAxisLabelText(),
-                "z_label": actor.GetZAxisLabelText(),
-                "labels_off": actor.GetAxisLabels() == 0,
-            }
-        else:
-            self.initial_axes_at_origin_settings = {
-                "enabled": False,
-                "line_width": 2,
-                "x_color": to_hex(pv.global_theme.axes.x_color),
-                "y_color": to_hex(pv.global_theme.axes.y_color),
-                "z_color": to_hex(pv.global_theme.axes.z_color),
-                "x_label": "X",
-                "y_label": "Y",
-                "z_label": "Z",
-                "labels_off": False,
-            }
+
+    def initialize_grid_settings(self):
         if any(x.__class__.__name__ == "CubeAxesActor" for x in self.plotter.renderer.actors.values()):
             self.initial_grid_settings = {
                 "enabled": True,
@@ -188,9 +452,142 @@ class DisplaySettingsDialog(QDialog):
                 "minor_ticks": False,
             }
 
-        self.populate_axes()
-        self.populate_axes_at_origin()
-        self.populate_grid()
+    def initialize_axes_at_origin_settings(self):
+        if self.plotter_window._axes_at_origin_action.isChecked():
+            actor = self.plotter_window.get_actor_by_name("AxesAtOriginActor")
+            self.initial_axes_at_origin_settings = {
+                "enabled": True,
+                "line_width": actor.GetXAxisShaftProperty().GetLineWidth(),
+                "x_color": to_hex(actor.GetXAxisTipProperty().GetColor()),
+                "y_color": to_hex(actor.GetYAxisTipProperty().GetColor()),
+                "z_color": to_hex(actor.GetZAxisTipProperty().GetColor()),
+                "x_label": actor.GetXAxisLabelText(),
+                "y_label": actor.GetYAxisLabelText(),
+                "z_label": actor.GetZAxisLabelText(),
+                "labels_off": actor.GetAxisLabels() == 0,
+            }
+        else:
+            self.initial_axes_at_origin_settings = {
+                "enabled": False,
+                "line_width": 2,
+                "x_color": to_hex(pv.global_theme.axes.x_color),
+                "y_color": to_hex(pv.global_theme.axes.y_color),
+                "z_color": to_hex(pv.global_theme.axes.z_color),
+                "x_label": "X",
+                "y_label": "Y",
+                "z_label": "Z",
+                "labels_off": False,
+            }
+
+    def populate_plotter_settings(self) -> None:
+        """Populate the property tree with plotter settings."""
+        self.tree.add_property(
+            name="Background Color",
+            value=self.initial_plotter_settings.get("background_color", "#FFFFFF"),
+            editor_type="color",
+        )
+
+    @property
+    def current_plotter_settings(self) -> dict:
+        """Get current plotter settings from the property tree.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all plotter configuration values.
+        """
+        values = self.tree.get_all_values()
+        return {
+            "background_color": values["Background Color"],
+        }
+
+    def populate_actors_settings(self) -> None:
+        """Populate the property tree with all actors settings in the plotter."""
+        group = self.tree.add_group(name="Actors")
+
+        self.tree.add_property(
+            name="Style",
+            value=self.initial_actors_settings.get("style", "surface"),
+            editor_type="enum",
+            choices=["surface", "wireframe", "points", "mixed"],
+            parent=group,
+        )
+
+        self.tree.add_property(
+            name="Show Edges",
+            value=self.initial_actors_settings.get("show_edges", "True"),
+            editor_type="enum",
+            choices=["True", "False", "mixed"],
+            parent=group,
+        )
+
+        self.tree.add_property(
+            name="Edge Color",
+            value=self.initial_actors_settings.get("edge_color", "#FFFFFF"),
+            editor_type="color",
+            parent=group,
+        )
+
+        self.tree.add_property(
+            name="Edge Opacity",
+            value=self.initial_actors_settings.get("edge_opacity", 0.3),
+            editor_type="slider",
+            parent=group,
+            min=0.0,
+            max=1.0,
+            decimals=1,
+            steps=10,
+        )
+
+        self.tree.add_property(
+            name="Line Width",
+            value=self.initial_actors_settings.get("line_width", 1),
+            editor_type="float",
+            parent=group,
+            min=0.1,
+            max=10.0,
+            decimals=2,
+            steps=100,
+        )
+
+        self.tree.add_property(
+            name="Colormap",
+            value=self.initial_actors_settings.get("colormap", "viridis"),
+            editor_type="enum",
+            choices=["mixed"] + [f"{n} : {t}" for n, t in CMAP_NAMES.items()],
+            parent=group,
+        )
+
+        self.tree.add_property(
+            name="Opacity",
+            value=self.initial_actors_settings.get("opacity", 1.0),
+            editor_type="slider",
+            parent=group,
+            min=0.0,
+            max=1.0,
+            decimals=1,
+            steps=10,
+        )
+
+    @property
+    def current_actors_settings(self) -> dict:
+        """Get current actors settings from the property tree.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all actors configuration values.
+        """
+        values = self.tree.get_all_values()
+        return {
+            "style": values["Actors:Style"],
+            "show_edges": values["Actors:Show Edges"],
+            "edge_color": values["Actors:Edge Color"],
+            "edge_opacity": float(values["Actors:Edge Opacity"]),
+            "line_width": float(values["Actors:Line Width"]),
+            "colormap": values["Actors:Colormap"],
+            "opacity": float(values["Actors:Opacity"]),
+        }
 
     def populate_axes(self) -> None:
         """Populate the property tree with axes settings from the plotter.
@@ -509,24 +906,43 @@ class DisplaySettingsDialog(QDialog):
     def _on_ok(self) -> None:
         """Handle Ok button click - apply changes and close dialog."""
         self._apply_settings(
-            self.current_axes_settings, self.current_axes_at_origin_settings, self.current_grid_settings
+            self.current_plotter_settings,
+            self.current_actors_settings,
+            self.current_axes_settings,
+            self.current_axes_at_origin_settings,
+            self.current_grid_settings,
         )
         self.accept()
 
     def _on_apply(self) -> None:
         """Handle Apply button click - apply changes without closing."""
         self._apply_settings(
-            self.current_axes_settings, self.current_axes_at_origin_settings, self.current_grid_settings
+            self.current_plotter_settings,
+            self.current_actors_settings,
+            self.current_axes_settings,
+            self.current_axes_at_origin_settings,
+            self.current_grid_settings,
         )
 
     def _on_cancel(self) -> None:
         """Handle Cancel button click - close dialog without applying changes."""
         self._apply_settings(
-            self.initial_axes_settings, self.initial_axes_at_origin_settings, self.initial_grid_settings
+            self.initial_plotter_settings,
+            self.initial_actors_settings,
+            self.initial_axes_settings,
+            self.initial_axes_at_origin_settings,
+            self.initial_grid_settings,
         )
         self.reject()
 
-    def _apply_settings(self, axes_settings: dict, axes_at_origin_settings: dict, grid_settings: dict) -> None:
+    def _apply_settings(
+        self,
+        plotter_settings: dict,
+        actors_settings: dict,
+        axes_settings: dict,
+        axes_at_origin_settings: dict,
+        grid_settings: dict,
+    ) -> None:
         """
         Apply settings to the plotter.
 
@@ -543,6 +959,33 @@ class DisplaySettingsDialog(QDialog):
         -----
         This method is called by both Ok and Apply buttons.
         """
+
+        # Apply plotter settings
+        self.plotter.renderer.background_color = pv.Color(plotter_settings["background_color"]).float_rgb
+
+        # Apply actors settings
+        # https://github.com/pyvista/pyvista/blob/main/pyvista/plotting/_property.py
+        for actor in self.plotter.renderer.actors.values():
+            if not isinstance(actor, pv.Actor):
+                continue
+            if actors_settings["style"] != "mixed":
+                actor.prop.style = actors_settings["style"]
+            if actors_settings["show_edges"] != "mixed":
+                actor.prop.show_edges = True if actors_settings["show_edges"] == "True" else False
+            if actors_settings["edge_color"] != "mixed":
+                edge_color = pv.Color(actors_settings["edge_color"]).float_rgb
+                actor.prop.edge_color = edge_color
+            if actors_settings["edge_opacity"] != "mixed":
+                actor.prop.edge_opacity = float(actors_settings["edge_opacity"])
+            if actors_settings["line_width"] != "mixed":
+                actor.prop.line_width = float(actors_settings["line_width"])
+            if actors_settings["colormap"] != "mixed":
+                cmap_name = actors_settings["colormap"].split(" : ")[0]
+                actor.mapper.lookup_table.cmap = cmap_name
+            if actors_settings["opacity"] != "mixed":
+                actor.prop.opacity = float(actors_settings["opacity"])
+
+        # Apply axes settings
         if axes_settings["enabled"]:
             self.plotter.show_axes()
             self.plotter_window._axes_action.setChecked(True)
@@ -573,6 +1016,7 @@ class DisplaySettingsDialog(QDialog):
             self.plotter.hide_axes()
             self.plotter_window._axes_action.setChecked(False)
 
+        # Apply axes at origin settings
         if axes_at_origin_settings["enabled"]:
             self.plotter_window._toggle_axes_at_origin(True)
             self.plotter_window._axes_at_origin_action.setChecked(True)
@@ -600,6 +1044,7 @@ class DisplaySettingsDialog(QDialog):
             self.plotter_window._toggle_axes_at_origin(False)
             self.plotter_window._axes_at_origin_action.setChecked(False)
 
+        # Apply grid settings
         if grid_settings["enabled"]:
             self.plotter.show_grid(
                 show_xaxis=grid_settings["show_xaxis"],

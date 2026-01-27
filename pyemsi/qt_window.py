@@ -63,9 +63,6 @@ class QtPlotterWindow:
     _display_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
     parent_plotter: "Plotter | None"
-    _display_settings_dialog: "DisplaySettingsDialog | None"
-    _block_visibility_dialog: "BlockVisibilityDialog | None"
-    _scalar_bar_settings_dialog: "ScalarBarSettingsDialog | None"
 
     def __init__(
         self,
@@ -93,11 +90,6 @@ class QtPlotterWindow:
         """
         # Store reference to parent plotter
         self.parent_plotter = parent_plotter
-
-        # Initialize display settings dialog reference
-        self._display_settings_dialog = None
-        self._block_visibility_dialog = None
-        self._scalar_bar_settings_dialog = None
 
         # Animation state variables
         self._is_playing = False
@@ -432,24 +424,23 @@ class QtPlotterWindow:
 
     def _open_display_settings(self) -> None:
         """Open display settings dialog (non-blocking)."""
-        # Create dialog if it doesn't exist or was closed
-        if self._display_settings_dialog is None:
-            self._display_settings_dialog = DisplaySettingsDialog(plotter=self.plotter, plotter_window=self)
+        display_settings_dialog = DisplaySettingsDialog(plotter=self.plotter, plotter_window=self)
+        display_settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         # Show and raise dialog (non-blocking)
-        self._display_settings_dialog.show()
-        self._display_settings_dialog.raise_()
-        self._display_settings_dialog.activateWindow()
+        display_settings_dialog.show()
+        display_settings_dialog.raise_()
+        display_settings_dialog.activateWindow()
 
     def _open_scalar_bar_settings_dialog(self) -> None:
         """Open the scalar bar settings dialog."""
-        if self._scalar_bar_settings_dialog is None:
-            self._scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
+        scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
+        scalar_bar_settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         # Show and bring to front
-        self._scalar_bar_settings_dialog.show()
-        self._scalar_bar_settings_dialog.raise_()
-        self._scalar_bar_settings_dialog.activateWindow()
+        scalar_bar_settings_dialog.show()
+        scalar_bar_settings_dialog.raise_()
+        scalar_bar_settings_dialog.activateWindow()
 
     def _open_block_visibility_dialog(self) -> None:
         """Open block visibility dialog (non-blocking)."""
@@ -458,24 +449,24 @@ class QtPlotterWindow:
             return
 
         # Create dialog if it doesn't exist or was closed
-        if self._block_visibility_dialog is None:
-            self._block_visibility_dialog = BlockVisibilityDialog(plotter=self.plotter, plotter_window=self)
+        block_visibility_dialog = BlockVisibilityDialog(plotter=self.plotter, plotter_window=self)
+        block_visibility_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         # Show and raise dialog (non-blocking)
-        self._block_visibility_dialog.show()
-        self._block_visibility_dialog.raise_()
-        self._block_visibility_dialog.activateWindow()
+        block_visibility_dialog.show()
+        block_visibility_dialog.raise_()
+        block_visibility_dialog.activateWindow()
 
     def _open_scalar_bar_settings_dialog(self) -> None:
         """Open scalar bar settings dialog (non-blocking)."""
         # Create dialog if it doesn't exist or was closed
-        if self._scalar_bar_settings_dialog is None:
-            self._scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
+        scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
+        scalar_bar_settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         # Show and raise dialog (non-blocking)
-        self._scalar_bar_settings_dialog.show()
-        self._scalar_bar_settings_dialog.raise_()
-        self._scalar_bar_settings_dialog.activateWindow()
+        scalar_bar_settings_dialog.show()
+        scalar_bar_settings_dialog.raise_()
+        scalar_bar_settings_dialog.activateWindow()
 
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """

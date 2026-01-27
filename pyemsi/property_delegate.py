@@ -212,7 +212,8 @@ class PropertyDelegate(QStyledItemDelegate):
             editor = QDoubleSpinBox(parent)
             min_val = index.data(self.MIN_VALUE_ROLE)
             max_val = index.data(self.MAX_VALUE_ROLE)
-            decimals = index.data(Qt.ItemDataRole.UserRole + 10)  # DECIMALS_ROLE
+            decimals = index.data(self.DECIMALS_ROLE)
+            steps = index.data(self.STEP_ROLE)
             if min_val is not None:
                 editor.setMinimum(min_val)
             else:
@@ -223,6 +224,11 @@ class PropertyDelegate(QStyledItemDelegate):
                 editor.setMaximum(1e308)  # Default float max
             if decimals is not None:
                 editor.setDecimals(decimals)
+                editor.setSingleStep(
+                    round((max_val - min_val) / steps, decimals)
+                    if (min_val is not None and max_val is not None)
+                    else 0.01
+                )
             else:
                 editor.setDecimals(2)  # Default 2 decimal places
             editor.setAutoFillBackground(True)
