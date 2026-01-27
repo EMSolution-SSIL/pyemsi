@@ -4,11 +4,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
-# C extensions
+# C extensions (keep compiled binaries out, but track Cython sources and generated C)
 *.so
 *.pyd
-*.pxd
-*.c
 *.prof
 
 # Distribution / packaging

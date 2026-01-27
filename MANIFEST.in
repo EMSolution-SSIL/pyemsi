@@ -1,0 +1,26 @@
+# Include essential files
+include README.md
+include LICENSE
+include requirements.txt
+
+# Include Cython source files
+include pyemsi/*.pyx
+include pyemsi/*.pxd
+
+# Include pre-generated C file for building without Cython
+include pyemsi/femap_parser.c
+
+# Include Qt resource files
+include pyemsi/resources/resources.qrc
+recursive-include pyemsi/resources/icons *.svg
+
+# Exclude test files
+global-exclude tests/
+global-exclude test_*.py
+
+# Exclude compiled binaries
+global-exclude *.pyd
+global-exclude *.so
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo

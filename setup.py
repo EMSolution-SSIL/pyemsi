@@ -2,6 +2,7 @@
 
 from setuptools import setup, find_packages, Extension
 import numpy as np
+import os
 
 try:
     from Cython.Build import cythonize
@@ -9,6 +10,14 @@ try:
     USE_CYTHON = True
 except ImportError:
     USE_CYTHON = False
+
+# Read version from __init__.py
+version = {}
+with open(os.path.join("pyemsi", "__init__.py"), "r", encoding="utf-8") as f:
+    for line in f:
+        if line.startswith("__version__"):
+            exec(line, version)
+            break
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -37,12 +46,13 @@ if USE_CYTHON:
 
 setup(
     name="pyemsi",
-    version="0.1.0",
-    author="Your Name",
-    description="Python tools for EMSI file format conversions",
+    version=version["__version__"],
+    author="SSIL",
+    author_email="emsolution@ssil.co.jp",
+    description="Python tools for FEMAP Neutral file conversion and VTK visualization",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/pyemsi",
+    url="https://github.com/EMSolution-SSIL/pyemsi",
     packages=find_packages(),
     ext_modules=ext_modules,
     classifiers=[
@@ -70,6 +80,9 @@ setup(
         "PySide6>=6.5.0",
     ],
     extras_require={
+        "jupyter": [
+            "pyvista[jupyter]>=0.43.0",
+        ],
         "dev": [
             "pytest>=7.0.0",
             "pytest-cov>=3.0.0",
