@@ -1,3 +1,4 @@
+.pyemsi
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -5,6 +6,10 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
+*.pxd
+*.c
+*.prof
 
 # Distribution / packaging
 .Python

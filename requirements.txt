@@ -1,0 +1,5 @@
+pyvista[jupyter]
+PySide6
+pyvistaqt
+Cython>=3.0.0
+numpy>=1.21.0

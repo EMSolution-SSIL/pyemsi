@@ -1,0 +1,7 @@
+{
+    "python-envs.pythonProjects": [],
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "outline.showVariables": false,
+    "editor.formatOnSave": true,
+    "ruff.lineLength": 120,
+}
