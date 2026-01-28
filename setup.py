@@ -55,11 +55,12 @@ setup(
     url="https://github.com/EMSolution-SSIL/pyemsi",
     packages=find_packages(),
     ext_modules=ext_modules,
+    license="GPL-3.0-or-later",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",

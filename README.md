@@ -1,18 +1,18 @@
 # pyemsi
 
-Python tools for FEMAP Neutral file conversion and interactive 3D visualization with VTK.
+Python tools for EMSolution FEMAP Neutral file conversion and interactive 3D visualization with VTK.
 
 ## Overview
 
-`pyemsi` provides powerful tools for working with FEMAP Neutral (.neu) files, enabling seamless conversion to VTK formats for advanced visualization in ParaView and interactive 3D exploration through Qt-based desktop applications.
+`pyemsi` provides powerful tools for working with EMSolution FEMAP Neutral (.neu) files, enabling seamless conversion to VTK formats for advanced visualization in ParaView and interactive 3D exploration through Qt-based desktop applications.
 
 ### Key Features
 
-- **FEMAP to VTK Conversion**: Convert FEMAP Neutral files to VTK MultiBlock UnstructuredGrid (.vtm) format
+- **FEMAP to VTK Conversion**: Convert EMSolution FEMAP Neutral files to VTK MultiBlock UnstructuredGrid (.vtm) format
 - **High-Performance Parsing**: Cython-accelerated parser for fast processing of large models
 - **Interactive 3D Visualization**: Desktop Qt and Jupyter notebook visualization with PyVista
 - **Comprehensive Data Support**: Handle displacement, magnetic, current, force, and heat data
-- **Element Type Mapping**: Support for various element types (hex, tet, quad, tri, beam, etc.)
+
 
 ## Installation
 
@@ -42,45 +42,12 @@ pip install -e .
 
 **Note**: Building from source requires Cython>=3.0.0 and numpy>=1.21.0. These will be installed automatically during the build process.
 
-## Quick Start
-
-### Converting FEMAP Files
-
-```python
-from pyemsi import FemapConverter
-
-# Convert FEMAP Neutral file to VTK MultiBlock format
-converter = FemapConverter("model.neu")
-multiblock = converter.to_vtm()
-
-# Save for use in ParaView
-multiblock.save("output.vtm")
-```
-
-### Interactive Visualization
-
-```python
-from pyemsi import Plotter
-
-# Create Qt-based 3D plotter
-plotter = Plotter()
-
-# Add your VTK data
-plotter.add_mesh(multiblock, scalars="displacement")
-
-# Display interactive window
-plotter.show()
-```
-
-## Development Notes
-
 ### Qt Resources
 
 If you're developing pyemsi and need to modify Qt resources (icons, UI files), you'll need to manually compile them:
 
 ```bash
-cd pyemsi/resources
-pyside6-rcc resources.qrc -o resources.py
+pyside6-rcc.exe .\pyemsi\resources\resources.qrc -g python -o .\pyemsi\resources\resources.py
 ```
 
 ### Cython Extension
@@ -103,7 +70,13 @@ https://emsolution-ssil.github.io/pyemsi
 
 ## License
 
-MIT License - Copyright (c) 2026 SSIL
+GNU General Public License v3.0 or later (GPLv3+) - Copyright (c) 2026 SSIL
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ## Contact
 
