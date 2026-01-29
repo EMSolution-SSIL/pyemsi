@@ -1,6 +1,81 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "Cython>=3.0.0", "numpy>=1.21.0"]
+requires = ["setuptools>=61", "wheel", "Cython>=3.0.0", "numpy>=1.21.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
+name = "pyemsi"
+dynamic = ["version"]
+description = "Python tools for FEMAP Neutral file conversion and VTK visualization"
+readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.9"
+authors = [
+    {name = "SSIL", email = "emsolution@ssil.co.jp"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "vtk>=9.0.0",
+    "numpy>=1.21.0",
+    "pyvista>=0.43.0",
+    "pyvistaqt>=0.11.0",
+    "PySide6>=6.5.0",
+]
+
+[project.optional-dependencies]
+jupyter = [
+    "pyvista[jupyter]>=0.43.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "Cython>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/EMSolution-SSIL/pyemsi"
+Repository = "https://github.com/EMSolution-SSIL/pyemsi"
+Issues = "https://github.com/EMSolution-SSIL/pyemsi/issues"
+
+[tool.setuptools]
+packages = ["pyemsi", "pyemsi.examples", "pyemsi.resources"]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.dynamic]
+version = {attr = "pyemsi.__version__"}
+
+[tool.setuptools.package-data]
+"pyemsi.examples" = [
+    "*.pvd",
+    "transient/*.vtm",
+    "transient/*/*.vtu",
+]
+"pyemsi.resources" = [
+    "*.qrc",
+    "icons/*.svg",
+]
+
+# cibuildwheel configuration
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-*"
+skip = "pp* *-musllinux_*"
+build-verbosity = 1
+
+[tool.cibuildwheel.linux]
+before-build = "pip install cython numpy"
+
+[tool.cibuildwheel.macos]
+before-build = "pip install cython numpy"
+
+[tool.cibuildwheel.windows]
+before-build = "pip install cython numpy"

@@ -14,6 +14,9 @@ include pyemsi/femap_parser.c
 include pyemsi/resources/resources.qrc
 recursive-include pyemsi/resources/icons *.svg
 
+# Include example data files
+recursive-include pyemsi/examples *.pvd *.vtm *.vtu
+
 # Exclude test files
 global-exclude tests/
 global-exclude test_*.py

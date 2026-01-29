@@ -12,13 +12,15 @@ from typing import Optional
 
 from .FemapConverter import FemapConverter
 from .plotter import Plotter
+from . import examples
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "FemapConverter",
     "Plotter",
     "configure_logging",
+    "examples",
 ]
 
 # Package-level logger setup (library best practice: NullHandler by default)

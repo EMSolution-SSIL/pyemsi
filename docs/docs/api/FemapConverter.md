@@ -35,8 +35,7 @@ converter = FemapConverter(
 )
 ```
 
-#### Parameters
-
+:::tip[Parameters]
 - **`input_dir`** (`str | Path`, required) — Directory containing FEMAP neutral files
 - **`output_dir`** (`str | Path`, default: `"./.pyemsi"`) — Directory where VTK output files will be written
 - **`output_name`** (`str`, default: `"output"`) — Base name for output files (PVD file and VTM folder)
@@ -49,6 +48,7 @@ converter = FemapConverter(
 - **`force_J_B`** (`str | Path | None`, default: `"force_J_B"`) — Path to Lorentz force data file, or `None` to skip
 - **`heat`** (`str | Path | None`, default: `"heat"`) — Path to heat/thermal data file, or `None` to skip
 - **`displacement`** (`str | Path`, default: `"disp"`) — Path to displacement data file, or `None` to skip
+:::
 
 ### Running the Conversion
 
@@ -181,12 +181,12 @@ The converter adds the following field data to meshes based on configured data f
 from pyemsi import FemapConverter
 
 # Basic conversion with default settings
-converter = FemapConverter(r"C:\path\to\femap\files")
+converter = FemapConverter(r"\path\to\femap\files")
 converter.run()
 
 # Skip current density processing
 converter = FemapConverter(
-    r"C:\path\to\femap\files",
+    r"\path\to\femap\files",
     output_name="my_simulation",
     current=None
 )
@@ -194,7 +194,7 @@ converter.run()
 
 # Force 2D mode for planar meshes
 converter = FemapConverter(
-    r"C:\path\to\femap\files",
+    r"\path\to\femap\files",
     force_2d=True
 )
 converter.run()
