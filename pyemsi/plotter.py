@@ -406,7 +406,7 @@ class Plotter:
             if edges.n_points == 0:
                 continue
             actor_name = f"feature_edges_block_{block_name}" if block_name else "feature_edges"
-            self.plotter.add_mesh(edges, name=actor_name, **self._feature_edges_props)
+            self.plotter.add_mesh(edges, name=actor_name, pickable=False, **self._feature_edges_props)
 
     def set_scalar(
         self,
@@ -479,6 +479,7 @@ class Plotter:
                 scalars=name,
                 preference="cell" if mode == "element" else "point",
                 name=actor_name,
+                pickable=True,
                 **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
             )
 
@@ -863,3 +864,364 @@ class Plotter:
         """
         if hasattr(self, "plotter") and self.plotter is not None:
             self.plotter.close()
+
+    def _find_block_by_name(self, block_name: str | None) -> tuple[int, pv.DataSet, str | None]:
+        """
+        Locate a block by name in the mesh.
+
+        For MultiBlock meshes, finds the block matching the given name.
+        For single meshes, returns the mesh if block_name is None.
+        """
+        if self.reader is None:
+            raise ValueError("No reader available. Call set_file() first.")
+
+        mesh = self.mesh
+        if isinstance(mesh, pv.MultiBlock):
+            if block_name is None:
+                # Default to first non-empty block
+                for idx, block in enumerate(mesh):
+                    if block is not None and getattr(block, "n_points", 0) > 0:
+                        name = mesh.get_block_name(idx) or str(idx)
+                        return idx, block, name
+                raise ValueError("No valid blocks found in MultiBlock mesh.")
+            # Find block by name using MultiBlock API
+            if block_name in mesh.keys():
+                idx = mesh.get_index_by_name(block_name)
+                block = mesh[block_name]
+                if block is None:
+                    raise ValueError(f"Block '{block_name}' is None.")
+                return idx, block, block_name
+            raise ValueError(f"Block '{block_name}' not found. Available: {list(mesh.keys())}")
+        else:
+            if block_name is not None:
+                raise ValueError("block_name must be None for single-block meshes.")
+            return 0, mesh, None
+
+    def _append_temporal_value(self, data_dict: dict, key: str, time_val: float, value) -> None:
+        """
+        Append a temporal value to the data dictionary.
+
+        For vectors (3-component), stores as x_value, y_value, z_value.
+        For scalars, stores as value.
+        """
+        is_vector = isinstance(value, list) and len(value) == 3
+
+        if key not in data_dict:
+            if is_vector:
+                data_dict[key] = {"time": [], "x_value": [], "y_value": [], "z_value": []}
+            else:
+                data_dict[key] = {"time": [], "value": []}
+
+        data_dict[key]["time"].append(time_val)
+        if is_vector:
+            data_dict[key]["x_value"].append(value[0])
+            data_dict[key]["y_value"].append(value[1])
+            data_dict[key]["z_value"].append(value[2])
+        else:
+            data_dict[key]["value"].append(value)
+
+    def query_point(
+        self,
+        point_id: int,
+        block_name: str | None = None,
+        time_value: float | None = None,
+    ) -> dict:
+        """
+        Query point data for a single point.
+
+        For temporal datasets, sweeps all time points unless time_value is specified.
+        For static datasets, returns values directly.
+
+        See full documentation at docs/api/Plotter/query_point.md
+        """
+        _, block, _ = self._find_block_by_name(block_name)
+
+        # Validate point_id
+        if point_id < 0 or point_id >= block.n_points:
+            raise ValueError(f"point_id {point_id} out of range [0, {block.n_points - 1}].")
+
+        data: dict = {}
+
+        time_reader = self._time_reader()
+        if time_reader is not None and time_reader.number_time_points > 0:
+            # Temporal dataset: use specific time_value or sweep all time points
+            original_time_value = self.active_time_value
+            try:
+                if time_value is not None:
+                    # Query specific time value
+                    time_reader.set_active_time_value(time_value)
+                    self._mesh = None  # Clear cache to force re-read
+                    _, current_block, _ = self._find_block_by_name(block_name)
+                    time_val = self.active_time_value
+
+                    for key in current_block.point_data.keys():
+                        arr = current_block.point_data[key]
+                        value = arr[point_id]
+                        if hasattr(value, "tolist"):
+                            value = value.tolist()
+                        self._append_temporal_value(data, key, time_val, value)
+                else:
+                    # Sweep all time points
+                    for tp in range(time_reader.number_time_points):
+                        self.set_active_time_point(tp)
+                        self._mesh = None  # Clear cache to force re-read
+                        _, current_block, _ = self._find_block_by_name(block_name)
+                        time_val = self.active_time_value
+
+                        for key in current_block.point_data.keys():
+                            arr = current_block.point_data[key]
+                            value = arr[point_id]
+                            # Convert numpy types to Python types for scalars
+                            if hasattr(value, "tolist"):
+                                value = value.tolist()
+                            self._append_temporal_value(data, key, time_val, value)
+            finally:
+                time_reader.set_active_time_value(original_time_value)
+                self._mesh = None  # Reset to original state
+        else:
+            # Static dataset
+            for key in block.point_data.keys():
+                arr = block.point_data[key]
+                value = arr[point_id]
+                if hasattr(value, "tolist"):
+                    value = value.tolist()
+                self._append_temporal_value(data, key, 0, value)
+
+        return data
+
+    def query_points(
+        self,
+        point_ids: list[int],
+        block_names: list[str] | str | None = None,
+        time_value: float | None = None,
+    ) -> list[dict]:
+        """
+        Query point data for multiple points.
+
+        For temporal datasets, sweeps all time points unless time_value is specified.
+        For static datasets, returns values directly.
+
+        See full documentation at docs/api/Plotter/query_points.md
+        """
+        if block_names is None:
+            block_name_list = [None] * len(point_ids)
+        elif isinstance(block_names, str):
+            block_name_list = [block_names] * len(point_ids)
+        elif isinstance(block_names, list):
+            if len(point_ids) != len(block_names):
+                raise ValueError("point_ids and block_names lists must have the same length.")
+            block_name_list = block_names
+        else:
+            raise ValueError("block_names must be str, list[str], or None.")
+
+        # Validate all point_ids upfront
+        for pid, bn in zip(point_ids, block_name_list):
+            _, block, _ = self._find_block_by_name(bn)
+            if pid < 0 or pid >= block.n_points:
+                raise ValueError(f"point_id {pid} out of range [0, {block.n_points - 1}].")
+
+        # Initialize result list
+        results: list[dict] = [{} for _ in point_ids]
+
+        time_reader = self._time_reader()
+        if time_reader is not None and time_reader.number_time_points > 0:
+            # Temporal dataset: use specific time_value or sweep all time points
+            original_time_value = self.active_time_value
+            try:
+                if time_value is not None:
+                    # Query specific time value
+                    time_reader.set_active_time_value(time_value)
+                    self._mesh = None  # Clear cache to force re-read
+                    time_val = self.active_time_value
+
+                    for i, (pid, bn) in enumerate(zip(point_ids, block_name_list)):
+                        _, current_block, _ = self._find_block_by_name(bn)
+                        for key in current_block.point_data.keys():
+                            arr = current_block.point_data[key]
+                            value = arr[pid]
+                            if hasattr(value, "tolist"):
+                                value = value.tolist()
+                            self._append_temporal_value(results[i], key, time_val, value)
+                else:
+                    # Sweep all time points
+                    for tp in range(time_reader.number_time_points):
+                        self.set_active_time_point(tp)
+                        self._mesh = None  # Clear cache to force re-read
+                        time_val = self.active_time_value
+
+                        for i, (pid, bn) in enumerate(zip(point_ids, block_name_list)):
+                            _, current_block, _ = self._find_block_by_name(bn)
+                            for key in current_block.point_data.keys():
+                                arr = current_block.point_data[key]
+                                value = arr[pid]
+                                if hasattr(value, "tolist"):
+                                    value = value.tolist()
+                                self._append_temporal_value(results[i], key, time_val, value)
+            finally:
+                time_reader.set_active_time_value(original_time_value)
+                self._mesh = None  # Reset to original state
+        else:
+            # Static dataset
+            for i, (pid, bn) in enumerate(zip(point_ids, block_name_list)):
+                _, block, _ = self._find_block_by_name(bn)
+                for key in block.point_data.keys():
+                    arr = block.point_data[key]
+                    value = arr[pid]
+                    if hasattr(value, "tolist"):
+                        value = value.tolist()
+                    self._append_temporal_value(results[i], key, 0, value)
+
+        return results
+
+    def query_cell(
+        self,
+        cell_id: int,
+        block_name: str | None = None,
+        time_value: float | None = None,
+    ) -> dict:
+        """
+        Query cell data for a single cell.
+
+        For temporal datasets, sweeps all time points unless time_value is specified.
+        For static datasets, returns values directly.
+
+        See full documentation at docs/api/Plotter/query_cell.md
+        """
+        _, block, _ = self._find_block_by_name(block_name)
+
+        # Validate cell_id
+        if cell_id < 0 or cell_id >= block.n_cells:
+            raise ValueError(f"cell_id {cell_id} out of range [0, {block.n_cells - 1}].")
+
+        data: dict = {}
+
+        time_reader = self._time_reader()
+        if time_reader is not None and time_reader.number_time_points > 0:
+            # Temporal dataset: use specific time_value or sweep all time points
+            original_time_value = self.active_time_value
+            try:
+                if time_value is not None:
+                    # Query specific time value
+                    time_reader.set_active_time_value(time_value)
+                    self._mesh = None  # Clear cache to force re-read
+                    _, current_block, _ = self._find_block_by_name(block_name)
+                    time_val = self.active_time_value
+
+                    for key in current_block.cell_data.keys():
+                        arr = current_block.cell_data[key]
+                        value = arr[cell_id]
+                        if hasattr(value, "tolist"):
+                            value = value.tolist()
+                        self._append_temporal_value(data, key, time_val, value)
+                else:
+                    # Sweep all time points
+                    for tp in range(time_reader.number_time_points):
+                        self.set_active_time_point(tp)
+                        self._mesh = None  # Clear cache to force re-read
+                        _, current_block, _ = self._find_block_by_name(block_name)
+                        time_val = self.active_time_value
+
+                        for key in current_block.cell_data.keys():
+                            arr = current_block.cell_data[key]
+                            value = arr[cell_id]
+                            # Convert numpy types to Python types for scalars
+                            if hasattr(value, "tolist"):
+                                value = value.tolist()
+                            self._append_temporal_value(data, key, time_val, value)
+            finally:
+                time_reader.set_active_time_value(original_time_value)
+                self._mesh = None  # Reset to original state
+        else:
+            # Static dataset
+            for key in block.cell_data.keys():
+                arr = block.cell_data[key]
+                value = arr[cell_id]
+                if hasattr(value, "tolist"):
+                    value = value.tolist()
+                self._append_temporal_value(data, key, 0, value)
+
+        return data
+
+    def query_cells(
+        self,
+        cell_ids: list[int],
+        block_names: list[str] | str | None = None,
+        time_value: float | None = None,
+    ) -> list[dict]:
+        """
+        Query cell data for multiple cells.
+
+        For temporal datasets, sweeps all time points unless time_value is specified.
+        For static datasets, returns values directly.
+
+        See full documentation at docs/api/Plotter/query_cells.md
+        """
+        if block_names is None:
+            block_name_list = [None] * len(cell_ids)
+        elif isinstance(block_names, str):
+            block_name_list = [block_names] * len(cell_ids)
+        elif isinstance(block_names, list):
+            if len(cell_ids) != len(block_names):
+                raise ValueError("cell_ids and block_names lists must have the same length.")
+            block_name_list = block_names
+        else:
+            raise ValueError("block_names must be str, list[str], or None.")
+
+        # Validate all cell_ids upfront
+        for cid, bn in zip(cell_ids, block_name_list):
+            _, block, _ = self._find_block_by_name(bn)
+            if cid < 0 or cid >= block.n_cells:
+                raise ValueError(f"cell_id {cid} out of range [0, {block.n_cells - 1}].")
+
+        # Initialize result list
+        results: list[dict] = [{} for _ in cell_ids]
+
+        time_reader = self._time_reader()
+        if time_reader is not None and time_reader.number_time_points > 0:
+            # Temporal dataset: use specific time_value or sweep all time points
+            original_time_value = self.active_time_value
+            try:
+                if time_value is not None:
+                    # Query specific time value
+                    time_reader.set_active_time_value(time_value)
+                    self._mesh = None  # Clear cache to force re-read
+                    time_val = self.active_time_value
+
+                    for i, (cid, bn) in enumerate(zip(cell_ids, block_name_list)):
+                        _, current_block, _ = self._find_block_by_name(bn)
+                        for key in current_block.cell_data.keys():
+                            arr = current_block.cell_data[key]
+                            value = arr[cid]
+                            if hasattr(value, "tolist"):
+                                value = value.tolist()
+                            self._append_temporal_value(results[i], key, time_val, value)
+                else:
+                    # Sweep all time points
+                    for tp in range(time_reader.number_time_points):
+                        self.set_active_time_point(tp)
+                        self._mesh = None  # Clear cache to force re-read
+                        time_val = self.active_time_value
+
+                        for i, (cid, bn) in enumerate(zip(cell_ids, block_name_list)):
+                            _, current_block, _ = self._find_block_by_name(bn)
+                            for key in current_block.cell_data.keys():
+                                arr = current_block.cell_data[key]
+                                value = arr[cid]
+                                if hasattr(value, "tolist"):
+                                    value = value.tolist()
+                                self._append_temporal_value(results[i], key, time_val, value)
+            finally:
+                time_reader.set_active_time_value(original_time_value)
+                self._mesh = None  # Reset to original state
+        else:
+            # Static dataset
+            for i, (cid, bn) in enumerate(zip(cell_ids, block_name_list)):
+                _, block, _ = self._find_block_by_name(bn)
+                for key in block.cell_data.keys():
+                    arr = block.cell_data[key]
+                    value = arr[cid]
+                    if hasattr(value, "tolist"):
+                        value = value.tolist()
+                    self._append_temporal_value(results[i], key, 0, value)
+
+        return results

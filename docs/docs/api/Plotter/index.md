@@ -89,6 +89,10 @@ If no file was loaded, you can still use the underlying `plotter` directly and a
 | [`set_scalar(...)`](./set_scalar) | Configure scalar coloring. |
 | [`set_contour(...)`](./set_contour) | Configure contours. |
 | [`set_vector(...)`](./set_vector) | Configure vector glyphs. |
+| [`query_point(...)`](./query_point) | Query point data for a single point. |
+| [`query_points(...)`](./query_points) | Query point data for multiple points. |
+| [`query_cell(...)`](./query_cell) | Query cell data for a single cell. |
+| [`query_cells(...)`](./query_cells) | Query cell data for multiple cells. |
 | [`show()`](./show) | Render (Qt window or notebook output). |
 | [`export(...)`](./export) | Save a screenshot to an image file. |
 
