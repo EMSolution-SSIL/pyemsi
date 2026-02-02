@@ -1,6 +1,6 @@
 ---
 sidebar_position: 1
-title: Introduction
+title: Installation
 ---
 
 # `pyemsi` API Reference
@@ -38,4 +38,16 @@ pip install -e .
 ```
 
 **Note**: Building from source requires Cython>=3.0.0 and numpy>=1.21.0, which will be installed automatically during the build process.
+
+## Quick Start
+
+```python
+from pyemsi import examples, Plotter
+
+file_path = examples.transient_path()
+
+plt = Plotter(filepath=file_path)
+plt.set_scalar("B-Mag (T)", "node")
+plt.show()
+```
 

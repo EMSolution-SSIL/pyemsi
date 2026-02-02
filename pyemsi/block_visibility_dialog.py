@@ -150,9 +150,8 @@ class BlockVisibilityDialog(QDialog):
 
     def _on_cancel(self) -> None:
         """Handle Cancel button click - restore initial visibility and close."""
-        # Restore initial visibility for all blocks
+        # Restore initial visibility for all blocks using batch update
         if self.plotter_window.parent_plotter:
-            for block_name, visible in self.initial_block_visibility.items():
-                self.plotter_window.parent_plotter.set_block_visibility(block_name, visible)
+            self.plotter_window.parent_plotter.set_blocks_visibility(self.initial_block_visibility)
 
         self.reject()

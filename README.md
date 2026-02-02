@@ -62,7 +62,7 @@ https://emsolution-ssil.github.io/pyemsi
 
 ## Requirements
 
-- Python >= 3.8
+- Python >= 3.9
 - VTK >= 9.0.0
 - PyVista >= 0.43.0
 - PySide6 >= 6.5.0

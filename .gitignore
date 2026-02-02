@@ -1,3 +1,9 @@
+.vscode/
+*.ipynb
+t.py
+y.py
+.claude/
+
 .pyemsi
 # Byte-compiled / optimized / DLL files
 __pycache__/

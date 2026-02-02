@@ -89,6 +89,10 @@ If no file was loaded, you can still use the underlying `plotter` directly and a
 | [`set_scalar(...)`](./set_scalar) | Configure scalar coloring. |
 | [`set_contour(...)`](./set_contour) | Configure contours. |
 | [`set_vector(...)`](./set_vector) | Configure vector glyphs. |
+| [`get_block_names()`](./get_block_names) | Get list of block names from multi-block mesh. |
+| [`get_block_visibility(block_name)`](./get_block_visibility) | Check visibility state of a block. |
+| [`set_block_visibility(block_name, visible)`](./set_block_visibility) | Set visibility for a single block. |
+| [`set_blocks_visibility(visibility)`](./set_blocks_visibility) | Set visibility for multiple blocks in batch. |
 | [`query_point(...)`](./query_point) | Query point data for a single point. |
 | [`query_points(...)`](./query_points) | Query point data for multiple points. |
 | [`query_cell(...)`](./query_cell) | Query cell data for a single cell. |

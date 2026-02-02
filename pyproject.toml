@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyemsi"
 dynamic = ["version"]
-description = "Python tools for FEMAP Neutral file conversion and VTK visualization"
+description = "Python tools EMSolution output visualization"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.9"

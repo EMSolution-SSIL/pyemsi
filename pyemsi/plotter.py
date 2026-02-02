@@ -80,6 +80,7 @@ class Plotter:
     _scalar_props: dict[str, object]
     _vector_props: dict[str, object]
     _contour_props: dict[str, object]
+    _block_visibility: dict[str, bool]
 
     def __init__(
         self,
@@ -123,6 +124,7 @@ class Plotter:
         self._scalar_props = {}
         self._vector_props = {}
         self._contour_props = {}
+        self._block_visibility = {}
         if filepath is not None:
             self.set_file(filepath)
         # Initialize based on mode
@@ -258,6 +260,16 @@ class Plotter:
                 self._mesh = self.reader.read()[0]
             else:
                 self._mesh = self.reader.read()
+            # Lazily populate _block_visibility for new blocks
+            if isinstance(self._mesh, pv.MultiBlock):
+                for idx, block in enumerate(self._mesh):
+                    if block is None:
+                        continue
+                    name = self._mesh.get_block_name(idx)
+                    if not name:
+                        name = str(idx)
+                    if name not in self._block_visibility:
+                        self._block_visibility[name] = True
         return self._mesh
 
     def _iter_blocks(self, skip_empty: bool = True):
@@ -298,10 +310,10 @@ class Plotter:
         return block_names
 
     def get_block_visibility(self, block_name: str) -> bool:
-        """Check if actors for a block are visible.
+        """Check if a block is visible.
 
-        Checks visibility state of any actor associated with the specified block.
-        Returns True if any matching actor exists and is visible, False otherwise.
+        Returns the visibility state from the internal visibility dictionary.
+        Defaults to True for blocks not yet tracked.
 
         Parameters
         ----------
@@ -311,31 +323,16 @@ class Plotter:
         Returns
         -------
         bool
-            True if block actors are visible, False otherwise.
+            True if block is visible, False otherwise.
         """
-        if not hasattr(self, "_window") or self._window is None:
-            return True  # Default visible if no window
-
-        # Check all possible actor patterns for this block
-        actor_patterns = [
-            f"feature_edges_block_{block_name}",
-            f"scalar_field_block_{block_name}",
-            f"contour_block_{block_name}",
-            f"vector_field_block_{block_name}",
-        ]
-
-        for actor_name in actor_patterns:
-            if actor_name in self.plotter.renderer.actors:
-                return bool(self.plotter.renderer.actors[actor_name].GetVisibility())
-
-        return True  # Default visible if no actors found
+        return self._block_visibility.get(block_name, True)
 
     def set_block_visibility(self, block_name: str, visible: bool) -> None:
         """Set visibility for all actors associated with a block.
 
-        Updates the visibility state of all actors (feature edges, scalar field,
-        contours, vector field) associated with the specified block, then renders
-        the scene.
+        Updates the visibility state in the internal dictionary and applies it
+        to all actors (feature edges, scalar field, contours, vector field)
+        associated with the specified block, then renders the scene.
 
         Parameters
         ----------
@@ -344,8 +341,8 @@ class Plotter:
         visible : bool
             True to show the block, False to hide it.
         """
-        if not hasattr(self, "_window") or self._window is None:
-            return  # No window, nothing to update
+        # Store visibility state in dictionary
+        self._block_visibility[block_name] = visible
 
         # Update visibility for all actor patterns for this block
         actor_patterns = [
@@ -358,6 +355,38 @@ class Plotter:
         for actor_name in actor_patterns:
             if actor_name in self.plotter.renderer.actors:
                 self.plotter.renderer.actors[actor_name].SetVisibility(visible)
+
+        # Render to update display
+        self.plotter.render()
+
+    def set_blocks_visibility(self, visibility: dict[str, bool]) -> None:
+        """Set visibility for multiple blocks in batch.
+
+        Updates the visibility state for multiple blocks at once, then renders
+        the scene. More efficient than calling set_block_visibility repeatedly.
+        Works in both desktop and notebook modes.
+
+        Parameters
+        ----------
+        visibility : dict[str, bool]
+            Dictionary mapping block names to visibility states.
+            True to show the block, False to hide it.
+        """
+        # Update visibility states in dictionary
+        self._block_visibility.update(visibility)
+
+        # Apply visibility to existing actors
+        for block_name, visible in visibility.items():
+            actor_patterns = [
+                f"feature_edges_block_{block_name}",
+                f"scalar_field_block_{block_name}",
+                f"contour_block_{block_name}",
+                f"vector_field_block_{block_name}",
+            ]
+
+            for actor_name in actor_patterns:
+                if actor_name in self.plotter.renderer.actors:
+                    self.plotter.renderer.actors[actor_name].SetVisibility(visible)
 
         # Render to update display
         self.plotter.render()
@@ -400,13 +429,17 @@ class Plotter:
         For MultiBlock datasets, creates separate actors for each block's feature edges.
         For single datasets, creates a single feature edges actor.
         Automatically resets the camera to frame the mesh after plotting.
+        Applies visibility settings from _block_visibility to each actor.
         """
         for idx, block, block_name in self._iter_blocks():
             edges = block.extract_feature_edges()
             if edges.n_points == 0:
                 continue
             actor_name = f"feature_edges_block_{block_name}" if block_name else "feature_edges"
-            self.plotter.add_mesh(edges, name=actor_name, pickable=False, **self._feature_edges_props)
+            actor = self.plotter.add_mesh(edges, name=actor_name, pickable=False, **self._feature_edges_props)
+            # Apply visibility from stored state
+            if block_name:
+                actor.SetVisibility(self.get_block_visibility(block_name))
 
     def set_scalar(
         self,
@@ -463,6 +496,8 @@ class Plotter:
     def _plot_scalar_field(self) -> None:
         """
         Plot the scalar field on the mesh based on the stored scalar properties.
+
+        Applies visibility settings from _block_visibility to each actor.
         """
         if self._scalar_props is None:
             return  # No scalar properties set
@@ -474,7 +509,7 @@ class Plotter:
             if name not in block_to_plot.array_names:
                 continue
             actor_name = f"scalar_field_block_{block_name}" if block_name else "scalar_field"
-            self.plotter.add_mesh(
+            actor = self.plotter.add_mesh(
                 block_to_plot,
                 scalars=name,
                 preference="cell" if mode == "element" else "point",
@@ -482,6 +517,9 @@ class Plotter:
                 pickable=True,
                 **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
             )
+            # Apply visibility from stored state
+            if block_name:
+                actor.SetVisibility(self.get_block_visibility(block_name))
 
     def set_contour(
         self,
@@ -579,7 +617,12 @@ class Plotter:
             if contours.n_points == 0:
                 continue
             actor_name = f"contour_block_{block_name}" if block_name else "contour"
-            self.plotter.add_mesh(contours, name=actor_name, color=color, line_width=line_width, **contour_kwargs)
+            actor = self.plotter.add_mesh(
+                contours, name=actor_name, color=color, line_width=line_width, **contour_kwargs
+            )
+            # Apply visibility from stored state
+            if block_name:
+                actor.SetVisibility(self.get_block_visibility(block_name))
 
     def set_vector(
         self,
@@ -741,7 +784,10 @@ class Plotter:
                 continue
 
             actor_name = f"vector_field_block_{block_name}" if block_name else "vector_field"
-            self.plotter.add_mesh(glyphs, name=actor_name, **vector_kwargs)
+            actor = self.plotter.add_mesh(glyphs, name=actor_name, **vector_kwargs)
+            # Apply visibility from stored state
+            if block_name:
+                actor.SetVisibility(self.get_block_visibility(block_name))
 
     def show(self):
         """
