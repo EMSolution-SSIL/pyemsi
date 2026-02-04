@@ -9,20 +9,18 @@ title: Installation
 
 ### Standard Installation
 
-Download the latest wheel file from the [GitHub Releases page](https://github.com/EMSolution-SSIL/pyemsi/releases/latest) and install it using pip:
+Install pyemsi from PyPI:
 
 ```bash
-pip install pyemsi-<version>-<platform>.whl
+pip install pyemsi
 ```
-
-Replace `<version>` and `<platform>` with the appropriate values for your downloaded file (e.g., `pyemsi-0.1.0-cp311-cp311-win_amd64.whl`).
 
 ### Jupyter Notebook Support
 
-For interactive visualization in Jupyter notebooks, install the additional dependencies after installing the wheel:
+For interactive visualization in Jupyter notebooks, install with the jupyter extras:
 
 ```bash
-pip install pyvistaqt ipywidgets
+pip install pyemsi[jupyter]
 ```
 
 This enables notebook integration with PyVista.
