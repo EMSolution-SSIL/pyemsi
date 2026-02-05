@@ -21,6 +21,7 @@ import pyemsi.resources.resources  # noqa: F401
 from .display_settings_dialog import DisplaySettingsDialog
 from .block_visibility_dialog import BlockVisibilityDialog
 from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
+from .cell_query_dialog import CellQueryDialog
 
 
 class QtPlotterWindow:
@@ -61,13 +62,14 @@ class QtPlotterWindow:
     _vlayout: "QVBoxLayout"
     _camera_toolbar: "QToolBar"
     _display_toolbar: "QToolBar"
+    _query_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
     parent_plotter: "Plotter | None"
 
     def __init__(
         self,
         title: str = "PyVista Plotter",
-        window_size: tuple[int, int] = (1024, 768),
+        window_size: tuple[int, int] | None = None,
         position: tuple[int, int] | None = None,
         parent_plotter: "Plotter | None" = None,
         **qt_interactor_kwargs,
@@ -79,9 +81,9 @@ class QtPlotterWindow:
         ----------
         title : str, optional
             Window title. Default is "PyVista Plotter".
-        window_size : tuple of int, optional
-            Window size as (width, height) in pixels. Default is (1024, 768).
-        position : tuple of int, optional
+        window_size : tuple of int or None, optional
+            Window size as (width, height) in pixels. Default is None.
+        position : tuple of int or None, optional
             Window position as (x, y) in screen coordinates. If None, uses OS default.
         parent_plotter : Plotter or None, optional
             Reference to the parent Plotter instance. Default is None.
@@ -90,6 +92,9 @@ class QtPlotterWindow:
         """
         # Store reference to parent plotter
         self.parent_plotter = parent_plotter
+
+        # Dialog references to maintain state
+        self._cell_query_dialog: CellQueryDialog | None = None
 
         # Animation state variables
         self._is_playing = False
@@ -108,7 +113,8 @@ class QtPlotterWindow:
         self._window = QMainWindow()
         self._window.setWindowIcon(QIcon(":/icons/Icon.svg"))
         self._window.setWindowTitle(title)
-        self._window.resize(*window_size)
+        if window_size is not None:
+            self._window.resize(*window_size)
         if position is not None:
             self._window.move(*position)
 
@@ -128,6 +134,7 @@ class QtPlotterWindow:
         # Create toolbars
         self._create_camera_toolbar()
         self._create_animation_toolbar()
+        self._create_query_toolbar()
 
         # Attach close event handler
         self._window.closeEvent = lambda event: self._on_close(event)
@@ -281,6 +288,25 @@ class QtPlotterWindow:
         # Configure animation timer
         self._animation_timer.timeout.connect(self._animation_step)
         self._animation_timer.setInterval(100)  # 100ms default interval
+
+    def _create_query_toolbar(self) -> None:
+        """
+        Create and configure the query tools toolbar.
+
+        Adds a movable toolbar with buttons for cell query and other query operations.
+        """
+        self._query_toolbar = QToolBar("Query Tools")
+        self._query_toolbar.setMovable(True)
+        self._query_toolbar.setIconSize(QSize(24, 24))
+
+        # Cell Query action
+        cell_query_action = QAction(QIcon(":/icons/QueryCell.svg"), "Cell Query", self._window)
+        cell_query_action.setToolTip("Open cell query dialog")
+        cell_query_action.triggered.connect(self._open_cell_query_dialog)
+        self._query_toolbar.addAction(cell_query_action)
+
+        # Add toolbar to main window
+        self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._query_toolbar)
 
     def _create_display_toolbar(self) -> None:
         """
@@ -468,6 +494,35 @@ class QtPlotterWindow:
         scalar_bar_settings_dialog.raise_()
         scalar_bar_settings_dialog.activateWindow()
 
+    def _open_cell_query_dialog(self) -> None:
+        """Open cell query dialog (non-blocking)."""
+        # Create dialog if it doesn't exist or was deleted
+        if self._cell_query_dialog is None or not self._cell_query_dialog.isVisible():
+            # Check if the dialog object was deleted by Qt
+            try:
+                if self._cell_query_dialog is not None:
+                    # Try to access a property to see if it's still valid
+                    _ = self._cell_query_dialog.isVisible()
+            except RuntimeError:
+                # Object was deleted, create a new one
+                self._cell_query_dialog = None
+
+            if self._cell_query_dialog is None:
+                self._cell_query_dialog = CellQueryDialog(plotter=self.plotter, plotter_window=self)
+                # Don't set WA_DeleteOnClose to keep the dialog alive between sessions
+
+        # Re-enable picking if it was disabled
+        if not self._cell_query_dialog._picking_enabled:
+            self._cell_query_dialog._enable_picking()
+
+        # Restore visualizations for previously selected cells
+        self._cell_query_dialog._restore_visualizations()
+
+        # Show and raise dialog (non-blocking)
+        self._cell_query_dialog.show()
+        self._cell_query_dialog.raise_()
+        self._cell_query_dialog.activateWindow()
+
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """
         Retrieve an actor by its assigned name.
@@ -508,6 +563,7 @@ class QtPlotterWindow:
         """
         self._window.show()
         self._create_display_toolbar()
+        self.plotter.reset_camera()
         self.app.exec()
 
     def play(self) -> None:

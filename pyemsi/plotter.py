@@ -86,7 +86,7 @@ class Plotter:
         self,
         filepath: str | Path | None = None,
         title: str = "pyemsi Plotter",
-        window_size: tuple[int, int] = (1024, 768),
+        window_size: tuple[int, int] | None = None,
         position: tuple[int, int] | None = None,
         notebook: bool = False,
         backend: str | None = "html",
@@ -101,9 +101,9 @@ class Plotter:
             Path to a mesh file to load immediately. If provided, calls set_file() automatically.
         title : str, optional
             Window title (desktop mode only). Default is "pyemsi Plotter".
-        window_size : tuple of int, optional
-            Window size as (width, height) in pixels (desktop mode only). Default is (1024, 768).
-        position : tuple of int, optional
+        window_size : tuple of int or None, optional
+            Window size as (width, height) in pixels (desktop mode only). Default is None.
+        position : tuple of int or None, optional
             Window position as (x, y) in screen coordinates (desktop mode only). If None, uses OS default.
         notebook : bool, optional
             If True, uses PyVista's native notebook backend for Jupyter environments.
@@ -144,8 +144,8 @@ class Plotter:
         # Create QtPlotterWindow with stored properties
         self._window = QtPlotterWindow(
             title=self._qt_props.get("title", "pyemsi Plotter"),
-            window_size=self._qt_props.get("window_size", (1024, 768)),
-            position=self._qt_props.get("position"),
+            window_size=self._qt_props.get("window_size", None),
+            position=self._qt_props.get("position", None),
             parent_plotter=self,
             **self._qt_interactor_kwargs,
         )
