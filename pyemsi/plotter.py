@@ -5,6 +5,8 @@ Provides a custom Plotter class that composes PyVista plotting functionality
 with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -1193,12 +1195,31 @@ class Plotter:
         cell_ids: list[int],
         block_names: list[str] | str | None = None,
         time_value: float | None = None,
+        progress_callback: callable | None = None,
     ) -> list[dict]:
         """
         Query cell data for multiple cells.
 
         For temporal datasets, sweeps all time points unless time_value is specified.
         For static datasets, returns values directly.
+
+        Parameters
+        ----------
+        cell_ids : list[int]
+            List of cell IDs to query.
+        block_names : list[str] | str | None, optional
+            Block names corresponding to each cell. If None, uses default block.
+        time_value : float | None, optional
+            Specific time value to query. If None, sweeps all time points.
+        progress_callback : callable | None, optional
+            Callback function for progress updates. Called with (current, total).
+            Should return True to continue or False to cancel.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries containing query results for each cell.
+            Returns empty list if cancelled via progress_callback.
 
         See full documentation at docs/api/Plotter/query_cells.md
         """
@@ -1233,7 +1254,16 @@ class Plotter:
                     self._mesh = None  # Clear cache to force re-read
                     time_val = self.active_time_value
 
+                    # Calculate total operations for progress tracking
+                    total_ops = len(cell_ids)
+                    current_op = 0
+
                     for i, (cid, bn) in enumerate(zip(cell_ids, block_name_list)):
+                        # Check for cancellation
+                        if progress_callback is not None:
+                            if not progress_callback(current_op, total_ops):
+                                return []  # Cancelled
+
                         _, current_block, _ = self._find_block_by_name(bn)
                         for key in current_block.cell_data.keys():
                             arr = current_block.cell_data[key]
@@ -1241,14 +1271,30 @@ class Plotter:
                             if hasattr(value, "tolist"):
                                 value = value.tolist()
                             self._append_temporal_value(results[i], key, time_val, value)
+
+                        current_op += 1
+
+                    # Final progress update
+                    if progress_callback is not None:
+                        progress_callback(total_ops, total_ops)
+
                 else:
                     # Sweep all time points
+                    # Calculate total operations for progress tracking
+                    total_ops = time_reader.number_time_points * len(cell_ids)
+                    current_op = 0
+
                     for tp in range(time_reader.number_time_points):
                         self.set_active_time_point(tp)
                         self._mesh = None  # Clear cache to force re-read
                         time_val = self.active_time_value
 
                         for i, (cid, bn) in enumerate(zip(cell_ids, block_name_list)):
+                            # Check for cancellation
+                            if progress_callback is not None:
+                                if not progress_callback(current_op, total_ops):
+                                    return []  # Cancelled
+
                             _, current_block, _ = self._find_block_by_name(bn)
                             for key in current_block.cell_data.keys():
                                 arr = current_block.cell_data[key]
@@ -1256,12 +1302,27 @@ class Plotter:
                                 if hasattr(value, "tolist"):
                                     value = value.tolist()
                                 self._append_temporal_value(results[i], key, time_val, value)
+
+                            current_op += 1
+
+                    # Final progress update
+                    if progress_callback is not None:
+                        progress_callback(total_ops, total_ops)
+
             finally:
                 time_reader.set_active_time_value(original_time_value)
                 self._mesh = None  # Reset to original state
         else:
             # Static dataset
+            total_ops = len(cell_ids)
+            current_op = 0
+
             for i, (cid, bn) in enumerate(zip(cell_ids, block_name_list)):
+                # Check for cancellation
+                if progress_callback is not None:
+                    if not progress_callback(current_op, total_ops):
+                        return []  # Cancelled
+
                 _, block, _ = self._find_block_by_name(bn)
                 for key in block.cell_data.keys():
                     arr = block.cell_data[key]
@@ -1269,5 +1330,11 @@ class Plotter:
                     if hasattr(value, "tolist"):
                         value = value.tolist()
                     self._append_temporal_value(results[i], key, 0, value)
+
+                current_op += 1
+
+            # Final progress update
+            if progress_callback is not None:
+                progress_callback(total_ops, total_ops)
 
         return results

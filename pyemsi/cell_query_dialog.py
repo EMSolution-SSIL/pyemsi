@@ -5,6 +5,8 @@ Provides interactive cell picking and query functionality with split-panel inter
 showing selected cells (left) and query results (right).
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,6 +30,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QAbstractItemView,
+    QProgressDialog,
+    QApplication,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
@@ -413,6 +417,10 @@ class CellQueryDialog(QDialog):
         if not self._selected_cells:
             return
 
+        # Disable button during query to prevent concurrent operations
+        self._run_query_button.setEnabled(False)
+        progress_dialog = None
+
         try:
             # Extract cell IDs and block IDs
             cell_ids = [c[0] for c in self._selected_cells]
@@ -427,7 +435,47 @@ class CellQueryDialog(QDialog):
                 )
                 return
 
-            query_results = self.plotter_window.parent_plotter.query_cells(cell_ids, block_ids)
+            # Create progress dialog
+            progress_dialog = QProgressDialog(
+                "Preparing to query cells...",
+                "Cancel",
+                0,
+                100,
+                self,
+            )
+            progress_dialog.setWindowTitle("Querying Cells")
+            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_dialog.setMinimumDuration(500)  # Show after 500ms to avoid flicker
+            progress_dialog.setValue(0)
+
+            # Define progress callback
+            def update_progress(current: int, total: int) -> bool:
+                """Update progress dialog and check for cancellation."""
+                if total > 0:
+                    percentage = int((current / total) * 100)
+                    progress_dialog.setValue(percentage)
+                    progress_dialog.setLabelText(f"Processing cell data... ({current}/{total})")
+                # Process events to keep UI responsive
+                QApplication.processEvents()
+                # Return False if user cancelled
+                return not progress_dialog.wasCanceled()
+
+            # Execute query with progress callback
+            query_results = self.plotter_window.parent_plotter.query_cells(
+                cell_ids, block_ids, progress_callback=update_progress
+            )
+
+            # Close progress dialog
+            progress_dialog.close()
+
+            # Check if user cancelled
+            if not query_results and progress_dialog.wasCanceled():
+                QMessageBox.information(
+                    self,
+                    "Query Cancelled",
+                    "Cell query was cancelled by user.",
+                )
+                return
 
             # Clear previous results
             self._results_tab_widget.clear()
@@ -443,6 +491,14 @@ class CellQueryDialog(QDialog):
                 "Query Error",
                 f"Failed to query cells:\n{str(e)}",
             )
+        finally:
+            # Clean up progress dialog
+            if progress_dialog is not None:
+                progress_dialog.close()
+                progress_dialog.deleteLater()
+
+            # Re-enable button
+            self._run_query_button.setEnabled(len(self._selected_cells) > 0)
 
     def _populate_results(self, query_results: list, cell_ids: list[int], block_ids: list[int]) -> None:
         """
