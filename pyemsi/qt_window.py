@@ -22,6 +22,7 @@ from .display_settings_dialog import DisplaySettingsDialog
 from .block_visibility_dialog import BlockVisibilityDialog
 from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
 from .cell_query_dialog import CellQueryDialog
+from .point_query_dialog import PointQueryDialog
 
 
 class QtPlotterWindow:
@@ -37,7 +38,7 @@ class QtPlotterWindow:
     title : str, optional
         Window title. Default is "PyVista Plotter".
     window_size : tuple of int, optional
-        Window size as (width, height) in pixels. Default is (1024, 768).
+        Window size as (width, height) in pixels. Default is None.
     position : tuple of int, optional
         Window position as (x, y) in screen coordinates. If None, uses OS default.
     parent_plotter : Plotter or None, optional
@@ -95,6 +96,7 @@ class QtPlotterWindow:
 
         # Dialog references to maintain state
         self._cell_query_dialog: CellQueryDialog | None = None
+        self._point_query_dialog: PointQueryDialog | None = None
 
         # Animation state variables
         self._is_playing = False
@@ -305,6 +307,12 @@ class QtPlotterWindow:
         cell_query_action.triggered.connect(self._open_cell_query_dialog)
         self._query_toolbar.addAction(cell_query_action)
 
+        # Point Query action
+        point_query_action = QAction(QIcon(":/icons/QueryPoint.svg"), "Point Query", self._window)
+        point_query_action.setToolTip("Open point query dialog")
+        point_query_action.triggered.connect(self._open_point_query_dialog)
+        self._query_toolbar.addAction(point_query_action)
+
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._query_toolbar)
 
@@ -496,6 +504,10 @@ class QtPlotterWindow:
 
     def _open_cell_query_dialog(self) -> None:
         """Open cell query dialog (non-blocking)."""
+        # Disable point picking before enabling cell picking.
+        if self._point_query_dialog is not None and self._point_query_dialog._picking_enabled:
+            self._point_query_dialog._disable_picking()
+
         # Create dialog if it doesn't exist or was deleted
         if self._cell_query_dialog is None or not self._cell_query_dialog.isVisible():
             # Check if the dialog object was deleted by Qt
@@ -522,6 +534,37 @@ class QtPlotterWindow:
         self._cell_query_dialog.show()
         self._cell_query_dialog.raise_()
         self._cell_query_dialog.activateWindow()
+
+    def _open_point_query_dialog(self) -> None:
+        """Open point query dialog (non-blocking)."""
+        # Disable cell picking before enabling point picking.
+        if self._cell_query_dialog is not None and self._cell_query_dialog._picking_enabled:
+            self._cell_query_dialog._disable_picking()
+
+        # Create dialog if it doesn't exist or was deleted
+        if self._point_query_dialog is None or not self._point_query_dialog.isVisible():
+            # Check if the dialog object was deleted by Qt
+            try:
+                if self._point_query_dialog is not None:
+                    _ = self._point_query_dialog.isVisible()
+            except RuntimeError:
+                self._point_query_dialog = None
+
+            if self._point_query_dialog is None:
+                self._point_query_dialog = PointQueryDialog(plotter=self.plotter, plotter_window=self)
+                # Don't set WA_DeleteOnClose to keep the dialog alive between sessions
+
+        # Re-enable picking if it was disabled
+        if not self._point_query_dialog._picking_enabled:
+            self._point_query_dialog._enable_picking()
+
+        # Restore visualizations for previously selected points
+        self._point_query_dialog._restore_visualizations()
+
+        # Show and raise dialog (non-blocking)
+        self._point_query_dialog.show()
+        self._point_query_dialog.raise_()
+        self._point_query_dialog.activateWindow()
 
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """

@@ -1042,12 +1042,19 @@ class Plotter:
         point_ids: list[int],
         block_names: list[str] | str | None = None,
         time_value: float | None = None,
+        progress_callback: callable | None = None,
     ) -> list[dict]:
         """
         Query point data for multiple points.
 
         For temporal datasets, sweeps all time points unless time_value is specified.
         For static datasets, returns values directly.
+
+        Parameters
+        ----------
+        progress_callback : callable | None, optional
+            Callback function for progress updates. Called with (current, total).
+            Should return True to continue or False to cancel.
 
         See full documentation at docs/api/Plotter/query_points.md
         """
@@ -1082,7 +1089,14 @@ class Plotter:
                     self._mesh = None  # Clear cache to force re-read
                     time_val = self.active_time_value
 
+                    total_ops = len(point_ids)
+                    current_op = 0
+
                     for i, (pid, bn) in enumerate(zip(point_ids, block_name_list)):
+                        if progress_callback is not None:
+                            if not progress_callback(current_op, total_ops):
+                                return []  # Cancelled
+
                         _, current_block, _ = self._find_block_by_name(bn)
                         for key in current_block.point_data.keys():
                             arr = current_block.point_data[key]
@@ -1090,14 +1104,26 @@ class Plotter:
                             if hasattr(value, "tolist"):
                                 value = value.tolist()
                             self._append_temporal_value(results[i], key, time_val, value)
+
+                        current_op += 1
+
+                    if progress_callback is not None:
+                        progress_callback(total_ops, total_ops)
                 else:
                     # Sweep all time points
+                    total_ops = time_reader.number_time_points * len(point_ids)
+                    current_op = 0
+
                     for tp in range(time_reader.number_time_points):
                         self.set_active_time_point(tp)
                         self._mesh = None  # Clear cache to force re-read
                         time_val = self.active_time_value
 
                         for i, (pid, bn) in enumerate(zip(point_ids, block_name_list)):
+                            if progress_callback is not None:
+                                if not progress_callback(current_op, total_ops):
+                                    return []  # Cancelled
+
                             _, current_block, _ = self._find_block_by_name(bn)
                             for key in current_block.point_data.keys():
                                 arr = current_block.point_data[key]
@@ -1105,12 +1131,24 @@ class Plotter:
                                 if hasattr(value, "tolist"):
                                     value = value.tolist()
                                 self._append_temporal_value(results[i], key, time_val, value)
+
+                            current_op += 1
+
+                    if progress_callback is not None:
+                        progress_callback(total_ops, total_ops)
             finally:
                 time_reader.set_active_time_value(original_time_value)
                 self._mesh = None  # Reset to original state
         else:
             # Static dataset
+            total_ops = len(point_ids)
+            current_op = 0
+
             for i, (pid, bn) in enumerate(zip(point_ids, block_name_list)):
+                if progress_callback is not None:
+                    if not progress_callback(current_op, total_ops):
+                        return []  # Cancelled
+
                 _, block, _ = self._find_block_by_name(bn)
                 for key in block.point_data.keys():
                     arr = block.point_data[key]
@@ -1118,6 +1156,11 @@ class Plotter:
                     if hasattr(value, "tolist"):
                         value = value.tolist()
                     self._append_temporal_value(results[i], key, 0, value)
+
+                current_op += 1
+
+            if progress_callback is not None:
+                progress_callback(total_ops, total_ops)
 
         return results
 
