@@ -75,6 +75,13 @@ class QtPlotterWindow:
     _point_pick_mode_active_point: tuple[str | None, int] | None
     _point_pick_mode_world_picker: vtkCellPicker | None
     _point_pick_mode_visible_blocks: list[tuple[str | None, pv.DataSet]]
+    _cell_pick_mode_enabled: bool
+    _cell_pick_mode_move_observer: int | None
+    _cell_pick_mode_click_observer: int | None
+    _cell_pick_mode_callback: Callable[[dict], None] | None
+    _cell_pick_mode_active_cell: tuple[str | None, int] | None
+    _cell_pick_mode_world_picker: vtkCellPicker | None
+    _cell_pick_mode_visible_blocks: list[tuple[str | None, pv.DataSet]]
 
     def __init__(
         self,
@@ -115,6 +122,15 @@ class QtPlotterWindow:
         self._point_pick_mode_active_point: tuple[str | None, int] | None = None
         self._point_pick_mode_world_picker = None
         self._point_pick_mode_visible_blocks: list[tuple[str | None, pv.DataSet]] = []
+
+        # One-shot cell-picking mode state
+        self._cell_pick_mode_enabled = False
+        self._cell_pick_mode_move_observer = None
+        self._cell_pick_mode_click_observer = None
+        self._cell_pick_mode_callback = None
+        self._cell_pick_mode_active_cell: tuple[str | None, int] | None = None
+        self._cell_pick_mode_world_picker = None
+        self._cell_pick_mode_visible_blocks: list[tuple[str | None, pv.DataSet]] = []
 
         # Animation state variables
         self._is_playing = False
@@ -341,6 +357,17 @@ class QtPlotterWindow:
         )
         self._query_toolbar.addAction(check_point_action)
 
+        # Check Cell action
+        check_cell_action = QAction("Check Cell", self._window)
+        check_cell_action.setToolTip("Check cell picking mode")
+        check_cell_action.triggered.connect(
+            lambda: self.enable_cell_picking_mode(
+                on_picked=lambda result: print(f"Picked cell: {result}"),
+                picker_tolerance=0.025,
+            )
+        )
+        self._query_toolbar.addAction(check_cell_action)
+
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._query_toolbar)
 
@@ -533,6 +560,7 @@ class QtPlotterWindow:
     def _open_cell_query_dialog(self) -> None:
         """Open cell query dialog (non-blocking)."""
         self.disable_point_picking_mode(render=False)
+        self.disable_cell_picking_mode(render=False)
 
         # Create dialog if it doesn't exist or was deleted
         if self._cell_query_dialog is None or not self._cell_query_dialog.isVisible():
@@ -564,6 +592,7 @@ class QtPlotterWindow:
     def _open_point_query_dialog(self) -> None:
         """Open point query dialog (non-blocking)."""
         self.disable_point_picking_mode(render=False)
+        self.disable_cell_picking_mode(render=False)
 
         # Create dialog if it doesn't exist or was deleted
         if self._point_query_dialog is None or not self._point_query_dialog.isVisible():
@@ -773,6 +802,240 @@ class QtPlotterWindow:
         finally:
             self.disable_point_picking_mode(render=True)
 
+    def enable_cell_picking_mode(
+        self,
+        *,
+        on_picked: Callable[[dict], None],
+        picker_tolerance: float = 0.025,
+    ) -> None:
+        """Enable one-shot cell-picking mode.
+
+        In this mode, the nearest cell to the mouse hover location is highlighted.
+        On a valid left click, the cell payload is returned through ``on_picked``,
+        then mode is automatically disabled and cleaned up.
+
+        Parameters
+        ----------
+        on_picked : callable
+            Callback function that receives cell information dict with keys:
+            'cell_id', 'block_name', 'coordinates', 'highlight_mesh'.
+        picker_tolerance : float, optional
+            Tolerance for vtkCellPicker in world coordinates. Default is 0.025.
+
+        Raises
+        ------
+        TypeError
+            If on_picked is not callable.
+        ValueError
+            If parent plotter, mesh, or visible cells are not available.
+        RuntimeError
+            If plotter interactor is not available.
+        """
+        if not callable(on_picked):
+            raise TypeError("on_picked must be callable.")
+
+        self.disable_cell_picking_mode(render=False)
+
+        self._cell_pick_mode_callback = on_picked
+
+        # Build list of visible blocks for cell picking
+        if self.parent_plotter is None:
+            raise ValueError("Parent plotter is not available.")
+        mesh = self.parent_plotter.mesh
+        if mesh is None:
+            raise ValueError("No mesh is loaded for cell picking.")
+
+        self._cell_pick_mode_visible_blocks.clear()
+        if isinstance(mesh, pv.MultiBlock):
+            for idx, block in enumerate(mesh):
+                if block is None or getattr(block, "n_cells", 0) <= 0:
+                    continue
+                block_name = mesh.get_block_name(idx) or str(idx)
+                if self.parent_plotter.get_block_visibility(block_name):
+                    self._cell_pick_mode_visible_blocks.append((block_name, block))
+        else:
+            if getattr(mesh, "n_cells", 0) > 0:
+                self._cell_pick_mode_visible_blocks.append((None, mesh))
+
+        if not self._cell_pick_mode_visible_blocks:
+            raise ValueError("No visible cells available for cell picking.")
+
+        self._cell_pick_mode_world_picker = vtkCellPicker()
+        self._cell_pick_mode_world_picker.SetTolerance(picker_tolerance)
+
+        iren = getattr(self.plotter, "iren", None)
+        if iren is None:
+            self.disable_cell_picking_mode(render=False)
+            raise RuntimeError("Plotter interactor is not available.")
+
+        self._cell_pick_mode_move_observer = iren.add_observer("MouseMoveEvent", self._on_cell_pick_mode_mouse_move)
+        self._cell_pick_mode_click_observer = iren.add_observer(
+            "LeftButtonPressEvent", self._on_cell_pick_mode_left_click
+        )
+
+        self._cell_pick_mode_enabled = True
+        self._cell_pick_mode_active_cell = None
+
+    def disable_cell_picking_mode(self, render: bool = True) -> None:
+        """Disable one-shot cell-picking mode and clean up temporary actors.
+
+        Parameters
+        ----------
+        render : bool, optional
+            If True, render the plotter after cleanup. Default is True.
+        """
+        iren = getattr(self.plotter, "iren", None)
+        if iren is not None and self._cell_pick_mode_move_observer is not None:
+            iren.remove_observer(self._cell_pick_mode_move_observer)
+        if iren is not None and self._cell_pick_mode_click_observer is not None:
+            iren.remove_observer(self._cell_pick_mode_click_observer)
+
+        self._cell_pick_mode_move_observer = None
+        self._cell_pick_mode_click_observer = None
+        self._cell_pick_mode_enabled = False
+
+        self._set_cell_pick_mode_highlight(None, render=False)
+
+        self._cell_pick_mode_callback = None
+        self._cell_pick_mode_world_picker = None
+        self._cell_pick_mode_visible_blocks.clear()
+
+        if render:
+            self.plotter.render()
+
+    def _get_world_position_from_mouse_cell_mode(self) -> tuple[float, float, float] | None:
+        """Get 3D world position from current mouse cursor position for cell picking."""
+        if self._cell_pick_mode_world_picker is None:
+            return None
+
+        iren = getattr(self.plotter, "iren", None)
+        if iren is None:
+            return None
+
+        x_pos, y_pos = iren.get_event_position()
+        renderer = iren.get_poked_renderer(x_pos, y_pos)
+        if renderer is None:
+            return None
+
+        self._cell_pick_mode_world_picker.Pick(x_pos, y_pos, 0, renderer)
+        if self._cell_pick_mode_world_picker.GetDataSet() is None:
+            return None
+
+        return self._cell_pick_mode_world_picker.GetPickPosition()
+
+    def _resolve_cell_pick_mode_candidate(self) -> dict | None:
+        """Resolve nearest candidate cell from current mouse event position.
+
+        Returns
+        -------
+        dict or None
+            Dictionary with keys 'cell_id', 'block_name', 'coordinates', and
+            'highlight_mesh', or None if no valid candidate found.
+        """
+        if not all([self._cell_pick_mode_enabled, self._cell_pick_mode_visible_blocks]):
+            return None
+
+        picked_position = self._get_world_position_from_mouse_cell_mode()
+        if picked_position is None:
+            return None
+
+        # Find closest cell across all visible blocks
+        closest_block_name: str | None = None
+        closest_cell_id: int = -1
+        closest_distance: float = float("inf")
+        closest_coordinates: tuple[float, float, float] | None = None
+        closest_block_mesh: pv.DataSet | None = None
+
+        for block_name, block_mesh in self._cell_pick_mode_visible_blocks:
+            # Use find_closest_cell with return_closest_point for accurate distance
+            result = block_mesh.find_closest_cell(picked_position, return_closest_point=True)
+            if isinstance(result, tuple):
+                cell_id, closest_point = result
+            else:
+                # Fallback if return_closest_point not supported
+                cell_id = result
+                cell_center = block_mesh.cell_centers().points[cell_id]
+                closest_point = cell_center
+
+            distance = np.linalg.norm(np.array(picked_position) - closest_point)
+
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_block_name = block_name
+                closest_cell_id = cell_id
+                closest_coordinates = (float(closest_point[0]), float(closest_point[1]), float(closest_point[2]))
+                closest_block_mesh = block_mesh
+
+        if closest_coordinates is None or closest_cell_id < 0 or closest_block_mesh is None:
+            return None
+
+        # Extract the cell for highlighting
+        highlight_mesh = closest_block_mesh.extract_cells([closest_cell_id])
+
+        return {
+            "cell_id": closest_cell_id,
+            "block_name": closest_block_name,
+            "coordinates": closest_coordinates,
+            "highlight_mesh": highlight_mesh,
+        }
+
+    def _set_cell_pick_mode_highlight(
+        self, mesh: pv.PolyData | pv.UnstructuredGrid | None, render: bool = True
+    ) -> None:
+        """Set or clear the cell picking highlight actor.
+
+        Parameters
+        ----------
+        mesh : pv.PolyData, pv.UnstructuredGrid, or None
+            Mesh to highlight as wireframe, or None to clear highlight.
+        render : bool, optional
+            If True, render after updating highlight. Default is True.
+        """
+        self.plotter.remove_actor("_cell_pick_mode_highlight", render=False)
+        if mesh is not None:
+            self.plotter.add_mesh(
+                mesh,
+                style="wireframe",
+                color="red",
+                line_width=5,
+                render_lines_as_tubes=True,
+                pickable=False,
+                reset_camera=False,
+                name="_cell_pick_mode_highlight",
+            )
+        else:
+            self._cell_pick_mode_active_cell = None
+        if render:
+            self.plotter.render()
+
+    def _on_cell_pick_mode_mouse_move(self, *_args) -> None:
+        """Update hover highlight on mouse move for cell picking."""
+        candidate = self._resolve_cell_pick_mode_candidate()
+        if candidate is None:
+            if self._cell_pick_mode_active_cell is not None:
+                self._set_cell_pick_mode_highlight(None, render=True)
+            return
+
+        current_cell = (candidate["block_name"], candidate["cell_id"])
+        if current_cell == self._cell_pick_mode_active_cell:
+            return
+
+        self._cell_pick_mode_active_cell = current_cell
+        self._set_cell_pick_mode_highlight(candidate["highlight_mesh"], render=True)
+
+    def _on_cell_pick_mode_left_click(self, *_args) -> None:
+        """Return picked cell payload on valid left click and then disable mode."""
+        candidate = self._resolve_cell_pick_mode_candidate()
+        if candidate is None:
+            return
+
+        callback = self._cell_pick_mode_callback
+        try:
+            if callback is not None:
+                callback(candidate)
+        finally:
+            self.disable_cell_picking_mode(render=True)
+
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """
         Retrieve an actor by its assigned name.
@@ -917,6 +1180,7 @@ class QtPlotterWindow:
         This method closes both the QtInteractor plotter and the QMainWindow.
         """
         self.disable_point_picking_mode(render=False)
+        self.disable_cell_picking_mode(render=False)
 
         # Stop animation timer if running
         if self._animation_timer and self._animation_timer.isActive():
