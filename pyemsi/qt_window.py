@@ -5,7 +5,7 @@ Provides QtPlotterWindow class that encapsulates Qt application and window
 management for interactive 3D visualization using pyvistaqt.QtInteractor.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, TypedDict
 
 if TYPE_CHECKING:
     from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
@@ -17,12 +17,30 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtCore import QSize, Qt, QTimer
 from pyvistaqt import QtInteractor
 import pyvista as pv
+import numpy as np
+from vtkmodules.vtkCommonDataModel import vtkStaticPointLocator
+from vtkmodules.vtkRenderingCore import vtkCellPicker
 import pyemsi.resources.resources  # noqa: F401
 from .display_settings_dialog import DisplaySettingsDialog
 from .block_visibility_dialog import BlockVisibilityDialog
 from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
 from .cell_query_dialog import CellQueryDialog
 from .point_query_dialog import PointQueryDialog
+
+
+class PointPickResult(TypedDict):
+    """Result payload returned by one-shot point-picking mode."""
+
+    coordinates: tuple[float, float, float]
+    point_id: int
+    block_name: str | None
+    highlight_mesh: pv.PolyData
+
+
+class _PointPickCandidate(PointPickResult):
+    """Internal candidate payload with global point-cloud index."""
+
+    global_index: int
 
 
 class QtPlotterWindow:
@@ -66,6 +84,20 @@ class QtPlotterWindow:
     _query_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
     parent_plotter: "Plotter | None"
+    _point_pick_mode_enabled: bool
+    _point_pick_mode_move_observer: int | None
+    _point_pick_mode_click_observer: int | None
+    _point_pick_mode_callback: Callable[[PointPickResult], None] | None
+    _point_pick_mode_point_color: str
+    _point_pick_mode_point_size: int
+    _point_pick_mode_render_points_as_spheres: bool
+    _point_pick_mode_picker_tolerance: float
+    _point_pick_mode_highlight_actor_name: str
+    _point_pick_mode_active_idx: int | None
+    _point_pick_mode_world_picker: vtkCellPicker | None
+    _point_pick_mode_point_cloud: pv.PolyData | None
+    _point_pick_mode_locator: vtkStaticPointLocator | None
+    _point_pick_mode_block_index_to_name: dict[int, str | None]
 
     def __init__(
         self,
@@ -97,6 +129,22 @@ class QtPlotterWindow:
         # Dialog references to maintain state
         self._cell_query_dialog: CellQueryDialog | None = None
         self._point_query_dialog: PointQueryDialog | None = None
+
+        # One-shot point-picking mode state
+        self._point_pick_mode_enabled = False
+        self._point_pick_mode_move_observer = None
+        self._point_pick_mode_click_observer = None
+        self._point_pick_mode_callback = None
+        self._point_pick_mode_point_color = "red"
+        self._point_pick_mode_point_size = 16
+        self._point_pick_mode_render_points_as_spheres = True
+        self._point_pick_mode_picker_tolerance = 0.025
+        self._point_pick_mode_highlight_actor_name = "_point_pick_mode_highlight"
+        self._point_pick_mode_active_idx = None
+        self._point_pick_mode_world_picker = None
+        self._point_pick_mode_point_cloud = None
+        self._point_pick_mode_locator = None
+        self._point_pick_mode_block_index_to_name: dict[int, str | None] = {}
 
         # Animation state variables
         self._is_playing = False
@@ -313,6 +361,19 @@ class QtPlotterWindow:
         point_query_action.triggered.connect(self._open_point_query_dialog)
         self._query_toolbar.addAction(point_query_action)
 
+        check_point_action = QAction("Check Point", self._window)
+        check_point_action.setToolTip("Check point picking mode")
+        check_point_action.triggered.connect(
+            lambda: self.enable_point_picking_mode(
+                on_picked=lambda result: print(f"Picked point: {result}"),
+                point_color="yellow",
+                point_size=20,
+                render_points_as_spheres=True,
+                picker_tolerance=0.01,
+            )
+        )
+        self._query_toolbar.addAction(check_point_action)
+
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._query_toolbar)
 
@@ -504,6 +565,8 @@ class QtPlotterWindow:
 
     def _open_cell_query_dialog(self) -> None:
         """Open cell query dialog (non-blocking)."""
+        self.disable_point_picking_mode(render=False)
+
         # Disable point picking before enabling cell picking.
         if self._point_query_dialog is not None and self._point_query_dialog._picking_enabled:
             self._point_query_dialog._disable_picking()
@@ -537,6 +600,8 @@ class QtPlotterWindow:
 
     def _open_point_query_dialog(self) -> None:
         """Open point query dialog (non-blocking)."""
+        self.disable_point_picking_mode(render=False)
+
         # Disable cell picking before enabling point picking.
         if self._cell_query_dialog is not None and self._cell_query_dialog._picking_enabled:
             self._cell_query_dialog._disable_picking()
@@ -565,6 +630,238 @@ class QtPlotterWindow:
         self._point_query_dialog.show()
         self._point_query_dialog.raise_()
         self._point_query_dialog.activateWindow()
+
+    def enable_point_picking_mode(
+        self,
+        *,
+        on_picked: Callable[[PointPickResult], None],
+        point_color: str = "red",
+        point_size: int = 16,
+        render_points_as_spheres: bool = True,
+        picker_tolerance: float = 0.025,
+    ) -> None:
+        """Enable one-shot point-picking mode.
+
+        In this mode, the nearest point to the mouse hover location is highlighted.
+        On a valid left click, the point payload is returned through ``on_picked``,
+        then mode is automatically disabled and cleaned up.
+        """
+        if not callable(on_picked):
+            raise TypeError("on_picked must be callable.")
+
+        self.disable_point_picking_mode(render=False)
+
+        # Enforce mutual exclusion with existing query picking modes.
+        if self._cell_query_dialog is not None and self._cell_query_dialog._picking_enabled:
+            self._cell_query_dialog._disable_picking()
+        if self._point_query_dialog is not None and self._point_query_dialog._picking_enabled:
+            self._point_query_dialog._disable_picking()
+
+        self._point_pick_mode_callback = on_picked
+        self._point_pick_mode_point_color = point_color
+        self._point_pick_mode_point_size = point_size
+        self._point_pick_mode_render_points_as_spheres = render_points_as_spheres
+        self._point_pick_mode_picker_tolerance = picker_tolerance
+
+        self._build_point_pick_mode_index()
+
+        self._point_pick_mode_world_picker = vtkCellPicker()
+        self._point_pick_mode_world_picker.SetTolerance(self._point_pick_mode_picker_tolerance)
+
+        iren = getattr(self.plotter, "iren", None)
+        if iren is None:
+            self.disable_point_picking_mode(render=False)
+            raise RuntimeError("Plotter interactor is not available.")
+
+        self._point_pick_mode_move_observer = iren.add_observer("MouseMoveEvent", self._on_point_pick_mode_mouse_move)
+        self._point_pick_mode_click_observer = iren.add_observer(
+            "LeftButtonPressEvent", self._on_point_pick_mode_left_click
+        )
+
+        self._point_pick_mode_enabled = True
+        self._point_pick_mode_active_idx = None
+
+    def disable_point_picking_mode(self, render: bool = True) -> None:
+        """Disable one-shot point-picking mode and clean up temporary actors."""
+        iren = getattr(self.plotter, "iren", None)
+        if iren is not None and self._point_pick_mode_move_observer is not None:
+            iren.remove_observer(self._point_pick_mode_move_observer)
+        if iren is not None and self._point_pick_mode_click_observer is not None:
+            iren.remove_observer(self._point_pick_mode_click_observer)
+
+        self._point_pick_mode_move_observer = None
+        self._point_pick_mode_click_observer = None
+        self._point_pick_mode_enabled = False
+
+        self._clear_point_pick_mode_highlight(render=False)
+
+        self._point_pick_mode_callback = None
+        self._point_pick_mode_world_picker = None
+        self._point_pick_mode_point_cloud = None
+        self._point_pick_mode_locator = None
+        self._point_pick_mode_block_index_to_name.clear()
+
+        if render:
+            self.plotter.render()
+
+    def _build_point_pick_mode_index(self) -> None:
+        """Build a global point index for nearest-point lookup."""
+        if self.parent_plotter is None:
+            raise ValueError("Parent plotter is not available.")
+
+        mesh = self.parent_plotter.mesh
+        if mesh is None:
+            raise ValueError("No mesh is loaded for point picking.")
+
+        all_points: list[np.ndarray] = []
+        all_point_ids: list[np.ndarray] = []
+        all_block_indices: list[np.ndarray] = []
+        self._point_pick_mode_block_index_to_name.clear()
+
+        if isinstance(mesh, pv.MultiBlock):
+            for idx, block in enumerate(mesh):
+                if block is None:
+                    continue
+                if getattr(block, "n_points", 0) <= 0:
+                    continue
+
+                block_name = mesh.get_block_name(idx)
+                if not block_name:
+                    block_name = str(idx)
+                if not self.parent_plotter.get_block_visibility(block_name):
+                    continue
+
+                points = np.asarray(block.points, dtype=float)
+                if points.size == 0:
+                    continue
+                n_points = points.shape[0]
+
+                all_points.append(points)
+                all_point_ids.append(np.arange(n_points, dtype=np.int64))
+                all_block_indices.append(np.full(n_points, idx, dtype=np.int64))
+                self._point_pick_mode_block_index_to_name[idx] = block_name
+        else:
+            if getattr(mesh, "n_points", 0) > 0:
+                points = np.asarray(mesh.points, dtype=float)
+                if points.size > 0:
+                    n_points = points.shape[0]
+                    all_points.append(points)
+                    all_point_ids.append(np.arange(n_points, dtype=np.int64))
+                    all_block_indices.append(np.full(n_points, -1, dtype=np.int64))
+                    self._point_pick_mode_block_index_to_name[-1] = None
+
+        if not all_points:
+            raise ValueError("No visible points available for point picking.")
+
+        point_cloud = pv.PolyData(np.concatenate(all_points, axis=0))
+        point_cloud.point_data["orig_point_id"] = np.concatenate(all_point_ids, axis=0)
+        point_cloud.point_data["orig_block_flat_index"] = np.concatenate(all_block_indices, axis=0)
+
+        locator = vtkStaticPointLocator()
+        locator.SetDataSet(point_cloud)
+        locator.BuildLocator()
+
+        self._point_pick_mode_point_cloud = point_cloud
+        self._point_pick_mode_locator = locator
+        self._point_pick_mode_active_idx = None
+
+    def _resolve_point_pick_mode_candidate(self) -> _PointPickCandidate | None:
+        """Resolve nearest candidate point from current mouse event position."""
+        if not self._point_pick_mode_enabled:
+            return None
+        if self._point_pick_mode_point_cloud is None or self._point_pick_mode_locator is None:
+            return None
+        if self._point_pick_mode_world_picker is None:
+            return None
+
+        iren = getattr(self.plotter, "iren", None)
+        if iren is None:
+            return None
+
+        x_pos, y_pos = iren.get_event_position()
+        renderer = iren.get_poked_renderer(x_pos, y_pos)
+        if renderer is None:
+            return None
+
+        self._point_pick_mode_world_picker.Pick(x_pos, y_pos, 0, renderer)
+        if self._point_pick_mode_world_picker.GetDataSet() is None:
+            return None
+
+        picked_position = self._point_pick_mode_world_picker.GetPickPosition()
+        global_index = int(self._point_pick_mode_locator.FindClosestPoint(picked_position))
+        if global_index < 0:
+            return None
+
+        point_array = self._point_pick_mode_point_cloud.points[global_index]
+        coordinates = (float(point_array[0]), float(point_array[1]), float(point_array[2]))
+        point_id = int(self._point_pick_mode_point_cloud.point_data["orig_point_id"][global_index])
+        block_index = int(self._point_pick_mode_point_cloud.point_data["orig_block_flat_index"][global_index])
+        block_name = self._point_pick_mode_block_index_to_name.get(block_index)
+        highlight_mesh = pv.PolyData(np.array([coordinates], dtype=float))
+
+        return {
+            "global_index": global_index,
+            "coordinates": coordinates,
+            "point_id": point_id,
+            "block_name": block_name,
+            "highlight_mesh": highlight_mesh,
+        }
+
+    def _update_point_pick_mode_highlight(self, highlight_mesh: pv.PolyData) -> None:
+        """Update temporary hover highlight actor."""
+        self.plotter.remove_actor(self._point_pick_mode_highlight_actor_name, render=False)
+        self.plotter.add_mesh(
+            highlight_mesh,
+            style="points",
+            color=self._point_pick_mode_point_color,
+            point_size=self._point_pick_mode_point_size,
+            render_points_as_spheres=self._point_pick_mode_render_points_as_spheres,
+            pickable=False,
+            reset_camera=False,
+            name=self._point_pick_mode_highlight_actor_name,
+        )
+        self.plotter.render()
+
+    def _clear_point_pick_mode_highlight(self, render: bool) -> None:
+        """Remove temporary hover highlight actor."""
+        self.plotter.remove_actor(self._point_pick_mode_highlight_actor_name, render=False)
+        self._point_pick_mode_active_idx = None
+        if render:
+            self.plotter.render()
+
+    def _on_point_pick_mode_mouse_move(self, *_args) -> None:
+        """Update hover highlight on mouse move."""
+        candidate = self._resolve_point_pick_mode_candidate()
+        if candidate is None:
+            if self._point_pick_mode_active_idx is not None:
+                self._clear_point_pick_mode_highlight(render=True)
+            return
+
+        if candidate["global_index"] == self._point_pick_mode_active_idx:
+            return
+
+        self._point_pick_mode_active_idx = candidate["global_index"]
+        self._update_point_pick_mode_highlight(candidate["highlight_mesh"])
+
+    def _on_point_pick_mode_left_click(self, *_args) -> None:
+        """Return picked point payload on valid left click and then disable mode."""
+        candidate = self._resolve_point_pick_mode_candidate()
+        if candidate is None:
+            return
+
+        payload: PointPickResult = {
+            "coordinates": candidate["coordinates"],
+            "point_id": candidate["point_id"],
+            "block_name": candidate["block_name"],
+            "highlight_mesh": candidate["highlight_mesh"],
+        }
+
+        callback = self._point_pick_mode_callback
+        try:
+            if callback is not None:
+                callback(payload)
+        finally:
+            self.disable_point_picking_mode(render=True)
 
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """
@@ -709,6 +1006,8 @@ class QtPlotterWindow:
 
         This method closes both the QtInteractor plotter and the QMainWindow.
         """
+        self.disable_point_picking_mode(render=False)
+
         # Stop animation timer if running
         if self._animation_timer and self._animation_timer.isActive():
             self._animation_timer.stop()
