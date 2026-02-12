@@ -97,6 +97,12 @@ If no file was loaded, you can still use the underlying `plotter` directly and a
 | [`query_points(...)`](./query_points) | Query point data for multiple points. |
 | [`query_cell(...)`](./query_cell) | Query cell data for a single cell. |
 | [`query_cells(...)`](./query_cells) | Query cell data for multiple cells. |
+| [`sample_point(...)`](./sample_point) | Sample mesh data at a single point coordinate. |
+| [`sample_points(...)`](./sample_points) | Sample mesh data at multiple point coordinates. |
+| [`sample_line(...)`](./sample_line) | Sample mesh data along a straight line. |
+| [`sample_lines(...)`](./sample_lines) | Sample mesh data along multiple straight lines. |
+| [`sample_arc(...)`](./sample_arc) | Sample mesh data along a circular arc. |
+| [`sample_arcs(...)`](./sample_arcs) | Sample mesh data along multiple circular arcs. |
 | [`show()`](./show) | Render (Qt window or notebook output). |
 | [`export(...)`](./export) | Save a screenshot to an image file. |
 

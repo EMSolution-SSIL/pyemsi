@@ -1381,3 +1381,858 @@ class Plotter:
                 progress_callback(total_ops, total_ops)
 
         return results
+
+    def _sample_probe(
+        self,
+        probe: pv.PolyData,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+        progress_callback: callable | None = None,
+    ) -> tuple[list[dict], pv.PolyData | None]:
+        """
+        Sample mesh data onto a probe geometry (internal helper).
+
+        This private method handles the core sampling logic for all sample_* methods.
+        It supports both temporal and static datasets, sampling from the entire mesh.
+
+        Parameters
+        ----------
+        probe : pv.PolyData
+            The probe geometry (point cloud, line, arc) to sample onto.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+        progress_callback : callable | None, optional
+            Callback function for progress updates during temporal sweeps.
+            Called with (current, total). Should return True to continue or False to cancel.
+            Default is None.
+
+        Returns
+        -------
+        tuple[list[dict], pv.PolyData | None]
+            A tuple of (results, last_sampled) where:
+            - results: list of dicts (one per probe point) with sampled data
+            - last_sampled: the last sampled PolyData (for advanced users)
+        """
+        # Sample from entire mesh
+        target = self.mesh
+
+        n_points = probe.n_points
+        results: list[dict] = [{} for _ in range(n_points)]
+
+        # Add probe coordinates to each result dict (static, doesn't change over time)
+        coords = probe.points  # (N, 3) array
+        for i in range(n_points):
+            results[i]["coordinates"] = {
+                "x": float(coords[i, 0]),
+                "y": float(coords[i, 1]),
+                "z": float(coords[i, 2]),
+            }
+
+        last_sampled: pv.PolyData | None = None
+
+        # Helper to extract arrays from sampled PolyData
+        def extract_arrays(sampled: pv.PolyData, time_val: float) -> None:
+            for key in sampled.point_data.keys():
+                # Skip internal VTK arrays
+                if key in ("vtkValidPointMask", "vtkGhostType"):
+                    continue
+                arr = sampled.point_data[key]
+                for pt_idx in range(n_points):
+                    value = arr[pt_idx]
+                    if hasattr(value, "tolist"):
+                        value = value.tolist()
+                    self._append_temporal_value(results[pt_idx], key, time_val, value)
+
+        # Temporal or static sampling
+        time_reader = self._time_reader()
+        if time_reader is not None and time_reader.number_time_points > 0:
+            # Temporal dataset
+            original_time_value = self.active_time_value
+            try:
+                if time_value is not None:
+                    # Query specific time value
+                    time_reader.set_active_time_value(time_value)
+                    self._mesh = None  # Clear cache to force re-read
+                    target = self.mesh
+                    last_sampled = probe.sample(target, tolerance=tolerance)
+                    time_val = self.active_time_value
+                    extract_arrays(last_sampled, time_val)
+                else:
+                    # Sweep all time points
+                    total = time_reader.number_time_points
+                    for tp in range(total):
+                        if progress_callback is not None:
+                            if not progress_callback(tp, total):
+                                return [], None  # Cancelled
+                        self.set_active_time_point(tp)
+                        self._mesh = None  # Clear cache to force re-read
+                        target = self.mesh
+                        last_sampled = probe.sample(target, tolerance=tolerance)
+                        time_val = self.active_time_value
+                        extract_arrays(last_sampled, time_val)
+
+                    if progress_callback is not None:
+                        progress_callback(total, total)
+            finally:
+                time_reader.set_active_time_value(original_time_value)
+                self._mesh = None  # Reset to original state
+        else:
+            # Static dataset
+            last_sampled = probe.sample(target, tolerance=tolerance)
+            extract_arrays(last_sampled, 0)
+
+        return results, last_sampled
+
+    def _sample_probe_lines_batch(
+        self,
+        probes: list[pv.PolyData],
+        time_value: float | None = None,
+        tolerance: float | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[list[dict]]:
+        """
+        Sample mesh data onto multiple line/arc probes with time-step-outer loop.
+
+        Instead of sweeping all time steps per probe (N probes × T time steps =
+        N×T expensive ``set_active_time_point`` calls), this method iterates time
+        steps in the outer loop and samples every probe against the already-loaded
+        mesh in the inner loop, reducing the expensive calls to just T.
+
+        Parameters
+        ----------
+        probes : list[pv.PolyData]
+            List of probe geometries (lines, arcs) to sample.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+        progress_callback : callable | None, optional
+            Callback function for progress updates during temporal sweeps.
+            Called with (current_time_step, total_time_steps).
+            Should return True to continue or False to cancel. Default is None.
+
+        Returns
+        -------
+        list[list[dict]]
+            One ``list[dict]`` per probe.  Each inner list has one dict per time
+            step, containing array names mapped to distance / value entries
+            (same structure as the former ``_sample_probe_line``).
+        """
+        n_probes = len(probes)
+        if n_probes == 0:
+            return []
+
+        # --- Pre-compute per-probe static geometry data ---
+        probe_meta: list[dict] = []
+        for probe in probes:
+            points = probe.points
+            n_points = len(points)
+
+            # Cumulative arc-length distances
+            distances = np.zeros(n_points)
+            for i in range(1, n_points):
+                distances[i] = distances[i - 1] + np.linalg.norm(points[i] - points[i - 1])
+            distance_list = distances.tolist()
+
+            # Coordinates
+            x_coords = points[:, 0].tolist()
+            y_coords = points[:, 1].tolist()
+            z_coords = points[:, 2].tolist()
+
+            # Tangent vectors for tangential / normal decomposition
+            tangents = np.zeros_like(points)
+            for i in range(n_points):
+                if i == 0:
+                    tangents[i] = points[1] - points[0]
+                elif i == n_points - 1:
+                    tangents[i] = points[-1] - points[-2]
+                else:
+                    tangents[i] = points[i + 1] - points[i - 1]
+                norm = np.linalg.norm(tangents[i])
+                if norm > 1e-10:
+                    tangents[i] /= norm
+
+            probe_meta.append(
+                {
+                    "n_points": n_points,
+                    "distance_list": distance_list,
+                    "x_coords": x_coords,
+                    "y_coords": y_coords,
+                    "z_coords": z_coords,
+                    "tangents": tangents,
+                }
+            )
+
+        # --- Per-probe result accumulators ---
+        all_results: list[list[dict]] = [[] for _ in range(n_probes)]
+
+        # --- Helper: extract arrays from one sampled PolyData for one time step ---
+        def _extract(sampled: pv.PolyData, time_val: float, meta: dict) -> dict:
+            n_pts = meta["n_points"]
+            dist = meta["distance_list"]
+            xc = meta["x_coords"]
+            yc = meta["y_coords"]
+            zc = meta["z_coords"]
+            tng = meta["tangents"]
+
+            time_data: dict = {"time": time_val}
+            for key in sampled.point_data.keys():
+                if key in ("vtkValidPointMask", "vtkGhostType"):
+                    continue
+                arr = sampled.point_data[key]
+                is_vector = arr.ndim > 1 and arr.shape[1] == 3
+
+                if is_vector:
+                    tangential = np.zeros(n_pts)
+                    normal = np.zeros(n_pts)
+                    for i in range(n_pts):
+                        tangential[i] = np.dot(arr[i], tng[i])
+                        tangential_vec = tangential[i] * tng[i]
+                        normal_vec = arr[i] - tangential_vec
+                        normal[i] = np.linalg.norm(normal_vec)
+                    time_data[key] = {
+                        "distance": dist.copy(),
+                        "x_value": arr[:, 0].tolist(),
+                        "y_value": arr[:, 1].tolist(),
+                        "z_value": arr[:, 2].tolist(),
+                        "tangential": tangential.tolist(),
+                        "normal": normal.tolist(),
+                        "x": xc.copy(),
+                        "y": yc.copy(),
+                        "z": zc.copy(),
+                    }
+                else:
+                    time_data[key] = {
+                        "distance": dist.copy(),
+                        "value": arr.tolist() if hasattr(arr, "tolist") else list(arr),
+                        "x": xc.copy(),
+                        "y": yc.copy(),
+                        "z": zc.copy(),
+                    }
+            return time_data
+
+        def _sample_all_probes(target, time_val: float) -> None:
+            """Sample every probe against *target* and append results."""
+            for p_idx in range(n_probes):
+                sampled = probes[p_idx].sample(target, tolerance=tolerance)
+                all_results[p_idx].append(_extract(sampled, time_val, probe_meta[p_idx]))
+
+        # --- Time-aware or static sampling ---
+        time_reader = self._time_reader()
+        if time_reader is not None and time_reader.number_time_points > 0:
+            original_time_value = self.active_time_value
+            try:
+                if time_value is not None:
+                    # Single requested time value
+                    time_reader.set_active_time_value(time_value)
+                    self._mesh = None
+                    target = self.mesh
+                    _sample_all_probes(target, self.active_time_value)
+                else:
+                    # Sweep all time points — outer loop is time, inner is probes
+                    total = time_reader.number_time_points
+                    for tp in range(total):
+                        if progress_callback is not None:
+                            if not progress_callback(tp, total):
+                                return [[] for _ in range(n_probes)]  # Cancelled
+                        self.set_active_time_point(tp)
+                        self._mesh = None
+                        target = self.mesh
+                        _sample_all_probes(target, self.active_time_value)
+
+                    if progress_callback is not None:
+                        progress_callback(total, total)
+            finally:
+                time_reader.set_active_time_value(original_time_value)
+                self._mesh = None
+        else:
+            # Static dataset — load mesh once, sample all probes
+            target = self.mesh
+            _sample_all_probes(target, 0.0)
+
+        return all_results
+
+    def sample_point(
+        self,
+        point: Sequence[float],
+        time_value: float | None = None,
+        tolerance: float | None = None,
+    ) -> dict:
+        """
+        Sample mesh data at a single point coordinate.
+
+        This method creates a probe at the specified 3D coordinate and samples
+        the mesh data onto it. For temporal datasets, sweeps all time points
+        unless time_value is specified.
+
+        Parameters
+        ----------
+        point : Sequence[float]
+            3D coordinate [x, y, z] to sample at.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+
+        Returns
+        -------
+        dict
+            Dictionary with array names as keys. Each value is a dict with
+            "time" and "value" keys (for scalars) or "time", "x_value",
+            "y_value", "z_value" keys (for vectors). Also includes a
+            "coordinates" key with the probe position.
+
+        Raises
+        ------
+        ValueError
+            If point does not have exactly 3 components.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> data = p.sample_point([1.0, 2.0, 3.0])
+        >>> print(data["Temperature"]["value"][0])
+
+        See full documentation at docs/api/Plotter/sample_point.md
+        """
+        if len(point) != 3:
+            raise ValueError(f"point must have 3 components, got {len(point)}.")
+
+        probe = pv.PolyData(np.array([point]))
+        results, _ = self._sample_probe(probe, time_value, tolerance)
+        return results[0]
+
+    def sample_points(
+        self,
+        points: Sequence[Sequence[float]],
+        time_value: float | None = None,
+        tolerance: float | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[dict]:
+        """
+        Sample mesh data at multiple point coordinates (point cloud).
+
+        This method creates a point cloud probe from the specified coordinates
+        and samples the mesh data onto each point. For temporal datasets, sweeps
+        all time points unless time_value is specified.
+
+        Parameters
+        ----------
+        points : Sequence[Sequence[float]]
+            List of 3D coordinates [[x, y, z], ...] to sample at.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+        progress_callback : callable | None, optional
+            Callback function for progress updates during temporal sweeps.
+            Called with (current, total). Should return True to continue or
+            False to cancel. Default is None.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries (one per point) with array names as keys.
+            Each value is a dict with "time" and "value" keys (for scalars)
+            or "time", "x_value", "y_value", "z_value" keys (for vectors).
+            Each point dict also includes a "coordinates" key.
+
+        Raises
+        ------
+        ValueError
+            If any point does not have exactly 3 components.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> points = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+        >>> data = p.sample_points(points)
+        >>> print(data[0]["Temperature"]["value"][0])
+
+        See full documentation at docs/api/Plotter/sample_points.md
+        """
+        # Validate all points have 3 components
+        for i, point in enumerate(points):
+            if len(point) != 3:
+                raise ValueError(f"points[{i}] must have 3 components, got {len(point)}.")
+
+        probe = pv.PolyData(np.array(points))
+        results, _ = self._sample_probe(probe, time_value, tolerance, progress_callback)
+        return results
+
+    def sample_line(
+        self,
+        pointa: Sequence[float],
+        pointb: Sequence[float],
+        resolution: int = 100,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+    ) -> list[dict]:
+        """
+        Sample mesh data along a straight line.
+
+        Creates a line probe from pointa to pointb with the specified resolution
+        and samples the mesh data onto each point along the line. For temporal
+        datasets, sweeps all time points unless time_value is specified.
+
+        Parameters
+        ----------
+        pointa : Sequence[float]
+            Starting point [x, y, z] of the line.
+        pointb : Sequence[float]
+            Ending point [x, y, z] of the line.
+        resolution : int, optional
+            Number of segments to divide the line into. The resulting line will
+            have resolution + 1 points. Default is 100.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries (one per time step) with array names as keys.
+            Each array has "distance" (distance along line) and "value" keys
+            (for scalars) or "distance", "x_value", "y_value", "z_value" keys
+            (for vectors). For static datasets, returns a single-element list.
+
+        Raises
+        ------
+        ValueError
+            If resolution < 1.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> data = p.sample_line([0, 0, 0], [1, 1, 1], resolution=50)
+        >>> # Plot temperature along line (static dataset)
+        >>> temps = data[0]["Temperature"]["value"]
+        >>> distances = data[0]["Temperature"]["distance"]
+
+        See full documentation at docs/api/Plotter/sample_line.md
+        """
+        if resolution < 1:
+            raise ValueError(f"resolution must be >= 1, got {resolution}.")
+
+        probe = pv.Line(pointa, pointb, resolution=resolution)
+        return self._sample_probe_lines_batch([probe], time_value, tolerance)[0]
+
+    def sample_lines(
+        self,
+        lines: Sequence[tuple[Sequence[float], Sequence[float]]],
+        resolution: int | list[int] = 100,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[list[dict]]:
+        """
+        Sample mesh data along multiple straight lines.
+
+        Creates line probes for each (pointa, pointb) pair and samples the mesh
+        data onto each line. For temporal datasets, sweeps all time points unless
+        time_value is specified.
+
+        Parameters
+        ----------
+        lines : Sequence[tuple[Sequence[float], Sequence[float]]]
+            List of line definitions, each as a tuple (pointa, pointb) where
+            pointa and pointb are [x, y, z] coordinates.
+        resolution : int or list[int], optional
+            Number of segments to divide each line into. Can be a single int
+            (applied to all lines) or a list of ints (one per line). Default is 100.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+        progress_callback : callable | None, optional
+            Callback function for progress updates. Called with (current_line, total_lines).
+            Should return True to continue or False to cancel. Default is None.
+
+        Returns
+        -------
+        list[list[dict]]
+            List of results (one per line), where each result is a list of
+            dictionaries (one per time step) with array names as keys.
+            Each array has "distance" and "value" keys (for scalars) or
+            "distance", "x_value", "y_value", "z_value" keys (for vectors).
+
+        Raises
+        ------
+        ValueError
+            If resolution is a list and its length doesn't match the number of lines,
+            or if any resolution < 1.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> lines = [([0, 0, 0], [1, 0, 0]), ([0, 0, 0], [0, 1, 0])]
+        >>> data = p.sample_lines(lines, resolution=50)
+        >>> # data[0] is results for first line, data[1] for second line
+        >>> # For static dataset: data[0][0] is the single time step
+        >>> temps_line0 = data[0][0]["Temperature"]["value"]
+        >>> distances_line0 = data[0][0]["Temperature"]["distance"]
+
+        See full documentation at docs/api/Plotter/sample_lines.md
+        """
+        # Normalize resolution to list
+        if isinstance(resolution, int):
+            resolution_list = [resolution] * len(lines)
+        elif isinstance(resolution, list):
+            if len(resolution) != len(lines):
+                raise ValueError(
+                    f"resolution list length ({len(resolution)}) must match number of lines ({len(lines)})."
+                )
+            resolution_list = resolution
+        else:
+            raise ValueError("resolution must be int or list[int].")
+
+        # Validate all resolutions
+        for i, res in enumerate(resolution_list):
+            if res < 1:
+                raise ValueError(f"resolution[{i}] must be >= 1, got {res}.")
+
+        # Build all probes up-front
+        probes = [pv.Line(pa, pb, resolution=res) for (pa, pb), res in zip(lines, resolution_list)]
+
+        # Sample all probes in a single time-step sweep
+        return self._sample_probe_lines_batch(probes, time_value, tolerance, progress_callback)
+
+    def sample_arc(
+        self,
+        pointa: Sequence[float],
+        pointb: Sequence[float],
+        center: Sequence[float],
+        resolution: int = 100,
+        negative: bool = False,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+    ) -> list[dict]:
+        """
+        Sample mesh data along a circular arc.
+
+        Creates a circular arc probe from pointa to pointb around center with
+        the specified resolution and samples the mesh data onto each point along
+        the arc. For temporal datasets, sweeps all time points unless time_value
+        is specified.
+
+        Parameters
+        ----------
+        pointa : Sequence[float]
+            Starting point [x, y, z] of the arc.
+        pointb : Sequence[float]
+            Ending point [x, y, z] of the arc.
+        center : Sequence[float]
+            Center point [x, y, z] of the circle containing the arc.
+        resolution : int, optional
+            Number of segments to divide the arc into. The resulting arc will
+            have resolution + 1 points. Default is 100.
+        negative : bool, optional
+            If False (default), the arc spans the positive angle from pointa to
+            pointb around center. If True, spans the negative (reflex) angle.
+            Default is False.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries (one per time step) with array names as keys.
+            Each array has "distance" (distance along arc) and "value" keys
+            (for scalars) or "distance", "x_value", "y_value", "z_value" keys
+            (for vectors). For static datasets, returns a single-element list.
+
+        Raises
+        ------
+        ValueError
+            If resolution < 1.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> data = p.sample_arc([1, 0, 0], [0, 1, 0], [0, 0, 0], resolution=50)
+        >>> # Plot magnetic field along arc (static dataset)
+        >>> b_mag = data[0]["B-Mag (T)"]["value"]
+        >>> distances = data[0]["B-Mag (T)"]["distance"]
+
+        See full documentation at docs/api/Plotter/sample_arc.md
+        """
+        if resolution < 1:
+            raise ValueError(f"resolution must be >= 1, got {resolution}.")
+
+        probe = pv.CircularArc(pointa=pointa, pointb=pointb, center=center, resolution=resolution, negative=negative)
+        return self._sample_probe_lines_batch([probe], time_value, tolerance)[0]
+
+    def sample_arcs(
+        self,
+        arcs: Sequence[tuple[Sequence[float], Sequence[float], Sequence[float]]],
+        resolution: int | list[int] = 100,
+        negative: bool = False,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[list[dict]]:
+        """
+        Sample mesh data along multiple circular arcs.
+
+        Creates circular arc probes for each (pointa, pointb, center) tuple and
+        samples the mesh data onto each arc. For temporal datasets, sweeps all
+        time points unless time_value is specified.
+
+        Parameters
+        ----------
+        arcs : Sequence[tuple[Sequence[float], Sequence[float], Sequence[float]]]
+            List of arc definitions, each as a tuple (pointa, pointb, center)
+            where each component is an [x, y, z] coordinate.
+        resolution : int or list[int], optional
+            Number of segments to divide each arc into. Can be a single int
+            (applied to all arcs) or a list of ints (one per arc). Default is 100.
+        negative : bool, optional
+            If False (default), arcs span the positive angle. If True, span
+            the negative (reflex) angle. Applied to all arcs. Default is False.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+        progress_callback : callable | None, optional
+            Callback function for progress updates. Called with (current_arc, total_arcs).
+            Should return True to continue or False to cancel. Default is None.
+
+        Returns
+        -------
+        list[list[dict]]
+            List of results (one per arc), where each result is a list of
+            dictionaries (one per time step) with array names as keys.
+            Each array has "distance" and "value" keys (for scalars) or
+            "distance", "x_value", "y_value", "z_value" keys (for vectors).
+
+        Raises
+        ------
+        ValueError
+            If resolution is a list and its length doesn't match the number of arcs,
+            or if any resolution < 1.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> arcs = [([1, 0, 0], [0, 1, 0], [0, 0, 0]),
+        ...         ([0, 0, 1], [1, 0, 1], [0, 0, 1])]
+        >>> data = p.sample_arcs(arcs, resolution=50)
+        >>> # data[0] is results for first arc, data[1] for second arc
+        >>> # For static dataset: data[0][0] is the single time step
+        >>> b_mag_arc0 = data[0][0]["B-Mag (T)"]["value"]
+        >>> distances_arc0 = data[0][0]["B-Mag (T)"]["distance"]
+
+        See full documentation at docs/api/Plotter/sample_arcs.md
+        """
+        # Normalize resolution to list
+        if isinstance(resolution, int):
+            resolution_list = [resolution] * len(arcs)
+        elif isinstance(resolution, list):
+            if len(resolution) != len(arcs):
+                raise ValueError(f"resolution list length ({len(resolution)}) must match number of arcs ({len(arcs)}).")
+            resolution_list = resolution
+        else:
+            raise ValueError("resolution must be int or list[int].")
+
+        # Validate all resolutions
+        for i, res in enumerate(resolution_list):
+            if res < 1:
+                raise ValueError(f"resolution[{i}] must be >= 1, got {res}.")
+
+        # Build all probes up-front
+        probes = [
+            pv.CircularArc(pointa=pa, pointb=pb, center=ctr, resolution=res, negative=negative)
+            for (pa, pb, ctr), res in zip(arcs, resolution_list)
+        ]
+
+        # Sample all probes in a single time-step sweep
+        return self._sample_probe_lines_batch(probes, time_value, tolerance, progress_callback)
+
+    def sample_arc_from_normal(
+        self,
+        center: Sequence[float],
+        resolution: int = 100,
+        normal: Sequence[float] | None = None,
+        polar: Sequence[float] | None = None,
+        angle: float | None = None,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+    ) -> list[dict]:
+        """
+        Sample mesh data along a circular arc defined by a normal vector.
+
+        Creates a circular arc probe defined by a normal to the plane of the arc,
+        a polar starting vector, and an angle. The arc is sampled in a
+        counterclockwise direction from the polar vector. For temporal datasets,
+        sweeps all time points unless time_value is specified.
+
+        Parameters
+        ----------
+        center : Sequence[float]
+            Center point [x, y, z] of the circle that defines the arc.
+        resolution : int, optional
+            Number of segments to divide the arc into. The resulting arc will
+            have resolution + 1 points. Default is 100.
+        normal : Sequence[float] | None, optional
+            Normal vector [x, y, z] to the plane of the arc. If None, defaults
+            to [0, 0, 1] (positive Z direction). Default is None.
+        polar : Sequence[float] | None, optional
+            Starting point of the arc in polar coordinates [x, y, z]. If None,
+            defaults to [1, 0, 0] (positive X direction). Default is None.
+        angle : float | None, optional
+            Arc length in degrees, beginning at the polar vector in a
+            counterclockwise direction. If None, defaults to 90 degrees.
+            Default is None.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+
+        Returns
+        -------
+        list[dict]
+            List of dictionaries (one per time step) with array names as keys.
+            Each array has "distance" (distance along arc), "value" (for scalars),
+            or "x_value", "y_value", "z_value" (for vectors), plus "tangential",
+            "normal", and "x", "y", "z" (sample point coordinates).
+            For static datasets, returns a single-element list.
+
+        Raises
+        ------
+        ValueError
+            If resolution < 1.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> # Quarter arc in XY plane starting from negative X axis
+        >>> data = p.sample_arc_from_normal(
+        ...     center=[0, 0, 0],
+        ...     normal=[0, 0, 1],
+        ...     polar=[-1, 0, 0],
+        ...     angle=90,
+        ...     resolution=50
+        ... )
+        >>> b_mag = data[0]["B-Mag (T)"]["value"]
+        >>> distances = data[0]["B-Mag (T)"]["distance"]
+
+        See full documentation at docs/api/Plotter/sample_arc_from_normal.md
+        """
+        if resolution < 1:
+            raise ValueError(f"resolution must be >= 1, got {resolution}.")
+
+        probe = pv.CircularArcFromNormal(center=center, resolution=resolution, normal=normal, polar=polar, angle=angle)
+        return self._sample_probe_lines_batch([probe], time_value, tolerance)[0]
+
+    def sample_arcs_from_normal(
+        self,
+        arcs: Sequence[tuple[Sequence[float], Sequence[float] | None, Sequence[float] | None, float | None]],
+        resolution: int | list[int] = 100,
+        time_value: float | None = None,
+        tolerance: float | None = None,
+        progress_callback: callable | None = None,
+    ) -> list[list[dict]]:
+        """
+        Sample mesh data along multiple circular arcs defined by normal vectors.
+
+        Creates circular arc probes for each (center, normal, polar, angle) tuple
+        and samples the mesh data onto each arc. For temporal datasets, sweeps all
+        time points unless time_value is specified.
+
+        Parameters
+        ----------
+        arcs : Sequence[tuple[Sequence[float], Sequence[float] | None, Sequence[float] | None, float | None]]
+            List of arc definitions, each as a tuple (center, normal, polar, angle)
+            where center is [x, y, z], normal is [x, y, z] or None (defaults to [0, 0, 1]),
+            polar is [x, y, z] or None (defaults to [1, 0, 0]), and angle is a float
+            in degrees or None (defaults to 90).
+        resolution : int or list[int], optional
+            Number of segments to divide each arc into. Can be a single int
+            (applied to all arcs) or a list of ints (one per arc). Default is 100.
+        time_value : float | None, optional
+            Query a specific time value instead of sweeping all time points.
+            Ignored for static datasets. Default is None.
+        tolerance : float | None, optional
+            Tolerance for the sample operation. If None, PyVista generates
+            a tolerance automatically. Default is None.
+        progress_callback : callable | None, optional
+            Callback function for progress updates. Called with (current_arc, total_arcs).
+            Should return True to continue or False to cancel. Default is None.
+
+        Returns
+        -------
+        list[list[dict]]
+            List of results (one per arc), where each result is a list of
+            dictionaries (one per time step) with array names as keys.
+
+        Raises
+        ------
+        ValueError
+            If resolution is a list and its length doesn't match the number of arcs,
+            or if any resolution < 1.
+
+        Examples
+        --------
+        >>> from pyemsi import Plotter
+        >>> p = Plotter("mesh.vtu")
+        >>> arcs = [
+        ...     ([0, 0, 0], [0, 0, 1], [-1, 0, 0], 90),  # Quarter arc in XY
+        ...     ([0, 0, 0], [1, 0, 0], [0, 1, 0], 180),  # Half arc in YZ
+        ... ]
+        >>> data = p.sample_arcs_from_normal(arcs, resolution=50)
+
+        See full documentation at docs/api/Plotter/sample_arcs_from_normal.md
+        """
+        # Normalize resolution to list
+        if isinstance(resolution, int):
+            resolution_list = [resolution] * len(arcs)
+        elif isinstance(resolution, list):
+            if len(resolution) != len(arcs):
+                raise ValueError(f"resolution list length ({len(resolution)}) must match number of arcs ({len(arcs)}).")
+            resolution_list = resolution
+        else:
+            raise ValueError("resolution must be int or list[int].")
+
+        # Validate all resolutions
+        for i, res in enumerate(resolution_list):
+            if res < 1:
+                raise ValueError(f"resolution[{i}] must be >= 1, got {res}.")
+
+        # Build all probes up-front
+        probes = [
+            pv.CircularArcFromNormal(center=ctr, resolution=res, normal=nrm, polar=pol, angle=ang)
+            for (ctr, nrm, pol, ang), res in zip(arcs, resolution_list)
+        ]
+
+        # Sample all probes in a single time-step sweep
+        return self._sample_probe_lines_batch(probes, time_value, tolerance, progress_callback)
