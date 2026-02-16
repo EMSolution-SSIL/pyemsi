@@ -25,6 +25,7 @@ from .block_visibility_dialog import BlockVisibilityDialog
 from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
 from .cell_query_dialog import CellQueryDialog
 from .point_query_dialog import PointQueryDialog
+from .pick_result_history_dialog import PickResultHistoryDialog
 
 
 class QtPlotterWindow:
@@ -113,6 +114,11 @@ class QtPlotterWindow:
         # Dialog references to maintain state
         self._cell_query_dialog: CellQueryDialog | None = None
         self._point_query_dialog: PointQueryDialog | None = None
+        self._pick_result_history_dialog: PickResultHistoryDialog | None = None
+
+        # Action references for toggle behavior
+        self._check_point_action: QAction | None = None
+        self._check_cell_action: QAction | None = None
 
         # One-shot point-picking mode state
         self._point_pick_mode_enabled = False
@@ -347,26 +353,19 @@ class QtPlotterWindow:
         point_query_action.triggered.connect(self._open_point_query_dialog)
         self._query_toolbar.addAction(point_query_action)
 
-        check_point_action = QAction("Check Point", self._window)
-        check_point_action.setToolTip("Check point picking mode")
-        check_point_action.triggered.connect(
-            lambda: self.enable_point_picking_mode(
-                on_picked=lambda result: print(f"Picked point: {result}"),
-                picker_tolerance=0.01,
-            )
-        )
-        self._query_toolbar.addAction(check_point_action)
+        # Check Point action (toggleable)
+        self._check_point_action = QAction(QIcon(":/icons/PickPoint.svg"), "Pick Point", self._window)
+        self._check_point_action.setToolTip("Toggle point picking mode with result history")
+        self._check_point_action.setCheckable(True)
+        self._check_point_action.toggled.connect(self._on_check_point_toggled)
+        self._query_toolbar.addAction(self._check_point_action)
 
-        # Check Cell action
-        check_cell_action = QAction("Check Cell", self._window)
-        check_cell_action.setToolTip("Check cell picking mode")
-        check_cell_action.triggered.connect(
-            lambda: self.enable_cell_picking_mode(
-                on_picked=lambda result: print(f"Picked cell: {result}"),
-                picker_tolerance=0.025,
-            )
-        )
-        self._query_toolbar.addAction(check_cell_action)
+        # Check Cell action (toggleable)
+        self._check_cell_action = QAction(QIcon(":/icons/PickCell.svg"), "Pick Cell", self._window)
+        self._check_cell_action.setToolTip("Toggle cell picking mode with result history")
+        self._check_cell_action.setCheckable(True)
+        self._check_cell_action.toggled.connect(self._on_check_cell_toggled)
+        self._query_toolbar.addAction(self._check_cell_action)
 
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._query_toolbar)
@@ -619,17 +618,133 @@ class QtPlotterWindow:
         self._point_query_dialog.raise_()
         self._point_query_dialog.activateWindow()
 
+    def _on_check_point_toggled(self, checked: bool) -> None:
+        """
+        Handle check point action toggle state change.
+
+        Parameters
+        ----------
+        checked : bool
+            True if toggle is checked (enabling picking), False if unchecked (disabling).
+        """
+        if checked:
+            # Ensure cell action is unchecked (mutual exclusivity)
+            if self._check_cell_action is not None:
+                self._check_cell_action.blockSignals(True)
+                self._check_cell_action.setChecked(False)
+                self._check_cell_action.blockSignals(False)
+
+            # Disable cell picking mode if active
+            self.disable_cell_picking_mode(render=False)
+
+            # Create and show history dialog if needed
+            if self._pick_result_history_dialog is None or not self._pick_result_history_dialog.isVisible():
+                self._pick_result_history_dialog = PickResultHistoryDialog(parent_window=self)
+                self._pick_result_history_dialog.show()
+
+            # Define callback that appends result
+            def on_point_picked(result: dict) -> None:
+                if self._pick_result_history_dialog is not None:
+                    self._pick_result_history_dialog.append_result("Point", result)
+
+            # Enable point picking mode
+            try:
+                self.enable_point_picking_mode(
+                    on_picked=on_point_picked,
+                    picker_tolerance=0.01,
+                )
+            except (TypeError, ValueError, RuntimeError) as e:
+                # If enabling fails, uncheck the action
+                self._check_point_action.blockSignals(True)
+                self._check_point_action.setChecked(False)
+                self._check_point_action.blockSignals(False)
+                if self._pick_result_history_dialog is not None:
+                    self._pick_result_history_dialog.close()
+                print(f"Failed to enable point picking mode: {e}")
+        else:
+            # Disable point picking mode
+            self.disable_point_picking_mode(render=True)
+
+            # Close history dialog
+            if self._pick_result_history_dialog is not None:
+                self._pick_result_history_dialog.close()
+
+    def _on_check_cell_toggled(self, checked: bool) -> None:
+        """
+        Handle check cell action toggle state change.
+
+        Parameters
+        ----------
+        checked : bool
+            True if toggle is checked (enabling picking), False if unchecked (disabling).
+        """
+        if checked:
+            # Ensure point action is unchecked (mutual exclusivity)
+            if self._check_point_action is not None:
+                self._check_point_action.blockSignals(True)
+                self._check_point_action.setChecked(False)
+                self._check_point_action.blockSignals(False)
+
+            # Disable point picking mode if active
+            self.disable_point_picking_mode(render=False)
+
+            # Create and show history dialog if needed
+            if self._pick_result_history_dialog is None or not self._pick_result_history_dialog.isVisible():
+                self._pick_result_history_dialog = PickResultHistoryDialog(parent_window=self)
+                self._pick_result_history_dialog.show()
+
+            # Define callback that appends result
+            def on_cell_picked(result: dict) -> None:
+                if self._pick_result_history_dialog is not None:
+                    self._pick_result_history_dialog.append_result("Cell", result)
+
+            # Enable cell picking mode
+            try:
+                self.enable_cell_picking_mode(
+                    on_picked=on_cell_picked,
+                    picker_tolerance=0.025,
+                )
+            except (TypeError, ValueError, RuntimeError) as e:
+                # If enabling fails, uncheck the action
+                self._check_cell_action.blockSignals(True)
+                self._check_cell_action.setChecked(False)
+                self._check_cell_action.blockSignals(False)
+                if self._pick_result_history_dialog is not None:
+                    self._pick_result_history_dialog.close()
+                print(f"Failed to enable cell picking mode: {e}")
+        else:
+            # Disable cell picking mode
+            self.disable_cell_picking_mode(render=True)
+
+            # Close history dialog
+            if self._pick_result_history_dialog is not None:
+                self._pick_result_history_dialog.close()
+
+    def _on_pick_history_dialog_closed(self) -> None:
+        """
+        Handle pick result history dialog closure.
+
+        Automatically unchecks both toggle buttons and disables picking modes
+        when the user closes the history dialog window.
+        """
+        # Uncheck point action if checked
+        if self._check_point_action is not None and self._check_point_action.isChecked():
+            self._check_point_action.setChecked(False)
+
+        # Uncheck cell action if checked
+        if self._check_cell_action is not None and self._check_cell_action.isChecked():
+            self._check_cell_action.setChecked(False)
+
     def enable_point_picking_mode(
         self,
-        *,
         on_picked: Callable[[dict], None],
         picker_tolerance: float = 0.025,
     ) -> None:
-        """Enable one-shot point-picking mode.
+        """Enable continuous point-picking mode.
 
         In this mode, the nearest point to the mouse hover location is highlighted.
-        On a valid left click, the point payload is returned through ``on_picked``,
-        then mode is automatically disabled and cleaned up.
+        On a valid left click, the point payload is returned through ``on_picked``.
+        The mode remains active until explicitly disabled.
         """
         if not callable(on_picked):
             raise TypeError("on_picked must be callable.")
@@ -740,13 +855,16 @@ class QtPlotterWindow:
             if distance < closest_distance:
                 closest_distance = distance
                 closest_block_name = block_name
+                closest_block_mesh = block_mesh
                 closest_point_id = point_id
                 closest_coordinates = (float(point_coords[0]), float(point_coords[1]), float(point_coords[2]))
 
         if closest_coordinates is None or closest_point_id < 0:
             return None
 
-        highlight_mesh = pv.PolyData(np.array([closest_coordinates], dtype=float))
+        highlight_mesh = closest_block_mesh.extract_points(
+            [closest_point_id], adjacent_cells=False, include_cells=False
+        )
 
         return {
             "coordinates": closest_coordinates,
@@ -790,29 +908,25 @@ class QtPlotterWindow:
         self._set_point_pick_mode_highlight(candidate["highlight_mesh"], render=True)
 
     def _on_point_pick_mode_left_click(self, *_args) -> None:
-        """Return picked point payload on valid left click and then disable mode."""
+        """Return picked point payload on valid left click."""
         candidate = self._resolve_point_pick_mode_candidate()
         if candidate is None:
             return
 
         callback = self._point_pick_mode_callback
-        try:
-            if callback is not None:
-                callback(candidate)
-        finally:
-            self.disable_point_picking_mode(render=True)
+        if callback is not None:
+            callback(candidate)
 
     def enable_cell_picking_mode(
         self,
-        *,
         on_picked: Callable[[dict], None],
         picker_tolerance: float = 0.025,
     ) -> None:
-        """Enable one-shot cell-picking mode.
+        """Enable continuous cell-picking mode.
 
         In this mode, the nearest cell to the mouse hover location is highlighted.
-        On a valid left click, the cell payload is returned through ``on_picked``,
-        then mode is automatically disabled and cleaned up.
+        On a valid left click, the cell payload is returned through ``on_picked``.
+        The mode remains active until explicitly disabled.
 
         Parameters
         ----------
@@ -1024,17 +1138,14 @@ class QtPlotterWindow:
         self._set_cell_pick_mode_highlight(candidate["highlight_mesh"], render=True)
 
     def _on_cell_pick_mode_left_click(self, *_args) -> None:
-        """Return picked cell payload on valid left click and then disable mode."""
+        """Return picked cell payload on valid left click."""
         candidate = self._resolve_cell_pick_mode_candidate()
         if candidate is None:
             return
 
         callback = self._cell_pick_mode_callback
-        try:
-            if callback is not None:
-                callback(candidate)
-        finally:
-            self.disable_cell_picking_mode(render=True)
+        if callback is not None:
+            callback(candidate)
 
     def get_actor_by_name(self, name: str) -> pv.Actor | None:
         """
@@ -1181,6 +1292,10 @@ class QtPlotterWindow:
         """
         self.disable_point_picking_mode(render=False)
         self.disable_cell_picking_mode(render=False)
+
+        # Close pick result history dialog if open
+        if hasattr(self, "_pick_result_history_dialog") and self._pick_result_history_dialog is not None:
+            self._pick_result_history_dialog.close()
 
         # Stop animation timer if running
         if self._animation_timer and self._animation_timer.isActive():
