@@ -63,7 +63,7 @@ class CellQueryDialog(QDialog):
     plotter_window : QtPlotterWindow
         Reference to the parent plotter window.
     _selected_cells : list of tuple
-        Internal list of selected (cell_id, block_id) tuples.
+        Internal list of selected (cell_id, block_name, mesh) tuples.
     """
 
     def __init__(
@@ -86,9 +86,8 @@ class CellQueryDialog(QDialog):
         self.plotter = plotter
 
         # Internal state
-        self._selected_cells: list[tuple[int, int]] = []
-        self._picking_enabled = False
-        self._visualization_actors: set[tuple[int, int]] = set()  # Track visualized cells
+        self._selected_cells: list[tuple[int, str | None, pv.PolyData | pv.UnstructuredGrid]] = []
+        self._visualization_actors: set[tuple[int, str | None]] = set()  # Track visualized cells
 
         # Configure dialog
         self.setWindowTitle("Cell Query")
@@ -203,17 +202,17 @@ class CellQueryDialog(QDialog):
         right_widget.setLayout(right_layout)
         return right_widget
 
+    @property
+    def _picking_enabled(self) -> bool:
+        """Check if cell picking mode is enabled via the plotter window."""
+        return self.plotter_window._cell_pick_mode_enabled
+
     def _enable_picking(self) -> None:
-        """Enable cell picking mode in the plotter."""
+        """Enable cell picking mode via the plotter window."""
         try:
-            self.plotter.enable_element_picking(
-                callback=self._on_cell_picked,
-                mode="cell",
-                show=False,
-                show_message=True,
-                font_size=18,
+            self.plotter_window.enable_cell_picking_mode(
+                on_picked=self._on_cell_picked,
             )
-            self._picking_enabled = True
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -222,26 +221,39 @@ class CellQueryDialog(QDialog):
             )
 
     def _disable_picking(self) -> None:
-        """Disable cell picking mode in the plotter."""
+        """Disable cell picking mode via the plotter window."""
         try:
-            self.plotter.disable_picking()
-            self._picking_enabled = False
+            self.plotter_window.disable_cell_picking_mode(render=False)
         except Exception:
             pass  # Silently ignore disable errors on close
 
-    def _visualize_cell(self, cell_id: int, block_id: int, mesh: "pv.PolyData | pv.UnstructuredGrid") -> None:
+    @staticmethod
+    def _actor_suffix(block_name: str | None) -> str:
+        """Create a stable actor name suffix from an optional block name."""
+        if block_name is None:
+            return "none"
+        return str(block_name).replace(" ", "_")
+
+    def _visualize_cell(
+        self,
+        cell_id: int,
+        block_name: str | None,
+        mesh: "pv.PolyData | pv.UnstructuredGrid",
+    ) -> None:
         """Add wireframe and label visualization for a picked cell.
 
         Parameters
         ----------
         cell_id : int
             The cell ID.
-        block_id : int
-            The block ID.
+        block_name : str or None
+            The block name.
         mesh : pv.PolyData or pv.UnstructuredGrid
             The picked mesh containing the cell.
         """
         try:
+            actor_suffix = self._actor_suffix(block_name)
+
             # Add wireframe visualization
             self.plotter.add_mesh(
                 mesh,
@@ -250,16 +262,17 @@ class CellQueryDialog(QDialog):
                 line_width=5,
                 render_lines_as_tubes=True,
                 pickable=False,
-                name=f"cell_viz_mesh_{cell_id}_{block_id}",
+                name=f"cell_viz_mesh_{cell_id}_{actor_suffix}",
             )
 
             # Get mesh center for label positioning
             center = mesh.center
+            block_label = block_name if block_name is not None else "N/A"
 
             # Add label at center
             self.plotter.add_point_labels(
                 [center],
-                [f"{cell_id}({block_id})"],
+                [f"{cell_id}({block_label})"],
                 font_size=16,
                 text_color="white",
                 show_points=False,
@@ -269,11 +282,11 @@ class CellQueryDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
-                name=f"cell_viz_label_{cell_id}_{block_id}",
+                name=f"cell_viz_label_{cell_id}_{actor_suffix}",
             )
 
             # Track this visualization
-            self._visualization_actors.add((cell_id, block_id))
+            self._visualization_actors.add((cell_id, block_name))
 
             # Render to show visualization immediately
             self.plotter.render()
@@ -285,25 +298,26 @@ class CellQueryDialog(QDialog):
                 f"Failed to visualize cell {cell_id}:\n{str(e)}",
             )
 
-    def _remove_cell_visualization(self, cell_id: int, block_id: int, render: bool = True) -> None:
+    def _remove_cell_visualization(self, cell_id: int, block_name: str | None, render: bool = True) -> None:
         """Remove visualization actors for a specific cell.
 
         Parameters
         ----------
         cell_id : int
             The cell ID.
-        block_id : int
-            The block ID.
+        block_name : str or None
+            The block name.
         render : bool, optional
             Whether to render after removal. Default is True.
         """
-        key = (cell_id, block_id)
+        key = (cell_id, block_name)
         if key not in self._visualization_actors:
             return
 
+        actor_suffix = self._actor_suffix(block_name)
         # Remove both actors using their names
-        self.plotter.remove_actor(f"cell_viz_mesh_{cell_id}_{block_id}", render=False)
-        self.plotter.remove_actor(f"cell_viz_label_{cell_id}_{block_id}", render=False)
+        self.plotter.remove_actor(f"cell_viz_mesh_{cell_id}_{actor_suffix}", render=False)
+        self.plotter.remove_actor(f"cell_viz_label_{cell_id}_{actor_suffix}", render=False)
 
         # Remove from tracking
         self._visualization_actors.discard(key)
@@ -325,10 +339,13 @@ class CellQueryDialog(QDialog):
         self.plotter.suppress_rendering = True
 
         # Re-visualize all selected cells
-        for cell_id, block_id, mesh in self._selected_cells:
+        for cell_id, block_name, mesh in self._selected_cells:
             # Skip if already visualized
-            if (cell_id, block_id) in self._visualization_actors:
+            if (cell_id, block_name) in self._visualization_actors:
                 continue
+
+            actor_suffix = self._actor_suffix(block_name)
+            block_label = block_name if block_name is not None else "N/A"
 
             # Add wireframe visualization
             self.plotter.add_mesh(
@@ -338,14 +355,14 @@ class CellQueryDialog(QDialog):
                 line_width=5,
                 render_lines_as_tubes=True,
                 pickable=False,
-                name=f"cell_viz_mesh_{cell_id}_{block_id}",
+                name=f"cell_viz_mesh_{cell_id}_{actor_suffix}",
             )
 
             # Add label at center
             center = mesh.center
             self.plotter.add_point_labels(
                 [center],
-                [f"{cell_id}({block_id})"],
+                [f"{cell_id}({block_label})"],
                 font_size=16,
                 text_color="white",
                 show_points=False,
@@ -355,52 +372,49 @@ class CellQueryDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
-                name=f"cell_viz_label_{cell_id}_{block_id}",
+                name=f"cell_viz_label_{cell_id}_{actor_suffix}",
             )
 
             # Track this visualization
-            self._visualization_actors.add((cell_id, block_id))
+            self._visualization_actors.add((cell_id, block_name))
 
         # Re-enable rendering and render once
         self.plotter.suppress_rendering = False
         self.plotter.render()
 
-    def _on_cell_picked(self, mesh: "pv.PolyData | pv.UnstructuredGrid") -> None:
+    def _on_cell_picked(self, result: dict) -> None:
         """
         Callback when a cell is picked.
 
         Parameters
         ----------
-        mesh : pv.PolyData or pv.UnstructuredGrid
-            The picked mesh containing cell data.
+        result : dict
+            Dict with 'cell_id', 'block_name', 'coordinates', 'highlight_mesh'.
         """
         try:
-            # Extract cell ID and block ID from mesh cell_data
-            if "vtkOriginalCellIds" not in mesh.cell_data or "PropertyID" not in mesh.point_data:
-                QMessageBox.warning(
-                    self,
-                    "Picking Warning",
-                    "Picked mesh does not contain vtkOriginalCellIds or PropertyID data.",
-                )
-                return
-
-            cell_id = int(mesh.cell_data["vtkOriginalCellIds"][0])
-            block_id = int(mesh.point_data["PropertyID"][0])
+            # Extract values from result dict
+            cell_id = result["cell_id"]
+            block_name = result["block_name"]
+            mesh = result["highlight_mesh"]
 
             # Check for duplicates
-            if (cell_id, block_id, mesh) in self._selected_cells:
+            if any(
+                selected_id == cell_id and selected_block == block_name
+                for selected_id, selected_block, _ in self._selected_cells
+            ):
                 return  # Already selected, ignore
 
             # Add to internal list
-            self._selected_cells.append((cell_id, block_id, mesh))
+            self._selected_cells.append((cell_id, block_name, mesh))
+
             # Add row to table
             row_position = self._table.rowCount()
             self._table.insertRow(row_position)
             self._table.setItem(row_position, 0, QTableWidgetItem(str(cell_id)))
-            self._table.setItem(row_position, 1, QTableWidgetItem(str(block_id)))
+            self._table.setItem(row_position, 1, QTableWidgetItem(block_name if block_name is not None else "N/A"))
 
             # Visualize the picked cell
-            self._visualize_cell(cell_id, block_id, mesh)
+            self._visualize_cell(cell_id, block_name, mesh)
 
             # Enable Run Query button
             self._run_query_button.setEnabled(True)
@@ -422,9 +436,9 @@ class CellQueryDialog(QDialog):
         progress_dialog = None
 
         try:
-            # Extract cell IDs and block IDs
+            # Extract cell IDs and block names
             cell_ids = [c[0] for c in self._selected_cells]
-            block_ids = [str(c[1]) for c in self._selected_cells]
+            block_names = [c[1] for c in self._selected_cells]
 
             # Query cells using parent plotter
             if self.plotter_window.parent_plotter is None:
@@ -462,7 +476,7 @@ class CellQueryDialog(QDialog):
 
             # Execute query with progress callback
             query_results = self.plotter_window.parent_plotter.query_cells(
-                cell_ids, block_ids, progress_callback=update_progress
+                cell_ids, block_names, progress_callback=update_progress
             )
 
             # Close progress dialog
@@ -482,8 +496,8 @@ class CellQueryDialog(QDialog):
             self._plots_tab_widget.clear()
 
             # Populate results tabs
-            self._populate_results(query_results, cell_ids, block_ids)
-            self._populate_plots(query_results, cell_ids, block_ids)
+            self._populate_results(query_results, cell_ids, block_names)
+            self._populate_plots(query_results, cell_ids, block_names)
 
         except Exception as e:
             QMessageBox.critical(
@@ -500,7 +514,12 @@ class CellQueryDialog(QDialog):
             # Re-enable button
             self._run_query_button.setEnabled(len(self._selected_cells) > 0)
 
-    def _populate_results(self, query_results: list, cell_ids: list[int], block_ids: list[int]) -> None:
+    def _populate_results(
+        self,
+        query_results: list,
+        cell_ids: list[int],
+        block_names: list[str | None],
+    ) -> None:
         """
         Populate the nested tabs with query results for each cell.
 
@@ -511,8 +530,8 @@ class CellQueryDialog(QDialog):
             with values being dicts containing 'time'/'value' or 'time'/'x_value'/'y_value'/'z_value'.
         cell_ids : list[int]
             List of cell IDs corresponding to query_results.
-        block_ids : list[int]
-            List of block IDs corresponding to query_results.
+        block_names : list[str | None]
+            List of block names corresponding to query_results.
         """
         if not query_results:
             # Show message in empty tab
@@ -522,7 +541,7 @@ class CellQueryDialog(QDialog):
             return
 
         # Create a tab for each cell
-        for cell_id, block_id, cell_data in zip(cell_ids, block_ids, query_results):
+        for cell_id, block_name, cell_data in zip(cell_ids, block_names, query_results):
             # Create table for this cell
             cell_table = QTableWidget()
             cell_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -673,9 +692,15 @@ class CellQueryDialog(QDialog):
             cell_table.resizeColumnsToContents()
 
             # Add this cell's table as a tab
-            self._results_tab_widget.addTab(cell_table, f"Cell {cell_id} (Block {block_id})")
+            block_label = block_name if block_name is not None else "N/A"
+            self._results_tab_widget.addTab(cell_table, f"Cell {cell_id} (Block {block_label})")
 
-    def _populate_plots(self, query_results: list, cell_ids: list[int], block_ids: list[int]) -> None:
+    def _populate_plots(
+        self,
+        query_results: list,
+        cell_ids: list[int],
+        block_names: list[str | None],
+    ) -> None:
         """
         Create matplotlib plots for each field showing all cells' time responses.
 
@@ -686,8 +711,8 @@ class CellQueryDialog(QDialog):
             with values being dicts containing 'time'/'value' or 'time'/'x_value'/'y_value'/'z_value'.
         cell_ids : list[int]
             List of cell IDs corresponding to query_results.
-        block_ids : list[int]
-            List of block IDs corresponding to query_results.
+        block_names : list[str | None]
+            List of block names corresponding to query_results.
         """
         if not query_results:
             return
@@ -740,7 +765,7 @@ class CellQueryDialog(QDialog):
 
             # Plot data for each cell
             has_data = False
-            for i, (cell_id, block_id, cell_data) in enumerate(zip(cell_ids, block_ids, query_results)):
+            for i, (cell_id, block_name, cell_data) in enumerate(zip(cell_ids, block_names, query_results)):
                 if field_name not in cell_data:
                     continue
 
@@ -755,11 +780,12 @@ class CellQueryDialog(QDialog):
                 # Handle scalar fields
                 if "value" in field_data:
                     values = field_data["value"]
+                    block_label = block_name if block_name is not None else "N/A"
                     ax.plot(
                         time_values,
                         values,
                         marker="o",
-                        label=f"Cell {cell_id} (Block {block_id})",
+                        label=f"Cell {cell_id} (Block {block_label})",
                         linewidth=2,
                         markersize=4,
                     )
@@ -770,13 +796,14 @@ class CellQueryDialog(QDialog):
                     x_vals = np.array(field_data["x_value"])
                     y_vals = np.array(field_data["y_value"])
                     z_vals = np.array(field_data["z_value"])
+                    block_label = block_name if block_name is not None else "N/A"
 
                     # Plot each component as a separate line
                     ax.plot(
                         time_values,
                         x_vals,
                         marker="o",
-                        label=f"Cell {cell_id} (Block {block_id}) - X",
+                        label=f"Cell {cell_id} (Block {block_label}) - X",
                         linewidth=2,
                         markersize=4,
                         linestyle="-",
@@ -785,7 +812,7 @@ class CellQueryDialog(QDialog):
                         time_values,
                         y_vals,
                         marker="s",
-                        label=f"Cell {cell_id} (Block {block_id}) - Y",
+                        label=f"Cell {cell_id} (Block {block_label}) - Y",
                         linewidth=2,
                         markersize=4,
                         linestyle="--",
@@ -794,7 +821,7 @@ class CellQueryDialog(QDialog):
                         time_values,
                         z_vals,
                         marker="^",
-                        label=f"Cell {cell_id} (Block {block_id}) - Z",
+                        label=f"Cell {cell_id} (Block {block_label}) - Z",
                         linewidth=2,
                         markersize=4,
                         linestyle="-.",
@@ -832,8 +859,8 @@ class CellQueryDialog(QDialog):
         for row in sorted(selected_rows, reverse=True):
             # Remove visualization if exists
             if row < len(self._selected_cells):
-                cell_id, block_id, mesh = self._selected_cells[row]
-                self._remove_cell_visualization(cell_id, block_id, render=False)
+                cell_id, block_name, mesh = self._selected_cells[row]
+                self._remove_cell_visualization(cell_id, block_name, render=False)
                 # Remove from internal list
                 del self._selected_cells[row]
 
@@ -853,8 +880,8 @@ class CellQueryDialog(QDialog):
         self.plotter.suppress_rendering = True
 
         # Remove all visualizations
-        for cell_id, block_id in list(self._visualization_actors):
-            self._remove_cell_visualization(cell_id, block_id, render=False)
+        for cell_id, block_name in list(self._visualization_actors):
+            self._remove_cell_visualization(cell_id, block_name, render=False)
 
         # Re-enable rendering and render once
         self.plotter.suppress_rendering = False
@@ -879,9 +906,10 @@ class CellQueryDialog(QDialog):
         self.plotter.suppress_rendering = True
 
         # Remove all visualization actors
-        for cell_id, block_id in list(self._visualization_actors):
-            self.plotter.remove_actor(f"cell_viz_mesh_{cell_id}_{block_id}", render=False)
-            self.plotter.remove_actor(f"cell_viz_label_{cell_id}_{block_id}", render=False)
+        for cell_id, block_name in list(self._visualization_actors):
+            actor_suffix = self._actor_suffix(block_name)
+            self.plotter.remove_actor(f"cell_viz_mesh_{cell_id}_{actor_suffix}", render=False)
+            self.plotter.remove_actor(f"cell_viz_label_{cell_id}_{actor_suffix}", render=False)
 
         # Clear tracking set
         self._visualization_actors.clear()

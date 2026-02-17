@@ -576,9 +576,8 @@ class QtPlotterWindow:
                 self._cell_query_dialog = CellQueryDialog(plotter=self.plotter, plotter_window=self)
                 # Don't set WA_DeleteOnClose to keep the dialog alive between sessions
 
-        # Re-enable picking if it was disabled
-        if not self._cell_query_dialog._picking_enabled:
-            self._cell_query_dialog._enable_picking()
+        # Re-enable picking (it was disabled at the top of this method)
+        self._cell_query_dialog._enable_picking()
 
         # Restore visualizations for previously selected cells
         self._cell_query_dialog._restore_visualizations()
@@ -606,9 +605,8 @@ class QtPlotterWindow:
                 self._point_query_dialog = PointQueryDialog(plotter=self.plotter, plotter_window=self)
                 # Don't set WA_DeleteOnClose to keep the dialog alive between sessions
 
-        # Re-enable picking if it was disabled
-        if not self._point_query_dialog._picking_enabled:
-            self._point_query_dialog._enable_picking()
+        # Re-enable picking (it was disabled at the top of this method)
+        self._point_query_dialog._enable_picking()
 
         # Restore visualizations for previously selected points
         self._point_query_dialog._restore_visualizations()

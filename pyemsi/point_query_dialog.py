@@ -87,7 +87,6 @@ class PointQueryDialog(QDialog):
 
         # Internal state
         self._selected_points: list[tuple[int, str | None, pv.PolyData | pv.UnstructuredGrid]] = []
-        self._picking_enabled = False
         self._visualization_actors: set[tuple[int, str | None]] = set()  # Track visualized points
 
         # Configure dialog
@@ -203,17 +202,17 @@ class PointQueryDialog(QDialog):
         right_widget.setLayout(right_layout)
         return right_widget
 
+    @property
+    def _picking_enabled(self) -> bool:
+        """Check if point picking mode is enabled via the plotter window."""
+        return self.plotter_window._point_pick_mode_enabled
+
     def _enable_picking(self) -> None:
-        """Enable point picking mode in the plotter."""
+        """Enable point picking mode via the plotter window."""
         try:
-            self.plotter.enable_element_picking(
-                callback=self._on_point_picked,
-                mode="point",
-                show=False,
-                show_message=True,
-                font_size=18,
+            self.plotter_window.enable_point_picking_mode(
+                on_picked=self._on_point_picked,
             )
-            self._picking_enabled = True
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -222,10 +221,9 @@ class PointQueryDialog(QDialog):
             )
 
     def _disable_picking(self) -> None:
-        """Disable point picking mode in the plotter."""
+        """Disable point picking mode via the plotter window."""
         try:
-            self.plotter.disable_picking()
-            self._picking_enabled = False
+            self.plotter_window.disable_point_picking_mode(render=False)
         except Exception:
             pass  # Silently ignore disable errors on close
 
@@ -383,42 +381,20 @@ class PointQueryDialog(QDialog):
         self.plotter.suppress_rendering = False
         self.plotter.render()
 
-    def _on_point_picked(self, mesh: "pv.PolyData | pv.UnstructuredGrid") -> None:
+    def _on_point_picked(self, result: dict) -> None:
         """
         Callback when a point is picked.
 
         Parameters
         ----------
-        mesh : pv.PolyData or pv.UnstructuredGrid
-            The picked mesh containing point data.
+        result : dict
+            Dict with 'point_id', 'block_name', 'coordinates', 'highlight_mesh'.
         """
         try:
-            if "vtkOriginalPointIds" not in mesh.point_data:
-                QMessageBox.warning(
-                    self,
-                    "Picking Warning",
-                    "Picked mesh does not contain vtkOriginalPointIds data.",
-                )
-                return
-
-            point_id = int(mesh.point_data["vtkOriginalPointIds"][0])
-
-            is_multiblock = self.plotter_window.parent_plotter is not None and isinstance(
-                self.plotter_window.parent_plotter.mesh, pv.MultiBlock
-            )
-
-            block_name = None
-            if is_multiblock:
-                if "PropertyID" in mesh.point_data:
-                    block_name = str(int(mesh.point_data["PropertyID"][0]))
-
-            if is_multiblock and block_name is None:
-                QMessageBox.warning(
-                    self,
-                    "Picking Warning",
-                    "Could not determine block for picked point. Expected PropertyID data.",
-                )
-                return
+            # Extract values from result dict
+            point_id = result["point_id"]
+            block_name = result["block_name"]
+            mesh = result["highlight_mesh"]
 
             # Check for duplicates
             if any(
