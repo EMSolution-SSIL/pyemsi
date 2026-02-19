@@ -26,6 +26,7 @@ from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
 from .cell_query_dialog import CellQueryDialog
 from .point_query_dialog import PointQueryDialog
 from .pick_result_history_dialog import PickResultHistoryDialog
+from .sample_lines_dialog import SampleLinesDialog
 
 
 class QtPlotterWindow:
@@ -115,6 +116,7 @@ class QtPlotterWindow:
         self._cell_query_dialog: CellQueryDialog | None = None
         self._point_query_dialog: PointQueryDialog | None = None
         self._pick_result_history_dialog: PickResultHistoryDialog | None = None
+        self._sample_lines_dialog: SampleLinesDialog | None = None
 
         # Action references for toggle behavior
         self._check_point_action: QAction | None = None
@@ -353,6 +355,12 @@ class QtPlotterWindow:
         point_query_action.triggered.connect(self._open_point_query_dialog)
         self._query_toolbar.addAction(point_query_action)
 
+        # Sample Lines action
+        sample_lines_action = QAction("Sample Lines", self._window)
+        sample_lines_action.setToolTip("Open sample lines dialog")
+        sample_lines_action.triggered.connect(self._open_sample_lines_dialog)
+        self._query_toolbar.addAction(sample_lines_action)
+
         # Check Point action (toggleable)
         self._check_point_action = QAction(QIcon(":/icons/PickPoint.svg"), "Pick Point", self._window)
         self._check_point_action.setToolTip("Toggle point picking mode with result history")
@@ -586,6 +594,31 @@ class QtPlotterWindow:
         self._cell_query_dialog.show()
         self._cell_query_dialog.raise_()
         self._cell_query_dialog.activateWindow()
+
+    def _open_sample_lines_dialog(self) -> None:
+        """Open sample lines dialog (non-blocking)."""
+        self.disable_point_picking_mode(render=False)
+        self.disable_cell_picking_mode(render=False)
+
+        # Create dialog if it doesn't exist or was deleted
+        if self._sample_lines_dialog is None or not self._sample_lines_dialog.isVisible():
+            try:
+                if self._sample_lines_dialog is not None:
+                    _ = self._sample_lines_dialog.isVisible()
+            except RuntimeError:
+                self._sample_lines_dialog = None
+
+            if self._sample_lines_dialog is None:
+                self._sample_lines_dialog = SampleLinesDialog(plotter=self.plotter, plotter_window=self)
+                # Don't set WA_DeleteOnClose to keep state between sessions
+
+        # Restore 3D line visualizations if dialog was previously closed
+        self._sample_lines_dialog._restore_visualizations()
+
+        # Show and raise dialog (non-blocking)
+        self._sample_lines_dialog.show()
+        self._sample_lines_dialog.raise_()
+        self._sample_lines_dialog.activateWindow()
 
     def _open_point_query_dialog(self) -> None:
         """Open point query dialog (non-blocking)."""
