@@ -624,12 +624,24 @@ class SampleLinesDialog(QDialog):
         """
         Populate the right-panel tab widget with sampling results.
 
+        Creates a nested tab hierarchy:
+
+        - **Data tab** — top-level tab for all results.
+          - **Line tabs** (``Line 1``, ``Line 2``, …) — one per sampled line.
+            - **Array tabs** (``B-Mag (T)``, ``Temperature``, …) — one per data
+              array found in the first time-step dictionary.
+              - **Sub-key tabs** (``value``, ``distance``, ``x``, …) — one per
+                entry inside the array dictionary.
+                - **QTableWidget** — rows = time steps, columns = sample points.
+
         Parameters
         ----------
-        results : object
-            The value returned by ``Plotter.sample_lines``. Implementation details
-            depend on the Plotter API; this method will be expanded once the
-            return format is established.
+        results : list[list[dict]]
+            The value returned by ``Plotter.sample_lines``.  Outer list is per
+            line, inner list is per time step.  Each dict has a ``"time"`` key
+            and one key per data array whose value is a sub-dict of equal-length
+            lists (e.g. ``"distance"``, ``"value"``, ``"x"``, ``"y"``, ``"z"``
+            for scalars).
         """
         # Clear existing tabs
         self._results_tab_widget.clear()
@@ -640,13 +652,136 @@ class SampleLinesDialog(QDialog):
             self._results_tab_widget.addTab(placeholder, "Results")
             return
 
-        # Placeholder: display raw repr until full result format is known
-        for i, (line_entry, result) in enumerate(zip(self._lines, results)):
-            start, end, resolution = line_entry
-            label = QLabel(f"Line {i + 1}: {self._fmt_xyz(start)} → {self._fmt_xyz(end)}\n\n{repr(result)}")
-            label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-            label.setWordWrap(True)
-            self._results_tab_widget.addTab(label, f"Line {i + 1}")
+        # Outer "Data" tab containing per-line sub-tabs
+        line_tabs = QTabWidget()
+        for line_idx, line_time_steps in enumerate(results):
+            line_tab = self._build_line_tab(line_time_steps)
+            line_tabs.addTab(line_tab, f"Line {line_idx + 1}")
+
+        self._results_tab_widget.addTab(line_tabs, "Data")
+
+    # ------------------------------------------------------------------
+    # Result-tab builders
+    # ------------------------------------------------------------------
+
+    def _build_line_tab(self, line_time_steps: list[dict]) -> QWidget:
+        """Build the array-level tab widget for a single line.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            One dict per time step with ``"time"`` and array-name keys.
+
+        Returns
+        -------
+        QWidget
+            A widget containing a ``QTabWidget`` with one tab per array.
+        """
+        if not line_time_steps:
+            lbl = QLabel("No time-step data.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        first_step = line_time_steps[0]
+        array_names = [k for k in first_step if k != "time"]
+
+        if not array_names:
+            lbl = QLabel("No data arrays in result.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        array_tabs = QTabWidget()
+        for array_name in array_names:
+            sub_widget = self._build_array_tab(line_time_steps, array_name)
+            array_tabs.addTab(sub_widget, array_name)
+
+        return array_tabs
+
+    def _build_array_tab(self, line_time_steps: list[dict], array_name: str) -> QWidget:
+        """Build the sub-key-level tab widget for one data array.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            Full time-step list for the line.
+        array_name : str
+            The array key (e.g. ``"B-Mag (T)"``).
+
+        Returns
+        -------
+        QWidget
+            A ``QTabWidget`` with one tab per sub-key.
+        """
+        first_array = line_time_steps[0].get(array_name, {})
+        sub_keys = list(first_array.keys())
+
+        if not sub_keys:
+            lbl = QLabel(f"No sub-keys for '{array_name}'.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        sub_tabs = QTabWidget()
+        for sub_key in sub_keys:
+            table = self._build_data_table(line_time_steps, array_name, sub_key)
+            sub_tabs.addTab(table, sub_key)
+
+        return sub_tabs
+
+    def _build_data_table(
+        self,
+        line_time_steps: list[dict],
+        array_name: str,
+        sub_key: str,
+    ) -> QTableWidget:
+        """Build a table for one sub-key of one array.
+
+        Rows correspond to time steps and columns to sample points along the
+        line.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            Full time-step list for the line.
+        array_name : str
+            Data-array key.
+        sub_key : str
+            Sub-key inside the array dict (e.g. ``"value"``).
+
+        Returns
+        -------
+        QTableWidget
+        """
+        n_times = len(line_time_steps)
+        # Determine number of sample points from the first time step
+        sample_data = line_time_steps[0].get(array_name, {}).get(sub_key, [])
+        n_points = len(sample_data)
+
+        table = QTableWidget(n_times, n_points)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+
+        # Horizontal header: point indices
+        table.setHorizontalHeaderLabels([str(j) for j in range(n_points)])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        table.horizontalHeader().setDefaultSectionSize(80)
+
+        # Vertical header: time values
+        time_labels = [f"{ts.get('time', 0.0):.6g}" for ts in line_time_steps]
+        table.setVerticalHeaderLabels(time_labels)
+
+        # Populate cells — suppress UI updates for performance
+        table.setUpdatesEnabled(False)
+        try:
+            for t_idx, ts in enumerate(line_time_steps):
+                values = ts.get(array_name, {}).get(sub_key, [])
+                for p_idx, val in enumerate(values):
+                    item = QTableWidgetItem(f"{val:.6g}" if isinstance(val, (int, float)) else str(val))
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                    table.setItem(t_idx, p_idx, item)
+        finally:
+            table.setUpdatesEnabled(True)
+
+        return table
 
     # ------------------------------------------------------------------
     # Slot: Remove Selected
