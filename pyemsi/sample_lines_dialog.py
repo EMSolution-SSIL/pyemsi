@@ -36,7 +36,11 @@ from PySide6.QtWidgets import (
     QLineEdit,
 )
 from PySide6.QtCore import Qt
+import numpy as np
 import pyvista as pv
+from matplotlib.backends.backend_qtagg import FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
 
 
 # ---------------------------------------------------------------------------
@@ -660,6 +664,20 @@ class SampleLinesDialog(QDialog):
 
         self._results_tab_widget.addTab(line_tabs, "Data")
 
+        # "3D Surface" tab — same line hierarchy but matplotlib plot_surface leaves
+        surface_line_tabs = QTabWidget()
+        for line_idx, line_time_steps in enumerate(results):
+            surface_line_tab = self._build_surface_line_tab(line_time_steps)
+            surface_line_tabs.addTab(surface_line_tab, f"Line {line_idx + 1}")
+        self._results_tab_widget.addTab(surface_line_tabs, "3D Surface")
+
+        # "Heatmap" tab — same line hierarchy but matplotlib imshow leaves
+        heatmap_line_tabs = QTabWidget()
+        for line_idx, line_time_steps in enumerate(results):
+            heatmap_line_tab = self._build_heatmap_line_tab(line_time_steps)
+            heatmap_line_tabs.addTab(heatmap_line_tab, f"Line {line_idx + 1}")
+        self._results_tab_widget.addTab(heatmap_line_tabs, "Heatmap")
+
     # ------------------------------------------------------------------
     # Result-tab builders
     # ------------------------------------------------------------------
@@ -782,6 +800,336 @@ class SampleLinesDialog(QDialog):
             table.setUpdatesEnabled(True)
 
         return table
+
+    # ------------------------------------------------------------------
+    # 3D Surface tab builders
+    # ------------------------------------------------------------------
+
+    # Spatial / axis sub-keys that are excluded from the 3D Surface tabs.
+    # "distance" is always the X-axis; "x", "y", "z" are sample-point coords.
+    _SURFACE_EXCLUDED_SUBKEYS: frozenset[str] = frozenset({"distance", "x", "y", "z"})
+
+    def _build_surface_line_tab(self, line_time_steps: list[dict]) -> QWidget:
+        """Build the array-level tab widget for the 3D Surface view of one line.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            One dict per time step with ``"time"`` and array-name keys.
+
+        Returns
+        -------
+        QWidget
+            A ``QTabWidget`` with one tab per data array.
+        """
+        if not line_time_steps:
+            lbl = QLabel("No time-step data.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        first_step = line_time_steps[0]
+        array_names = [k for k in first_step if k != "time"]
+
+        if not array_names:
+            lbl = QLabel("No data arrays in result.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        array_tabs = QTabWidget()
+        for array_name in array_names:
+            sub_widget = self._build_surface_array_tab(line_time_steps, array_name)
+            array_tabs.addTab(sub_widget, array_name)
+
+        return array_tabs
+
+    def _build_surface_array_tab(self, line_time_steps: list[dict], array_name: str) -> QWidget:
+        """Build the sub-key-level tab widget for the 3D Surface view of one array.
+
+        Excludes ``"distance"``, ``"x"``, ``"y"``, ``"z"`` sub-keys because distance
+        is the X-axis of the surface and the coordinate keys are not field values.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            Full time-step list for the line.
+        array_name : str
+            The array key (e.g. ``"B-Mag (T)"``).
+
+        Returns
+        -------
+        QWidget
+            A ``QTabWidget`` with one surface-plot tab per plottable sub-key.
+        """
+        first_array = line_time_steps[0].get(array_name, {})
+        if not first_array.get("distance"):
+            lbl = QLabel("Distance data unavailable.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        sub_keys = [k for k in first_array if k not in self._SURFACE_EXCLUDED_SUBKEYS]
+
+        if not sub_keys:
+            lbl = QLabel(f"No plottable sub-keys for '{array_name}'.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        sub_tabs = QTabWidget()
+        for sub_key in sub_keys:
+            plot_widget = self._build_surface_plot(line_time_steps, array_name, sub_key)
+            sub_tabs.addTab(plot_widget, sub_key)
+
+        return sub_tabs
+
+    def _build_surface_plot(
+        self,
+        line_time_steps: list[dict],
+        array_name: str,
+        sub_key: str,
+    ) -> QWidget:
+        """Build a matplotlib 3D surface (or 2D line fallback) widget.
+
+        For datasets with more than one time step the method renders a
+        ``plot_surface`` with:
+
+        - **X** — distance along the sample line
+        - **Y** — time value
+        - **Z** — sampled field value (``sub_key``)
+
+        For static datasets (single time step) a 2D ``ax.plot`` fallback is
+        shown instead because a 1-row surface is degenerate.
+
+        The Z-axis label follows decision C: the array name alone when
+        ``sub_key == "value"``, otherwise ``"{array_name} - {sub_key}"``.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            Full time-step list for the line.
+        array_name : str
+            Data-array key.
+        sub_key : str
+            Sub-key inside the array dict (e.g. ``"value"``, ``"tangential"``).
+
+        Returns
+        -------
+        QWidget
+            A widget containing a ``NavigationToolbar`` and a
+            ``FigureCanvas`` with the rendered plot.
+        """
+        z_label = array_name if sub_key == "value" else f"{array_name} - {sub_key}"
+
+        widget = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        fig = Figure(figsize=(10, 6))
+        canvas = FigureCanvas(fig)
+        toolbar = NavigationToolbar(canvas, widget)
+
+        try:
+            distances = line_time_steps[0][array_name]["distance"]
+            times = [ts["time"] for ts in line_time_steps]
+            values = [ts.get(array_name, {}).get(sub_key, []) for ts in line_time_steps]
+
+            if len(line_time_steps) == 1:
+                # --- 2D line fallback for static (single time step) datasets ---
+                ax = fig.add_subplot(111)
+                ax.plot(distances, values[0])
+                ax.set_xlabel("Distance")
+                ax.set_ylabel(z_label)
+                ax.set_title(f"{z_label} (static)")
+                ax.grid(True)
+            else:
+                # --- 3D surface for temporal datasets ---
+                Z = np.array(values)  # shape (n_times, n_points)
+                X, Y = np.meshgrid(distances, times)  # X=distance, Y=time
+
+                ax = fig.add_subplot(111, projection="3d")
+                ax.plot_surface(X, Y, Z, cmap="viridis", edgecolor="none")
+                ax.set_xlabel("Distance")
+                ax.set_ylabel("Time")
+                ax.set_zlabel(z_label)
+                ax.set_title(z_label)
+
+        except Exception as exc:  # noqa: BLE001
+            fig.clear()
+            ax = fig.add_subplot(111)
+            ax.text(
+                0.5,
+                0.5,
+                f"Could not render surface:\n{exc}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
+            ax.axis("off")
+
+        fig.tight_layout()
+
+        layout.addWidget(toolbar)
+        layout.addWidget(canvas)
+        widget.setLayout(layout)
+        return widget
+
+    # ------------------------------------------------------------------
+    # Heatmap tab builders
+    # ------------------------------------------------------------------
+
+    def _build_heatmap_line_tab(self, line_time_steps: list[dict]) -> QWidget:
+        """Build the array-level tab widget for the Heatmap view of one line.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            One dict per time step with ``"time"`` and array-name keys.
+
+        Returns
+        -------
+        QWidget
+            A ``QTabWidget`` with one tab per data array.
+        """
+        if not line_time_steps:
+            lbl = QLabel("No time-step data.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        array_names = [k for k in line_time_steps[0] if k != "time"]
+
+        if not array_names:
+            lbl = QLabel("No data arrays in result.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        array_tabs = QTabWidget()
+        for array_name in array_names:
+            array_tabs.addTab(self._build_heatmap_array_tab(line_time_steps, array_name), array_name)
+        return array_tabs
+
+    def _build_heatmap_array_tab(self, line_time_steps: list[dict], array_name: str) -> QWidget:
+        """Build the sub-key-level tab widget for the Heatmap view of one array.
+
+        Excludes ``"distance"``, ``"x"``, ``"y"``, ``"z"`` sub-keys (same policy
+        as the 3D Surface tab).
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            Full time-step list for the line.
+        array_name : str
+            The array key (e.g. ``"B-Mag (T)"``).
+
+        Returns
+        -------
+        QWidget
+            A ``QTabWidget`` with one heatmap tab per plottable sub-key.
+        """
+        first_array = line_time_steps[0].get(array_name, {})
+        if not first_array.get("distance"):
+            lbl = QLabel("Distance data unavailable.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        sub_keys = [k for k in first_array if k not in self._SURFACE_EXCLUDED_SUBKEYS]
+
+        if not sub_keys:
+            lbl = QLabel(f"No plottable sub-keys for '{array_name}'.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            return lbl
+
+        sub_tabs = QTabWidget()
+        for sub_key in sub_keys:
+            sub_tabs.addTab(self._build_heatmap_plot(line_time_steps, array_name, sub_key), sub_key)
+        return sub_tabs
+
+    def _build_heatmap_plot(
+        self,
+        line_time_steps: list[dict],
+        array_name: str,
+        sub_key: str,
+    ) -> QWidget:
+        """Build a matplotlib ``imshow`` heatmap widget.
+
+        Renders a 2-D image where:
+
+        - **X axis (columns)** — distance along the sample line
+        - **Y axis (rows)**    — time value
+        - **colour**           — sampled field value (``sub_key``)
+
+        Works for both temporal (multiple time steps) and static (single time
+        step, displayed as a 1-row image) datasets.
+
+        The colour-bar label follows decision C: the array name alone when
+        ``sub_key == "value"``, otherwise ``"{array_name} - {sub_key}"``.
+
+        Parameters
+        ----------
+        line_time_steps : list[dict]
+            Full time-step list for the line.
+        array_name : str
+            Data-array key.
+        sub_key : str
+            Sub-key inside the array dict (e.g. ``"value"``, ``"tangential"``).
+
+        Returns
+        -------
+        QWidget
+            A widget containing a ``NavigationToolbar`` and a
+            ``FigureCanvas`` with the rendered heatmap.
+        """
+        z_label = array_name if sub_key == "value" else f"{array_name} - {sub_key}"
+
+        widget = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+
+        fig = Figure(figsize=(10, 6))
+        canvas = FigureCanvas(fig)
+        toolbar = NavigationToolbar(canvas, widget)
+
+        try:
+            distances = line_time_steps[0][array_name]["distance"]
+            times = [ts["time"] for ts in line_time_steps]
+            Z = np.array(
+                [ts.get(array_name, {}).get(sub_key, []) for ts in line_time_steps]
+            )  # shape (n_times, n_points)
+
+            ax = fig.add_subplot(111)
+
+            # extent: [left, right, bottom, top] maps pixel axes to data coords
+            # so the toolbar cursor readout shows real distance / time values.
+            extent = [distances[0], distances[-1], times[0], times[-1]]
+            im = ax.imshow(
+                Z,
+                aspect="auto",
+                origin="lower",
+                extent=extent,
+                cmap="viridis",
+                interpolation="nearest",
+            )
+            fig.colorbar(im, ax=ax, label=z_label)
+            ax.set_xlabel("Distance")
+            ax.set_ylabel("Time")
+            ax.set_title(z_label)
+
+        except Exception as exc:  # noqa: BLE001
+            fig.clear()
+            ax = fig.add_subplot(111)
+            ax.text(
+                0.5,
+                0.5,
+                f"Could not render heatmap:\n{exc}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
+            ax.axis("off")
+
+        fig.tight_layout()
+
+        layout.addWidget(toolbar)
+        layout.addWidget(canvas)
+        widget.setLayout(layout)
+        return widget
 
     # ------------------------------------------------------------------
     # Slot: Remove Selected
