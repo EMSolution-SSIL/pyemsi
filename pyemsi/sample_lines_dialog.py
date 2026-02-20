@@ -82,12 +82,13 @@ class AddLineDialog(QDialog):
         Parent widget. Default is ``None``.
     """
 
-    def __init__(self, plotter_window: "QtPlotterWindow", parent=None) -> None:
+    def __init__(self, plotter_window: "QtPlotterWindow", parent=None, initial_values=None) -> None:
         super().__init__(parent)
         self._plotter_window = plotter_window
         self._picking_target: str | None = None  # "start" or "end"
+        self._initial_values = initial_values  # (start, end, resolution) or None
 
-        self.setWindowTitle("Add Sample Line")
+        self.setWindowTitle("Edit Sample Line" if initial_values is not None else "Add Sample Line")
         # NonModal so the user can interact with the plotter window during picking.
         # The dialog stays on top of its parent via Qt.WindowType.Window.
         self.setWindowModality(Qt.WindowModality.NonModal)
@@ -143,6 +144,13 @@ class AddLineDialog(QDialog):
         self._resolution_spin.setMaximum(10000)
         self._resolution_spin.setValue(100)
         form.addRow("Resolution:", self._resolution_spin)
+
+        # --- Pre-fill if editing an existing line ---
+        if self._initial_values is not None:
+            iv_start, iv_end, iv_res = self._initial_values
+            self._start_edit.setText(f"{iv_start[0]:.6g}, {iv_start[1]:.6g}, {iv_start[2]:.6g}")
+            self._end_edit.setText(f"{iv_end[0]:.6g}, {iv_end[1]:.6g}, {iv_end[2]:.6g}")
+            self._resolution_spin.setValue(iv_res)
 
         layout.addLayout(form)
 
@@ -362,6 +370,8 @@ class SampleLinesDialog(QDialog):
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.itemSelectionChanged.connect(self._update_button_states)
+        self._table.cellDoubleClicked.connect(self._on_edit_selected_by_row)
         left_layout.addWidget(self._table)
 
         # Bottom buttons
@@ -371,6 +381,11 @@ class SampleLinesDialog(QDialog):
         self._run_button.setEnabled(False)
         self._run_button.clicked.connect(self._on_run_sampling)
         button_layout.addWidget(self._run_button)
+
+        self._edit_button = QPushButton("Edit Selected")
+        self._edit_button.setEnabled(False)
+        self._edit_button.clicked.connect(self._on_edit_selected)
+        button_layout.addWidget(self._edit_button)
 
         self._remove_button = QPushButton("Remove Selected")
         self._remove_button.clicked.connect(self._on_remove_selected)
@@ -546,12 +561,118 @@ class SampleLinesDialog(QDialog):
         # Visualize in 3D.
         self._add_line_visualization(line_idx, start, end, row_number=row + 1)
 
-        self._run_button.setEnabled(True)
+        self._update_button_states()
 
     def _on_add_line_rejected(self) -> None:
         """Handle rejection/close of the AddLineDialog."""
         self._active_add_line_dlg = None
         self._add_line_button.setEnabled(True)
+        self._update_button_states()
+
+    # ------------------------------------------------------------------
+    # Button state helper
+    # ------------------------------------------------------------------
+
+    def _update_button_states(self) -> None:
+        """Enable/disable action buttons based on table selection and dialog state."""
+        row_count = self._table.rowCount()
+        selected_rows = self._table.selectionModel().selectedRows()
+        sub_dialog_open = self._active_add_line_dlg is not None
+
+        self._run_button.setEnabled(row_count > 0)
+        self._edit_button.setEnabled(len(selected_rows) == 1 and not sub_dialog_open)
+
+    # ------------------------------------------------------------------
+    # Slot: Edit Line
+    # ------------------------------------------------------------------
+
+    def _on_edit_selected(self) -> None:
+        """Open AddLineDialog pre-filled for the currently selected row."""
+        selected_rows = self._table.selectionModel().selectedRows()
+        if len(selected_rows) != 1:
+            return
+        row = selected_rows[0].row()
+        self._open_edit_dialog_for_row(row)
+
+    def _on_edit_selected_by_row(self, row: int, _col: int) -> None:
+        """Handle double-click on a table row — open the edit dialog for that row."""
+        self._open_edit_dialog_for_row(row)
+
+    def _open_edit_dialog_for_row(self, row: int) -> None:
+        """Open AddLineDialog pre-filled with the values for *row*."""
+        if self._active_add_line_dlg is not None:
+            # A sub-dialog is already open; bring it to front instead.
+            self._active_add_line_dlg.raise_()
+            self._active_add_line_dlg.activateWindow()
+            return
+
+        list_pos = row  # row index == list index (removes renumber both)
+        if list_pos < 0 or list_pos >= len(self._lines):
+            return
+
+        line_idx = self._table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+
+        dlg = AddLineDialog(
+            plotter_window=self._plotter_window,
+            parent=self,
+            initial_values=self._lines[list_pos],
+        )
+        self._active_add_line_dlg = dlg
+        dlg.accepted.connect(lambda: self._on_edit_line_accepted(row, list_pos, line_idx, dlg))
+        dlg.rejected.connect(self._on_edit_line_rejected)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        self._add_line_button.setEnabled(False)
+        self._edit_button.setEnabled(False)
+
+    def _on_edit_line_rejected(self) -> None:
+        """Handle rejection/close of the edit AddLineDialog."""
+        self._active_add_line_dlg = None
+        self._add_line_button.setEnabled(True)
+        self._update_button_states()
+
+    def _on_edit_line_accepted(
+        self,
+        row: int,
+        list_pos: int,
+        line_idx: int,
+        dlg: "AddLineDialog",
+    ) -> None:
+        """Apply edits from the dialog back to the table, data model, and 3D view."""
+        self._active_add_line_dlg = None
+        self._add_line_button.setEnabled(True)
+
+        data = dlg.result_data()
+        if data is None:
+            self._update_button_states()
+            return
+
+        new_start, new_end, new_resolution = data
+
+        # Update internal data model.
+        self._lines[list_pos] = (new_start, new_end, new_resolution)
+
+        # Refresh table cells (columns 1-3; column 0 keeps its index / UserRole).
+        self._table.item(row, 1).setText(self._fmt_xyz(new_start))
+        self._table.item(row, 2).setText(self._fmt_xyz(new_end))
+        self._table.item(row, 3).setText(str(new_resolution))
+
+        # Update 3D visualization: remove old actor, re-add with same name.
+        self._remove_line_visualization(line_idx, render=False)
+        self._add_line_visualization(line_idx, new_start, new_end, row_number=row + 1)
+
+        # Mark any existing result tabs for this line as stale.
+        line_label = f"Line {row + 1}"
+        stale_suffix = " [stale]"
+        for top_idx in range(self._results_tab_widget.count()):
+            top_tab = self._results_tab_widget.widget(top_idx)
+            if isinstance(top_tab, QTabWidget):
+                for sub_idx in range(top_tab.count()):
+                    if top_tab.tabText(sub_idx) == line_label:
+                        top_tab.setTabText(sub_idx, line_label + stale_suffix)
+
+        self._update_button_states()
 
     # ------------------------------------------------------------------
     # Slot: Run Sampling
