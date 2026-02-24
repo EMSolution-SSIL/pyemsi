@@ -21,6 +21,7 @@ __all__ = [
     "Plotter",
     "configure_logging",
     "examples",
+    "gui",
 ]
 
 # Package-level logger setup (library best practice: NullHandler by default)
