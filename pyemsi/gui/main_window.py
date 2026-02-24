@@ -109,8 +109,8 @@ class PyEmsiMainWindow(QMainWindow):
             self.setWindowTitle(f"pyemsi — {folder_name}")
 
     def _on_file_activated(self, path: str) -> None:
-        """Stub: called when the user double-clicks a file in the Explorer."""
-        print(f"[Explorer] file activated: {path}")
+        """Open *path* in a viewer tab, or focus the existing tab if already open."""
+        self._container.open_file(path)
 
     def _setup_terminal(self):
         """Create the in-process IPython kernel and terminal widget."""

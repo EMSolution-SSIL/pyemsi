@@ -200,6 +200,56 @@ class SplitContainer(QWidget):
         self._left.addTab(widget, title)
         self._left.setCurrentWidget(widget)
 
+    def focus_widget(self, widget: QWidget) -> bool:
+        """Activate the tab containing *widget*. Returns True if found."""
+        for panel in (self._left, self._right):
+            idx = panel.indexOf(widget)
+            if idx != -1:
+                panel.setCurrentIndex(idx)
+                return True
+        return False
+
+    def open_file(self, path: str, category: str | None = None) -> QWidget:
+        """Open *path* in a viewer tab, or focus the existing tab.
+
+        Parameters
+        ----------
+        path : str
+            Absolute path to the file.
+        category : str, optional
+            Force a viewer category (``"text"``, ``"image"``, ``"audio"``).
+            When *None* the category is inferred from the file extension.
+
+        Returns
+        -------
+        QWidget
+            The viewer widget (new or existing).
+        """
+        import os
+
+        from pyemsi.gui.file_viewers import create_viewer
+
+        norm_path = os.path.normpath(path)
+
+        existing = self._find_tab_by_path(norm_path)
+        if existing is not None:
+            self.focus_widget(existing)
+            return existing
+
+        viewer = create_viewer(norm_path, category)
+        viewer.setProperty("file_path", norm_path)
+        self.add_tab(viewer, os.path.basename(norm_path))
+        return viewer
+
+    def _find_tab_by_path(self, norm_path: str) -> QWidget | None:
+        """Return the tab widget showing *norm_path*, or ``None``."""
+        for panel in (self._left, self._right):
+            for i in range(panel.count()):
+                w = panel.widget(i)
+                if w is not None and w.property("file_path") == norm_path:
+                    return w
+        return None
+
     # ------------------------------------------------------------------
     # private helpers
     # ------------------------------------------------------------------
