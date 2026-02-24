@@ -18,12 +18,12 @@ import numpy as np
 # TYPE_CHECKING imports (for type checkers only, not runtime)
 if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
-    from pyemsi.qt_window import QtPlotterWindow
+    from pyemsi.plotter.qt_window import QtPlotterWindow
 
 # Qt imports are optional (only needed for desktop mode)
 try:
     from pyvistaqt import QtInteractor
-    from pyemsi.qt_window import QtPlotterWindow
+    from pyemsi.plotter.qt_window import QtPlotterWindow
 
     HAS_QT = True
 except ImportError:

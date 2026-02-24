@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
-    from pyemsi.qt_window import QtPlotterWindow
+    from pyemsi.plotter.qt_window import QtPlotterWindow
     import pyvista as pv
 
 from PySide6.QtWidgets import (

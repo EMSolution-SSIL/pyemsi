@@ -4,7 +4,7 @@ Tests for FEMAP Neutral file parser.
 
 import os
 import unittest
-from pyemsi.femap_parser import FEMAPParser, FEMAPBlock
+from pyemsi.core.femap_parser import FEMAPParser, FEMAPBlock
 
 
 class TestFEMAPParser(unittest.TestCase):
@@ -12,9 +12,9 @@ class TestFEMAPParser(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures path."""
-        self.fixtures_dir = os.path.join(os.path.dirname(__file__), 'fixtures')
-        self.simple_mesh = os.path.join(self.fixtures_dir, 'simple_mesh.neu')
-        self.mixed_mesh = os.path.join(self.fixtures_dir, 'mixed_elements.neu')
+        self.fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+        self.simple_mesh = os.path.join(self.fixtures_dir, "simple_mesh.neu")
+        self.mixed_mesh = os.path.join(self.fixtures_dir, "mixed_elements.neu")
 
     def test_parse_simple_mesh(self):
         """Test parsing a simple single-element mesh."""
@@ -44,8 +44,8 @@ class TestFEMAPParser(unittest.TestCase):
         header = parser.get_header()
 
         self.assertIsNotNone(header)
-        self.assertEqual(header['version'], '4.41')
-        self.assertEqual(header['title'], '')  # <NULL> becomes empty string
+        self.assertEqual(header["version"], "4.41")
+        self.assertEqual(header["title"], "")  # <NULL> becomes empty string
 
     def test_get_nodes(self):
         """Test node extraction."""
@@ -70,8 +70,8 @@ class TestFEMAPParser(unittest.TestCase):
 
         self.assertEqual(len(properties), 1)
         self.assertIn(1, properties)
-        self.assertEqual(properties[1]['material_id'], 1)
-        self.assertEqual(properties[1]['title'], 'Material1')
+        self.assertEqual(properties[1]["material_id"], 1)
+        self.assertEqual(properties[1]["title"], "Material1")
 
     def test_get_elements(self):
         """Test element extraction."""
@@ -81,11 +81,11 @@ class TestFEMAPParser(unittest.TestCase):
 
         self.assertEqual(len(elements), 1)
         elem = elements[0]
-        self.assertEqual(elem['id'], 1)
-        self.assertEqual(elem['prop_id'], 1)
-        self.assertEqual(elem['topology'], 8)  # Brick8
-        self.assertEqual(len(elem['nodes']), 8)
-        self.assertEqual(elem['nodes'], [1, 2, 3, 4, 5, 6, 7, 8])
+        self.assertEqual(elem["id"], 1)
+        self.assertEqual(elem["prop_id"], 1)
+        self.assertEqual(elem["topology"], 8)  # Brick8
+        self.assertEqual(len(elem["nodes"]), 8)
+        self.assertEqual(elem["nodes"], [1, 2, 3, 4, 5, 6, 7, 8])
 
     def test_get_materials(self):
         """Test material extraction."""
@@ -94,7 +94,7 @@ class TestFEMAPParser(unittest.TestCase):
         materials = parser.get_materials()
 
         self.assertIn(1, materials)
-        self.assertEqual(materials[1]['id'], 1)
+        self.assertEqual(materials[1]["id"], 1)
 
     def test_repeated_blocks(self):
         """Test handling of repeated blocks."""
@@ -115,7 +115,7 @@ class TestFEMAPParser(unittest.TestCase):
         self.assertEqual(len(elements), 3)
 
         # Check element types
-        topologies = [elem['topology'] for elem in elements]
+        topologies = [elem["topology"] for elem in elements]
         self.assertIn(6, topologies)  # Tetra4
         self.assertIn(2, topologies)  # Tri3
         self.assertIn(4, topologies)  # Quad4
@@ -124,21 +124,22 @@ class TestFEMAPParser(unittest.TestCase):
         """Test CSV line parsing."""
         # Comma-separated
         result = FEMAPParser.parse_csv_line("1,2,3,4,5,")
-        self.assertEqual(result, ['1', '2', '3', '4', '5'])
+        self.assertEqual(result, ["1", "2", "3", "4", "5"])
 
         # Space-separated
         result = FEMAPParser.parse_csv_line("1 2 3 4 5")
-        self.assertEqual(result, ['1', '2', '3', '4', '5'])
+        self.assertEqual(result, ["1", "2", "3", "4", "5"])
 
         # Mixed (comma is preferred)
         result = FEMAPParser.parse_csv_line("1, 2, 3,4,5")
-        self.assertEqual(result, ['1', '2', '3', '4', '5'])
+        self.assertEqual(result, ["1", "2", "3", "4", "5"])
 
     def test_empty_file(self):
         """Test handling of empty or invalid files."""
         # Create a temporary empty file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.neu') as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".neu") as f:
             empty_file = f.name
 
         try:
@@ -167,8 +168,8 @@ class TestFEMAPParser(unittest.TestCase):
         self.assertEqual(len(properties), 2)
         self.assertIn(1, properties)
         self.assertIn(2, properties)
-        self.assertEqual(properties[1]['title'], 'Steel_Property')
-        self.assertEqual(properties[2]['title'], 'Aluminum_Property')
+        self.assertEqual(properties[1]["title"], "Steel_Property")
+        self.assertEqual(properties[2]["title"], "Aluminum_Property")
 
 
 class TestFEMAPBlock(unittest.TestCase):
@@ -191,5 +192,5 @@ class TestFEMAPBlock(unittest.TestCase):
         self.assertIn("3", repr_str)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

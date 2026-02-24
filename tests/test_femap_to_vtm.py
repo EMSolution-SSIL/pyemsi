@@ -8,7 +8,7 @@ import tempfile
 
 from vtk import vtkMultiBlockDataSet
 
-from pyemsi.femap_to_vtm import FemapConverter, FEMAP_TO_VTK, convert_femap_to_vtm
+from pyemsi.tools.FemapConverter import FemapConverter, FEMAP_TO_VTK
 
 
 class TestFemapConverter(unittest.TestCase):
@@ -16,9 +16,9 @@ class TestFemapConverter(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures path."""
-        self.fixtures_dir = os.path.join(os.path.dirname(__file__), 'fixtures')
-        self.simple_mesh = os.path.join(self.fixtures_dir, 'simple_mesh.neu')
-        self.mixed_mesh = os.path.join(self.fixtures_dir, 'mixed_elements.neu')
+        self.fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+        self.simple_mesh = os.path.join(self.fixtures_dir, "simple_mesh.neu")
+        self.mixed_mesh = os.path.join(self.fixtures_dir, "mixed_elements.neu")
 
     def test_converter_initialization(self):
         """Test converter initialization."""
@@ -91,7 +91,7 @@ class TestFemapConverter(unittest.TestCase):
         """Test writing VTM file."""
         converter = FemapConverter(self.simple_mesh)
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".vtm") as f:
             output_file = f.name
 
         try:
@@ -112,8 +112,7 @@ class TestFemapConverter(unittest.TestCase):
         self.assertGreater(mb.GetNumberOfBlocks(), 0)
 
         # Count total cells across all blocks
-        total_cells = sum(mb.GetBlock(i).GetNumberOfCells()
-                         for i in range(mb.GetNumberOfBlocks()))
+        total_cells = sum(mb.GetBlock(i).GetNumberOfCells() for i in range(mb.GetNumberOfBlocks()))
         self.assertEqual(total_cells, 3)
 
     def test_topology_mapping(self):
@@ -131,7 +130,7 @@ class TestFemapConverter(unittest.TestCase):
 
     def test_convenience_function(self):
         """Test the convenience conversion function."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".vtm") as f:
             output_file = f.name
 
         try:
@@ -199,13 +198,13 @@ class TestIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures path."""
-        self.fixtures_dir = os.path.join(os.path.dirname(__file__), 'fixtures')
-        self.simple_mesh = os.path.join(self.fixtures_dir, 'simple_mesh.neu')
-        self.mixed_mesh = os.path.join(self.fixtures_dir, 'mixed_elements.neu')
+        self.fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+        self.simple_mesh = os.path.join(self.fixtures_dir, "simple_mesh.neu")
+        self.mixed_mesh = os.path.join(self.fixtures_dir, "mixed_elements.neu")
 
     def test_end_to_end_simple(self):
         """Test complete conversion pipeline for simple mesh."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".vtm") as f:
             output_file = f.name
 
         try:
@@ -218,6 +217,7 @@ class TestIntegration(unittest.TestCase):
 
             # Read back and verify
             from vtk import vtkXMLMultiBlockDataReader
+
             reader = vtkXMLMultiBlockDataReader()
             reader.SetFileName(output_file)
             reader.Update()
@@ -235,7 +235,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_end_to_end_mixed(self):
         """Test complete conversion pipeline for mixed element mesh."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.vtm') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".vtm") as f:
             output_file = f.name
 
         try:
@@ -248,6 +248,7 @@ class TestIntegration(unittest.TestCase):
 
             # Read back and verify
             from vtk import vtkXMLMultiBlockDataReader
+
             reader = vtkXMLMultiBlockDataReader()
             reader.SetFileName(output_file)
             reader.Update()
@@ -256,8 +257,7 @@ class TestIntegration(unittest.TestCase):
             self.assertGreater(mb.GetNumberOfBlocks(), 0)
 
             # Count total cells across all blocks
-            total_cells = sum(mb.GetBlock(i).GetNumberOfCells()
-                             for i in range(mb.GetNumberOfBlocks()))
+            total_cells = sum(mb.GetBlock(i).GetNumberOfCells() for i in range(mb.GetNumberOfBlocks()))
             self.assertEqual(total_cells, 3)
 
             # Verify cell data arrays exist in first block
@@ -271,5 +271,5 @@ class TestIntegration(unittest.TestCase):
                 os.unlink(output_file)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

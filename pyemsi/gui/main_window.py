@@ -14,8 +14,8 @@ from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow
 
 import pyemsi.resources.resources  # noqa: F401
-from pyemsi.explorer_widget import ExplorerWidget
-from pyemsi.split_container import SplitContainer
+from pyemsi.widgets.explorer_widget import ExplorerWidget
+from pyemsi.widgets.split_container import SplitContainer
 
 
 class PyEmsiMainWindow(QMainWindow):

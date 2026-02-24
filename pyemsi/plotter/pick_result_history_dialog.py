@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit
     from PySide6.QtGui import QFont, QCloseEvent
-    from pyemsi.qt_window import QtPlotterWindow
+    from pyemsi.plotter.qt_window import QtPlotterWindow
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit
 from PySide6.QtGui import QFont

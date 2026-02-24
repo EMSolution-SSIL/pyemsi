@@ -11,7 +11,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 
 from .color_utils import to_hex
-from .property_tree_widget import PropertyTreeWidget
+from pyemsi.widgets.property_tree_widget import PropertyTreeWidget
 
 
 class ScalarBarSettingsDialog(QDialog):

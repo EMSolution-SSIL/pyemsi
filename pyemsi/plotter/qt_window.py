@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
     from pyvistaqt import QtInteractor
-    from pyemsi.plotter import Plotter
+    from pyemsi.plotter.plotter import Plotter
 
 from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar, QComboBox
 from PySide6.QtGui import QAction, QIcon

@@ -19,8 +19,8 @@ ext_modules = []
 if USE_CYTHON:
     extensions = [
         Extension(
-            "pyemsi.femap_parser",
-            ["pyemsi/femap_parser.pyx"],
+            "pyemsi.core.femap_parser",
+            ["pyemsi/core/femap_parser.pyx"],
             include_dirs=[np.get_include()],
             define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
         )
@@ -39,8 +39,8 @@ else:
     # Fallback to pre-generated C file when Cython is not available
     ext_modules = [
         Extension(
-            "pyemsi.femap_parser",
-            ["pyemsi/femap_parser.c"],
+            "pyemsi.core.femap_parser",
+            ["pyemsi/core/femap_parser.c"],
             include_dirs=[np.get_include()],
             define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
         )

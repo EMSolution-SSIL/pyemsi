@@ -10,7 +10,7 @@ Main functionality:
 import logging
 from typing import Optional
 
-from .FemapConverter import FemapConverter
+from .tools.FemapConverter import FemapConverter
 from .plotter import Plotter
 from . import examples
 
