@@ -49,6 +49,8 @@ class PyEmsiMainWindow(QMainWindow):
 
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._terminal_dock)
 
+        self._setup_view_menu()
+
     @property
     def container(self) -> SplitContainer:
         """The SplitContainer (central widget)."""
@@ -72,6 +74,12 @@ class PyEmsiMainWindow(QMainWindow):
         open_action.setIcon(QIcon(":/icons/FolderOpen.svg"))
         open_action.triggered.connect(self._open_folder)
         file_menu.addAction(open_action)
+
+    def _setup_view_menu(self) -> None:
+        """Add a View menu with toggles for the Explorer and Terminal docks."""
+        view_menu = self.menuBar().addMenu("&View")
+        view_menu.addAction(self._explorer_dock.toggleViewAction())
+        view_menu.addAction(self._terminal_dock.toggleViewAction())
 
     def _setup_explorer(self) -> None:
         """Create the Explorer dock widget and wire its signals."""
