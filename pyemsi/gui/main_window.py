@@ -7,11 +7,14 @@ a bottom dock hosting an embedded IPython terminal.
 
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QDockWidget, QMainWindow
+from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow
 
 import pyemsi.resources.resources  # noqa: F401
+from pyemsi.explorer_widget import ExplorerWidget
 from pyemsi.split_container import SplitContainer
 
 
@@ -32,6 +35,9 @@ class PyEmsiMainWindow(QMainWindow):
         self._container = SplitContainer()
         self.setCentralWidget(self._container)
 
+        self._setup_menu_bar()
+        self._setup_explorer()
+
         self._terminal_dock = QDockWidget("Terminal", self)
         self._terminal_dock.setAllowedAreas(
             Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea
@@ -49,9 +55,54 @@ class PyEmsiMainWindow(QMainWindow):
         return self._container
 
     @property
+    def explorer(self) -> ExplorerWidget:
+        """The Explorer dock widget."""
+        return self._explorer_widget
+
+    @property
     def terminal(self):
         """The embedded IPython RichJupyterWidget."""
         return self._terminal_widget
+
+    def _setup_menu_bar(self) -> None:
+        """Add a File menu with Open Folder (Ctrl+O)."""
+        file_menu = self.menuBar().addMenu("&File")
+        open_action = QAction("Open &Folder...", self)
+        open_action.setShortcut(QKeySequence("Ctrl+O"))
+        open_action.setIcon(QIcon(":/icons/FolderOpen.svg"))
+        open_action.triggered.connect(self._open_folder)
+        file_menu.addAction(open_action)
+
+    def _setup_explorer(self) -> None:
+        """Create the Explorer dock widget and wire its signals."""
+        self._explorer_widget = ExplorerWidget()
+        self._explorer_widget.setMinimumWidth(200)
+        self._explorer_widget.open_folder_requested.connect(self._open_folder)
+        self._explorer_widget.file_activated.connect(self._on_file_activated)
+
+        self._explorer_dock = QDockWidget("Explorer", self)
+        self._explorer_dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self._explorer_dock.setWidget(self._explorer_widget)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._explorer_dock)
+
+    def _open_folder(self) -> None:
+        """Prompt the user to pick a directory and open it in the Explorer."""
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Open Folder",
+            os.getcwd(),
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if path:
+            self._explorer_widget.set_directory(path)
+            folder_name = os.path.basename(path) or path
+            self.setWindowTitle(f"pyemsi — {folder_name}")
+
+    def _on_file_activated(self, path: str) -> None:
+        """Stub: called when the user double-clicks a file in the Explorer."""
+        print(f"[Explorer] file activated: {path}")
 
     def _setup_terminal(self):
         """Create the in-process IPython kernel and terminal widget."""
@@ -63,14 +114,8 @@ class PyEmsiMainWindow(QMainWindow):
     def _build_namespace(self) -> dict:
         """Build the initial namespace for the IPython kernel."""
         import pyemsi
-        # import pyemsi.gui as gui_module
 
-        return {
-            "pyemsi": pyemsi,
-            # "gui": gui_module,
-            # "window": self,
-            # "container": self._container,
-        }
+        return {"pyemsi": pyemsi}
 
     def push_to_namespace(self, **kwargs):
         """Push additional variables into the IPython kernel namespace."""
