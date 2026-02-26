@@ -10,17 +10,23 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
+
+# ---------------------------------------------------------------------------
+# MonacoLspWidget
+# ---------------------------------------------------------------------------
+
+from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+from pyemsi.widgets.monaco_lsp._widget import EXT_TO_LANG
 
 # ---------------------------------------------------------------------------
 # QtMultimedia (optional – needed for AudioViewer)
@@ -104,33 +110,6 @@ for _ext in _IMAGE_EXTENSIONS:
     _CATEGORY[_ext] = "image"
 for _ext in _AUDIO_EXTENSIONS:
     _CATEGORY[_ext] = "audio"
-
-
-# ---------------------------------------------------------------------------
-# TextViewer
-# ---------------------------------------------------------------------------
-
-
-class TextViewer(QPlainTextEdit):
-    """Read-only plain-text viewer with a monospace font."""
-
-    _MAX_BYTES = 5 * 1024 * 1024  # 5 MB
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setReadOnly(True)
-        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-        font = QFont("Consolas", 10)
-        font.setStyleHint(QFont.StyleHint.Monospace)
-        self.setFont(font)
-
-    def load_file(self, path: str) -> None:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            text = f.read(self._MAX_BYTES)
-        if os.path.getsize(path) > self._MAX_BYTES:
-            text += "\n\n--- (file truncated at 5 MB) ---"
-        self.setPlainText(text)
-
 
 # ---------------------------------------------------------------------------
 # ImageViewer
@@ -248,7 +227,6 @@ if _HAS_MULTIMEDIA:
             seconds = total_seconds % 60
             return f"{minutes}:{seconds:02d}"
 
-
 # ---------------------------------------------------------------------------
 # UnsupportedViewer
 # ---------------------------------------------------------------------------
@@ -286,7 +264,11 @@ def create_viewer(path: str, category: str | None = None) -> QWidget:
         category = _CATEGORY.get(ext)
 
     if category == "text":
-        viewer = TextViewer()
+        ext = os.path.splitext(path)[1].lower()
+        lang = EXT_TO_LANG.get(ext, "plaintext")
+        viewer = MonacoLspWidget(language=lang)
+        viewer.setTheme("vs")
+        viewer.setLanguage(lang)
         viewer.load_file(path)
     elif category == "image":
         viewer = ImageViewer()

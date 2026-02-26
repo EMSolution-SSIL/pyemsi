@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
@@ -80,11 +81,32 @@ class _TabPanel(QTabWidget):
 
     def _close_tab(self, index: int) -> None:
         widget = self.widget(index)
+        if widget is not None and self._is_dirty(widget):
+            title = self.tabText(index).rstrip(" *")
+            ans = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                f"Save changes to {title}?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+            )
+            if ans == QMessageBox.StandardButton.Cancel:
+                return
+            if ans == QMessageBox.StandardButton.Save:
+                try:
+                    widget.save()
+                except Exception:
+                    return
         self.removeTab(index)
         if widget is not None:
             widget.deleteLater()
         if self.count() == 0:
             self.last_tab_closed.emit()
+
+    @staticmethod
+    def _is_dirty(widget: QWidget) -> bool:
+        return getattr(widget, "dirty", False)
 
     def _tab_index_at(self, local_pos) -> int:
         """Return the tab index under *local_pos*, or currentIndex() as fallback."""
@@ -238,7 +260,16 @@ class SplitContainer(QWidget):
 
         viewer = create_viewer(norm_path, category)
         viewer.setProperty("file_path", norm_path)
-        self.add_tab(viewer, os.path.basename(norm_path))
+        base_name = os.path.basename(norm_path)
+        self.add_tab(viewer, base_name)
+
+        # Track dirty state for Monaco editors
+        if hasattr(viewer, "dirtyChanged"):
+            panel = self._left  # add_tab always targets _left
+            viewer.dirtyChanged.connect(
+                lambda dirty, w=viewer, bn=base_name, p=panel: self._update_dirty_title(p, w, bn, dirty)
+            )
+
         return viewer
 
     def _find_tab_by_path(self, norm_path: str) -> QWidget | None:
@@ -249,6 +280,13 @@ class SplitContainer(QWidget):
                 if w is not None and w.property("file_path") == norm_path:
                     return w
         return None
+
+    @staticmethod
+    def _update_dirty_title(panel: _TabPanel, widget: QWidget, base_name: str, dirty: bool) -> None:
+        idx = panel.indexOf(widget)
+        if idx == -1:
+            return
+        panel.setTabText(idx, f"{base_name} *" if dirty else base_name)
 
     # ------------------------------------------------------------------
     # private helpers

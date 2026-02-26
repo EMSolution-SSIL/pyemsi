@@ -67,13 +67,18 @@ class PyEmsiMainWindow(QMainWindow):
         return self._terminal_widget
 
     def _setup_menu_bar(self) -> None:
-        """Add a File menu with Open Folder (Ctrl+O)."""
+        """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
         file_menu = self.menuBar().addMenu("&File")
         open_action = QAction("Open &Folder...", self)
         open_action.setShortcut(QKeySequence("Ctrl+O"))
         open_action.setIcon(QIcon(":/icons/FolderOpen.svg"))
         open_action.triggered.connect(self._open_folder)
         file_menu.addAction(open_action)
+
+        save_action = QAction("&Save", self)
+        save_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_action.triggered.connect(self._save_active_tab)
+        file_menu.addAction(save_action)
 
     def _setup_view_menu(self) -> None:
         """Add a View menu with toggles for the Explorer and Terminal docks."""
@@ -111,6 +116,16 @@ class PyEmsiMainWindow(QMainWindow):
     def _on_file_activated(self, path: str) -> None:
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
         self._container.open_file(path)
+
+    def _save_active_tab(self) -> None:
+        """Save the currently-focused Monaco editor tab."""
+        from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+        for panel in (self._container.left_panel, self._container.right_panel):
+            widget = panel.currentWidget()
+            if isinstance(widget, MonacoLspWidget) and widget.file_path:
+                widget.save()
+                return
 
     def _setup_terminal(self):
         """Create the in-process IPython kernel and terminal widget."""
