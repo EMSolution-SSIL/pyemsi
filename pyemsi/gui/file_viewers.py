@@ -248,7 +248,7 @@ class UnsupportedViewer(QWidget):
 # ---------------------------------------------------------------------------
 
 
-def create_viewer(path: str, category: str | None = None) -> QWidget:
+def create_viewer(path: str, category: str | None = None, parent: QWidget | None = None) -> QWidget:
     """Create the appropriate viewer widget for *path* and load the file.
 
     Parameters
@@ -258,6 +258,8 @@ def create_viewer(path: str, category: str | None = None) -> QWidget:
     category : str, optional
         Force a viewer category (``"text"``, ``"image"``, ``"audio"``).
         When *None* the category is inferred from the file extension.
+    parent : QWidget, optional
+        Parent widget used when constructing the viewer.
     """
     if category is None:
         ext = os.path.splitext(path)[1].lower()
@@ -266,17 +268,17 @@ def create_viewer(path: str, category: str | None = None) -> QWidget:
     if category == "text":
         ext = os.path.splitext(path)[1].lower()
         lang = EXT_TO_LANG.get(ext, "plaintext")
-        viewer = MonacoLspWidget(language=lang)
+        viewer = MonacoLspWidget(language=lang, parent=parent)
         viewer.setTheme("vs")
         viewer.setLanguage(lang)
         viewer.load_file(path)
     elif category == "image":
-        viewer = ImageViewer()
+        viewer = ImageViewer(parent=parent)
         viewer.load_file(path)
     elif category == "audio" and _HAS_MULTIMEDIA:
-        viewer = AudioViewer()
+        viewer = AudioViewer(parent=parent)
         viewer.load_file(path)
     else:
-        viewer = UnsupportedViewer(path)
+        viewer = UnsupportedViewer(path, parent=parent)
 
     return viewer

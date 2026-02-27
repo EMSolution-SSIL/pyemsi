@@ -205,6 +205,17 @@ class SplitContainer(QWidget):
         self._left.last_tab_closed.connect(self._on_left_emptied)
         self._right.last_tab_closed.connect(self._on_right_emptied)
 
+        # Pre-create one Monaco editor so first text-file open can reuse an
+        # existing WebEngine widget instead of creating one on demand.
+        self._prewarmed_monaco = None
+        try:
+            from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+            self._prewarmed_monaco = MonacoLspWidget(language="plaintext", parent=self._left)
+            self._prewarmed_monaco.hide()
+        except Exception:
+            self._prewarmed_monaco = None
+
     # ------------------------------------------------------------------
     # public API
     # ------------------------------------------------------------------
@@ -250,6 +261,7 @@ class SplitContainer(QWidget):
         import os
 
         from pyemsi.gui.file_viewers import create_viewer
+        from pyemsi.widgets.monaco_lsp._widget import EXT_TO_LANG
 
         norm_path = os.path.normpath(path)
 
@@ -258,7 +270,18 @@ class SplitContainer(QWidget):
             self.focus_widget(existing)
             return existing
 
-        viewer = create_viewer(norm_path, category)
+        # Create the viewer with the target panel as parent so native-backed
+        # widgets (e.g. QWebEngineView) do not need an extra reparent on addTab.
+        ext = os.path.splitext(norm_path)[1].lower()
+        if category in (None, "text") and self._prewarmed_monaco is not None and ext in EXT_TO_LANG:
+            viewer = self._prewarmed_monaco
+            self._prewarmed_monaco = None
+            lang = EXT_TO_LANG.get(ext, "plaintext")
+            viewer.setTheme("vs")
+            viewer.setLanguage(lang)
+            viewer.load_file(norm_path)
+        else:
+            viewer = create_viewer(norm_path, category, parent=self._left)
         viewer.setProperty("file_path", norm_path)
         base_name = os.path.basename(norm_path)
         self.add_tab(viewer, base_name)
