@@ -119,11 +119,12 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _save_active_tab(self) -> None:
         """Save the currently-focused Monaco editor tab."""
+        from pyemsi.gui.file_viewers import MarkdownViewer
         from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
         for panel in (self._container.left_panel, self._container.right_panel):
             widget = panel.currentWidget()
-            if isinstance(widget, MonacoLspWidget) and widget.file_path:
+            if isinstance(widget, (MonacoLspWidget, MarkdownViewer)) and widget.file_path:
                 widget.save()
                 return
 

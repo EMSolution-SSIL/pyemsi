@@ -1,4 +1,3 @@
-import os
 import sys
 import subprocess
 import socket
@@ -372,6 +371,15 @@ _HTML = r"""<!DOCTYPE html>
                 monaco.editor.setTheme(data);
                 sendToPython('theme', editor._themeService._theme.themeName);
                 break;
+            case 'insertAtCursor':
+                editor.trigger('bridge', 'type', { text: data });
+                break;
+            case 'wrapSelection':
+                var sel = editor.getSelection();
+                var selText = editor.getModel().getValueInRange(sel);
+                editor.executeEdits('bridge', [{ range: sel, text: data.prefix + selText + data.suffix }]);
+                editor.focus();
+                break;
         }
     }
 
@@ -509,3 +517,14 @@ class MonacoLspWidget(QWebEngineView):
 
     def setTheme(self, theme):
         self._bridge.send_to_js("theme", theme)
+
+    def insertAtCursor(self, text: str) -> None:
+        """Insert *text* at the current cursor position."""
+        self._bridge.send_to_js("insertAtCursor", text)
+
+    def wrapSelection(self, prefix: str, suffix: str) -> None:
+        """Wrap the current selection with *prefix* and *suffix*.
+
+        If no text is selected the markers are inserted at the cursor.
+        """
+        self._bridge.send_to_js("wrapSelection", {"prefix": prefix, "suffix": suffix})

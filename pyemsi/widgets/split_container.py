@@ -207,14 +207,14 @@ class SplitContainer(QWidget):
 
         # Pre-create one Monaco editor so first text-file open can reuse an
         # existing WebEngine widget instead of creating one on demand.
-        self._prewarmed_monaco = None
+        _prewarmed_monaco = None
         try:
             from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
-            self._prewarmed_monaco = MonacoLspWidget(language="plaintext", parent=self._left)
-            self._prewarmed_monaco.hide()
+            _prewarmed_monaco = MonacoLspWidget(language="plaintext", parent=self._left)
+            _prewarmed_monaco.hide()
         except Exception:
-            self._prewarmed_monaco = None
+            pass
 
     # ------------------------------------------------------------------
     # public API
@@ -260,8 +260,7 @@ class SplitContainer(QWidget):
         """
         import os
 
-        from pyemsi.gui.file_viewers import create_viewer
-        from pyemsi.widgets.monaco_lsp._widget import EXT_TO_LANG
+        from pyemsi.gui.file_viewers import _CATEGORY, MarkdownViewer, create_viewer
 
         norm_path = os.path.normpath(path)
 
@@ -270,18 +269,9 @@ class SplitContainer(QWidget):
             self.focus_widget(existing)
             return existing
 
-        # Create the viewer with the target panel as parent so native-backed
-        # widgets (e.g. QWebEngineView) do not need an extra reparent on addTab.
         ext = os.path.splitext(norm_path)[1].lower()
-        if category in (None, "text") and self._prewarmed_monaco is not None and ext in EXT_TO_LANG:
-            viewer = self._prewarmed_monaco
-            self._prewarmed_monaco = None
-            lang = EXT_TO_LANG.get(ext, "plaintext")
-            viewer.setTheme("vs")
-            viewer.setLanguage(lang)
-            viewer.load_file(norm_path)
-        else:
-            viewer = create_viewer(norm_path, category, parent=self._left)
+        effective_category = category if category is not None else _CATEGORY.get(ext)
+        viewer = create_viewer(norm_path, effective_category, parent=self._left)
         viewer.setProperty("file_path", norm_path)
         base_name = os.path.basename(norm_path)
         self.add_tab(viewer, base_name)
@@ -293,7 +283,46 @@ class SplitContainer(QWidget):
                 lambda dirty, w=viewer, bn=base_name, p=panel: self._update_dirty_title(p, w, bn, dirty)
             )
 
+        # Wire up MarkdownViewer preview support
+        if isinstance(viewer, MarkdownViewer):
+            viewer.preview_requested.connect(self.open_preview)
+            viewer.editor.textChanged.connect(lambda text, p=norm_path: self._update_preview(p, text))
+
         return viewer
+
+    def open_preview(self, path: str) -> None:
+        """Open (or focus) a rendered Markdown preview tab for *path*."""
+        import os
+
+        from pyemsi.gui.file_viewers import MarkdownPreviewViewer
+
+        norm_path = os.path.normpath(path)
+        preview_key = norm_path + "::preview"
+
+        existing = self._find_tab_by_path(preview_key)
+        if existing is not None:
+            self.focus_widget(existing)
+            return
+
+        preview = MarkdownPreviewViewer(parent=self._left)
+        preview.setProperty("file_path", preview_key)
+
+        # Seed preview with current editor content if the editor is open
+        editor_widget = self._find_tab_by_path(norm_path)
+        if editor_widget is not None and hasattr(editor_widget, "text"):
+            preview.set_markdown(editor_widget.text())
+        else:
+            preview.load_file(norm_path)
+
+        base_name = os.path.basename(norm_path)
+        self.add_tab(preview, f"Preview: {base_name}")
+
+    def _update_preview(self, path: str, text: str) -> None:
+        """Push *text* to the preview tab for *path* if it is open."""
+        preview_key = path + "::preview"
+        preview = self._find_tab_by_path(preview_key)
+        if preview is not None and hasattr(preview, "set_markdown"):
+            preview.set_markdown(text)
 
     def _find_tab_by_path(self, norm_path: str) -> QWidget | None:
         """Return the tab widget showing *norm_path*, or ``None``."""
