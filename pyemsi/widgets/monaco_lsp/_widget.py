@@ -231,6 +231,19 @@ _HTML = r"""<!DOCTYPE html>
     var editor = null;
     var lspClient = null;
     var registeredLspLanguages = new Set();
+    var _bridgeChannel = null;   // stash QWebChannel result until editor ready
+    var _editorReady = false;    // true once require callback completed
+    var _bridgeReady = false;    // true once QWebChannel callback completed
+
+    // Called after BOTH editor and bridge are available so that
+    // queued Python→JS messages are only flushed when the editor exists.
+    function _finishInit() {
+        if (!_editorReady || !_bridgeReady) return;
+        bridge = _bridgeChannel.objects.bridge;
+        bridge.sendDataChanged.connect(updateFromPython);
+        bridge.init();   // flush queue – editor guaranteed non-null
+        init();
+    }
 
     function registerLspProviders(langId) {
         if (registeredLspLanguages.has(langId)) return;
@@ -344,6 +357,9 @@ _HTML = r"""<!DOCTYPE html>
                 };
             };
         }
+
+        _editorReady = true;
+        _finishInit();
     });
 
     function init() {
@@ -385,10 +401,9 @@ _HTML = r"""<!DOCTYPE html>
 
     window.onload = function () {
         new QWebChannel(qt.webChannelTransport, function (channel) {
-            bridge = channel.objects.bridge;
-            bridge.sendDataChanged.connect(updateFromPython);
-            bridge.init();
-            init();
+            _bridgeChannel = channel;
+            _bridgeReady = true;
+            _finishInit();
         });
     };
     </script>

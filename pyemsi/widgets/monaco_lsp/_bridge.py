@@ -40,20 +40,34 @@ class EditorBridge(BaseBridge):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self._value = ''
-        self._language = ''
-        self._theme = ''
+        self._value = ""
+        self._language = ""
+        self._theme = ""
 
-    def getValue(self):              return self._value
-    def setValue(self, value):       self._value = value; self.valueChanged.emit()
-    def getLanguage(self):           return self._language
-    def setLanguage(self, language): self._language = language; self.languageChanged.emit()
-    def getTheme(self):              return self._theme
-    def setTheme(self, theme):       self._theme = theme; self.themeChanged.emit()
+    def getValue(self):
+        return self._value
 
-    value    = Property(str, fget=getValue,    fset=setValue,    notify=valueChanged)
+    def setValue(self, value):
+        self._value = value
+        self.valueChanged.emit()
+
+    def getLanguage(self):
+        return self._language
+
+    def setLanguage(self, language):
+        self._language = language
+        self.languageChanged.emit()
+
+    def getTheme(self):
+        return self._theme
+
+    def setTheme(self, theme):
+        self._theme = theme
+        self.themeChanged.emit()
+
+    value = Property(str, fget=getValue, fset=setValue, notify=valueChanged)
     language = Property(str, fget=getLanguage, fset=setLanguage, notify=languageChanged)
-    theme    = Property(str, fget=getTheme,    fset=setTheme,    notify=themeChanged)
+    theme = Property(str, fget=getTheme, fset=setTheme, notify=themeChanged)
 
 
 class MonacoPage(QWebEnginePage):

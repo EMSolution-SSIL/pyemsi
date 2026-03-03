@@ -2,9 +2,12 @@ from __future__ import annotations
 
 _CATEGORY: dict[str, str] = {}
 
+_PYTHON_EXTENSIONS = {
+    ".py",
+}
+
 _TEXT_EXTENSIONS = {
     ".txt",
-    ".py",
     ".json",
     ".yaml",
     ".yml",
@@ -62,6 +65,8 @@ _AUDIO_EXTENSIONS = {
     ".m4a",
 }
 
+for _ext in _PYTHON_EXTENSIONS:
+    _CATEGORY[_ext] = "python"
 for _ext in _TEXT_EXTENSIONS:
     _CATEGORY[_ext] = "text"
 for _ext in _MARKDOWN_EXTENSIONS:

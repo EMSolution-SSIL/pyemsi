@@ -115,16 +115,24 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _on_file_activated(self, path: str) -> None:
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
-        self._container.open_file(path)
+        viewer = self._container.open_file(path)
+
+        from pyemsi.gui.file_viewers import PythonViewer
+
+        if isinstance(viewer, PythonViewer):
+            # Connect only once – guard via a dynamic attribute.
+            if not getattr(viewer, "_run_connected", False):
+                viewer.run_requested.connect(self._run_python_file)
+                viewer._run_connected = True
 
     def _save_active_tab(self) -> None:
         """Save the currently-focused Monaco editor tab."""
-        from pyemsi.gui.file_viewers import MarkdownViewer
+        from pyemsi.gui.file_viewers import MarkdownViewer, PythonViewer
         from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
         for panel in (self._container.left_panel, self._container.right_panel):
             widget = panel.currentWidget()
-            if isinstance(widget, (MonacoLspWidget, MarkdownViewer)) and widget.file_path:
+            if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
                 widget.save()
                 return
 
@@ -140,6 +148,15 @@ class PyEmsiMainWindow(QMainWindow):
         import pyemsi
 
         return {"pyemsi": pyemsi}
+
+    def _run_python_file(self, path: str) -> None:
+        """Execute a Python file in the embedded IPython terminal."""
+        import os
+
+        cwd = self.explorer.current_path
+        if cwd and os.path.isdir(cwd):
+            self._kernel_manager.kernel.shell.run_cell(f"import os; os.chdir({cwd!r})", silent=True)
+        self._terminal_widget.execute(f"%run {path}")
 
     def push_to_namespace(self, **kwargs):
         """Push additional variables into the IPython kernel namespace."""

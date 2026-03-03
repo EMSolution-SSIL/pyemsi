@@ -11,6 +11,7 @@ from ._audio import _HAS_MULTIMEDIA
 from ._constants import _CATEGORY
 from ._image import ImageViewer
 from ._markdown import MarkdownViewer
+from ._python import PythonViewer
 from ._unsupported import UnsupportedViewer
 
 if _HAS_MULTIMEDIA:
@@ -36,6 +37,9 @@ def create_viewer(path: str, category: str | None = None, parent: QWidget | None
 
     if category == "markdown":
         viewer = MarkdownViewer(parent=parent)
+        viewer.load_file(path)
+    elif category == "python":
+        viewer = PythonViewer(parent=parent)
         viewer.load_file(path)
     elif category == "text":
         ext = os.path.splitext(path)[1].lower()
