@@ -43,6 +43,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._ipython_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
         self._ipython_widget = None
         self._kernel_manager = None
+        self._active_external_terminals: dict = {}
 
         self._setup_ipython_terminal()
 
@@ -127,8 +128,9 @@ class PyEmsiMainWindow(QMainWindow):
         if isinstance(viewer, PythonViewer):
             # Connect only once – guard via a dynamic attribute.
             if not getattr(viewer, "_run_connected", False):
-                viewer.run_requested.connect(self._run_python_file)
+                viewer.run_ipython_requested.connect(self._run_python_file_ipython)
                 viewer.run_external_requested.connect(self._run_python_file_external)
+                viewer.stop_external_requested.connect(self._stop_python_file_external)
                 viewer._run_connected = True
 
     def _save_active_tab(self) -> None:
@@ -155,7 +157,7 @@ class PyEmsiMainWindow(QMainWindow):
 
         return {"pyemsi": pyemsi}
 
-    def _run_python_file(self, path: str) -> None:
+    def _run_python_file_ipython(self, path: str) -> None:
         """Execute a Python file in the embedded IPython terminal."""
         import os
 
@@ -164,21 +166,41 @@ class PyEmsiMainWindow(QMainWindow):
             self._kernel_manager.kernel.shell.run_cell(f"import os; os.chdir({cwd!r})", silent=True)
         self._ipython_widget.execute(f"%run {path}")
 
+    def _stop_python_file_external(self) -> None:
+        """Terminate the external terminal process for the requesting viewer."""
+        viewer = self.sender()
+        xterm = self._active_external_terminals.get(id(viewer))
+        if xterm is not None:
+            xterm.kill()
+
     def _run_python_file_external(self, path: str) -> None:
         """Execute a Python file in a new external terminal tab."""
         import sys
 
+        viewer = self.sender()
         cwd = self.explorer.current_path or os.path.dirname(path)
         title = os.path.basename(path)
 
+        if viewer is not None:
+            viewer.set_external_running(True)
+
         self._external_terminal_dock.show()
         self._external_terminal_dock.raise_()
-        self._external_terminal_dock.add_terminal(
+        xterm = self._external_terminal_dock.add_terminal(
             title=title,
             cmd=sys.executable,
             args=[path],
             cwd=cwd,
         )
+
+        if viewer is not None:
+            self._active_external_terminals[id(viewer)] = xterm
+            xterm.processFinished.connect(
+                lambda _code, v=viewer: (
+                    v.set_external_running(False),
+                    self._active_external_terminals.pop(id(v), None),
+                )
+            )
 
     def push_to_namespace(self, **kwargs):
         """Push additional variables into the IPython kernel namespace."""
