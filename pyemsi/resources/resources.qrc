@@ -1,24 +1,37 @@
 <RCC>
   <qresource>
     <file>icons/Back.svg</file>
+    <file>icons/Bold.svg</file>
+    <file>icons/Code.svg</file>
+    <file>icons/Explorer.svg</file>
+    <file>icons/ExternalTerminal.svg</file>
     <file>icons/First.svg</file>
     <file>icons/FolderOpen.svg</file>
     <file>icons/Forward.svg</file>
     <file>icons/Icon.svg</file>
+    <file>icons/Image.svg</file>
+    <file>icons/IPythonTerminal.svg</file>
     <file>icons/IsometricView.svg</file>
+    <file>icons/Italic.svg</file>
     <file>icons/Last.svg</file>
+    <file>icons/Link.svg</file>
     <file>icons/Loop.svg</file>
     <file>icons/Pause.svg</file>
     <file>icons/PickCell.svg</file>
     <file>icons/PickPoint.svg</file>
     <file>icons/Play.svg</file>
+    <file>icons/Preview.svg</file>
     <file>icons/QueryCell.svg</file>
     <file>icons/QueryPoint.svg</file>
-    <file>icons/ResetCamera.svg</file>
     <file>icons/SampleArc.svg</file>
     <file>icons/SampleLine.svg</file>
+    <file>icons/Save.svg</file>
+    <file>icons/SaveAll.svg</file>
+    <file>icons/ResetCamera.svg</file>
     <file>icons/Reverse.svg</file>
+    <file>icons/Run.svg</file>
     <file>icons/Settings.svg</file>
+    <file>icons/Stop.svg</file>
     <file>icons/XMinus.svg</file>
     <file>icons/XPlus.svg</file>
     <file>icons/YMinus.svg</file>

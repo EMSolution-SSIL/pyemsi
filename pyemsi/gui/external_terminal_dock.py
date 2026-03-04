@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PySide6.QtGui import QIcon
 
 from pyemsi.widgets.xterm import XtermWidget
 
@@ -25,10 +26,12 @@ class ExternalTerminalDock(QDockWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("External Terminal", parent)
         self.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
+        self.setWindowIcon(QIcon(":/icons/ExternalTerminal.svg"))
 
         self._tabs = QTabWidget()
         self._tabs.setTabsClosable(True)
         self._tabs.tabCloseRequested.connect(self._close_tab)
+        self._tabs.setTabShape(QTabWidget.TabShape.Rounded)
 
         self._empty_page = self._build_empty_page()
 

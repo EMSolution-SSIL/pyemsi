@@ -40,6 +40,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._setup_explorer()
 
         self._ipython_dock = QDockWidget("IPython Terminal", self)
+        self._ipython_dock.setWindowIcon(QIcon(":/icons/IPythonTerminal.svg"))
         self._ipython_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
         self._ipython_widget = None
         self._kernel_manager = None
@@ -82,15 +83,34 @@ class PyEmsiMainWindow(QMainWindow):
 
         save_action = QAction("&Save", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_action.setIcon(QIcon(":/icons/Save.svg"))
         save_action.triggered.connect(self._save_active_tab)
         file_menu.addAction(save_action)
+
+        save_all_action = QAction("Save A&ll", self)
+        save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        save_all_action.setIcon(QIcon(":/icons/SaveAll.svg"))
+        save_all_action.triggered.connect(self._save_all_tabs)
+        file_menu.addAction(save_all_action)
 
     def _setup_view_menu(self) -> None:
         """Add a View menu with toggles for the Explorer and Terminal docks."""
         view_menu = self.menuBar().addMenu("&View")
-        view_menu.addAction(self._explorer_dock.toggleViewAction())
-        view_menu.addAction(self._ipython_dock.toggleViewAction())
-        view_menu.addAction(self._external_terminal_dock.toggleViewAction())
+
+        explorer_action = self._explorer_dock.toggleViewAction()
+        explorer_action.setIcon(QIcon(":/icons/Explorer.svg"))
+        explorer_action.setShortcut(QKeySequence("Ctrl+E"))
+        view_menu.addAction(explorer_action)
+
+        ipython_action = self._ipython_dock.toggleViewAction()
+        ipython_action.setIcon(QIcon(":/icons/IPythonTerminal.svg"))
+        ipython_action.setShortcut(QKeySequence("Ctrl+I"))
+        view_menu.addAction(ipython_action)
+
+        external_action = self._external_terminal_dock.toggleViewAction()
+        external_action.setIcon(QIcon(":/icons/ExternalTerminal.svg"))
+        external_action.setShortcut(QKeySequence("Ctrl+T"))
+        view_menu.addAction(external_action)
 
     def _setup_explorer(self) -> None:
         """Create the Explorer dock widget and wire its signals."""
@@ -100,6 +120,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._explorer_widget.file_activated.connect(self._on_file_activated)
 
         self._explorer_dock = QDockWidget("Explorer", self)
+        self._explorer_dock.setWindowIcon(QIcon(":/icons/Explorer.svg"))
         self._explorer_dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
@@ -143,6 +164,17 @@ class PyEmsiMainWindow(QMainWindow):
             if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
                 widget.save()
                 return
+
+    def _save_all_tabs(self) -> None:
+        """Save all open editor tabs in both panels."""
+        from pyemsi.gui.file_viewers import MarkdownViewer, PythonViewer
+        from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+        for panel in (self._container.left_panel, self._container.right_panel):
+            for i in range(panel.count()):
+                widget = panel.widget(i)
+                if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
+                    widget.save()
 
     def _setup_ipython_terminal(self):
         """Create the in-process IPython kernel and terminal widget."""

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QAction, QFont
-from PySide6.QtWidgets import QTextBrowser, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Signal
+from PySide6.QtGui import QAction, QFont, QIcon
+from PySide6.QtWidgets import QFrame, QTextBrowser, QToolBar, QVBoxLayout, QWidget
 
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
-
 
 # ---------------------------------------------------------------------------
 # MarkdownViewer
@@ -37,33 +36,34 @@ class MarkdownViewer(QWidget):
         # -- toolbar --
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
+        toolbar.setIconSize(QSize(16, 16))
 
         bold_font = QFont()
         bold_font.setBold(True)
         italic_font = QFont()
         italic_font.setItalic(True)
 
-        def _add(label: str, tip: str, font: QFont | None = None) -> QAction:
-            act = QAction(label, self)
+        def _add(icon: QIcon, tip: str, font: QFont | None = None) -> QAction:
+            act = QAction(icon, "", self)
             act.setToolTip(tip)
             if font is not None:
                 act.setFont(font)
             toolbar.addAction(act)
             return act
 
-        _bold_act = _add("B", "Bold — wrap selection with **", bold_font)
-        _italic_act = _add("I", "Italic — wrap selection with *", italic_font)
-        _head_act = _add("H", "Heading — prefix line with ## ", bold_font)
-        _code_act = _add("<>", "Inline code — wrap selection with `")
-        _link_act = _add("Link", "Hyperlink — wrap selection as [text](url)")
+        _bold_act = _add(QIcon(":/icons/Bold.svg"), "Bold — wrap selection with **", bold_font)
+        _italic_act = _add(QIcon(":/icons/Italic.svg"), "Italic — wrap selection with *", italic_font)
+        _code_act = _add(QIcon(":/icons/Code.svg"), "Inline code — wrap selection with `")
+        _link_act = _add(QIcon(":/icons/Link.svg"), "Hyperlink — wrap selection as [text](url)")
+        _image_act = _add(QIcon(":/icons/Image.svg"), "Image — wrap selection as ![alt](url)")
         toolbar.addSeparator()
-        _prev_act = _add("Preview", "Open/focus the rendered preview tab")
+        _prev_act = _add(QIcon(":/icons/Preview.svg"), "Open/focus the rendered preview tab")
 
         _bold_act.triggered.connect(lambda: self.editor.wrapSelection("**", "**"))
         _italic_act.triggered.connect(lambda: self.editor.wrapSelection("*", "*"))
-        _head_act.triggered.connect(lambda: self.editor.wrapSelection("## ", ""))
         _code_act.triggered.connect(lambda: self.editor.wrapSelection("`", "`"))
         _link_act.triggered.connect(lambda: self.editor.wrapSelection("[", "](url)"))
+        _image_act.triggered.connect(lambda: self.editor.wrapSelection("![", "](url)"))
         _prev_act.triggered.connect(self._on_preview_clicked)
 
         # -- layout --
@@ -127,6 +127,7 @@ class MarkdownPreviewViewer(QWidget):
         self._browser = QTextBrowser(self)
         self._browser.setOpenExternalLinks(True)
         self._browser.setReadOnly(True)
+        self._browser.setFrameShape(QFrame.Shape.NoFrame)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

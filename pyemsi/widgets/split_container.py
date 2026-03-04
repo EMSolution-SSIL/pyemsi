@@ -190,9 +190,11 @@ class SplitContainer(QWidget):
 
         self._left = _TabPanel(self)
         self._left._is_left = True
+        self._left.setTabShape(QTabWidget.TabShape.Rounded)
 
         self._right = _TabPanel(self)
         self._right._is_left = False
+        self._right.setTabShape(QTabWidget.TabShape.Rounded)
 
         self._splitter.addWidget(self._left)
         self._splitter.addWidget(self._right)

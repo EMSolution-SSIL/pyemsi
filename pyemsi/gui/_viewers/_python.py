@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QToolBar, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Signal
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QLabel, QToolBar, QVBoxLayout, QWidget
 
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
@@ -37,19 +37,25 @@ class PythonViewer(QWidget):
         # -- toolbar --
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
+        toolbar.setIconSize(QSize(16, 16))
 
-        run_ipy_act = QAction("▶ Run IPython", self)
+        toolbar.addWidget(QLabel("IPython:"))
+        run_ipy_act = QAction("Run IPython", self)
         run_ipy_act.setToolTip("Save and run this file in the IPython terminal")
+        run_ipy_act.setIcon(QIcon(":/icons/Run.svg"))
         toolbar.addAction(run_ipy_act)
 
         toolbar.addSeparator()
 
-        self._run_ext_act = QAction("▶ Run External", self)
+        toolbar.addWidget(QLabel("External:"))
+        self._run_ext_act = QAction("Run External", self)
         self._run_ext_act.setToolTip("Save and run this file in an external terminal")
+        self._run_ext_act.setIcon(QIcon(":/icons/Run.svg"))
         toolbar.addAction(self._run_ext_act)
 
-        self._stop_ext_act = QAction("■ Stop External", self)
+        self._stop_ext_act = QAction("Stop External", self)
         self._stop_ext_act.setToolTip("Terminate the external terminal process")
+        self._stop_ext_act.setIcon(QIcon(":/icons/Stop.svg"))
         self._stop_ext_act.setEnabled(False)
         toolbar.addAction(self._stop_ext_act)
 
