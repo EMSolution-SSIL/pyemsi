@@ -10,7 +10,7 @@ After launch, the module proxies attribute access to the PyEmsiMainWindow
 instance, so ``gui`` itself acts like the window::
 
     >>> gui.container.add_tab(QLabel("Hello"), "My Tab")
-    >>> gui.terminal   # the IPython RichJupyterWidget
+    >>> gui.ipython_terminal   # the IPython RichJupyterWidget
     >>> gui.push_to_namespace(x=42)
 
 From the IPython terminal, pre-injected locals are also available::

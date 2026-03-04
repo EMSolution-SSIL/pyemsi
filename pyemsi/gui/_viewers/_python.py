@@ -21,6 +21,8 @@ class PythonViewer(QWidget):
     dirtyChanged = Signal(bool)
     #: Emitted when the user clicks the Run button; carries the file path.
     run_requested = Signal(str)
+    #: Emitted when the user clicks Run External; carries the file path.
+    run_external_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -34,11 +36,16 @@ class PythonViewer(QWidget):
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
 
-        run_act = QAction("▶ Run", self)
+        run_act = QAction("▶ Run IPython", self)
         run_act.setToolTip("Save and run this file in the IPython terminal")
         toolbar.addAction(run_act)
 
+        run_ext_act = QAction("▶ Run External", self)
+        run_ext_act.setToolTip("Save and run this file in an external terminal")
+        toolbar.addAction(run_ext_act)
+
         run_act.triggered.connect(self._on_run_clicked)
+        run_ext_act.triggered.connect(self._on_run_external_clicked)
 
         # -- layout --
         layout = QVBoxLayout(self)
@@ -83,3 +90,11 @@ class PythonViewer(QWidget):
         if self.editor.dirty:
             self.editor.save()
         self.run_requested.emit(path)
+
+    def _on_run_external_clicked(self) -> None:
+        path = self.editor.file_path
+        if not path:
+            return
+        if self.editor.dirty:
+            self.editor.save()
+        self.run_external_requested.emit(path)

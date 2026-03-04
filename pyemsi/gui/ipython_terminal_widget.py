@@ -13,7 +13,7 @@ from qtconsole.rich_jupyter_widget import RichJupyterWidget
 from qtconsole.inprocess import QtInProcessKernelManager
 
 
-def create_terminal_widget(
+def create_ipython_terminal(
     namespace: dict[str, Any] | None = None,
 ) -> tuple[RichJupyterWidget, QtInProcessKernelManager]:
     """
