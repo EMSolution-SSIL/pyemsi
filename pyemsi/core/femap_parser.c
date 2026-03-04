@@ -10,21 +10,21 @@
             ]
         ],
         "depends": [
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-kl6rg2m_\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayobject.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-kl6rg2m_\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayscalars.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-kl6rg2m_\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarrayobject.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-kl6rg2m_\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarraytypes.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-kl6rg2m_\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ufuncobject.h"
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayobject.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayscalars.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarrayobject.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarraytypes.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ufuncobject.h"
         ],
         "include_dirs": [
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-kl6rg2m_\\Lib\\site-packages\\numpy\\_core\\include"
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include"
         ],
-        "name": "pyemsi.femap_parser",
+        "name": "pyemsi.core.femap_parser",
         "sources": [
-            "pyemsi/femap_parser.pyx"
+            "pyemsi/core/femap_parser.pyx"
         ]
     },
-    "module_name": "pyemsi.femap_parser"
+    "module_name": "pyemsi.core.femap_parser"
 }
 END: Cython Metadata */
 
@@ -1142,8 +1142,8 @@ static int __Pyx_init_co_variables(void) {
   #endif
 #endif
 
-#define __PYX_HAVE__pyemsi__femap_parser
-#define __PYX_HAVE_API__pyemsi__femap_parser
+#define __PYX_HAVE__pyemsi__core__femap_parser
+#define __PYX_HAVE_API__pyemsi__core__femap_parser
 /* Early includes */
 #include <string.h>
 #include <stdio.h>
@@ -1393,11 +1393,11 @@ static const char *__pyx_filename;
 /* #### Code section: filename_table ### */
 
 static const char* const __pyx_f[] = {
-  "pyemsi/femap_parser.pyx",
-  "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd",
-  "pyemsi/femap_parser.pxd",
+  "pyemsi/core/femap_parser.pyx",
+  ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd",
+  "pyemsi/core/femap_parser.pxd",
   "<stringsource>",
-  "cpython/type.pxd",
+  ".venv311/Lib/site-packages/Cython/Includes/cpython/type.pxd",
 };
 /* #### Code section: utility_code_proto_before_types ### */
 /* Atomics.proto (used by UnpackUnboundCMethod) */
@@ -1606,7 +1606,7 @@ typedef struct {
 
 /* #### Code section: numeric_typedefs ### */
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":744
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":744
  * # in Cython to enable them only on the right systems.
  * 
  * ctypedef npy_int8       int8_t             # <<<<<<<<<<<<<<
@@ -1615,7 +1615,7 @@ typedef struct {
 */
 typedef npy_int8 __pyx_t_5numpy_int8_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":745
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":745
  * 
  * ctypedef npy_int8       int8_t
  * ctypedef npy_int16      int16_t             # <<<<<<<<<<<<<<
@@ -1624,7 +1624,7 @@ typedef npy_int8 __pyx_t_5numpy_int8_t;
 */
 typedef npy_int16 __pyx_t_5numpy_int16_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":746
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":746
  * ctypedef npy_int8       int8_t
  * ctypedef npy_int16      int16_t
  * ctypedef npy_int32      int32_t             # <<<<<<<<<<<<<<
@@ -1633,7 +1633,7 @@ typedef npy_int16 __pyx_t_5numpy_int16_t;
 */
 typedef npy_int32 __pyx_t_5numpy_int32_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":747
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":747
  * ctypedef npy_int16      int16_t
  * ctypedef npy_int32      int32_t
  * ctypedef npy_int64      int64_t             # <<<<<<<<<<<<<<
@@ -1642,7 +1642,7 @@ typedef npy_int32 __pyx_t_5numpy_int32_t;
 */
 typedef npy_int64 __pyx_t_5numpy_int64_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":749
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":749
  * ctypedef npy_int64      int64_t
  * 
  * ctypedef npy_uint8      uint8_t             # <<<<<<<<<<<<<<
@@ -1651,7 +1651,7 @@ typedef npy_int64 __pyx_t_5numpy_int64_t;
 */
 typedef npy_uint8 __pyx_t_5numpy_uint8_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":750
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":750
  * 
  * ctypedef npy_uint8      uint8_t
  * ctypedef npy_uint16     uint16_t             # <<<<<<<<<<<<<<
@@ -1660,7 +1660,7 @@ typedef npy_uint8 __pyx_t_5numpy_uint8_t;
 */
 typedef npy_uint16 __pyx_t_5numpy_uint16_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":751
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":751
  * ctypedef npy_uint8      uint8_t
  * ctypedef npy_uint16     uint16_t
  * ctypedef npy_uint32     uint32_t             # <<<<<<<<<<<<<<
@@ -1669,7 +1669,7 @@ typedef npy_uint16 __pyx_t_5numpy_uint16_t;
 */
 typedef npy_uint32 __pyx_t_5numpy_uint32_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":752
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":752
  * ctypedef npy_uint16     uint16_t
  * ctypedef npy_uint32     uint32_t
  * ctypedef npy_uint64     uint64_t             # <<<<<<<<<<<<<<
@@ -1678,7 +1678,7 @@ typedef npy_uint32 __pyx_t_5numpy_uint32_t;
 */
 typedef npy_uint64 __pyx_t_5numpy_uint64_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":754
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":754
  * ctypedef npy_uint64     uint64_t
  * 
  * ctypedef npy_float32    float32_t             # <<<<<<<<<<<<<<
@@ -1687,7 +1687,7 @@ typedef npy_uint64 __pyx_t_5numpy_uint64_t;
 */
 typedef npy_float32 __pyx_t_5numpy_float32_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":755
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":755
  * 
  * ctypedef npy_float32    float32_t
  * ctypedef npy_float64    float64_t             # <<<<<<<<<<<<<<
@@ -1696,7 +1696,7 @@ typedef npy_float32 __pyx_t_5numpy_float32_t;
 */
 typedef npy_float64 __pyx_t_5numpy_float64_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":762
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":762
  * ctypedef double complex complex128_t
  * 
  * ctypedef npy_longlong   longlong_t             # <<<<<<<<<<<<<<
@@ -1705,7 +1705,7 @@ typedef npy_float64 __pyx_t_5numpy_float64_t;
 */
 typedef npy_longlong __pyx_t_5numpy_longlong_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":763
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":763
  * 
  * ctypedef npy_longlong   longlong_t
  * ctypedef npy_ulonglong  ulonglong_t             # <<<<<<<<<<<<<<
@@ -1714,7 +1714,7 @@ typedef npy_longlong __pyx_t_5numpy_longlong_t;
 */
 typedef npy_ulonglong __pyx_t_5numpy_ulonglong_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":765
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":765
  * ctypedef npy_ulonglong  ulonglong_t
  * 
  * ctypedef npy_intp       intp_t             # <<<<<<<<<<<<<<
@@ -1723,7 +1723,7 @@ typedef npy_ulonglong __pyx_t_5numpy_ulonglong_t;
 */
 typedef npy_intp __pyx_t_5numpy_intp_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":766
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":766
  * 
  * ctypedef npy_intp       intp_t
  * ctypedef npy_uintp      uintp_t             # <<<<<<<<<<<<<<
@@ -1732,7 +1732,7 @@ typedef npy_intp __pyx_t_5numpy_intp_t;
 */
 typedef npy_uintp __pyx_t_5numpy_uintp_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":768
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":768
  * ctypedef npy_uintp      uintp_t
  * 
  * ctypedef npy_double     float_t             # <<<<<<<<<<<<<<
@@ -1741,7 +1741,7 @@ typedef npy_uintp __pyx_t_5numpy_uintp_t;
 */
 typedef npy_double __pyx_t_5numpy_float_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":769
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":769
  * 
  * ctypedef npy_double     float_t
  * ctypedef npy_double     double_t             # <<<<<<<<<<<<<<
@@ -1750,7 +1750,7 @@ typedef npy_double __pyx_t_5numpy_float_t;
 */
 typedef npy_double __pyx_t_5numpy_double_t;
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":770
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":770
  * ctypedef npy_double     float_t
  * ctypedef npy_double     double_t
  * ctypedef npy_longdouble longdouble_t             # <<<<<<<<<<<<<<
@@ -1798,58 +1798,58 @@ static CYTHON_INLINE __pyx_t_long_double_complex __pyx_t_long_double_complex_fro
 /* #### Code section: type_declarations ### */
 
 /*--- Type declarations ---*/
-struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock;
-struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser;
-struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes;
-struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays;
+struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock;
+struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser;
+struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes;
+struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays;
 
-/* "pyemsi/femap_parser.pxd":30
+/* "pyemsi/core/femap_parser.pxd":30
  *     cpdef list get_blocks(self, int block_id)
  *     cpdef dict get_header(self)
  *     cpdef dict get_nodes(self, bint force_2d=*)             # <<<<<<<<<<<<<<
  *     cpdef tuple get_nodes_arrays(self)
  *     cpdef dict get_properties(self)
 */
-struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes {
+struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes {
   int __pyx_n;
   int force_2d;
 };
 
-/* "pyemsi/femap_parser.pxd":38
+/* "pyemsi/core/femap_parser.pxd":38
  *     cpdef dict get_output_sets(self)
  *     cpdef list get_output_vectors(self)
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=*, int vec_id_filter=*)             # <<<<<<<<<<<<<<
 */
-struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays {
+struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays {
   int __pyx_n;
   int set_id_filter;
   int vec_id_filter;
 };
 
-/* "pyemsi/femap_parser.pxd":12
+/* "pyemsi/core/femap_parser.pxd":12
  * 
  * 
  * cdef class FEMAPBlock:             # <<<<<<<<<<<<<<
  *     cdef public int block_id
  *     cdef public list lines
 */
-struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock {
+struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock {
   PyObject_HEAD
   int block_id;
   PyObject *lines;
 };
 
 
-/* "pyemsi/femap_parser.pxd":17
+/* "pyemsi/core/femap_parser.pxd":17
  * 
  * 
  * cdef class FEMAPParser:             # <<<<<<<<<<<<<<
  *     cdef str filepath
  *     cdef public dict blocks
 */
-struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser {
+struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser {
   PyObject_HEAD
-  struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *__pyx_vtab;
+  struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_vtab;
   PyObject *filepath;
   PyObject *blocks;
   PyObject *BLOCK_DELIMITER;
@@ -1857,7 +1857,7 @@ struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser {
 
 
 
-/* "pyemsi/femap_parser.pyx":33
+/* "pyemsi/core/femap_parser.pyx":33
  * 
  * 
  * cdef class FEMAPParser:             # <<<<<<<<<<<<<<
@@ -1865,23 +1865,23 @@ struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser {
  *     Parser for FEMAP Neutral files.
 */
 
-struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser {
-  void (*_parse)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *);
+struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser {
+  void (*_parse)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *);
   PyObject *(*_parse_csv_line_fast)(PyObject *);
-  PyObject *(*parse)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_blocks)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int, int __pyx_skip_dispatch);
-  PyObject *(*get_header)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_nodes)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args);
-  PyObject *(*get_nodes_arrays)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_properties)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_elements)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_elements_arrays)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_materials)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_output_sets)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_output_vectors)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
-  PyObject *(*get_output_vectors_arrays)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args);
+  PyObject *(*parse)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_blocks)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int, int __pyx_skip_dispatch);
+  PyObject *(*get_header)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_nodes)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args);
+  PyObject *(*get_nodes_arrays)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_properties)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_elements)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_elements_arrays)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_materials)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_output_sets)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_output_vectors)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
+  PyObject *(*get_output_vectors_arrays)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args);
 };
-static struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *__pyx_vtabptr_6pyemsi_12femap_parser_FEMAPParser;
+static struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser;
 /* #### Code section: utility_code_proto ### */
 
 /* --- Runtime support code (head) --- */
@@ -3250,20 +3250,20 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayObject *__pyx_v_self); /* proto*/
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *__pyx_v_self); /* proto*/
 static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__pyx_v_self); /* proto*/
-static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(PyObject *__pyx_v_line); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args); /* proto*/
+static void __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_parse(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(PyObject *__pyx_v_line); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_blocks(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_header(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_properties(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_materials(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_sets(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args); /* proto*/
 
 /* Module declarations from "libc.string" */
 
@@ -3286,18 +3286,18 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void); /*proto*/
 
 /* Module declarations from "cython" */
 
-/* Module declarations from "pyemsi.femap_parser" */
-static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *, PyObject *); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPParser__set_state(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, PyObject *); /*proto*/
+/* Module declarations from "pyemsi.core.femap_parser" */
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *, PyObject *); /*proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPParser__set_state(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, PyObject *); /*proto*/
 /* #### Code section: typeinfo ### */
 static const __Pyx_TypeInfo __Pyx_TypeInfo_nn___pyx_t_5numpy_int32_t = { "int32_t", NULL, sizeof(__pyx_t_5numpy_int32_t), { 0 }, 0, __PYX_IS_UNSIGNED(__pyx_t_5numpy_int32_t) ? 'U' : 'I', __PYX_IS_UNSIGNED(__pyx_t_5numpy_int32_t), 0 };
 static const __Pyx_TypeInfo __Pyx_TypeInfo_nn___pyx_t_5numpy_float64_t = { "float64_t", NULL, sizeof(__pyx_t_5numpy_float64_t), { 0 }, 0, 'R', 0, 0 };
 /* #### Code section: before_global_var ### */
-#define __Pyx_MODULE_NAME "pyemsi.femap_parser"
-extern int __pyx_module_is_main_pyemsi__femap_parser;
-int __pyx_module_is_main_pyemsi__femap_parser = 0;
+#define __Pyx_MODULE_NAME "pyemsi.core.femap_parser"
+extern int __pyx_module_is_main_pyemsi__core__femap_parser;
+int __pyx_module_is_main_pyemsi__core__femap_parser = 0;
 
-/* Implementation of "pyemsi.femap_parser" */
+/* Implementation of "pyemsi.core.femap_parser" */
 /* #### Code section: global_var ### */
 static PyObject *__pyx_builtin_staticmethod;
 static PyObject *__pyx_builtin_open;
@@ -3306,38 +3306,38 @@ static const char __pyx_k_block_id_lines[] = "block_id, lines";
 static const char __pyx_k_BLOCK_DELIMITER_blocks_filepath[] = "BLOCK_DELIMITER, blocks, filepath";
 static const char __pyx_k_FEMAP_Neutral_File_Parser_Cytho[] = "\nFEMAP Neutral File Parser (Cython Optimized)\n\nThis module parses FEMAP Neutral files and extracts structured data blocks.\nFEMAP files contain blocks identified by IDs, and blocks can appear in any order.\n";
 /* #### Code section: decls ### */
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, int __pyx_v_block_id, PyObject *__pyx_v_lines); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id___get__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_2__set__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines___get__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_2__set__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value); /* proto */
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_4__del__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_4__reduce_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v___pyx_state); /* proto */
-static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_filepath); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(PyObject *__pyx_v_line); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_force_2d); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vectors(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vectors_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_set_id_filter, int __pyx_v_vec_id_filter); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks___get__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_2__set__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_value); /* proto */
-static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_4__del__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_28__reduce_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_30__setstate_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v___pyx_state); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state); /* proto */
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state); /* proto */
-static PyObject *__pyx_tp_new_6pyemsi_12femap_parser_FEMAPBlock(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
-static PyObject *__pyx_tp_new_6pyemsi_12femap_parser_FEMAPParser(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock___init__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, int __pyx_v_block_id, PyObject *__pyx_v_lines); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_2__repr__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id___get__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_2__set__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines___get__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_2__set__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value); /* proto */
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_4__del__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_4__reduce_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_6__setstate_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v___pyx_state); /* proto */
+static int __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser___init__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_filepath); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_2parse(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_4parse_csv_line(PyObject *__pyx_v_line); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6get_blocks(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_8get_header(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_10get_nodes(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_force_2d); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_12get_nodes_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_14get_properties(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_16get_elements(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_18get_elements_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_20get_materials(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_22get_output_sets(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_26get_output_vectors_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_set_id_filter, int __pyx_v_vec_id_filter); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks___get__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static int __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_2__set__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_value); /* proto */
+static int __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_4__del__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_28__reduce_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_30__setstate_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v___pyx_state); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state); /* proto */
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_2__pyx_unpickle_FEMAPParser(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state); /* proto */
+static PyObject *__pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPBlock(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
+static PyObject *__pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPParser(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
 /* #### Code section: late_includes ### */
 /* #### Code section: module_state ### */
 /* SmallCodeConfig */
@@ -3374,10 +3374,10 @@ typedef struct {
   PyTypeObject *__pyx_ptype_5numpy_flexible;
   PyTypeObject *__pyx_ptype_5numpy_character;
   PyTypeObject *__pyx_ptype_5numpy_ufunc;
-  PyObject *__pyx_type_6pyemsi_12femap_parser_FEMAPBlock;
-  PyObject *__pyx_type_6pyemsi_12femap_parser_FEMAPParser;
-  PyTypeObject *__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock;
-  PyTypeObject *__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser;
+  PyObject *__pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock;
+  PyObject *__pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser;
+  PyTypeObject *__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock;
+  PyTypeObject *__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser;
   __Pyx_CachedCFunction __pyx_umethod_PyDict_Type_get;
   __Pyx_CachedCFunction __pyx_umethod_PyDict_Type_items;
   __Pyx_CachedCFunction __pyx_umethod_PyDict_Type_pop;
@@ -3447,7 +3447,7 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_kp_u_lines_2 __pyx_string_tab[17]
 #define __pyx_kp_u_numpy__core_multiarray_failed_to __pyx_string_tab[18]
 #define __pyx_kp_u_numpy__core_umath_failed_to_impo __pyx_string_tab[19]
-#define __pyx_kp_u_pyemsi_femap_parser_pyx __pyx_string_tab[20]
+#define __pyx_kp_u_pyemsi_core_femap_parser_pyx __pyx_string_tab[20]
 #define __pyx_kp_u_stringsource __pyx_string_tab[21]
 #define __pyx_n_u_Dict __pyx_string_tab[22]
 #define __pyx_n_u_FEMAPBlock __pyx_string_tab[23]
@@ -3520,7 +3520,7 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_n_u_parse_csv_line __pyx_string_tab[90]
 #define __pyx_n_u_pop __pyx_string_tab[91]
 #define __pyx_n_u_prop_id __pyx_string_tab[92]
-#define __pyx_n_u_pyemsi_femap_parser __pyx_string_tab[93]
+#define __pyx_n_u_pyemsi_core_femap_parser __pyx_string_tab[93]
 #define __pyx_n_u_pyx_checksum __pyx_string_tab[94]
 #define __pyx_n_u_pyx_result __pyx_string_tab[95]
 #define __pyx_n_u_pyx_state __pyx_string_tab[96]
@@ -3611,10 +3611,10 @@ static CYTHON_SMALL_CODE int __pyx_m_clear(PyObject *m) {
   Py_CLEAR(clear_module_state->__pyx_ptype_5numpy_flexible);
   Py_CLEAR(clear_module_state->__pyx_ptype_5numpy_character);
   Py_CLEAR(clear_module_state->__pyx_ptype_5numpy_ufunc);
-  Py_CLEAR(clear_module_state->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock);
-  Py_CLEAR(clear_module_state->__pyx_type_6pyemsi_12femap_parser_FEMAPBlock);
-  Py_CLEAR(clear_module_state->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser);
-  Py_CLEAR(clear_module_state->__pyx_type_6pyemsi_12femap_parser_FEMAPParser);
+  Py_CLEAR(clear_module_state->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock);
+  Py_CLEAR(clear_module_state->__pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock);
+  Py_CLEAR(clear_module_state->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser);
+  Py_CLEAR(clear_module_state->__pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser);
   for (int i=0; i<4; ++i) { Py_CLEAR(clear_module_state->__pyx_tuple[i]); }
   for (int i=0; i<19; ++i) { Py_CLEAR(clear_module_state->__pyx_codeobj_tab[i]); }
   for (int i=0; i<150; ++i) { Py_CLEAR(clear_module_state->__pyx_string_tab[i]); }
@@ -3657,10 +3657,10 @@ static CYTHON_SMALL_CODE int __pyx_m_traverse(PyObject *m, visitproc visit, void
   Py_VISIT(traverse_module_state->__pyx_ptype_5numpy_flexible);
   Py_VISIT(traverse_module_state->__pyx_ptype_5numpy_character);
   Py_VISIT(traverse_module_state->__pyx_ptype_5numpy_ufunc);
-  Py_VISIT(traverse_module_state->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock);
-  Py_VISIT(traverse_module_state->__pyx_type_6pyemsi_12femap_parser_FEMAPBlock);
-  Py_VISIT(traverse_module_state->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser);
-  Py_VISIT(traverse_module_state->__pyx_type_6pyemsi_12femap_parser_FEMAPParser);
+  Py_VISIT(traverse_module_state->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock);
+  Py_VISIT(traverse_module_state->__pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock);
+  Py_VISIT(traverse_module_state->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser);
+  Py_VISIT(traverse_module_state->__pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser);
   for (int i=0; i<4; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_tuple[i]); }
   for (int i=0; i<19; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_codeobj_tab[i]); }
   for (int i=0; i<150; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_string_tab[i]); }
@@ -3678,7 +3678,7 @@ return 0;
 #endif
 /* #### Code section: module_code ### */
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":243
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":243
  *         cdef int type_num
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3689,7 +3689,7 @@ return 0;
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_Descr *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":245
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":245
  *         @property
  *         cdef inline npy_intp itemsize(self) noexcept nogil:
  *             return PyDataType_ELSIZE(self)             # <<<<<<<<<<<<<<
@@ -3699,7 +3699,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_D
   __pyx_r = PyDataType_ELSIZE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":243
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":243
  *         cdef int type_num
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3712,7 +3712,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_D
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":247
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":247
  *             return PyDataType_ELSIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3723,7 +3723,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_D
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_9alignment_alignment(PyArray_Descr *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":249
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":249
  *         @property
  *         cdef inline npy_intp alignment(self) noexcept nogil:
  *             return PyDataType_ALIGNMENT(self)             # <<<<<<<<<<<<<<
@@ -3733,7 +3733,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_9alignment_alignment(PyArray
   __pyx_r = PyDataType_ALIGNMENT(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":247
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":247
  *             return PyDataType_ELSIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3746,7 +3746,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_9alignment_alignment(PyArray
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":253
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":253
  *         # Use fields/names with care as they may be NULL.  You must check
  *         # for this using PyDataType_HASFIELDS.
  *         @property             # <<<<<<<<<<<<<<
@@ -3760,7 +3760,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_6fields_fields(PyArray_Desc
   PyObject *__pyx_t_1;
   __Pyx_RefNannySetupContext("fields", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":255
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":255
  *         @property
  *         cdef inline object fields(self):
  *             return <object>PyDataType_FIELDS(self)             # <<<<<<<<<<<<<<
@@ -3773,7 +3773,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_6fields_fields(PyArray_Desc
   __pyx_r = ((PyObject *)__pyx_t_1);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":253
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":253
  *         # Use fields/names with care as they may be NULL.  You must check
  *         # for this using PyDataType_HASFIELDS.
  *         @property             # <<<<<<<<<<<<<<
@@ -3788,7 +3788,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_6fields_fields(PyArray_Desc
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":257
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":257
  *             return <object>PyDataType_FIELDS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3802,7 +3802,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
   PyObject *__pyx_t_1;
   __Pyx_RefNannySetupContext("names", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":259
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":259
  *         @property
  *         cdef inline tuple names(self):
  *             return <tuple>PyDataType_NAMES(self)             # <<<<<<<<<<<<<<
@@ -3815,7 +3815,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
   __pyx_r = ((PyObject*)__pyx_t_1);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":257
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":257
  *             return <object>PyDataType_FIELDS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3830,7 +3830,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":264
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":264
  *         # valid (the pointer can be NULL). Most users should access
  *         # this field via the inline helper method PyDataType_SHAPE.
  *         @property             # <<<<<<<<<<<<<<
@@ -3841,7 +3841,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
 static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarray(PyArray_Descr *__pyx_v_self) {
   PyArray_ArrayDescr *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":266
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":266
  *         @property
  *         cdef inline PyArray_ArrayDescr* subarray(self) noexcept nogil:
  *             return PyDataType_SUBARRAY(self)             # <<<<<<<<<<<<<<
@@ -3851,7 +3851,7 @@ static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarra
   __pyx_r = PyDataType_SUBARRAY(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":264
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":264
  *         # valid (the pointer can be NULL). Most users should access
  *         # this field via the inline helper method PyDataType_SHAPE.
  *         @property             # <<<<<<<<<<<<<<
@@ -3864,7 +3864,7 @@ static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarra
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":268
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":268
  *             return PyDataType_SUBARRAY(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3875,7 +3875,7 @@ static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarra
 static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr *__pyx_v_self) {
   npy_uint64 __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":271
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":271
  *         cdef inline npy_uint64 flags(self) noexcept nogil:
  *             """The data types flags."""
  *             return PyDataType_FLAGS(self)             # <<<<<<<<<<<<<<
@@ -3885,7 +3885,7 @@ static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr
   __pyx_r = PyDataType_FLAGS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":268
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":268
  *             return PyDataType_SUBARRAY(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3898,7 +3898,7 @@ static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":280
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":280
  *     ctypedef class numpy.broadcast [object PyArrayMultiIterObject, check_size ignore]:
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3909,7 +3909,7 @@ static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr
 static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMultiIterObject *__pyx_v_self) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":283
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":283
  *         cdef inline int numiter(self) noexcept nogil:
  *             """The number of arrays that need to be broadcast to the same shape."""
  *             return PyArray_MultiIter_NUMITER(self)             # <<<<<<<<<<<<<<
@@ -3919,7 +3919,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMulti
   __pyx_r = PyArray_MultiIter_NUMITER(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":280
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":280
  *     ctypedef class numpy.broadcast [object PyArrayMultiIterObject, check_size ignore]:
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3932,7 +3932,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMulti
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":285
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":285
  *             return PyArray_MultiIter_NUMITER(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3943,7 +3943,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMulti
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiIterObject *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":288
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":288
  *         cdef inline npy_intp size(self) noexcept nogil:
  *             """The total broadcasted size."""
  *             return PyArray_MultiIter_SIZE(self)             # <<<<<<<<<<<<<<
@@ -3953,7 +3953,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiI
   __pyx_r = PyArray_MultiIter_SIZE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":285
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":285
  *             return PyArray_MultiIter_NUMITER(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3966,7 +3966,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiI
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":290
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":290
  *             return PyArray_MultiIter_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3977,7 +3977,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiI
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMultiIterObject *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":293
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":293
  *         cdef inline npy_intp index(self) noexcept nogil:
  *             """The current (1-d) index into the broadcasted result."""
  *             return PyArray_MultiIter_INDEX(self)             # <<<<<<<<<<<<<<
@@ -3987,7 +3987,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMult
   __pyx_r = PyArray_MultiIter_INDEX(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":290
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":290
  *             return PyArray_MultiIter_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4000,7 +4000,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMult
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":295
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":295
  *             return PyArray_MultiIter_INDEX(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4011,7 +4011,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMult
 static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject *__pyx_v_self) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":298
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":298
  *         cdef inline int nd(self) noexcept nogil:
  *             """The number of dimensions in the broadcasted result."""
  *             return PyArray_MultiIter_NDIM(self)             # <<<<<<<<<<<<<<
@@ -4021,7 +4021,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject
   __pyx_r = PyArray_MultiIter_NDIM(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":295
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":295
  *             return PyArray_MultiIter_INDEX(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4034,7 +4034,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":300
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":300
  *             return PyArray_MultiIter_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4045,7 +4045,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions(PyArrayMultiIterObject *__pyx_v_self) {
   npy_intp *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":303
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":303
  *         cdef inline npy_intp* dimensions(self) noexcept nogil:
  *             """The shape of the broadcasted result."""
  *             return PyArray_MultiIter_DIMS(self)             # <<<<<<<<<<<<<<
@@ -4055,7 +4055,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions
   __pyx_r = PyArray_MultiIter_DIMS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":300
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":300
  *             return PyArray_MultiIter_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4068,7 +4068,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":305
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":305
  *             return PyArray_MultiIter_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4079,7 +4079,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions
 static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiIterObject *__pyx_v_self) {
   void **__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":309
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":309
  *             """An array of iterator objects that holds the iterators for the arrays to be broadcast together.
  *             On return, the iterators are adjusted for broadcasting."""
  *             return PyArray_MultiIter_ITERS(self)             # <<<<<<<<<<<<<<
@@ -4089,7 +4089,7 @@ static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiI
   __pyx_r = PyArray_MultiIter_ITERS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":305
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":305
  *             return PyArray_MultiIter_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4102,7 +4102,7 @@ static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiI
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":323
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":323
  *         # Instead, we use properties that map to the corresponding C-API functions.
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4113,7 +4113,7 @@ static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiI
 static CYTHON_INLINE PyObject *__pyx_f_5numpy_7ndarray_4base_base(PyArrayObject *__pyx_v_self) {
   PyObject *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":327
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":327
  *             """Returns a borrowed reference to the object owning the data/memory.
  *             """
  *             return PyArray_BASE(self)             # <<<<<<<<<<<<<<
@@ -4123,7 +4123,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_7ndarray_4base_base(PyArrayObject 
   __pyx_r = PyArray_BASE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":323
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":323
  *         # Instead, we use properties that map to the corresponding C-API functions.
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4136,7 +4136,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_7ndarray_4base_base(PyArrayObject 
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":329
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":329
  *             return PyArray_BASE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4150,7 +4150,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
   PyArray_Descr *__pyx_t_1;
   __Pyx_RefNannySetupContext("descr", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":333
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":333
  *             """Returns an owned reference to the dtype of the array.
  *             """
  *             return <dtype>PyArray_DESCR(self)             # <<<<<<<<<<<<<<
@@ -4163,7 +4163,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
   __pyx_r = ((PyArray_Descr *)__pyx_t_1);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":329
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":329
  *             return PyArray_BASE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4178,7 +4178,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":335
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":335
  *             return <dtype>PyArray_DESCR(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4189,7 +4189,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
 static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx_v_self) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":339
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":339
  *             """Returns the number of dimensions in the array.
  *             """
  *             return PyArray_NDIM(self)             # <<<<<<<<<<<<<<
@@ -4199,7 +4199,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx
   __pyx_r = PyArray_NDIM(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":335
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":335
  *             return <dtype>PyArray_DESCR(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4212,7 +4212,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":341
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":341
  *             return PyArray_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4223,7 +4223,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObject *__pyx_v_self) {
   npy_intp *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":347
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":347
  *             Can return NULL for 0-dimensional arrays.
  *             """
  *             return PyArray_DIMS(self)             # <<<<<<<<<<<<<<
@@ -4233,7 +4233,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
   __pyx_r = PyArray_DIMS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":341
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":341
  *             return PyArray_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4246,7 +4246,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":349
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":349
  *             return PyArray_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4257,7 +4257,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayObject *__pyx_v_self) {
   npy_intp *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":354
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":354
  *             The number of elements matches the number of dimensions of the array (ndim).
  *             """
  *             return PyArray_STRIDES(self)             # <<<<<<<<<<<<<<
@@ -4267,7 +4267,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayO
   __pyx_r = PyArray_STRIDES(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":349
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":349
  *             return PyArray_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4280,7 +4280,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayO
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":356
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":356
  *             return PyArray_STRIDES(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4291,7 +4291,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayO
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":360
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":360
  *             """Returns the total size (in number of elements) of the array.
  *             """
  *             return PyArray_SIZE(self)             # <<<<<<<<<<<<<<
@@ -4301,7 +4301,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *
   __pyx_r = PyArray_SIZE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":356
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":356
  *             return PyArray_STRIDES(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4314,7 +4314,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":362
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":362
  *             return PyArray_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4325,7 +4325,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *
 static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__pyx_v_self) {
   char *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":369
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":369
  *             of `PyArray_DATA()` instead, which returns a 'void*'.
  *             """
  *             return PyArray_BYTES(self)             # <<<<<<<<<<<<<<
@@ -4335,7 +4335,7 @@ static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__p
   __pyx_r = PyArray_BYTES(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":362
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":362
  *             return PyArray_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4348,7 +4348,7 @@ static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__p
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":777
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":777
  * ctypedef long double complex clongdouble_t
  * 
  * cdef inline object PyArray_MultiIterNew1(a):             # <<<<<<<<<<<<<<
@@ -4365,7 +4365,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew1(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew1", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":778
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":778
  * 
  * cdef inline object PyArray_MultiIterNew1(a):
  *     return PyArray_MultiIterNew(1, <void*>a)             # <<<<<<<<<<<<<<
@@ -4379,7 +4379,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew1(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":777
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":777
  * ctypedef long double complex clongdouble_t
  * 
  * cdef inline object PyArray_MultiIterNew1(a):             # <<<<<<<<<<<<<<
@@ -4398,7 +4398,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew1(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":780
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":780
  *     return PyArray_MultiIterNew(1, <void*>a)
  * 
  * cdef inline object PyArray_MultiIterNew2(a, b):             # <<<<<<<<<<<<<<
@@ -4415,7 +4415,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew2(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew2", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":781
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":781
  * 
  * cdef inline object PyArray_MultiIterNew2(a, b):
  *     return PyArray_MultiIterNew(2, <void*>a, <void*>b)             # <<<<<<<<<<<<<<
@@ -4429,7 +4429,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew2(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":780
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":780
  *     return PyArray_MultiIterNew(1, <void*>a)
  * 
  * cdef inline object PyArray_MultiIterNew2(a, b):             # <<<<<<<<<<<<<<
@@ -4448,7 +4448,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew2(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":783
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":783
  *     return PyArray_MultiIterNew(2, <void*>a, <void*>b)
  * 
  * cdef inline object PyArray_MultiIterNew3(a, b, c):             # <<<<<<<<<<<<<<
@@ -4465,7 +4465,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew3(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew3", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":784
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":784
  * 
  * cdef inline object PyArray_MultiIterNew3(a, b, c):
  *     return PyArray_MultiIterNew(3, <void*>a, <void*>b, <void*> c)             # <<<<<<<<<<<<<<
@@ -4479,7 +4479,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew3(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":783
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":783
  *     return PyArray_MultiIterNew(2, <void*>a, <void*>b)
  * 
  * cdef inline object PyArray_MultiIterNew3(a, b, c):             # <<<<<<<<<<<<<<
@@ -4498,7 +4498,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew3(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":786
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":786
  *     return PyArray_MultiIterNew(3, <void*>a, <void*>b, <void*> c)
  * 
  * cdef inline object PyArray_MultiIterNew4(a, b, c, d):             # <<<<<<<<<<<<<<
@@ -4515,7 +4515,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew4(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew4", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":787
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":787
  * 
  * cdef inline object PyArray_MultiIterNew4(a, b, c, d):
  *     return PyArray_MultiIterNew(4, <void*>a, <void*>b, <void*>c, <void*> d)             # <<<<<<<<<<<<<<
@@ -4529,7 +4529,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew4(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":786
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":786
  *     return PyArray_MultiIterNew(3, <void*>a, <void*>b, <void*> c)
  * 
  * cdef inline object PyArray_MultiIterNew4(a, b, c, d):             # <<<<<<<<<<<<<<
@@ -4548,7 +4548,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew4(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":789
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":789
  *     return PyArray_MultiIterNew(4, <void*>a, <void*>b, <void*>c, <void*> d)
  * 
  * cdef inline object PyArray_MultiIterNew5(a, b, c, d, e):             # <<<<<<<<<<<<<<
@@ -4565,7 +4565,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew5(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew5", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":790
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":790
  * 
  * cdef inline object PyArray_MultiIterNew5(a, b, c, d, e):
  *     return PyArray_MultiIterNew(5, <void*>a, <void*>b, <void*>c, <void*> d, <void*> e)             # <<<<<<<<<<<<<<
@@ -4579,7 +4579,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew5(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":789
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":789
  *     return PyArray_MultiIterNew(4, <void*>a, <void*>b, <void*>c, <void*> d)
  * 
  * cdef inline object PyArray_MultiIterNew5(a, b, c, d, e):             # <<<<<<<<<<<<<<
@@ -4598,7 +4598,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew5(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":792
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":792
  *     return PyArray_MultiIterNew(5, <void*>a, <void*>b, <void*>c, <void*> d, <void*> e)
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):             # <<<<<<<<<<<<<<
@@ -4613,7 +4613,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
   PyObject *__pyx_t_2;
   __Pyx_RefNannySetupContext("PyDataType_SHAPE", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":793
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":793
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):
  *     if PyDataType_HASSUBARRAY(d):             # <<<<<<<<<<<<<<
@@ -4623,7 +4623,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
   __pyx_t_1 = PyDataType_HASSUBARRAY(__pyx_v_d);
   if (__pyx_t_1) {
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":794
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":794
  * cdef inline tuple PyDataType_SHAPE(dtype d):
  *     if PyDataType_HASSUBARRAY(d):
  *         return <tuple>d.subarray.shape             # <<<<<<<<<<<<<<
@@ -4636,7 +4636,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
     __pyx_r = ((PyObject*)__pyx_t_2);
     goto __pyx_L0;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":793
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":793
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):
  *     if PyDataType_HASSUBARRAY(d):             # <<<<<<<<<<<<<<
@@ -4645,7 +4645,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
 */
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":796
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":796
  *         return <tuple>d.subarray.shape
  *     else:
  *         return ()             # <<<<<<<<<<<<<<
@@ -4659,7 +4659,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
     goto __pyx_L0;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":792
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":792
  *     return PyArray_MultiIterNew(5, <void*>a, <void*>b, <void*>c, <void*> d, <void*> e)
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):             # <<<<<<<<<<<<<<
@@ -4674,7 +4674,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":995
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":995
  *     int _import_umath() except -1
  * 
  * cdef inline void set_array_base(ndarray arr, object base) except *:             # <<<<<<<<<<<<<<
@@ -4688,7 +4688,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":996
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":996
  * 
  * cdef inline void set_array_base(ndarray arr, object base) except *:
  *     Py_INCREF(base) # important to do this before stealing the reference below!             # <<<<<<<<<<<<<<
@@ -4697,7 +4697,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
 */
   Py_INCREF(__pyx_v_base);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":997
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":997
  * cdef inline void set_array_base(ndarray arr, object base) except *:
  *     Py_INCREF(base) # important to do this before stealing the reference below!
  *     PyArray_SetBaseObject(arr, base)             # <<<<<<<<<<<<<<
@@ -4706,7 +4706,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
 */
   __pyx_t_1 = PyArray_SetBaseObject(__pyx_v_arr, __pyx_v_base); if (unlikely(__pyx_t_1 == ((int)-1))) __PYX_ERR(1, 997, __pyx_L1_error)
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":995
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":995
  *     int _import_umath() except -1
  * 
  * cdef inline void set_array_base(ndarray arr, object base) except *:             # <<<<<<<<<<<<<<
@@ -4721,7 +4721,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
   __pyx_L0:;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":999
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":999
  *     PyArray_SetBaseObject(arr, base)
  * 
  * cdef inline object get_array_base(ndarray arr):             # <<<<<<<<<<<<<<
@@ -4736,7 +4736,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   int __pyx_t_1;
   __Pyx_RefNannySetupContext("get_array_base", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1000
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1000
  * 
  * cdef inline object get_array_base(ndarray arr):
  *     base = PyArray_BASE(arr)             # <<<<<<<<<<<<<<
@@ -4745,7 +4745,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
 */
   __pyx_v_base = PyArray_BASE(__pyx_v_arr);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
  * cdef inline object get_array_base(ndarray arr):
  *     base = PyArray_BASE(arr)
  *     if base is NULL:             # <<<<<<<<<<<<<<
@@ -4755,7 +4755,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   __pyx_t_1 = (__pyx_v_base == NULL);
   if (__pyx_t_1) {
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1002
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1002
  *     base = PyArray_BASE(arr)
  *     if base is NULL:
  *         return None             # <<<<<<<<<<<<<<
@@ -4766,7 +4766,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
     __pyx_r = Py_None; __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
  * cdef inline object get_array_base(ndarray arr):
  *     base = PyArray_BASE(arr)
  *     if base is NULL:             # <<<<<<<<<<<<<<
@@ -4775,7 +4775,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
 */
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1003
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1003
  *     if base is NULL:
  *         return None
  *     return <object>base             # <<<<<<<<<<<<<<
@@ -4787,7 +4787,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   __pyx_r = ((PyObject *)__pyx_v_base);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":999
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":999
  *     PyArray_SetBaseObject(arr, base)
  * 
  * cdef inline object get_array_base(ndarray arr):             # <<<<<<<<<<<<<<
@@ -4802,7 +4802,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
  * # Versions of the import_* functions which are more suitable for
  * # Cython code.
  * cdef inline int import_array() except -1:             # <<<<<<<<<<<<<<
@@ -4828,7 +4828,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("import_array", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
  * # Cython code.
  * cdef inline int import_array() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4844,7 +4844,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     __Pyx_XGOTREF(__pyx_t_3);
     /*try:*/ {
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1009
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1009
  * cdef inline int import_array() except -1:
  *     try:
  *         __pyx_import_array()             # <<<<<<<<<<<<<<
@@ -4853,7 +4853,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
 */
       __pyx_t_4 = _import_array(); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(1, 1009, __pyx_L3_error)
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
  * # Cython code.
  * cdef inline int import_array() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4867,7 +4867,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     goto __pyx_L8_try_end;
     __pyx_L3_error:;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1010
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1010
  *     try:
  *         __pyx_import_array()
  *     except Exception:             # <<<<<<<<<<<<<<
@@ -4882,7 +4882,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
       __Pyx_XGOTREF(__pyx_t_6);
       __Pyx_XGOTREF(__pyx_t_7);
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1011
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1011
  *         __pyx_import_array()
  *     except Exception:
  *         raise ImportError("numpy._core.multiarray failed to import")             # <<<<<<<<<<<<<<
@@ -4904,7 +4904,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     }
     goto __pyx_L5_except_error;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
  * # Cython code.
  * cdef inline int import_array() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4920,7 +4920,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     __pyx_L8_try_end:;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
  * # Versions of the import_* functions which are more suitable for
  * # Cython code.
  * cdef inline int import_array() except -1:             # <<<<<<<<<<<<<<
@@ -4944,7 +4944,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
  *         raise ImportError("numpy._core.multiarray failed to import")
  * 
  * cdef inline int import_umath() except -1:             # <<<<<<<<<<<<<<
@@ -4970,7 +4970,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("import_umath", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
  * 
  * cdef inline int import_umath() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4986,7 +4986,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     __Pyx_XGOTREF(__pyx_t_3);
     /*try:*/ {
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1015
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1015
  * cdef inline int import_umath() except -1:
  *     try:
  *         _import_umath()             # <<<<<<<<<<<<<<
@@ -4995,7 +4995,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
 */
       __pyx_t_4 = _import_umath(); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(1, 1015, __pyx_L3_error)
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
  * 
  * cdef inline int import_umath() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5009,7 +5009,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     goto __pyx_L8_try_end;
     __pyx_L3_error:;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1016
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1016
  *     try:
  *         _import_umath()
  *     except Exception:             # <<<<<<<<<<<<<<
@@ -5024,7 +5024,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
       __Pyx_XGOTREF(__pyx_t_6);
       __Pyx_XGOTREF(__pyx_t_7);
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1017
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1017
  *         _import_umath()
  *     except Exception:
  *         raise ImportError("numpy._core.umath failed to import")             # <<<<<<<<<<<<<<
@@ -5046,7 +5046,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     }
     goto __pyx_L5_except_error;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
  * 
  * cdef inline int import_umath() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5062,7 +5062,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     __pyx_L8_try_end:;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
  *         raise ImportError("numpy._core.multiarray failed to import")
  * 
  * cdef inline int import_umath() except -1:             # <<<<<<<<<<<<<<
@@ -5086,7 +5086,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
  *         raise ImportError("numpy._core.umath failed to import")
  * 
  * cdef inline int import_ufunc() except -1:             # <<<<<<<<<<<<<<
@@ -5112,7 +5112,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("import_ufunc", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
  * 
  * cdef inline int import_ufunc() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5128,7 +5128,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     __Pyx_XGOTREF(__pyx_t_3);
     /*try:*/ {
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1021
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1021
  * cdef inline int import_ufunc() except -1:
  *     try:
  *         _import_umath()             # <<<<<<<<<<<<<<
@@ -5137,7 +5137,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
 */
       __pyx_t_4 = _import_umath(); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(1, 1021, __pyx_L3_error)
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
  * 
  * cdef inline int import_ufunc() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5151,7 +5151,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     goto __pyx_L8_try_end;
     __pyx_L3_error:;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1022
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1022
  *     try:
  *         _import_umath()
  *     except Exception:             # <<<<<<<<<<<<<<
@@ -5166,7 +5166,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
       __Pyx_XGOTREF(__pyx_t_6);
       __Pyx_XGOTREF(__pyx_t_7);
 
-      /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1023
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1023
  *         _import_umath()
  *     except Exception:
  *         raise ImportError("numpy._core.umath failed to import")             # <<<<<<<<<<<<<<
@@ -5188,7 +5188,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     }
     goto __pyx_L5_except_error;
 
-    /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
  * 
  * cdef inline int import_ufunc() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5204,7 +5204,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     __pyx_L8_try_end:;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
  *         raise ImportError("numpy._core.umath failed to import")
  * 
  * cdef inline int import_ufunc() except -1:             # <<<<<<<<<<<<<<
@@ -5228,7 +5228,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
  * 
  * 
  * cdef inline bint is_timedelta64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5239,7 +5239,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
 static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_obj) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1038
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1038
  *     bool
  *     """
  *     return PyObject_TypeCheck(obj, &PyTimedeltaArrType_Type)             # <<<<<<<<<<<<<<
@@ -5249,7 +5249,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_
   __pyx_r = PyObject_TypeCheck(__pyx_v_obj, (&PyTimedeltaArrType_Type));
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
  * 
  * 
  * cdef inline bint is_timedelta64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5262,7 +5262,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
  * 
  * 
  * cdef inline bint is_datetime64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5273,7 +5273,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_
 static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_obj) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1053
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1053
  *     bool
  *     """
  *     return PyObject_TypeCheck(obj, &PyDatetimeArrType_Type)             # <<<<<<<<<<<<<<
@@ -5283,7 +5283,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_o
   __pyx_r = PyObject_TypeCheck(__pyx_v_obj, (&PyDatetimeArrType_Type));
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
  * 
  * 
  * cdef inline bint is_datetime64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5296,7 +5296,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_o
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
  * 
  * 
  * cdef inline npy_datetime get_datetime64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5307,7 +5307,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_o
 static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *__pyx_v_obj) {
   npy_datetime __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1063
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1063
  *     also needed.  That can be found using `get_datetime64_unit`.
  *     """
  *     return (<PyDatetimeScalarObject*>obj).obval             # <<<<<<<<<<<<<<
@@ -5317,7 +5317,7 @@ static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *
   __pyx_r = ((PyDatetimeScalarObject *)__pyx_v_obj)->obval;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
  * 
  * 
  * cdef inline npy_datetime get_datetime64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5330,7 +5330,7 @@ static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
  * 
  * 
  * cdef inline npy_timedelta get_timedelta64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5341,7 +5341,7 @@ static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *
 static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject *__pyx_v_obj) {
   npy_timedelta __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1070
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1070
  *     returns the int64 value underlying scalar numpy timedelta64 object
  *     """
  *     return (<PyTimedeltaScalarObject*>obj).obval             # <<<<<<<<<<<<<<
@@ -5351,7 +5351,7 @@ static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject
   __pyx_r = ((PyTimedeltaScalarObject *)__pyx_v_obj)->obval;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
  * 
  * 
  * cdef inline npy_timedelta get_timedelta64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5364,7 +5364,7 @@ static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
  * 
  * 
  * cdef inline NPY_DATETIMEUNIT get_datetime64_unit(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5375,7 +5375,7 @@ static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject
 static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObject *__pyx_v_obj) {
   NPY_DATETIMEUNIT __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1077
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1077
  *     returns the unit part of the dtype for a numpy datetime64 object.
  *     """
  *     return <NPY_DATETIMEUNIT>(<PyDatetimeScalarObject*>obj).obmeta.base             # <<<<<<<<<<<<<<
@@ -5385,7 +5385,7 @@ static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObjec
   __pyx_r = ((NPY_DATETIMEUNIT)((PyDatetimeScalarObject *)__pyx_v_obj)->obmeta.base);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-kl6rg2m_/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
  * 
  * 
  * cdef inline NPY_DATETIMEUNIT get_datetime64_unit(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5398,7 +5398,7 @@ static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObjec
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":25
+/* "pyemsi/core/femap_parser.pyx":25
  *     """Represents a single FEMAP data block."""
  * 
  *     def __init__(self, int block_id, list lines):             # <<<<<<<<<<<<<<
@@ -5407,8 +5407,8 @@ static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObjec
 */
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   int __pyx_v_block_id;
   PyObject *__pyx_v_lines = 0;
   CYTHON_UNUSED Py_ssize_t __pyx_nargs;
@@ -5468,12 +5468,12 @@ static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_1__init__(PyObject *__py
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return -1;
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_lines), (&PyList_Type), 1, "lines", 1))) __PYX_ERR(0, 25, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self), __pyx_v_block_id, __pyx_v_lines);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock___init__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self), __pyx_v_block_id, __pyx_v_lines);
 
   /* function exit code */
   goto __pyx_L0;
@@ -5492,12 +5492,12 @@ static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_1__init__(PyObject *__py
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, int __pyx_v_block_id, PyObject *__pyx_v_lines) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock___init__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, int __pyx_v_block_id, PyObject *__pyx_v_lines) {
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__init__", 0);
 
-  /* "pyemsi/femap_parser.pyx":26
+  /* "pyemsi/core/femap_parser.pyx":26
  * 
  *     def __init__(self, int block_id, list lines):
  *         self.block_id = block_id             # <<<<<<<<<<<<<<
@@ -5506,7 +5506,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(struct __pyx_ob
 */
   __pyx_v_self->block_id = __pyx_v_block_id;
 
-  /* "pyemsi/femap_parser.pyx":27
+  /* "pyemsi/core/femap_parser.pyx":27
  *     def __init__(self, int block_id, list lines):
  *         self.block_id = block_id
  *         self.lines = lines             # <<<<<<<<<<<<<<
@@ -5519,7 +5519,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(struct __pyx_ob
   __Pyx_DECREF(__pyx_v_self->lines);
   __pyx_v_self->lines = __pyx_v_lines;
 
-  /* "pyemsi/femap_parser.pyx":25
+  /* "pyemsi/core/femap_parser.pyx":25
  *     """Represents a single FEMAP data block."""
  * 
  *     def __init__(self, int block_id, list lines):             # <<<<<<<<<<<<<<
@@ -5533,7 +5533,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(struct __pyx_ob
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":29
+/* "pyemsi/core/femap_parser.pyx":29
  *         self.lines = lines
  * 
  *     def __repr__(self):             # <<<<<<<<<<<<<<
@@ -5542,21 +5542,21 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock___init__(struct __pyx_ob
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_3__repr__(PyObject *__pyx_v_self); /*proto*/
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_3__repr__(PyObject *__pyx_v_self) {
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_3__repr__(PyObject *__pyx_v_self); /*proto*/
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_3__repr__(PyObject *__pyx_v_self) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__repr__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_2__repr__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_2__repr__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -5569,7 +5569,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct _
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__repr__", 0);
 
-  /* "pyemsi/femap_parser.pyx":30
+  /* "pyemsi/core/femap_parser.pyx":30
  * 
  *     def __repr__(self):
  *         return f"FEMAPBlock(id={self.block_id}, lines={len(self.lines)})"             # <<<<<<<<<<<<<<
@@ -5603,7 +5603,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct _
   __pyx_t_5 = 0;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":29
+  /* "pyemsi/core/femap_parser.pyx":29
  *         self.lines = lines
  * 
  *     def __repr__(self):             # <<<<<<<<<<<<<<
@@ -5616,7 +5616,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct _
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_5);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.__repr__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.__repr__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -5624,7 +5624,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct _
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pxd":13
+/* "pyemsi/core/femap_parser.pxd":13
  * 
  * cdef class FEMAPBlock:
  *     cdef public int block_id             # <<<<<<<<<<<<<<
@@ -5633,21 +5633,21 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_2__repr__(struct _
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_1__get__(PyObject *__pyx_v_self); /*proto*/
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_1__get__(PyObject *__pyx_v_self) {
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_1__get__(PyObject *__pyx_v_self); /*proto*/
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_1__get__(PyObject *__pyx_v_self) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__get__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id___get__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id___get__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id___get__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id___get__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -5665,7 +5665,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id___get__(
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.block_id.__get__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.block_id.__get__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -5674,21 +5674,21 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id___get__(
 }
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__set__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_2__set__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self), ((PyObject *)__pyx_v_value));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_2__set__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self), ((PyObject *)__pyx_v_value));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_2__set__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_2__set__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value) {
   int __pyx_r;
   int __pyx_t_1;
   int __pyx_lineno = 0;
@@ -5701,13 +5701,13 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_2__set__(struc
   __pyx_r = 0;
   goto __pyx_L0;
   __pyx_L1_error:;
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.block_id.__set__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.block_id.__set__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pxd":14
+/* "pyemsi/core/femap_parser.pxd":14
  * cdef class FEMAPBlock:
  *     cdef public int block_id
  *     cdef public list lines             # <<<<<<<<<<<<<<
@@ -5716,21 +5716,21 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_2__set__(struc
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_1__get__(PyObject *__pyx_v_self); /*proto*/
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_1__get__(PyObject *__pyx_v_self) {
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_1__get__(PyObject *__pyx_v_self); /*proto*/
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_1__get__(PyObject *__pyx_v_self) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__get__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines___get__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines___get__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines___get__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines___get__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__get__", 0);
@@ -5747,21 +5747,21 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines___get__(str
 }
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__set__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_2__set__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self), ((PyObject *)__pyx_v_value));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_2__set__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self), ((PyObject *)__pyx_v_value));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_2__set__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_2__set__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v_value) {
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -5783,7 +5783,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_2__set__(struct _
   goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.lines.__set__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.lines.__set__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -5791,21 +5791,21 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_2__set__(struct _
 }
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_5__del__(PyObject *__pyx_v_self); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_5__del__(PyObject *__pyx_v_self) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_5__del__(PyObject *__pyx_v_self); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_5__del__(PyObject *__pyx_v_self) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__del__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_4__del__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_4__del__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_4__del__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_4__del__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self) {
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__del__", 0);
@@ -5828,15 +5828,15 @@ static int __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_5lines_4__del__(struct _
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5__reduce_cython__(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5__reduce_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_10FEMAPBlock_5__reduce_cython__ = {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5__reduce_cython__(PyObject *__pyx_v_self, 
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_10FEMAPBlock_5__reduce_cython__ = {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5__reduce_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -5862,14 +5862,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("__reduce_cython__", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_4__reduce_cython__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_4__reduce_cython__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_4__reduce_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_4__reduce_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self) {
   PyObject *__pyx_v_state = 0;
   PyObject *__pyx_v__dict = 0;
   int __pyx_v_use_setstate;
@@ -6085,7 +6085,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_4__reduce_cython__
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_5);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.__reduce_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.__reduce_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_state);
@@ -6103,15 +6103,15 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_4__reduce_cython__
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_7__setstate_cython__(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_7__setstate_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_10FEMAPBlock_7__setstate_cython__ = {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_7__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_7__setstate_cython__(PyObject *__pyx_v_self, 
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_10FEMAPBlock_7__setstate_cython__ = {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_7__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_7__setstate_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -6173,11 +6173,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v_self), __pyx_v___pyx_state);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_6__setstate_cython__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v_self), __pyx_v___pyx_state);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -6187,7 +6187,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v___pyx_state) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_10FEMAPBlock_6__setstate_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_self, PyObject *__pyx_v___pyx_state) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6209,7 +6209,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython
     PyErr_SetString(PyExc_TypeError, "cannot pass None into a C function argument that is declared 'not None'");
     __PYX_ERR(3, 17, __pyx_L1_error)
   }
-  __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(__pyx_v_self, ((PyObject*)__pyx_t_1)); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 17, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(__pyx_v_self, ((PyObject*)__pyx_t_1)); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 17, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
@@ -6227,7 +6227,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPBlock.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPBlock.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -6235,7 +6235,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":40
+/* "pyemsi/core/femap_parser.pyx":40
  *     """
  * 
  *     def __init__(self, str filepath):             # <<<<<<<<<<<<<<
@@ -6244,8 +6244,8 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_10FEMAPBlock_6__setstate_cython
 */
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_1__init__(PyObject *__pyx_v_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyObject *__pyx_v_filepath = 0;
   CYTHON_UNUSED Py_ssize_t __pyx_nargs;
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
@@ -6297,12 +6297,12 @@ static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_1__init__(PyObject *__p
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return -1;
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_filepath), (&PyUnicode_Type), 1, "filepath", 1))) __PYX_ERR(0, 40, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_filepath);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser___init__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_filepath);
 
   /* function exit code */
   goto __pyx_L0;
@@ -6321,7 +6321,7 @@ static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_1__init__(PyObject *__p
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_filepath) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser___init__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_filepath) {
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6330,7 +6330,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_o
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__init__", 0);
 
-  /* "pyemsi/femap_parser.pyx":41
+  /* "pyemsi/core/femap_parser.pyx":41
  * 
  *     def __init__(self, str filepath):
  *         self.filepath = filepath             # <<<<<<<<<<<<<<
@@ -6343,7 +6343,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_o
   __Pyx_DECREF(__pyx_v_self->filepath);
   __pyx_v_self->filepath = __pyx_v_filepath;
 
-  /* "pyemsi/femap_parser.pyx":42
+  /* "pyemsi/core/femap_parser.pyx":42
  *     def __init__(self, str filepath):
  *         self.filepath = filepath
  *         self.blocks = {}             # <<<<<<<<<<<<<<
@@ -6358,7 +6358,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_o
   __pyx_v_self->blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":43
+  /* "pyemsi/core/femap_parser.pyx":43
  *         self.filepath = filepath
  *         self.blocks = {}
  *         self.BLOCK_DELIMITER = "   -1"  # 3 spaces + -1             # <<<<<<<<<<<<<<
@@ -6371,16 +6371,16 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_o
   __Pyx_DECREF(__pyx_v_self->BLOCK_DELIMITER);
   __pyx_v_self->BLOCK_DELIMITER = __pyx_mstate_global->__pyx_kp_u_1;
 
-  /* "pyemsi/femap_parser.pyx":44
+  /* "pyemsi/core/femap_parser.pyx":44
  *         self.blocks = {}
  *         self.BLOCK_DELIMITER = "   -1"  # 3 spaces + -1
  *         self._parse()             # <<<<<<<<<<<<<<
  * 
  *     cdef void _parse(self):
 */
-  ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->_parse(__pyx_v_self); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 44, __pyx_L1_error)
+  ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->_parse(__pyx_v_self); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 44, __pyx_L1_error)
 
-  /* "pyemsi/femap_parser.pyx":40
+  /* "pyemsi/core/femap_parser.pyx":40
  *     """
  * 
  *     def __init__(self, str filepath):             # <<<<<<<<<<<<<<
@@ -6393,14 +6393,14 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_o
   goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.__init__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":46
+/* "pyemsi/core/femap_parser.pyx":46
  *         self._parse()
  * 
  *     cdef void _parse(self):             # <<<<<<<<<<<<<<
@@ -6408,7 +6408,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser___init__(struct __pyx_o
  *         Parse the FEMAP file and populate blocks grouped by ID.
 */
 
-static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static void __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_v_lines = 0;
   int __pyx_v_i;
   int __pyx_v_n_lines;
@@ -6416,7 +6416,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
   PyObject *__pyx_v_line = 0;
   PyObject *__pyx_v_next_line = 0;
   PyObject *__pyx_v_block_lines = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   PyObject *__pyx_v_f = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -6440,7 +6440,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("_parse", 0);
 
-  /* "pyemsi/femap_parser.pyx":57
+  /* "pyemsi/core/femap_parser.pyx":57
  *         cdef FEMAPBlock block
  * 
  *         with open(self.filepath, "r") as f:             # <<<<<<<<<<<<<<
@@ -6497,7 +6497,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
           __pyx_v_f = __pyx_t_6;
           __pyx_t_6 = 0;
 
-          /* "pyemsi/femap_parser.pyx":58
+          /* "pyemsi/core/femap_parser.pyx":58
  * 
  *         with open(self.filepath, "r") as f:
  *             lines = f.readlines()             # <<<<<<<<<<<<<<
@@ -6518,7 +6518,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
           __pyx_v_lines = ((PyObject*)__pyx_t_6);
           __pyx_t_6 = 0;
 
-          /* "pyemsi/femap_parser.pyx":57
+          /* "pyemsi/core/femap_parser.pyx":57
  *         cdef FEMAPBlock block
  * 
  *         with open(self.filepath, "r") as f:             # <<<<<<<<<<<<<<
@@ -6536,7 +6536,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
         __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
         __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
         /*except:*/ {
-          __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser._parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
+          __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser._parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
           if (__Pyx_GetException(&__pyx_t_6, &__pyx_t_1, &__pyx_t_2) < 0) __PYX_ERR(0, 57, __pyx_L9_except_error)
           __Pyx_XGOTREF(__pyx_t_6);
           __Pyx_XGOTREF(__pyx_t_1);
@@ -6599,7 +6599,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
     __pyx_L16:;
   }
 
-  /* "pyemsi/femap_parser.pyx":60
+  /* "pyemsi/core/femap_parser.pyx":60
  *             lines = f.readlines()
  * 
  *         n_lines = len(lines)             # <<<<<<<<<<<<<<
@@ -6614,7 +6614,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
   __pyx_t_13 = __Pyx_PyList_GET_SIZE(__pyx_v_lines); if (unlikely(__pyx_t_13 == ((Py_ssize_t)-1))) __PYX_ERR(0, 60, __pyx_L1_error)
   __pyx_v_n_lines = __pyx_t_13;
 
-  /* "pyemsi/femap_parser.pyx":61
+  /* "pyemsi/core/femap_parser.pyx":61
  * 
  *         n_lines = len(lines)
  *         i = 0             # <<<<<<<<<<<<<<
@@ -6623,7 +6623,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
   __pyx_v_i = 0;
 
-  /* "pyemsi/femap_parser.pyx":63
+  /* "pyemsi/core/femap_parser.pyx":63
  *         i = 0
  * 
  *         while i < n_lines:             # <<<<<<<<<<<<<<
@@ -6634,7 +6634,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
     __pyx_t_12 = (__pyx_v_i < __pyx_v_n_lines);
     if (!__pyx_t_12) break;
 
-    /* "pyemsi/femap_parser.pyx":64
+    /* "pyemsi/core/femap_parser.pyx":64
  * 
  *         while i < n_lines:
  *             line = (<str>lines[i]).rstrip("\n")             # <<<<<<<<<<<<<<
@@ -6659,7 +6659,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
     __Pyx_XDECREF_SET(__pyx_v_line, ((PyObject*)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":67
+    /* "pyemsi/core/femap_parser.pyx":67
  * 
  *             # Check for block delimiter
  *             if line == self.BLOCK_DELIMITER:             # <<<<<<<<<<<<<<
@@ -6669,7 +6669,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
     __pyx_t_12 = (__Pyx_PyUnicode_Equals(__pyx_v_line, __pyx_v_self->BLOCK_DELIMITER, Py_EQ)); if (unlikely((__pyx_t_12 < 0))) __PYX_ERR(0, 67, __pyx_L1_error)
     if (__pyx_t_12) {
 
-      /* "pyemsi/femap_parser.pyx":69
+      /* "pyemsi/core/femap_parser.pyx":69
  *             if line == self.BLOCK_DELIMITER:
  *                 # Next line should contain block ID
  *                 if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -6679,7 +6679,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
       __pyx_t_12 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
       if (__pyx_t_12) {
 
-        /* "pyemsi/femap_parser.pyx":70
+        /* "pyemsi/core/femap_parser.pyx":70
  *                 # Next line should contain block ID
  *                 if i + 1 < n_lines:
  *                     next_line = (<str>lines[i + 1]).strip()             # <<<<<<<<<<<<<<
@@ -6705,7 +6705,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
         __Pyx_XDECREF_SET(__pyx_v_next_line, ((PyObject*)__pyx_t_2));
         __pyx_t_2 = 0;
 
-        /* "pyemsi/femap_parser.pyx":73
+        /* "pyemsi/core/femap_parser.pyx":73
  * 
  *                     # Skip if next line is also a delimiter (double delimiter)
  *                     if next_line == "-1":             # <<<<<<<<<<<<<<
@@ -6715,7 +6715,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
         __pyx_t_12 = (__Pyx_PyUnicode_Equals(__pyx_v_next_line, __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_12 < 0))) __PYX_ERR(0, 73, __pyx_L1_error)
         if (__pyx_t_12) {
 
-          /* "pyemsi/femap_parser.pyx":74
+          /* "pyemsi/core/femap_parser.pyx":74
  *                     # Skip if next line is also a delimiter (double delimiter)
  *                     if next_line == "-1":
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -6724,7 +6724,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
           __pyx_v_i = (__pyx_v_i + 1);
 
-          /* "pyemsi/femap_parser.pyx":75
+          /* "pyemsi/core/femap_parser.pyx":75
  *                     if next_line == "-1":
  *                         i += 1
  *                         continue             # <<<<<<<<<<<<<<
@@ -6733,7 +6733,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
           goto __pyx_L17_continue;
 
-          /* "pyemsi/femap_parser.pyx":73
+          /* "pyemsi/core/femap_parser.pyx":73
  * 
  *                     # Skip if next line is also a delimiter (double delimiter)
  *                     if next_line == "-1":             # <<<<<<<<<<<<<<
@@ -6742,7 +6742,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
         }
 
-        /* "pyemsi/femap_parser.pyx":77
+        /* "pyemsi/core/femap_parser.pyx":77
  *                         continue
  * 
  *                     try:             # <<<<<<<<<<<<<<
@@ -6758,7 +6758,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
           __Pyx_XGOTREF(__pyx_t_8);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":78
+            /* "pyemsi/core/femap_parser.pyx":78
  * 
  *                     try:
  *                         block_id = int(next_line)             # <<<<<<<<<<<<<<
@@ -6771,7 +6771,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
             __pyx_v_block_id = __pyx_t_15;
 
-            /* "pyemsi/femap_parser.pyx":80
+            /* "pyemsi/core/femap_parser.pyx":80
  *                         block_id = int(next_line)
  *                         # Collect block content
  *                         block_lines = []             # <<<<<<<<<<<<<<
@@ -6783,7 +6783,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
             __Pyx_XDECREF_SET(__pyx_v_block_lines, ((PyObject*)__pyx_t_2));
             __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":81
+            /* "pyemsi/core/femap_parser.pyx":81
  *                         # Collect block content
  *                         block_lines = []
  *                         i += 2  # Skip delimiter and ID line             # <<<<<<<<<<<<<<
@@ -6792,7 +6792,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
             __pyx_v_i = (__pyx_v_i + 2);
 
-            /* "pyemsi/femap_parser.pyx":84
+            /* "pyemsi/core/femap_parser.pyx":84
  * 
  *                         # Read until next delimiter
  *                         while i < n_lines:             # <<<<<<<<<<<<<<
@@ -6803,7 +6803,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
               __pyx_t_12 = (__pyx_v_i < __pyx_v_n_lines);
               if (!__pyx_t_12) break;
 
-              /* "pyemsi/femap_parser.pyx":85
+              /* "pyemsi/core/femap_parser.pyx":85
  *                         # Read until next delimiter
  *                         while i < n_lines:
  *                             line = (<str>lines[i]).rstrip("\n")             # <<<<<<<<<<<<<<
@@ -6828,7 +6828,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
               __Pyx_DECREF_SET(__pyx_v_line, ((PyObject*)__pyx_t_2));
               __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":86
+              /* "pyemsi/core/femap_parser.pyx":86
  *                         while i < n_lines:
  *                             line = (<str>lines[i]).rstrip("\n")
  *                             if line == self.BLOCK_DELIMITER:             # <<<<<<<<<<<<<<
@@ -6838,7 +6838,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
               __pyx_t_12 = (__Pyx_PyUnicode_Equals(__pyx_v_line, __pyx_v_self->BLOCK_DELIMITER, Py_EQ)); if (unlikely((__pyx_t_12 < 0))) __PYX_ERR(0, 86, __pyx_L22_error)
               if (__pyx_t_12) {
 
-                /* "pyemsi/femap_parser.pyx":87
+                /* "pyemsi/core/femap_parser.pyx":87
  *                             line = (<str>lines[i]).rstrip("\n")
  *                             if line == self.BLOCK_DELIMITER:
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -6847,7 +6847,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":88
+                /* "pyemsi/core/femap_parser.pyx":88
  *                             if line == self.BLOCK_DELIMITER:
  *                                 i += 1
  *                                 break             # <<<<<<<<<<<<<<
@@ -6856,7 +6856,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
                 goto __pyx_L31_break;
 
-                /* "pyemsi/femap_parser.pyx":86
+                /* "pyemsi/core/femap_parser.pyx":86
  *                         while i < n_lines:
  *                             line = (<str>lines[i]).rstrip("\n")
  *                             if line == self.BLOCK_DELIMITER:             # <<<<<<<<<<<<<<
@@ -6865,7 +6865,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":89
+              /* "pyemsi/core/femap_parser.pyx":89
  *                                 i += 1
  *                                 break
  *                             block_lines.append(line)             # <<<<<<<<<<<<<<
@@ -6874,7 +6874,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
               __pyx_t_16 = __Pyx_PyList_Append(__pyx_v_block_lines, __pyx_v_line); if (unlikely(__pyx_t_16 == ((int)-1))) __PYX_ERR(0, 89, __pyx_L22_error)
 
-              /* "pyemsi/femap_parser.pyx":90
+              /* "pyemsi/core/femap_parser.pyx":90
  *                                 break
  *                             block_lines.append(line)
  *                             i += 1             # <<<<<<<<<<<<<<
@@ -6885,7 +6885,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
             }
             __pyx_L31_break:;
 
-            /* "pyemsi/femap_parser.pyx":93
+            /* "pyemsi/core/femap_parser.pyx":93
  * 
  *                         # Store block
  *                         block = FEMAPBlock(block_id, block_lines)             # <<<<<<<<<<<<<<
@@ -6898,16 +6898,16 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
             __pyx_t_3 = 1;
             {
               PyObject *__pyx_callargs[3] = {__pyx_t_1, __pyx_t_6, __pyx_v_block_lines};
-              __pyx_t_2 = __Pyx_PyObject_FastCall((PyObject*)__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock, __pyx_callargs+__pyx_t_3, (3-__pyx_t_3) | (__pyx_t_3*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
+              __pyx_t_2 = __Pyx_PyObject_FastCall((PyObject*)__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock, __pyx_callargs+__pyx_t_3, (3-__pyx_t_3) | (__pyx_t_3*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
               __Pyx_XDECREF(__pyx_t_1); __pyx_t_1 = 0;
               __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
               if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 93, __pyx_L22_error)
               __Pyx_GOTREF((PyObject *)__pyx_t_2);
             }
-            __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+            __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
             __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":94
+            /* "pyemsi/core/femap_parser.pyx":94
  *                         # Store block
  *                         block = FEMAPBlock(block_id, block_lines)
  *                         if block_id not in self.blocks:             # <<<<<<<<<<<<<<
@@ -6924,7 +6924,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
             if (__pyx_t_12) {
 
-              /* "pyemsi/femap_parser.pyx":95
+              /* "pyemsi/core/femap_parser.pyx":95
  *                         block = FEMAPBlock(block_id, block_lines)
  *                         if block_id not in self.blocks:
  *                             self.blocks[block_id] = []             # <<<<<<<<<<<<<<
@@ -6943,7 +6943,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
               __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":94
+              /* "pyemsi/core/femap_parser.pyx":94
  *                         # Store block
  *                         block = FEMAPBlock(block_id, block_lines)
  *                         if block_id not in self.blocks:             # <<<<<<<<<<<<<<
@@ -6952,7 +6952,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":96
+            /* "pyemsi/core/femap_parser.pyx":96
  *                         if block_id not in self.blocks:
  *                             self.blocks[block_id] = []
  *                         (<list>self.blocks[block_id]).append(block)             # <<<<<<<<<<<<<<
@@ -6975,7 +6975,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
             __pyx_t_16 = __Pyx_PyList_Append(((PyObject*)__pyx_t_6), ((PyObject *)__pyx_v_block)); if (unlikely(__pyx_t_16 == ((int)-1))) __PYX_ERR(0, 96, __pyx_L22_error)
             __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-            /* "pyemsi/femap_parser.pyx":77
+            /* "pyemsi/core/femap_parser.pyx":77
  *                         continue
  * 
  *                     try:             # <<<<<<<<<<<<<<
@@ -6993,7 +6993,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
           __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
           __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-          /* "pyemsi/femap_parser.pyx":98
+          /* "pyemsi/core/femap_parser.pyx":98
  *                         (<list>self.blocks[block_id]).append(block)
  * 
  *                     except ValueError:             # <<<<<<<<<<<<<<
@@ -7002,13 +7002,13 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
 */
           __pyx_t_15 = __Pyx_PyErr_ExceptionMatches(((PyObject *)(((PyTypeObject*)PyExc_ValueError))));
           if (__pyx_t_15) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser._parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser._parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_6, &__pyx_t_2, &__pyx_t_1) < 0) __PYX_ERR(0, 98, __pyx_L24_except_error)
             __Pyx_XGOTREF(__pyx_t_6);
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_1);
 
-            /* "pyemsi/femap_parser.pyx":99
+            /* "pyemsi/core/femap_parser.pyx":99
  * 
  *                     except ValueError:
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -7023,7 +7023,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
           }
           goto __pyx_L24_except_error;
 
-          /* "pyemsi/femap_parser.pyx":77
+          /* "pyemsi/core/femap_parser.pyx":77
  *                         continue
  * 
  *                     try:             # <<<<<<<<<<<<<<
@@ -7044,7 +7044,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
           __pyx_L29_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":69
+        /* "pyemsi/core/femap_parser.pyx":69
  *             if line == self.BLOCK_DELIMITER:
  *                 # Next line should contain block ID
  *                 if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -7054,7 +7054,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
         goto __pyx_L20;
       }
 
-      /* "pyemsi/femap_parser.pyx":101
+      /* "pyemsi/core/femap_parser.pyx":101
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -7066,7 +7066,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
       }
       __pyx_L20:;
 
-      /* "pyemsi/femap_parser.pyx":67
+      /* "pyemsi/core/femap_parser.pyx":67
  * 
  *             # Check for block delimiter
  *             if line == self.BLOCK_DELIMITER:             # <<<<<<<<<<<<<<
@@ -7076,7 +7076,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
       goto __pyx_L19;
     }
 
-    /* "pyemsi/femap_parser.pyx":103
+    /* "pyemsi/core/femap_parser.pyx":103
  *                     i += 1
  *             else:
  *                 i += 1             # <<<<<<<<<<<<<<
@@ -7090,7 +7090,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
     __pyx_L17_continue:;
   }
 
-  /* "pyemsi/femap_parser.pyx":46
+  /* "pyemsi/core/femap_parser.pyx":46
  *         self._parse()
  * 
  *     cdef void _parse(self):             # <<<<<<<<<<<<<<
@@ -7105,7 +7105,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser._parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser._parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_lines);
   __Pyx_XDECREF(__pyx_v_line);
@@ -7116,7 +7116,7 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
   __Pyx_RefNannyFinishContext();
 }
 
-/* "pyemsi/femap_parser.pyx":105
+/* "pyemsi/core/femap_parser.pyx":105
  *                 i += 1
  * 
  *     cpdef dict parse(self):             # <<<<<<<<<<<<<<
@@ -7124,14 +7124,14 @@ static void __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse(struct __pyx_obj
  *         Public method to return parsed blocks (for API compatibility).
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_3parse(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_parse(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -7148,7 +7148,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -7161,7 +7161,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_parse); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 105, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_3parse)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -7205,7 +7205,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":112
+  /* "pyemsi/core/femap_parser.pyx":112
  *             Dictionary mapping block IDs to lists of blocks
  *         """
  *         return self.blocks             # <<<<<<<<<<<<<<
@@ -7217,7 +7217,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx
   __pyx_r = __pyx_v_self->blocks;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":105
+  /* "pyemsi/core/femap_parser.pyx":105
  *                 i += 1
  * 
  *     cpdef dict parse(self):             # <<<<<<<<<<<<<<
@@ -7231,7 +7231,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7240,16 +7240,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(struct __pyx
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_3parse(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_2parse, "\n        Public method to return parsed blocks (for API compatibility).\n        \n        Returns:\n            Dictionary mapping block IDs to lists of blocks\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_3parse = {"parse", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_3parse, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_2parse};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_3parse(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_2parse, "\n        Public method to return parsed blocks (for API compatibility).\n        \n        Returns:\n            Dictionary mapping block IDs to lists of blocks\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse = {"parse", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_2parse};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7275,14 +7275,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("parse", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_2parse(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_2parse(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -7291,7 +7291,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(struct __p
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("parse", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 105, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_parse(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 105, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -7300,7 +7300,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(struct __p
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.parse", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7308,7 +7308,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(struct __p
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":114
+/* "pyemsi/core/femap_parser.pyx":114
  *         return self.blocks
  * 
  *     @staticmethod             # <<<<<<<<<<<<<<
@@ -7316,7 +7316,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_2parse(struct __p
  *         """
 */
 
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(PyObject *__pyx_v_line) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(PyObject *__pyx_v_line) {
   PyObject *__pyx_v_stripped = 0;
   PyObject *__pyx_v_parts = 0;
   PyObject *__pyx_7genexpr__pyx_v_p = NULL;
@@ -7334,7 +7334,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("_parse_csv_line_fast", 0);
 
-  /* "pyemsi/femap_parser.pyx":122
+  /* "pyemsi/core/femap_parser.pyx":122
  *         cdef list parts
  * 
  *         stripped = line.rstrip(",").strip()             # <<<<<<<<<<<<<<
@@ -7357,7 +7357,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   __pyx_v_stripped = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":124
+  /* "pyemsi/core/femap_parser.pyx":124
  *         stripped = line.rstrip(",").strip()
  * 
  *         if "," in stripped:             # <<<<<<<<<<<<<<
@@ -7367,7 +7367,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   __pyx_t_5 = (__Pyx_PyUnicode_ContainsTF(__pyx_mstate_global->__pyx_kp_u__3, __pyx_v_stripped, Py_EQ)); if (unlikely((__pyx_t_5 < 0))) __PYX_ERR(0, 124, __pyx_L1_error)
   if (__pyx_t_5) {
 
-    /* "pyemsi/femap_parser.pyx":125
+    /* "pyemsi/core/femap_parser.pyx":125
  * 
  *         if "," in stripped:
  *             parts = [p.strip() for p in stripped.split(",") if p.strip()]             # <<<<<<<<<<<<<<
@@ -7434,7 +7434,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
     __pyx_v_parts = ((PyObject*)__pyx_t_1);
     __pyx_t_1 = 0;
 
-    /* "pyemsi/femap_parser.pyx":124
+    /* "pyemsi/core/femap_parser.pyx":124
  *         stripped = line.rstrip(",").strip()
  * 
  *         if "," in stripped:             # <<<<<<<<<<<<<<
@@ -7444,7 +7444,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
     goto __pyx_L3;
   }
 
-  /* "pyemsi/femap_parser.pyx":127
+  /* "pyemsi/core/femap_parser.pyx":127
  *             parts = [p.strip() for p in stripped.split(",") if p.strip()]
  *         else:
  *             parts = stripped.split()             # <<<<<<<<<<<<<<
@@ -7459,7 +7459,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   }
   __pyx_L3:;
 
-  /* "pyemsi/femap_parser.pyx":129
+  /* "pyemsi/core/femap_parser.pyx":129
  *             parts = stripped.split()
  * 
  *         return parts             # <<<<<<<<<<<<<<
@@ -7471,7 +7471,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   __pyx_r = __pyx_v_parts;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":114
+  /* "pyemsi/core/femap_parser.pyx":114
  *         return self.blocks
  * 
  *     @staticmethod             # <<<<<<<<<<<<<<
@@ -7485,7 +7485,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser._parse_csv_line_fast", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser._parse_csv_line_fast", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_stripped);
@@ -7496,7 +7496,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":131
+/* "pyemsi/core/femap_parser.pyx":131
  *         return parts
  * 
  *     @staticmethod             # <<<<<<<<<<<<<<
@@ -7505,16 +7505,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fa
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_5parse_csv_line(CYTHON_UNUSED PyObject *__pyx_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_5parse_csv_line(CYTHON_UNUSED PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line, "\n        Parse a FEMAP line that may be comma or space separated.\n        Public API-compatible wrapper.\n\n        Args:\n            line: Input line string\n\n        Returns:\n            List of field values as strings\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_5parse_csv_line = {"parse_csv_line", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_5parse_csv_line, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_5parse_csv_line(CYTHON_UNUSED PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_4parse_csv_line, "\n        Parse a FEMAP line that may be comma or space separated.\n        Public API-compatible wrapper.\n\n        Args:\n            line: Input line string\n\n        Returns:\n            List of field values as strings\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_5parse_csv_line = {"parse_csv_line", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_5parse_csv_line, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_4parse_csv_line};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_5parse_csv_line(CYTHON_UNUSED PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7576,12 +7576,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.parse_csv_line", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.parse_csv_line", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_line), (&PyUnicode_Type), 1, "line", 1))) __PYX_ERR(0, 132, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(__pyx_v_line);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_4parse_csv_line(__pyx_v_line);
 
   /* function exit code */
   goto __pyx_L0;
@@ -7600,7 +7600,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(PyObject *__pyx_v_line) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_4parse_csv_line(PyObject *__pyx_v_line) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -7609,7 +7609,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(P
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("parse_csv_line", 0);
 
-  /* "pyemsi/femap_parser.pyx":143
+  /* "pyemsi/core/femap_parser.pyx":143
  *             List of field values as strings
  *         """
  *         return FEMAPParser._parse_csv_line_fast(line)             # <<<<<<<<<<<<<<
@@ -7617,13 +7617,13 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(P
  *     cpdef list get_blocks(self, int block_id):
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(__pyx_v_line); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 143, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(__pyx_v_line); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 143, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":131
+  /* "pyemsi/core/femap_parser.pyx":131
  *         return parts
  * 
  *     @staticmethod             # <<<<<<<<<<<<<<
@@ -7634,7 +7634,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(P
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.parse_csv_line", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.parse_csv_line", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7642,7 +7642,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(P
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":145
+/* "pyemsi/core/femap_parser.pyx":145
  *         return FEMAPParser._parse_csv_line_fast(line)
  * 
  *     cpdef list get_blocks(self, int block_id):             # <<<<<<<<<<<<<<
@@ -7650,14 +7650,14 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line(P
  *         return self.blocks.get(block_id, [])
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_blocks(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id, int __pyx_skip_dispatch) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -7675,7 +7675,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct 
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -7688,7 +7688,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct 
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_blocks); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 145, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -7735,7 +7735,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct 
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":147
+  /* "pyemsi/core/femap_parser.pyx":147
  *     cpdef list get_blocks(self, int block_id):
  *         """Get all blocks with the specified ID."""
  *         return self.blocks.get(block_id, [])             # <<<<<<<<<<<<<<
@@ -7760,7 +7760,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct 
   __pyx_t_4 = 0;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":145
+  /* "pyemsi/core/femap_parser.pyx":145
  *         return FEMAPParser._parse_csv_line_fast(line)
  * 
  *     cpdef list get_blocks(self, int block_id):             # <<<<<<<<<<<<<<
@@ -7775,7 +7775,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct 
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_5);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7784,16 +7784,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(struct 
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks, "Get all blocks with the specified ID.");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks = {"get_blocks", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_6get_blocks, "Get all blocks with the specified ID.");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks = {"get_blocks", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_6get_blocks};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -7855,11 +7855,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_block_id);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6get_blocks(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_block_id);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -7869,7 +7869,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6get_blocks(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_block_id) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -7878,7 +7878,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(struc
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_blocks", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks(__pyx_v_self, __pyx_v_block_id, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 145, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_blocks(__pyx_v_self, __pyx_v_block_id, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 145, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -7887,7 +7887,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(struc
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -7895,7 +7895,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(struc
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":149
+/* "pyemsi/core/femap_parser.pyx":149
  *         return self.blocks.get(block_id, [])
  * 
  *     cpdef dict get_header(self):             # <<<<<<<<<<<<<<
@@ -7903,16 +7903,16 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6get_blocks(struc
  *         Extract header information from Block 100.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_9get_header(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_header(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_blocks = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   PyObject *__pyx_v_title = 0;
   PyObject *__pyx_v_version = 0;
   PyObject *__pyx_r = NULL;
@@ -7934,7 +7934,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -7947,7 +7947,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_header); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 149, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_9get_header)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -7991,19 +7991,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":156
+  /* "pyemsi/core/femap_parser.pyx":156
  *             Dictionary with 'title' and 'version' keys, or None if not found
  *         """
  *         cdef list blocks = self.get_blocks(100)             # <<<<<<<<<<<<<<
  *         cdef FEMAPBlock block
  *         cdef str title, version
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x64, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 156, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x64, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 156, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":160
+  /* "pyemsi/core/femap_parser.pyx":160
  *         cdef str title, version
  * 
  *         if not blocks:             # <<<<<<<<<<<<<<
@@ -8021,7 +8021,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   __pyx_t_7 = (!__pyx_t_6);
   if (__pyx_t_7) {
 
-    /* "pyemsi/femap_parser.pyx":161
+    /* "pyemsi/core/femap_parser.pyx":161
  * 
  *         if not blocks:
  *             return None             # <<<<<<<<<<<<<<
@@ -8032,7 +8032,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
     __pyx_r = ((PyObject*)Py_None); __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "pyemsi/femap_parser.pyx":160
+    /* "pyemsi/core/femap_parser.pyx":160
  *         cdef str title, version
  * 
  *         if not blocks:             # <<<<<<<<<<<<<<
@@ -8041,7 +8041,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
 */
   }
 
-  /* "pyemsi/femap_parser.pyx":163
+  /* "pyemsi/core/femap_parser.pyx":163
  *             return None
  * 
  *         block = <FEMAPBlock>blocks[0]             # <<<<<<<<<<<<<<
@@ -8054,10 +8054,10 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   }
   __pyx_t_1 = __Pyx_PyList_GET_ITEM(__pyx_v_blocks, 0);
   __Pyx_INCREF(__pyx_t_1);
-  __pyx_v_block = ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_1);
+  __pyx_v_block = ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":164
+  /* "pyemsi/core/femap_parser.pyx":164
  * 
  *         block = <FEMAPBlock>blocks[0]
  *         if len(block.lines) < 2:             # <<<<<<<<<<<<<<
@@ -8075,7 +8075,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   __pyx_t_7 = (__pyx_t_8 < 2);
   if (__pyx_t_7) {
 
-    /* "pyemsi/femap_parser.pyx":165
+    /* "pyemsi/core/femap_parser.pyx":165
  *         block = <FEMAPBlock>blocks[0]
  *         if len(block.lines) < 2:
  *             return None             # <<<<<<<<<<<<<<
@@ -8086,7 +8086,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
     __pyx_r = ((PyObject*)Py_None); __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "pyemsi/femap_parser.pyx":164
+    /* "pyemsi/core/femap_parser.pyx":164
  * 
  *         block = <FEMAPBlock>blocks[0]
  *         if len(block.lines) < 2:             # <<<<<<<<<<<<<<
@@ -8095,7 +8095,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
 */
   }
 
-  /* "pyemsi/femap_parser.pyx":167
+  /* "pyemsi/core/femap_parser.pyx":167
  *             return None
  * 
  *         title = (<str>block.lines[0]).strip()             # <<<<<<<<<<<<<<
@@ -8119,7 +8119,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   __pyx_v_title = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":168
+  /* "pyemsi/core/femap_parser.pyx":168
  * 
  *         title = (<str>block.lines[0]).strip()
  *         version = (<str>block.lines[1]).strip()             # <<<<<<<<<<<<<<
@@ -8143,7 +8143,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   __pyx_v_version = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":170
+  /* "pyemsi/core/femap_parser.pyx":170
  *         version = (<str>block.lines[1]).strip()
  * 
  *         return {"title": title if title != "<NULL>" else "", "version": version}             # <<<<<<<<<<<<<<
@@ -8168,7 +8168,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":149
+  /* "pyemsi/core/femap_parser.pyx":149
  *         return self.blocks.get(block_id, [])
  * 
  *     cpdef dict get_header(self):             # <<<<<<<<<<<<<<
@@ -8182,7 +8182,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_header", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_header", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_blocks);
@@ -8195,16 +8195,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(struct 
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_9get_header(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_8get_header, "\n        Extract header information from Block 100.\n\n        Returns:\n            Dictionary with 'title' and 'version' keys, or None if not found\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_9get_header = {"get_header", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_9get_header, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_8get_header};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_9get_header(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_8get_header, "\n        Extract header information from Block 100.\n\n        Returns:\n            Dictionary with 'title' and 'version' keys, or None if not found\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header = {"get_header", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_8get_header};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -8230,14 +8230,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_header", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_8get_header(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_8get_header(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -8246,7 +8246,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(struc
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_header", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 149, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_header(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 149, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -8255,7 +8255,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(struc
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_header", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_header", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -8263,7 +8263,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(struc
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":172
+/* "pyemsi/core/femap_parser.pyx":172
  *         return {"title": title if title != "<NULL>" else "", "version": version}
  * 
  *     cpdef dict get_nodes(self, bint force_2d=False):             # <<<<<<<<<<<<<<
@@ -8271,19 +8271,19 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_8get_header(struc
  *         Extract all nodes from Block 403.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args) {
   int __pyx_v_force_2d = ((int)0);
   PyObject *__pyx_v_nodes = 0;
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   PyObject *__pyx_v_line = 0;
   int __pyx_v_node_id;
   double __pyx_v_x;
@@ -8321,7 +8321,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -8334,7 +8334,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_nodes); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 172, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -8381,7 +8381,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":182
+  /* "pyemsi/core/femap_parser.pyx":182
  *             Dictionary mapping node IDs to (x, y, z) coordinates
  *         """
  *         cdef dict nodes = {}             # <<<<<<<<<<<<<<
@@ -8393,19 +8393,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
   __pyx_v_nodes = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":189
+  /* "pyemsi/core/femap_parser.pyx":189
  *         cdef double x, y, z
  * 
  *         all_blocks = self.get_blocks(403)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             for line in block.lines:
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x193, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 189, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x193, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 189, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":190
+  /* "pyemsi/core/femap_parser.pyx":190
  * 
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -8430,11 +8430,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
     ++__pyx_t_7;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 190, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 190, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 190, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":191
+    /* "pyemsi/core/femap_parser.pyx":191
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:
  *             for line in block.lines:             # <<<<<<<<<<<<<<
@@ -8463,19 +8463,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
       __Pyx_XDECREF_SET(__pyx_v_line, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":192
+      /* "pyemsi/core/femap_parser.pyx":192
  *         for block in all_blocks:
  *             for line in block.lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(line)             # <<<<<<<<<<<<<<
  *                 if len(parts) >= 14:
  *                     try:
 */
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(__pyx_v_line); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(__pyx_v_line); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":193
+      /* "pyemsi/core/femap_parser.pyx":193
  *             for line in block.lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:             # <<<<<<<<<<<<<<
@@ -8490,7 +8490,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
       __pyx_t_10 = (__pyx_t_9 >= 14);
       if (__pyx_t_10) {
 
-        /* "pyemsi/femap_parser.pyx":194
+        /* "pyemsi/core/femap_parser.pyx":194
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:
  *                     try:             # <<<<<<<<<<<<<<
@@ -8506,7 +8506,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
           __Pyx_XGOTREF(__pyx_t_13);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":195
+            /* "pyemsi/core/femap_parser.pyx":195
  *                 if len(parts) >= 14:
  *                     try:
  *                         node_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -8523,7 +8523,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_node_id = __pyx_t_14;
 
-            /* "pyemsi/femap_parser.pyx":196
+            /* "pyemsi/core/femap_parser.pyx":196
  *                     try:
  *                         node_id = int(parts[0])
  *                         x = float(parts[11])             # <<<<<<<<<<<<<<
@@ -8537,7 +8537,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
             __pyx_t_15 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 11)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_15, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 196, __pyx_L8_error)
             __pyx_v_x = __pyx_t_15;
 
-            /* "pyemsi/femap_parser.pyx":197
+            /* "pyemsi/core/femap_parser.pyx":197
  *                         node_id = int(parts[0])
  *                         x = float(parts[11])
  *                         y = float(parts[12])             # <<<<<<<<<<<<<<
@@ -8551,7 +8551,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
             __pyx_t_15 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 12)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_15, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 197, __pyx_L8_error)
             __pyx_v_y = __pyx_t_15;
 
-            /* "pyemsi/femap_parser.pyx":198
+            /* "pyemsi/core/femap_parser.pyx":198
  *                         x = float(parts[11])
  *                         y = float(parts[12])
  *                         z = float(parts[13])             # <<<<<<<<<<<<<<
@@ -8565,7 +8565,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
             __pyx_t_15 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 13)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_15, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 198, __pyx_L8_error)
             __pyx_v_z = __pyx_t_15;
 
-            /* "pyemsi/femap_parser.pyx":199
+            /* "pyemsi/core/femap_parser.pyx":199
  *                         y = float(parts[12])
  *                         z = float(parts[13])
  *                         if force_2d:             # <<<<<<<<<<<<<<
@@ -8574,7 +8574,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 */
             if (__pyx_v_force_2d) {
 
-              /* "pyemsi/femap_parser.pyx":200
+              /* "pyemsi/core/femap_parser.pyx":200
  *                         z = float(parts[13])
  *                         if force_2d:
  *                             if z > 0.0:             # <<<<<<<<<<<<<<
@@ -8584,7 +8584,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
               __pyx_t_10 = (__pyx_v_z > 0.0);
               if (__pyx_t_10) {
 
-                /* "pyemsi/femap_parser.pyx":201
+                /* "pyemsi/core/femap_parser.pyx":201
  *                         if force_2d:
  *                             if z > 0.0:
  *                                 continue             # <<<<<<<<<<<<<<
@@ -8593,7 +8593,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 */
                 goto __pyx_L14_try_continue;
 
-                /* "pyemsi/femap_parser.pyx":200
+                /* "pyemsi/core/femap_parser.pyx":200
  *                         z = float(parts[13])
  *                         if force_2d:
  *                             if z > 0.0:             # <<<<<<<<<<<<<<
@@ -8602,7 +8602,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":199
+              /* "pyemsi/core/femap_parser.pyx":199
  *                         y = float(parts[12])
  *                         z = float(parts[13])
  *                         if force_2d:             # <<<<<<<<<<<<<<
@@ -8611,7 +8611,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":202
+            /* "pyemsi/core/femap_parser.pyx":202
  *                             if z > 0.0:
  *                                 continue
  *                         nodes[node_id] = (x, y, z)             # <<<<<<<<<<<<<<
@@ -8641,7 +8641,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
             __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
             __Pyx_DECREF(__pyx_t_16); __pyx_t_16 = 0;
 
-            /* "pyemsi/femap_parser.pyx":194
+            /* "pyemsi/core/femap_parser.pyx":194
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:
  *                     try:             # <<<<<<<<<<<<<<
@@ -8659,7 +8659,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
           __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-          /* "pyemsi/femap_parser.pyx":203
+          /* "pyemsi/core/femap_parser.pyx":203
  *                                 continue
  *                         nodes[node_id] = (x, y, z)
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -8668,13 +8668,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 */
           __pyx_t_14 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_14) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_16, &__pyx_t_3, &__pyx_t_5) < 0) __PYX_ERR(0, 203, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_16);
             __Pyx_XGOTREF(__pyx_t_3);
             __Pyx_XGOTREF(__pyx_t_5);
 
-            /* "pyemsi/femap_parser.pyx":204
+            /* "pyemsi/core/femap_parser.pyx":204
  *                         nodes[node_id] = (x, y, z)
  *                     except (ValueError, IndexError):
  *                         continue             # <<<<<<<<<<<<<<
@@ -8690,7 +8690,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":194
+          /* "pyemsi/core/femap_parser.pyx":194
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:
  *                     try:             # <<<<<<<<<<<<<<
@@ -8712,7 +8712,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":193
+        /* "pyemsi/core/femap_parser.pyx":193
  *             for line in block.lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:             # <<<<<<<<<<<<<<
@@ -8721,7 +8721,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 */
       }
 
-      /* "pyemsi/femap_parser.pyx":191
+      /* "pyemsi/core/femap_parser.pyx":191
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:
  *             for line in block.lines:             # <<<<<<<<<<<<<<
@@ -8732,7 +8732,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
     }
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":190
+    /* "pyemsi/core/femap_parser.pyx":190
  * 
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -8742,7 +8742,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":206
+  /* "pyemsi/core/femap_parser.pyx":206
  *                         continue
  * 
  *         return nodes             # <<<<<<<<<<<<<<
@@ -8754,7 +8754,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
   __pyx_r = __pyx_v_nodes;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":172
+  /* "pyemsi/core/femap_parser.pyx":172
  *         return {"title": title if title != "<NULL>" else "", "version": version}
  * 
  *     cpdef dict get_nodes(self, bint force_2d=False):             # <<<<<<<<<<<<<<
@@ -8770,7 +8770,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_16);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_nodes);
@@ -8784,16 +8784,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes(struct _
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes, "\n        Extract all nodes from Block 403.\n\n        Args:\n            force_2d: If True, skip nodes where z != 0.0\n\n        Returns:\n            Dictionary mapping node IDs to (x, y, z) coordinates\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes = {"get_nodes", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_10get_nodes, "\n        Extract all nodes from Block 403.\n\n        Args:\n            force_2d: If True, skip nodes where z != 0.0\n\n        Returns:\n            Dictionary mapping node IDs to (x, y, z) coordinates\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes = {"get_nodes", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_10get_nodes};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -8860,11 +8860,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_force_2d);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_10get_nodes(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_force_2d);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -8874,11 +8874,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_force_2d) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_10get_nodes(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_force_2d) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
-  struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes __pyx_t_2;
+  struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes __pyx_t_2;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -8886,7 +8886,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(struc
   __Pyx_XDECREF(__pyx_r);
   __pyx_t_2.__pyx_n = 1;
   __pyx_t_2.force_2d = __pyx_v_force_2d;
-  __pyx_t_1 = __pyx_vtabptr_6pyemsi_12femap_parser_FEMAPParser->get_nodes(__pyx_v_self, 1, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 172, __pyx_L1_error)
+  __pyx_t_1 = __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser->get_nodes(__pyx_v_self, 1, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 172, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -8895,7 +8895,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(struc
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -8903,7 +8903,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(struc
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":208
+/* "pyemsi/core/femap_parser.pyx":208
  *         return nodes
  * 
  *     cpdef tuple get_nodes_arrays(self):             # <<<<<<<<<<<<<<
@@ -8911,19 +8911,19 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_10get_nodes(struc
  *         Extract all nodes from Block 403 as NumPy arrays (high performance).
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
   PyObject *__pyx_v_node_list = 0;
   PyObject *__pyx_v_coord_list = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   PyObject *__pyx_v_line = 0;
   int __pyx_v_node_id;
   double __pyx_v_x;
@@ -8971,7 +8971,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -8984,7 +8984,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_nodes_arrays); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 208, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -9028,7 +9028,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":221
+  /* "pyemsi/core/femap_parser.pyx":221
  *         cdef double x, y, z
  * 
  *         node_list = []             # <<<<<<<<<<<<<<
@@ -9040,7 +9040,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   __pyx_v_node_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":222
+  /* "pyemsi/core/femap_parser.pyx":222
  * 
  *         node_list = []
  *         coord_list = []             # <<<<<<<<<<<<<<
@@ -9052,19 +9052,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   __pyx_v_coord_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":224
+  /* "pyemsi/core/femap_parser.pyx":224
  *         coord_list = []
  * 
  *         all_blocks = self.get_blocks(403)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             for line in block.lines:
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x193, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 224, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x193, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 224, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":225
+  /* "pyemsi/core/femap_parser.pyx":225
  * 
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -9089,11 +9089,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 225, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 225, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 225, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":226
+    /* "pyemsi/core/femap_parser.pyx":226
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:
  *             for line in block.lines:             # <<<<<<<<<<<<<<
@@ -9122,19 +9122,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
       __Pyx_XDECREF_SET(__pyx_v_line, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":227
+      /* "pyemsi/core/femap_parser.pyx":227
  *         for block in all_blocks:
  *             for line in block.lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(line)             # <<<<<<<<<<<<<<
  *                 if len(parts) >= 14:
  *                     try:
 */
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(__pyx_v_line); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 227, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(__pyx_v_line); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 227, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":228
+      /* "pyemsi/core/femap_parser.pyx":228
  *             for line in block.lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:             # <<<<<<<<<<<<<<
@@ -9149,7 +9149,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
       __pyx_t_9 = (__pyx_t_8 >= 14);
       if (__pyx_t_9) {
 
-        /* "pyemsi/femap_parser.pyx":229
+        /* "pyemsi/core/femap_parser.pyx":229
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:
  *                     try:             # <<<<<<<<<<<<<<
@@ -9165,7 +9165,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
           __Pyx_XGOTREF(__pyx_t_12);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":230
+            /* "pyemsi/core/femap_parser.pyx":230
  *                 if len(parts) >= 14:
  *                     try:
  *                         node_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -9182,7 +9182,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_node_id = __pyx_t_13;
 
-            /* "pyemsi/femap_parser.pyx":231
+            /* "pyemsi/core/femap_parser.pyx":231
  *                     try:
  *                         node_id = int(parts[0])
  *                         x = float(parts[11])             # <<<<<<<<<<<<<<
@@ -9196,7 +9196,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
             __pyx_t_14 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 11)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_14, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 231, __pyx_L8_error)
             __pyx_v_x = __pyx_t_14;
 
-            /* "pyemsi/femap_parser.pyx":232
+            /* "pyemsi/core/femap_parser.pyx":232
  *                         node_id = int(parts[0])
  *                         x = float(parts[11])
  *                         y = float(parts[12])             # <<<<<<<<<<<<<<
@@ -9210,7 +9210,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
             __pyx_t_14 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 12)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_14, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 232, __pyx_L8_error)
             __pyx_v_y = __pyx_t_14;
 
-            /* "pyemsi/femap_parser.pyx":233
+            /* "pyemsi/core/femap_parser.pyx":233
  *                         x = float(parts[11])
  *                         y = float(parts[12])
  *                         z = float(parts[13])             # <<<<<<<<<<<<<<
@@ -9224,7 +9224,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
             __pyx_t_14 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 13)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_14, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 233, __pyx_L8_error)
             __pyx_v_z = __pyx_t_14;
 
-            /* "pyemsi/femap_parser.pyx":234
+            /* "pyemsi/core/femap_parser.pyx":234
  *                         y = float(parts[12])
  *                         z = float(parts[13])
  *                         node_list.append(node_id)             # <<<<<<<<<<<<<<
@@ -9236,7 +9236,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
             __pyx_t_15 = __Pyx_PyList_Append(__pyx_v_node_list, __pyx_t_4); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 234, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":235
+            /* "pyemsi/core/femap_parser.pyx":235
  *                         z = float(parts[13])
  *                         node_list.append(node_id)
  *                         coord_list.append((x, y, z))             # <<<<<<<<<<<<<<
@@ -9263,7 +9263,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
             __pyx_t_15 = __Pyx_PyList_Append(__pyx_v_coord_list, __pyx_t_17); if (unlikely(__pyx_t_15 == ((int)-1))) __PYX_ERR(0, 235, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_17); __pyx_t_17 = 0;
 
-            /* "pyemsi/femap_parser.pyx":229
+            /* "pyemsi/core/femap_parser.pyx":229
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:
  *                     try:             # <<<<<<<<<<<<<<
@@ -9281,7 +9281,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":236
+          /* "pyemsi/core/femap_parser.pyx":236
  *                         node_list.append(node_id)
  *                         coord_list.append((x, y, z))
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -9290,13 +9290,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
 */
           __pyx_t_13 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_13) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_17, &__pyx_t_16, &__pyx_t_3) < 0) __PYX_ERR(0, 236, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_17);
             __Pyx_XGOTREF(__pyx_t_16);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":237
+            /* "pyemsi/core/femap_parser.pyx":237
  *                         coord_list.append((x, y, z))
  *                     except (ValueError, IndexError):
  *                         continue             # <<<<<<<<<<<<<<
@@ -9312,7 +9312,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":229
+          /* "pyemsi/core/femap_parser.pyx":229
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:
  *                     try:             # <<<<<<<<<<<<<<
@@ -9334,7 +9334,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":228
+        /* "pyemsi/core/femap_parser.pyx":228
  *             for line in block.lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(line)
  *                 if len(parts) >= 14:             # <<<<<<<<<<<<<<
@@ -9343,7 +9343,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
 */
       }
 
-      /* "pyemsi/femap_parser.pyx":226
+      /* "pyemsi/core/femap_parser.pyx":226
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:
  *             for line in block.lines:             # <<<<<<<<<<<<<<
@@ -9354,7 +9354,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
     }
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":225
+    /* "pyemsi/core/femap_parser.pyx":225
  * 
  *         all_blocks = self.get_blocks(403)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -9364,7 +9364,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":239
+  /* "pyemsi/core/femap_parser.pyx":239
  *                         continue
  * 
  *         cdef np.ndarray[np.int32_t, ndim=1] node_ids = np.array(node_list, dtype=np.int32)             # <<<<<<<<<<<<<<
@@ -9419,7 +9419,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   __pyx_v_node_ids = ((PyArrayObject *)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":240
+  /* "pyemsi/core/femap_parser.pyx":240
  * 
  *         cdef np.ndarray[np.int32_t, ndim=1] node_ids = np.array(node_list, dtype=np.int32)
  *         cdef np.ndarray[np.float64_t, ndim=2] coords = np.array(coord_list, dtype=np.float64)             # <<<<<<<<<<<<<<
@@ -9474,7 +9474,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   __pyx_v_coords = ((PyArrayObject *)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":242
+  /* "pyemsi/core/femap_parser.pyx":242
  *         cdef np.ndarray[np.float64_t, ndim=2] coords = np.array(coord_list, dtype=np.float64)
  * 
  *         return (node_ids, coords)             # <<<<<<<<<<<<<<
@@ -9494,7 +9494,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":208
+  /* "pyemsi/core/femap_parser.pyx":208
  *         return nodes
  * 
  *     cpdef tuple get_nodes_arrays(self):             # <<<<<<<<<<<<<<
@@ -9517,7 +9517,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_coords.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_node_ids.rcbuffer->pybuffer);
   __Pyx_ErrRestore(__pyx_type, __pyx_value, __pyx_tb);}
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   goto __pyx_L2;
   __pyx_L0:;
@@ -9538,16 +9538,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(s
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_arrays, "\n        Extract all nodes from Block 403 as NumPy arrays (high performance).\n\n        Returns:\n            Tuple of (node_ids: np.ndarray[int32], coords: np.ndarray[float64, (n,3)])\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays = {"get_nodes_arrays", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_arrays};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_12get_nodes_arrays, "\n        Extract all nodes from Block 403 as NumPy arrays (high performance).\n\n        Returns:\n            Tuple of (node_ids: np.ndarray[int32], coords: np.ndarray[float64, (n,3)])\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays = {"get_nodes_arrays", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_12get_nodes_arrays};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -9573,14 +9573,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_nodes_arrays", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_arrays(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_12get_nodes_arrays(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_12get_nodes_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -9589,7 +9589,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_array
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_nodes_arrays", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 208, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes_arrays(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 208, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -9598,7 +9598,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_array
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_nodes_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_nodes_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -9606,7 +9606,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_array
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":244
+/* "pyemsi/core/femap_parser.pyx":244
  *         return (node_ids, coords)
  * 
  *     cpdef dict get_properties(self):             # <<<<<<<<<<<<<<
@@ -9614,18 +9614,18 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_12get_nodes_array
  *         Extract all properties from Block 402.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_15get_properties(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_properties(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_properties = 0;
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_prop_id;
   int __pyx_v_mat_id;
@@ -9656,7 +9656,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -9669,7 +9669,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_properties); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 244, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_15get_properties)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -9713,7 +9713,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":251
+  /* "pyemsi/core/femap_parser.pyx":251
  *             Dictionary mapping property IDs to property metadata
  *         """
  *         cdef dict properties = {}             # <<<<<<<<<<<<<<
@@ -9725,19 +9725,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
   __pyx_v_properties = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":257
+  /* "pyemsi/core/femap_parser.pyx":257
  *         cdef str title
  * 
  *         all_blocks = self.get_blocks(402)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x192, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 257, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x192, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 257, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":258
+  /* "pyemsi/core/femap_parser.pyx":258
  * 
  *         all_blocks = self.get_blocks(402)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -9762,11 +9762,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 258, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 258, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 258, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":259
+    /* "pyemsi/core/femap_parser.pyx":259
  *         all_blocks = self.get_blocks(402)
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -9775,7 +9775,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":260
+    /* "pyemsi/core/femap_parser.pyx":260
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -9792,7 +9792,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/femap_parser.pyx":261
+    /* "pyemsi/core/femap_parser.pyx":261
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -9803,7 +9803,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/femap_parser.pyx":262
+      /* "pyemsi/core/femap_parser.pyx":262
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -9816,13 +9816,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 262, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 262, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":263
+      /* "pyemsi/core/femap_parser.pyx":263
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 3:             # <<<<<<<<<<<<<<
@@ -9837,7 +9837,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
       __pyx_t_8 = (__pyx_t_7 >= 3);
       if (__pyx_t_8) {
 
-        /* "pyemsi/femap_parser.pyx":264
+        /* "pyemsi/core/femap_parser.pyx":264
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 3:
  *                     try:             # <<<<<<<<<<<<<<
@@ -9853,7 +9853,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":265
+            /* "pyemsi/core/femap_parser.pyx":265
  *                 if len(parts) >= 3:
  *                     try:
  *                         prop_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -9870,7 +9870,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_prop_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":266
+            /* "pyemsi/core/femap_parser.pyx":266
  *                     try:
  *                         prop_id = int(parts[0])
  *                         mat_id = int(parts[2])             # <<<<<<<<<<<<<<
@@ -9887,7 +9887,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_mat_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":268
+            /* "pyemsi/core/femap_parser.pyx":268
  *                         mat_id = int(parts[2])
  * 
  *                         title = ""             # <<<<<<<<<<<<<<
@@ -9897,7 +9897,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
             __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
             __Pyx_XDECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-            /* "pyemsi/femap_parser.pyx":269
+            /* "pyemsi/core/femap_parser.pyx":269
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -9907,7 +9907,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
             __pyx_t_8 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":270
+              /* "pyemsi/core/femap_parser.pyx":270
  *                         title = ""
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")             # <<<<<<<<<<<<<<
@@ -9943,7 +9943,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
               __Pyx_DECREF_SET(__pyx_v_title, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":271
+              /* "pyemsi/core/femap_parser.pyx":271
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -9953,7 +9953,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
               __pyx_t_8 = (__Pyx_PyUnicode_Equals(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u_NULL, Py_EQ)); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 271, __pyx_L8_error)
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":272
+                /* "pyemsi/core/femap_parser.pyx":272
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":
  *                                 title = ""             # <<<<<<<<<<<<<<
@@ -9963,7 +9963,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
                 __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
                 __Pyx_DECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-                /* "pyemsi/femap_parser.pyx":271
+                /* "pyemsi/core/femap_parser.pyx":271
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -9972,7 +9972,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":269
+              /* "pyemsi/core/femap_parser.pyx":269
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -9981,7 +9981,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":274
+            /* "pyemsi/core/femap_parser.pyx":274
  *                                 title = ""
  * 
  *                         properties[prop_id] = {"material_id": mat_id, "title": title}             # <<<<<<<<<<<<<<
@@ -10001,7 +10001,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
             __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":275
+            /* "pyemsi/core/femap_parser.pyx":275
  * 
  *                         properties[prop_id] = {"material_id": mat_id, "title": title}
  *                         i += 7             # <<<<<<<<<<<<<<
@@ -10010,7 +10010,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
 */
             __pyx_v_i = (__pyx_v_i + 7);
 
-            /* "pyemsi/femap_parser.pyx":264
+            /* "pyemsi/core/femap_parser.pyx":264
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 3:
  *                     try:             # <<<<<<<<<<<<<<
@@ -10028,7 +10028,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":276
+          /* "pyemsi/core/femap_parser.pyx":276
  *                         properties[prop_id] = {"material_id": mat_id, "title": title}
  *                         i += 7
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -10037,13 +10037,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
 */
           __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_12) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_properties", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_properties", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_4, &__pyx_t_3, &__pyx_t_2) < 0) __PYX_ERR(0, 276, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_4);
             __Pyx_XGOTREF(__pyx_t_3);
             __Pyx_XGOTREF(__pyx_t_2);
 
-            /* "pyemsi/femap_parser.pyx":277
+            /* "pyemsi/core/femap_parser.pyx":277
  *                         i += 7
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -10058,7 +10058,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":264
+          /* "pyemsi/core/femap_parser.pyx":264
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 3:
  *                     try:             # <<<<<<<<<<<<<<
@@ -10079,7 +10079,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":263
+        /* "pyemsi/core/femap_parser.pyx":263
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 3:             # <<<<<<<<<<<<<<
@@ -10089,7 +10089,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":279
+      /* "pyemsi/core/femap_parser.pyx":279
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -10102,7 +10102,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
       __pyx_L7:;
     }
 
-    /* "pyemsi/femap_parser.pyx":258
+    /* "pyemsi/core/femap_parser.pyx":258
  * 
  *         all_blocks = self.get_blocks(402)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -10112,7 +10112,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":281
+  /* "pyemsi/core/femap_parser.pyx":281
  *                     i += 1
  * 
  *         return properties             # <<<<<<<<<<<<<<
@@ -10124,7 +10124,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
   __pyx_r = __pyx_v_properties;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":244
+  /* "pyemsi/core/femap_parser.pyx":244
  *         return (node_ids, coords)
  * 
  *     cpdef dict get_properties(self):             # <<<<<<<<<<<<<<
@@ -10139,7 +10139,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_13);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_properties", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_properties", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_properties);
@@ -10153,16 +10153,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(str
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_15get_properties(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_14get_properties, "\n        Extract all properties from Block 402.\n\n        Returns:\n            Dictionary mapping property IDs to property metadata\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_15get_properties = {"get_properties", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_15get_properties, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_14get_properties};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_15get_properties(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_14get_properties, "\n        Extract all properties from Block 402.\n\n        Returns:\n            Dictionary mapping property IDs to property metadata\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties = {"get_properties", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_14get_properties};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -10188,14 +10188,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_properties", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_14get_properties(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_14get_properties(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -10204,7 +10204,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_properties", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 244, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_properties(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 244, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -10213,7 +10213,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_properties", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_properties", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -10221,7 +10221,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":283
+/* "pyemsi/core/femap_parser.pyx":283
  *         return properties
  * 
  *     cpdef list get_elements(self):             # <<<<<<<<<<<<<<
@@ -10229,21 +10229,21 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_14get_properties(
  *         Extract all elements from Block 404.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_17get_elements(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_elements = 0;
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
   PyObject *__pyx_v_nodes = 0;
   PyObject *__pyx_v_nodes1 = 0;
   PyObject *__pyx_v_nodes2 = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_elem_id;
   int __pyx_v_prop_id;
@@ -10276,7 +10276,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -10289,7 +10289,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_elements); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 283, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_17get_elements)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -10333,7 +10333,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":290
+  /* "pyemsi/core/femap_parser.pyx":290
  *             List of element dictionaries with id, prop_id, topology, and nodes
  *         """
  *         cdef list elements = []             # <<<<<<<<<<<<<<
@@ -10345,19 +10345,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
   __pyx_v_elements = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":295
+  /* "pyemsi/core/femap_parser.pyx":295
  *         cdef int i, elem_id, prop_id, topology, n_lines, n
  * 
  *         all_blocks = self.get_blocks(404)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x194, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 295, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x194, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 295, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":296
+  /* "pyemsi/core/femap_parser.pyx":296
  * 
  *         all_blocks = self.get_blocks(404)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -10382,11 +10382,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 296, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 296, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 296, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":297
+    /* "pyemsi/core/femap_parser.pyx":297
  *         all_blocks = self.get_blocks(404)
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -10395,7 +10395,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":298
+    /* "pyemsi/core/femap_parser.pyx":298
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -10412,7 +10412,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/femap_parser.pyx":299
+    /* "pyemsi/core/femap_parser.pyx":299
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -10423,7 +10423,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/femap_parser.pyx":300
+      /* "pyemsi/core/femap_parser.pyx":300
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -10436,13 +10436,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 300, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 300, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":301
+      /* "pyemsi/core/femap_parser.pyx":301
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:             # <<<<<<<<<<<<<<
@@ -10457,7 +10457,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
       __pyx_t_8 = (__pyx_t_7 >= 5);
       if (__pyx_t_8) {
 
-        /* "pyemsi/femap_parser.pyx":302
+        /* "pyemsi/core/femap_parser.pyx":302
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:
  *                     try:             # <<<<<<<<<<<<<<
@@ -10473,7 +10473,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":303
+            /* "pyemsi/core/femap_parser.pyx":303
  *                 if len(parts) >= 5:
  *                     try:
  *                         elem_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -10490,7 +10490,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_elem_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":304
+            /* "pyemsi/core/femap_parser.pyx":304
  *                     try:
  *                         elem_id = int(parts[0])
  *                         prop_id = int(parts[2])             # <<<<<<<<<<<<<<
@@ -10507,7 +10507,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_prop_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":305
+            /* "pyemsi/core/femap_parser.pyx":305
  *                         elem_id = int(parts[0])
  *                         prop_id = int(parts[2])
  *                         topology = int(parts[4])             # <<<<<<<<<<<<<<
@@ -10524,7 +10524,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_topology = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":307
+            /* "pyemsi/core/femap_parser.pyx":307
  *                         topology = int(parts[4])
  * 
  *                         nodes = []             # <<<<<<<<<<<<<<
@@ -10536,7 +10536,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __Pyx_XDECREF_SET(__pyx_v_nodes, ((PyObject*)__pyx_t_4));
             __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":308
+            /* "pyemsi/core/femap_parser.pyx":308
  * 
  *                         nodes = []
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -10546,7 +10546,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __pyx_t_8 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":309
+              /* "pyemsi/core/femap_parser.pyx":309
  *                         nodes = []
  *                         if i + 1 < n_lines:
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])             # <<<<<<<<<<<<<<
@@ -10560,13 +10560,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
               __pyx_t_13 = (__pyx_v_i + 1);
               __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_13);
               __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 309, __pyx_L8_error)
+              __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 309, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_2);
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
               __Pyx_XDECREF_SET(__pyx_v_nodes1, ((PyObject*)__pyx_t_2));
               __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":310
+              /* "pyemsi/core/femap_parser.pyx":310
  *                         if i + 1 < n_lines:
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])
  *                             for nstr in nodes1:             # <<<<<<<<<<<<<<
@@ -10594,7 +10594,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                 __Pyx_XDECREF_SET(__pyx_v_nstr, __pyx_t_4);
                 __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":311
+                /* "pyemsi/core/femap_parser.pyx":311
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])
  *                             for nstr in nodes1:
  *                                 n = int(nstr)             # <<<<<<<<<<<<<<
@@ -10607,7 +10607,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_n = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":312
+                /* "pyemsi/core/femap_parser.pyx":312
  *                             for nstr in nodes1:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -10617,7 +10617,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                 __pyx_t_8 = (__pyx_v_n != 0);
                 if (__pyx_t_8) {
 
-                  /* "pyemsi/femap_parser.pyx":313
+                  /* "pyemsi/core/femap_parser.pyx":313
  *                                 n = int(nstr)
  *                                 if n != 0:
  *                                     nodes.append(n)             # <<<<<<<<<<<<<<
@@ -10629,7 +10629,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                   __pyx_t_14 = __Pyx_PyList_Append(__pyx_v_nodes, __pyx_t_4); if (unlikely(__pyx_t_14 == ((int)-1))) __PYX_ERR(0, 313, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":312
+                  /* "pyemsi/core/femap_parser.pyx":312
  *                             for nstr in nodes1:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -10638,7 +10638,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
                 }
 
-                /* "pyemsi/femap_parser.pyx":310
+                /* "pyemsi/core/femap_parser.pyx":310
  *                         if i + 1 < n_lines:
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])
  *                             for nstr in nodes1:             # <<<<<<<<<<<<<<
@@ -10648,7 +10648,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
               }
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":308
+              /* "pyemsi/core/femap_parser.pyx":308
  * 
  *                         nodes = []
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -10657,7 +10657,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":315
+            /* "pyemsi/core/femap_parser.pyx":315
  *                                     nodes.append(n)
  * 
  *                         if i + 2 < n_lines:             # <<<<<<<<<<<<<<
@@ -10667,7 +10667,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __pyx_t_8 = ((__pyx_v_i + 2) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":316
+              /* "pyemsi/core/femap_parser.pyx":316
  * 
  *                         if i + 2 < n_lines:
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])             # <<<<<<<<<<<<<<
@@ -10681,13 +10681,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
               __pyx_t_13 = (__pyx_v_i + 2);
               __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_13);
               __Pyx_INCREF(__pyx_t_2);
-              __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 316, __pyx_L8_error)
+              __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 316, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_4);
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
               __Pyx_XDECREF_SET(__pyx_v_nodes2, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":317
+              /* "pyemsi/core/femap_parser.pyx":317
  *                         if i + 2 < n_lines:
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])
  *                             for nstr in nodes2:             # <<<<<<<<<<<<<<
@@ -10715,7 +10715,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                 __Pyx_XDECREF_SET(__pyx_v_nstr, __pyx_t_2);
                 __pyx_t_2 = 0;
 
-                /* "pyemsi/femap_parser.pyx":318
+                /* "pyemsi/core/femap_parser.pyx":318
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])
  *                             for nstr in nodes2:
  *                                 n = int(nstr)             # <<<<<<<<<<<<<<
@@ -10728,7 +10728,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                 __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                 __pyx_v_n = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":319
+                /* "pyemsi/core/femap_parser.pyx":319
  *                             for nstr in nodes2:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -10738,7 +10738,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                 __pyx_t_8 = (__pyx_v_n != 0);
                 if (__pyx_t_8) {
 
-                  /* "pyemsi/femap_parser.pyx":320
+                  /* "pyemsi/core/femap_parser.pyx":320
  *                                 n = int(nstr)
  *                                 if n != 0:
  *                                     nodes.append(n)             # <<<<<<<<<<<<<<
@@ -10750,7 +10750,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
                   __pyx_t_14 = __Pyx_PyList_Append(__pyx_v_nodes, __pyx_t_2); if (unlikely(__pyx_t_14 == ((int)-1))) __PYX_ERR(0, 320, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":319
+                  /* "pyemsi/core/femap_parser.pyx":319
  *                             for nstr in nodes2:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -10759,7 +10759,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
                 }
 
-                /* "pyemsi/femap_parser.pyx":317
+                /* "pyemsi/core/femap_parser.pyx":317
  *                         if i + 2 < n_lines:
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])
  *                             for nstr in nodes2:             # <<<<<<<<<<<<<<
@@ -10769,7 +10769,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
               }
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":315
+              /* "pyemsi/core/femap_parser.pyx":315
  *                                     nodes.append(n)
  * 
  *                         if i + 2 < n_lines:             # <<<<<<<<<<<<<<
@@ -10778,7 +10778,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":323
+            /* "pyemsi/core/femap_parser.pyx":323
  * 
  *                         elements.append({
  *                             "id": elem_id,             # <<<<<<<<<<<<<<
@@ -10792,7 +10792,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_id, __pyx_t_2) < (0)) __PYX_ERR(0, 323, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":324
+            /* "pyemsi/core/femap_parser.pyx":324
  *                         elements.append({
  *                             "id": elem_id,
  *                             "prop_id": prop_id,             # <<<<<<<<<<<<<<
@@ -10804,7 +10804,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_prop_id, __pyx_t_2) < (0)) __PYX_ERR(0, 323, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":325
+            /* "pyemsi/core/femap_parser.pyx":325
  *                             "id": elem_id,
  *                             "prop_id": prop_id,
  *                             "topology": topology,             # <<<<<<<<<<<<<<
@@ -10816,7 +10816,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_topology, __pyx_t_2) < (0)) __PYX_ERR(0, 323, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":326
+            /* "pyemsi/core/femap_parser.pyx":326
  *                             "prop_id": prop_id,
  *                             "topology": topology,
  *                             "nodes": nodes,             # <<<<<<<<<<<<<<
@@ -10825,7 +10825,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
             if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_nodes, __pyx_v_nodes) < (0)) __PYX_ERR(0, 323, __pyx_L8_error)
 
-            /* "pyemsi/femap_parser.pyx":322
+            /* "pyemsi/core/femap_parser.pyx":322
  *                                     nodes.append(n)
  * 
  *                         elements.append({             # <<<<<<<<<<<<<<
@@ -10835,7 +10835,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
             __pyx_t_14 = __Pyx_PyList_Append(__pyx_v_elements, __pyx_t_4); if (unlikely(__pyx_t_14 == ((int)-1))) __PYX_ERR(0, 322, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":328
+            /* "pyemsi/core/femap_parser.pyx":328
  *                             "nodes": nodes,
  *                         })
  *                         i += 7             # <<<<<<<<<<<<<<
@@ -10844,7 +10844,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
             __pyx_v_i = (__pyx_v_i + 7);
 
-            /* "pyemsi/femap_parser.pyx":302
+            /* "pyemsi/core/femap_parser.pyx":302
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:
  *                     try:             # <<<<<<<<<<<<<<
@@ -10861,7 +10861,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":329
+          /* "pyemsi/core/femap_parser.pyx":329
  *                         })
  *                         i += 7
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -10870,13 +10870,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 */
           __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_12) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_elements", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_elements", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_4, &__pyx_t_2, &__pyx_t_3) < 0) __PYX_ERR(0, 329, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_4);
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":330
+            /* "pyemsi/core/femap_parser.pyx":330
  *                         i += 7
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -10891,7 +10891,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":302
+          /* "pyemsi/core/femap_parser.pyx":302
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:
  *                     try:             # <<<<<<<<<<<<<<
@@ -10912,7 +10912,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":301
+        /* "pyemsi/core/femap_parser.pyx":301
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:             # <<<<<<<<<<<<<<
@@ -10922,7 +10922,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":332
+      /* "pyemsi/core/femap_parser.pyx":332
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -10935,7 +10935,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
       __pyx_L7:;
     }
 
-    /* "pyemsi/femap_parser.pyx":296
+    /* "pyemsi/core/femap_parser.pyx":296
  * 
  *         all_blocks = self.get_blocks(404)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -10945,7 +10945,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":334
+  /* "pyemsi/core/femap_parser.pyx":334
  *                     i += 1
  * 
  *         return elements             # <<<<<<<<<<<<<<
@@ -10957,7 +10957,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
   __pyx_r = __pyx_v_elements;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":283
+  /* "pyemsi/core/femap_parser.pyx":283
  *         return properties
  * 
  *     cpdef list get_elements(self):             # <<<<<<<<<<<<<<
@@ -10971,7 +10971,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_elements", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_elements", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_elements);
@@ -10988,16 +10988,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(struc
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_17get_elements(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_16get_elements, "\n        Extract all elements from Block 404.\n\n        Returns:\n            List of element dictionaries with id, prop_id, topology, and nodes\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_17get_elements = {"get_elements", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_17get_elements, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_16get_elements};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_17get_elements(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_16get_elements, "\n        Extract all elements from Block 404.\n\n        Returns:\n            List of element dictionaries with id, prop_id, topology, and nodes\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements = {"get_elements", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_16get_elements};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -11023,14 +11023,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_elements", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_16get_elements(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_16get_elements(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -11039,7 +11039,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(st
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_elements", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 283, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 283, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -11048,7 +11048,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(st
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_elements", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_elements", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -11056,7 +11056,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(st
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":336
+/* "pyemsi/core/femap_parser.pyx":336
  *         return elements
  * 
  *     cpdef tuple get_elements_arrays(self):             # <<<<<<<<<<<<<<
@@ -11064,14 +11064,14 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_16get_elements(st
  *         Extract all elements from Block 404 as NumPy arrays (high performance).
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
   PyObject *__pyx_v_nodes1 = 0;
@@ -11081,7 +11081,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   PyObject *__pyx_v_topo_list = 0;
   PyObject *__pyx_v_connectivity_list = 0;
   PyObject *__pyx_v_offsets_list = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_elem_id;
   int __pyx_v_prop_id;
@@ -11120,7 +11120,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -11133,7 +11133,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_elements_arrays); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 336, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -11177,7 +11177,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":349
+  /* "pyemsi/core/femap_parser.pyx":349
  *         """
  *         cdef list all_blocks, parts, nodes1, nodes2
  *         cdef list elem_ids_list = []             # <<<<<<<<<<<<<<
@@ -11189,7 +11189,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __pyx_v_elem_ids_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":350
+  /* "pyemsi/core/femap_parser.pyx":350
  *         cdef list all_blocks, parts, nodes1, nodes2
  *         cdef list elem_ids_list = []
  *         cdef list prop_ids_list = []             # <<<<<<<<<<<<<<
@@ -11201,7 +11201,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __pyx_v_prop_ids_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":351
+  /* "pyemsi/core/femap_parser.pyx":351
  *         cdef list elem_ids_list = []
  *         cdef list prop_ids_list = []
  *         cdef list topo_list = []             # <<<<<<<<<<<<<<
@@ -11213,7 +11213,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __pyx_v_topo_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":352
+  /* "pyemsi/core/femap_parser.pyx":352
  *         cdef list prop_ids_list = []
  *         cdef list topo_list = []
  *         cdef list connectivity_list = []             # <<<<<<<<<<<<<<
@@ -11225,7 +11225,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __pyx_v_connectivity_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":353
+  /* "pyemsi/core/femap_parser.pyx":353
  *         cdef list topo_list = []
  *         cdef list connectivity_list = []
  *         cdef list offsets_list = [0]             # <<<<<<<<<<<<<<
@@ -11240,19 +11240,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __pyx_v_offsets_list = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":357
+  /* "pyemsi/core/femap_parser.pyx":357
  *         cdef int i, elem_id, prop_id, topology, n_lines, n, offset
  * 
  *         all_blocks = self.get_blocks(404)             # <<<<<<<<<<<<<<
  *         offset = 0
  * 
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x194, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 357, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x194, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 357, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":358
+  /* "pyemsi/core/femap_parser.pyx":358
  * 
  *         all_blocks = self.get_blocks(404)
  *         offset = 0             # <<<<<<<<<<<<<<
@@ -11261,7 +11261,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
   __pyx_v_offset = 0;
 
-  /* "pyemsi/femap_parser.pyx":360
+  /* "pyemsi/core/femap_parser.pyx":360
  *         offset = 0
  * 
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -11286,11 +11286,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 360, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 360, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 360, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":361
+    /* "pyemsi/core/femap_parser.pyx":361
  * 
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -11299,7 +11299,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":362
+    /* "pyemsi/core/femap_parser.pyx":362
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -11316,7 +11316,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/femap_parser.pyx":363
+    /* "pyemsi/core/femap_parser.pyx":363
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -11327,7 +11327,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/femap_parser.pyx":364
+      /* "pyemsi/core/femap_parser.pyx":364
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -11340,13 +11340,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 364, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 364, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":365
+      /* "pyemsi/core/femap_parser.pyx":365
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:             # <<<<<<<<<<<<<<
@@ -11361,7 +11361,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
       __pyx_t_8 = (__pyx_t_7 >= 5);
       if (__pyx_t_8) {
 
-        /* "pyemsi/femap_parser.pyx":366
+        /* "pyemsi/core/femap_parser.pyx":366
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:
  *                     try:             # <<<<<<<<<<<<<<
@@ -11377,7 +11377,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":367
+            /* "pyemsi/core/femap_parser.pyx":367
  *                 if len(parts) >= 5:
  *                     try:
  *                         elem_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -11394,7 +11394,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_elem_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":368
+            /* "pyemsi/core/femap_parser.pyx":368
  *                     try:
  *                         elem_id = int(parts[0])
  *                         prop_id = int(parts[2])             # <<<<<<<<<<<<<<
@@ -11411,7 +11411,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_prop_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":369
+            /* "pyemsi/core/femap_parser.pyx":369
  *                         elem_id = int(parts[0])
  *                         prop_id = int(parts[2])
  *                         topology = int(parts[4])             # <<<<<<<<<<<<<<
@@ -11428,7 +11428,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_topology = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":371
+            /* "pyemsi/core/femap_parser.pyx":371
  *                         topology = int(parts[4])
  * 
  *                         elem_ids_list.append(elem_id)             # <<<<<<<<<<<<<<
@@ -11440,7 +11440,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __pyx_t_13 = __Pyx_PyList_Append(__pyx_v_elem_ids_list, __pyx_t_4); if (unlikely(__pyx_t_13 == ((int)-1))) __PYX_ERR(0, 371, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":372
+            /* "pyemsi/core/femap_parser.pyx":372
  * 
  *                         elem_ids_list.append(elem_id)
  *                         prop_ids_list.append(prop_id)             # <<<<<<<<<<<<<<
@@ -11452,7 +11452,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __pyx_t_13 = __Pyx_PyList_Append(__pyx_v_prop_ids_list, __pyx_t_4); if (unlikely(__pyx_t_13 == ((int)-1))) __PYX_ERR(0, 372, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":373
+            /* "pyemsi/core/femap_parser.pyx":373
  *                         elem_ids_list.append(elem_id)
  *                         prop_ids_list.append(prop_id)
  *                         topo_list.append(topology)             # <<<<<<<<<<<<<<
@@ -11464,7 +11464,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __pyx_t_13 = __Pyx_PyList_Append(__pyx_v_topo_list, __pyx_t_4); if (unlikely(__pyx_t_13 == ((int)-1))) __PYX_ERR(0, 373, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":375
+            /* "pyemsi/core/femap_parser.pyx":375
  *                         topo_list.append(topology)
  * 
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -11474,7 +11474,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __pyx_t_8 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":376
+              /* "pyemsi/core/femap_parser.pyx":376
  * 
  *                         if i + 1 < n_lines:
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])             # <<<<<<<<<<<<<<
@@ -11488,13 +11488,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
               __pyx_t_14 = (__pyx_v_i + 1);
               __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_14);
               __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 376, __pyx_L8_error)
+              __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 376, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_2);
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
               __Pyx_XDECREF_SET(__pyx_v_nodes1, ((PyObject*)__pyx_t_2));
               __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":377
+              /* "pyemsi/core/femap_parser.pyx":377
  *                         if i + 1 < n_lines:
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])
  *                             for nstr in nodes1:             # <<<<<<<<<<<<<<
@@ -11522,7 +11522,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                 __Pyx_XDECREF_SET(__pyx_v_nstr, __pyx_t_4);
                 __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":378
+                /* "pyemsi/core/femap_parser.pyx":378
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])
  *                             for nstr in nodes1:
  *                                 n = int(nstr)             # <<<<<<<<<<<<<<
@@ -11535,7 +11535,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_n = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":379
+                /* "pyemsi/core/femap_parser.pyx":379
  *                             for nstr in nodes1:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -11545,7 +11545,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                 __pyx_t_8 = (__pyx_v_n != 0);
                 if (__pyx_t_8) {
 
-                  /* "pyemsi/femap_parser.pyx":380
+                  /* "pyemsi/core/femap_parser.pyx":380
  *                                 n = int(nstr)
  *                                 if n != 0:
  *                                     connectivity_list.append(n)             # <<<<<<<<<<<<<<
@@ -11557,7 +11557,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                   __pyx_t_13 = __Pyx_PyList_Append(__pyx_v_connectivity_list, __pyx_t_4); if (unlikely(__pyx_t_13 == ((int)-1))) __PYX_ERR(0, 380, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":381
+                  /* "pyemsi/core/femap_parser.pyx":381
  *                                 if n != 0:
  *                                     connectivity_list.append(n)
  *                                     offset += 1             # <<<<<<<<<<<<<<
@@ -11566,7 +11566,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
                   __pyx_v_offset = (__pyx_v_offset + 1);
 
-                  /* "pyemsi/femap_parser.pyx":379
+                  /* "pyemsi/core/femap_parser.pyx":379
  *                             for nstr in nodes1:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -11575,7 +11575,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
                 }
 
-                /* "pyemsi/femap_parser.pyx":377
+                /* "pyemsi/core/femap_parser.pyx":377
  *                         if i + 1 < n_lines:
  *                             nodes1 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 1])
  *                             for nstr in nodes1:             # <<<<<<<<<<<<<<
@@ -11585,7 +11585,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
               }
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":375
+              /* "pyemsi/core/femap_parser.pyx":375
  *                         topo_list.append(topology)
  * 
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -11594,7 +11594,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":383
+            /* "pyemsi/core/femap_parser.pyx":383
  *                                     offset += 1
  * 
  *                         if i + 2 < n_lines:             # <<<<<<<<<<<<<<
@@ -11604,7 +11604,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __pyx_t_8 = ((__pyx_v_i + 2) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":384
+              /* "pyemsi/core/femap_parser.pyx":384
  * 
  *                         if i + 2 < n_lines:
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])             # <<<<<<<<<<<<<<
@@ -11618,13 +11618,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
               __pyx_t_14 = (__pyx_v_i + 2);
               __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_14);
               __Pyx_INCREF(__pyx_t_2);
-              __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 384, __pyx_L8_error)
+              __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 384, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_4);
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
               __Pyx_XDECREF_SET(__pyx_v_nodes2, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":385
+              /* "pyemsi/core/femap_parser.pyx":385
  *                         if i + 2 < n_lines:
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])
  *                             for nstr in nodes2:             # <<<<<<<<<<<<<<
@@ -11652,7 +11652,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                 __Pyx_XDECREF_SET(__pyx_v_nstr, __pyx_t_2);
                 __pyx_t_2 = 0;
 
-                /* "pyemsi/femap_parser.pyx":386
+                /* "pyemsi/core/femap_parser.pyx":386
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])
  *                             for nstr in nodes2:
  *                                 n = int(nstr)             # <<<<<<<<<<<<<<
@@ -11665,7 +11665,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                 __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                 __pyx_v_n = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":387
+                /* "pyemsi/core/femap_parser.pyx":387
  *                             for nstr in nodes2:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -11675,7 +11675,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                 __pyx_t_8 = (__pyx_v_n != 0);
                 if (__pyx_t_8) {
 
-                  /* "pyemsi/femap_parser.pyx":388
+                  /* "pyemsi/core/femap_parser.pyx":388
  *                                 n = int(nstr)
  *                                 if n != 0:
  *                                     connectivity_list.append(n)             # <<<<<<<<<<<<<<
@@ -11687,7 +11687,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
                   __pyx_t_13 = __Pyx_PyList_Append(__pyx_v_connectivity_list, __pyx_t_2); if (unlikely(__pyx_t_13 == ((int)-1))) __PYX_ERR(0, 388, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":389
+                  /* "pyemsi/core/femap_parser.pyx":389
  *                                 if n != 0:
  *                                     connectivity_list.append(n)
  *                                     offset += 1             # <<<<<<<<<<<<<<
@@ -11696,7 +11696,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
                   __pyx_v_offset = (__pyx_v_offset + 1);
 
-                  /* "pyemsi/femap_parser.pyx":387
+                  /* "pyemsi/core/femap_parser.pyx":387
  *                             for nstr in nodes2:
  *                                 n = int(nstr)
  *                                 if n != 0:             # <<<<<<<<<<<<<<
@@ -11705,7 +11705,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
                 }
 
-                /* "pyemsi/femap_parser.pyx":385
+                /* "pyemsi/core/femap_parser.pyx":385
  *                         if i + 2 < n_lines:
  *                             nodes2 = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 2])
  *                             for nstr in nodes2:             # <<<<<<<<<<<<<<
@@ -11715,7 +11715,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
               }
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":383
+              /* "pyemsi/core/femap_parser.pyx":383
  *                                     offset += 1
  * 
  *                         if i + 2 < n_lines:             # <<<<<<<<<<<<<<
@@ -11724,7 +11724,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":391
+            /* "pyemsi/core/femap_parser.pyx":391
  *                                     offset += 1
  * 
  *                         offsets_list.append(offset)             # <<<<<<<<<<<<<<
@@ -11736,7 +11736,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
             __pyx_t_13 = __Pyx_PyList_Append(__pyx_v_offsets_list, __pyx_t_4); if (unlikely(__pyx_t_13 == ((int)-1))) __PYX_ERR(0, 391, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":392
+            /* "pyemsi/core/femap_parser.pyx":392
  * 
  *                         offsets_list.append(offset)
  *                         i += 7             # <<<<<<<<<<<<<<
@@ -11745,7 +11745,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
             __pyx_v_i = (__pyx_v_i + 7);
 
-            /* "pyemsi/femap_parser.pyx":366
+            /* "pyemsi/core/femap_parser.pyx":366
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:
  *                     try:             # <<<<<<<<<<<<<<
@@ -11762,7 +11762,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":393
+          /* "pyemsi/core/femap_parser.pyx":393
  *                         offsets_list.append(offset)
  *                         i += 7
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -11771,13 +11771,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
           __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_12) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_elements_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_elements_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_4, &__pyx_t_2, &__pyx_t_3) < 0) __PYX_ERR(0, 393, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_4);
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":394
+            /* "pyemsi/core/femap_parser.pyx":394
  *                         i += 7
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -11792,7 +11792,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":366
+          /* "pyemsi/core/femap_parser.pyx":366
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:
  *                     try:             # <<<<<<<<<<<<<<
@@ -11813,7 +11813,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":365
+        /* "pyemsi/core/femap_parser.pyx":365
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 5:             # <<<<<<<<<<<<<<
@@ -11823,7 +11823,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":396
+      /* "pyemsi/core/femap_parser.pyx":396
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -11836,7 +11836,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
       __pyx_L7:;
     }
 
-    /* "pyemsi/femap_parser.pyx":360
+    /* "pyemsi/core/femap_parser.pyx":360
  *         offset = 0
  * 
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -11846,7 +11846,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":398
+  /* "pyemsi/core/femap_parser.pyx":398
  *                     i += 1
  * 
  *         return (             # <<<<<<<<<<<<<<
@@ -11855,7 +11855,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 */
   __Pyx_XDECREF(__pyx_r);
 
-  /* "pyemsi/femap_parser.pyx":399
+  /* "pyemsi/core/femap_parser.pyx":399
  * 
  *         return (
  *             np.array(elem_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -11899,7 +11899,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     __Pyx_GOTREF(__pyx_t_1);
   }
 
-  /* "pyemsi/femap_parser.pyx":400
+  /* "pyemsi/core/femap_parser.pyx":400
  *         return (
  *             np.array(elem_ids_list, dtype=np.int32),
  *             np.array(prop_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -11943,7 +11943,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     __Pyx_GOTREF(__pyx_t_4);
   }
 
-  /* "pyemsi/femap_parser.pyx":401
+  /* "pyemsi/core/femap_parser.pyx":401
  *             np.array(elem_ids_list, dtype=np.int32),
  *             np.array(prop_ids_list, dtype=np.int32),
  *             np.array(topo_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -11987,7 +11987,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     __Pyx_GOTREF(__pyx_t_3);
   }
 
-  /* "pyemsi/femap_parser.pyx":402
+  /* "pyemsi/core/femap_parser.pyx":402
  *             np.array(prop_ids_list, dtype=np.int32),
  *             np.array(topo_list, dtype=np.int32),
  *             np.array(connectivity_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -12031,7 +12031,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     __Pyx_GOTREF(__pyx_t_2);
   }
 
-  /* "pyemsi/femap_parser.pyx":403
+  /* "pyemsi/core/femap_parser.pyx":403
  *             np.array(topo_list, dtype=np.int32),
  *             np.array(connectivity_list, dtype=np.int32),
  *             np.array(offsets_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -12075,7 +12075,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
     __Pyx_GOTREF(__pyx_t_15);
   }
 
-  /* "pyemsi/femap_parser.pyx":399
+  /* "pyemsi/core/femap_parser.pyx":399
  * 
  *         return (
  *             np.array(elem_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -12103,7 +12103,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __pyx_t_16 = 0;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":336
+  /* "pyemsi/core/femap_parser.pyx":336
  *         return elements
  * 
  *     cpdef tuple get_elements_arrays(self):             # <<<<<<<<<<<<<<
@@ -12122,7 +12122,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
   __Pyx_XDECREF(__pyx_t_17);
   __Pyx_XDECREF(__pyx_t_18);
   __Pyx_XDECREF(__pyx_t_19);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_elements_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_elements_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_all_blocks);
@@ -12142,16 +12142,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_array
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_arrays, "\n        Extract all elements from Block 404 as NumPy arrays (high performance).\n\n        Returns:\n            Tuple of (element_ids, prop_ids, topologies, node_connectivity, offsets)\n            - element_ids: np.ndarray[int32] - element IDs\n            - prop_ids: np.ndarray[int32] - property IDs\n            - topologies: np.ndarray[int32] - topology codes\n            - connectivity: np.ndarray[int32] - flat node connectivity\n            - offsets: np.ndarray[int32] - offsets into connectivity for each element\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays = {"get_elements_arrays", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_arrays};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_18get_elements_arrays, "\n        Extract all elements from Block 404 as NumPy arrays (high performance).\n\n        Returns:\n            Tuple of (element_ids, prop_ids, topologies, node_connectivity, offsets)\n            - element_ids: np.ndarray[int32] - element IDs\n            - prop_ids: np.ndarray[int32] - property IDs\n            - topologies: np.ndarray[int32] - topology codes\n            - connectivity: np.ndarray[int32] - flat node connectivity\n            - offsets: np.ndarray[int32] - offsets into connectivity for each element\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays = {"get_elements_arrays", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_18get_elements_arrays};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -12177,14 +12177,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_elements_arrays", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_arrays(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_18get_elements_arrays(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_18get_elements_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -12193,7 +12193,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_ar
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_elements_arrays", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_arrays(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 336, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements_arrays(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 336, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -12202,7 +12202,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_ar
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_elements_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_elements_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -12210,7 +12210,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_ar
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":406
+/* "pyemsi/core/femap_parser.pyx":406
  *         )
  * 
  *     cpdef dict get_materials(self):             # <<<<<<<<<<<<<<
@@ -12218,18 +12218,18 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_18get_elements_ar
  *         Extract all materials from Block 601.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_21get_materials(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_materials(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_materials = 0;
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_mat_id;
   int __pyx_v_n_lines;
@@ -12256,7 +12256,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -12269,7 +12269,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_materials); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 406, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_21get_materials)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -12313,7 +12313,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":413
+  /* "pyemsi/core/femap_parser.pyx":413
  *             Dictionary mapping material IDs to material metadata
  *         """
  *         cdef dict materials = {}             # <<<<<<<<<<<<<<
@@ -12325,19 +12325,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
   __pyx_v_materials = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":418
+  /* "pyemsi/core/femap_parser.pyx":418
  *         cdef int i, mat_id, n_lines
  * 
  *         all_blocks = self.get_blocks(601)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x259, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 418, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x259, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 418, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":419
+  /* "pyemsi/core/femap_parser.pyx":419
  * 
  *         all_blocks = self.get_blocks(601)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -12362,11 +12362,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 419, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 419, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 419, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":420
+    /* "pyemsi/core/femap_parser.pyx":420
  *         all_blocks = self.get_blocks(601)
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -12375,7 +12375,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":421
+    /* "pyemsi/core/femap_parser.pyx":421
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -12392,7 +12392,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/femap_parser.pyx":422
+    /* "pyemsi/core/femap_parser.pyx":422
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -12403,7 +12403,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/femap_parser.pyx":423
+      /* "pyemsi/core/femap_parser.pyx":423
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -12416,13 +12416,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 423, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 423, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":424
+      /* "pyemsi/core/femap_parser.pyx":424
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:             # <<<<<<<<<<<<<<
@@ -12437,7 +12437,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
       __pyx_t_8 = (__pyx_t_7 >= 1);
       if (__pyx_t_8) {
 
-        /* "pyemsi/femap_parser.pyx":425
+        /* "pyemsi/core/femap_parser.pyx":425
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:
  *                     try:             # <<<<<<<<<<<<<<
@@ -12453,7 +12453,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":426
+            /* "pyemsi/core/femap_parser.pyx":426
  *                 if len(parts) >= 1:
  *                     try:
  *                         mat_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -12470,7 +12470,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_mat_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":427
+            /* "pyemsi/core/femap_parser.pyx":427
  *                     try:
  *                         mat_id = int(parts[0])
  *                         materials[mat_id] = {"id": mat_id}             # <<<<<<<<<<<<<<
@@ -12489,7 +12489,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":428
+            /* "pyemsi/core/femap_parser.pyx":428
  *                         mat_id = int(parts[0])
  *                         materials[mat_id] = {"id": mat_id}
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -12498,7 +12498,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
 */
             __pyx_v_i = (__pyx_v_i + 1);
 
-            /* "pyemsi/femap_parser.pyx":425
+            /* "pyemsi/core/femap_parser.pyx":425
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:
  *                     try:             # <<<<<<<<<<<<<<
@@ -12515,7 +12515,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":429
+          /* "pyemsi/core/femap_parser.pyx":429
  *                         materials[mat_id] = {"id": mat_id}
  *                         i += 1
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -12524,13 +12524,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
 */
           __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_12) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_materials", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_materials", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_4, &__pyx_t_2, &__pyx_t_3) < 0) __PYX_ERR(0, 429, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_4);
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":430
+            /* "pyemsi/core/femap_parser.pyx":430
  *                         i += 1
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -12545,7 +12545,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":425
+          /* "pyemsi/core/femap_parser.pyx":425
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:
  *                     try:             # <<<<<<<<<<<<<<
@@ -12566,7 +12566,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":424
+        /* "pyemsi/core/femap_parser.pyx":424
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:             # <<<<<<<<<<<<<<
@@ -12576,7 +12576,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":432
+      /* "pyemsi/core/femap_parser.pyx":432
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -12589,7 +12589,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
       __pyx_L7:;
     }
 
-    /* "pyemsi/femap_parser.pyx":419
+    /* "pyemsi/core/femap_parser.pyx":419
  * 
  *         all_blocks = self.get_blocks(601)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -12599,7 +12599,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":434
+  /* "pyemsi/core/femap_parser.pyx":434
  *                     i += 1
  * 
  *         return materials             # <<<<<<<<<<<<<<
@@ -12611,7 +12611,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
   __pyx_r = __pyx_v_materials;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":406
+  /* "pyemsi/core/femap_parser.pyx":406
  *         )
  * 
  *     cpdef dict get_materials(self):             # <<<<<<<<<<<<<<
@@ -12625,7 +12625,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_materials", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_materials", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_materials);
@@ -12638,16 +12638,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(stru
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_21get_materials(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_20get_materials, "\n        Extract all materials from Block 601.\n\n        Returns:\n            Dictionary mapping material IDs to material metadata\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_21get_materials = {"get_materials", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_21get_materials, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_20get_materials};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_21get_materials(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_20get_materials, "\n        Extract all materials from Block 601.\n\n        Returns:\n            Dictionary mapping material IDs to material metadata\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials = {"get_materials", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_20get_materials};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -12673,14 +12673,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_materials", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_20get_materials(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_20get_materials(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -12689,7 +12689,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(s
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_materials", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 406, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_materials(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 406, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -12698,7 +12698,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(s
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_materials", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_materials", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -12706,7 +12706,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(s
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":436
+/* "pyemsi/core/femap_parser.pyx":436
  *         return materials
  * 
  *     cpdef dict get_output_sets(self):             # <<<<<<<<<<<<<<
@@ -12714,19 +12714,19 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_20get_materials(s
  *         Extract all output sets from Block 450.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_sets(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_output_sets = 0;
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
   PyObject *__pyx_v_value_parts = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_set_id;
   int __pyx_v_n_lines;
@@ -12758,7 +12758,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -12771,7 +12771,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_sets); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 436, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -12815,7 +12815,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":443
+  /* "pyemsi/core/femap_parser.pyx":443
  *             Dictionary mapping output set IDs to metadata
  *         """
  *         cdef dict output_sets = {}             # <<<<<<<<<<<<<<
@@ -12827,19 +12827,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
   __pyx_v_output_sets = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":450
+  /* "pyemsi/core/femap_parser.pyx":450
  *         cdef double value
  * 
  *         all_blocks = self.get_blocks(450)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x1C2, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 450, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x1C2, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 450, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":451
+  /* "pyemsi/core/femap_parser.pyx":451
  * 
  *         all_blocks = self.get_blocks(450)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -12864,11 +12864,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 451, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 451, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 451, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":452
+    /* "pyemsi/core/femap_parser.pyx":452
  *         all_blocks = self.get_blocks(450)
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -12877,7 +12877,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":453
+    /* "pyemsi/core/femap_parser.pyx":453
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -12894,7 +12894,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/femap_parser.pyx":454
+    /* "pyemsi/core/femap_parser.pyx":454
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -12905,7 +12905,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/femap_parser.pyx":455
+      /* "pyemsi/core/femap_parser.pyx":455
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -12918,13 +12918,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 455, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 455, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":456
+      /* "pyemsi/core/femap_parser.pyx":456
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:             # <<<<<<<<<<<<<<
@@ -12939,7 +12939,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
       __pyx_t_8 = (__pyx_t_7 >= 1);
       if (__pyx_t_8) {
 
-        /* "pyemsi/femap_parser.pyx":457
+        /* "pyemsi/core/femap_parser.pyx":457
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:
  *                     try:             # <<<<<<<<<<<<<<
@@ -12955,7 +12955,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":458
+            /* "pyemsi/core/femap_parser.pyx":458
  *                 if len(parts) >= 1:
  *                     try:
  *                         set_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -12972,7 +12972,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_set_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":460
+            /* "pyemsi/core/femap_parser.pyx":460
  *                         set_id = int(parts[0])
  * 
  *                         title = ""             # <<<<<<<<<<<<<<
@@ -12982,7 +12982,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
             __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
             __Pyx_XDECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-            /* "pyemsi/femap_parser.pyx":461
+            /* "pyemsi/core/femap_parser.pyx":461
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -12992,7 +12992,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
             __pyx_t_8 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":462
+              /* "pyemsi/core/femap_parser.pyx":462
  *                         title = ""
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")             # <<<<<<<<<<<<<<
@@ -13028,7 +13028,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
               __Pyx_DECREF_SET(__pyx_v_title, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":463
+              /* "pyemsi/core/femap_parser.pyx":463
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -13038,7 +13038,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
               __pyx_t_8 = (__Pyx_PyUnicode_Equals(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u_NULL, Py_EQ)); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 463, __pyx_L8_error)
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":464
+                /* "pyemsi/core/femap_parser.pyx":464
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":
  *                                 title = ""             # <<<<<<<<<<<<<<
@@ -13048,7 +13048,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
                 __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
                 __Pyx_DECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-                /* "pyemsi/femap_parser.pyx":463
+                /* "pyemsi/core/femap_parser.pyx":463
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -13057,7 +13057,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":461
+              /* "pyemsi/core/femap_parser.pyx":461
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -13066,7 +13066,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":466
+            /* "pyemsi/core/femap_parser.pyx":466
  *                                 title = ""
  * 
  *                         value = 0.0             # <<<<<<<<<<<<<<
@@ -13075,7 +13075,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
             __pyx_v_value = 0.0;
 
-            /* "pyemsi/femap_parser.pyx":467
+            /* "pyemsi/core/femap_parser.pyx":467
  * 
  *                         value = 0.0
  *                         if i + 3 < n_lines:             # <<<<<<<<<<<<<<
@@ -13085,7 +13085,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
             __pyx_t_8 = ((__pyx_v_i + 3) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":468
+              /* "pyemsi/core/femap_parser.pyx":468
  *                         value = 0.0
  *                         if i + 3 < n_lines:
  *                             value_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 3])             # <<<<<<<<<<<<<<
@@ -13099,13 +13099,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
               __pyx_t_14 = (__pyx_v_i + 3);
               __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_14);
               __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_3 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 468, __pyx_L8_error)
+              __pyx_t_3 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 468, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_3);
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
               __Pyx_XDECREF_SET(__pyx_v_value_parts, ((PyObject*)__pyx_t_3));
               __pyx_t_3 = 0;
 
-              /* "pyemsi/femap_parser.pyx":469
+              /* "pyemsi/core/femap_parser.pyx":469
  *                         if i + 3 < n_lines:
  *                             value_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 3])
  *                             if len(value_parts) >= 1:             # <<<<<<<<<<<<<<
@@ -13120,7 +13120,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
               __pyx_t_8 = (__pyx_t_7 >= 1);
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":470
+                /* "pyemsi/core/femap_parser.pyx":470
  *                             value_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 3])
  *                             if len(value_parts) >= 1:
  *                                 value = float(value_parts[0])             # <<<<<<<<<<<<<<
@@ -13134,7 +13134,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
                 __pyx_t_15 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_value_parts, 0)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_15, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 470, __pyx_L8_error)
                 __pyx_v_value = __pyx_t_15;
 
-                /* "pyemsi/femap_parser.pyx":469
+                /* "pyemsi/core/femap_parser.pyx":469
  *                         if i + 3 < n_lines:
  *                             value_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 3])
  *                             if len(value_parts) >= 1:             # <<<<<<<<<<<<<<
@@ -13143,7 +13143,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":467
+              /* "pyemsi/core/femap_parser.pyx":467
  * 
  *                         value = 0.0
  *                         if i + 3 < n_lines:             # <<<<<<<<<<<<<<
@@ -13152,7 +13152,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":472
+            /* "pyemsi/core/femap_parser.pyx":472
  *                                 value = float(value_parts[0])
  * 
  *                         output_sets[set_id] = {"title": title, "value": value}             # <<<<<<<<<<<<<<
@@ -13172,7 +13172,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-            /* "pyemsi/femap_parser.pyx":473
+            /* "pyemsi/core/femap_parser.pyx":473
  * 
  *                         output_sets[set_id] = {"title": title, "value": value}
  *                         i += 6             # <<<<<<<<<<<<<<
@@ -13181,7 +13181,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
             __pyx_v_i = (__pyx_v_i + 6);
 
-            /* "pyemsi/femap_parser.pyx":457
+            /* "pyemsi/core/femap_parser.pyx":457
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:
  *                     try:             # <<<<<<<<<<<<<<
@@ -13199,7 +13199,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":474
+          /* "pyemsi/core/femap_parser.pyx":474
  *                         output_sets[set_id] = {"title": title, "value": value}
  *                         i += 6
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -13208,13 +13208,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 */
           __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_12) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_sets", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_sets", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_3, &__pyx_t_4, &__pyx_t_2) < 0) __PYX_ERR(0, 474, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_3);
             __Pyx_XGOTREF(__pyx_t_4);
             __Pyx_XGOTREF(__pyx_t_2);
 
-            /* "pyemsi/femap_parser.pyx":475
+            /* "pyemsi/core/femap_parser.pyx":475
  *                         i += 6
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -13229,7 +13229,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":457
+          /* "pyemsi/core/femap_parser.pyx":457
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:
  *                     try:             # <<<<<<<<<<<<<<
@@ -13250,7 +13250,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":456
+        /* "pyemsi/core/femap_parser.pyx":456
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 1:             # <<<<<<<<<<<<<<
@@ -13260,7 +13260,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":477
+      /* "pyemsi/core/femap_parser.pyx":477
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -13273,7 +13273,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
       __pyx_L7:;
     }
 
-    /* "pyemsi/femap_parser.pyx":451
+    /* "pyemsi/core/femap_parser.pyx":451
  * 
  *         all_blocks = self.get_blocks(450)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -13283,7 +13283,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":479
+  /* "pyemsi/core/femap_parser.pyx":479
  *                     i += 1
  * 
  *         return output_sets             # <<<<<<<<<<<<<<
@@ -13295,7 +13295,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
   __pyx_r = __pyx_v_output_sets;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":436
+  /* "pyemsi/core/femap_parser.pyx":436
  *         return materials
  * 
  *     cpdef dict get_output_sets(self):             # <<<<<<<<<<<<<<
@@ -13310,7 +13310,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_13);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_sets", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_sets", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_output_sets);
@@ -13325,16 +13325,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(st
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets, "\n        Extract all output sets from Block 450.\n\n        Returns:\n            Dictionary mapping output set IDs to metadata\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets = {"get_output_sets", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_22get_output_sets, "\n        Extract all output sets from Block 450.\n\n        Returns:\n            Dictionary mapping output set IDs to metadata\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets = {"get_output_sets", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_22get_output_sets};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -13360,14 +13360,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_output_sets", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_22get_output_sets(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_22get_output_sets(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -13376,7 +13376,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_output_sets", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 436, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_sets(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 436, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -13385,7 +13385,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_sets", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_sets", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -13393,7 +13393,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":481
+/* "pyemsi/core/femap_parser.pyx":481
  *         return output_sets
  * 
  *     cpdef list get_output_vectors(self):             # <<<<<<<<<<<<<<
@@ -13401,14 +13401,14 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_22get_output_sets
  *         Extract all output data vectors from Block 1051.
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch) {
   PyObject *__pyx_v_output_vectors = 0;
   PyObject *__pyx_v_all_blocks = 0;
   PyObject *__pyx_v_parts = 0;
@@ -13416,7 +13416,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   PyObject *__pyx_v_cont_parts = 0;
   PyObject *__pyx_v_values = 0;
   PyObject *__pyx_v_line6_parts = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_set_id;
   int __pyx_v_vec_id;
@@ -13462,7 +13462,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -13475,7 +13475,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_vectors); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 481, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -13519,7 +13519,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":488
+  /* "pyemsi/core/femap_parser.pyx":488
  *             List of output vector dictionaries with metadata and results
  *         """
  *         cdef list output_vectors = []             # <<<<<<<<<<<<<<
@@ -13531,19 +13531,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   __pyx_v_output_vectors = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":499
+  /* "pyemsi/core/femap_parser.pyx":499
  *         cdef bint has_ent_type
  * 
  *         all_blocks = self.get_blocks(1051)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 499, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 499, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":500
+  /* "pyemsi/core/femap_parser.pyx":500
  * 
  *         all_blocks = self.get_blocks(1051)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -13568,11 +13568,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
     ++__pyx_t_6;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 500, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 500, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 500, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":501
+    /* "pyemsi/core/femap_parser.pyx":501
  *         all_blocks = self.get_blocks(1051)
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -13581,7 +13581,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":502
+    /* "pyemsi/core/femap_parser.pyx":502
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -13598,7 +13598,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/femap_parser.pyx":503
+    /* "pyemsi/core/femap_parser.pyx":503
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -13609,7 +13609,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/femap_parser.pyx":504
+      /* "pyemsi/core/femap_parser.pyx":504
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -13622,13 +13622,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 504, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 504, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":505
+      /* "pyemsi/core/femap_parser.pyx":505
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -13643,7 +13643,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       __pyx_t_8 = (__pyx_t_7 >= 2);
       if (__pyx_t_8) {
 
-        /* "pyemsi/femap_parser.pyx":506
+        /* "pyemsi/core/femap_parser.pyx":506
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -13659,7 +13659,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":507
+            /* "pyemsi/core/femap_parser.pyx":507
  *                 if len(parts) >= 2:
  *                     try:
  *                         set_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -13676,7 +13676,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_set_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":508
+            /* "pyemsi/core/femap_parser.pyx":508
  *                     try:
  *                         set_id = int(parts[0])
  *                         vec_id = int(parts[1])             # <<<<<<<<<<<<<<
@@ -13693,7 +13693,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_vec_id = __pyx_t_12;
 
-            /* "pyemsi/femap_parser.pyx":510
+            /* "pyemsi/core/femap_parser.pyx":510
  *                         vec_id = int(parts[1])
  * 
  *                         title = ""             # <<<<<<<<<<<<<<
@@ -13703,7 +13703,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
             __Pyx_XDECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-            /* "pyemsi/femap_parser.pyx":511
+            /* "pyemsi/core/femap_parser.pyx":511
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -13713,7 +13713,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_t_8 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":512
+              /* "pyemsi/core/femap_parser.pyx":512
  *                         title = ""
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")             # <<<<<<<<<<<<<<
@@ -13749,7 +13749,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __Pyx_DECREF_SET(__pyx_v_title, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":513
+              /* "pyemsi/core/femap_parser.pyx":513
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -13759,7 +13759,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_8 = (__Pyx_PyUnicode_Equals(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u_NULL, Py_EQ)); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 513, __pyx_L8_error)
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":514
+                /* "pyemsi/core/femap_parser.pyx":514
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":
  *                                 title = ""             # <<<<<<<<<<<<<<
@@ -13769,7 +13769,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
                 __Pyx_DECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-                /* "pyemsi/femap_parser.pyx":513
+                /* "pyemsi/core/femap_parser.pyx":513
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -13778,7 +13778,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":511
+              /* "pyemsi/core/femap_parser.pyx":511
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -13787,7 +13787,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":516
+            /* "pyemsi/core/femap_parser.pyx":516
  *                                 title = ""
  * 
  *                         ent_type_val = -1             # <<<<<<<<<<<<<<
@@ -13796,7 +13796,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __pyx_v_ent_type_val = -1;
 
-            /* "pyemsi/femap_parser.pyx":517
+            /* "pyemsi/core/femap_parser.pyx":517
  * 
  *                         ent_type_val = -1
  *                         has_ent_type = False             # <<<<<<<<<<<<<<
@@ -13805,7 +13805,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __pyx_v_has_ent_type = 0;
 
-            /* "pyemsi/femap_parser.pyx":518
+            /* "pyemsi/core/femap_parser.pyx":518
  *                         ent_type_val = -1
  *                         has_ent_type = False
  *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
@@ -13815,7 +13815,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_t_8 = ((__pyx_v_i + 5) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/femap_parser.pyx":519
+              /* "pyemsi/core/femap_parser.pyx":519
  *                         has_ent_type = False
  *                         if i + 5 < n_lines:
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])             # <<<<<<<<<<<<<<
@@ -13829,13 +13829,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_14 = (__pyx_v_i + 5);
               __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_14);
               __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_3 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 519, __pyx_L8_error)
+              __pyx_t_3 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 519, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_3);
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
               __Pyx_XDECREF_SET(__pyx_v_line6_parts, ((PyObject*)__pyx_t_3));
               __pyx_t_3 = 0;
 
-              /* "pyemsi/femap_parser.pyx":520
+              /* "pyemsi/core/femap_parser.pyx":520
  *                         if i + 5 < n_lines:
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
  *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
@@ -13850,7 +13850,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_8 = (__pyx_t_7 >= 4);
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":521
+                /* "pyemsi/core/femap_parser.pyx":521
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
  *                             if len(line6_parts) >= 4:
  *                                 ent_type_val = int(line6_parts[3])             # <<<<<<<<<<<<<<
@@ -13867,7 +13867,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
                 __pyx_v_ent_type_val = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":522
+                /* "pyemsi/core/femap_parser.pyx":522
  *                             if len(line6_parts) >= 4:
  *                                 ent_type_val = int(line6_parts[3])
  *                                 has_ent_type = True             # <<<<<<<<<<<<<<
@@ -13876,7 +13876,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_has_ent_type = 1;
 
-                /* "pyemsi/femap_parser.pyx":520
+                /* "pyemsi/core/femap_parser.pyx":520
  *                         if i + 5 < n_lines:
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
  *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
@@ -13885,7 +13885,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":518
+              /* "pyemsi/core/femap_parser.pyx":518
  *                         ent_type_val = -1
  *                         has_ent_type = False
  *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
@@ -13894,7 +13894,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":524
+            /* "pyemsi/core/femap_parser.pyx":524
  *                                 has_ent_type = True
  * 
  *                         i += 7             # <<<<<<<<<<<<<<
@@ -13903,7 +13903,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __pyx_v_i = (__pyx_v_i + 7);
 
-            /* "pyemsi/femap_parser.pyx":526
+            /* "pyemsi/core/femap_parser.pyx":526
  *                         i += 7
  * 
  *                         results = {}             # <<<<<<<<<<<<<<
@@ -13915,7 +13915,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_XDECREF_SET(__pyx_v_results, ((PyObject*)__pyx_t_3));
             __pyx_t_3 = 0;
 
-            /* "pyemsi/femap_parser.pyx":527
+            /* "pyemsi/core/femap_parser.pyx":527
  * 
  *                         results = {}
  *                         while i < n_lines:             # <<<<<<<<<<<<<<
@@ -13926,7 +13926,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
               if (!__pyx_t_8) break;
 
-              /* "pyemsi/femap_parser.pyx":528
+              /* "pyemsi/core/femap_parser.pyx":528
  *                         results = {}
  *                         while i < n_lines:
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -13939,13 +13939,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               }
               __pyx_t_3 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
               __Pyx_INCREF(__pyx_t_3);
-              __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_3)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 528, __pyx_L8_error)
+              __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_3)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 528, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_4);
               __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
               __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":530
+              /* "pyemsi/core/femap_parser.pyx":530
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -13964,7 +13964,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L23_bool_binop_done;
               }
 
-              /* "pyemsi/femap_parser.pyx":531
+              /* "pyemsi/core/femap_parser.pyx":531
  * 
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -13982,7 +13982,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L23_bool_binop_done;
               }
 
-              /* "pyemsi/femap_parser.pyx":532
+              /* "pyemsi/core/femap_parser.pyx":532
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -13997,7 +13997,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_8 = __pyx_t_15;
               __pyx_L23_bool_binop_done:;
 
-              /* "pyemsi/femap_parser.pyx":530
+              /* "pyemsi/core/femap_parser.pyx":530
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14006,7 +14006,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":533
+                /* "pyemsi/core/femap_parser.pyx":533
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14015,7 +14015,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":534
+                /* "pyemsi/core/femap_parser.pyx":534
  *                                 result_parts[1] == "0."):
  *                                 i += 1
  *                                 break             # <<<<<<<<<<<<<<
@@ -14024,7 +14024,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 goto __pyx_L21_break;
 
-                /* "pyemsi/femap_parser.pyx":530
+                /* "pyemsi/core/femap_parser.pyx":530
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14033,7 +14033,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":536
+              /* "pyemsi/core/femap_parser.pyx":536
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
@@ -14048,7 +14048,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_8 = (__pyx_t_7 == 2);
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":537
+                /* "pyemsi/core/femap_parser.pyx":537
  * 
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -14065,7 +14065,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_entity_id = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":538
+                /* "pyemsi/core/femap_parser.pyx":538
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])             # <<<<<<<<<<<<<<
@@ -14079,7 +14079,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_16 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_16, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 538, __pyx_L8_error)
                 __pyx_v_value = __pyx_t_16;
 
-                /* "pyemsi/femap_parser.pyx":539
+                /* "pyemsi/core/femap_parser.pyx":539
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])
  *                                 results[entity_id] = value             # <<<<<<<<<<<<<<
@@ -14094,7 +14094,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":540
+                /* "pyemsi/core/femap_parser.pyx":540
  *                                 value = float(result_parts[1])
  *                                 results[entity_id] = value
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14103,7 +14103,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":536
+                /* "pyemsi/core/femap_parser.pyx":536
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
@@ -14113,7 +14113,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L26;
               }
 
-              /* "pyemsi/femap_parser.pyx":542
+              /* "pyemsi/core/femap_parser.pyx":542
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
@@ -14128,7 +14128,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_8 = (__pyx_t_7 > 2);
               if (__pyx_t_8) {
 
-                /* "pyemsi/femap_parser.pyx":543
+                /* "pyemsi/core/femap_parser.pyx":543
  * 
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -14145,7 +14145,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_start_id = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":544
+                /* "pyemsi/core/femap_parser.pyx":544
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])             # <<<<<<<<<<<<<<
@@ -14162,7 +14162,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_end_id = __pyx_t_12;
 
-                /* "pyemsi/femap_parser.pyx":545
+                /* "pyemsi/core/femap_parser.pyx":545
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])
  *                                 values = [float(v) for v in result_parts[2:]]             # <<<<<<<<<<<<<<
@@ -14211,7 +14211,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_XDECREF_SET(__pyx_v_values, ((PyObject*)__pyx_t_4));
                 __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":547
+                /* "pyemsi/core/femap_parser.pyx":547
  *                                 values = [float(v) for v in result_parts[2:]]
  * 
  *                                 entity_count = end_id - start_id + 1             # <<<<<<<<<<<<<<
@@ -14220,7 +14220,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_entity_count = ((__pyx_v_end_id - __pyx_v_start_id) + 1);
 
-                /* "pyemsi/femap_parser.pyx":548
+                /* "pyemsi/core/femap_parser.pyx":548
  * 
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14229,7 +14229,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":549
+                /* "pyemsi/core/femap_parser.pyx":549
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:             # <<<<<<<<<<<<<<
@@ -14249,7 +14249,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_L36_bool_binop_done:;
                   if (!__pyx_t_8) break;
 
-                  /* "pyemsi/femap_parser.pyx":550
+                  /* "pyemsi/core/femap_parser.pyx":550
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -14262,13 +14262,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   }
                   __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
                   __Pyx_INCREF(__pyx_t_4);
-                  __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 550, __pyx_L8_error)
+                  __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 550, __pyx_L8_error)
                   __Pyx_GOTREF(__pyx_t_2);
                   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                   __Pyx_XDECREF_SET(__pyx_v_cont_parts, ((PyObject*)__pyx_t_2));
                   __pyx_t_2 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":551
+                  /* "pyemsi/core/femap_parser.pyx":551
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14287,7 +14287,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                     goto __pyx_L39_bool_binop_done;
                   }
 
-                  /* "pyemsi/femap_parser.pyx":552
+                  /* "pyemsi/core/femap_parser.pyx":552
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -14305,7 +14305,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                     goto __pyx_L39_bool_binop_done;
                   }
 
-                  /* "pyemsi/femap_parser.pyx":553
+                  /* "pyemsi/core/femap_parser.pyx":553
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -14320,7 +14320,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_t_8 = __pyx_t_15;
                   __pyx_L39_bool_binop_done:;
 
-                  /* "pyemsi/femap_parser.pyx":551
+                  /* "pyemsi/core/femap_parser.pyx":551
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14329,7 +14329,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                   if (__pyx_t_8) {
 
-                    /* "pyemsi/femap_parser.pyx":554
+                    /* "pyemsi/core/femap_parser.pyx":554
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):
  *                                         break             # <<<<<<<<<<<<<<
@@ -14338,7 +14338,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                     goto __pyx_L35_break;
 
-                    /* "pyemsi/femap_parser.pyx":551
+                    /* "pyemsi/core/femap_parser.pyx":551
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14347,7 +14347,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                   }
 
-                  /* "pyemsi/femap_parser.pyx":555
+                  /* "pyemsi/core/femap_parser.pyx":555
  *                                         cont_parts[1] == "0."):
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])             # <<<<<<<<<<<<<<
@@ -14393,7 +14393,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_t_17 = __Pyx_PyList_Extend(__pyx_v_values, __pyx_t_2); if (unlikely(__pyx_t_17 == ((int)-1))) __PYX_ERR(0, 555, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":556
+                  /* "pyemsi/core/femap_parser.pyx":556
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])
  *                                     i += 1             # <<<<<<<<<<<<<<
@@ -14404,7 +14404,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 }
                 __pyx_L35_break:;
 
-                /* "pyemsi/femap_parser.pyx":558
+                /* "pyemsi/core/femap_parser.pyx":558
  *                                     i += 1
  * 
  *                                 for offset in range(min(len(values), entity_count)):             # <<<<<<<<<<<<<<
@@ -14424,7 +14424,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 for (__pyx_t_12 = 0; __pyx_t_12 < __pyx_t_18; __pyx_t_12+=1) {
                   __pyx_v_offset = __pyx_t_12;
 
-                  /* "pyemsi/femap_parser.pyx":559
+                  /* "pyemsi/core/femap_parser.pyx":559
  * 
  *                                 for offset in range(min(len(values), entity_count)):
  *                                     results[start_id + offset] = values[offset]             # <<<<<<<<<<<<<<
@@ -14440,7 +14440,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                 }
 
-                /* "pyemsi/femap_parser.pyx":542
+                /* "pyemsi/core/femap_parser.pyx":542
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
@@ -14450,7 +14450,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L26;
               }
 
-              /* "pyemsi/femap_parser.pyx":561
+              /* "pyemsi/core/femap_parser.pyx":561
  *                                     results[start_id + offset] = values[offset]
  *                             else:
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14464,7 +14464,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             }
             __pyx_L21_break:;
 
-            /* "pyemsi/femap_parser.pyx":564
+            /* "pyemsi/core/femap_parser.pyx":564
  * 
  *                         output_vectors.append({
  *                             "set_id": set_id,             # <<<<<<<<<<<<<<
@@ -14478,7 +14478,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_set_id, __pyx_t_4) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":565
+            /* "pyemsi/core/femap_parser.pyx":565
  *                         output_vectors.append({
  *                             "set_id": set_id,
  *                             "vec_id": vec_id,             # <<<<<<<<<<<<<<
@@ -14490,7 +14490,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_vec_id, __pyx_t_4) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":566
+            /* "pyemsi/core/femap_parser.pyx":566
  *                             "set_id": set_id,
  *                             "vec_id": vec_id,
  *                             "title": title,             # <<<<<<<<<<<<<<
@@ -14499,7 +14499,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_title, __pyx_v_title) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
 
-            /* "pyemsi/femap_parser.pyx":567
+            /* "pyemsi/core/femap_parser.pyx":567
  *                             "vec_id": vec_id,
  *                             "title": title,
  *                             "ent_type": ent_type_val if has_ent_type else None,             # <<<<<<<<<<<<<<
@@ -14518,7 +14518,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_ent_type, __pyx_t_4) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-            /* "pyemsi/femap_parser.pyx":568
+            /* "pyemsi/core/femap_parser.pyx":568
  *                             "title": title,
  *                             "ent_type": ent_type_val if has_ent_type else None,
  *                             "results": results,             # <<<<<<<<<<<<<<
@@ -14527,7 +14527,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_results, __pyx_v_results) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
 
-            /* "pyemsi/femap_parser.pyx":563
+            /* "pyemsi/core/femap_parser.pyx":563
  *                                 i += 1
  * 
  *                         output_vectors.append({             # <<<<<<<<<<<<<<
@@ -14537,7 +14537,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_t_17 = __Pyx_PyList_Append(__pyx_v_output_vectors, __pyx_t_2); if (unlikely(__pyx_t_17 == ((int)-1))) __PYX_ERR(0, 563, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":506
+            /* "pyemsi/core/femap_parser.pyx":506
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -14555,7 +14555,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/femap_parser.pyx":571
+          /* "pyemsi/core/femap_parser.pyx":571
  *                         })
  * 
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -14564,13 +14564,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
           __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_12) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_2, &__pyx_t_4, &__pyx_t_3) < 0) __PYX_ERR(0, 571, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_4);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":572
+            /* "pyemsi/core/femap_parser.pyx":572
  * 
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -14585,7 +14585,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":506
+          /* "pyemsi/core/femap_parser.pyx":506
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -14606,7 +14606,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/femap_parser.pyx":505
+        /* "pyemsi/core/femap_parser.pyx":505
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -14616,7 +14616,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":574
+      /* "pyemsi/core/femap_parser.pyx":574
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -14629,7 +14629,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       __pyx_L7:;
     }
 
-    /* "pyemsi/femap_parser.pyx":500
+    /* "pyemsi/core/femap_parser.pyx":500
  * 
  *         all_blocks = self.get_blocks(1051)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -14639,7 +14639,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":576
+  /* "pyemsi/core/femap_parser.pyx":576
  *                     i += 1
  * 
  *         return output_vectors             # <<<<<<<<<<<<<<
@@ -14651,7 +14651,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   __pyx_r = __pyx_v_output_vectors;
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":481
+  /* "pyemsi/core/femap_parser.pyx":481
  *         return output_sets
  * 
  *     cpdef list get_output_vectors(self):             # <<<<<<<<<<<<<<
@@ -14666,7 +14666,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_13);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_output_vectors);
@@ -14687,16 +14687,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vectors, "\n        Extract all output data vectors from Block 1051.\n\n        Returns:\n            List of output vector dictionaries with metadata and results\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors = {"get_output_vectors", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vectors};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors, "\n        Extract all output data vectors from Block 1051.\n\n        Returns:\n            List of output vector dictionaries with metadata and results\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors = {"get_output_vectors", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -14722,14 +14722,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("get_output_vectors", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vectors(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vectors(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -14738,7 +14738,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vect
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_output_vectors", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 481, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 481, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -14747,7 +14747,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vect
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -14755,7 +14755,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vect
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pyx":578
+/* "pyemsi/core/femap_parser.pyx":578
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
@@ -14763,14 +14763,14 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_24get_output_vect
  *         Extract output vectors as NumPy arrays (high performance).
 */
 
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args) {
   int __pyx_v_set_id_filter = ((int)-1);
   int __pyx_v_vec_id_filter = ((int)-1);
   PyObject *__pyx_v_all_blocks = 0;
@@ -14781,7 +14781,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   PyObject *__pyx_v_line6_parts = 0;
   PyObject *__pyx_v_entity_ids_list = 0;
   PyObject *__pyx_v_values_list = 0;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_set_id;
   int __pyx_v_vec_id;
@@ -14835,7 +14835,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   /* Check if overridden in Python */
   else if (
   #if !CYTHON_USE_TYPE_SLOTS
-  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser &&
+  unlikely(Py_TYPE(((PyObject *)__pyx_v_self)) != __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser &&
   __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), Py_TPFLAGS_HAVE_GC))
   #else
   unlikely(Py_TYPE(((PyObject *)__pyx_v_self))->tp_dictoffset != 0 || __Pyx_PyType_HasFeature(Py_TYPE(((PyObject *)__pyx_v_self)), (Py_TPFLAGS_IS_ABSTRACT | Py_TPFLAGS_HEAPTYPE)))
@@ -14848,7 +14848,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       #endif
       __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 578, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays)) {
+      if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
@@ -14898,19 +14898,19 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
     #endif
   }
 
-  /* "pyemsi/femap_parser.pyx":600
+  /* "pyemsi/core/femap_parser.pyx":600
  *         cdef bint has_ent_type
  * 
  *         all_blocks = self.get_blocks(1051)             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 600, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 600, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":601
+  /* "pyemsi/core/femap_parser.pyx":601
  * 
  *         all_blocks = self.get_blocks(1051)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -14935,11 +14935,11 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
     ++__pyx_t_8;
     if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 601, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 601, __pyx_L1_error)
-    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_t_2));
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 601, __pyx_L1_error)
+    __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/femap_parser.pyx":602
+    /* "pyemsi/core/femap_parser.pyx":602
  *         all_blocks = self.get_blocks(1051)
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
@@ -14948,7 +14948,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/femap_parser.pyx":603
+    /* "pyemsi/core/femap_parser.pyx":603
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -14965,7 +14965,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_9;
 
-    /* "pyemsi/femap_parser.pyx":604
+    /* "pyemsi/core/femap_parser.pyx":604
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -14976,7 +14976,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_10) break;
 
-      /* "pyemsi/femap_parser.pyx":605
+      /* "pyemsi/core/femap_parser.pyx":605
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -14989,13 +14989,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 605, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 605, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/femap_parser.pyx":606
+      /* "pyemsi/core/femap_parser.pyx":606
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -15010,7 +15010,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       __pyx_t_10 = (__pyx_t_9 >= 2);
       if (__pyx_t_10) {
 
-        /* "pyemsi/femap_parser.pyx":607
+        /* "pyemsi/core/femap_parser.pyx":607
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -15026,7 +15026,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           __Pyx_XGOTREF(__pyx_t_13);
           /*try:*/ {
 
-            /* "pyemsi/femap_parser.pyx":608
+            /* "pyemsi/core/femap_parser.pyx":608
  *                 if len(parts) >= 2:
  *                     try:
  *                         set_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -15043,7 +15043,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_set_id = __pyx_t_14;
 
-            /* "pyemsi/femap_parser.pyx":609
+            /* "pyemsi/core/femap_parser.pyx":609
  *                     try:
  *                         set_id = int(parts[0])
  *                         vec_id = int(parts[1])             # <<<<<<<<<<<<<<
@@ -15060,7 +15060,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_vec_id = __pyx_t_14;
 
-            /* "pyemsi/femap_parser.pyx":612
+            /* "pyemsi/core/femap_parser.pyx":612
  * 
  *                         # Check filters
  *                         if set_id_filter >= 0 and set_id != set_id_filter:             # <<<<<<<<<<<<<<
@@ -15078,7 +15078,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_L17_bool_binop_done:;
             if (__pyx_t_10) {
 
-              /* "pyemsi/femap_parser.pyx":613
+              /* "pyemsi/core/femap_parser.pyx":613
  *                         # Check filters
  *                         if set_id_filter >= 0 and set_id != set_id_filter:
  *                             i += 7             # <<<<<<<<<<<<<<
@@ -15087,7 +15087,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               __pyx_v_i = (__pyx_v_i + 7);
 
-              /* "pyemsi/femap_parser.pyx":615
+              /* "pyemsi/core/femap_parser.pyx":615
  *                             i += 7
  *                             # Skip to end marker
  *                             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -15098,7 +15098,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
                 if (!__pyx_t_10) break;
 
-                /* "pyemsi/femap_parser.pyx":616
+                /* "pyemsi/core/femap_parser.pyx":616
  *                             # Skip to end marker
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15111,13 +15111,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 }
                 __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
                 __Pyx_INCREF(__pyx_t_4);
-                __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 616, __pyx_L8_error)
+                __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 616, __pyx_L8_error)
                 __Pyx_GOTREF(__pyx_t_2);
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_2));
                 __pyx_t_2 = 0;
 
-                /* "pyemsi/femap_parser.pyx":617
+                /* "pyemsi/core/femap_parser.pyx":617
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15126,7 +15126,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":618
+                /* "pyemsi/core/femap_parser.pyx":618
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15145,7 +15145,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   goto __pyx_L22_bool_binop_done;
                 }
 
-                /* "pyemsi/femap_parser.pyx":619
+                /* "pyemsi/core/femap_parser.pyx":619
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15163,7 +15163,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   goto __pyx_L22_bool_binop_done;
                 }
 
-                /* "pyemsi/femap_parser.pyx":620
+                /* "pyemsi/core/femap_parser.pyx":620
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15178,7 +15178,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_10 = __pyx_t_15;
                 __pyx_L22_bool_binop_done:;
 
-                /* "pyemsi/femap_parser.pyx":618
+                /* "pyemsi/core/femap_parser.pyx":618
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15187,7 +15187,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 if (__pyx_t_10) {
 
-                  /* "pyemsi/femap_parser.pyx":621
+                  /* "pyemsi/core/femap_parser.pyx":621
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):
  *                                     break             # <<<<<<<<<<<<<<
@@ -15196,7 +15196,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                   goto __pyx_L20_break;
 
-                  /* "pyemsi/femap_parser.pyx":618
+                  /* "pyemsi/core/femap_parser.pyx":618
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15207,7 +15207,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               }
               __pyx_L20_break:;
 
-              /* "pyemsi/femap_parser.pyx":622
+              /* "pyemsi/core/femap_parser.pyx":622
  *                                     result_parts[1] == "0."):
  *                                     break
  *                             continue             # <<<<<<<<<<<<<<
@@ -15216,7 +15216,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               goto __pyx_L14_try_continue;
 
-              /* "pyemsi/femap_parser.pyx":612
+              /* "pyemsi/core/femap_parser.pyx":612
  * 
  *                         # Check filters
  *                         if set_id_filter >= 0 and set_id != set_id_filter:             # <<<<<<<<<<<<<<
@@ -15225,7 +15225,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":624
+            /* "pyemsi/core/femap_parser.pyx":624
  *                             continue
  * 
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:             # <<<<<<<<<<<<<<
@@ -15243,7 +15243,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_L26_bool_binop_done:;
             if (__pyx_t_10) {
 
-              /* "pyemsi/femap_parser.pyx":625
+              /* "pyemsi/core/femap_parser.pyx":625
  * 
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:
  *                             i += 7             # <<<<<<<<<<<<<<
@@ -15252,7 +15252,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               __pyx_v_i = (__pyx_v_i + 7);
 
-              /* "pyemsi/femap_parser.pyx":626
+              /* "pyemsi/core/femap_parser.pyx":626
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:
  *                             i += 7
  *                             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -15263,7 +15263,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
                 if (!__pyx_t_10) break;
 
-                /* "pyemsi/femap_parser.pyx":627
+                /* "pyemsi/core/femap_parser.pyx":627
  *                             i += 7
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15276,13 +15276,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 }
                 __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
                 __Pyx_INCREF(__pyx_t_2);
-                __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 627, __pyx_L8_error)
+                __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 627, __pyx_L8_error)
                 __Pyx_GOTREF(__pyx_t_4);
                 __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                 __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_4));
                 __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":628
+                /* "pyemsi/core/femap_parser.pyx":628
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15291,7 +15291,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":629
+                /* "pyemsi/core/femap_parser.pyx":629
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15310,7 +15310,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   goto __pyx_L31_bool_binop_done;
                 }
 
-                /* "pyemsi/femap_parser.pyx":630
+                /* "pyemsi/core/femap_parser.pyx":630
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15328,7 +15328,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   goto __pyx_L31_bool_binop_done;
                 }
 
-                /* "pyemsi/femap_parser.pyx":631
+                /* "pyemsi/core/femap_parser.pyx":631
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15343,7 +15343,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_10 = __pyx_t_15;
                 __pyx_L31_bool_binop_done:;
 
-                /* "pyemsi/femap_parser.pyx":629
+                /* "pyemsi/core/femap_parser.pyx":629
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15352,7 +15352,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 if (__pyx_t_10) {
 
-                  /* "pyemsi/femap_parser.pyx":632
+                  /* "pyemsi/core/femap_parser.pyx":632
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):
  *                                     break             # <<<<<<<<<<<<<<
@@ -15361,7 +15361,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                   goto __pyx_L29_break;
 
-                  /* "pyemsi/femap_parser.pyx":629
+                  /* "pyemsi/core/femap_parser.pyx":629
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15372,7 +15372,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               }
               __pyx_L29_break:;
 
-              /* "pyemsi/femap_parser.pyx":633
+              /* "pyemsi/core/femap_parser.pyx":633
  *                                     result_parts[1] == "0."):
  *                                     break
  *                             continue             # <<<<<<<<<<<<<<
@@ -15381,7 +15381,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               goto __pyx_L14_try_continue;
 
-              /* "pyemsi/femap_parser.pyx":624
+              /* "pyemsi/core/femap_parser.pyx":624
  *                             continue
  * 
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:             # <<<<<<<<<<<<<<
@@ -15390,7 +15390,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":635
+            /* "pyemsi/core/femap_parser.pyx":635
  *                             continue
  * 
  *                         ent_type_val = -1             # <<<<<<<<<<<<<<
@@ -15399,7 +15399,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __pyx_v_ent_type_val = -1;
 
-            /* "pyemsi/femap_parser.pyx":636
+            /* "pyemsi/core/femap_parser.pyx":636
  * 
  *                         ent_type_val = -1
  *                         has_ent_type = False             # <<<<<<<<<<<<<<
@@ -15408,7 +15408,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __pyx_v_has_ent_type = 0;
 
-            /* "pyemsi/femap_parser.pyx":637
+            /* "pyemsi/core/femap_parser.pyx":637
  *                         ent_type_val = -1
  *                         has_ent_type = False
  *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
@@ -15418,7 +15418,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_t_10 = ((__pyx_v_i + 5) < __pyx_v_n_lines);
             if (__pyx_t_10) {
 
-              /* "pyemsi/femap_parser.pyx":638
+              /* "pyemsi/core/femap_parser.pyx":638
  *                         has_ent_type = False
  *                         if i + 5 < n_lines:
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])             # <<<<<<<<<<<<<<
@@ -15432,13 +15432,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_16 = (__pyx_v_i + 5);
               __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_16);
               __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 638, __pyx_L8_error)
+              __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 638, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_2);
               __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
               __Pyx_XDECREF_SET(__pyx_v_line6_parts, ((PyObject*)__pyx_t_2));
               __pyx_t_2 = 0;
 
-              /* "pyemsi/femap_parser.pyx":639
+              /* "pyemsi/core/femap_parser.pyx":639
  *                         if i + 5 < n_lines:
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
  *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
@@ -15453,7 +15453,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_10 = (__pyx_t_9 >= 4);
               if (__pyx_t_10) {
 
-                /* "pyemsi/femap_parser.pyx":640
+                /* "pyemsi/core/femap_parser.pyx":640
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
  *                             if len(line6_parts) >= 4:
  *                                 ent_type_val = int(line6_parts[3])             # <<<<<<<<<<<<<<
@@ -15470,7 +15470,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                 __pyx_v_ent_type_val = __pyx_t_14;
 
-                /* "pyemsi/femap_parser.pyx":641
+                /* "pyemsi/core/femap_parser.pyx":641
  *                             if len(line6_parts) >= 4:
  *                                 ent_type_val = int(line6_parts[3])
  *                                 has_ent_type = True             # <<<<<<<<<<<<<<
@@ -15479,7 +15479,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_has_ent_type = 1;
 
-                /* "pyemsi/femap_parser.pyx":639
+                /* "pyemsi/core/femap_parser.pyx":639
  *                         if i + 5 < n_lines:
  *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
  *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
@@ -15488,7 +15488,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":637
+              /* "pyemsi/core/femap_parser.pyx":637
  *                         ent_type_val = -1
  *                         has_ent_type = False
  *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
@@ -15497,7 +15497,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             }
 
-            /* "pyemsi/femap_parser.pyx":643
+            /* "pyemsi/core/femap_parser.pyx":643
  *                                 has_ent_type = True
  * 
  *                         i += 7             # <<<<<<<<<<<<<<
@@ -15506,7 +15506,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __pyx_v_i = (__pyx_v_i + 7);
 
-            /* "pyemsi/femap_parser.pyx":645
+            /* "pyemsi/core/femap_parser.pyx":645
  *                         i += 7
  * 
  *                         entity_ids_list = []             # <<<<<<<<<<<<<<
@@ -15518,7 +15518,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_XDECREF_SET(__pyx_v_entity_ids_list, ((PyObject*)__pyx_t_2));
             __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":646
+            /* "pyemsi/core/femap_parser.pyx":646
  * 
  *                         entity_ids_list = []
  *                         values_list = []             # <<<<<<<<<<<<<<
@@ -15530,7 +15530,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_XDECREF_SET(__pyx_v_values_list, ((PyObject*)__pyx_t_2));
             __pyx_t_2 = 0;
 
-            /* "pyemsi/femap_parser.pyx":648
+            /* "pyemsi/core/femap_parser.pyx":648
  *                         values_list = []
  * 
  *                         while i < n_lines:             # <<<<<<<<<<<<<<
@@ -15541,7 +15541,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
               if (!__pyx_t_10) break;
 
-              /* "pyemsi/femap_parser.pyx":649
+              /* "pyemsi/core/femap_parser.pyx":649
  * 
  *                         while i < n_lines:
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15554,13 +15554,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               }
               __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
               __Pyx_INCREF(__pyx_t_2);
-              __pyx_t_4 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 649, __pyx_L8_error)
+              __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 649, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_4);
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
               __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/femap_parser.pyx":651
+              /* "pyemsi/core/femap_parser.pyx":651
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15579,7 +15579,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L39_bool_binop_done;
               }
 
-              /* "pyemsi/femap_parser.pyx":652
+              /* "pyemsi/core/femap_parser.pyx":652
  * 
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15597,7 +15597,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L39_bool_binop_done;
               }
 
-              /* "pyemsi/femap_parser.pyx":653
+              /* "pyemsi/core/femap_parser.pyx":653
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15612,7 +15612,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_10 = __pyx_t_15;
               __pyx_L39_bool_binop_done:;
 
-              /* "pyemsi/femap_parser.pyx":651
+              /* "pyemsi/core/femap_parser.pyx":651
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15621,7 +15621,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               if (__pyx_t_10) {
 
-                /* "pyemsi/femap_parser.pyx":654
+                /* "pyemsi/core/femap_parser.pyx":654
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15630,7 +15630,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":655
+                /* "pyemsi/core/femap_parser.pyx":655
  *                                 result_parts[1] == "0."):
  *                                 i += 1
  *                                 break             # <<<<<<<<<<<<<<
@@ -15639,7 +15639,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 goto __pyx_L37_break;
 
-                /* "pyemsi/femap_parser.pyx":651
+                /* "pyemsi/core/femap_parser.pyx":651
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15648,7 +15648,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
               }
 
-              /* "pyemsi/femap_parser.pyx":657
+              /* "pyemsi/core/femap_parser.pyx":657
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
@@ -15663,7 +15663,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_10 = (__pyx_t_9 == 2);
               if (__pyx_t_10) {
 
-                /* "pyemsi/femap_parser.pyx":658
+                /* "pyemsi/core/femap_parser.pyx":658
  * 
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -15680,7 +15680,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_entity_id = __pyx_t_14;
 
-                /* "pyemsi/femap_parser.pyx":659
+                /* "pyemsi/core/femap_parser.pyx":659
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])             # <<<<<<<<<<<<<<
@@ -15694,7 +15694,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_17 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_17, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 659, __pyx_L8_error)
                 __pyx_v_value = __pyx_t_17;
 
-                /* "pyemsi/femap_parser.pyx":660
+                /* "pyemsi/core/femap_parser.pyx":660
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])
  *                                 entity_ids_list.append(entity_id)             # <<<<<<<<<<<<<<
@@ -15706,7 +15706,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_entity_ids_list, __pyx_t_4); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 660, __pyx_L8_error)
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":661
+                /* "pyemsi/core/femap_parser.pyx":661
  *                                 value = float(result_parts[1])
  *                                 entity_ids_list.append(entity_id)
  *                                 values_list.append(value)             # <<<<<<<<<<<<<<
@@ -15718,7 +15718,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_values_list, __pyx_t_4); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 661, __pyx_L8_error)
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":662
+                /* "pyemsi/core/femap_parser.pyx":662
  *                                 entity_ids_list.append(entity_id)
  *                                 values_list.append(value)
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15727,7 +15727,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":657
+                /* "pyemsi/core/femap_parser.pyx":657
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
@@ -15737,7 +15737,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L42;
               }
 
-              /* "pyemsi/femap_parser.pyx":664
+              /* "pyemsi/core/femap_parser.pyx":664
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
@@ -15752,7 +15752,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_10 = (__pyx_t_9 > 2);
               if (__pyx_t_10) {
 
-                /* "pyemsi/femap_parser.pyx":665
+                /* "pyemsi/core/femap_parser.pyx":665
  * 
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -15769,7 +15769,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_start_id = __pyx_t_14;
 
-                /* "pyemsi/femap_parser.pyx":666
+                /* "pyemsi/core/femap_parser.pyx":666
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])             # <<<<<<<<<<<<<<
@@ -15786,7 +15786,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                 __pyx_v_end_id = __pyx_t_14;
 
-                /* "pyemsi/femap_parser.pyx":667
+                /* "pyemsi/core/femap_parser.pyx":667
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])
  *                                 values = [float(v) for v in result_parts[2:]]             # <<<<<<<<<<<<<<
@@ -15835,7 +15835,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 __Pyx_XDECREF_SET(__pyx_v_values, ((PyObject*)__pyx_t_4));
                 __pyx_t_4 = 0;
 
-                /* "pyemsi/femap_parser.pyx":669
+                /* "pyemsi/core/femap_parser.pyx":669
  *                                 values = [float(v) for v in result_parts[2:]]
  * 
  *                                 entity_count = end_id - start_id + 1             # <<<<<<<<<<<<<<
@@ -15844,7 +15844,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_entity_count = ((__pyx_v_end_id - __pyx_v_start_id) + 1);
 
-                /* "pyemsi/femap_parser.pyx":670
+                /* "pyemsi/core/femap_parser.pyx":670
  * 
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15853,7 +15853,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/femap_parser.pyx":671
+                /* "pyemsi/core/femap_parser.pyx":671
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:             # <<<<<<<<<<<<<<
@@ -15873,7 +15873,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_L52_bool_binop_done:;
                   if (!__pyx_t_10) break;
 
-                  /* "pyemsi/femap_parser.pyx":672
+                  /* "pyemsi/core/femap_parser.pyx":672
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15886,13 +15886,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   }
                   __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
                   __Pyx_INCREF(__pyx_t_4);
-                  __pyx_t_6 = __pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 672, __pyx_L8_error)
+                  __pyx_t_6 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 672, __pyx_L8_error)
                   __Pyx_GOTREF(__pyx_t_6);
                   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
                   __Pyx_XDECREF_SET(__pyx_v_cont_parts, ((PyObject*)__pyx_t_6));
                   __pyx_t_6 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":673
+                  /* "pyemsi/core/femap_parser.pyx":673
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15911,7 +15911,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                     goto __pyx_L55_bool_binop_done;
                   }
 
-                  /* "pyemsi/femap_parser.pyx":674
+                  /* "pyemsi/core/femap_parser.pyx":674
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15929,7 +15929,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                     goto __pyx_L55_bool_binop_done;
                   }
 
-                  /* "pyemsi/femap_parser.pyx":675
+                  /* "pyemsi/core/femap_parser.pyx":675
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15944,7 +15944,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_t_10 = __pyx_t_15;
                   __pyx_L55_bool_binop_done:;
 
-                  /* "pyemsi/femap_parser.pyx":673
+                  /* "pyemsi/core/femap_parser.pyx":673
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15953,7 +15953,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                   if (__pyx_t_10) {
 
-                    /* "pyemsi/femap_parser.pyx":676
+                    /* "pyemsi/core/femap_parser.pyx":676
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):
  *                                         break             # <<<<<<<<<<<<<<
@@ -15962,7 +15962,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                     goto __pyx_L51_break;
 
-                    /* "pyemsi/femap_parser.pyx":673
+                    /* "pyemsi/core/femap_parser.pyx":673
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15971,7 +15971,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
                   }
 
-                  /* "pyemsi/femap_parser.pyx":677
+                  /* "pyemsi/core/femap_parser.pyx":677
  *                                         cont_parts[1] == "0."):
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])             # <<<<<<<<<<<<<<
@@ -16017,7 +16017,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_t_18 = __Pyx_PyList_Extend(__pyx_v_values, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 677, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":678
+                  /* "pyemsi/core/femap_parser.pyx":678
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])
  *                                     i += 1             # <<<<<<<<<<<<<<
@@ -16028,7 +16028,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 }
                 __pyx_L51_break:;
 
-                /* "pyemsi/femap_parser.pyx":680
+                /* "pyemsi/core/femap_parser.pyx":680
  *                                     i += 1
  * 
  *                                 for offset in range(min(len(values), entity_count)):             # <<<<<<<<<<<<<<
@@ -16048,7 +16048,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 for (__pyx_t_14 = 0; __pyx_t_14 < __pyx_t_19; __pyx_t_14+=1) {
                   __pyx_v_offset = __pyx_t_14;
 
-                  /* "pyemsi/femap_parser.pyx":681
+                  /* "pyemsi/core/femap_parser.pyx":681
  * 
  *                                 for offset in range(min(len(values), entity_count)):
  *                                     entity_ids_list.append(start_id + offset)             # <<<<<<<<<<<<<<
@@ -16060,7 +16060,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_entity_ids_list, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 681, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-                  /* "pyemsi/femap_parser.pyx":682
+                  /* "pyemsi/core/femap_parser.pyx":682
  *                                 for offset in range(min(len(values), entity_count)):
  *                                     entity_ids_list.append(start_id + offset)
  *                                     values_list.append(values[offset])             # <<<<<<<<<<<<<<
@@ -16073,7 +16073,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
                 }
 
-                /* "pyemsi/femap_parser.pyx":664
+                /* "pyemsi/core/femap_parser.pyx":664
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
@@ -16083,7 +16083,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
                 goto __pyx_L42;
               }
 
-              /* "pyemsi/femap_parser.pyx":684
+              /* "pyemsi/core/femap_parser.pyx":684
  *                                     values_list.append(values[offset])
  *                             else:
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -16097,7 +16097,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             }
             __pyx_L37_break:;
 
-            /* "pyemsi/femap_parser.pyx":686
+            /* "pyemsi/core/femap_parser.pyx":686
  *                                 i += 1
  * 
  *                         return (             # <<<<<<<<<<<<<<
@@ -16106,7 +16106,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
             __Pyx_XDECREF(__pyx_r);
 
-            /* "pyemsi/femap_parser.pyx":687
+            /* "pyemsi/core/femap_parser.pyx":687
  * 
  *                         return (
  *                             np.array(entity_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -16150,7 +16150,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __Pyx_GOTREF(__pyx_t_6);
             }
 
-            /* "pyemsi/femap_parser.pyx":688
+            /* "pyemsi/core/femap_parser.pyx":688
  *                         return (
  *                             np.array(entity_ids_list, dtype=np.int32),
  *                             np.array(values_list, dtype=np.float64),             # <<<<<<<<<<<<<<
@@ -16194,7 +16194,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __Pyx_GOTREF(__pyx_t_5);
             }
 
-            /* "pyemsi/femap_parser.pyx":689
+            /* "pyemsi/core/femap_parser.pyx":689
  *                             np.array(entity_ids_list, dtype=np.int32),
  *                             np.array(values_list, dtype=np.float64),
  *                             set_id,             # <<<<<<<<<<<<<<
@@ -16204,7 +16204,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_set_id); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 689, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_4);
 
-            /* "pyemsi/femap_parser.pyx":690
+            /* "pyemsi/core/femap_parser.pyx":690
  *                             np.array(values_list, dtype=np.float64),
  *                             set_id,
  *                             vec_id,             # <<<<<<<<<<<<<<
@@ -16214,7 +16214,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_vec_id); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 690, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":691
+            /* "pyemsi/core/femap_parser.pyx":691
  *                             set_id,
  *                             vec_id,
  *                             ent_type_val if has_ent_type else -1             # <<<<<<<<<<<<<<
@@ -16231,7 +16231,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
               __pyx_t_20 = __pyx_mstate_global->__pyx_int_neg_1;
             }
 
-            /* "pyemsi/femap_parser.pyx":687
+            /* "pyemsi/core/femap_parser.pyx":687
  * 
  *                         return (
  *                             np.array(entity_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
@@ -16260,7 +16260,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
             __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
             goto __pyx_L12_try_return;
 
-            /* "pyemsi/femap_parser.pyx":607
+            /* "pyemsi/core/femap_parser.pyx":607
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -16276,7 +16276,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
           __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-          /* "pyemsi/femap_parser.pyx":694
+          /* "pyemsi/core/femap_parser.pyx":694
  *                         )
  * 
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
@@ -16285,13 +16285,13 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 */
           __pyx_t_14 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
           if (__pyx_t_14) {
-            __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+            __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
             if (__Pyx_GetException(&__pyx_t_2, &__pyx_t_20, &__pyx_t_3) < 0) __PYX_ERR(0, 694, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_20);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/femap_parser.pyx":695
+            /* "pyemsi/core/femap_parser.pyx":695
  * 
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -16306,7 +16306,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/femap_parser.pyx":607
+          /* "pyemsi/core/femap_parser.pyx":607
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -16338,7 +16338,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
           __Pyx_ExceptionReset(__pyx_t_11, __pyx_t_12, __pyx_t_13);
         }
 
-        /* "pyemsi/femap_parser.pyx":606
+        /* "pyemsi/core/femap_parser.pyx":606
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -16348,7 +16348,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
         goto __pyx_L7;
       }
 
-      /* "pyemsi/femap_parser.pyx":697
+      /* "pyemsi/core/femap_parser.pyx":697
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -16362,7 +16362,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
       __pyx_L5_continue:;
     }
 
-    /* "pyemsi/femap_parser.pyx":601
+    /* "pyemsi/core/femap_parser.pyx":601
  * 
  *         all_blocks = self.get_blocks(1051)
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
@@ -16372,7 +16372,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/femap_parser.pyx":699
+  /* "pyemsi/core/femap_parser.pyx":699
  *                     i += 1
  * 
  *         return (None, None, -1, -1, -1)             # <<<<<<<<<<<<<<
@@ -16382,7 +16382,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   __pyx_r = __pyx_mstate_global->__pyx_tuple[1];
   goto __pyx_L0;
 
-  /* "pyemsi/femap_parser.pyx":578
+  /* "pyemsi/core/femap_parser.pyx":578
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
@@ -16399,7 +16399,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_20);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_all_blocks);
@@ -16419,16 +16419,16 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vectors_arrays, "\n        Extract output vectors as NumPy arrays (high performance).\n        \n        Args:\n            set_id_filter: If >= 0, only extract vectors with this set_id\n            vec_id_filter: If >= 0, only extract vectors with this vec_id\n        \n        Returns:\n            Tuple of (entity_ids: np.ndarray[int32], values: np.ndarray[float64], \n                      set_id: int, vec_id: int, ent_type: int) for the first matching vector\n            Returns (None, None, -1, -1, -1) if no matching vectors found\n        ");
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays = {"get_output_vectors_arrays", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vectors_arrays};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays(PyObject *__pyx_v_self, 
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_26get_output_vectors_arrays, "\n        Extract output vectors as NumPy arrays (high performance).\n        \n        Args:\n            set_id_filter: If >= 0, only extract vectors with this set_id\n            vec_id_filter: If >= 0, only extract vectors with this vec_id\n        \n        Returns:\n            Tuple of (entity_ids: np.ndarray[int32], values: np.ndarray[float64], \n                      set_id: int, vec_id: int, ent_type: int) for the first matching vector\n            Returns (None, None, -1, -1, -1) if no matching vectors found\n        ");
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays = {"get_output_vectors_arrays", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_26get_output_vectors_arrays};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -16509,11 +16509,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vectors_arrays(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_set_id_filter, __pyx_v_vec_id_filter);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_26get_output_vectors_arrays(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v_set_id_filter, __pyx_v_vec_id_filter);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -16523,11 +16523,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vectors_arrays(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_set_id_filter, int __pyx_v_vec_id_filter) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_26get_output_vectors_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_v_set_id_filter, int __pyx_v_vec_id_filter) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
-  struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays __pyx_t_2;
+  struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays __pyx_t_2;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -16536,7 +16536,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vect
   __pyx_t_2.__pyx_n = 2;
   __pyx_t_2.set_id_filter = __pyx_v_set_id_filter;
   __pyx_t_2.vec_id_filter = __pyx_v_vec_id_filter;
-  __pyx_t_1 = __pyx_vtabptr_6pyemsi_12femap_parser_FEMAPParser->get_output_vectors_arrays(__pyx_v_self, 1, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 578, __pyx_L1_error)
+  __pyx_t_1 = __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser->get_output_vectors_arrays(__pyx_v_self, 1, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 578, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -16545,7 +16545,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vect
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -16553,7 +16553,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vect
   return __pyx_r;
 }
 
-/* "pyemsi/femap_parser.pxd":19
+/* "pyemsi/core/femap_parser.pxd":19
  * cdef class FEMAPParser:
  *     cdef str filepath
  *     cdef public dict blocks             # <<<<<<<<<<<<<<
@@ -16562,21 +16562,21 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_26get_output_vect
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_1__get__(PyObject *__pyx_v_self); /*proto*/
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_1__get__(PyObject *__pyx_v_self) {
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_1__get__(PyObject *__pyx_v_self); /*proto*/
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_1__get__(PyObject *__pyx_v_self) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__get__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks___get__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks___get__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks___get__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks___get__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__get__", 0);
@@ -16593,21 +16593,21 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks___get__(s
 }
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_3__set__(PyObject *__pyx_v_self, PyObject *__pyx_v_value) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__set__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_2__set__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self), ((PyObject *)__pyx_v_value));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_2__set__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self), ((PyObject *)__pyx_v_value));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_2__set__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_value) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_2__set__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v_value) {
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -16629,7 +16629,7 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_2__set__(struct
   goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.blocks.__set__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.blocks.__set__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -16637,21 +16637,21 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_2__set__(struct
 }
 
 /* Python wrapper */
-static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_5__del__(PyObject *__pyx_v_self); /*proto*/
-static int __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_5__del__(PyObject *__pyx_v_self) {
+static int __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_5__del__(PyObject *__pyx_v_self); /*proto*/
+static int __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_5__del__(PyObject *__pyx_v_self) {
   CYTHON_UNUSED PyObject *const *__pyx_kwvalues;
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__del__ (wrapper)", 0);
   __pyx_kwvalues = __Pyx_KwValues_VARARGS(__pyx_args, __pyx_nargs);
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_4__del__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_4__del__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_4__del__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static int __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_4__del__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   int __pyx_r;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__del__", 0);
@@ -16674,15 +16674,15 @@ static int __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_6blocks_4__del__(struct
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_29__reduce_cython__(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_29__reduce_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_29__reduce_cython__ = {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_29__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_29__reduce_cython__(PyObject *__pyx_v_self, 
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_29__reduce_cython__ = {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_29__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_29__reduce_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -16708,14 +16708,14 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   const Py_ssize_t __pyx_kwds_len = unlikely(__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
   if (unlikely(__pyx_kwds_len < 0)) return NULL;
   if (unlikely(__pyx_kwds_len > 0)) {__Pyx_RejectKeywords("__reduce_cython__", __pyx_kwds); return NULL;}
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_28__reduce_cython__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self));
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_28__reduce_cython__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self));
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_28__reduce_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_28__reduce_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
   PyObject *__pyx_v_state = 0;
   PyObject *__pyx_v__dict = 0;
   int __pyx_v_use_setstate;
@@ -16946,7 +16946,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_28__reduce_cython
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_5);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.__reduce_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.__reduce_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_state);
@@ -16964,15 +16964,15 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_28__reduce_cython
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_31__setstate_cython__(PyObject *__pyx_v_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_31__setstate_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_31__setstate_cython__ = {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_31__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_31__setstate_cython__(PyObject *__pyx_v_self, 
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_31__setstate_cython__ = {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_31__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_31__setstate_cython__(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -17034,11 +17034,11 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_30__setstate_cython__(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v___pyx_state);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_30__setstate_cython__(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self), __pyx_v___pyx_state);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -17048,7 +17048,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_30__setstate_cython__(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v___pyx_state) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_30__setstate_cython__(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, PyObject *__pyx_v___pyx_state) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -17070,7 +17070,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_30__setstate_cyth
     PyErr_SetString(PyExc_TypeError, "cannot pass None into a C function argument that is declared 'not None'");
     __PYX_ERR(3, 17, __pyx_L1_error)
   }
-  __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPParser__set_state(__pyx_v_self, ((PyObject*)__pyx_t_1)); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 17, __pyx_L1_error)
+  __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPParser__set_state(__pyx_v_self, ((PyObject*)__pyx_t_1)); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 17, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
@@ -17088,7 +17088,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_30__setstate_cyth
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("pyemsi.femap_parser.FEMAPParser.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.__setstate_cython__", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -17105,15 +17105,15 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_11FEMAPParser_30__setstate_cyth
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_1__pyx_unpickle_FEMAPBlock(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_1__pyx_unpickle_FEMAPBlock(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_1__pyx_unpickle_FEMAPBlock = {"__pyx_unpickle_FEMAPBlock", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_1__pyx_unpickle_FEMAPBlock, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_1__pyx_unpickle_FEMAPBlock(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_1__pyx_unpickle_FEMAPBlock = {"__pyx_unpickle_FEMAPBlock", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_1__pyx_unpickle_FEMAPBlock, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_1__pyx_unpickle_FEMAPBlock(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -17191,12 +17191,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.__pyx_unpickle_FEMAPBlock", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.__pyx_unpickle_FEMAPBlock", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v___pyx_state), (&PyTuple_Type), 1, "__pyx_state", 1))) __PYX_ERR(3, 4, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(__pyx_self, __pyx_v___pyx_type, __pyx_v___pyx_checksum, __pyx_v___pyx_state);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock(__pyx_self, __pyx_v___pyx_type, __pyx_v___pyx_checksum, __pyx_v___pyx_state);
 
   /* function exit code */
   goto __pyx_L0;
@@ -17215,7 +17215,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state) {
   PyObject *__pyx_v___pyx_result = 0;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
@@ -17245,7 +17245,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHO
  *     if __pyx_state is not None:
  *         __pyx_unpickle_FEMAPBlock__set_state(<FEMAPBlock> __pyx_result, __pyx_state)
 */
-  __pyx_t_3 = ((PyObject *)__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock);
+  __pyx_t_3 = ((PyObject *)__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock);
   __Pyx_INCREF(__pyx_t_3);
   __pyx_t_4 = 0;
   {
@@ -17279,7 +17279,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHO
       PyErr_SetString(PyExc_TypeError, "cannot pass None into a C function argument that is declared 'not None'");
       __PYX_ERR(3, 9, __pyx_L1_error)
     }
-    __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)__pyx_v___pyx_result), __pyx_v___pyx_state); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 9, __pyx_L1_error)
+    __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_v___pyx_result), __pyx_v___pyx_state); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 9, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
@@ -17316,7 +17316,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHO
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("pyemsi.femap_parser.__pyx_unpickle_FEMAPBlock", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.__pyx_unpickle_FEMAPBlock", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v___pyx_result);
@@ -17333,7 +17333,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock(CYTHO
  *     __Pyx_UpdateUnpickledDict(__pyx_result, __pyx_state, 2)
 */
 
-static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *__pyx_v___pyx_result, PyObject *__pyx_v___pyx_state) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPBlock__set_state(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v___pyx_result, PyObject *__pyx_v___pyx_state) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   int __pyx_t_1;
@@ -17380,7 +17380,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock__set_s
   goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("pyemsi.femap_parser.__pyx_unpickle_FEMAPBlock__set_state", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.__pyx_unpickle_FEMAPBlock__set_state", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -17397,15 +17397,15 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPBlock__set_s
 */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_3__pyx_unpickle_FEMAPParser(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_3__pyx_unpickle_FEMAPParser(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyMethodDef __pyx_mdef_6pyemsi_12femap_parser_3__pyx_unpickle_FEMAPParser = {"__pyx_unpickle_FEMAPParser", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_3__pyx_unpickle_FEMAPParser, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_6pyemsi_12femap_parser_3__pyx_unpickle_FEMAPParser(PyObject *__pyx_self, 
+static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_3__pyx_unpickle_FEMAPParser = {"__pyx_unpickle_FEMAPParser", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_3__pyx_unpickle_FEMAPParser, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_3__pyx_unpickle_FEMAPParser(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -17483,12 +17483,12 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("pyemsi.femap_parser.__pyx_unpickle_FEMAPParser", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.__pyx_unpickle_FEMAPParser", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
   if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v___pyx_state), (&PyTuple_Type), 1, "__pyx_state", 1))) __PYX_ERR(3, 4, __pyx_L1_error)
-  __pyx_r = __pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(__pyx_self, __pyx_v___pyx_type, __pyx_v___pyx_checksum, __pyx_v___pyx_state);
+  __pyx_r = __pyx_pf_6pyemsi_4core_12femap_parser_2__pyx_unpickle_FEMAPParser(__pyx_self, __pyx_v___pyx_type, __pyx_v___pyx_checksum, __pyx_v___pyx_state);
 
   /* function exit code */
   goto __pyx_L0;
@@ -17507,7 +17507,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state) {
+static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_2__pyx_unpickle_FEMAPParser(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v___pyx_type, long __pyx_v___pyx_checksum, PyObject *__pyx_v___pyx_state) {
   PyObject *__pyx_v___pyx_result = 0;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
@@ -17537,7 +17537,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(CYT
  *     if __pyx_state is not None:
  *         __pyx_unpickle_FEMAPParser__set_state(<FEMAPParser> __pyx_result, __pyx_state)
 */
-  __pyx_t_3 = ((PyObject *)__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser);
+  __pyx_t_3 = ((PyObject *)__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser);
   __Pyx_INCREF(__pyx_t_3);
   __pyx_t_4 = 0;
   {
@@ -17571,7 +17571,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(CYT
       PyErr_SetString(PyExc_TypeError, "cannot pass None into a C function argument that is declared 'not None'");
       __PYX_ERR(3, 9, __pyx_L1_error)
     }
-    __pyx_t_2 = __pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPParser__set_state(((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)__pyx_v___pyx_result), __pyx_v___pyx_state); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 9, __pyx_L1_error)
+    __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPParser__set_state(((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v___pyx_result), __pyx_v___pyx_state); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 9, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
@@ -17608,7 +17608,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(CYT
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("pyemsi.femap_parser.__pyx_unpickle_FEMAPParser", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.__pyx_unpickle_FEMAPParser", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v___pyx_result);
@@ -17625,7 +17625,7 @@ static PyObject *__pyx_pf_6pyemsi_12femap_parser_2__pyx_unpickle_FEMAPParser(CYT
  *     __Pyx_UpdateUnpickledDict(__pyx_result, __pyx_state, 3)
 */
 
-static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPParser__set_state(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *__pyx_v___pyx_result, PyObject *__pyx_v___pyx_state) {
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser___pyx_unpickle_FEMAPParser__set_state(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v___pyx_result, PyObject *__pyx_v___pyx_state) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -17686,7 +17686,7 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPParser__set_
   goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("pyemsi.femap_parser.__pyx_unpickle_FEMAPParser__set_state", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.__pyx_unpickle_FEMAPParser__set_state", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -17695,21 +17695,21 @@ static PyObject *__pyx_f_6pyemsi_12femap_parser___pyx_unpickle_FEMAPParser__set_
 }
 /* #### Code section: module_exttypes ### */
 
-static PyObject *__pyx_tp_new_6pyemsi_12femap_parser_FEMAPBlock(PyTypeObject *t, CYTHON_UNUSED PyObject *a, CYTHON_UNUSED PyObject *k) {
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *p;
+static PyObject *__pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPBlock(PyTypeObject *t, CYTHON_UNUSED PyObject *a, CYTHON_UNUSED PyObject *k) {
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *p;
   PyObject *o;
   o = __Pyx_AllocateExtensionType(t, 0);
   if (unlikely(!o)) return 0;
-  p = ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)o);
+  p = ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)o);
   p->lines = ((PyObject*)Py_None); Py_INCREF(Py_None);
   return o;
 }
 
-static void __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPBlock(PyObject *o) {
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *p = (struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)o;
+static void __pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPBlock(PyObject *o) {
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *p = (struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)o;
   #if CYTHON_USE_TP_FINALIZE
   if (unlikely(__Pyx_PyObject_GetSlot(o, tp_finalize, destructor)) && !__Pyx_PyObject_GC_IsFinalized(o)) {
-    if (__Pyx_PyObject_GetSlot(o, tp_dealloc, destructor) == __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPBlock) {
+    if (__Pyx_PyObject_GetSlot(o, tp_dealloc, destructor) == __pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPBlock) {
       if (PyObject_CallFinalizerFromDealloc(o)) return;
     }
   }
@@ -17730,9 +17730,9 @@ static void __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPBlock(PyObject *o) {
   #endif
 }
 
-static int __pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPBlock(PyObject *o, visitproc v, void *a) {
+static int __pyx_tp_traverse_6pyemsi_4core_12femap_parser_FEMAPBlock(PyObject *o, visitproc v, void *a) {
   int e;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *p = (struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)o;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *p = (struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)o;
   {
     e = __Pyx_call_type_traverse(o, 1, v, a);
     if (e) return e;
@@ -17743,22 +17743,22 @@ static int __pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPBlock(PyObject *o, visi
   return 0;
 }
 
-static int __pyx_tp_clear_6pyemsi_12femap_parser_FEMAPBlock(PyObject *o) {
+static int __pyx_tp_clear_6pyemsi_4core_12femap_parser_FEMAPBlock(PyObject *o) {
   PyObject* tmp;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *p = (struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock *)o;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *p = (struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)o;
   tmp = ((PyObject*)p->lines);
   p->lines = ((PyObject*)Py_None); Py_INCREF(Py_None);
   Py_XDECREF(tmp);
   return 0;
 }
 
-static PyObject *__pyx_getprop_6pyemsi_12femap_parser_10FEMAPBlock_block_id(PyObject *o, CYTHON_UNUSED void *x) {
-  return __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_1__get__(o);
+static PyObject *__pyx_getprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_block_id(PyObject *o, CYTHON_UNUSED void *x) {
+  return __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_1__get__(o);
 }
 
-static int __pyx_setprop_6pyemsi_12femap_parser_10FEMAPBlock_block_id(PyObject *o, PyObject *v, CYTHON_UNUSED void *x) {
+static int __pyx_setprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_block_id(PyObject *o, PyObject *v, CYTHON_UNUSED void *x) {
   if (v) {
-    return __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_8block_id_3__set__(o, v);
+    return __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_8block_id_3__set__(o, v);
   }
   else {
     PyErr_SetString(PyExc_NotImplementedError, "__del__");
@@ -17766,63 +17766,63 @@ static int __pyx_setprop_6pyemsi_12femap_parser_10FEMAPBlock_block_id(PyObject *
   }
 }
 
-static PyObject *__pyx_getprop_6pyemsi_12femap_parser_10FEMAPBlock_lines(PyObject *o, CYTHON_UNUSED void *x) {
-  return __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_1__get__(o);
+static PyObject *__pyx_getprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_lines(PyObject *o, CYTHON_UNUSED void *x) {
+  return __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_1__get__(o);
 }
 
-static int __pyx_setprop_6pyemsi_12femap_parser_10FEMAPBlock_lines(PyObject *o, PyObject *v, CYTHON_UNUSED void *x) {
+static int __pyx_setprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_lines(PyObject *o, PyObject *v, CYTHON_UNUSED void *x) {
   if (v) {
-    return __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_3__set__(o, v);
+    return __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_3__set__(o, v);
   }
   else {
-    return __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5lines_5__del__(o);
+    return __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5lines_5__del__(o);
   }
 }
 
-static PyMethodDef __pyx_methods_6pyemsi_12femap_parser_FEMAPBlock[] = {
-  {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_5__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
-  {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_7__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
+static PyMethodDef __pyx_methods_6pyemsi_4core_12femap_parser_FEMAPBlock[] = {
+  {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_5__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
+  {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_7__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
   {0, 0, 0, 0}
 };
 
-static struct PyGetSetDef __pyx_getsets_6pyemsi_12femap_parser_FEMAPBlock[] = {
-  {"block_id", __pyx_getprop_6pyemsi_12femap_parser_10FEMAPBlock_block_id, __pyx_setprop_6pyemsi_12femap_parser_10FEMAPBlock_block_id, 0, 0},
-  {"lines", __pyx_getprop_6pyemsi_12femap_parser_10FEMAPBlock_lines, __pyx_setprop_6pyemsi_12femap_parser_10FEMAPBlock_lines, 0, 0},
+static struct PyGetSetDef __pyx_getsets_6pyemsi_4core_12femap_parser_FEMAPBlock[] = {
+  {"block_id", __pyx_getprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_block_id, __pyx_setprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_block_id, 0, 0},
+  {"lines", __pyx_getprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_lines, __pyx_setprop_6pyemsi_4core_12femap_parser_10FEMAPBlock_lines, 0, 0},
   {0, 0, 0, 0, 0}
 };
 #if CYTHON_USE_TYPE_SPECS
-static PyType_Slot __pyx_type_6pyemsi_12femap_parser_FEMAPBlock_slots[] = {
-  {Py_tp_dealloc, (void *)__pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPBlock},
-  {Py_tp_repr, (void *)__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_3__repr__},
+static PyType_Slot __pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock_slots[] = {
+  {Py_tp_dealloc, (void *)__pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPBlock},
+  {Py_tp_repr, (void *)__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_3__repr__},
   {Py_tp_doc, (void *)PyDoc_STR("Represents a single FEMAP data block.")},
-  {Py_tp_traverse, (void *)__pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPBlock},
-  {Py_tp_clear, (void *)__pyx_tp_clear_6pyemsi_12femap_parser_FEMAPBlock},
-  {Py_tp_methods, (void *)__pyx_methods_6pyemsi_12femap_parser_FEMAPBlock},
-  {Py_tp_getset, (void *)__pyx_getsets_6pyemsi_12femap_parser_FEMAPBlock},
-  {Py_tp_init, (void *)__pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_1__init__},
-  {Py_tp_new, (void *)__pyx_tp_new_6pyemsi_12femap_parser_FEMAPBlock},
+  {Py_tp_traverse, (void *)__pyx_tp_traverse_6pyemsi_4core_12femap_parser_FEMAPBlock},
+  {Py_tp_clear, (void *)__pyx_tp_clear_6pyemsi_4core_12femap_parser_FEMAPBlock},
+  {Py_tp_methods, (void *)__pyx_methods_6pyemsi_4core_12femap_parser_FEMAPBlock},
+  {Py_tp_getset, (void *)__pyx_getsets_6pyemsi_4core_12femap_parser_FEMAPBlock},
+  {Py_tp_init, (void *)__pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_1__init__},
+  {Py_tp_new, (void *)__pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPBlock},
   {0, 0},
 };
-static PyType_Spec __pyx_type_6pyemsi_12femap_parser_FEMAPBlock_spec = {
-  "pyemsi.femap_parser.FEMAPBlock",
-  sizeof(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock),
+static PyType_Spec __pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock_spec = {
+  "pyemsi.core.femap_parser.FEMAPBlock",
+  sizeof(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock),
   0,
   Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_VERSION_TAG|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_HAVE_NEWBUFFER|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
-  __pyx_type_6pyemsi_12femap_parser_FEMAPBlock_slots,
+  __pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock_slots,
 };
 #else
 
-static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPBlock = {
+static PyTypeObject __pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock = {
   PyVarObject_HEAD_INIT(0, 0)
-  "pyemsi.femap_parser.""FEMAPBlock", /*tp_name*/
-  sizeof(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPBlock), /*tp_basicsize*/
+  "pyemsi.core.femap_parser.""FEMAPBlock", /*tp_name*/
+  sizeof(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock), /*tp_basicsize*/
   0, /*tp_itemsize*/
-  __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPBlock, /*tp_dealloc*/
+  __pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPBlock, /*tp_dealloc*/
   0, /*tp_vectorcall_offset*/
   0, /*tp_getattr*/
   0, /*tp_setattr*/
   0, /*tp_as_async*/
-  __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_3__repr__, /*tp_repr*/
+  __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_3__repr__, /*tp_repr*/
   0, /*tp_as_number*/
   0, /*tp_as_sequence*/
   0, /*tp_as_mapping*/
@@ -17834,15 +17834,15 @@ static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPBlock = {
   0, /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_VERSION_TAG|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_HAVE_NEWBUFFER|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC, /*tp_flags*/
   PyDoc_STR("Represents a single FEMAP data block."), /*tp_doc*/
-  __pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPBlock, /*tp_traverse*/
-  __pyx_tp_clear_6pyemsi_12femap_parser_FEMAPBlock, /*tp_clear*/
+  __pyx_tp_traverse_6pyemsi_4core_12femap_parser_FEMAPBlock, /*tp_traverse*/
+  __pyx_tp_clear_6pyemsi_4core_12femap_parser_FEMAPBlock, /*tp_clear*/
   0, /*tp_richcompare*/
   0, /*tp_weaklistoffset*/
   0, /*tp_iter*/
   0, /*tp_iternext*/
-  __pyx_methods_6pyemsi_12femap_parser_FEMAPBlock, /*tp_methods*/
+  __pyx_methods_6pyemsi_4core_12femap_parser_FEMAPBlock, /*tp_methods*/
   0, /*tp_members*/
-  __pyx_getsets_6pyemsi_12femap_parser_FEMAPBlock, /*tp_getset*/
+  __pyx_getsets_6pyemsi_4core_12femap_parser_FEMAPBlock, /*tp_getset*/
   0, /*tp_base*/
   0, /*tp_dict*/
   0, /*tp_descr_get*/
@@ -17850,9 +17850,9 @@ static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPBlock = {
   #if !CYTHON_USE_TYPE_SPECS
   0, /*tp_dictoffset*/
   #endif
-  __pyx_pw_6pyemsi_12femap_parser_10FEMAPBlock_1__init__, /*tp_init*/
+  __pyx_pw_6pyemsi_4core_12femap_parser_10FEMAPBlock_1__init__, /*tp_init*/
   0, /*tp_alloc*/
-  __pyx_tp_new_6pyemsi_12femap_parser_FEMAPBlock, /*tp_new*/
+  __pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPBlock, /*tp_new*/
   0, /*tp_free*/
   0, /*tp_is_gc*/
   0, /*tp_bases*/
@@ -17884,26 +17884,26 @@ static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPBlock = {
   #endif
 };
 #endif
-static struct __pyx_vtabstruct_6pyemsi_12femap_parser_FEMAPParser __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser;
+static struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser;
 
-static PyObject *__pyx_tp_new_6pyemsi_12femap_parser_FEMAPParser(PyTypeObject *t, CYTHON_UNUSED PyObject *a, CYTHON_UNUSED PyObject *k) {
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *p;
+static PyObject *__pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPParser(PyTypeObject *t, CYTHON_UNUSED PyObject *a, CYTHON_UNUSED PyObject *k) {
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *p;
   PyObject *o;
   o = __Pyx_AllocateExtensionType(t, 0);
   if (unlikely(!o)) return 0;
-  p = ((struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)o);
-  p->__pyx_vtab = __pyx_vtabptr_6pyemsi_12femap_parser_FEMAPParser;
+  p = ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)o);
+  p->__pyx_vtab = __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser;
   p->filepath = ((PyObject*)Py_None); Py_INCREF(Py_None);
   p->blocks = ((PyObject*)Py_None); Py_INCREF(Py_None);
   p->BLOCK_DELIMITER = ((PyObject*)Py_None); Py_INCREF(Py_None);
   return o;
 }
 
-static void __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPParser(PyObject *o) {
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *p = (struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)o;
+static void __pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPParser(PyObject *o) {
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *p = (struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)o;
   #if CYTHON_USE_TP_FINALIZE
   if (unlikely(__Pyx_PyObject_GetSlot(o, tp_finalize, destructor)) && !__Pyx_PyObject_GC_IsFinalized(o)) {
-    if (__Pyx_PyObject_GetSlot(o, tp_dealloc, destructor) == __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPParser) {
+    if (__Pyx_PyObject_GetSlot(o, tp_dealloc, destructor) == __pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPParser) {
       if (PyObject_CallFinalizerFromDealloc(o)) return;
     }
   }
@@ -17926,9 +17926,9 @@ static void __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPParser(PyObject *o) {
   #endif
 }
 
-static int __pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPParser(PyObject *o, visitproc v, void *a) {
+static int __pyx_tp_traverse_6pyemsi_4core_12femap_parser_FEMAPParser(PyObject *o, visitproc v, void *a) {
   int e;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *p = (struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)o;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *p = (struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)o;
   {
     e = __Pyx_call_type_traverse(o, 1, v, a);
     if (e) return e;
@@ -17939,66 +17939,66 @@ static int __pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPParser(PyObject *o, vis
   return 0;
 }
 
-static int __pyx_tp_clear_6pyemsi_12femap_parser_FEMAPParser(PyObject *o) {
+static int __pyx_tp_clear_6pyemsi_4core_12femap_parser_FEMAPParser(PyObject *o) {
   PyObject* tmp;
-  struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *p = (struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *)o;
+  struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *p = (struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *)o;
   tmp = ((PyObject*)p->blocks);
   p->blocks = ((PyObject*)Py_None); Py_INCREF(Py_None);
   Py_XDECREF(tmp);
   return 0;
 }
 
-static PyObject *__pyx_getprop_6pyemsi_12femap_parser_11FEMAPParser_blocks(PyObject *o, CYTHON_UNUSED void *x) {
-  return __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_1__get__(o);
+static PyObject *__pyx_getprop_6pyemsi_4core_12femap_parser_11FEMAPParser_blocks(PyObject *o, CYTHON_UNUSED void *x) {
+  return __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_1__get__(o);
 }
 
-static int __pyx_setprop_6pyemsi_12femap_parser_11FEMAPParser_blocks(PyObject *o, PyObject *v, CYTHON_UNUSED void *x) {
+static int __pyx_setprop_6pyemsi_4core_12femap_parser_11FEMAPParser_blocks(PyObject *o, PyObject *v, CYTHON_UNUSED void *x) {
   if (v) {
-    return __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_3__set__(o, v);
+    return __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_3__set__(o, v);
   }
   else {
-    return __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_6blocks_5__del__(o);
+    return __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_6blocks_5__del__(o);
   }
 }
 
-static PyMethodDef __pyx_methods_6pyemsi_12femap_parser_FEMAPParser[] = {
-  {"parse_csv_line", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_5parse_csv_line, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_12femap_parser_11FEMAPParser_4parse_csv_line},
-  {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_29__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
-  {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_31__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
+static PyMethodDef __pyx_methods_6pyemsi_4core_12femap_parser_FEMAPParser[] = {
+  {"parse_csv_line", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_5parse_csv_line, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_4parse_csv_line},
+  {"__reduce_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_29__reduce_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
+  {"__setstate_cython__", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_31__setstate_cython__, __Pyx_METH_FASTCALL|METH_KEYWORDS, 0},
   {0, 0, 0, 0}
 };
 
-static struct PyGetSetDef __pyx_getsets_6pyemsi_12femap_parser_FEMAPParser[] = {
-  {"blocks", __pyx_getprop_6pyemsi_12femap_parser_11FEMAPParser_blocks, __pyx_setprop_6pyemsi_12femap_parser_11FEMAPParser_blocks, 0, 0},
+static struct PyGetSetDef __pyx_getsets_6pyemsi_4core_12femap_parser_FEMAPParser[] = {
+  {"blocks", __pyx_getprop_6pyemsi_4core_12femap_parser_11FEMAPParser_blocks, __pyx_setprop_6pyemsi_4core_12femap_parser_11FEMAPParser_blocks, 0, 0},
   {0, 0, 0, 0, 0}
 };
 #if CYTHON_USE_TYPE_SPECS
-static PyType_Slot __pyx_type_6pyemsi_12femap_parser_FEMAPParser_slots[] = {
-  {Py_tp_dealloc, (void *)__pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPParser},
+static PyType_Slot __pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser_slots[] = {
+  {Py_tp_dealloc, (void *)__pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPParser},
   {Py_tp_doc, (void *)PyDoc_STR("\n    Parser for FEMAP Neutral files.\n\n    Handles blocks in any order and supports repeated blocks of the same type.\n    ")},
-  {Py_tp_traverse, (void *)__pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPParser},
-  {Py_tp_clear, (void *)__pyx_tp_clear_6pyemsi_12femap_parser_FEMAPParser},
-  {Py_tp_methods, (void *)__pyx_methods_6pyemsi_12femap_parser_FEMAPParser},
-  {Py_tp_getset, (void *)__pyx_getsets_6pyemsi_12femap_parser_FEMAPParser},
-  {Py_tp_init, (void *)__pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_1__init__},
-  {Py_tp_new, (void *)__pyx_tp_new_6pyemsi_12femap_parser_FEMAPParser},
+  {Py_tp_traverse, (void *)__pyx_tp_traverse_6pyemsi_4core_12femap_parser_FEMAPParser},
+  {Py_tp_clear, (void *)__pyx_tp_clear_6pyemsi_4core_12femap_parser_FEMAPParser},
+  {Py_tp_methods, (void *)__pyx_methods_6pyemsi_4core_12femap_parser_FEMAPParser},
+  {Py_tp_getset, (void *)__pyx_getsets_6pyemsi_4core_12femap_parser_FEMAPParser},
+  {Py_tp_init, (void *)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_1__init__},
+  {Py_tp_new, (void *)__pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPParser},
   {0, 0},
 };
-static PyType_Spec __pyx_type_6pyemsi_12femap_parser_FEMAPParser_spec = {
-  "pyemsi.femap_parser.FEMAPParser",
-  sizeof(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser),
+static PyType_Spec __pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser_spec = {
+  "pyemsi.core.femap_parser.FEMAPParser",
+  sizeof(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser),
   0,
   Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_VERSION_TAG|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_HAVE_NEWBUFFER|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC,
-  __pyx_type_6pyemsi_12femap_parser_FEMAPParser_slots,
+  __pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser_slots,
 };
 #else
 
-static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPParser = {
+static PyTypeObject __pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser = {
   PyVarObject_HEAD_INIT(0, 0)
-  "pyemsi.femap_parser.""FEMAPParser", /*tp_name*/
-  sizeof(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser), /*tp_basicsize*/
+  "pyemsi.core.femap_parser.""FEMAPParser", /*tp_name*/
+  sizeof(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser), /*tp_basicsize*/
   0, /*tp_itemsize*/
-  __pyx_tp_dealloc_6pyemsi_12femap_parser_FEMAPParser, /*tp_dealloc*/
+  __pyx_tp_dealloc_6pyemsi_4core_12femap_parser_FEMAPParser, /*tp_dealloc*/
   0, /*tp_vectorcall_offset*/
   0, /*tp_getattr*/
   0, /*tp_setattr*/
@@ -18015,15 +18015,15 @@ static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPParser = {
   0, /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT|Py_TPFLAGS_HAVE_VERSION_TAG|Py_TPFLAGS_CHECKTYPES|Py_TPFLAGS_HAVE_NEWBUFFER|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_GC, /*tp_flags*/
   PyDoc_STR("\n    Parser for FEMAP Neutral files.\n\n    Handles blocks in any order and supports repeated blocks of the same type.\n    "), /*tp_doc*/
-  __pyx_tp_traverse_6pyemsi_12femap_parser_FEMAPParser, /*tp_traverse*/
-  __pyx_tp_clear_6pyemsi_12femap_parser_FEMAPParser, /*tp_clear*/
+  __pyx_tp_traverse_6pyemsi_4core_12femap_parser_FEMAPParser, /*tp_traverse*/
+  __pyx_tp_clear_6pyemsi_4core_12femap_parser_FEMAPParser, /*tp_clear*/
   0, /*tp_richcompare*/
   0, /*tp_weaklistoffset*/
   0, /*tp_iter*/
   0, /*tp_iternext*/
-  __pyx_methods_6pyemsi_12femap_parser_FEMAPParser, /*tp_methods*/
+  __pyx_methods_6pyemsi_4core_12femap_parser_FEMAPParser, /*tp_methods*/
   0, /*tp_members*/
-  __pyx_getsets_6pyemsi_12femap_parser_FEMAPParser, /*tp_getset*/
+  __pyx_getsets_6pyemsi_4core_12femap_parser_FEMAPParser, /*tp_getset*/
   0, /*tp_base*/
   0, /*tp_dict*/
   0, /*tp_descr_get*/
@@ -18031,9 +18031,9 @@ static PyTypeObject __pyx_type_6pyemsi_12femap_parser_FEMAPParser = {
   #if !CYTHON_USE_TYPE_SPECS
   0, /*tp_dictoffset*/
   #endif
-  __pyx_pw_6pyemsi_12femap_parser_11FEMAPParser_1__init__, /*tp_init*/
+  __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_1__init__, /*tp_init*/
   0, /*tp_alloc*/
-  __pyx_tp_new_6pyemsi_12femap_parser_FEMAPParser, /*tp_new*/
+  __pyx_tp_new_6pyemsi_4core_12femap_parser_FEMAPParser, /*tp_new*/
   0, /*tp_free*/
   0, /*tp_is_gc*/
   0, /*tp_bases*/
@@ -18120,64 +18120,64 @@ static int __Pyx_modinit_type_init_code(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_RefNannySetupContext("__Pyx_modinit_type_init_code", 0);
   /*--- Type init code ---*/
   #if CYTHON_USE_TYPE_SPECS
-  __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock = (PyTypeObject *) __Pyx_PyType_FromModuleAndSpec(__pyx_m, &__pyx_type_6pyemsi_12femap_parser_FEMAPBlock_spec, NULL); if (unlikely(!__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock)) __PYX_ERR(0, 22, __pyx_L1_error)
-  if (__Pyx_fix_up_extension_type_from_spec(&__pyx_type_6pyemsi_12femap_parser_FEMAPBlock_spec, __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
+  __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock = (PyTypeObject *) __Pyx_PyType_FromModuleAndSpec(__pyx_m, &__pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock_spec, NULL); if (unlikely(!__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock)) __PYX_ERR(0, 22, __pyx_L1_error)
+  if (__Pyx_fix_up_extension_type_from_spec(&__pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock_spec, __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
   #else
-  __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock = &__pyx_type_6pyemsi_12femap_parser_FEMAPBlock;
+  __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock = &__pyx_type_6pyemsi_4core_12femap_parser_FEMAPBlock;
   #endif
   #if !CYTHON_COMPILING_IN_LIMITED_API
   #endif
   #if !CYTHON_USE_TYPE_SPECS
-  if (__Pyx_PyType_Ready(__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
+  if (__Pyx_PyType_Ready(__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
   #endif
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
-  PyUnstable_Object_EnableDeferredRefcount((PyObject*)__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock);
+  PyUnstable_Object_EnableDeferredRefcount((PyObject*)__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock);
   #endif
   #if !CYTHON_COMPILING_IN_LIMITED_API
-  if ((CYTHON_USE_TYPE_SLOTS && CYTHON_USE_PYTYPE_LOOKUP) && likely(!__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock->tp_dictoffset && __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock->tp_getattro == PyObject_GenericGetAttr)) {
-    __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock->tp_getattro = PyObject_GenericGetAttr;
+  if ((CYTHON_USE_TYPE_SLOTS && CYTHON_USE_PYTYPE_LOOKUP) && likely(!__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock->tp_dictoffset && __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock->tp_getattro == PyObject_GenericGetAttr)) {
+    __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock->tp_getattro = PyObject_GenericGetAttr;
   }
   #endif
-  if (PyObject_SetAttr(__pyx_m, __pyx_mstate_global->__pyx_n_u_FEMAPBlock, (PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
-  if (__Pyx_setup_reduce((PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
-  __pyx_vtabptr_6pyemsi_12femap_parser_FEMAPParser = &__pyx_vtable_6pyemsi_12femap_parser_FEMAPParser;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser._parse = (void (*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser._parse_csv_line_fast = (PyObject *(*)(PyObject *))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser__parse_csv_line_fast;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.parse = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_parse;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_blocks = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_blocks;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_header = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_header;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_nodes = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_nodes_arrays = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_nodes_arrays;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_properties = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_properties;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_elements = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_elements_arrays = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_elements_arrays;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_materials = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_materials;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_output_sets = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_sets;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_output_vectors = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors;
-  __pyx_vtable_6pyemsi_12femap_parser_FEMAPParser.get_output_vectors_arrays = (PyObject *(*)(struct __pyx_obj_6pyemsi_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args))__pyx_f_6pyemsi_12femap_parser_11FEMAPParser_get_output_vectors_arrays;
+  if (PyObject_SetAttr(__pyx_m, __pyx_mstate_global->__pyx_n_u_FEMAPBlock, (PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
+  if (__Pyx_setup_reduce((PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock) < (0)) __PYX_ERR(0, 22, __pyx_L1_error)
+  __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser = &__pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser._parse = (void (*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser._parse_csv_line_fast = (PyObject *(*)(PyObject *))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.parse = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_parse;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_blocks = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_blocks;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_header = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_header;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_nodes = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes *__pyx_optional_args))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_nodes_arrays = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes_arrays;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_properties = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_properties;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_elements = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_elements_arrays = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements_arrays;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_materials = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_materials;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_output_sets = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_sets;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_output_vectors = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_output_vectors_arrays = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays;
   #if CYTHON_USE_TYPE_SPECS
-  __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser = (PyTypeObject *) __Pyx_PyType_FromModuleAndSpec(__pyx_m, &__pyx_type_6pyemsi_12femap_parser_FEMAPParser_spec, NULL); if (unlikely(!__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser)) __PYX_ERR(0, 33, __pyx_L1_error)
-  if (__Pyx_fix_up_extension_type_from_spec(&__pyx_type_6pyemsi_12femap_parser_FEMAPParser_spec, __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
+  __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser = (PyTypeObject *) __Pyx_PyType_FromModuleAndSpec(__pyx_m, &__pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser_spec, NULL); if (unlikely(!__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (__Pyx_fix_up_extension_type_from_spec(&__pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser_spec, __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
   #else
-  __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser = &__pyx_type_6pyemsi_12femap_parser_FEMAPParser;
+  __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser = &__pyx_type_6pyemsi_4core_12femap_parser_FEMAPParser;
   #endif
   #if !CYTHON_COMPILING_IN_LIMITED_API
   #endif
   #if !CYTHON_USE_TYPE_SPECS
-  if (__Pyx_PyType_Ready(__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (__Pyx_PyType_Ready(__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
   #endif
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
-  PyUnstable_Object_EnableDeferredRefcount((PyObject*)__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser);
+  PyUnstable_Object_EnableDeferredRefcount((PyObject*)__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser);
   #endif
   #if !CYTHON_COMPILING_IN_LIMITED_API
-  if ((CYTHON_USE_TYPE_SLOTS && CYTHON_USE_PYTYPE_LOOKUP) && likely(!__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser->tp_dictoffset && __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser->tp_getattro == PyObject_GenericGetAttr)) {
-    __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser->tp_getattro = PyObject_GenericGetAttr;
+  if ((CYTHON_USE_TYPE_SLOTS && CYTHON_USE_PYTYPE_LOOKUP) && likely(!__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser->tp_dictoffset && __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser->tp_getattro == PyObject_GenericGetAttr)) {
+    __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser->tp_getattro = PyObject_GenericGetAttr;
   }
   #endif
-  if (__Pyx_SetVtable(__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_vtabptr_6pyemsi_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
-  if (__Pyx_MergeVtables(__pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
-  if (PyObject_SetAttr(__pyx_m, __pyx_mstate_global->__pyx_n_u_FEMAPParser, (PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
-  if (__Pyx_setup_reduce((PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (__Pyx_SetVtable(__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (__Pyx_MergeVtables(__pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (PyObject_SetAttr(__pyx_m, __pyx_mstate_global->__pyx_n_u_FEMAPParser, (PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
+  if (__Pyx_setup_reduce((PyObject *) __pyx_mstate->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser) < (0)) __PYX_ERR(0, 33, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -18617,13 +18617,13 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   if (__Pyx_InitConstants(__pyx_mstate) < (0)) __PYX_ERR(0, 1, __pyx_L1_error)
   stringtab_initialized = 1;
   if (__Pyx_InitGlobals() < (0)) __PYX_ERR(0, 1, __pyx_L1_error)
-  if (__pyx_module_is_main_pyemsi__femap_parser) {
+  if (__pyx_module_is_main_pyemsi__core__femap_parser) {
     if (PyObject_SetAttr(__pyx_m, __pyx_mstate_global->__pyx_n_u_name, __pyx_mstate_global->__pyx_n_u_main) < (0)) __PYX_ERR(0, 1, __pyx_L1_error)
   }
   {
     PyObject *modules = PyImport_GetModuleDict(); if (unlikely(!modules)) __PYX_ERR(0, 1, __pyx_L1_error)
-    if (!PyDict_GetItemString(modules, "pyemsi.femap_parser")) {
-      if (unlikely((PyDict_SetItemString(modules, "pyemsi.femap_parser", __pyx_m) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
+    if (!PyDict_GetItemString(modules, "pyemsi.core.femap_parser")) {
+      if (unlikely((PyDict_SetItemString(modules, "pyemsi.core.femap_parser", __pyx_m) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
     }
   }
   /*--- Builtin init code ---*/
@@ -18641,7 +18641,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   (void)__Pyx_modinit_function_import_code(__pyx_mstate);
   /*--- Execution code ---*/
 
-  /* "pyemsi/femap_parser.pyx":14
+  /* "pyemsi/core/femap_parser.pyx":14
  * 
  * cimport cython
  * import numpy as np             # <<<<<<<<<<<<<<
@@ -18654,7 +18654,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_np, __pyx_t_2) < (0)) __PYX_ERR(0, 14, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "pyemsi/femap_parser.pyx":17
+  /* "pyemsi/core/femap_parser.pyx":17
  * cimport numpy as np
  * 
  * np.import_array()             # <<<<<<<<<<<<<<
@@ -18663,7 +18663,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
 */
   __pyx_t_3 = __pyx_f_5numpy_import_array(); if (unlikely(__pyx_t_3 == ((int)-1))) __PYX_ERR(0, 17, __pyx_L1_error)
 
-  /* "pyemsi/femap_parser.pyx":19
+  /* "pyemsi/core/femap_parser.pyx":19
  * np.import_array()
  * 
  * from typing import Dict, List, Tuple, Optional             # <<<<<<<<<<<<<<
@@ -18692,12 +18692,12 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
  *     cdef tuple state
  *     cdef object _dict
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_10FEMAPBlock_5__reduce_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPBlock___reduce_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 1, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_10FEMAPBlock_5__reduce_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPBlock___reduce_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock, __pyx_mstate_global->__pyx_n_u_reduce_cython, __pyx_t_2) < (0)) __PYX_ERR(3, 1, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock, __pyx_mstate_global->__pyx_n_u_reduce_cython, __pyx_t_2) < (0)) __PYX_ERR(3, 1, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "(tree fragment)":16
@@ -18706,30 +18706,30 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
  * def __setstate_cython__(self, __pyx_state):             # <<<<<<<<<<<<<<
  *     __pyx_unpickle_FEMAPBlock__set_state(self, __pyx_state)
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_10FEMAPBlock_7__setstate_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPBlock___setstate_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 16, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_10FEMAPBlock_7__setstate_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPBlock___setstate_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(3, 16, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPBlock, __pyx_mstate_global->__pyx_n_u_setstate_cython, __pyx_t_2) < (0)) __PYX_ERR(3, 16, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock, __pyx_mstate_global->__pyx_n_u_setstate_cython, __pyx_t_2) < (0)) __PYX_ERR(3, 16, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "pyemsi/femap_parser.pyx":105
+  /* "pyemsi/core/femap_parser.pyx":105
  *                 i += 1
  * 
  *     cpdef dict parse(self):             # <<<<<<<<<<<<<<
  *         """
  *         Public method to return parsed blocks (for API compatibility).
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_3parse, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_parse, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 105, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_3parse, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_parse, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 105, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse, __pyx_t_2) < (0)) __PYX_ERR(0, 105, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse, __pyx_t_2) < (0)) __PYX_ERR(0, 105, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "pyemsi/femap_parser.pyx":131
+  /* "pyemsi/core/femap_parser.pyx":131
  *         return parts
  * 
  *     @staticmethod             # <<<<<<<<<<<<<<
@@ -18739,17 +18739,17 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 131, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_list) < (0)) __PYX_ERR(0, 131, __pyx_L1_error)
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_5parse_csv_line, __Pyx_CYFUNCTION_STATICMETHOD | __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_parse_csv_line, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[3])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 131, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_5parse_csv_line, __Pyx_CYFUNCTION_STATICMETHOD | __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_parse_csv_line, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[3])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 131, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_5, __pyx_t_2);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse_csv_line, __pyx_t_5) < (0)) __PYX_ERR(0, 131, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse_csv_line, __pyx_t_5) < (0)) __PYX_ERR(0, 131, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __pyx_t_2 = NULL;
-  __Pyx_GetNameInClass(__pyx_t_6, (PyObject*)__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse_csv_line); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 131, __pyx_L1_error)
+  __Pyx_GetNameInClass(__pyx_t_6, (PyObject*)__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse_csv_line); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 131, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
   __pyx_t_7 = 1;
   {
@@ -18760,174 +18760,174 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
     if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 131, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
   }
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse_csv_line, __pyx_t_5) < (0)) __PYX_ERR(0, 131, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_parse_csv_line, __pyx_t_5) < (0)) __PYX_ERR(0, 131, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":145
+  /* "pyemsi/core/femap_parser.pyx":145
  *         return FEMAPParser._parse_csv_line_fast(line)
  * 
  *     cpdef list get_blocks(self, int block_id):             # <<<<<<<<<<<<<<
  *         """Get all blocks with the specified ID."""
  *         return self.blocks.get(block_id, [])
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_7get_blocks, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_blocks, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[4])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 145, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_7get_blocks, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_blocks, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[4])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 145, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_blocks, __pyx_t_5) < (0)) __PYX_ERR(0, 145, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_blocks, __pyx_t_5) < (0)) __PYX_ERR(0, 145, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":149
+  /* "pyemsi/core/femap_parser.pyx":149
  *         return self.blocks.get(block_id, [])
  * 
  *     cpdef dict get_header(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract header information from Block 100.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_9get_header, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_header, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[5])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 149, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_9get_header, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_header, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[5])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 149, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_header, __pyx_t_5) < (0)) __PYX_ERR(0, 149, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_header, __pyx_t_5) < (0)) __PYX_ERR(0, 149, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":172
+  /* "pyemsi/core/femap_parser.pyx":172
  *         return {"title": title if title != "<NULL>" else "", "version": version}
  * 
  *     cpdef dict get_nodes(self, bint force_2d=False):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all nodes from Block 403.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_11get_nodes, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_nodes, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[6])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 172, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_11get_nodes, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_nodes, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[6])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 172, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_5, __pyx_mstate_global->__pyx_tuple[2]);
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_nodes, __pyx_t_5) < (0)) __PYX_ERR(0, 172, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_nodes, __pyx_t_5) < (0)) __PYX_ERR(0, 172, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":208
+  /* "pyemsi/core/femap_parser.pyx":208
  *         return nodes
  * 
  *     cpdef tuple get_nodes_arrays(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all nodes from Block 403 as NumPy arrays (high performance).
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_13get_nodes_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_nodes_arrays, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[7])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 208, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_13get_nodes_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_nodes_arrays, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[7])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 208, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_nodes_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 208, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_nodes_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 208, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":244
+  /* "pyemsi/core/femap_parser.pyx":244
  *         return (node_ids, coords)
  * 
  *     cpdef dict get_properties(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all properties from Block 402.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_15get_properties, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_properties, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[8])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 244, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_15get_properties, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_properties, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[8])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 244, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_properties, __pyx_t_5) < (0)) __PYX_ERR(0, 244, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_properties, __pyx_t_5) < (0)) __PYX_ERR(0, 244, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":283
+  /* "pyemsi/core/femap_parser.pyx":283
  *         return properties
  * 
  *     cpdef list get_elements(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all elements from Block 404.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_17get_elements, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_elements, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[9])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 283, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_17get_elements, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_elements, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[9])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 283, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_elements, __pyx_t_5) < (0)) __PYX_ERR(0, 283, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_elements, __pyx_t_5) < (0)) __PYX_ERR(0, 283, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":336
+  /* "pyemsi/core/femap_parser.pyx":336
  *         return elements
  * 
  *     cpdef tuple get_elements_arrays(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all elements from Block 404 as NumPy arrays (high performance).
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_19get_elements_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_elements_arrays, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[10])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 336, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_19get_elements_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_elements_arrays, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[10])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 336, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_elements_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 336, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_elements_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 336, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":406
+  /* "pyemsi/core/femap_parser.pyx":406
  *         )
  * 
  *     cpdef dict get_materials(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all materials from Block 601.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_21get_materials, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_materials, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[11])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 406, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_21get_materials, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_materials, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[11])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 406, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_materials, __pyx_t_5) < (0)) __PYX_ERR(0, 406, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_materials, __pyx_t_5) < (0)) __PYX_ERR(0, 406, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":436
+  /* "pyemsi/core/femap_parser.pyx":436
  *         return materials
  * 
  *     cpdef dict get_output_sets(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all output sets from Block 450.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_23get_output_sets, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_sets, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[12])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 436, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_23get_output_sets, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_sets, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[12])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 436, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_sets, __pyx_t_5) < (0)) __PYX_ERR(0, 436, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_sets, __pyx_t_5) < (0)) __PYX_ERR(0, 436, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":481
+  /* "pyemsi/core/femap_parser.pyx":481
  *         return output_sets
  * 
  *     cpdef list get_output_vectors(self):             # <<<<<<<<<<<<<<
  *         """
  *         Extract all output data vectors from Block 1051.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[13])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 481, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[13])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 481, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors, __pyx_t_5) < (0)) __PYX_ERR(0, 481, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors, __pyx_t_5) < (0)) __PYX_ERR(0, 481, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":578
+  /* "pyemsi/core/femap_parser.pyx":578
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
  *         """
  *         Extract output vectors as NumPy arrays (high performance).
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_27get_output_vectors_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors_a, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[14])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 578, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors_a, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[14])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 578, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_5, __pyx_mstate_global->__pyx_tuple[3]);
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 578, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 578, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
   /* "(tree fragment)":1
@@ -18935,12 +18935,12 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
  *     cdef tuple state
  *     cdef object _dict
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_29__reduce_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser___reduce_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[15])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 1, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_29__reduce_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser___reduce_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[15])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_reduce_cython, __pyx_t_5) < (0)) __PYX_ERR(3, 1, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_reduce_cython, __pyx_t_5) < (0)) __PYX_ERR(3, 1, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
   /* "(tree fragment)":16
@@ -18949,12 +18949,12 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
  * def __setstate_cython__(self, __pyx_state):             # <<<<<<<<<<<<<<
  *     __pyx_unpickle_FEMAPParser__set_state(self, __pyx_state)
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_11FEMAPParser_31__setstate_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser___setstate_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[16])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 16, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_31__setstate_cython__, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser___setstate_cython, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[16])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 16, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_setstate_cython, __pyx_t_5) < (0)) __PYX_ERR(3, 16, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_setstate_cython, __pyx_t_5) < (0)) __PYX_ERR(3, 16, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
   /* "(tree fragment)":4
@@ -18964,7 +18964,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
  *     cdef object __pyx_result
  *     __Pyx_CheckUnpickleChecksum(__pyx_checksum, 0x7eb2a63, 0xc7dd1c6, 0xdcf7ca8, b'block_id, lines')
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_1__pyx_unpickle_FEMAPBlock, 0, __pyx_mstate_global->__pyx_n_u_pyx_unpickle_FEMAPBlock, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[17])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 4, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_1__pyx_unpickle_FEMAPBlock, 0, __pyx_mstate_global->__pyx_n_u_pyx_unpickle_FEMAPBlock, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[17])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 4, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
@@ -18977,7 +18977,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
  *     int __Pyx_CheckUnpickleChecksum(long, long, long, long, const char*) except -1
  *     int __Pyx_UpdateUnpickledDict(object, object, Py_ssize_t) except -1
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_12femap_parser_3__pyx_unpickle_FEMAPParser, 0, __pyx_mstate_global->__pyx_n_u_pyx_unpickle_FEMAPParser, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[18])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 4, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_3__pyx_unpickle_FEMAPParser, 0, __pyx_mstate_global->__pyx_n_u_pyx_unpickle_FEMAPParser, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[18])); if (unlikely(!__pyx_t_5)) __PYX_ERR(3, 4, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
@@ -18985,7 +18985,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_pyx_unpickle_FEMAPParser, __pyx_t_5) < (0)) __PYX_ERR(3, 4, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/femap_parser.pyx":1
+  /* "pyemsi/core/femap_parser.pyx":1
  * # cython: language_level=3             # <<<<<<<<<<<<<<
  * # cython: boundscheck=False
  * # cython: wraparound=False
@@ -19004,7 +19004,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   __Pyx_XDECREF(__pyx_t_6);
   if (__pyx_m) {
     if (__pyx_mstate->__pyx_d && stringtab_initialized) {
-      __Pyx_AddTraceback("init pyemsi.femap_parser", __pyx_clineno, __pyx_lineno, __pyx_filename);
+      __Pyx_AddTraceback("init pyemsi.core.femap_parser", __pyx_clineno, __pyx_lineno, __pyx_filename);
     }
     #if !CYTHON_USE_MODULE_STATE
     Py_CLEAR(__pyx_m);
@@ -19018,7 +19018,7 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
     }
     #endif
   } else if (!PyErr_Occurred()) {
-    PyErr_SetString(PyExc_ImportError, "init pyemsi.femap_parser");
+    PyErr_SetString(PyExc_ImportError, "init pyemsi.core.femap_parser");
   }
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -19058,7 +19058,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
   __Pyx_RefNannySetupContext("__Pyx_InitCachedConstants", 0);
 
-  /* "pyemsi/femap_parser.pyx":57
+  /* "pyemsi/core/femap_parser.pyx":57
  *         cdef FEMAPBlock block
  * 
  *         with open(self.filepath, "r") as f:             # <<<<<<<<<<<<<<
@@ -19069,7 +19069,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[0]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[0]);
 
-  /* "pyemsi/femap_parser.pyx":699
+  /* "pyemsi/core/femap_parser.pyx":699
  *                     i += 1
  * 
  *         return (None, None, -1, -1, -1)             # <<<<<<<<<<<<<<
@@ -19078,7 +19078,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[1]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[1]);
 
-  /* "pyemsi/femap_parser.pyx":172
+  /* "pyemsi/core/femap_parser.pyx":172
  *         return {"title": title if title != "<NULL>" else "", "version": version}
  * 
  *     cpdef dict get_nodes(self, bint force_2d=False):             # <<<<<<<<<<<<<<
@@ -19089,7 +19089,7 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[2]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[2]);
 
-  /* "pyemsi/femap_parser.pyx":578
+  /* "pyemsi/core/femap_parser.pyx":578
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
@@ -19129,25 +19129,25 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
 static int __Pyx_InitConstants(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
   {
-    const struct { const unsigned int length: 10; } index[] = {{1},{2},{5},{2},{14},{6},{179},{1},{1},{0},{1},{1},{8},{7},{6},{2},{9},{8},{39},{34},{23},{14},{4},{10},{28},{30},{11},{29},{31},{22},{24},{31},{22},{25},{21},{28},{27},{30},{37},{26},{17},{26},{4},{8},{20},{5},{5},{18},{8},{18},{8},{5},{5},{8},{9},{8},{8},{7},{8},{8},{3},{10},{12},{19},{10},{13},{9},{16},{15},{18},{25},{14},{12},{2},{5},{13},{5},{4},{5},{4},{8},{11},{10},{8},{7},{5},{2},{5},{4},{5},{14},{3},{7},{19},{14},{12},{11},{10},{25},{26},{14},{12},{1},{9},{10},{17},{13},{7},{6},{6},{4},{6},{13},{12},{10},{12},{19},{5},{12},{5},{8},{5},{8},{6},{6},{12},{5},{6},{6},{13},{7},{684},{113},{194},{332},{272},{137},{447},{17},{213},{11},{17},{876},{162},{132},{101},{11},{11},{55},{55}};
-    #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (2536 bytes) */
-const char* const cstring = "BZh91AY&SY\361\256\370\177\000\002]\177\377\377\377\377\377\377\377\377\377\277\377\377\377\377\377\377\374\300@@@@@@@@@@@@\000@\000`\t\375\360\006\205:\001\336\335\024R\203\243W\216\252\200\372\257\000I\022M$\217S\323\324'\224\362\207\352A\2326'\243I\3515\023G\250a?)\246\210?S\024\304\037\252`M\224\317T\362F\3656\243D\375OTzM\250\031$\323M\r\004\364\205\036\231OS\311=&\312\000\003@\000\000d\000\000\000\000\000\001\240\000\212\247\352\233\310\204a4\3102hd\323M\r0\23212\032\0322b`&\232\003C\0024\304\321\202\032\014\231\030\004\221\021#FP\320\304\3654\036\243 0CC'\242d\000\304\032\014\206\010d\r\r4\321\220\304d\323\322d\006U\021\241\243@4\323\324\320h\321\211\246M\000\323'\251\243@\320d\30423H\030@\006\203&\200444\004\212\001\004\323I\221\241\245<&\231Fji=#@=@2\000d\000z\200\320\000=\020\003@4\323i*\024\372\025u\326q\333\305\345\256\226\010\230\323\326B_\263\371M8\033\t\020[\032\344d\246\223(\241\204\332D\232E\006\024\032\224\t\251\003$\246\202(\366Ax\306x\311l=\225U\343=\245\243\tn\024,c@\307\024\233\030\r\266\r\260lc\023v(\030\002!C~\247\202W\222\274\241\215o\022\\\325*\202\326+\242\3109N4D\324\026H\300A\204\322\213\032\2235%\232\n\243\003%\255(\220$\202\016R$O&\210\271Q\322\004\212\227%$\211\0262$t\240\246eR\250\\+\006zPkKAY\342i\317\0239\240\343A\20103K)\227X/$dh\311&\232lC`1\264\230\2060\033\033m\261\255\230\245\247\270\26234\304\026sA\033\204\\4\306\223hJ\035\332\n\361\244\274\260\226\230\221#\254\202\r\275\373\220\257\030\230\303m\201\020d@\310\034\303\273?v\327\217\017\317\275\203\030\237O\024\370\260N\237\021\213\207\221\007\215G\217\223\224\215\361\260\330tn\237\025(4\035\tt\001\320\203\264\272\203\240\231y\024\271cZBL\201\007\"3\242V\275\336\230\023./9Pc;\301\236\346\240V\246+\255\0078\013+\376\t\200\260f3KDRm5#\021b\217\210\264\314\235\007Je\375fL\241B\205\ry\013\037\357\325d\256\035\353@\327\203\002_;\341\223-R\003-\234\007P4\206\241'\301\312\241\224F\031Lc\034\332\020\241\263\035\0167\327\233S/8jE?<I\030\314\236\323\267/}\232$\317\231\300\021\010\232""\303\332\364G\323\321\335\\\301\004\215\001\330F=mr\305\"%GF\232\251DO\350\370,\"!\324\026,\\\274\334pAS\005\233@\345\321\312l\315h\210:\243,\241d\274\274\231\330$\223.\222b\021HX\353\342X\262\245\313A\2638\227\355\035\211\036\031\236\306\255ggn+\233\363\353\"k\370\035\177\240H\314&\220M#HmR\226\250LD\302'\237\001\210\354D\322\302\245Jp\353\337\232S/\016\317\273\335\276e\347\343\0224h&.\360fy\236g\225\333}\346nPin\211\263\003\r\206\035d5N\222A\035D\317\n\356\303\270sz\271X\261\371\004\215\307\247\253v\0057\376\371o\302\215\346\200\346A\310\200\274\202[o\003 \311c\316\022\3224\0246\240eN\024\340\211\"\314\261\002\312\003d\353D\250F\016\020c\205\3138\210\262\261\373\002eR\252#\037?\216\364\027C\305\352x\252\213\304o#\325\212V\2269\252\005\264\025\026\005M&\225\373C#\032\243\364\376\340\202\362\n\177\010\245\2579\251\004\222\324P\376J\303\010\223\344\373\220SbAi\033\324\250\2632j\027\020\003\274\037\247K\221(E\245\344\311\010su\265\2062\311\376j\321\n\003c2\314\016\020b(`n\331\202\303\010@Y\000\301@\000p\010\000,1b\200\224L\236X\312\371J\276\247\260P\230\332\035\320\025FDF, 5X\301h\224\n@\240\022\270\260G\324f\230YJB\037\370\3678\351\005\230\270}\024\331\245p\263\322\326t\332\031%\200\270\003\276\222m\267\310|+\375.\001l\301Cs\205\240k\230\035\375\310;\335K\254\357\235\343\376\022\t\224JRR\0176%b\341M\376C\230\341\365\303\243\214\344\261\206\032Q\330X\345\320bk2D\361\247\207\214$\314\306]\322n\225\227u\220D\305\001mKy\006\360\367\203 \235\240G\205\013\256*\213\226T+\021H\205q\330b\303\"\204\205A8\311\304/E\221o\214\2347\241\322\273N\025\336c\221BD\206\335#qkN\342R\200\177\331\232]\323E\321\303\316\337\214\247\276\032'+v\312\207Q\034\253\216.\374\302V\276\321@a\010\017\2120Y\336Bd)=\204 6\334\315'=y\300c\033\004\3368\305E\204\351Dl\335}\205\373\304\343\014\004\344\001\261\273\233\235\307\t\357\311\234\334\314\316A\243#\020\305bH\354\240\264\021\022\323 6\3067qC>\016\013\004\316\250\010\307\202\343\005-<\304?\301\314O\322\300\t\235\303\255s\361\222\224\360\"\301\274.w""\351\231\242d\256\264)\350]\347m\274\346\205\020ym_X\216\200\261\255\025\261?\010Q\224\0059B\226\324\247\272\025\272\277\320\211M\305\231\304\301\021\024[\217x\325<\2465\n(\206\231X\232\222\345\245\361\234\020\333p\037\223\266\326\354\265\215m*\265\032#\235\337c^\352\310_Co\016\235q\nf\203\024uvj\225\322J\213\035\346]>-\360\210D\303\272\353\252\306\261_\236\303\200\331u\rQ\337\301Y:\014\214#-d2\261\207\257\230\250rB\032(\227\016\337$]HPK\250\347\345;\t\372$R\254I3\270\2523\270\\JU\330\2224\27606\360(o\352Z\216(\033\254\027\005\334*\363p\023\035:Hih0\343NH\254+I\361\252\253u\302\205\205\030\274+\036\n\r\007w\230BqY\3478\202.5rs\353Kc\307,\262\312\030N\036A\0273\275>\005\244\224K\332n\031z\032o\211#Gh\205\374\010\334B<P\236\317*\006\230\353\035P-\245\230{i \335;B\3617tmt\223\327\005W\244\0348\022\234u\020\320G\212\327\341[\302\371\005\201[&\001nb\024\225\t\204U\032\246\2743\342\237\323\203H\220aT\017\266\241\202\203vq\236\370\3729u\360\212 ot\235\240\320P\343\325\034C\211\365\034\312\356e}\374H\"\035;\2112P`\265n\241\225\002\205)v\310+\007wx\034f5\t\255C\236\364APY\362\366\261\363\0020\303\264\033\341w\376\005\374\253\300\266\312E\327Gl\\\317\331\363\035\013\300R\276\202\216#p\026\371\007*\242\367\235+\206a\243\365 \235\344I\233\256\031(9\311A(\274\236`\311A\337;Y\351_J\351\343\314A\267\351<ME.\271\004\213\337%\030C\374w\027&\376\003\3128\227\347\030E(\346g\311\277\325s\322\201\212~\370\232)u|\342 \202\215\307\232D^xG3\031\020\332\343\t\363P1\366\2442\\v>)\265\020\327\330\364\034\207@\311S\316\204/G\252M\274H\340E,\330\213\216\202\355+\271F\252\034T\274C\247[3R\263\244\203\206\013\240\244\010%\0059\207]\315#\001K\022\2526\223\020I\261\205\254\033Lg\271\250\303\220\264\276=\326\254v\320\306\243&wL\035@\321J\010\234\301\025\"\2656\247a\0219psp\211\315\304\267\367\246.\312NM\020\305^\211q\221\352\320&\320\002\004l\242\270\\3Ba\264\t@\201\004:\264\260\310tk\271\t\\=\246U\215\202\263\312z\312\341\253~bR\271\000\202`\337\230\332\226\265\203\010i\226tU\365\030\346\303\221""\214LY\230\2600\271\3770JZ9\205\363\321x\232\2713+c\203\2141\242Y\344Dzf\025\202U\353\341\222\237\245\323\357$Lc\235\301\216}-r\251Db\261\024V\314F8\3111%D\346\350\324\340U?\243\006qL*\016T\200\351k\226\317oZ\252eS\274R9%\261\323\354\035\223L\246[4\315x\020 l\311h$$Z\267K]\362VK\376\266g\230\252\311\3209\246\311@D\332\026\313\206avM'\364\200!\214\260\200ZP@\r\265\241\004G\247\002\"\0326\216\311\305\016\033\232\253R\312O\312\270XTB\214\312\271b\262\265\204\363Q\310\333\017\326\177{\367\313,\240\213\253w\\:F\334>\347\t\010\025B\230\232\360\364Ta\t7\301+\213)$7%p?DP-\211\326'TF[\310\264k\035S\362\311\315\325\215{\262h\034|\261\311(\201\030\311\347F\247\2631\227\t\355i\347\240\260\025\212U\014\006\246I(\240\220\023\031Q\224\204csJP\371\2418\022\264\221\"\254\215&?\027\246_\372\257\202\252\332\027\030\341<*\241\\\tN(\243\302\251Pq(\003 l\031\006\307\024\340H\270\201Y\214\210\311\253\210\021\326P\241\371\210*L\251\031\230\004\310\221\"hh\243\275\317\226\3040+\000&]\2423#E\033\350\341t\340F\260\221\302QR\220&V\304\210V\223\236\024\234\005*g\023w\377\027rE8P\220\361\256\370\177";
-    PyObject *data = __Pyx_DecompressString(cstring, 2536, 2);
+    const struct { const unsigned int length: 10; } index[] = {{1},{2},{5},{2},{14},{6},{179},{1},{1},{0},{1},{1},{8},{7},{6},{2},{9},{8},{39},{34},{28},{14},{4},{10},{28},{30},{11},{29},{31},{22},{24},{31},{22},{25},{21},{28},{27},{30},{37},{26},{17},{26},{4},{8},{20},{5},{5},{18},{8},{18},{8},{5},{5},{8},{9},{8},{8},{7},{8},{8},{3},{10},{12},{19},{10},{13},{9},{16},{15},{18},{25},{14},{12},{2},{5},{13},{5},{4},{5},{4},{8},{11},{10},{8},{7},{5},{2},{5},{4},{5},{14},{3},{7},{24},{14},{12},{11},{10},{25},{26},{14},{12},{1},{9},{10},{17},{13},{7},{6},{6},{4},{6},{13},{12},{10},{12},{19},{5},{12},{5},{8},{5},{8},{6},{6},{12},{5},{6},{6},{13},{7},{684},{113},{194},{332},{272},{137},{447},{17},{213},{11},{17},{876},{162},{132},{101},{11},{11},{55},{55}};
+    #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (2522 bytes) */
+const char* const cstring = "BZh91AY&SY\336\234\2304\000\002]\177\377\377\377\377\377\377\377\377\377\277\377\377\377\377\377\377\374\300@@@@@@@@@@@@\000@\000`\t\367\300\032\036\234\224W\252\320V\330\252\025\340\320\001X8I\022B\220\361CG\250\375\024~\250i\232'\350z4i5M7\252z\217I\345?)\251\352h\317T\374\222h\321\372\204\332M\221=2F\3652\233M=OT\362\217$\022T\304\321O\023@\211\345=4\312zF'\241\000\000\000\000\032\006\200\001\240\r4\000\000\033D\001\251\244\332I\211\250\320\320\000\000\000\r\000h\000\000\000\000\000\000\000\000\320\320\002)\251\251\264\324\321\243\365\020\364\2324d\320\323'\250\0322\031\006 \311\241\211\223C\010d\320d`\206\t\200\021\246\004\0310\002`\023\023&L\000\t\2010\023\023\004\300\000\000\000\t\221\200\230\020\302\000H\240\020M4\236\223A\250\302\231\245<\312\236\223\324\032\003\324\003\324\0004\000\000\000\003\322\000\000\r6\2225=\211\253d\272\223\230\372\317j\"\202u\331K<\321\274\230\006\202CV\207\350t7\222\2019\014&\322$\322(0\240\324\240MH\031%4\021G\250\013\3143\314Ki\352*\2571\352\255XKx\241c\032\0068\244\330\300m\260m\203c\030\233\261@\300\021\n\0345<r\274\225\345\014kx\222\347\251T\026\261]VA\314r\242&\300\262F\002\014&\224X\324\231\261,\320U\030\031-\022\211\002H \345\"D\362h\213\225\035 H\251rRH\221c\"Gq\0053*\225B\341X3\326\203D\265\025\236&\274\3613\232\016T\030\023\0034\262\231u\202\362FF\254\222i\246\3046\003\033I\210c\001\261\266\333\032\333\212Z\374\013#3\\Ag4\021\270E\303Li6\204\241\327A^4\227\255\tk\211\022:\020A\305\342\271\n\361\211\2146\330\021\006D\014a\314\033\323\267\254\370\360}\034;\274\202v^\031\321n\314\235\021\207\223\215\007\232\246\342c\373\210\341\033\r\247N\371\362R\203A\322\227H\035(<\345\324\035$\313\310\245\315\032\322\022d\0109\021\235\022\265\356\364\300\231qy\314\203\031\336\014\364*\005jb\273\310:\000Y_\356\214\005\2031\232Z\242\223i\251\030\213\024{\325\256d\350:S/\3472e\n\024(i\220\261\376\335VJ\341\336\265\rx\360%\362=\3412\325 1\250`\234 \220\340\001\017U6\340\314\002\200\014\020\026\014\306H\376\n\036{\215\023rU\000\225\205CK:A""\000&\237\021\335\234}\276h\233>6\340\210D\320=_\224>\347OZ\347\010$d\035\204c\336k\232)\021*:4\325J\"\1773\307a\021\016\240\261b\345\353\361\301\005L\025(\303\243G.:\021\306DMUK(\344\252*\211N\362I2\251%\021\024\211\363\\%\213k.R\013\372M$\254A\030\343\255\t\243N\251\221\250j\265\344\2524\253\272\305\362\211\024\202\024\202i\032\303\211J[!1\023\010\236H\014Gb&\226\025*S\217N\031\2452\360\354\373=w\314\274\374\002F\255D\305\341\014\317?\317\357\367_\205\233\324\032[\342m\300\303i\206(\312p\275\310\033L\204\353,v]-\372\247\214\214\360\211\030'v\236\014\243\360;\204}\344T\201\001\316\203\264\200\274\202\\W\201\220d\261\350\tk\032\n\034H\031S\2158\"H\263,@\262\200\331:\321*\021\203\204\030\341r\316\",\254~\220\231T\252\210\307\311\313z\013\241\345\364\274\265E\3428\021\372\242\225\245\216j\201mEE)\021D\242\275a94H\315\366\003\026\020\377sR\253J\024\340rT\307\237\005\031\000H\312\177\304\212\276DW\3627\245\322\333O\227\331D\017D?\314\022\353\240I\323\262q\215d*U)\223\372k\340\326\033S\312\360\351\250\226\240\3346\031\010 \311\206\026\000t\030\004\222z5\023'\2262\276R\257\245\351\224&6\207t\005Q\221\021\213\010\rV0N\251\204\220H\004\374F\240B\036\3105\276#\021p\373\336\242\220G3\205\244Vd\374)\032p5\036\005\267\302-\301\342I6\333\355\036\356\377Gp\266\340\241\275\302\3204\230\036-\350<=K\274x\215Q\2368!\036\223\234\234\032\346\2216\006?\002\311l\257x.X,\306K-\024d\021\234\332\214M\014\221<i\365yBL\314e\335\303|\272\356?\203\203\"\212\n\002\343KD\032\032h,\rv\013\274\rj\355\303>\337\024\016\004fNWn\244\212Vh\204r;\375gM{\335\255\3418pC\272\273\216\025\340c\221BD\206\335#qkN\342R\200\177\331\232\335\323E\321\303\320\341\214\247\302\032\247+u\025\016\361\034\253\216.\374\302V\276\321@a\010\017\2220Y\336Bd)=\244 6\334\315gMz@c\033\004\3368\305F\000\205\357\202:\031\233{\232d\254\030\211b\206\342\327\346\276\031\00664\352\3172\263r\021t\273\201%\366\222\003\220m\3622\003lcw\0243\335\272\3013\252\0021\335q\202\226\276r\037\334\347\017\031\300\001\212\021<\211\211 \245\033\201""\202\000\211\306\211\270\223\016\230SO\022\273\266\240G\266%\322\264\0310+\216/\250\2166E;\2655#\024\240\311\230R\216\253*M\013\246\277\373\242Ue\312sP\333\201n^\003d\362\230\324(\242\032\345bjK\232\227\306pCm\300~\263\212\326\354\265\215\032Uj4GC\276\306\233\353!|\276.=zD)\232\014Q\325\331\262WI*,x\031t\3718E\020\211\207[\256\313\032\n\374\366\233\215\267P\331\036\034\025\223\240\306\261\256\2522x\311oR\023\313,e\007\245^\2660\261\020\230\226!\246\264d\020\345\rJ(\222g\201Tg\200\270\224\253\265$k|\240qnD8v-\207$\r\366\013\202\352\352C\004\010\230\230\222 }\210\006\020PH\250i\t\335,\314Xm\263q\314mF55\306\020\205HN+<\347\020E\306\316\327F\211mx\345\226YC\t\303\266E\314\360\317r\326J%\3557\014\276\006\273\342H\325\347\020\277r7\220\217$'\267\277\003\\t\035P.\"\314=t\220o\235\241x\233\2726\272I\351\005W\254\0347%8\354!\250\217%\257\302\267\205\362\013\nT\324\022\306\215<\032S4\272\032\272\016s?O\022\310\274\357\302<\033\340j(\253S\230\\:\026\252\327\023@\251\2470\302\200\362\3056\314\032X1\013j\372\332\222M*\006\207sy&\223;\274\233\364=\254`f\371\267\nB\362t\013\226\226il\327\217\007\003f\204\226\326\267\307\324\031\206\035\240\337\023\277\362/\351l\202\333(\227\235\037\260\272\035\367\310t/\001F\372\n\030M\300\\d\034\244\215\2372V\314\203;\353A3\310\2237\\1\320}IA(\274\236P\307A\336;y\251_J\361\343\310A\267\350<MA.\271\004\215\237\232\204!\300\356.u\375\323\373\034K\177\260\"\304[\036)\237\007\235\315d\014px\"/\245\245\332\021\004\034\252\335\231\210\317\2709\260\310\206\327,O\224\201\216\242C%\314c\225.\242\032\373\033\3475\3202X\372\226\2679\377rM\322E\267%\234\341]A\271Kr\362\tF\013q\22611~\344K&\302\016X-%\030A()\214:\356g\233\245\034*\220\331\354A&\344\n\350m1\232\346\243\016B=\003\277I\216\232\030\336d\316\351\203D/\245\004b\260D\246*G\026/T\210\253\0077\010\234\334K\217\206R\364\204\304\321\014R\351\026\331\037\355RZ\240@\232\312+e\263(%\032\251 \020 \207VV\010\316\225G!#\206+*f\271M\3448\212\201r\374\244\205B\001\004\301\307)\265%:\306\000\323+\347+\352h\346""\273\223F%+\312V\030Z?8HY:\005\363\177d\226\241++C\203\2141\234W\346\304z%\025bE\305\311$;7\216\261\032c\020\356\014h\321\325)\024\006)\221Eh\302b\014\223\021\346'7\206\313\201H\363\233\277!\226\031\203\231\220\035-R\321\355\335\244\231fwJ'8\264:}s\264i\231e\243L\325\201\002\006\304vB25r\361g\274H\311zm\031\246\032Q\351\035\023`\340?\036\261\357\374'Eh%\017Ol.\237I<\311S\347\207c$\237`\363kX.\330\310\320J\261\317\256\\Z\225\322\177\226\331YP\n\022\252\205jj\316\003\313C\033l?y\335\337\014\362\272\007s\373]\020\343\254#\223\232uL\251G\245L\344\021\353\214\314s\253k\0031\0334\255\213A\027\226\255.\252]3\363\\(\262]?\003\364\307\312\2715d\307T\346O\034\216\200\023FO2j\234\314\307\034j\376\014*\202\300V)T0\032\231$\242\202@LeFR\021\215\315)C\343\204\340J\322D\212\2624\230\374\277p\277\363\337\005U\304\027\030\341<*\241\\\tN(\243\302\251Pq(\003 m\031\006\307\024\340H\270\201Y\214\210\311\253\210\021\320\241C\361\220T\231R30\t\221\"D\324\321G{\2375\210`V\000L\273TfF\2127\321\302\351\300\215a#\214\242\245 L\255\211\tefn,\322\020\245\276`I\377\213\271\"\234(HoNL\032\000";
+    PyObject *data = __Pyx_DecompressString(cstring, 2522, 2);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (2234 bytes) */
-const char* const cstring = "x\332\335VIw\323X\026\306E\000\007\334\020e\"T\014\310\2113P\004\027\316H3\325qBBSEQQ\010I\027\223J\226\236\023u\024\311\326`\342\252:\247Yz\251\245\226o\371\226Zj\251\245\227Zj\351\237\220\237\320\367I!\2163PuN\207\352s\372\234D~\343\035\276\373\335\373\356\255\2739\226e\357\344\357\344\227\026\177,,\317+\232\2705.K\217\036\276x\365\374\371\343\027\232\211XsS0\331\205\232\271\251\251\254l\260\022R\344\"\322\005\023)5\3260uY4\221N\017\251\354\362\342\362\235\351{\323\254\240J\254\216\376\205D\323`\r\253(*\202a \203\325Jl\321\222\025SVY\263VFF\216}Vbk\232\305\252\010I\254\251\261e8w\360\202\271\211T\326@&\035\260c\202\252j\246`\312\232\312\303uY\335\030c%Y\007%r\025\321\333K\202b\240\334\305\211\334w\202$\361p\026I\262!\024\025\204T\372\335\020e#\036I\023\254\"\253\310x\244Z\333\345Z\216\0275\035\345\266-0L\320u\241\306\226\004Y\211\r\222\267\313\232n\036<fm\013\346\346\221\023\345\032\3326\344oKh[(\363eA7\220\236+\327v\036Rx\324\rC\263t\021=~\002H\265@n\215r<\257#\311\022\021/F \363|\333\036\370o\200\333\207v\227#%\007\206'H\331\337\374\234\230\334\0062\371\"\325g\034^E\n\332F\252y\342:\037Avd{\023\tR\273yt\025\260C\272\014a:\274\241j\022:~\361\004\371\232e\226-3r\352\204\255*\020C\323\377`\367\004\351e]+#\335\224\333m\212\342zd\201\027\215*O\351\364\\6\314\237\312\224\236\202\302\363\313\265\035\370\247!\347_\240\035s\005\225V\255\262\202\"}\202QSEY\313\001\241\300\034\312\304\010{^\226D*\210\227\201\340\272 \242\242\000\213\274De\304?\022M\033@\235\362\037\361<\214\220\016[<\332\221\341H\t8Y\006v\226\024M0g\247K\032\220\216\237\224`\303RE\236\007\307Za>\030\302c\302\331\na[\330\366\243r8<\207Br\024\350\023\241o\207;\2622\246)\240!\253\346\324$/\033\374>P\262\tyF1\212\362W\001\304y\260\016\360\332\267\021\256\301D\223,\005QdTa;\376E\037\370\330b\265\034\2453hT\243\370\265\007\261\254\225\2515 %N\351\334\301\224\346y\310i^\334D\000\240\265\035\317td@\341\210\307{\206\323a\034 :\262\324\262,n\2015\255\244>nc\371\200\206\252I\253\0245\273b\tJ\354\202\256C8\"\257\367""\363\234?\222\361\373\013h\207\337\263\314\320\221i\351\252N+Q\331@J\t\342\003\336\305_J\231\210Bt\032\353\201\221\204JB\344\323~\311\340\217)\037\321\214~dq\033\301\222\024i\340y\272\010_\331T\220\251\2255E\333\250\305\325\332*Kp\303\002\260?\311\252\n\212\025\177\014 \005\330\023\177\367\254\252\"\335\200d\372X\330\275|\2463\213\363\273\375g:\373\355Ug\020\0270\027&S\365g6\027\246\272\354D\230\352\267E\207qF\234J\230\352\266\207\354y[\010\273\206\203\341{^\302\353\363\220?\333`\032\231\260\253\307\236\262\005\373\203#b&\354\355\013\0072\270\007D\275\"\031\222o\2334\007X\234\010\007\006\235Ig\305\321q7\316\207\351\021\330\032!U\227s\213\336W\336\260\267\346O\372\353\215B\203\013\3237\235*~I\022!;N\022\315\001\370\204\003c\270r\350\376L0\363}#\323\230\t\226_\005\257\336\004o\336\006o\337\007\357\177\t~\021\250\000\003g\360#\367\254\233\017\331o\211\341f\334\007\236\340U\350\244\322\034\270\356p\315\201!\234\t\007n8E\374\025\014\322\263\301\354\017\215|c1\340\326\2025\020\365.x\367\276\231f\361Y\234\307/\334aw\305\205\313\023\244@^\202\320\031/\321\232\200\206\021@\217\3154\367\324>v{\334\002\335_ \0257\345\025<\216:r\216pD\3612\036\034\007_\310\337\\.\272\327\314d\001\244\367\356$\235\337&SD \277{y\017\356\337\"=\240\341\255\307x\031:a\000\254\n\250\233v-\357y#\321`\232\340\313\007\300\256\323\357\366?\3310\212E88\356\016\271?\372\275\376\212\2577\2300\3730x\310\005\334J\260\262\036\254\203g\305\240(\006\242\024f\307\311Y\222'\317\275\263\336$\2308>\t M\271\"\204WhM\230p\374V\230\375\206\214\271\014\254\200\337^\217\367\304?\347sa\026Lj\262Y\374=A\260~\026l~FWo\203\310g\200\326\257~\277_i$\232\221\217\003\243x\203@\\G\261\260\367\241\326\246\307\203\361{\301=\010b\230\006Hv\317\237\271~\213\206\232F\247\367\232\3034\223W\352\225\230\253ig\332\371\215\022i7y\2463U\237\256\003-{\354|3\331e\247\234%\300<\037&/\325\247\352B\335\262\377\341\314;\302\3366c\367\331\310\231\305\014\036\306k\300\311d\217=\343\234s\326 \250\013\270J8*\240\323\271\206G\001\212\307^\257\367""\246\221\000\205_\237\351\354\263\013a\262\317\206\003}\307\344G\022dp\373\371\300\034\315\203!\320\307a\004X\024\302\201\264\263\010\006\214@\320\023\237\233d\360U\222 \014\275<F\272\201\t\242\313\000Ft\353Z39\347\352^\277W\361/5f\003\356e\360r5\334_J5\226\202\225\325`\365\025\365\346\242\223\211!\273\341p\273\027O9\275\333\334j\233\014\343),`\013\010\313\035\227\353w\203\273\213>\347#\232\255\220_@\304\237\203\237i\316\206\220bI\232\351Y\010\010\205\201\035\306\223Q\356\003\277\256\272\t\227i\236\242$\026_\2002\222\246\231O\031\027\243\233\216\030\n\244\333\003\373\030\372ep\202\376|\251R\371_U\307\243W\377ta\214\213\322\026\2550M\210`\036\377@j\336\005\257\326\210Q8\031\217\233\216p\352\334:\364t0\3706Y\003#?c\010\244\3510D2I\303\231\274\0019\237\244\245%I\357fh\2358`\036c\303\255\277\214\377#x\235\016\302\326`/\267O\201\3133\356z\364\242dsD8uqY\3744v\3478\320;\303\324\345z\311.\330<^\"Cp\352\370\351\033|\036\027\341f<\r\372\306\311yRt?\315\355\367x\026\212[\376c!\314\216\320\366c0\370\032\236d7\021\023\213u*\273\251/Y\264N+\353\200s\370!\371\267\267\351\313\215\312\037dKW\335\264\301a\272b\332sN\326\021\234_\t\023t,\004\013\020\240\327\273\023\177Q\023\006\017\354\265\264\363\030\332\212y\"\271c\360\222\027\3024dK\023\n\342\020\236\207\334a\357\007\367\177jT\242\302\361:xMKF \024\367z\213\230<\227\241)\350\206&&{\027Jj\217\273\000\335H\2415\251@T\303\364uJ\314\243z\302/\240\347\013\365\206\337\020\350\r\241\2324\3777\r\"m\354\004*\3576\231\003\363\362\377\227\235\342\224;\007\336\376\335\237\367\2050\033{\\\3658O\330k\031\257\205\351\033N\t\027\202\221Y\267\344\315\203\252x\216\337\271\243\220\233\020\221\353\321\337D0\361\235w\\\363\330e\237\2677\234U\334\213\271\240\343\016\341v{\241\3328\231\223\036\362/\322\323\r:yJ\270\230\225l&2\317Q\3100\360\"\321\352\355h\245H\300\213u\356r}5`\206\3614\256\271\035\300\220\216T\375\251\235\267\227\234\t\310\231\216\013\037\253\365u{\321\351\0053\223\3356\274yW\355J\023>f08A\236F\320N{;\376\207\006\n^\002G!\261\244@\332""\n\266\024z\267\022&\257\004W&\310\023\310\240\253\336%\177\256\221i\266\257\344\367m\260\007\235'P\032\377\254zg\016\032V\246\245\3446\231\006\376]p\177\363\307\032L\263}%\363\021\344R\212\216B\311\207!@@\372\t\270\337\354\270\351T\002\366\256{\311{\340o\001\t\303\216\036\373\276\363O\200<R\376;TN\320Is\352\235\227\203\016\245\343R=\177\302\265\007\316&<\306\225\003\327 \374D\365^@\265\244\327\376\003\375\216\301\017";
-    PyObject *data = __Pyx_DecompressString(cstring, 2234, 1);
+    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (2239 bytes) */
+const char* const cstring = "x\332\335VKs\323X\026\306M\000\007<\020\345E\350\030\220\023\347A\023\014\316\223\001\232.'$\014\3354\035\205\220L\363R\313\322u\242\211\"\331z\230\270\273\253\206\245\227Zjy\227w\251\245\226Zz\251\245\226\376\t\371\ts\256\024\3428\017\272\253&\364TMU\"\337\347y|\347;\347\236[\367r,\313\336\311\337\311/-\376XX\236W4qk\\\226\276}\364\342\325\363\347\217_h&b\315M\301d\027j\346\246\246\262\262\301JH\221\213H\027L\244\324X\303\324e\321D:=\244\262\313\213\313w\246\357O\263\202*\261:\372\027\022M\2035\254\242\250\010\206\201\014V+\261EKVLYe\315Z\031\0319\366Y\211\255i\026\253\"$\261\246\306\226\341\334\301\013\346&RY\003\231t\300\216\t\252\252\231\202)k*\017\327euc\214\225d\035\224\310UDo/\t\212\201r\027'r\337\t\222\304\303Y$\311\206PT\020R\351wC\224\215x$M\260\212\254\"\343[\325\332.\327r\274\250\351(\267m\201a\202\256\0135\266$\310Jl\220\274]\326t\363\3401k[07\217\234(\327\320\266!\337\245'\356\226\320\266P\346\313\202n =W\256\355<\242\030\251\033\206f\351\"z\374\004\340j!\335\032\345x^G\222%\"^\214\220\346\371\266=\000\301\000\337\017\355.GJ\016\014O\220\262\277\37191\271\rd\362E\252\3178\274\212\024\264\215T\363\304u>\302\355\310\366&\022\244v\363\350*\000\210t\031buxC\325$t\374\342\t\3625\313,[f\344\324\t[U`\207\246\377\301\356\t\322\313\272VF\272)\267\333\024\305\365\310\002/\032U\236r\352\271l\230?\225)G\005\205\347\227k;\360OC\316\277@;\346\n*\255Ze\005E\372\004\243\246\212\262\226\003\316\2009\224\216\021\366\274,\211T\020/\003\313uADE\001\026y\211\312\210\177$\232;\200:M\002\304\3630B:l\361hG\206#% f\031(ZR4\301\234\235.i@:~R\202\rK\025y\036\034k\205\371`\010\217\tg+\204ma\333\217\312\341\360\034\n\311Q\240O\204\276\035\356\310\312\230\246\200\206\254\232S\223\274l\360\373@\311&$\033\305(Jb\005\020\347\301:\300k\337F\270\006\023M\262\024D\221Q\205\355\370\027}\340c\213\325r\224\323\240Q\215\342\327\036\304\262V\246\326\200\2248\257sQ\346\037\314k\236\207\304\346\305M\004(Z\333\361LG\006\224\220x\274g=\035\306Q\242#K-\313\342\026\230\324\312\354\3436\226\017h""\250\232\264^Q\333+\226\240\304~\350:\304$r}?\331\371#i\277\277\200v\370=\313\014\035\231\226\256\352\264\034\225\r\244\224 H\340b\374\245\274\211xD\247\261\036\030I\250$D>\355\327\r\376\230\032\022\315\350G\026\267\021,I\221\006\236\247\213\360\225M\005\231ZYS\264\215Z\\\267\255\262\0047,@\374\223\254\252\240X\361\307\000f\200=\361w\317\252*\322\r\310\250\217\205\335\313g:\2638\277\333\177\246\263\337^u\006q\001sa2U\177fsa\252\313N\204\251~[t\030g\304\251\204\251n{\310\236\267\205\260k8\030\276\357%\274>\017\371\263\r\246\221\t\273z\354)[\260?8\"f\302\336\276p \203{@\324+\222!\371\266Is\200\305\211p`\320\231tV\034\035w\343|\230\036\201\255\021Ru9\267\350}\345\r{k\376\244\277\336(4\2700}\323\251\342\227$\021\262\343$\321\034\200O80\206+\207\356\317\0043\33772\215\231`\371U\360\352M\360\346m\360\366}\360\376\227\340\027\201\n0p\006\177\353\236u\363!{\227\030n\306}\350\t^\205N*\315\201\353\016\327\034\030\302\231p\340\206S\304_\301 =\033\314\376\320\3107\026\003n-X\003Q\357\202w\357\233i\026\237\305y\374\302\035vW\\\270<A\n\344%\010\235\361\022\255\th\030\001\364\330LsO\355c\267\307-\320\375\005RqS^\301\343\250#\347\010G\024/\343\301q\360\205\374\315\345\242{\315L\026@z\357N\322\371m2E\004\362\273\227\367\340\376-\322\003\032\336z\214\227\241\023\006\300\252\200\272i\327\362\2367\022\r\246\t\276|\000\354:\375n\377\223\r\243X\204\203\343\356\220\373\243\337\353\257\370z\203\t\263\217\202G\\\300\255\004+\353\301:xV\014\212b Jav\234\234%y\362\334;\353M\202\211\343\223\000\322\224+Bx\205\326\204\t\307o\205\331o\310\230\313\300\n\370\355\365xO\374s>\027f\301\244&\233\305\337\023\004\353g\301\346gt\3656\210|\006h\375\352\367\373\225F\242\031\37180\2127\010\304u\024\013{\037jmz<\030\277\037\334\207 \206i\200d\367\374\231\353\267h\250itz\2579L3y\245^\211\271\232v\246\235\337(\221v\223g:S\365\351:\320\262\307\3167\223]v\312Y\002\314\363a\362R}\252.\324-\373\037\316\274#\354m3v\237\215\234Y\314\340a\274\006\234L\366\3303\3169g\r\202\272\200\253\204\243\002:\235kx\024\240x\354""\365zo\032\tP\370\365\231\316>\273\020&\373l8\320wL~$A\006\267\237\017\314\321<\030\002}\034F\200E!\034H;\213`\300\010\004=\361\271I\006_%\t\302\320\313c\244\033\230 \272\014`D\267\2565\223s\256\356\365{\025\377Rc6\340^\006/W\303\375\245Tc)XY\rV_Qo.:\231\030\262\033\016\267{\361\224\323\273\315\255\266\3110\236\302\002\266\200\260\334q\271~/\270\267\350s>\242\331\n\371\005D\3749\370\231\346l\010)\226\244\231\236\205\200P\030\330a<\031\345>\360\353\252\233p\231\346)Jb\361\005(#i\232\371\224q1\272\351\210\241@\272=\260\217\241_\006'\350\317\227*\225\377Uu<z\365O\027\306\270(m\321\n\323\204\010\346\361\017\244\346]\360j\215\030\205\223\361\270\351\010\247\316\255CO\007\203o\22350\3623\206@\232\016C$\2234\234\311\033\220\363IZZ\222\364n\206\326\211\003\34616\334\372\313\370?\202\327\351 l\r\366r\373\024\270<\343\256G/J6G\204S\027\227\305Ocw\216\003\2753L]\256\227\354\202\315\343%2\004\247\216\237\276\301\347q\021n\306\323\240o\234\234'E\367\323\334~\217g\241\270\345?\026\302\354\010m?\006\203\257\341Iv\0231\261X\247\262\233\372\222E\353\264\262\0168\207\037\221\177{\233\276\334\250\374A\266t\325M\033\034\246+\246=\347d\035\301\371\2250A\307B\260\000\001z\275;\361\0275a\360\300^K;\217\241\255\230'\222;\006/y!LC\2664\241 \016\341y\310\035\366A\360\340\247F%*\034\257\203\327\264d\004Bq\257\267\210\311s\031\232\202nhb\262\367\240\244\366\270\013\320\215\024Z\223\nD5L_\247\304<\252'\374\002z\276Po\370\r\201\336\020\252I\363\177\323 \322\306N\240\362n\22390/\377\177\331)N\271s\340\355\337\375y_\010\263\261\307U\217\363\204\275\226\361Z\230\276\341\224p!\030\231uK\336<\250\212\347\370\235;\n\271\t\021\271\036\375M\004\023\337y\3075\217]\366y{\303Y\305\275\230\013:\356\020n\267\027\252\215\2239\351!\377\"=\335\240\223\247\204\213Y\311f\"\363\034\205\014\003/\022\255\336\216V\212\004\274X\347.\327W\003f\030O\343\232\333\001\014\351H\325\237\332y{\311\231\200\234\351\270\360\261Z_\267\027\235^03\331m\303\233w\325\2564\341c\006\203\023\344i\004\355\264\267\343\177h\240\340%p\024""\022K\n\244\255`K\241w+a\362Jpe\202<\201\014\272\352]\362\347\032\231f\373J~\337\006{\320y\002\245\361\317\252w\346\240aeZJn\223i\340\337\005\3677\177\254\3014\333W2\037A.\245\350(\224|\030\002\004\244\237\200\373\315\216\233N%`\357\271\227\274\207\376\026\2200\354\350\261\0378\377\004\310#\345\277C\345\004\2354\247\336y9\350P:.\325\363'\\{\350l\302c\\9p\r\302OT\357\005TKz\355?)A\304\276";
+    PyObject *data = __Pyx_DecompressString(cstring, 2239, 1);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #else /* compression: none (5537 bytes) */
-const char* const bytes = ")0.   -1-1FEMAPBlock(id=<NULL>Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.\n,.?add_notedisableenablegcisenabled, lines=numpy._core.multiarray failed to importnumpy._core.umath failed to importpyemsi/femap_parser.pyx<stringsource>DictFEMAPBlockFEMAPBlock.__reduce_cython__FEMAPBlock.__setstate_cython__FEMAPParserFEMAPParser.__reduce_cython__FEMAPParser.__setstate_cython__FEMAPParser.get_blocksFEMAPParser.get_elementsFEMAPParser.get_elements_arraysFEMAPParser.get_headerFEMAPParser.get_materialsFEMAPParser.get_nodesFEMAPParser.get_nodes_arraysFEMAPParser.get_output_setsFEMAPParser.get_output_vectorsFEMAPParser.get_output_vectors_arraysFEMAPParser.get_propertiesFEMAPParser.parseFEMAPParser.parse_csv_lineListOptional__Pyx_PyDict_NextRefTuplearrayasyncio.coroutinesblock_idcline_in_traceback__dict___dictdtypeent_type__enter____exit__filepathfloat64force_2d__func__getget_blocksget_elementsget_elements_arraysget_headerget_materialsget_nodesget_nodes_arraysget_output_setsget_output_vectorsget_output_vectors_arraysget_properties__getstate__idint32_is_coroutineitemslinelineslist__main__material_id__module____name____new__nodesnpnumpyopenparseparse_csv_linepopprop_idpyemsi.femap_parser__pyx_checksum__pyx_result__pyx_state__pyx_type__pyx_unpickle_FEMAPBlock__pyx_unpickle_FEMAPParser__pyx_vtable____qualname__rreadlines__reduce____reduce_cython____reduce_ex__resultsreturnrstripselfset_idset_id_filter__set_name__setdefault__setstate____setstate_cython__statestaticmethodstrip__test__titletopologytypingupdateuse_setstatevaluevaluesvec_idvec_id_filterversion\200A\360\016\000\t$\2401\360\026\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A""\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030(\250\001\330\030'\240q\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 /\250s\260!\260;\270a\270q\330 /\250q\340\030\035\230Q\340\030\"\240!\330\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 '\240q\250\r\260Q\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$+\2501\250I\260R\260z\300\026\300q\310\001\340 %\240Q\340\030&\240g\250Q\330\034&\240a\330\034&\240a\330\034%\240Q\330\034(\320(8\3208J\310!\330\034'\240q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\034\2304\230{\250!\2501\360\010\000\t\014\2104\210q\330\014\023\2201\340\010\020\220\014\230F\240!\2401\330\010\013\2103\210a\210u\220H\230B\230a\330\014\023\2201\340\010\021\220\025\220e\2306\240\021\240#\240V\2501\330\010\023\2205\230\005\230V\2401\240C\240v\250Q\340\010\020\220\t\230\031\240&\250\003\250>\270\024\270[\310\001\200A\360\032\000\t\025\220A\330\010\025\220Q""\340\010\025\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030!\240\027\250\001\250\021\330\030\"\240'\250\022\2503\250c\260\021\330\034(\250\001\330\030\031\340\0107\260r\270\026\270q\300\013\3106\320QS\320ST\330\0107\260r\270\026\270q\300\014\310F\320RT\320TU\340\010\020\220\n\230!\200A\360\016\000\t\036\230Q\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030 \240\007\240q\330\034\"\240!\330\034'\240q\330\034(\250\001\330\034%\240Q\340\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t!\240\001\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034""\037\230v\240S\250\001\330 (\250\001\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 (\250\005\250Q\250k\270\021\270!\340\030#\2401\240K\250y\270\007\270y\310\001\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\037\230a\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\021\240+\250V\2601\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\032\000\t#\240!\330\010\"\240!\330\010\036\230a\330\010&\240a\330\010!\240\021\240!\360\010\000\t\026\220T\230\033\240A\240Q\330\010\021\220\021\340\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030%\240W\250A\250Q\330\030%\240W\250A\250Q\330\030!\240\027\250\001\250\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030$\240G\2501\250A\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\t\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220[\240\006\240b\250""\001\330\014\016\210f\220A\320\025(\250\006\250b\260\001\330\014\016\210f\220A\220^\2406\250\022\2501\200A\330$%\360\026\000\t\033\320\032/\250q\260\001\200A\360\016\000\t \230q\360\014\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030\"\240!\240<\250\177\270h\300i\310q\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\020\210t\2201\200A\340\010\017\210t\2207\230$\230a\230z\250\021\320\004C\320CY\320YZ\360,\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\360\006\000\031\034\230>\250\023\250B\250d\260'\270\023\270A\330\034!\240\021\340\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030\033\230>\250\023\250B\250d\260'\270\023\270A\330\034!\240\021\330\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030(\250\001\330\030'\240q\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 /\250s\260!""\260;\270a\270q\330 /\250q\340\030\035\230Q\340\030*\250!\330\030&\240a\340\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 /\250w\260a\260q\330 +\2507\260!\2601\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$3\2607\270!\2709\300B\300a\330$/\250w\260a\260v\270Q\270a\340 %\240Q\340\030\031\330\034\036\230f\240A\320%6\260f\270B\270a\330\034\036\230f\240A\240]\260&\270\002\270!\330\034\035\330\034\035\330\034,\320,?\270q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\020\220\006\220g\230T\240\024\240Q\320\004-\250Q\360\024\000\t\033\230!\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\033\2301\330\034\037\230r\240\022\2401\330 !\330\030\035\230Q\230l\250#\250S\260\001\330\034(\250\001\330\030\031\340\010\017\210q\200\001\360\010\000\005\016\210T\320\021#\2404\240y\260\004\260A\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330\010\027""\220q\340\010\027\220t\320\033,\250G\2605\270\003\2704\270x\300w\310e\320SV\320VZ\320Zd\320dk\320kl\330\004\007\200q\330\010\017\320\017,\250D\260\001\260\027\270\013\3007\310!\340\010\017\320\017,\250D\260\001\260\027\270\013\3001\200\001\360\010\000\005\016\210T\220\033\230D\240\001\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330\010\027\220q\340\010\027\220t\2307\240'\250\021\330\004\007\200q\330\010\017\320\017+\2504\250q\260\007\260{\300'\310\021\340\010\017\320\017+\2504\250q\260\007\260{\300!\200\001\330\004)\250\021\250&\260\001\200\001\330\004(\250\001\250\026\250q\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220:\230X\240Q\240a\330\004\007\200|\2207\230!\330\010,\250A\250]\270.\310\001\330\004\013\2101\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220;\230h\240a\240q\330\004\007\200|\2207\230!\330\010-\250Q\250n\270N\310!\330\004\013\2101";
+    #else /* compression: none (5547 bytes) */
+const char* const bytes = ")0.   -1-1FEMAPBlock(id=<NULL>Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.\n,.?add_notedisableenablegcisenabled, lines=numpy._core.multiarray failed to importnumpy._core.umath failed to importpyemsi/core/femap_parser.pyx<stringsource>DictFEMAPBlockFEMAPBlock.__reduce_cython__FEMAPBlock.__setstate_cython__FEMAPParserFEMAPParser.__reduce_cython__FEMAPParser.__setstate_cython__FEMAPParser.get_blocksFEMAPParser.get_elementsFEMAPParser.get_elements_arraysFEMAPParser.get_headerFEMAPParser.get_materialsFEMAPParser.get_nodesFEMAPParser.get_nodes_arraysFEMAPParser.get_output_setsFEMAPParser.get_output_vectorsFEMAPParser.get_output_vectors_arraysFEMAPParser.get_propertiesFEMAPParser.parseFEMAPParser.parse_csv_lineListOptional__Pyx_PyDict_NextRefTuplearrayasyncio.coroutinesblock_idcline_in_traceback__dict___dictdtypeent_type__enter____exit__filepathfloat64force_2d__func__getget_blocksget_elementsget_elements_arraysget_headerget_materialsget_nodesget_nodes_arraysget_output_setsget_output_vectorsget_output_vectors_arraysget_properties__getstate__idint32_is_coroutineitemslinelineslist__main__material_id__module____name____new__nodesnpnumpyopenparseparse_csv_linepopprop_idpyemsi.core.femap_parser__pyx_checksum__pyx_result__pyx_state__pyx_type__pyx_unpickle_FEMAPBlock__pyx_unpickle_FEMAPParser__pyx_vtable____qualname__rreadlines__reduce____reduce_cython____reduce_ex__resultsreturnrstripselfset_idset_id_filter__set_name__setdefault__setstate____setstate_cython__statestaticmethodstrip__test__titletopologytypingupdateuse_setstatevaluevaluesvec_idvec_id_filterversion\200A\360\016\000\t$\2401\360\026\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240""\023\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030(\250\001\330\030'\240q\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 /\250s\260!\260;\270a\270q\330 /\250q\340\030\035\230Q\340\030\"\240!\330\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 '\240q\250\r\260Q\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$+\2501\250I\260R\260z\300\026\300q\310\001\340 %\240Q\340\030&\240g\250Q\330\034&\240a\330\034&\240a\330\034%\240Q\330\034(\320(8\3208J\310!\330\034'\240q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\034\2304\230{\250!\2501\360\010\000\t\014\2104\210q\330\014\023\2201\340\010\020\220\014\230F\240!\2401\330\010\013\2103\210a\210u\220H\230B\230a\330\014\023\2201\340\010\021\220\025\220e\2306\240\021\240#\240V\2501\330\010\023\2205\230\005\230V\2401\240C\240v\250Q\340\010\020\220\t\230\031\240&\250\003\250>\270\024\270[\310\001\200A\360\032\000\t\025\220A\330""\010\025\220Q\340\010\025\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030!\240\027\250\001\250\021\330\030\"\240'\250\022\2503\250c\260\021\330\034(\250\001\330\030\031\340\0107\260r\270\026\270q\300\013\3106\320QS\320ST\330\0107\260r\270\026\270q\300\014\310F\320RT\320TU\340\010\020\220\n\230!\200A\360\016\000\t\036\230Q\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030 \240\007\240q\330\034\"\240!\330\034'\240q\330\034(\250\001\330\034%\240Q\340\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t!\240\001\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A""\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 (\250\005\250Q\250k\270\021\270!\340\030#\2401\240K\250y\270\007\270y\310\001\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\037\230a\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\021\240+\250V\2601\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\032\000\t#\240!\330\010\"\240!\330\010\036\230a\330\010&\240a\330\010!\240\021\240!\360\010\000\t\026\220T\230\033\240A\240Q\330\010\021\220\021\340\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030%\240W\250A\250Q\330\030%\240W\250A\250Q\330\030!\240\027\250\001\250\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030$\240G\2501\250A\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\t\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220[\240""\006\240b\250\001\330\014\016\210f\220A\320\025(\250\006\250b\260\001\330\014\016\210f\220A\220^\2406\250\022\2501\200A\330$%\360\026\000\t\033\320\032/\250q\260\001\200A\360\016\000\t \230q\360\014\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030\"\240!\240<\250\177\270h\300i\310q\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\020\210t\2201\200A\340\010\017\210t\2207\230$\230a\230z\250\021\320\004C\320CY\320YZ\360,\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\360\006\000\031\034\230>\250\023\250B\250d\260'\270\023\270A\330\034!\240\021\340\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030\033\230>\250\023\250B\250d\260'\270\023\270A\330\034!\240\021\330\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030(\250\001\330\030'\240q\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 /""\250s\260!\260;\270a\270q\330 /\250q\340\030\035\230Q\340\030*\250!\330\030&\240a\340\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 /\250w\260a\260q\330 +\2507\260!\2601\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$3\2607\270!\2709\300B\300a\330$/\250w\260a\260v\270Q\270a\340 %\240Q\340\030\031\330\034\036\230f\240A\320%6\260f\270B\270a\330\034\036\230f\240A\240]\260&\270\002\270!\330\034\035\330\034\035\330\034,\320,?\270q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\020\220\006\220g\230T\240\024\240Q\320\004-\250Q\360\024\000\t\033\230!\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\033\2301\330\034\037\230r\240\022\2401\330 !\330\030\035\230Q\230l\250#\250S\260\001\330\034(\250\001\330\030\031\340\010\017\210q\200\001\360\010\000\005\016\210T\320\021#\2404\240y\260\004\260A\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330""\010\027\220q\340\010\027\220t\320\033,\250G\2605\270\003\2704\270x\300w\310e\320SV\320VZ\320Zd\320dk\320kl\330\004\007\200q\330\010\017\320\017,\250D\260\001\260\027\270\013\3007\310!\340\010\017\320\017,\250D\260\001\260\027\270\013\3001\200\001\360\010\000\005\016\210T\220\033\230D\240\001\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330\010\027\220q\340\010\027\220t\2307\240'\250\021\330\004\007\200q\330\010\017\320\017+\2504\250q\260\007\260{\300'\310\021\340\010\017\320\017+\2504\250q\260\007\260{\300!\200\001\330\004)\250\021\250&\260\001\200\001\330\004(\250\001\250\026\250q\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220:\230X\240Q\240a\330\004\007\200|\2207\230!\330\010,\250A\250]\270.\310\001\330\004\013\2101\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220;\230h\240a\240q\330\004\007\200|\2207\230!\330\010-\250Q\250n\270N\310!\330\004\013\2101";
     PyObject *data = NULL;
     CYTHON_UNUSED_VAR(__Pyx_DecompressString);
     #endif
@@ -19268,67 +19268,67 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 105};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_parse, __pyx_mstate->__pyx_kp_b_iso88591_A_t1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_parse, __pyx_mstate->__pyx_kp_b_iso88591_A_t1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 131};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_line};
-    __pyx_mstate_global->__pyx_codeobj_tab[3] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_parse_csv_line, __pyx_mstate->__pyx_kp_b_iso88591_A_q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[3])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[3] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_parse_csv_line, __pyx_mstate->__pyx_kp_b_iso88591_A_q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[3])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 145};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self, __pyx_mstate->__pyx_n_u_block_id};
-    __pyx_mstate_global->__pyx_codeobj_tab[4] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_blocks, __pyx_mstate->__pyx_kp_b_iso88591_A_t7_az, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[4])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[4] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_blocks, __pyx_mstate->__pyx_kp_b_iso88591_A_t7_az, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[4])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 149};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[5] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_header, __pyx_mstate->__pyx_kp_b_iso88591_A_4_1_4q_1_F_1_3auHBa_1_e6_V1_5, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[5])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[5] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_header, __pyx_mstate->__pyx_kp_b_iso88591_A_4_1_4q_1_F_1_3auHBa_1_e6_V1_5, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[5])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 172};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self, __pyx_mstate->__pyx_n_u_force_2d};
-    __pyx_mstate_global->__pyx_codeobj_tab[6] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_nodes, __pyx_mstate->__pyx_kp_b_iso88591_Q_T_AQ_IQ_Q_8_3awc_Qe1A_E_q_E_q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[6])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[6] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_nodes, __pyx_mstate->__pyx_kp_b_iso88591_Q_T_AQ_IQ_Q_8_3awc_Qe1A_E_q_E_q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[6])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 208};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[7] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_nodes_arrays, __pyx_mstate->__pyx_kp_b_iso88591_A_A_Q_T_AQ_IQ_Q_8_3awc_Qe1A_E_q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[7])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[7] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_nodes_arrays, __pyx_mstate->__pyx_kp_b_iso88591_A_A_Q_T_AQ_IQ_Q_8_3awc_Qe1A_E_q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[7])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 244};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[8] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_properties, __pyx_mstate->__pyx_kp_b_iso88591_A_q_T_AQ_IQ_c_q_Ba_8_e6_3awc_Qe1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[8])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[8] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_properties, __pyx_mstate->__pyx_kp_b_iso88591_A_q_T_AQ_IQ_c_q_Ba_8_e6_3awc_Qe1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[8])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 283};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[9] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_elements, __pyx_mstate->__pyx_kp_b_iso88591_A_Q_T_AQ_IQ_c_q_Ba_8_e6_3awc_Qe1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[9])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[9] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_elements, __pyx_mstate->__pyx_kp_b_iso88591_A_Q_T_AQ_IQ_c_q_Ba_8_e6_3awc_Qe1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[9])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 336};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[10] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_elements_arrays, __pyx_mstate->__pyx_kp_b_iso88591_A_a_a_T_AQ_IQ_c_q_Ba_8_e6_3awc_Q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[10])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[10] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_elements_arrays, __pyx_mstate->__pyx_kp_b_iso88591_A_a_a_T_AQ_IQ_c_q_Ba_8_e6_3awc_Q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[10])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 406};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[11] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_materials, __pyx_mstate->__pyx_kp_b_iso88591_A_a_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[11])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[11] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_materials, __pyx_mstate->__pyx_kp_b_iso88591_A_a_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[11])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 436};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[12] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_sets, __pyx_mstate->__pyx_kp_b_iso88591_A_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[12])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[12] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_sets, __pyx_mstate->__pyx_kp_b_iso88591_A_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[12])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 481};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[13] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors, __pyx_mstate->__pyx_kp_b_iso88591_A_1_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[13])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[13] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors, __pyx_mstate->__pyx_kp_b_iso88591_A_1_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[13])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 3, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 578};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self, __pyx_mstate->__pyx_n_u_set_id_filter, __pyx_mstate->__pyx_n_u_vec_id_filter};
-    __pyx_mstate_global->__pyx_codeobj_tab[14] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors_arrays, __pyx_mstate->__pyx_kp_b_iso88591_CCYYZ_T_AQ_IQ_c_q_Ba_8_e6_3awc, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[14])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[14] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors_arrays, __pyx_mstate->__pyx_kp_b_iso88591_CCYYZ_T_AQ_IQ_c_q_Ba_8_e6_3awc, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[14])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 4, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 1};

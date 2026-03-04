@@ -54,6 +54,14 @@ pyside6-rcc.exe .\pyemsi\resources\resources.qrc -g python -o .\pyemsi\resources
 
 The `femap_parser` module is implemented in Cython for performance. When building from source, the extension will be compiled automatically. Pre-generated C files are included in source distributions for users without Cython.
 
+To manually compile the extension in-place (produces a `.pyd` file on Windows):
+
+```bash
+python setup.py build_ext --inplace
+```
+
+The compiled `.pyd` file will be placed in `pyemsi/core/`.
+
 ## Documentation
 
 For comprehensive API documentation and tutorials, visit:
