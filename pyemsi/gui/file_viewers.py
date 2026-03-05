@@ -25,6 +25,13 @@ from ._viewers._unsupported import UnsupportedViewer
 if _HAS_MULTIMEDIA:
     from ._viewers._audio import AudioViewer
 
+try:
+    from ._viewers._matplotlib import MatplotlibViewer
+
+    _HAS_MATPLOTLIB = True
+except ImportError:
+    _HAS_MATPLOTLIB = False
+
 __all__ = [
     "_CATEGORY",
     "_TEXT_EXTENSIONS",
@@ -39,4 +46,6 @@ __all__ = [
     "ImageViewer",
     "UnsupportedViewer",
     "create_viewer",
+    "MatplotlibViewer",
+    "_HAS_MATPLOTLIB",
 ]

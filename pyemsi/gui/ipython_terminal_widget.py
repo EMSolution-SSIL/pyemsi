@@ -46,4 +46,6 @@ def create_ipython_terminal(
     terminal.kernel_manager = kernel_manager
     terminal.kernel_client = kernel_client
 
+    kernel_client.execute("%matplotlib inline", silent=True)
+
     return terminal, kernel_manager

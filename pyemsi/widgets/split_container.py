@@ -235,6 +235,28 @@ class SplitContainer(QWidget):
         self._left.addTab(widget, title)
         self._left.setCurrentWidget(widget)
 
+    def add_figure(self, figure=None, title: str = "Figure"):
+        """Embed a matplotlib Figure as a new tab in the left panel.
+
+        Parameters
+        ----------
+        figure : matplotlib.figure.Figure, optional
+            Figure to display.  A blank Figure is created when *None*.
+        title : str
+            Tab label.  Defaults to ``"Figure"``.
+
+        Returns
+        -------
+        MatplotlibViewer
+            The viewer widget; use ``viewer.figure`` / ``viewer.draw()`` to
+            update the plot after creation.
+        """
+        from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
+
+        viewer = MatplotlibViewer(figure, parent=self._left)
+        self.add_tab(viewer, title)
+        return viewer
+
     def focus_widget(self, widget: QWidget) -> bool:
         """Activate the tab containing *widget*. Returns True if found."""
         for panel in (self._left, self._right):
