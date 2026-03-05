@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 import socket
 from pathlib import Path
@@ -210,6 +211,16 @@ _HTML = r"""<!DOCTYPE html>
         }
 
         stop() { this._stopping = true; this._initialized = false; if (this._ws) this._ws.close(); }
+
+        changeFileUri(newUri, text) {
+            if (this._initialized) {
+                this._notify('textDocument/didClose', { textDocument: { uri: this._fileUri } });
+            }
+            this._fileUri = newUri;
+            if (this._initialized) {
+                this.openDocument(text);
+            }
+        }
     }
 
     function lspKindToMonaco(kind) {
@@ -396,6 +407,9 @@ _HTML = r"""<!DOCTYPE html>
                 editor.executeEdits('bridge', [{ range: sel, text: data.prefix + selText + data.suffix }]);
                 editor.focus();
                 break;
+            case 'fileUri':
+                if (lspClient) lspClient.changeFileUri(data, editor.getModel().getValue());
+                break;
         }
     }
 
@@ -439,11 +453,16 @@ class MonacoLspWidget(QWebEngineView):
             self._lsp_port = _find_free_port()
             cmd = [c.replace("{port}", str(self._lsp_port)) for c in server_cmd]
             flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            # Set VIRTUAL_ENV so jedi ignores CONDA_PREFIX and uses the
+            # correct venv (the one running this process).
+            env = os.environ.copy()
+            env["VIRTUAL_ENV"] = str(Path(sys.executable).parent.parent)
             self._pylsp_proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=flags,
+                env=env,
             )
         else:
             self._lsp_port = 0  # signals JS to skip LSP
@@ -492,6 +511,7 @@ class MonacoLspWidget(QWebEngineView):
             text = f.read(self._MAX_BYTES)
         self._initial_text = text
         self.setText(text)
+        self._bridge.send_to_js("fileUri", Path(path).as_uri())
         self._dirty = False
 
     def save(self, path: str | None = None) -> None:
