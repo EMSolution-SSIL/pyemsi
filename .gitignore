@@ -2,7 +2,10 @@
 *.ipynb
 t.py
 y.py
+z.py
+todo
 .claude/
+.copilot-tracking/
 
 .pyemsi
 # Byte-compiled / optimized / DLL files
@@ -147,6 +150,7 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv311
 env/
 venv/
 ENV/

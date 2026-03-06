@@ -1,0 +1,246 @@
+"""
+Main application window for the pyemsi GUI.
+
+Provides PyEmsiMainWindow with a SplitContainer central widget and
+a bottom dock hosting an embedded IPython terminal.
+"""
+
+from __future__ import annotations
+
+import os
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow
+
+import pyemsi.resources.resources  # noqa: F401
+from pyemsi.widgets.explorer_widget import ExplorerWidget
+from pyemsi.widgets.split_container import SplitContainer
+from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
+
+
+class PyEmsiMainWindow(QMainWindow):
+    """
+    Main application window for the pyemsi GUI.
+
+    Central widget is a SplitContainer (two-panel tabbed area).
+    Bottom dock widget hosts an embedded IPython terminal.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("pyemsi")
+        self.setWindowIcon(QIcon(":/icons/Icon.svg"))
+        self.resize(1400, 900)
+
+        self._container = SplitContainer()
+        self.setCentralWidget(self._container)
+
+        self._setup_menu_bar()
+        self._setup_explorer()
+
+        self._ipython_dock = QDockWidget("IPython Terminal", self)
+        self._ipython_dock.setWindowIcon(QIcon(":/icons/IPythonTerminal.svg"))
+        self._ipython_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
+        self._ipython_widget = None
+        self._kernel_manager = None
+        self._active_external_terminals: dict = {}
+
+        self._setup_ipython_terminal()
+
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._ipython_dock)
+
+        self._external_terminal_dock = ExternalTerminalDock(self)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._external_terminal_dock)
+        self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
+        self._ipython_dock.raise_()
+
+        self._setup_view_menu()
+
+    @property
+    def container(self) -> SplitContainer:
+        """The SplitContainer (central widget)."""
+        return self._container
+
+    @property
+    def explorer(self) -> ExplorerWidget:
+        """The Explorer dock widget."""
+        return self._explorer_widget
+
+    @property
+    def ipython_terminal(self):
+        """The embedded IPython RichJupyterWidget."""
+        return self._ipython_widget
+
+    def _setup_menu_bar(self) -> None:
+        """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
+        file_menu = self.menuBar().addMenu("&File")
+        open_action = QAction("Open &Folder...", self)
+        open_action.setShortcut(QKeySequence("Ctrl+O"))
+        open_action.setIcon(QIcon(":/icons/FolderOpen.svg"))
+        open_action.triggered.connect(self._open_folder)
+        file_menu.addAction(open_action)
+
+        save_action = QAction("&Save", self)
+        save_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_action.setIcon(QIcon(":/icons/Save.svg"))
+        save_action.triggered.connect(self._save_active_tab)
+        file_menu.addAction(save_action)
+
+        save_all_action = QAction("Save A&ll", self)
+        save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        save_all_action.setIcon(QIcon(":/icons/SaveAll.svg"))
+        save_all_action.triggered.connect(self._save_all_tabs)
+        file_menu.addAction(save_all_action)
+
+    def _setup_view_menu(self) -> None:
+        """Add a View menu with toggles for the Explorer and Terminal docks."""
+        view_menu = self.menuBar().addMenu("&View")
+
+        explorer_action = self._explorer_dock.toggleViewAction()
+        explorer_action.setIcon(QIcon(":/icons/Explorer.svg"))
+        explorer_action.setShortcut(QKeySequence("Ctrl+E"))
+        view_menu.addAction(explorer_action)
+
+        ipython_action = self._ipython_dock.toggleViewAction()
+        ipython_action.setIcon(QIcon(":/icons/IPythonTerminal.svg"))
+        ipython_action.setShortcut(QKeySequence("Ctrl+I"))
+        view_menu.addAction(ipython_action)
+
+        external_action = self._external_terminal_dock.toggleViewAction()
+        external_action.setIcon(QIcon(":/icons/ExternalTerminal.svg"))
+        external_action.setShortcut(QKeySequence("Ctrl+T"))
+        view_menu.addAction(external_action)
+
+    def _setup_explorer(self) -> None:
+        """Create the Explorer dock widget and wire its signals."""
+        self._explorer_widget = ExplorerWidget()
+        self._explorer_widget.setMinimumWidth(200)
+        self._explorer_widget.open_folder_requested.connect(self._open_folder)
+        self._explorer_widget.file_activated.connect(self._on_file_activated)
+
+        self._explorer_dock = QDockWidget("Explorer", self)
+        self._explorer_dock.setWindowIcon(QIcon(":/icons/Explorer.svg"))
+        self._explorer_dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self._explorer_dock.setWidget(self._explorer_widget)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._explorer_dock)
+
+    def _open_folder(self) -> None:
+        """Prompt the user to pick a directory and open it in the Explorer."""
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Open Folder",
+            os.getcwd(),
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if path:
+            self._explorer_widget.set_directory(path)
+            folder_name = os.path.basename(path) or path
+            self.setWindowTitle(f"pyemsi — {folder_name}")
+
+    def _on_file_activated(self, path: str) -> None:
+        """Open *path* in a viewer tab, or focus the existing tab if already open."""
+        viewer = self._container.open_file(path)
+
+        from pyemsi.gui.file_viewers import PythonViewer
+
+        if isinstance(viewer, PythonViewer):
+            # Connect only once – guard via a dynamic attribute.
+            if not getattr(viewer, "_run_connected", False):
+                viewer.run_ipython_requested.connect(self._run_python_file_ipython)
+                viewer.run_external_requested.connect(self._run_python_file_external)
+                viewer.stop_external_requested.connect(self._stop_python_file_external)
+                viewer._run_connected = True
+
+    def _save_active_tab(self) -> None:
+        """Save the currently-focused Monaco editor tab."""
+        from pyemsi.gui.file_viewers import MarkdownViewer, PythonViewer
+        from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+        for panel in (self._container.left_panel, self._container.right_panel):
+            widget = panel.currentWidget()
+            if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
+                widget.save()
+                return
+
+    def _save_all_tabs(self) -> None:
+        """Save all open editor tabs in both panels."""
+        from pyemsi.gui.file_viewers import MarkdownViewer, PythonViewer
+        from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+        for panel in (self._container.left_panel, self._container.right_panel):
+            for i in range(panel.count()):
+                widget = panel.widget(i)
+                if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
+                    widget.save()
+
+    def _setup_ipython_terminal(self):
+        """Create the in-process IPython kernel and terminal widget."""
+        from pyemsi.gui.ipython_terminal_widget import create_ipython_terminal
+
+        self._ipython_widget, self._kernel_manager = create_ipython_terminal(namespace=self._build_namespace())
+        self._ipython_dock.setWidget(self._ipython_widget)
+
+    def _build_namespace(self) -> dict:
+        """Build the initial namespace for the IPython kernel."""
+        import pyemsi
+
+        return {"pyemsi": pyemsi}
+
+    def _run_python_file_ipython(self, path: str) -> None:
+        """Execute a Python file in the embedded IPython terminal."""
+        import os
+
+        cwd = self.explorer.current_path
+        if cwd and os.path.isdir(cwd):
+            self._kernel_manager.kernel.shell.run_cell(f"import os; os.chdir({cwd!r})", silent=True)
+        self._ipython_widget.execute(f"%run {path}")
+
+    def _stop_python_file_external(self) -> None:
+        """Terminate the external terminal process for the requesting viewer."""
+        viewer = self.sender()
+        xterm = self._active_external_terminals.get(id(viewer))
+        if xterm is not None:
+            xterm.kill()
+
+    def _run_python_file_external(self, path: str) -> None:
+        """Execute a Python file in a new external terminal tab."""
+        import sys
+
+        viewer = self.sender()
+        cwd = self.explorer.current_path or os.path.dirname(path)
+        title = os.path.basename(path)
+
+        if viewer is not None:
+            viewer.set_external_running(True)
+
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
+        xterm = self._external_terminal_dock.add_terminal(
+            title=title,
+            cmd=sys.executable,
+            args=[path],
+            cwd=cwd,
+        )
+
+        if viewer is not None:
+            self._active_external_terminals[id(viewer)] = xterm
+            xterm.processFinished.connect(
+                lambda _code, v=viewer: (
+                    v.set_external_running(False),
+                    self._active_external_terminals.pop(id(v), None),
+                )
+            )
+
+    def push_to_namespace(self, **kwargs):
+        """Push additional variables into the IPython kernel namespace."""
+        if self._kernel_manager is not None:
+            self._kernel_manager.kernel.shell.push(kwargs)
+
+    def closeEvent(self, event):
+        """Clean up kernel on close."""
+        if self._kernel_manager is not None:
+            self._kernel_manager.shutdown_kernel()
+        super().closeEvent(event)

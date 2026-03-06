@@ -30,6 +30,11 @@ dependencies = [
     "pyvistaqt>=0.11.0",
     "PySide6>=6.5.0",
     "matplotlib>=3.5.0",
+    "qtconsole>=5.4.0",
+    "ipykernel>=6.0.0",
+    "markdown>=3.4.0",
+    "python-lsp-server[websockets]",
+    "basedpyright>=1.31.4",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +53,7 @@ Repository = "https://github.com/EMSolution-SSIL/pyemsi"
 Issues = "https://github.com/EMSolution-SSIL/pyemsi/issues"
 
 [tool.setuptools]
-packages = ["pyemsi", "pyemsi.examples", "pyemsi.resources"]
+packages = ["pyemsi", "pyemsi.examples", "pyemsi.gui", "pyemsi.resources"]
 include-package-data = true
 zip-safe = false
 
