@@ -195,6 +195,24 @@ Utility functions for converting between all common color formats:
 | `explorer_widget.py` | `ExplorerWidget` | VSCode-style file system tree; empty-state hint when no folder is open |
 | `split_container.py` | `SplitContainer`, `_TabPanel` | Two-panel horizontal `QSplitter` with tabbed panels; right-click context menu for moving/closing tabs |
 
+#### `widgets/monaco_lsp` (Python LSP + Semantic Highlighting Rollout)
+
+- `MonacoLspWidget` keeps a WebSocket contract to Monaco (`ws://127.0.0.1:<port>`).
+- Default Python server path remains `pylsp --ws --port <port>`.
+- Feature-flag path uses a local relay (`pyemsi.widgets.monaco_lsp._relay`) that proxies WebSocket JSON-RPC to `basedpyright-langserver --stdio`.
+- Rollout gate:
+  - Python viewer requests semantic highlighting by default.
+  - `PYEMSI_PY_SEMANTIC_TOKENS=0` forces legacy `pylsp --ws` behavior.
+  - `PYEMSI_PY_SEMANTIC_TOKENS=1` forces relay + BasedPyright semantic-token path.
+- Viewer scope:
+  - Python viewer enables semantic-highlighting support (`MonacoLspWidget(..., enable_python_semantic_highlighting=True)`).
+  - Non-Python Monaco paths are unchanged.
+- Fail-open behavior:
+  - If `basedpyright-langserver` is unavailable or relay launch fails, startup falls back to legacy `pylsp --ws`.
+  - If runtime capabilities omit `semanticTokensProvider` or token requests fail, syntax highlighting remains active.
+- Debug diagnostics:
+  - `PYEMSI_MONACO_LSP_DEBUG=1` enables concise launch/capability diagnostics.
+
 #### `PropertyTreeWidget`
 
 - Each row has a *key* column and an *editable value* column.

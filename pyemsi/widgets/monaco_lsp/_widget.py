@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import socket
+import logging
 from pathlib import Path
 
 from qtpy.QtCore import Signal, QUrl
@@ -9,8 +10,20 @@ from qtpy.QtWebEngineWidgets import QWebEngineView
 from qtpy.QtWebChannel import QWebChannel
 
 from ._bridge import EditorBridge, MonacoPage
+from ._config import (
+    LSP_DEBUG_ENV,
+    PY_SEMANTIC_FEATURE_ENV,
+    PY_TYPE_CHECKING_MODE_ENV,
+    as_js_bool_literal,
+    build_python_lsp_launch_command,
+    read_bool_env,
+    read_str_env,
+    resolve_basedpyright_executable,
+    semantic_theme_enabled,
+)
 
 _PKG_DIR = Path(__file__).parent
+LOGGER = logging.getLogger(__name__)
 
 # Extension-to-Monaco language mapping (also used by file_viewers)
 EXT_TO_LANG: dict[str, str] = {
@@ -93,6 +106,20 @@ _HTML = r"""<!DOCTYPE html>
     'use strict';
     const LSP_PORT = __LSP_PORT__;
     const LSP_LANGUAGE = '__LSP_LANGUAGE__';
+    const PY_SEMANTIC_FEATURE = __PY_SEMANTIC_FEATURE__;
+    const PY_SEMANTIC_DEBUG = __PY_SEMANTIC_DEBUG__;
+    const PY_TYPE_CHECKING_MODE = '__PY_TYPE_CHECKING_MODE__';
+
+    const DEFAULT_SEMANTIC_TYPES = [
+        'namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter',
+        'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method',
+        'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp',
+        'operator', 'decorator'
+    ];
+    const DEFAULT_SEMANTIC_MODIFIERS = [
+        'declaration', 'definition', 'readonly', 'static', 'deprecated', 'abstract',
+        'async', 'modification', 'documentation', 'defaultLibrary'
+    ];
 
     // ── LSP JSON-RPC client over WebSocket ──────────────────────────────────────
     class LspClient {
@@ -107,6 +134,10 @@ _HTML = r"""<!DOCTYPE html>
             this._version = 0;
             this.onDiagnostics = null;
             this.onReady = null;
+            this._semanticTokensProvider = null;
+            this._semanticLegend = { tokenTypes: [], tokenModifiers: [] };
+            this._supportsSemanticTokens = false;
+            this._semanticFailureLogged = false;
             this._connect();
         }
 
@@ -150,7 +181,7 @@ _HTML = r"""<!DOCTYPE html>
 
         async _initialize() {
             try {
-                await this._request('initialize', {
+                const initResult = await this._request('initialize', {
                     processId: null,
                     clientInfo: { name: 'monaco-lsp-client', version: '1.0' },
                     rootUri: null,
@@ -167,14 +198,101 @@ _HTML = r"""<!DOCTYPE html>
                                 dynamicRegistration: false,
                                 signatureInformation: { documentationFormat: ['plaintext'] }
                             },
-                            publishDiagnostics: { relatedInformation: false }
+                            publishDiagnostics: { relatedInformation: false },
+                            semanticTokens: {
+                                dynamicRegistration: false,
+                                requests: { full: { delta: false }, range: false },
+                                tokenTypes: DEFAULT_SEMANTIC_TYPES,
+                                tokenModifiers: DEFAULT_SEMANTIC_MODIFIERS,
+                                formats: ['relative'],
+                                overlappingTokenSupport: false,
+                                multilineTokenSupport: false
+                            }
                         }
                     }
                 });
+
+                const caps = (initResult && initResult.capabilities) || {};
+                this._semanticTokensProvider = caps.semanticTokensProvider || null;
+
+                if (
+                    PY_SEMANTIC_FEATURE &&
+                    this._languageId === 'python' &&
+                    this._semanticTokensProvider &&
+                    this._semanticTokensProvider.legend
+                ) {
+                    const legend = this._semanticTokensProvider.legend;
+                    this._semanticLegend = {
+                        tokenTypes: Array.isArray(legend.tokenTypes) ? legend.tokenTypes : [],
+                        tokenModifiers: Array.isArray(legend.tokenModifiers) ? legend.tokenModifiers : [],
+                    };
+                    this._supportsSemanticTokens = this._semanticLegend.tokenTypes.length > 0;
+                    if (PY_SEMANTIC_DEBUG) {
+                        console.info('LSP semanticTokensProvider available', this._semanticLegend);
+                    }
+                } else {
+                    this._supportsSemanticTokens = false;
+                    if (PY_SEMANTIC_DEBUG && this._languageId === 'python') {
+                        console.info('LSP semanticTokensProvider unavailable; syntax highlighting only');
+                    }
+                }
+
                 this._notify('initialized', {});
+
+                // Tone down diagnostics to match an editor-like default profile.
+                if (this._languageId === 'python') {
+                    this._notify('workspace/didChangeConfiguration', {
+                        settings: {
+                            python: {
+                                analysis: {
+                                    typeCheckingMode: PY_TYPE_CHECKING_MODE,
+                                    diagnosticMode: 'openFilesOnly'
+                                }
+                            },
+                            pyright: {
+                                analysis: {
+                                    typeCheckingMode: PY_TYPE_CHECKING_MODE,
+                                    diagnosticMode: 'openFilesOnly'
+                                }
+                            },
+                            basedpyright: {
+                                analysis: {
+                                    typeCheckingMode: PY_TYPE_CHECKING_MODE,
+                                    diagnosticMode: 'openFilesOnly'
+                                }
+                            }
+                        }
+                    });
+                }
+
                 this._initialized = true;
                 if (this.onReady) this.onReady();
             } catch (e) { console.error('LSP init failed:', e.message); }
+        }
+
+        supportsSemanticTokens() {
+            return this._supportsSemanticTokens;
+        }
+
+        semanticLegend() {
+            return this._semanticLegend;
+        }
+
+        async semanticTokensFull() {
+            if (!this._initialized || !this._supportsSemanticTokens) return null;
+            try {
+                return await this._request('textDocument/semanticTokens/full', {
+                    textDocument: { uri: this._fileUri }
+                });
+            } catch (e) {
+                if (!this._semanticFailureLogged) {
+                    this._semanticFailureLogged = true;
+                    if (PY_SEMANTIC_DEBUG) {
+                        console.warn('semanticTokens/full failed; falling back to syntax highlighting:', e.message);
+                    }
+                }
+                return null;
+            }
         }
 
         openDocument(text) {
@@ -217,6 +335,9 @@ _HTML = r"""<!DOCTYPE html>
                 this._notify('textDocument/didClose', { textDocument: { uri: this._fileUri } });
             }
             this._fileUri = newUri;
+            if (editor) {
+                monaco.editor.setModelMarkers(editor.getModel(), 'lsp', []);
+            }
             if (this._initialized) {
                 this.openDocument(text);
             }
@@ -237,14 +358,79 @@ _HTML = r"""<!DOCTYPE html>
         return typeof doc === 'string' ? doc : (doc.value || '');
     }
 
+    function normalizeUriKey(uri) {
+        if (!uri) return '';
+        let normalized = String(uri);
+        try {
+            normalized = decodeURIComponent(normalized);
+        } catch (_) {
+            // Keep original when URI is not percent-encoded.
+        }
+        normalized = normalized.replace(/\\/g, '/');
+
+        // Canonicalize Windows file URIs to reduce case/encoding mismatches.
+        if (normalized.startsWith('file:///') && /^[A-Za-z]:/.test(normalized.slice(8))) {
+            normalized = 'file:///' + normalized.slice(8, 9).toLowerCase() + normalized.slice(9);
+        }
+
+        return normalized.toLowerCase();
+    }
+
     // ── Editor + Monaco providers ───────────────────────────────────────────────
     var bridge = null;
     var editor = null;
     var lspClient = null;
     var registeredLspLanguages = new Set();
+    var registeredSemanticLanguages = new Set();
     var _bridgeChannel = null;   // stash QWebChannel result until editor ready
     var _editorReady = false;    // true once require callback completed
     var _bridgeReady = false;    // true once QWebChannel callback completed
+
+    function resolveThemeName(themeName) {
+        if (!(PY_SEMANTIC_FEATURE && LSP_LANGUAGE === 'python')) return themeName;
+        if (themeName === 'vs') return 'pyemsi-vs';
+        return themeName;
+    }
+
+    function defineSemanticTheme() {
+        if (!(PY_SEMANTIC_FEATURE && LSP_LANGUAGE === 'python')) return;
+        monaco.editor.defineTheme('pyemsi-vs', {
+            base: 'vs',
+            inherit: true,
+            // This bundled monaco version styles semantic tokens through token rules.
+            rules: [
+                { token: 'class', foreground: '267f99' },
+                { token: 'type', foreground: '267f99' },
+                { token: 'namespace', foreground: '267f99' },
+                { token: 'variable', foreground: '001080' },
+                { token: 'parameter', foreground: '001080' },
+                { token: 'property', foreground: '0451a5' },
+                { token: 'function', foreground: '795E26' },
+                { token: 'method', foreground: '795E26' },
+            ],
+            colors: {},
+            semanticHighlighting: true,
+        });
+    }
+
+    function getDiagnosticsHoverMarkdown(model, position) {
+        const markers = monaco.editor.getModelMarkers({
+            owner: 'lsp',
+            resource: model.uri,
+        });
+        const matching = markers.filter((m) => {
+            const afterStart = position.lineNumber > m.startLineNumber ||
+                (position.lineNumber === m.startLineNumber && position.column >= m.startColumn);
+            const beforeEnd = position.lineNumber < m.endLineNumber ||
+                (position.lineNumber === m.endLineNumber && position.column <= m.endColumn);
+            return afterStart && beforeEnd;
+        });
+        if (matching.length === 0) return [];
+        return matching.map((m) => {
+            const source = m.source ? ` (${m.source})` : '';
+            return { value: `**${m.message}**${source}` };
+        });
+    }
 
     // Called after BOTH editor and bridge are available so that
     // queued Python→JS messages are only flushed when the editor exists.
@@ -289,11 +475,18 @@ _HTML = r"""<!DOCTYPE html>
         // Hover
         monaco.languages.registerHoverProvider(langId, {
             provideHover: async (model, position) => {
-                if (!lspClient || !lspClient._initialized) return null;
-                const result = await lspClient.hover(position.lineNumber - 1, position.column - 1);
-                if (!result || !result.contents) return null;
-                const raw = Array.isArray(result.contents) ? result.contents : [result.contents];
-                return { contents: raw.map(c => ({ value: extractDocString(c) })) };
+                const contents = getDiagnosticsHoverMarkdown(model, position);
+
+                if (lspClient && lspClient._initialized) {
+                    const result = await lspClient.hover(position.lineNumber - 1, position.column - 1);
+                    if (result && result.contents) {
+                        const raw = Array.isArray(result.contents) ? result.contents : [result.contents];
+                        contents.push(...raw.map(c => ({ value: extractDocString(c) })));
+                    }
+                }
+
+                if (contents.length === 0) return null;
+                return { contents };
             }
         });
 
@@ -323,12 +516,41 @@ _HTML = r"""<!DOCTYPE html>
         });
     }
 
+    function registerSemanticProvider(langId) {
+        if (registeredSemanticLanguages.has(langId)) return;
+        if (!lspClient || !lspClient.supportsSemanticTokens()) return;
+
+        const legend = lspClient.semanticLegend();
+        if (!legend || !Array.isArray(legend.tokenTypes) || legend.tokenTypes.length === 0) {
+            return;
+        }
+
+        registeredSemanticLanguages.add(langId);
+        monaco.languages.registerDocumentSemanticTokensProvider(langId, {
+            getLegend: () => legend,
+            provideDocumentSemanticTokens: async () => {
+                if (!lspClient || !lspClient._initialized) return { data: new Uint32Array(0) };
+                const response = await lspClient.semanticTokensFull();
+                if (!response || !Array.isArray(response.data)) return { data: new Uint32Array(0) };
+                return {
+                    resultId: response.resultId,
+                    data: new Uint32Array(response.data),
+                };
+            },
+            releaseDocumentSemanticTokens: () => {},
+        });
+    }
+
     require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 
     require(['vs/editor/editor.main'], () => {
+        defineSemanticTheme();
+
         editor = monaco.editor.create(document.getElementById('container'), {
             fontFamily: 'Consolas, "Courier New", monospace',
             automaticLayout: true,
+            theme: resolveThemeName('vs'),
+            'semanticHighlighting.enabled': PY_SEMANTIC_FEATURE && LSP_LANGUAGE === 'python',
         });
 
         editor.onDidChangeModelContent(() => {
@@ -351,18 +573,33 @@ _HTML = r"""<!DOCTYPE html>
             lspClient.onReady = () => {
                 lspClient.openDocument(editor.getModel().getValue());
                 registerLspProviders(LSP_LANGUAGE);
+                registerSemanticProvider(LSP_LANGUAGE);
 
                 // Wire up diagnostics → Monaco markers
                 lspClient.onDiagnostics = (params) => {
+                    // Only apply diagnostics for the active LSP document.
+                    if (!params || normalizeUriKey(params.uri) !== normalizeUriKey(lspClient._fileUri)) {
+                        if (PY_SEMANTIC_DEBUG && params && params.uri) {
+                            console.info('Ignoring diagnostics for non-active URI', params.uri, lspClient._fileUri);
+                        }
+                        return;
+                    }
+
                     const sev = monaco.MarkerSeverity;
-                    const markers = params.diagnostics.map(d => ({
+                    const diagnostics = (params.diagnostics || []).filter((d) => {
+                        // Keep only errors and warnings to avoid excessive strictness.
+                        const lspSeverity = d.severity || 2;
+                        return lspSeverity <= 2;
+                    });
+
+                    const markers = diagnostics.map(d => ({
                         severity: [, sev.Error, sev.Warning, sev.Info, sev.Hint][d.severity] || sev.Info,
                         message:         d.message,
                         source:          d.source || 'lsp',
                         startLineNumber: d.range.start.line + 1,
                         startColumn:     d.range.start.character + 1,
                         endLineNumber:   d.range.end.line + 1,
-                        endColumn:       d.range.end.character + 1,
+                        endColumn:       Math.max(d.range.start.character + 2, d.range.end.character + 1),
                     }));
                     monaco.editor.setModelMarkers(editor.getModel(), 'lsp', markers);
                 };
@@ -395,7 +632,7 @@ _HTML = r"""<!DOCTYPE html>
                 monaco.editor.setModelLanguage(editor.getModel(), data);
                 break;
             case 'theme':
-                monaco.editor.setTheme(data);
+                monaco.editor.setTheme(resolveThemeName(data));
                 sendToPython('theme', editor._themeService._theme.themeName);
                 break;
             case 'insertAtCursor':
@@ -440,30 +677,35 @@ class MonacoLspWidget(QWebEngineView):
     textChanged = Signal(str)
     dirtyChanged = Signal(bool)
 
-    def __init__(self, language: str = "python", parent=None):
+    def __init__(
+        self,
+        language: str = "python",
+        parent=None,
+        enable_python_semantic_highlighting: bool = False,
+    ):
         super().__init__(parent=parent)
         self._file_path: str | None = None
         self._dirty = False
         self._initial_text: str = ""
+        self._semantic_requested = enable_python_semantic_highlighting
+        self._semantic_enabled = semantic_theme_enabled(
+            language,
+            semantic_requested=self._semantic_requested,
+        )
 
         # Decide whether to spawn an LSP server
         self._pylsp_proc = None
+        self._lsp_mode = "none"
         server_cmd = _LSP_SERVERS.get(language)
         if server_cmd is not None:
             self._lsp_port = _find_free_port()
-            cmd = [c.replace("{port}", str(self._lsp_port)) for c in server_cmd]
-            flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-            # Set VIRTUAL_ENV so jedi ignores CONDA_PREFIX and uses the
-            # correct venv (the one running this process).
-            env = os.environ.copy()
-            env["VIRTUAL_ENV"] = str(Path(sys.executable).parent.parent)
-            self._pylsp_proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=flags,
-                env=env,
-            )
+            if language == "python":
+                command, mode = self._resolve_python_server_command()
+            else:
+                command = [c.replace("{port}", str(self._lsp_port)) for c in server_cmd]
+                mode = "legacy"
+
+            self._start_lsp_process(command=command, mode=mode)
         else:
             self._lsp_port = 0  # signals JS to skip LSP
 
@@ -472,6 +714,15 @@ class MonacoLspWidget(QWebEngineView):
 
         html = _HTML.replace("__LSP_PORT__", str(self._lsp_port))
         html = html.replace("__LSP_LANGUAGE__", language)
+        html = html.replace("__PY_SEMANTIC_FEATURE__", as_js_bool_literal(self._semantic_enabled))
+        html = html.replace(
+            "__PY_SEMANTIC_DEBUG__",
+            as_js_bool_literal(read_bool_env(LSP_DEBUG_ENV, default=False)),
+        )
+        html = html.replace(
+            "__PY_TYPE_CHECKING_MODE__",
+            read_str_env(PY_TYPE_CHECKING_MODE_ENV, default="basic"),
+        )
         base_url = QUrl.fromLocalFile((_PKG_DIR / "index.html").as_posix())
         self.setHtml(html, base_url)
 
@@ -482,6 +733,59 @@ class MonacoLspWidget(QWebEngineView):
 
         self._bridge.initialized.connect(self.initialized)
         self._bridge.valueChanged.connect(self._on_value_changed)
+
+    def _resolve_python_server_command(self) -> tuple[list[str], str]:
+        basedpyright_executable = resolve_basedpyright_executable(python_executable=sys.executable)
+        command, mode = build_python_lsp_launch_command(
+            self._lsp_port,
+            semantic_requested=self._semantic_requested,
+            basedpyright_executable=basedpyright_executable,
+        )
+        if (
+            mode == "legacy-pylsp"
+            and self._semantic_requested
+            and read_bool_env(
+                PY_SEMANTIC_FEATURE_ENV,
+                default=False,
+            )
+        ):
+            LOGGER.warning(
+                "Python semantic highlighting requested but basedpyright-langserver was not found; "
+                "falling back to legacy pylsp WebSocket mode"
+            )
+        return command, mode
+
+    def _start_lsp_process(self, command: list[str], mode: str) -> None:
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        env = os.environ.copy()
+        env["VIRTUAL_ENV"] = str(Path(sys.executable).parent.parent)
+
+        try:
+            self._pylsp_proc = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+                env=env,
+            )
+            self._lsp_mode = mode
+            if read_bool_env(LSP_DEBUG_ENV, default=False):
+                LOGGER.debug("Started Monaco LSP process mode=%s command=%s", mode, command)
+        except OSError:
+            self._pylsp_proc = None
+            self._lsp_mode = "none"
+            LOGGER.exception("Failed to start Monaco LSP process for mode=%s", mode)
+            if mode == "relay-basedpyright":
+                # Fail open to legacy behavior if the relay path cannot be launched.
+                fallback = [
+                    sys.executable,
+                    "-m",
+                    "pylsp",
+                    "--ws",
+                    "--port",
+                    str(self._lsp_port),
+                ]
+                self._start_lsp_process(command=fallback, mode="legacy-pylsp")
 
     # -- dirty tracking ----------------------------------------------------
 

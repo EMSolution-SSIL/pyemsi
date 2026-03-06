@@ -30,7 +30,11 @@ class PythonViewer(QWidget):
         super().__init__(parent)
 
         # -- inner Monaco editor with Python LSP --
-        self.editor = MonacoLspWidget(language="python", parent=self)
+        self.editor = MonacoLspWidget(
+            language="python",
+            parent=self,
+            enable_python_semantic_highlighting=True,
+        )
         self.editor.setLanguage("python")
         self.editor.setTheme("vs")
 
