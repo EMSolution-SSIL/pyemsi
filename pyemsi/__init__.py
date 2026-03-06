@@ -13,6 +13,7 @@ from typing import Optional
 from .tools.FemapConverter import FemapConverter
 from .plotter import Plotter
 from . import examples
+from .io import EMSolutionOutput
 
 __version__ = "0.1.2"
 
@@ -22,7 +23,20 @@ __all__ = [
     "configure_logging",
     "examples",
     "gui",
+    "is_gui_running",
+    "EMSolutionOutput",
 ]
+
+
+def is_gui_running() -> bool:
+    """Return True if a QApplication instance is currently active."""
+    try:
+        from PySide6.QtWidgets import QApplication
+
+        return QApplication.instance() is not None
+    except ImportError:
+        return False
+
 
 # Package-level logger setup (library best practice: NullHandler by default)
 logger = logging.getLogger(__name__)

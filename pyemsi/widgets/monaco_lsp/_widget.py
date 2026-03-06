@@ -252,7 +252,7 @@ _HTML = r"""<!DOCTYPE html>
         if (!_editorReady || !_bridgeReady) return;
         bridge = _bridgeChannel.objects.bridge;
         bridge.sendDataChanged.connect(updateFromPython);
-        bridge.init();   // flush queue – editor guaranteed non-null
+        bridge.init();   // flush queue - editor guaranteed non-null
         init();
     }
 
@@ -262,7 +262,7 @@ _HTML = r"""<!DOCTYPE html>
 
         // Completion
         monaco.languages.registerCompletionItemProvider(langId, {
-            triggerCharacters: ['.', '('],
+            triggerCharacters: ['.'],
             provideCompletionItems: async (model, position) => {
                 if (!lspClient || !lspClient._initialized) return { suggestions: [] };
                 const result = await lspClient.completion(position.lineNumber - 1, position.column - 1);
