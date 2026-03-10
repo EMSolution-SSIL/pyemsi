@@ -32,6 +32,8 @@ Right-click a tab to:
 
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
@@ -44,6 +46,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def _resolve_open_path(path: str) -> str:
+    """Return a normalized absolute path for viewer operations."""
+    return os.path.abspath(os.path.normpath(path))
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +279,8 @@ class SplitContainer(QWidget):
         Parameters
         ----------
         path : str
-            Absolute path to the file.
+            Path to the file. Relative paths are resolved against the current
+            working directory.
         category : str, optional
             Force a viewer category (``"text"``, ``"image"``, ``"audio"``).
             When *None* the category is inferred from the file extension.
@@ -282,11 +290,9 @@ class SplitContainer(QWidget):
         QWidget
             The viewer widget (new or existing).
         """
-        import os
-
         from pyemsi.gui.file_viewers import _CATEGORY, MarkdownViewer, create_viewer
 
-        norm_path = os.path.normpath(path)
+        norm_path = _resolve_open_path(path)
 
         existing = self._find_tab_by_path(norm_path)
         if existing is not None:
@@ -316,11 +322,9 @@ class SplitContainer(QWidget):
 
     def open_preview(self, path: str) -> None:
         """Open (or focus) a rendered Markdown preview tab for *path*."""
-        import os
-
         from pyemsi.gui.file_viewers import MarkdownPreviewViewer
 
-        norm_path = os.path.normpath(path)
+        norm_path = _resolve_open_path(path)
         preview_key = norm_path + "::preview"
 
         existing = self._find_tab_by_path(preview_key)

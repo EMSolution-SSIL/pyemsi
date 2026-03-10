@@ -849,13 +849,14 @@ class MonacoLspWidget(QWebEngineView):
 
     def load_file(self, path: str) -> None:
         """Read *path* and populate the editor."""
-        self._file_path = path
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        resolved_path = str(Path(path).resolve())
+        self._file_path = resolved_path
+        with open(resolved_path, "r", encoding="utf-8", errors="replace") as f:
             text = f.read(self._MAX_BYTES)
         self._initial_text = text
         self.setText(text)
-        self._update_python_analysis_paths(path)
-        self._bridge.send_to_js("fileUri", Path(path).as_uri())
+        self._update_python_analysis_paths(resolved_path)
+        self._bridge.send_to_js("fileUri", Path(resolved_path).as_uri())
         self._dirty = False
 
     def _update_python_analysis_paths(self, path: str) -> None:
