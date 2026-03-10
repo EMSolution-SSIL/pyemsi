@@ -251,47 +251,222 @@ def find_containing_symbol_trail(
     return []
 
 
+def build_symbol_breadcrumb_items(
+    symbols: list[dict[str, Any]],
+    position: dict[str, int],
+) -> list[dict[str, Any]]:
+    trail = find_containing_symbol_trail(symbols, position)
+    if not trail:
+        return []
+
+    items: list[dict[str, Any]] = []
+    siblings: list[dict[str, Any]] = symbols
+    for index, symbol in enumerate(trail):
+        level_siblings = [candidate for candidate in siblings if isinstance(candidate, dict)]
+        items.append(
+            {
+                "symbol": symbol,
+                "siblings": level_siblings,
+                "isLeaf": index == len(trail) - 1,
+            }
+        )
+        children = symbol.get("children")
+        siblings = children if isinstance(children, list) else []
+    return items
+
+
+def should_show_breadcrumbs(
+    active_language: str | None,
+    lsp_language: str | None,
+    has_document_symbol_support: bool,
+    symbols: list[dict[str, Any]] | None,
+) -> bool:
+    if not has_document_symbol_support:
+        return False
+    if not active_language or active_language != lsp_language:
+        return False
+    return bool(symbols)
+
+
 _HTML = r"""<!DOCTYPE html>
 <style>
     * { padding: 0; margin: 0; }
+    :root {
+        --breadcrumb-font-family: "Consolas", "Cascadia Code", "JetBrains Mono", "Fira Code", "Courier New", monospace;
+        --breadcrumb-font-size: 12px;
+        --breadcrumb-line-height: 1.35;
+        --breadcrumb-text: #1f2937;
+        --breadcrumb-muted: #5b6b80;
+        --breadcrumb-accent: #1d4ed8;
+        --breadcrumb-hover-bg: rgba(37, 99, 235, 0.10);
+        --breadcrumb-active-bg: linear-gradient(180deg, rgba(37, 99, 235, 0.14), rgba(37, 99, 235, 0.08));
+        --breadcrumb-active-border: rgba(37, 99, 235, 0.22);
+        --breadcrumb-panel-border: rgba(148, 163, 184, 0.35);
+        --breadcrumb-panel-bg: rgba(255, 255, 255, 0.98);
+        --breadcrumb-radius: 8px;
+        --breadcrumb-panel-radius: 12px;
+        --breadcrumb-badge-bg: rgba(37, 99, 235, 0.10);
+    }
     html, body { min-height: 100% !important; height: 100%; overflow: hidden; }
     body {
         display: flex;
         flex-direction: column;
         background: #ffffff;
-        color: #1f2937;
+        color: var(--breadcrumb-text);
     }
     #breadcrumbs {
         display: none;
         align-items: center;
         gap: 2px;
         min-height: 24px;
-        padding: 1px 1px;
+        padding: 2px 3px;
         border-bottom: 1px solid #d6dce5;
         background: white;
-        font: 11px "Segoe UI", "Helvetica Neue", sans-serif;
+        font-family: var(--breadcrumb-font-family);
+        font-size: var(--breadcrumb-font-size);
+        font-weight: 400;
+        line-height: var(--breadcrumb-line-height);
+        letter-spacing: 0.01em;
         white-space: nowrap;
         overflow-x: auto;
         overflow-y: hidden;
     }
     #breadcrumbs.visible { display: flex; }
+    .breadcrumb-item {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        font: inherit;
+    }
+    .breadcrumb-segment-group {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid transparent;
+        border-radius: var(--breadcrumb-radius);
+        transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .breadcrumb-segment-group.open {
+        background: var(--breadcrumb-active-bg);
+        border-color: var(--breadcrumb-active-border);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    }
     .breadcrumb-segment {
         appearance: none;
         border: 0;
         background: transparent;
-        border-radius: 4px;
-        color: #1f2937;
+        border-radius: calc(var(--breadcrumb-radius) - 2px);
+        color: var(--breadcrumb-text);
         cursor: pointer;
         font: inherit;
-        padding: 2px 6px;
+        line-height: inherit;
+        padding: 4px 9px;
     }
-    .breadcrumb-segment:hover {
-        background: rgba(37, 99, 235, 0.10);
-        color: #1d4ed8;
+    .breadcrumb-segment:hover,
+    .breadcrumb-segment:focus-visible {
+        background: var(--breadcrumb-hover-bg);
+        color: var(--breadcrumb-accent);
+        outline: none;
+    }
+    .breadcrumb-segment-label {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .breadcrumb-separator {
-        color: #64748b;
+        color: var(--breadcrumb-muted);
+        font-size: 11px;
+        padding: 0 2px;
         user-select: none;
+    }
+    #breadcrumb-menu {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        min-width: 180px;
+        max-width: min(320px, calc(100vw - 16px));
+        max-height: min(320px, calc(100vh - 16px));
+        overflow: auto;
+        border: 1px solid var(--breadcrumb-panel-border);
+        border-radius: var(--breadcrumb-panel-radius);
+        background: var(--breadcrumb-panel-bg);
+        backdrop-filter: blur(14px);
+        color: var(--breadcrumb-text);
+        font-family: var(--breadcrumb-font-family);
+        font-size: var(--breadcrumb-font-size);
+        font-weight: 400;
+        line-height: var(--breadcrumb-line-height);
+        letter-spacing: 0.01em;
+        padding: 6px;
+    }
+    #breadcrumb-menu.visible {
+        display: block;
+    }
+    .breadcrumb-menu-surface {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .breadcrumb-menu-item {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        appearance: none;
+        border: 0;
+        border-radius: var(--breadcrumb-radius);
+        background: transparent;
+        color: var(--breadcrumb-text);
+        cursor: pointer;
+        font: inherit;
+        line-height: inherit;
+        padding: 6px 10px;
+        text-align: left;
+        transition: background 120ms ease, color 120ms ease;
+    }
+    .breadcrumb-menu-item:hover,
+    .breadcrumb-menu-item:focus-visible {
+        background: var(--breadcrumb-hover-bg);
+        color: var(--breadcrumb-accent);
+        outline: none;
+    }
+    .breadcrumb-menu-item.active {
+        background: var(--breadcrumb-active-bg);
+        color: var(--breadcrumb-accent);
+    }
+    .breadcrumb-menu-item-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font: inherit;
+    }
+    .breadcrumb-menu-item-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        margin-left: 12px;
+    }
+    .breadcrumb-menu-item-badge {
+        border-radius: 999px;
+        background: var(--breadcrumb-badge-bg);
+        color: var(--breadcrumb-accent);
+        font-family: var(--breadcrumb-font-family);
+        font-size: 10px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        line-height: 1.2;
+        padding: 2px 6px;
+        text-transform: uppercase;
+    }
+    .breadcrumb-menu-item-detail {
+        color: var(--breadcrumb-muted);
+        flex: 0 0 auto;
+        font-family: var(--breadcrumb-font-family);
+        font-size: 11px;
+        line-height: 1.2;
     }
     #container {
         width: 100%;
@@ -307,6 +482,7 @@ _HTML = r"""<!DOCTYPE html>
 </head>
 <body>
     <div id="breadcrumbs" aria-label="Document breadcrumbs"></div>
+    <div id="breadcrumb-menu" aria-label="Breadcrumb sibling symbols"></div>
     <div id="container"></div>
     <script src="monaco-editor/min/vs/loader.js"></script>
     <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
@@ -745,6 +921,24 @@ _HTML = r"""<!DOCTYPE html>
         return [];
     }
 
+    function buildSymbolBreadcrumbItems(position, symbols) {
+        const trail = findContainingSymbolTrail(position, symbols);
+        if (trail.length === 0) return [];
+
+        const items = [];
+        let siblings = Array.isArray(symbols) ? symbols : [];
+        trail.forEach((symbol, index) => {
+            const levelSiblings = siblings.filter(Boolean);
+            items.push({
+                symbol,
+                siblings: levelSiblings,
+                isLeaf: index === trail.length - 1,
+            });
+            siblings = Array.isArray(symbol.children) ? symbol.children : [];
+        });
+        return items;
+    }
+
     // ── Editor + Monaco providers ───────────────────────────────────────────────
     var bridge = null;
     var editor = null;
@@ -759,7 +953,10 @@ _HTML = r"""<!DOCTYPE html>
     var _documentSymbolRefreshTimer = null;
     var _documentSymbolRefreshPromise = null;
     var _activeDocumentUri = '';
+    var _breadcrumbTrail = [];
+    var _openBreadcrumbMenuState = null;
     const breadcrumbsEl = document.getElementById('breadcrumbs');
+    const breadcrumbMenuEl = document.getElementById('breadcrumb-menu');
 
     function resolveThemeName(themeName) {
         if (!(PY_SEMANTIC_FEATURE && LSP_LANGUAGE === 'python')) return themeName;
@@ -838,6 +1035,17 @@ _HTML = r"""<!DOCTYPE html>
         };
     }
 
+    function hasDocumentSymbolSupportForActiveLanguage() {
+        if (!editor || !lspClient || !lspClient.supportsDocumentSymbols()) {
+            return false;
+        }
+        return editor.getModel().getLanguageId() === LSP_LANGUAGE;
+    }
+
+    function shouldShowBreadcrumbs() {
+        return hasDocumentSymbolSupportForActiveLanguage() && Array.isArray(_documentSymbols) && _documentSymbols.length > 0;
+    }
+
     function navigateToFileStart() {
         if (!editor) return;
         const target = { lineNumber: 1, column: 1 };
@@ -857,27 +1065,170 @@ _HTML = r"""<!DOCTYPE html>
         editor.focus();
     }
 
+    function hideBreadcrumbMenu() {
+        breadcrumbMenuEl.replaceChildren();
+        breadcrumbMenuEl.classList.remove('visible');
+        breadcrumbMenuEl.style.left = '0px';
+        breadcrumbMenuEl.style.top = '0px';
+        breadcrumbMenuEl.style.minWidth = '180px';
+    }
+
+    function closeBreadcrumbMenu() {
+        if (_openBreadcrumbMenuState === null) {
+            hideBreadcrumbMenu();
+            return;
+        }
+        _openBreadcrumbMenuState = null;
+        renderBreadcrumbStrip(_breadcrumbTrail);
+    }
+
+    function setBreadcrumbMenuState(state) {
+        _openBreadcrumbMenuState = state;
+        renderBreadcrumbStrip(_breadcrumbTrail);
+    }
+
+    function toggleBreadcrumbMenu(index, anchorEl) {
+        if (!anchorEl) return;
+        if (_openBreadcrumbMenuState && _openBreadcrumbMenuState.index === index) {
+            closeBreadcrumbMenu();
+            return;
+        }
+
+        const rect = anchorEl.getBoundingClientRect();
+        setBreadcrumbMenuState({
+            index,
+            left: rect.left,
+            top: rect.bottom + 4,
+            width: Math.max(rect.width, 180),
+        });
+    }
+
+    function renderBreadcrumbMenu(trail) {
+        breadcrumbMenuEl.replaceChildren();
+        if (!_openBreadcrumbMenuState) {
+            hideBreadcrumbMenu();
+            return;
+        }
+
+        const entry = trail[_openBreadcrumbMenuState.index];
+        if (!entry || entry.isFile || !Array.isArray(entry.siblings) || entry.siblings.length <= 1) {
+            _openBreadcrumbMenuState = null;
+            hideBreadcrumbMenu();
+            return;
+        }
+
+        const surface = document.createElement('div');
+        surface.className = 'breadcrumb-menu-surface';
+
+        entry.siblings.forEach((sibling) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'breadcrumb-menu-item';
+            if (sibling === entry.symbol) {
+                button.classList.add('active');
+            }
+
+            const name = document.createElement('span');
+            name.className = 'breadcrumb-menu-item-name';
+            name.textContent = sibling.name || '(symbol)';
+            button.appendChild(name);
+
+            if (sibling.detail || sibling === entry.symbol) {
+                const meta = document.createElement('span');
+                meta.className = 'breadcrumb-menu-item-meta';
+
+                if (sibling === entry.symbol) {
+                    const badge = document.createElement('span');
+                    badge.className = 'breadcrumb-menu-item-badge';
+                    badge.textContent = 'Current';
+                    meta.appendChild(badge);
+                }
+
+                if (sibling.detail) {
+                const detail = document.createElement('span');
+                detail.className = 'breadcrumb-menu-item-detail';
+                detail.textContent = sibling.detail;
+                    meta.appendChild(detail);
+                }
+
+                button.appendChild(meta);
+            }
+
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                _openBreadcrumbMenuState = null;
+                navigateToSymbol(sibling);
+                updateBreadcrumbsForActivePosition();
+            });
+            surface.appendChild(button);
+        });
+
+        breadcrumbMenuEl.appendChild(surface);
+
+        const maxLeft = Math.max(8, window.innerWidth - 340);
+        breadcrumbMenuEl.style.left = `${Math.min(_openBreadcrumbMenuState.left, maxLeft)}px`;
+        breadcrumbMenuEl.style.top = `${Math.min(_openBreadcrumbMenuState.top, window.innerHeight - 12)}px`;
+        breadcrumbMenuEl.style.minWidth = `${_openBreadcrumbMenuState.width}px`;
+        breadcrumbMenuEl.classList.add('visible');
+    }
+
     function renderBreadcrumbStrip(trail) {
         breadcrumbsEl.replaceChildren();
         if (!Array.isArray(trail) || trail.length === 0) {
+            _openBreadcrumbMenuState = null;
+            hideBreadcrumbMenu();
             breadcrumbsEl.classList.remove('visible');
             return;
         }
 
-        trail.forEach((symbol, index) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'breadcrumb-segment';
-            button.textContent = symbol.name || '(symbol)';
-            button.title = symbol.detail ? `${symbol.name} - ${symbol.detail}` : (symbol.name || 'Symbol');
-            button.addEventListener('click', () => {
-                if (symbol.isFile) {
+        trail.forEach((entry, index) => {
+            const item = document.createElement('div');
+            item.className = 'breadcrumb-item';
+
+            if (entry.isFile) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'breadcrumb-segment';
+                button.textContent = entry.name || '(symbol)';
+                button.title = entry.detail ? `${entry.name} - ${entry.detail}` : (entry.name || 'Symbol');
+                button.addEventListener('click', () => {
                     navigateToFileStart();
-                    return;
+                });
+                item.appendChild(button);
+            } else {
+                const group = document.createElement('div');
+                group.className = 'breadcrumb-segment-group';
+                if (_openBreadcrumbMenuState && _openBreadcrumbMenuState.index === index) {
+                    group.classList.add('open');
                 }
-                navigateToSymbol(symbol);
-            });
-            breadcrumbsEl.appendChild(button);
+
+                const labelButton = document.createElement('button');
+                labelButton.type = 'button';
+                labelButton.className = 'breadcrumb-segment';
+                labelButton.title = entry.detail ? `${entry.name} - ${entry.detail}` : (entry.name || 'Symbol');
+                labelButton.setAttribute('aria-haspopup', Array.isArray(entry.siblings) && entry.siblings.length > 1 ? 'menu' : 'false');
+                labelButton.setAttribute('aria-expanded', _openBreadcrumbMenuState && _openBreadcrumbMenuState.index === index ? 'true' : 'false');
+                labelButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (Array.isArray(entry.siblings) && entry.siblings.length > 1) {
+                        toggleBreadcrumbMenu(index, labelButton);
+                        return;
+                    }
+                    navigateToSymbol(entry.symbol);
+                });
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'breadcrumb-segment-label';
+                labelSpan.textContent = entry.name || '(symbol)';
+                labelButton.appendChild(labelSpan);
+                group.appendChild(labelButton);
+
+                item.appendChild(group);
+            }
+
+            breadcrumbsEl.appendChild(item);
 
             if (index < trail.length - 1) {
                 const separator = document.createElement('span');
@@ -888,9 +1239,14 @@ _HTML = r"""<!DOCTYPE html>
         });
 
         breadcrumbsEl.classList.add('visible');
+        renderBreadcrumbMenu(trail);
     }
 
     function buildBreadcrumbTrailForActivePosition() {
+        if (!shouldShowBreadcrumbs()) {
+            return [];
+        }
+
         const trail = [];
         const fileBreadcrumb = buildFileBreadcrumb();
         if (fileBreadcrumb) {
@@ -906,18 +1262,27 @@ _HTML = r"""<!DOCTYPE html>
             return trail;
         }
 
-        return trail.concat(findContainingSymbolTrail(position, _documentSymbols));
+        return trail.concat(buildSymbolBreadcrumbItems(position, _documentSymbols).map((item) => ({
+            name: item.symbol.name || '',
+            detail: item.symbol.detail || '',
+            isFile: false,
+            symbol: item.symbol,
+            siblings: item.siblings,
+            isLeaf: item.isLeaf,
+        })));
     }
 
     function updateBreadcrumbsForActivePosition() {
-        renderBreadcrumbStrip(buildBreadcrumbTrailForActivePosition());
+        _breadcrumbTrail = buildBreadcrumbTrailForActivePosition();
+        renderBreadcrumbStrip(_breadcrumbTrail);
     }
 
     async function refreshDocumentSymbols(options) {
         const force = !!(options && options.force);
         const skipBreadcrumbUpdate = !!(options && options.skipBreadcrumbUpdate);
-        if (!editor || !lspClient || !lspClient._initialized || !lspClient.supportsDocumentSymbols()) {
+        if (!editor || !lspClient || !lspClient._initialized || !hasDocumentSymbolSupportForActiveLanguage()) {
             _documentSymbols = [];
+            _openBreadcrumbMenuState = null;
             if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
             return [];
         }
@@ -932,11 +1297,13 @@ _HTML = r"""<!DOCTYPE html>
                     return _documentSymbols;
                 }
                 _documentSymbols = normalizeLspDocumentSymbols(result, activeUri);
+                _openBreadcrumbMenuState = null;
                 if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
                 return _documentSymbols;
             })
             .catch(() => {
                 _documentSymbols = [];
+                _openBreadcrumbMenuState = null;
                 if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
                 return [];
             })
@@ -954,8 +1321,9 @@ _HTML = r"""<!DOCTYPE html>
         if (_documentSymbolRefreshTimer) {
             clearTimeout(_documentSymbolRefreshTimer);
         }
-        if (!lspClient || !lspClient.supportsDocumentSymbols()) {
+        if (!hasDocumentSymbolSupportForActiveLanguage()) {
             _documentSymbols = [];
+            _openBreadcrumbMenuState = null;
             updateBreadcrumbsForActivePosition();
             return;
         }
@@ -1181,6 +1549,18 @@ __LSP_COMPLETION_ITEM_METADATA__
         sendToPython('theme',    editor._themeService._theme.themeName);
     }
 
+    document.addEventListener('mousedown', (event) => {
+        if (!_openBreadcrumbMenuState) return;
+        if (breadcrumbsEl.contains(event.target) || breadcrumbMenuEl.contains(event.target)) return;
+        closeBreadcrumbMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || !_openBreadcrumbMenuState) return;
+        event.preventDefault();
+        closeBreadcrumbMenu();
+    });
+
     function sendToPython(name, value) {
         bridge.receive_from_js(name, JSON.stringify(value));
     }
@@ -1194,7 +1574,14 @@ __LSP_COMPLETION_ITEM_METADATA__
                 break;
             case 'language':
                 monaco.editor.setModelLanguage(editor.getModel(), data);
-                registerDocumentSymbolProvider(data);
+                if (data === LSP_LANGUAGE) {
+                    registerDocumentSymbolProvider(data);
+                    scheduleDocumentSymbolRefresh(0);
+                } else {
+                    _documentSymbols = [];
+                    _openBreadcrumbMenuState = null;
+                    updateBreadcrumbsForActivePosition();
+                }
                 break;
             case 'theme':
                 monaco.editor.setTheme(resolveThemeName(data));
@@ -1211,6 +1598,7 @@ __LSP_COMPLETION_ITEM_METADATA__
                 break;
             case 'fileUri':
                 _activeDocumentUri = data || '';
+                _openBreadcrumbMenuState = null;
                 if (lspClient) {
                     lspClient.changeFileUri(data, editor.getModel().getValue());
                     scheduleDocumentSymbolRefresh(0);
