@@ -5,6 +5,8 @@ import subprocess
 import socket
 import logging
 from pathlib import Path
+from typing import Any
+from urllib.parse import unquote
 
 from qtpy.QtCore import Signal, QUrl
 from qtpy.QtWebEngineWidgets import QWebEngineView
@@ -104,11 +106,199 @@ def _find_project_root(start_path: Path) -> Path:
     return current
 
 
+def normalize_uri_key(uri: str | None) -> str:
+    if not uri:
+        return ""
+
+    normalized = str(uri)
+    try:
+        normalized = unquote(normalized)
+    except Exception:
+        pass
+
+    normalized = normalized.replace("\\", "/")
+    if normalized.startswith("file:///") and len(normalized) > 9 and normalized[8].isalpha() and normalized[9] == ":":
+        normalized = f"file:///{normalized[8].lower()}{normalized[9:]}"
+    return normalized.lower()
+
+
+def _to_monaco_range(range_data: dict[str, Any] | None) -> dict[str, int]:
+    if not isinstance(range_data, dict):
+        return {
+            "startLineNumber": 1,
+            "startColumn": 1,
+            "endLineNumber": 1,
+            "endColumn": 1,
+        }
+
+    start = range_data.get("start") or {}
+    end = range_data.get("end") or start
+    return {
+        "startLineNumber": int(start.get("line", 0)) + 1,
+        "startColumn": int(start.get("character", 0)) + 1,
+        "endLineNumber": int(end.get("line", 0)) + 1,
+        "endColumn": int(end.get("character", 0)) + 1,
+    }
+
+
+def _range_contains_position(range_data: dict[str, int], position: dict[str, int]) -> bool:
+    start = (range_data["startLineNumber"], range_data["startColumn"])
+    end = (range_data["endLineNumber"], range_data["endColumn"])
+    current = (position["lineNumber"], position["column"])
+    return start <= current <= end
+
+
+def _range_contains_range(outer: dict[str, int], inner: dict[str, int]) -> bool:
+    outer_start = (outer["startLineNumber"], outer["startColumn"])
+    outer_end = (outer["endLineNumber"], outer["endColumn"])
+    inner_start = (inner["startLineNumber"], inner["startColumn"])
+    inner_end = (inner["endLineNumber"], inner["endColumn"])
+    return outer_start <= inner_start and outer_end >= inner_end
+
+
+def _normalize_document_symbol(symbol: dict[str, Any]) -> dict[str, Any]:
+    children = symbol.get("children")
+    return {
+        "name": symbol.get("name") or "",
+        "detail": symbol.get("detail") or "",
+        "kind": int(symbol.get("kind", 13)),
+        "tags": list(symbol.get("tags") or []),
+        "range": _to_monaco_range(symbol.get("range")),
+        "selectionRange": _to_monaco_range(symbol.get("selectionRange") or symbol.get("range")),
+        "children": [_normalize_document_symbol(child) for child in children if isinstance(child, dict)]
+        if isinstance(children, list)
+        else [],
+    }
+
+
+def _normalize_symbol_information(symbol: dict[str, Any]) -> dict[str, Any] | None:
+    location = symbol.get("location")
+    if not isinstance(location, dict):
+        return None
+    return {
+        "name": symbol.get("name") or "",
+        "detail": "",
+        "kind": int(symbol.get("kind", 13)),
+        "tags": list(symbol.get("tags") or []),
+        "range": _to_monaco_range(location.get("range")),
+        "selectionRange": _to_monaco_range(location.get("range")),
+        "children": [],
+    }
+
+
+def normalize_lsp_document_symbols(symbols: Any, active_uri: str | None) -> list[dict[str, Any]]:
+    if not isinstance(symbols, list) or not symbols:
+        return []
+
+    if isinstance(symbols[0], dict) and "location" not in symbols[0]:
+        return [_normalize_document_symbol(symbol) for symbol in symbols if isinstance(symbol, dict)]
+
+    normalized_active_uri = normalize_uri_key(active_uri)
+    flat_symbols: list[dict[str, Any]] = []
+    for symbol in symbols:
+        if not isinstance(symbol, dict):
+            continue
+        location = symbol.get("location")
+        if not isinstance(location, dict):
+            continue
+        symbol_uri = normalize_uri_key(location.get("uri"))
+        if normalized_active_uri and symbol_uri and symbol_uri != normalized_active_uri:
+            continue
+        converted = _normalize_symbol_information(symbol)
+        if converted is not None:
+            flat_symbols.append(converted)
+
+    flat_symbols.sort(
+        key=lambda item: (
+            item["range"]["startLineNumber"],
+            item["range"]["startColumn"],
+            -item["range"]["endLineNumber"],
+            -item["range"]["endColumn"],
+            item["name"],
+        )
+    )
+
+    roots: list[dict[str, Any]] = []
+    stack: list[dict[str, Any]] = []
+    for symbol in flat_symbols:
+        while stack and not _range_contains_range(stack[-1]["range"], symbol["range"]):
+            stack.pop()
+        if stack:
+            stack[-1]["children"].append(symbol)
+        else:
+            roots.append(symbol)
+        stack.append(symbol)
+    return roots
+
+
+def find_containing_symbol_trail(
+    symbols: list[dict[str, Any]],
+    position: dict[str, int],
+) -> list[dict[str, Any]]:
+    def _find(symbol: dict[str, Any]) -> list[dict[str, Any]]:
+        if not _range_contains_position(symbol["range"], position):
+            return []
+        for child in symbol.get("children") or []:
+            child_trail = _find(child)
+            if child_trail:
+                return [symbol, *child_trail]
+        return [symbol]
+
+    for symbol in symbols:
+        trail = _find(symbol)
+        if trail:
+            return trail
+    return []
+
+
 _HTML = r"""<!DOCTYPE html>
 <style>
     * { padding: 0; margin: 0; }
     html, body { min-height: 100% !important; height: 100%; overflow: hidden; }
-    #container { width: 100%; height: 100%; overflow: hidden; position: relative; }
+    body {
+        display: flex;
+        flex-direction: column;
+        background: #ffffff;
+        color: #1f2937;
+    }
+    #breadcrumbs {
+        display: none;
+        align-items: center;
+        gap: 2px;
+        min-height: 24px;
+        padding: 1px 1px;
+        border-bottom: 1px solid #d6dce5;
+        background: white;
+        font: 11px "Segoe UI", "Helvetica Neue", sans-serif;
+        white-space: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+    #breadcrumbs.visible { display: flex; }
+    .breadcrumb-segment {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        border-radius: 4px;
+        color: #1f2937;
+        cursor: pointer;
+        font: inherit;
+        padding: 2px 6px;
+    }
+    .breadcrumb-segment:hover {
+        background: rgba(37, 99, 235, 0.10);
+        color: #1d4ed8;
+    }
+    .breadcrumb-separator {
+        color: #64748b;
+        user-select: none;
+    }
+    #container {
+        width: 100%;
+        flex: 1 1 auto;
+        overflow: hidden;
+        position: relative;
+    }
 </style>
 <html>
 <head>
@@ -116,6 +306,7 @@ _HTML = r"""<!DOCTYPE html>
     <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
 </head>
 <body>
+    <div id="breadcrumbs" aria-label="Document breadcrumbs"></div>
     <div id="container"></div>
     <script src="monaco-editor/min/vs/loader.js"></script>
     <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
@@ -155,6 +346,7 @@ _HTML = r"""<!DOCTYPE html>
             this.onDiagnostics = null;
             this.onReady = null;
             this._semanticTokensProvider = null;
+            this._documentSymbolProvider = null;
             this._semanticLegend = { tokenTypes: [], tokenModifiers: [] };
             this._supportsSemanticTokens = false;
             this._semanticFailureLogged = false;
@@ -221,6 +413,11 @@ _HTML = r"""<!DOCTYPE html>
                                 dynamicRegistration: false,
                                 signatureInformation: { documentationFormat: ['plaintext'] }
                             },
+                            documentSymbol: {
+                                dynamicRegistration: false,
+                                hierarchicalDocumentSymbolSupport: true,
+                                tagSupport: { valueSet: [1] }
+                            },
                             publishDiagnostics: { relatedInformation: false },
                             semanticTokens: {
                                 dynamicRegistration: false,
@@ -237,6 +434,7 @@ _HTML = r"""<!DOCTYPE html>
 
                 const caps = (initResult && initResult.capabilities) || {};
                 this._semanticTokensProvider = caps.semanticTokensProvider || null;
+                this._documentSymbolProvider = caps.documentSymbolProvider || null;
 
                 if (
                     PY_SEMANTIC_FEATURE &&
@@ -276,6 +474,10 @@ _HTML = r"""<!DOCTYPE html>
             return this._semanticLegend;
         }
 
+        supportsDocumentSymbols() {
+            return !!this._documentSymbolProvider;
+        }
+
         async semanticTokensFull() {
             if (!this._initialized || !this._supportsSemanticTokens) return null;
             try {
@@ -290,6 +492,18 @@ _HTML = r"""<!DOCTYPE html>
                     }
                 }
                 return null;
+            }
+        }
+
+        async documentSymbols() {
+            if (!this._initialized || !this.supportsDocumentSymbols()) return [];
+            try {
+                const result = await this._request('textDocument/documentSymbol', {
+                    textDocument: { uri: this._fileUri }
+                });
+                return Array.isArray(result) ? result : [];
+            } catch (_) {
+                return [];
             }
         }
 
@@ -401,15 +615,151 @@ _HTML = r"""<!DOCTYPE html>
         return normalized.toLowerCase();
     }
 
+    function toMonacoRange(range) {
+        if (!range || !range.start) {
+            return {
+                startLineNumber: 1,
+                startColumn: 1,
+                endLineNumber: 1,
+                endColumn: 1,
+            };
+        }
+        const end = range.end || range.start;
+        return {
+            startLineNumber: range.start.line + 1,
+            startColumn: range.start.character + 1,
+            endLineNumber: end.line + 1,
+            endColumn: end.character + 1,
+        };
+    }
+
+    function rangeContainsPosition(range, position) {
+        const startsBefore = position.lineNumber > range.startLineNumber ||
+            (position.lineNumber === range.startLineNumber && position.column >= range.startColumn);
+        const endsAfter = position.lineNumber < range.endLineNumber ||
+            (position.lineNumber === range.endLineNumber && position.column <= range.endColumn);
+        return startsBefore && endsAfter;
+    }
+
+    function rangeContainsRange(outer, inner) {
+        const startsBefore = inner.startLineNumber > outer.startLineNumber ||
+            (inner.startLineNumber === outer.startLineNumber && inner.startColumn >= outer.startColumn);
+        const endsAfter = inner.endLineNumber < outer.endLineNumber ||
+            (inner.endLineNumber === outer.endLineNumber && inner.endColumn <= outer.endColumn);
+        return startsBefore && endsAfter;
+    }
+
+    function normalizeDocumentSymbol(symbol) {
+        const children = Array.isArray(symbol.children) ? symbol.children.map(normalizeDocumentSymbol) : [];
+        return {
+            name: symbol.name || '',
+            detail: symbol.detail || '',
+            kind: symbol.kind || monaco.languages.SymbolKind.Variable,
+            tags: Array.isArray(symbol.tags) ? symbol.tags : [],
+            range: toMonacoRange(symbol.range),
+            selectionRange: toMonacoRange(symbol.selectionRange || symbol.range),
+            children,
+        };
+    }
+
+    function normalizeSymbolInformation(symbol) {
+        if (!symbol || !symbol.location) return null;
+        return {
+            name: symbol.name || '',
+            detail: '',
+            kind: symbol.kind || monaco.languages.SymbolKind.Variable,
+            tags: Array.isArray(symbol.tags) ? symbol.tags : [],
+            range: toMonacoRange(symbol.location.range),
+            selectionRange: toMonacoRange(symbol.location.range),
+            children: [],
+        };
+    }
+
+    function normalizeLspDocumentSymbols(symbols, activeUri) {
+        if (!Array.isArray(symbols) || symbols.length === 0) return [];
+
+        if (!symbols[0] || !Object.prototype.hasOwnProperty.call(symbols[0], 'location')) {
+            return symbols.map((symbol) => normalizeDocumentSymbol(symbol));
+        }
+
+        const normalizedActiveUri = normalizeUriKey(activeUri);
+        const flatSymbols = symbols
+            .filter((symbol) => symbol && symbol.location)
+            .filter((symbol) => {
+                const symbolUri = normalizeUriKey(symbol.location.uri);
+                return !normalizedActiveUri || !symbolUri || symbolUri === normalizedActiveUri;
+            })
+            .map((symbol) => normalizeSymbolInformation(symbol))
+            .filter(Boolean)
+            .sort((left, right) => {
+                if (left.range.startLineNumber !== right.range.startLineNumber) {
+                    return left.range.startLineNumber - right.range.startLineNumber;
+                }
+                if (left.range.startColumn !== right.range.startColumn) {
+                    return left.range.startColumn - right.range.startColumn;
+                }
+                if (left.range.endLineNumber !== right.range.endLineNumber) {
+                    return right.range.endLineNumber - left.range.endLineNumber;
+                }
+                if (left.range.endColumn !== right.range.endColumn) {
+                    return right.range.endColumn - left.range.endColumn;
+                }
+                return left.name.localeCompare(right.name);
+            });
+
+        const roots = [];
+        const stack = [];
+        flatSymbols.forEach((symbol) => {
+            while (stack.length > 0 && !rangeContainsRange(stack[stack.length - 1].range, symbol.range)) {
+                stack.pop();
+            }
+            if (stack.length > 0) {
+                stack[stack.length - 1].children.push(symbol);
+            } else {
+                roots.push(symbol);
+            }
+            stack.push(symbol);
+        });
+        return roots;
+    }
+
+    function findContainingSymbolTrail(position, symbols) {
+        function findInSymbol(symbol) {
+            if (!rangeContainsPosition(symbol.range, position)) return [];
+            const children = Array.isArray(symbol.children) ? symbol.children : [];
+            for (const child of children) {
+                const trail = findInSymbol(child);
+                if (trail.length > 0) {
+                    return [symbol].concat(trail);
+                }
+            }
+            return [symbol];
+        }
+
+        for (const symbol of symbols || []) {
+            const trail = findInSymbol(symbol);
+            if (trail.length > 0) {
+                return trail;
+            }
+        }
+        return [];
+    }
+
     // ── Editor + Monaco providers ───────────────────────────────────────────────
     var bridge = null;
     var editor = null;
     var lspClient = null;
     var registeredLspLanguages = new Set();
     var registeredSemanticLanguages = new Set();
+    var registeredDocumentSymbolLanguages = new Set();
     var _bridgeChannel = null;   // stash QWebChannel result until editor ready
     var _editorReady = false;    // true once require callback completed
     var _bridgeReady = false;    // true once QWebChannel callback completed
+    var _documentSymbols = [];
+    var _documentSymbolRefreshTimer = null;
+    var _documentSymbolRefreshPromise = null;
+    var _activeDocumentUri = '';
+    const breadcrumbsEl = document.getElementById('breadcrumbs');
 
     function resolveThemeName(themeName) {
         if (!(PY_SEMANTIC_FEATURE && LSP_LANGUAGE === 'python')) return themeName;
@@ -455,6 +805,164 @@ _HTML = r"""<!DOCTYPE html>
             const source = m.source ? ` (${m.source})` : '';
             return { value: `**${m.message}**${source}` };
         });
+    }
+
+    function getActiveDocumentUri() {
+        if (_activeDocumentUri) return _activeDocumentUri;
+        if (lspClient && lspClient._fileUri) return lspClient._fileUri;
+        return '';
+    }
+
+    function getDocumentLabelFromUri(uri) {
+        if (!uri) return '';
+
+        let decoded = String(uri);
+        try {
+            decoded = decodeURIComponent(decoded);
+        } catch (_) {
+            // Keep original when URI is not percent-encoded.
+        }
+
+        decoded = decoded.replace(/\\/g, '/');
+        const segments = decoded.split('/').filter(Boolean);
+        return segments.length > 0 ? segments[segments.length - 1] : decoded;
+    }
+
+    function buildFileBreadcrumb() {
+        const label = getDocumentLabelFromUri(getActiveDocumentUri());
+        if (!label) return null;
+        return {
+            name: label,
+            detail: '',
+            isFile: true,
+        };
+    }
+
+    function navigateToFileStart() {
+        if (!editor) return;
+        const target = { lineNumber: 1, column: 1 };
+        editor.setPosition(target);
+        editor.revealPositionInCenter(target);
+        editor.focus();
+    }
+
+    function navigateToSymbol(symbol) {
+        if (!editor || !symbol || !symbol.selectionRange) return;
+        const target = {
+            lineNumber: symbol.selectionRange.startLineNumber,
+            column: symbol.selectionRange.startColumn,
+        };
+        editor.setPosition(target);
+        editor.revealPositionInCenter(target);
+        editor.focus();
+    }
+
+    function renderBreadcrumbStrip(trail) {
+        breadcrumbsEl.replaceChildren();
+        if (!Array.isArray(trail) || trail.length === 0) {
+            breadcrumbsEl.classList.remove('visible');
+            return;
+        }
+
+        trail.forEach((symbol, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'breadcrumb-segment';
+            button.textContent = symbol.name || '(symbol)';
+            button.title = symbol.detail ? `${symbol.name} - ${symbol.detail}` : (symbol.name || 'Symbol');
+            button.addEventListener('click', () => {
+                if (symbol.isFile) {
+                    navigateToFileStart();
+                    return;
+                }
+                navigateToSymbol(symbol);
+            });
+            breadcrumbsEl.appendChild(button);
+
+            if (index < trail.length - 1) {
+                const separator = document.createElement('span');
+                separator.className = 'breadcrumb-separator';
+                separator.textContent = '›';
+                breadcrumbsEl.appendChild(separator);
+            }
+        });
+
+        breadcrumbsEl.classList.add('visible');
+    }
+
+    function buildBreadcrumbTrailForActivePosition() {
+        const trail = [];
+        const fileBreadcrumb = buildFileBreadcrumb();
+        if (fileBreadcrumb) {
+            trail.push(fileBreadcrumb);
+        }
+
+        if (!editor) {
+            return trail;
+        }
+
+        const position = editor.getPosition();
+        if (!position) {
+            return trail;
+        }
+
+        return trail.concat(findContainingSymbolTrail(position, _documentSymbols));
+    }
+
+    function updateBreadcrumbsForActivePosition() {
+        renderBreadcrumbStrip(buildBreadcrumbTrailForActivePosition());
+    }
+
+    async function refreshDocumentSymbols(options) {
+        const force = !!(options && options.force);
+        const skipBreadcrumbUpdate = !!(options && options.skipBreadcrumbUpdate);
+        if (!editor || !lspClient || !lspClient._initialized || !lspClient.supportsDocumentSymbols()) {
+            _documentSymbols = [];
+            if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
+            return [];
+        }
+        if (!force && _documentSymbolRefreshPromise) {
+            return _documentSymbolRefreshPromise;
+        }
+
+        const activeUri = lspClient._fileUri;
+        const refreshPromise = lspClient.documentSymbols()
+            .then((result) => {
+                if (activeUri !== lspClient._fileUri) {
+                    return _documentSymbols;
+                }
+                _documentSymbols = normalizeLspDocumentSymbols(result, activeUri);
+                if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
+                return _documentSymbols;
+            })
+            .catch(() => {
+                _documentSymbols = [];
+                if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
+                return [];
+            })
+            .finally(() => {
+                if (_documentSymbolRefreshPromise === refreshPromise) {
+                    _documentSymbolRefreshPromise = null;
+                }
+            });
+
+        _documentSymbolRefreshPromise = refreshPromise;
+        return refreshPromise;
+    }
+
+    function scheduleDocumentSymbolRefresh(delayMs) {
+        if (_documentSymbolRefreshTimer) {
+            clearTimeout(_documentSymbolRefreshTimer);
+        }
+        if (!lspClient || !lspClient.supportsDocumentSymbols()) {
+            _documentSymbols = [];
+            updateBreadcrumbsForActivePosition();
+            return;
+        }
+        _documentSymbolRefreshTimer = setTimeout(() => {
+            _documentSymbolRefreshTimer = null;
+            refreshDocumentSymbols({ force: true });
+        }, typeof delayMs === 'number' ? delayMs : 180);
     }
 
     // Called after BOTH editor and bridge are available so that
@@ -567,6 +1075,28 @@ __LSP_COMPLETION_ITEM_METADATA__
         });
     }
 
+    function registerDocumentSymbolProvider(langId) {
+        if (registeredDocumentSymbolLanguages.has(langId)) return;
+        if (!lspClient || !lspClient.supportsDocumentSymbols()) return;
+
+        registeredDocumentSymbolLanguages.add(langId);
+        monaco.languages.registerDocumentSymbolProvider(langId, {
+            provideDocumentSymbols: async (model) => {
+                if (!lspClient || !lspClient._initialized || !lspClient.supportsDocumentSymbols()) {
+                    return [];
+                }
+
+                const modelUri = model && model.uri ? model.uri.toString() : lspClient._fileUri;
+                if (normalizeUriKey(modelUri) !== normalizeUriKey(lspClient._fileUri)) {
+                    return [];
+                }
+
+                const symbols = await refreshDocumentSymbols({ force: true, skipBreadcrumbUpdate: true });
+                return Array.isArray(symbols) ? symbols : [];
+            }
+        });
+    }
+
     require.config({ paths: { 'vs': 'monaco-editor/min/vs' } });
 
     require(['vs/editor/editor.main'], () => {
@@ -583,10 +1113,15 @@ __LSP_COMPLETION_ITEM_METADATA__
             const text = editor.getModel().getValue();
             sendToPython('value', text);
             if (lspClient && lspClient._initialized) lspClient.changeDocument(text);
+            scheduleDocumentSymbolRefresh(220);
         });
 
         editor.onDidChangeModelLanguage((event) => {
             sendToPython('language', event.newLanguage);
+        });
+
+        editor.onDidChangeCursorPosition(() => {
+            updateBreadcrumbsForActivePosition();
         });
 
         // Start LSP client only if a server is configured for this language
@@ -595,11 +1130,14 @@ __LSP_COMPLETION_ITEM_METADATA__
                                  'javascript': '.js', 'typescript': '.ts' };
             const fileExt = langExtMap[LSP_LANGUAGE] || '.txt';
             lspClient = new LspClient('ws://127.0.0.1:' + LSP_PORT, LSP_LANGUAGE, fileExt);
+            _activeDocumentUri = lspClient._fileUri || '';
 
             lspClient.onReady = () => {
                 lspClient.openDocument(editor.getModel().getValue());
                 registerLspProviders(LSP_LANGUAGE);
                 registerSemanticProvider(LSP_LANGUAGE);
+                registerDocumentSymbolProvider(LSP_LANGUAGE);
+                scheduleDocumentSymbolRefresh(0);
 
                 // Wire up diagnostics → Monaco markers
                 lspClient.onDiagnostics = (params) => {
@@ -656,6 +1194,7 @@ __LSP_COMPLETION_ITEM_METADATA__
                 break;
             case 'language':
                 monaco.editor.setModelLanguage(editor.getModel(), data);
+                registerDocumentSymbolProvider(data);
                 break;
             case 'theme':
                 monaco.editor.setTheme(resolveThemeName(data));
@@ -671,7 +1210,13 @@ __LSP_COMPLETION_ITEM_METADATA__
                 editor.focus();
                 break;
             case 'fileUri':
-                if (lspClient) lspClient.changeFileUri(data, editor.getModel().getValue());
+                _activeDocumentUri = data || '';
+                if (lspClient) {
+                    lspClient.changeFileUri(data, editor.getModel().getValue());
+                    scheduleDocumentSymbolRefresh(0);
+                } else {
+                    updateBreadcrumbsForActivePosition();
+                }
                 break;
             case 'pythonAnalysisPaths':
                 if (lspClient) lspClient.updatePythonAnalysisPaths(data);
