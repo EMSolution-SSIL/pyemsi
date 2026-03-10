@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import subprocess
 import socket
 import logging
@@ -10,6 +11,7 @@ from qtpy.QtWebEngineWidgets import QWebEngineView
 from qtpy.QtWebChannel import QWebChannel
 
 from ._bridge import EditorBridge, MonacoPage
+from ._completion import build_completion_item_metadata_js
 from ._config import (
     LSP_DEBUG_ENV,
     PY_SEMANTIC_FEATURE_ENV,
@@ -87,6 +89,21 @@ def _find_free_port():
         return s.getsockname()[1]
 
 
+_PROJECT_ROOT_MARKERS = ("pyproject.toml", "setup.py", "setup.cfg", ".git")
+
+
+def _find_project_root(start_path: Path) -> Path:
+    """Best-effort project root detection for Python import resolution."""
+    current = start_path.resolve()
+    if current.is_file():
+        current = current.parent
+
+    for candidate in (current, *current.parents):
+        if any((candidate / marker).exists() for marker in _PROJECT_ROOT_MARKERS):
+            return candidate
+    return current
+
+
 _HTML = r"""<!DOCTYPE html>
 <style>
     * { padding: 0; margin: 0; }
@@ -109,6 +126,9 @@ _HTML = r"""<!DOCTYPE html>
     const PY_SEMANTIC_FEATURE = __PY_SEMANTIC_FEATURE__;
     const PY_SEMANTIC_DEBUG = __PY_SEMANTIC_DEBUG__;
     const PY_TYPE_CHECKING_MODE = '__PY_TYPE_CHECKING_MODE__';
+    const LSP_ROOT_URI = __LSP_ROOT_URI__;
+    const LSP_WORKSPACE_FOLDERS = __LSP_WORKSPACE_FOLDERS__;
+    const PY_EXTRA_PATHS = __PY_EXTRA_PATHS__;
 
     const DEFAULT_SEMANTIC_TYPES = [
         'namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter',
@@ -138,6 +158,9 @@ _HTML = r"""<!DOCTYPE html>
             this._semanticLegend = { tokenTypes: [], tokenModifiers: [] };
             this._supportsSemanticTokens = false;
             this._semanticFailureLogged = false;
+            this._rootUri = LSP_ROOT_URI || null;
+            this._workspaceFolders = Array.isArray(LSP_WORKSPACE_FOLDERS) ? LSP_WORKSPACE_FOLDERS : null;
+            this._pythonAnalysisPaths = Array.isArray(PY_EXTRA_PATHS) ? PY_EXTRA_PATHS : [];
             this._connect();
         }
 
@@ -184,8 +207,8 @@ _HTML = r"""<!DOCTYPE html>
                 const initResult = await this._request('initialize', {
                     processId: null,
                     clientInfo: { name: 'monaco-lsp-client', version: '1.0' },
-                    rootUri: null,
-                    workspaceFolders: null,
+                    rootUri: this._rootUri,
+                    workspaceFolders: this._workspaceFolders,
                     capabilities: {
                         textDocument: {
                             synchronization: { dynamicRegistration: false, willSave: false, didSave: false },
@@ -238,32 +261,7 @@ _HTML = r"""<!DOCTYPE html>
                 }
 
                 this._notify('initialized', {});
-
-                // Tone down diagnostics to match an editor-like default profile.
-                if (this._languageId === 'python') {
-                    this._notify('workspace/didChangeConfiguration', {
-                        settings: {
-                            python: {
-                                analysis: {
-                                    typeCheckingMode: PY_TYPE_CHECKING_MODE,
-                                    diagnosticMode: 'openFilesOnly'
-                                }
-                            },
-                            pyright: {
-                                analysis: {
-                                    typeCheckingMode: PY_TYPE_CHECKING_MODE,
-                                    diagnosticMode: 'openFilesOnly'
-                                }
-                            },
-                            basedpyright: {
-                                analysis: {
-                                    typeCheckingMode: PY_TYPE_CHECKING_MODE,
-                                    diagnosticMode: 'openFilesOnly'
-                                }
-                            }
-                        }
-                    });
-                }
+                this._applyPythonConfiguration();
 
                 this._initialized = true;
                 if (this.onReady) this.onReady();
@@ -329,6 +327,33 @@ _HTML = r"""<!DOCTYPE html>
         }
 
         stop() { this._stopping = true; this._initialized = false; if (this._ws) this._ws.close(); }
+
+        _buildPythonAnalysisSettings() {
+            return {
+                typeCheckingMode: PY_TYPE_CHECKING_MODE,
+                diagnosticMode: 'openFilesOnly',
+                extraPaths: this._pythonAnalysisPaths,
+            };
+        }
+
+        _applyPythonConfiguration() {
+            if (this._languageId !== 'python') return;
+            this._notify('workspace/didChangeConfiguration', {
+                settings: {
+                    python: { analysis: this._buildPythonAnalysisSettings() },
+                    pyright: { analysis: this._buildPythonAnalysisSettings() },
+                    basedpyright: { analysis: this._buildPythonAnalysisSettings() },
+                }
+            });
+        }
+
+        updatePythonAnalysisPaths(paths) {
+            if (!Array.isArray(paths)) return;
+            this._pythonAnalysisPaths = paths;
+            if (this._initialized) {
+                this._applyPythonConfiguration();
+            }
+        }
 
         changeFileUri(newUri, text) {
             if (this._initialized) {
@@ -463,6 +488,7 @@ _HTML = r"""<!DOCTYPE html>
                     suggestions: items.map(item => ({
                         label:         item.label,
                         kind:          lspKindToMonaco(item.kind),
+__LSP_COMPLETION_ITEM_METADATA__
                         insertText:    item.textEdit ? item.textEdit.newText : (item.insertText || item.label),
                         detail:        item.detail || '',
                         documentation: extractDocString(item.documentation),
@@ -647,6 +673,9 @@ _HTML = r"""<!DOCTYPE html>
             case 'fileUri':
                 if (lspClient) lspClient.changeFileUri(data, editor.getModel().getValue());
                 break;
+            case 'pythonAnalysisPaths':
+                if (lspClient) lspClient.updatePythonAnalysisPaths(data);
+                break;
         }
     }
 
@@ -684,6 +713,7 @@ class MonacoLspWidget(QWebEngineView):
         enable_python_semantic_highlighting: bool = False,
     ):
         super().__init__(parent=parent)
+        self._language = language
         self._file_path: str | None = None
         self._dirty = False
         self._initial_text: str = ""
@@ -692,6 +722,9 @@ class MonacoLspWidget(QWebEngineView):
             language,
             semantic_requested=self._semantic_requested,
         )
+        self._python_analysis_paths: list[str] = []
+        if language == "python":
+            self._python_analysis_paths = [str(_find_project_root(Path.cwd()))]
 
         # Decide whether to spawn an LSP server
         self._pylsp_proc = None
@@ -723,6 +756,12 @@ class MonacoLspWidget(QWebEngineView):
             "__PY_TYPE_CHECKING_MODE__",
             read_str_env(PY_TYPE_CHECKING_MODE_ENV, default="basic"),
         )
+        root_uri = Path(self._python_analysis_paths[0]).as_uri() if self._python_analysis_paths else None
+        workspace_folders = [{"uri": root_uri, "name": Path(self._python_analysis_paths[0]).name}] if root_uri else None
+        html = html.replace("__LSP_ROOT_URI__", json.dumps(root_uri))
+        html = html.replace("__LSP_WORKSPACE_FOLDERS__", json.dumps(workspace_folders))
+        html = html.replace("__PY_EXTRA_PATHS__", json.dumps(self._python_analysis_paths))
+        html = html.replace("__LSP_COMPLETION_ITEM_METADATA__", build_completion_item_metadata_js())
         base_url = QUrl.fromLocalFile((_PKG_DIR / "index.html").as_posix())
         self.setHtml(html, base_url)
 
@@ -815,8 +854,19 @@ class MonacoLspWidget(QWebEngineView):
             text = f.read(self._MAX_BYTES)
         self._initial_text = text
         self.setText(text)
+        self._update_python_analysis_paths(path)
         self._bridge.send_to_js("fileUri", Path(path).as_uri())
         self._dirty = False
+
+    def _update_python_analysis_paths(self, path: str) -> None:
+        if self._language != "python":
+            return
+        project_root = _find_project_root(Path(path))
+        paths = [str(project_root)]
+        if paths == self._python_analysis_paths:
+            return
+        self._python_analysis_paths = paths
+        self._bridge.send_to_js("pythonAnalysisPaths", paths)
 
     def save(self, path: str | None = None) -> None:
         """Write editor contents to *path* (defaults to ``load_file`` path)."""

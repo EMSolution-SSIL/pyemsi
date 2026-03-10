@@ -14,6 +14,13 @@ include pyemsi/femap_parser.c
 include pyemsi/resources/resources.qrc
 recursive-include pyemsi/resources/icons *.svg
 
+# Include Monaco and xterm widget web assets
+include pyemsi/widgets/monaco_lsp/index.html
+recursive-include pyemsi/widgets/monaco_lsp/grammars *
+recursive-include pyemsi/widgets/monaco_lsp/monaco-editor *
+include pyemsi/widgets/xterm/index.html
+recursive-include pyemsi/widgets/xterm/xterm-js *
+
 # Include example data files
 recursive-include pyemsi/examples *.pvd *.vtm *.vtu
 

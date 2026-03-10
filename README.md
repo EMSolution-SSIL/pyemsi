@@ -62,6 +62,77 @@ python setup.py build_ext --inplace
 
 The compiled `.pyd` file will be placed in `pyemsi/core/`.
 
+## Build Artifacts
+
+This repository is configured to produce two distributables:
+
+- `pyemsi` API wheel (`.whl`) via PEP 517 build
+- `pyemsi_gui` desktop installer via Briefcase
+
+### Build the `pyemsi` API Wheel
+
+From the repository root:
+
+```bash
+python -m pip install --upgrade pip build
+python -m build --wheel
+```
+
+Output:
+
+- Wheel file in `dist/` (for example: `dist/pyemsi-0.1.2-cp313-cp313-win_amd64.whl`)
+
+Optional check:
+
+```bash
+python -m pip install --force-reinstall dist/*.whl
+```
+
+### Build the `pyemsi_gui` Installer (Briefcase)
+
+`pyproject.toml` already contains Briefcase configuration under `[tool.briefcase.app.pyemsi_gui]`.
+
+1. Install Briefcase (in your Python 3.11 environment):
+
+```bash
+.venv311\\Scripts\\python.exe -m pip install --upgrade briefcase
+```
+
+2. Create/update the Windows app bundle:
+
+```bash
+.venv311\\Scripts\\python.exe -m briefcase create windows app --no-input
+# If the app template already exists, use:
+.venv311\\Scripts\\python.exe -m briefcase update windows app -r --no-input
+```
+
+3. Build the app:
+
+```bash
+.venv311\\Scripts\\python.exe -m briefcase build windows app --no-input
+```
+
+4. Package installer:
+
+```bash
+.venv311\\Scripts\\python.exe -m briefcase package windows -p msi --no-input
+```
+
+Output:
+
+- Built app folder under `build/pyemsi_gui/windows/app/`
+- MSI installer under `dist/` (once WiX toolset installation completes)
+
+### Notes for Windows Packaging
+
+- The first MSI packaging run may prompt/install the WiX toolset.
+- If `briefcase create` fails because the app already exists, run `briefcase update windows app -r --no-input` and continue.
+- You can run the app without packaging using:
+
+```bash
+.venv311\\Scripts\\python.exe -m briefcase run windows app
+```
+
 ## Documentation
 
 For comprehensive API documentation and tutorials, visit:
@@ -70,7 +141,7 @@ https://emsolution-ssil.github.io/pyemsi
 
 ## Requirements
 
-- Python >= 3.9
+- Python >= 3.11, < 3.12
 - VTK >= 9.0.0
 - PyVista >= 0.43.0
 - PySide6 >= 6.5.0
