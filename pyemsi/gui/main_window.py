@@ -154,26 +154,32 @@ class PyEmsiMainWindow(QMainWindow):
                 viewer.stop_external_requested.connect(self._stop_python_file_external)
                 viewer._run_connected = True
 
+    @staticmethod
+    def _is_saveable_viewer(widget) -> bool:
+        """
+        Return True if *widget* satisfies the editor save contract.
+
+        A widget is considered saveable when it both:
+        - exposes a non-empty ``file_path`` attribute, and
+        - provides a callable ``save`` attribute (method).
+        """
+        file_path = getattr(widget, "file_path", None)
+        return bool(file_path) and callable(getattr(widget, "save", None))
+
     def _save_active_tab(self) -> None:
         """Save the currently-focused Monaco editor tab."""
-        from pyemsi.gui.file_viewers import MarkdownViewer, PythonViewer
-        from pyemsi.widgets.monaco_lsp import MonacoLspWidget
-
         for panel in (self._container.left_panel, self._container.right_panel):
             widget = panel.currentWidget()
-            if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
+            if self._is_saveable_viewer(widget):
                 widget.save()
                 return
 
     def _save_all_tabs(self) -> None:
         """Save all open editor tabs in both panels."""
-        from pyemsi.gui.file_viewers import MarkdownViewer, PythonViewer
-        from pyemsi.widgets.monaco_lsp import MonacoLspWidget
-
         for panel in (self._container.left_panel, self._container.right_panel):
             for i in range(panel.count()):
                 widget = panel.widget(i)
-                if isinstance(widget, (MonacoLspWidget, MarkdownViewer, PythonViewer)) and widget.file_path:
+                if self._is_saveable_viewer(widget):
                     widget.save()
 
     def _setup_ipython_terminal(self):

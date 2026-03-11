@@ -16,6 +16,7 @@ from ._viewers._constants import (
     _PYTHON_EXTENSIONS,
     _TEXT_EXTENSIONS,
 )
+from ._viewers._emsolution_json import EMSolutionInputViewer, EMSolutionOutputViewer
 from ._viewers._factory import create_viewer
 from ._viewers._image import ImageViewer
 from ._viewers._markdown import MarkdownPreviewViewer, MarkdownViewer
@@ -39,6 +40,8 @@ __all__ = [
     "MarkdownViewer",
     "MarkdownPreviewViewer",
     "PythonViewer",
+    "EMSolutionInputViewer",
+    "EMSolutionOutputViewer",
     "ImageViewer",
     "UnsupportedViewer",
     "create_viewer",
