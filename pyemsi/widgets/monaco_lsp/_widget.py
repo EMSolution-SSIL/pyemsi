@@ -324,8 +324,8 @@ _HTML = r"""<!DOCTYPE html>
         display: none;
         align-items: center;
         gap: 2px;
-        min-height: 24px;
-        padding: 2px 3px;
+        min-height: 16px;
+        padding: 0px 3px;
         border-bottom: 1px solid #d6dce5;
         background: white;
         font-family: var(--breadcrumb-font-family);
@@ -366,7 +366,7 @@ _HTML = r"""<!DOCTYPE html>
         cursor: pointer;
         font: inherit;
         line-height: inherit;
-        padding: 4px 9px;
+        padding: 0px 4px;
     }
     .breadcrumb-segment:hover,
     .breadcrumb-segment:focus-visible {
@@ -404,7 +404,7 @@ _HTML = r"""<!DOCTYPE html>
         font-weight: 400;
         line-height: var(--breadcrumb-line-height);
         letter-spacing: 0.01em;
-        padding: 6px;
+        padding: 2px;
     }
     #breadcrumb-menu.visible {
         display: block;
@@ -428,7 +428,7 @@ _HTML = r"""<!DOCTYPE html>
         cursor: pointer;
         font: inherit;
         line-height: inherit;
-        padding: 6px 10px;
+        padding: 2px 4px;
         text-align: left;
         transition: background 120ms ease, color 120ms ease;
     }
