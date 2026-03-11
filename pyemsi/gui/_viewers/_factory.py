@@ -7,15 +7,12 @@ from PySide6.QtWidgets import QWidget
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 from pyemsi.widgets.monaco_lsp._widget import EXT_TO_LANG
 
-from ._audio import _HAS_MULTIMEDIA
+from ._audio import AudioViewer
 from ._constants import _CATEGORY
 from ._image import ImageViewer
 from ._markdown import MarkdownViewer
 from ._python import PythonViewer
 from ._unsupported import UnsupportedViewer
-
-if _HAS_MULTIMEDIA:
-    from ._audio import AudioViewer
 
 
 def create_viewer(path: str, category: str | None = None, parent: QWidget | None = None) -> QWidget:
@@ -51,8 +48,8 @@ def create_viewer(path: str, category: str | None = None, parent: QWidget | None
     elif category == "image":
         viewer = ImageViewer(parent=parent)
         viewer.load_file(path)
-    elif category == "audio" and _HAS_MULTIMEDIA:
-        viewer = AudioViewer(parent=parent)  # type: ignore[possibly-undefined]
+    elif category == "audio":
+        viewer = AudioViewer(parent=parent)
         viewer.load_file(path)
     else:
         viewer = UnsupportedViewer(path, parent=parent)
