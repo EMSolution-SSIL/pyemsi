@@ -207,9 +207,14 @@ Utility functions for converting between all common color formats:
 - Viewer scope:
   - Python viewer enables semantic-highlighting support (`MonacoLspWidget(..., enable_python_semantic_highlighting=True)`).
   - Non-Python Monaco paths are unchanged.
+- Breadcrumb scope:
+  - `MonacoLspWidget` now requests `textDocument/documentSymbol` for the active model only when the server advertises `documentSymbolProvider`.
+  - Monaco document symbols and the custom breadcrumb strip share the same normalized symbol tree; no Python-side breadcrumb state or workspace-wide indexing is introduced.
+  - Breadcrumb clicks navigate with the symbol `selectionRange`, while the visible trail is derived from the deepest symbol `range` containing the current cursor.
 - Fail-open behavior:
   - If `basedpyright-langserver` is unavailable or relay launch fails, startup falls back to legacy `pylsp --ws`.
   - If runtime capabilities omit `semanticTokensProvider` or token requests fail, syntax highlighting remains active.
+  - If runtime capabilities omit `documentSymbolProvider` or symbol results are empty, the breadcrumb strip stays hidden and the editor continues working normally.
 - Debug diagnostics:
   - `PYEMSI_MONACO_LSP_DEBUG=1` enables concise launch/capability diagnostics.
 
