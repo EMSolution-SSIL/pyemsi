@@ -288,6 +288,12 @@ def should_show_breadcrumbs(
     return bool(symbols)
 
 
+def build_json_document_symbols(symbols: Any) -> list[dict[str, Any]]:
+    if not isinstance(symbols, list) or not symbols:
+        return []
+    return [_normalize_document_symbol(symbol) for symbol in symbols if isinstance(symbol, dict)]
+
+
 _HTML = r"""<!DOCTYPE html>
 <style>
     * { padding: 0; margin: 0; }
@@ -939,6 +945,440 @@ _HTML = r"""<!DOCTYPE html>
         return items;
     }
 
+    function buildLineStarts(text) {
+        const starts = [0];
+        for (let index = 0; index < text.length; index += 1) {
+            const ch = text.charCodeAt(index);
+            if (ch === 13) {
+                if (index + 1 < text.length && text.charCodeAt(index + 1) === 10) {
+                    index += 1;
+                }
+                starts.push(index + 1);
+            } else if (ch === 10) {
+                starts.push(index + 1);
+            }
+        }
+        return starts;
+    }
+
+    function offsetToMonacoPosition(offset, lineStarts) {
+        const clamped = Math.max(0, offset);
+        let low = 0;
+        let high = lineStarts.length - 1;
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            if (lineStarts[mid] <= clamped) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        const lineIndex = Math.max(0, high);
+        return {
+            lineNumber: lineIndex + 1,
+            column: clamped - lineStarts[lineIndex] + 1,
+        };
+    }
+
+    function offsetsToMonacoRange(startOffset, endOffset, lineStarts) {
+        const safeStart = Math.max(0, startOffset);
+        const safeEnd = Math.max(safeStart + 1, endOffset);
+        const start = offsetToMonacoPosition(safeStart, lineStarts);
+        const end = offsetToMonacoPosition(safeEnd, lineStarts);
+        return {
+            startLineNumber: start.lineNumber,
+            startColumn: start.column,
+            endLineNumber: end.lineNumber,
+            endColumn: end.column,
+        };
+    }
+
+    function buildJsonDocumentSymbols(text) {
+        const source = typeof text === 'string' ? text : '';
+        if (!source.trim()) {
+            return [];
+        }
+
+        const lineStarts = buildLineStarts(source);
+        let index = 0;
+
+        function isWhitespace(charCode) {
+            return charCode === 32 || charCode === 9 || charCode === 10 || charCode === 13;
+        }
+
+        function skipTrivia() {
+            while (index < source.length) {
+                const charCode = source.charCodeAt(index);
+                if (isWhitespace(charCode)) {
+                    index += 1;
+                    continue;
+                }
+
+                if (charCode === 47 && index + 1 < source.length) {
+                    const nextCode = source.charCodeAt(index + 1);
+                    if (nextCode === 47) {
+                        index += 2;
+                        while (index < source.length) {
+                            const lineCode = source.charCodeAt(index);
+                            if (lineCode === 10 || lineCode === 13) {
+                                break;
+                            }
+                            index += 1;
+                        }
+                        continue;
+                    }
+                    if (nextCode === 42) {
+                        index += 2;
+                        while (index + 1 < source.length) {
+                            if (source.charCodeAt(index) === 42 && source.charCodeAt(index + 1) === 47) {
+                                index += 2;
+                                break;
+                            }
+                            index += 1;
+                        }
+                        continue;
+                    }
+                }
+
+                break;
+            }
+        }
+
+        function parseStringToken() {
+            if (source.charCodeAt(index) !== 34) {
+                return null;
+            }
+
+            const start = index;
+            index += 1;
+            let value = '';
+            while (index < source.length) {
+                const charCode = source.charCodeAt(index);
+                if (charCode === 34) {
+                    const end = index + 1;
+                    index = end;
+                    return {
+                        value,
+                        start,
+                        end,
+                        contentStart: Math.min(start + 1, end - 1),
+                        contentEnd: Math.max(start + 1, end - 1),
+                    };
+                }
+                if (charCode === 92) {
+                    if (index + 1 >= source.length) {
+                        return null;
+                    }
+                    const escapeCode = source.charCodeAt(index + 1);
+                    switch (escapeCode) {
+                        case 34:
+                            value += '"';
+                            break;
+                        case 92:
+                            value += '\\';
+                            break;
+                        case 47:
+                            value += '/';
+                            break;
+                        case 98:
+                            value += '\b';
+                            break;
+                        case 102:
+                            value += '\f';
+                            break;
+                        case 110:
+                            value += '\n';
+                            break;
+                        case 114:
+                            value += '\r';
+                            break;
+                        case 116:
+                            value += '\t';
+                            break;
+                        case 117: {
+                            const hex = source.slice(index + 2, index + 6);
+                            if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+                                return null;
+                            }
+                            value += String.fromCharCode(parseInt(hex, 16));
+                            index += 4;
+                            break;
+                        }
+                        default:
+                            value += source.charAt(index + 1);
+                            break;
+                    }
+                    index += 2;
+                    continue;
+                }
+
+                value += source.charAt(index);
+                index += 1;
+            }
+
+            return null;
+        }
+
+        function parseNumberToken() {
+            const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(source.slice(index));
+            if (!match) {
+                return null;
+            }
+            const start = index;
+            index += match[0].length;
+            return {
+                type: 'number',
+                start,
+                end: index,
+                selectionStart: start,
+                selectionEnd: index,
+                children: [],
+            };
+        }
+
+        function parseKeyword(keyword, type) {
+            if (!source.startsWith(keyword, index)) {
+                return null;
+            }
+            const start = index;
+            index += keyword.length;
+            return {
+                type,
+                start,
+                end: index,
+                selectionStart: start,
+                selectionEnd: index,
+                children: [],
+            };
+        }
+
+        function buildSymbolKind(type, isProperty) {
+            const kinds = monaco.languages.SymbolKind;
+            if (isProperty) {
+                return kinds.Property;
+            }
+            switch (type) {
+                case 'object':
+                    return kinds.Object;
+                case 'array':
+                    return kinds.Array;
+                case 'string':
+                    return kinds.String;
+                case 'number':
+                    return kinds.Number;
+                case 'boolean':
+                    return kinds.Boolean;
+                case 'null':
+                    return kinds.Null;
+                default:
+                    return kinds.Variable;
+            }
+        }
+
+        function buildDetail(type) {
+            if (type === 'object' || type === 'array') {
+                return type;
+            }
+            return '';
+        }
+
+        function createSymbol(name, type, rangeStart, rangeEnd, selectionStart, selectionEnd, children, isProperty) {
+            return {
+                name,
+                detail: buildDetail(type),
+                kind: buildSymbolKind(type, isProperty),
+                tags: [],
+                range: offsetsToMonacoRange(rangeStart, rangeEnd, lineStarts),
+                selectionRange: offsetsToMonacoRange(selectionStart, selectionEnd, lineStarts),
+                children: Array.isArray(children) ? children : [],
+            };
+        }
+
+        function parseValue() {
+            skipTrivia();
+            if (index >= source.length) {
+                return null;
+            }
+
+            const charCode = source.charCodeAt(index);
+            if (charCode === 123) {
+                return parseObject();
+            }
+            if (charCode === 91) {
+                return parseArray();
+            }
+            if (charCode === 34) {
+                const token = parseStringToken();
+                if (!token) {
+                    return null;
+                }
+                return {
+                    type: 'string',
+                    start: token.start,
+                    end: token.end,
+                    selectionStart: token.contentStart,
+                    selectionEnd: token.contentEnd,
+                    children: [],
+                };
+            }
+            if (charCode === 116) {
+                return parseKeyword('true', 'boolean');
+            }
+            if (charCode === 102) {
+                return parseKeyword('false', 'boolean');
+            }
+            if (charCode === 110) {
+                return parseKeyword('null', 'null');
+            }
+            return parseNumberToken();
+        }
+
+        function parseObject() {
+            const start = index;
+            index += 1;
+            const children = [];
+
+            while (index <= source.length) {
+                skipTrivia();
+                if (index >= source.length) {
+                    return null;
+                }
+                if (source.charCodeAt(index) === 125) {
+                    index += 1;
+                    return {
+                        type: 'object',
+                        start,
+                        end: index,
+                        selectionStart: start,
+                        selectionEnd: start + 1,
+                        children,
+                    };
+                }
+
+                const keyToken = parseStringToken();
+                if (!keyToken) {
+                    return null;
+                }
+
+                skipTrivia();
+                if (source.charCodeAt(index) !== 58) {
+                    return null;
+                }
+                index += 1;
+
+                const valueNode = parseValue();
+                if (!valueNode) {
+                    return null;
+                }
+
+                const selectionEnd = Math.max(keyToken.contentStart + 1, keyToken.contentEnd);
+                children.push(
+                    createSymbol(
+                        keyToken.value,
+                        valueNode.type,
+                        keyToken.start,
+                        valueNode.end,
+                        keyToken.contentStart,
+                        selectionEnd,
+                        valueNode.children,
+                        true,
+                    )
+                );
+
+                skipTrivia();
+                if (source.charCodeAt(index) === 44) {
+                    index += 1;
+                    skipTrivia();
+                    if (source.charCodeAt(index) === 125) {
+                        continue;
+                    }
+                    continue;
+                }
+                if (source.charCodeAt(index) === 125) {
+                    continue;
+                }
+                return null;
+            }
+
+            return null;
+        }
+
+        function parseArray() {
+            const start = index;
+            index += 1;
+            const children = [];
+            let itemIndex = 0;
+
+            while (index <= source.length) {
+                skipTrivia();
+                if (index >= source.length) {
+                    return null;
+                }
+                if (source.charCodeAt(index) === 93) {
+                    index += 1;
+                    return {
+                        type: 'array',
+                        start,
+                        end: index,
+                        selectionStart: start,
+                        selectionEnd: start + 1,
+                        children,
+                    };
+                }
+
+                const valueNode = parseValue();
+                if (!valueNode) {
+                    return null;
+                }
+
+                const selectionEnd = Math.max(valueNode.selectionStart + 1, valueNode.selectionEnd);
+                children.push(
+                    createSymbol(
+                        `[${itemIndex}]`,
+                        valueNode.type,
+                        valueNode.start,
+                        valueNode.end,
+                        valueNode.selectionStart,
+                        selectionEnd,
+                        valueNode.children,
+                        false,
+                    )
+                );
+                itemIndex += 1;
+
+                skipTrivia();
+                if (source.charCodeAt(index) === 44) {
+                    index += 1;
+                    skipTrivia();
+                    if (source.charCodeAt(index) === 93) {
+                        continue;
+                    }
+                    continue;
+                }
+                if (source.charCodeAt(index) === 93) {
+                    continue;
+                }
+                return null;
+            }
+
+            return null;
+        }
+
+        try {
+            const root = parseValue();
+            if (!root) {
+                return [];
+            }
+            skipTrivia();
+            if (index < source.length) {
+                return [];
+            }
+            return Array.isArray(root.children) ? root.children : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
     // ── Editor + Monaco providers ───────────────────────────────────────────────
     var bridge = null;
     var editor = null;
@@ -1035,11 +1475,26 @@ _HTML = r"""<!DOCTYPE html>
         };
     }
 
-    function hasDocumentSymbolSupportForActiveLanguage() {
-        if (!editor || !lspClient || !lspClient.supportsDocumentSymbols()) {
+    function hasLocalDocumentSymbolSupport(languageId) {
+        return languageId === 'json';
+    }
+
+    function hasLspDocumentSymbolSupport(languageId) {
+        if (!lspClient || !lspClient.supportsDocumentSymbols()) {
             return false;
         }
-        return editor.getModel().getLanguageId() === LSP_LANGUAGE;
+        return languageId === LSP_LANGUAGE;
+    }
+
+    function hasDocumentSymbolSupportForLanguage(languageId) {
+        return hasLocalDocumentSymbolSupport(languageId) || hasLspDocumentSymbolSupport(languageId);
+    }
+
+    function hasDocumentSymbolSupportForActiveLanguage() {
+        if (!editor) {
+            return false;
+        }
+        return hasDocumentSymbolSupportForLanguage(editor.getModel().getLanguageId());
     }
 
     function shouldShowBreadcrumbs() {
@@ -1277,10 +1732,38 @@ _HTML = r"""<!DOCTYPE html>
         renderBreadcrumbStrip(_breadcrumbTrail);
     }
 
+    async function resolveDocumentSymbolsForModel(model) {
+        if (!model) {
+            return [];
+        }
+
+        const languageId = model.getLanguageId();
+        if (!hasDocumentSymbolSupportForLanguage(languageId)) {
+            return [];
+        }
+
+        if (languageId === 'json') {
+            return buildJsonDocumentSymbols(model.getValue());
+        }
+
+        if (!lspClient || !lspClient._initialized || !lspClient.supportsDocumentSymbols()) {
+            return [];
+        }
+
+        const modelUri = model.uri ? model.uri.toString() : lspClient._fileUri;
+        if (normalizeUriKey(modelUri) !== normalizeUriKey(lspClient._fileUri)) {
+            return [];
+        }
+
+        const result = await lspClient.documentSymbols();
+        return normalizeLspDocumentSymbols(result, lspClient._fileUri);
+    }
+
     async function refreshDocumentSymbols(options) {
         const force = !!(options && options.force);
         const skipBreadcrumbUpdate = !!(options && options.skipBreadcrumbUpdate);
-        if (!editor || !lspClient || !lspClient._initialized || !hasDocumentSymbolSupportForActiveLanguage()) {
+        const model = editor ? editor.getModel() : null;
+        if (!model || !hasDocumentSymbolSupportForLanguage(model.getLanguageId())) {
             _documentSymbols = [];
             _openBreadcrumbMenuState = null;
             if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
@@ -1290,13 +1773,15 @@ _HTML = r"""<!DOCTYPE html>
             return _documentSymbolRefreshPromise;
         }
 
-        const activeUri = lspClient._fileUri;
-        const refreshPromise = lspClient.documentSymbols()
-            .then((result) => {
-                if (activeUri !== lspClient._fileUri) {
+        const activeUri = model.uri ? model.uri.toString() : getActiveDocumentUri();
+        const refreshPromise = resolveDocumentSymbolsForModel(model)
+            .then((symbols) => {
+                const currentModel = editor ? editor.getModel() : null;
+                const currentUri = currentModel && currentModel.uri ? currentModel.uri.toString() : getActiveDocumentUri();
+                if (normalizeUriKey(activeUri) !== normalizeUriKey(currentUri)) {
                     return _documentSymbols;
                 }
-                _documentSymbols = normalizeLspDocumentSymbols(result, activeUri);
+                _documentSymbols = Array.isArray(symbols) ? symbols : [];
                 _openBreadcrumbMenuState = null;
                 if (!skipBreadcrumbUpdate) updateBreadcrumbsForActivePosition();
                 return _documentSymbols;
@@ -1445,17 +1930,15 @@ __LSP_COMPLETION_ITEM_METADATA__
 
     function registerDocumentSymbolProvider(langId) {
         if (registeredDocumentSymbolLanguages.has(langId)) return;
-        if (!lspClient || !lspClient.supportsDocumentSymbols()) return;
+        if (!hasDocumentSymbolSupportForLanguage(langId)) return;
 
         registeredDocumentSymbolLanguages.add(langId);
         monaco.languages.registerDocumentSymbolProvider(langId, {
             provideDocumentSymbols: async (model) => {
-                if (!lspClient || !lspClient._initialized || !lspClient.supportsDocumentSymbols()) {
+                if (!model || !hasDocumentSymbolSupportForLanguage(model.getLanguageId())) {
                     return [];
                 }
-
-                const modelUri = model && model.uri ? model.uri.toString() : lspClient._fileUri;
-                if (normalizeUriKey(modelUri) !== normalizeUriKey(lspClient._fileUri)) {
+                if (editor && model !== editor.getModel()) {
                     return [];
                 }
 
@@ -1469,6 +1952,16 @@ __LSP_COMPLETION_ITEM_METADATA__
 
     require(['vs/editor/editor.main'], () => {
         defineSemanticTheme();
+
+        if (monaco.languages.json && monaco.languages.json.jsonDefaults) {
+            const modeConfiguration = monaco.languages.json.jsonDefaults.modeConfiguration || {};
+            if (modeConfiguration.documentSymbols) {
+                monaco.languages.json.jsonDefaults.setModeConfiguration({
+                    ...modeConfiguration,
+                    documentSymbols: false,
+                });
+            }
+        }
 
         editor = monaco.editor.create(document.getElementById('container'), {
             fontFamily: 'Consolas, "Courier New", monospace',
@@ -1538,6 +2031,9 @@ __LSP_COMPLETION_ITEM_METADATA__
             };
         }
 
+        registerDocumentSymbolProvider(editor.getModel().getLanguageId());
+        scheduleDocumentSymbolRefresh(0);
+
         _editorReady = true;
         _finishInit();
     });
@@ -1574,7 +2070,7 @@ __LSP_COMPLETION_ITEM_METADATA__
                 break;
             case 'language':
                 monaco.editor.setModelLanguage(editor.getModel(), data);
-                if (data === LSP_LANGUAGE) {
+                if (hasDocumentSymbolSupportForLanguage(data)) {
                     registerDocumentSymbolProvider(data);
                     scheduleDocumentSymbolRefresh(0);
                 } else {

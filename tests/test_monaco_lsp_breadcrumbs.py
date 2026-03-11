@@ -259,6 +259,87 @@ def test_build_symbol_breadcrumb_items_fails_open_when_no_symbol_contains_positi
     assert build_symbol_breadcrumb_items(symbols, {"lineNumber": 10, "column": 1}) == []
 
 
+def test_build_symbol_breadcrumb_items_tracks_json_array_indexes():
+    symbols = [
+        {
+            "name": "items",
+            "detail": "array",
+            "range": {
+                "startLineNumber": 1,
+                "startColumn": 1,
+                "endLineNumber": 9,
+                "endColumn": 2,
+            },
+            "selectionRange": {
+                "startLineNumber": 1,
+                "startColumn": 2,
+                "endLineNumber": 1,
+                "endColumn": 7,
+            },
+            "children": [
+                {
+                    "name": "[0]",
+                    "detail": "object",
+                    "range": {
+                        "startLineNumber": 2,
+                        "startColumn": 3,
+                        "endLineNumber": 4,
+                        "endColumn": 4,
+                    },
+                    "selectionRange": {
+                        "startLineNumber": 2,
+                        "startColumn": 3,
+                        "endLineNumber": 2,
+                        "endColumn": 4,
+                    },
+                    "children": [
+                        {
+                            "name": "name",
+                            "detail": "",
+                            "range": {
+                                "startLineNumber": 3,
+                                "startColumn": 5,
+                                "endLineNumber": 3,
+                                "endColumn": 20,
+                            },
+                            "selectionRange": {
+                                "startLineNumber": 3,
+                                "startColumn": 6,
+                                "endLineNumber": 3,
+                                "endColumn": 10,
+                            },
+                            "children": [],
+                        }
+                    ],
+                },
+                {
+                    "name": "[1]",
+                    "detail": "number",
+                    "range": {
+                        "startLineNumber": 5,
+                        "startColumn": 3,
+                        "endLineNumber": 5,
+                        "endColumn": 4,
+                    },
+                    "selectionRange": {
+                        "startLineNumber": 5,
+                        "startColumn": 3,
+                        "endLineNumber": 5,
+                        "endColumn": 4,
+                    },
+                    "children": [],
+                },
+            ],
+        }
+    ]
+
+    items = build_symbol_breadcrumb_items(symbols, {"lineNumber": 3, "column": 8})
+
+    assert [item["symbol"]["name"] for item in items] == ["items", "[0]", "name"]
+    assert [symbol["name"] for symbol in items[1]["siblings"]] == ["[0]", "[1]"]
+    assert items[2]["isLeaf"] is True
+
+
 def test_normalize_lsp_document_symbols_fails_open_for_empty_or_unsupported_payloads():
     assert normalize_lsp_document_symbols(None, "file:///workspace/example.py") == []
     assert normalize_lsp_document_symbols([], "file:///workspace/example.py") == []
@@ -269,6 +350,7 @@ def test_should_show_breadcrumbs_requires_matching_symbol_capable_language():
     symbols = [{"name": "Example"}]
 
     assert should_show_breadcrumbs("python", "python", True, symbols) is True
+    assert should_show_breadcrumbs("json", "json", True, symbols) is True
     assert should_show_breadcrumbs("markdown", "python", True, symbols) is False
     assert should_show_breadcrumbs("python", "python", False, symbols) is False
 
