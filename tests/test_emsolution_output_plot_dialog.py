@@ -152,16 +152,18 @@ def test_emsolution_plot_dialog_applies_per_series_style():
     assert descriptor is not None
     dialog._apply_series_style(
         descriptor,
-        PlotSeriesStyle(line_style="--", marker="o", line_width=2.5, color="#ff0000"),
+        PlotSeriesStyle(label="Custom Current", line_style="--", marker="o", line_width=2.5, color="#ff0000"),
     )
     dialog._redraw_plot()
 
-    line = dialog._preview.figure.axes[0].lines[0]
+    ax = dialog._preview.figure.axes[0]
+    line = ax.lines[0]
 
     assert line.get_linestyle() == "--"
     assert line.get_marker() == "o"
     assert line.get_linewidth() == 2.5
     assert line.get_color() == "#ff0000"
+    assert ax.get_legend_handles_labels()[1] == ["Custom Current"]
 
 
 def test_emsolution_plot_dialog_preserves_distinct_styles_for_multiple_series():
@@ -261,6 +263,19 @@ def test_plot_settings_dialog_round_trips_style_and_log_scale_settings():
     assert settings.y_log_scale is True
     assert settings.show_legend is False
     assert settings.show_grid is False
+
+
+def test_series_style_dialog_round_trips_custom_label():
+    _app()
+    dialog = _emsolution_plot_dialog.SeriesStyleDialog(
+        PlotSeriesStyle(label="Custom Voltage", line_style="--"),
+        "Voltage",
+    )
+
+    style = dialog.style()
+
+    assert style.label == "Custom Voltage"
+    assert style.line_style == "--"
 
 
 def test_plot_settings_dialog_apply_emits_current_settings_without_closing():
@@ -399,6 +414,22 @@ def test_emsolution_plot_dialog_applies_style_preset_with_scoped_context(monkeyp
     )
 
     assert "ggplot" in captured
+
+
+def test_emsolution_plot_dialog_uses_custom_series_label_in_legend():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_positive_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    descriptor = dialog._descriptor_for_item(leaf)
+    assert descriptor is not None
+
+    dialog._apply_series_style(descriptor, PlotSeriesStyle(label="Rotor Current"))
+
+    ax = dialog._preview.figure.axes[0]
+
+    assert ax.get_legend_handles_labels()[1] == ["Rotor Current"]
 
 
 def test_emsolution_plot_dialog_applies_log_scale_to_axes():

@@ -34,6 +34,7 @@ from pyemsi.io import EMSolutionOutput, PlotAxisOption, PlotSeriesDescriptor
 
 @dataclass
 class PlotSeriesStyle:
+    label: str = ""
     line_style: str = "-"
     marker: str = "None"
     line_width: float = 1.5
@@ -183,10 +184,12 @@ class PlotSettingsDialog(QDialog):
 
 
 class SeriesStyleDialog(QDialog):
-    def __init__(self, style: PlotSeriesStyle, parent: QWidget | None = None) -> None:
+    def __init__(self, style: PlotSeriesStyle, default_label: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Series Style")
 
+        self._label_edit = QLineEdit(self)
+        self._label_edit.setPlaceholderText(default_label)
         self._line_style_combo = QComboBox(self)
         self._line_style_combo.addItem("Solid", "-")
         self._line_style_combo.addItem("Dashed", "--")
@@ -217,6 +220,7 @@ class SeriesStyleDialog(QDialog):
         color_row.addWidget(self._reset_color_button)
 
         form_layout = QFormLayout()
+        form_layout.addRow("Label:", self._label_edit)
         form_layout.addRow("Line Style:", self._line_style_combo)
         form_layout.addRow("Marker:", self._marker_combo)
         form_layout.addRow("Width:", self._line_width_spin)
@@ -239,6 +243,7 @@ class SeriesStyleDialog(QDialog):
         self._set_style(style)
 
     def _set_style(self, style: PlotSeriesStyle) -> None:
+        self._label_edit.setText(style.label)
         self._line_style_combo.setCurrentIndex(max(self._line_style_combo.findData(style.line_style), 0))
         self._marker_combo.setCurrentIndex(max(self._marker_combo.findData(style.marker), 0))
         self._line_width_spin.setValue(style.line_width)
@@ -272,6 +277,7 @@ class SeriesStyleDialog(QDialog):
 
     def style(self) -> PlotSeriesStyle:
         return PlotSeriesStyle(
+            label=self._label_edit.text().strip(),
             line_style=str(self._line_style_combo.currentData()),
             marker=str(self._marker_combo.currentData()),
             line_width=float(self._line_width_spin.value()),
@@ -420,6 +426,10 @@ class EMSolutionPlotDialog(QDialog):
             self._series_styles[key] = style
         return style
 
+    def _display_label_for_descriptor(self, descriptor: PlotSeriesDescriptor) -> str:
+        style = self._style_for_descriptor(descriptor)
+        return style.label or descriptor.label
+
     def _selected_x_option(self) -> PlotAxisOption:
         return self._x_options[self._plot_settings.x_axis_key]
 
@@ -521,7 +531,7 @@ class EMSolutionPlotDialog(QDialog):
             return
 
         self._tree.setCurrentItem(item)
-        dialog = SeriesStyleDialog(self._style_for_descriptor(descriptor), parent=self)
+        dialog = SeriesStyleDialog(self._style_for_descriptor(descriptor), descriptor.label, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._apply_series_style(descriptor, dialog.style())
 
@@ -550,12 +560,12 @@ class EMSolutionPlotDialog(QDialog):
                 if invalid_x:
                     continue
                 if self._plot_settings.y_log_scale and (descriptor.values <= 0).any():
-                    invalid_y_series.append(descriptor.label)
+                    invalid_y_series.append(self._display_label_for_descriptor(descriptor))
                     continue
 
                 style = self._style_for_descriptor(descriptor)
                 plot_kwargs = {
-                    "label": descriptor.label,
+                    "label": self._display_label_for_descriptor(descriptor),
                     "linestyle": style.line_style,
                     "linewidth": style.line_width,
                 }
