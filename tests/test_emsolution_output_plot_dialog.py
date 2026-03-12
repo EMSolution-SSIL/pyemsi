@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QSplitter
+from PySide6.QtWidgets import QApplication, QPushButton, QSplitter
 
-from pyemsi.gui._viewers._emsolution_plot_dialog import EMSolutionPlotDialog
+from pyemsi.gui._viewers._emsolution_plot_dialog import EMSolutionPlotDialog, PlotDialogSettings, PlotSeriesStyle
 from pyemsi.gui.file_viewers import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput
 
@@ -65,7 +65,14 @@ def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
     assert splitter is not None
     assert splitter.widget(0).findChild(type(dialog._tree)) is dialog._tree
     assert isinstance(splitter.widget(1), MatplotlibViewer)
-    assert dialog._x_label_edit.placeholderText() == "Time (s)"
+    assert dialog._plot_settings_button.text() == "Plot Settings..."
+
+
+def test_emsolution_plot_dialog_uses_default_axis_label_before_overrides():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    assert dialog._effective_x_label() == "Time (s)"
 
 
 def test_emsolution_plot_dialog_updates_preview_from_tree_and_labels():
@@ -74,9 +81,16 @@ def test_emsolution_plot_dialog_updates_preview_from_tree_and_labels():
 
     leaf = _first_leaf(dialog._tree.topLevelItem(0))
     leaf.setCheckState(0, Qt.CheckState.Checked)
-    dialog._title_edit.setText("Custom Plot")
-    dialog._x_label_edit.setText("Rotor Angle")
-    dialog._y_label_edit.setText("Response")
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            title="Custom Plot",
+            x_label="Rotor Angle",
+            y_label="Response",
+            show_legend=True,
+            show_grid=False,
+        )
+    )
     dialog._redraw_plot()
 
     ax = dialog._preview.figure.axes[0]
@@ -93,8 +107,13 @@ def test_emsolution_plot_dialog_toggles_legend_and_grid():
 
     leaf = _first_leaf(dialog._tree.topLevelItem(0))
     leaf.setCheckState(0, Qt.CheckState.Checked)
-    dialog._show_legend_checkbox.setChecked(False)
-    dialog._show_grid_checkbox.setChecked(True)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            show_legend=False,
+            show_grid=True,
+        )
+    )
     dialog._redraw_plot()
 
     ax = dialog._preview.figure.axes[0]
@@ -109,14 +128,13 @@ def test_emsolution_plot_dialog_applies_per_series_style():
     dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
 
     leaf = _first_leaf(dialog._tree.topLevelItem(0))
-    dialog._tree.setCurrentItem(leaf)
     leaf.setCheckState(0, Qt.CheckState.Checked)
-    dialog._line_style_combo.setCurrentIndex(dialog._line_style_combo.findData("--"))
-    dialog._marker_combo.setCurrentIndex(dialog._marker_combo.findData("o"))
-    dialog._line_width_spin.setValue(2.5)
-    style = dialog._style_for_descriptor(dialog._current_styled_series())
-    style.color = "#ff0000"
-    dialog._update_color_button(style.color)
+    descriptor = dialog._descriptor_for_item(leaf)
+    assert descriptor is not None
+    dialog._apply_series_style(
+        descriptor,
+        PlotSeriesStyle(line_style="--", marker="o", line_width=2.5, color="#ff0000"),
+    )
     dialog._redraw_plot()
 
     line = dialog._preview.figure.axes[0].lines[0]
@@ -135,15 +153,16 @@ def test_emsolution_plot_dialog_preserves_distinct_styles_for_multiple_series():
     first_leaf = _first_leaf(top)
     second_leaf = top.child(0).child(1)
 
-    dialog._tree.setCurrentItem(first_leaf)
     first_leaf.setCheckState(0, Qt.CheckState.Checked)
-    dialog._line_style_combo.setCurrentIndex(dialog._line_style_combo.findData("--"))
-    dialog._line_width_spin.setValue(2.0)
-
-    dialog._tree.setCurrentItem(second_leaf)
     second_leaf.setCheckState(0, Qt.CheckState.Checked)
-    dialog._marker_combo.setCurrentIndex(dialog._marker_combo.findData("s"))
-    dialog._line_width_spin.setValue(3.0)
+
+    first_descriptor = dialog._descriptor_for_item(first_leaf)
+    second_descriptor = dialog._descriptor_for_item(second_leaf)
+    assert first_descriptor is not None
+    assert second_descriptor is not None
+
+    dialog._apply_series_style(first_descriptor, PlotSeriesStyle(line_style="--", line_width=2.0))
+    dialog._apply_series_style(second_descriptor, PlotSeriesStyle(marker="s", line_width=3.0))
 
     dialog._redraw_plot()
     lines = dialog._preview.figure.axes[0].lines
@@ -155,14 +174,38 @@ def test_emsolution_plot_dialog_preserves_distinct_styles_for_multiple_series():
     assert lines[1].get_linewidth() == 3.0
 
 
-def test_emsolution_plot_dialog_disables_style_controls_for_unchecked_leaf():
+def test_emsolution_plot_dialog_only_shows_style_button_for_checked_leaf():
     _app()
     dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
 
     leaf = _first_leaf(dialog._tree.topLevelItem(0))
-    dialog._tree.setCurrentItem(leaf)
+    assert dialog._tree.itemWidget(leaf, dialog.SETTINGS_COLUMN) is None
 
-    assert dialog._line_style_combo.isEnabled() is False
-    assert dialog._marker_combo.isEnabled() is False
-    assert dialog._line_width_spin.isEnabled() is False
-    assert dialog._color_button.isEnabled() is False
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    button = dialog._tree.itemWidget(leaf, dialog.SETTINGS_COLUMN)
+
+    assert isinstance(button, QPushButton)
+    assert button.text() == "Style"
+
+    leaf.setCheckState(0, Qt.CheckState.Unchecked)
+
+    assert dialog._tree.itemWidget(leaf, dialog.SETTINGS_COLUMN) is None
+
+
+def test_emsolution_plot_dialog_style_button_opens_for_checked_leaf(monkeypatch):
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    button = dialog._tree.itemWidget(leaf, dialog.SETTINGS_COLUMN)
+
+    opened = {"item": None}
+
+    def fake_open(item):
+        opened["item"] = item
+
+    monkeypatch.setattr(dialog, "_open_style_dialog_for_item", fake_open)
+    button.click()
+
+    assert opened["item"] is leaf
