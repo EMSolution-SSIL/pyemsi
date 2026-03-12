@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import copy
 import json
 import os
@@ -25,19 +24,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "explorer": {
             "root_path": None,
         },
-        "layout": {
-            "splitter_sizes": [],
-        },
         "window": {
             "dock_visibility": {
                 "explorer": True,
                 "external_terminal": False,
                 "ipython": False,
             },
-            "geometry": None,
             "maximized": False,
-            "state": None,
-            "state_version": 1,
         },
     },
 }
@@ -55,41 +48,10 @@ def _normalize_optional_path(value: Any) -> str | None:
     return os.path.abspath(os.path.normpath(value))
 
 
-def _normalize_optional_base64(value: Any) -> str | None:
-    if value in (None, ""):
-        return None
-    if not isinstance(value, str):
-        raise ValueError("expected a base64 string or null")
-    try:
-        base64.b64decode(value.encode("ascii"), validate=True)
-    except Exception as exc:
-        raise ValueError("expected valid base64") from exc
-    return value
-
-
 def _normalize_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     raise ValueError("expected a boolean")
-
-
-def _normalize_int(value: Any) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError("expected an integer")
-    return value
-
-
-def _normalize_splitter_sizes(value: Any) -> list[int]:
-    if value in (None, []):
-        return []
-    if not isinstance(value, list):
-        raise ValueError("expected a list of integers")
-    normalized: list[int] = []
-    for item in value:
-        if isinstance(item, bool) or not isinstance(item, int) or item < 0:
-            raise ValueError("expected a list of non-negative integers")
-        normalized.append(item)
-    return normalized
 
 
 def _normalize_recent_folders(value: Any) -> list[str]:
@@ -134,23 +96,18 @@ class SettingDefinition:
 SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "app.recent_folders": SettingDefinition([], SCOPE_GLOBAL, _normalize_recent_folders),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
-    "workbench.layout.splitter_sizes": SettingDefinition([], SCOPE_LOCAL, _normalize_splitter_sizes),
     "workbench.window.dock_visibility": SettingDefinition(
         _copy_default(DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"]),
-        SCOPE_BOTH,
+        SCOPE_GLOBAL,
         _normalize_dock_visibility,
     ),
-    "workbench.window.geometry": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_base64),
-    "workbench.window.maximized": SettingDefinition(False, SCOPE_LOCAL, _normalize_bool),
-    "workbench.window.state": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_base64),
-    "workbench.window.state_version": SettingDefinition(1, SCOPE_LOCAL, _normalize_int),
+    "workbench.window.maximized": SettingDefinition(False, SCOPE_GLOBAL, _normalize_bool),
 }
 
 _CONTAINER_PATHS = {
     "app",
     "workbench",
     "workbench.explorer",
-    "workbench.layout",
     "workbench.window",
 }
 
@@ -167,20 +124,6 @@ def get_user_config_dir(app_name: str = "pyemsi") -> Path:
     if xdg_dir:
         return Path(xdg_dir) / app_name
     return Path.home() / ".config" / app_name
-
-
-def encode_qt_state(value: bytes | bytearray | memoryview | None) -> str | None:
-    """Encode Qt byte payloads for JSON storage."""
-    if not value:
-        return None
-    return base64.b64encode(bytes(value)).decode("ascii")
-
-
-def decode_qt_state(value: str | None) -> bytes | None:
-    """Decode Qt byte payloads from JSON storage."""
-    if not value:
-        return None
-    return base64.b64decode(value.encode("ascii"))
 
 
 def _deep_merge(base: Any, override: Any) -> Any:

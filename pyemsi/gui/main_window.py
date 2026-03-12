@@ -17,7 +17,7 @@ import pyemsi.resources.resources  # noqa: F401
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
 from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
-from pyemsi.settings import SettingsManager, decode_qt_state, encode_qt_state
+from pyemsi.settings import SettingsManager
 
 
 class PyEmsiMainWindow(QMainWindow):
@@ -62,6 +62,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._external_terminal_dock.hide()
 
         self._setup_view_menu()
+        self._apply_window_settings()
         self._refresh_recent_folders_menu()
 
     @property
@@ -188,11 +189,10 @@ class PyEmsiMainWindow(QMainWindow):
         if path:
             self._set_workspace_path(path)
 
-    def _set_workspace_path(self, path: str, restore_state: bool = True, track_recent: bool = True) -> None:
+    def _set_workspace_path(self, path: str) -> None:
         """Switch the active workspace path and update persisted context."""
         normalized_path = os.path.abspath(os.path.normpath(path))
-        if track_recent:
-            self._settings.add_recent_folder(normalized_path)
+        self._settings.add_recent_folder(normalized_path)
         self._settings.load_workspace(normalized_path)
         self._refresh_recent_folders_menu()
 
@@ -200,11 +200,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._explorer_widget.set_directory(explorer_root)
         self._settings.set_local("workbench.explorer.root_path", explorer_root)
 
-        folder_name = os.path.basename(normalized_path) or normalized_path
-        self.setWindowTitle(f"pyemsi — {folder_name}")
-
-        if restore_state:
-            self._restore_workspace_state()
+        self.setWindowTitle(f"pyemsi — {normalized_path}")
 
     def _on_file_activated(self, path: str) -> None:
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
@@ -267,54 +263,33 @@ class PyEmsiMainWindow(QMainWindow):
 
         return {"pyemsi": pyemsi}
 
-    def _restore_workspace_state(self) -> None:
-        """Restore persisted Qt window and layout state for the active workspace."""
-        restored_any = False
-
-        geometry_state = decode_qt_state(self._settings.get_effective("workbench.window.geometry"))
-        if geometry_state:
-            self.restoreGeometry(geometry_state)
-            restored_any = True
-
-        state_version = self._settings.get_effective("workbench.window.state_version") or 1
-        window_state = decode_qt_state(self._settings.get_effective("workbench.window.state"))
-        if window_state:
-            self.restoreState(window_state, state_version)
-            restored_any = True
-
+    def _apply_window_settings(self) -> None:
+        """Apply persisted global window preferences."""
         dock_visibility = self._settings.get_effective("workbench.window.dock_visibility") or {}
         self._explorer_dock.setVisible(dock_visibility.get("explorer", True))
         self._ipython_dock.setVisible(dock_visibility.get("ipython", False))
         self._external_terminal_dock.setVisible(dock_visibility.get("external_terminal", False))
 
-        splitter_sizes = self._settings.get_effective("workbench.layout.splitter_sizes") or []
-        if splitter_sizes:
-            self._container.restore_layout_state(splitter_sizes)
-            restored_any = True
-
-        maximized = self._settings.get_effective("workbench.window.maximized")
-        self._show_maximized_on_launch = bool(maximized) if restored_any or maximized else True
+        maximized = self._settings.get_global("workbench.window.maximized")
+        if maximized is not None:
+            self._show_maximized_on_launch = bool(maximized)
 
     def _persist_workspace_state(self) -> None:
-        """Persist workspace-scoped UI state for the active workspace."""
+        """Persist global window preferences and workspace-local explorer state."""
+        self._settings.set_global("workbench.window.maximized", self.isMaximized())
+        self._settings.set_global(
+            "workbench.window.dock_visibility",
+            {
+                "explorer": self._explorer_dock.isVisible(),
+                "ipython": self._ipython_dock.isVisible(),
+                "external_terminal": self._external_terminal_dock.isVisible(),
+            },
+        )
+
         current_workspace = self.explorer.current_path
         if current_workspace and os.path.isdir(current_workspace):
             self._settings.load_workspace(current_workspace)
             self._settings.set_local("workbench.explorer.root_path", current_workspace)
-            self._settings.set_local("workbench.window.geometry", encode_qt_state(self.saveGeometry()))
-            self._settings.set_local("workbench.window.maximized", self.isMaximized())
-
-            state_version = self._settings.get_effective("workbench.window.state_version") or 1
-            self._settings.set_local("workbench.window.state", encode_qt_state(self.saveState(state_version)))
-            self._settings.set_local(
-                "workbench.window.dock_visibility",
-                {
-                    "explorer": self._explorer_dock.isVisible(),
-                    "ipython": self._ipython_dock.isVisible(),
-                    "external_terminal": self._external_terminal_dock.isVisible(),
-                },
-            )
-            self._settings.set_local("workbench.layout.splitter_sizes", self._container.serialize_layout_state())
 
         self._settings.save()
 

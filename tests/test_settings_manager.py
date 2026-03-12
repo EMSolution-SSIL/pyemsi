@@ -7,24 +7,29 @@ from pyemsi.settings import SettingsManager
 def test_settings_manager_merges_defaults_global_and_local(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
+    nested_workspace = workspace / "nested"
+    nested_workspace.mkdir()
     global_settings_path = tmp_path / "config" / "settings.json"
 
     manager = SettingsManager(global_settings_path=global_settings_path)
     manager.set_global("workbench.window.dock_visibility", {"ipython": True})
+    manager.set_global("workbench.window.maximized", True)
     manager.load_workspace(workspace)
-    manager.set_local("workbench.window.dock_visibility", {"external_terminal": True})
-    manager.set_local("workbench.layout.splitter_sizes", [320, 1080])
+    manager.set_local("workbench.explorer.root_path", str(nested_workspace))
     manager.save()
 
     reloaded = SettingsManager(global_settings_path=global_settings_path)
     reloaded.load_workspace(workspace)
 
-    assert reloaded.get_effective("workbench.layout.splitter_sizes") == [320, 1080]
     assert reloaded.get_effective("workbench.window.dock_visibility") == {
         "explorer": True,
-        "external_terminal": True,
+        "external_terminal": False,
         "ipython": True,
     }
+    assert reloaded.get_effective("workbench.window.maximized") is True
+    assert reloaded.get_local("workbench.explorer.root_path") == os.path.abspath(
+        os.path.normpath(str(nested_workspace))
+    )
 
 
 def test_settings_manager_falls_back_when_json_is_malformed(tmp_path):
@@ -38,13 +43,10 @@ def test_settings_manager_falls_back_when_json_is_malformed(tmp_path):
     assert any("failed to read global settings" in warning for warning in manager.warnings)
 
 
-def test_settings_manager_ignores_invalid_workspace_values(tmp_path):
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
+def test_settings_manager_ignores_invalid_global_window_values(tmp_path):
     global_settings_path = tmp_path / "config" / "settings.json"
-    local_settings_path = workspace / ".pyemsi" / "workspace.json"
-    local_settings_path.parent.mkdir(parents=True)
-    local_settings_path.write_text(
+    global_settings_path.parent.mkdir(parents=True)
+    global_settings_path.write_text(
         json.dumps(
             {
                 "schemaVersion": 1,
@@ -59,7 +61,6 @@ def test_settings_manager_ignores_invalid_workspace_values(tmp_path):
     )
 
     manager = SettingsManager(global_settings_path=global_settings_path)
-    manager.load_workspace(workspace)
 
     assert manager.get_effective("workbench.window.dock_visibility") == {
         "explorer": True,
@@ -114,8 +115,11 @@ def test_settings_manager_recent_folders_filters_missing_directories(tmp_path):
     assert manager.get_global("app.recent_folders") == [os.path.abspath(os.path.normpath(str(existing_folder)))]
 
 
-def test_settings_manager_drops_legacy_last_workspace_path_on_load_and_save(tmp_path):
+def test_settings_manager_drops_removed_legacy_settings_on_load_and_save(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
     global_settings_path = tmp_path / "config" / "settings.json"
+    local_settings_path = workspace / ".pyemsi" / "workspace.json"
     global_settings_path.parent.mkdir(parents=True)
     global_settings_path.write_text(
         json.dumps(
@@ -125,14 +129,49 @@ def test_settings_manager_drops_legacy_last_workspace_path_on_load_and_save(tmp_
                     "last_workspace_path": str(tmp_path / "workspace"),
                     "recent_folders": [],
                 },
+                "workbench": {
+                    "layout": {"splitter_sizes": [320, 1080]},
+                    "window": {
+                        "geometry": "Zm9v",
+                        "state": "YmFy",
+                        "state_version": 1,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    local_settings_path.parent.mkdir(parents=True)
+    local_settings_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "workbench": {
+                    "layout": {"splitter_sizes": [100, 200]},
+                    "window": {
+                        "geometry": "Zm9v",
+                        "state": "YmFy",
+                        "state_version": 1,
+                    },
+                },
             }
         ),
         encoding="utf-8",
     )
 
     manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
     manager.save()
 
-    payload = json.loads(global_settings_path.read_text(encoding="utf-8"))
+    global_payload = json.loads(global_settings_path.read_text(encoding="utf-8"))
+    local_payload = json.loads(local_settings_path.read_text(encoding="utf-8"))
 
-    assert "last_workspace_path" not in payload.get("app", {})
+    assert "last_workspace_path" not in global_payload.get("app", {})
+    assert "layout" not in global_payload.get("workbench", {})
+    assert "geometry" not in global_payload.get("workbench", {}).get("window", {})
+    assert "state" not in global_payload.get("workbench", {}).get("window", {})
+    assert "state_version" not in global_payload.get("workbench", {}).get("window", {})
+    assert "layout" not in local_payload.get("workbench", {})
+    assert "geometry" not in local_payload.get("workbench", {}).get("window", {})
+    assert "state" not in local_payload.get("workbench", {}).get("window", {})
+    assert "state_version" not in local_payload.get("workbench", {}).get("window", {})
