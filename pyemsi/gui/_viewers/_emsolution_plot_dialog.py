@@ -467,6 +467,9 @@ class EMSolutionPlotDialog(QDialog):
         self._plot_button.clicked.connect(self._on_plot)
         self._cancel_button.clicked.connect(self.reject)
 
+        self._plot_button.setDefault(True)
+        self._plot_button.setFocus()
+
         self._redraw_plot()
 
     def _populate_tree(self) -> None:

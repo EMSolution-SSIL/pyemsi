@@ -10,7 +10,8 @@ from pyemsi.widgets.monaco_lsp._widget import EXT_TO_LANG
 
 from ._audio import AudioViewer
 from ._constants import _CATEGORY
-from ._emsolution_json import EMSolutionInputViewer, EMSolutionOutputViewer
+from ._emsolution_input_viewer import EMSolutionInputViewer
+from ._emsolution_output_viewer import EMSolutionOutputViewer
 from ._image import ImageViewer
 from ._markdown import MarkdownViewer
 from ._python import PythonViewer

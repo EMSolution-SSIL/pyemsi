@@ -16,7 +16,8 @@ from ._viewers._constants import (
     _PYTHON_EXTENSIONS,
     _TEXT_EXTENSIONS,
 )
-from ._viewers._emsolution_json import EMSolutionInputViewer, EMSolutionOutputViewer
+from ._viewers._emsolution_input_viewer import EMSolutionInputViewer
+from ._viewers._emsolution_output_viewer import EMSolutionOutputViewer
 from ._viewers._factory import create_viewer
 from ._viewers._image import ImageViewer
 from ._viewers._markdown import MarkdownPreviewViewer, MarkdownViewer

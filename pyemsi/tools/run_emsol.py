@@ -1,0 +1,51 @@
+"""CLI entry-point for running an EMSolution simulation via pyemsol.
+
+Usage::
+
+    python -m pyemsi.tools.run_emsol <input.json>
+
+The script reads the JSON input file, then calls::
+
+    pyemsol.initialize(data, directory)
+    pyemsol.solve()
+    pyemsol.finalize()
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: python -m pyemsi.tools.run_emsol <input.json>", file=sys.stderr)
+        sys.exit(1)
+
+    input_path = os.path.abspath(sys.argv[1])
+    if not os.path.isfile(input_path):
+        print(f"Error: file not found: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    directory = os.path.dirname(input_path)
+
+    with open(input_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    import pyemsol
+
+    print(f"Initializing pyemsol with {input_path} ...")
+    pyemsol.initialize(data, directory)
+
+    print("Solving ...")
+    pyemsol.solve()
+
+    print("Finalizing ...")
+    pyemsol.finalize()
+
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()

@@ -13,13 +13,11 @@ from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 from ._emsolution_plot_dialog import EMSolutionPlotDialog
 
 
-class _BaseEMSolutionJsonViewer(QWidget):
-    """Shared Monaco-based JSON viewer with an extensible toolbar."""
+class EMSolutionOutputViewer(QWidget):
+    """Monaco-based JSON viewer for EMSolution output files with a Plot button."""
 
     textChanged = Signal(str)
     dirtyChanged = Signal(bool)
-
-    toolbar_label = "EMSolution"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -31,9 +29,14 @@ class _BaseEMSolutionJsonViewer(QWidget):
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
         toolbar.setIconSize(QSize(16, 16))
-        toolbar.addWidget(QLabel(self.toolbar_label))
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self._toolbar = toolbar
-        self._configure_toolbar(toolbar)
+
+        plot_action = QAction(QIcon(":/icons/Graph.svg"), "Plot", self)
+        plot_action.setToolTip("Open the plotting dialog for this EMSolution output")
+        plot_action.triggered.connect(self._open_plot_dialog)
+        toolbar.addAction(plot_action)
+        self._plot_action = plot_action
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -61,21 +64,6 @@ class _BaseEMSolutionJsonViewer(QWidget):
     def save(self, path: str | None = None) -> None:
         self.editor.save(path)
 
-    def _configure_toolbar(self, toolbar: QToolBar) -> None:
-        del toolbar
-
-
-class EMSolutionOutputViewer(_BaseEMSolutionJsonViewer):
-    toolbar_label = "EMSolution Output:"
-
-    def _configure_toolbar(self, toolbar: QToolBar) -> None:
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        plot_action = QAction(QIcon(":/icons/Graph.svg"), "Plot", self)
-        plot_action.setToolTip("Open the plotting dialog for this EMSolution output")
-        plot_action.triggered.connect(self._open_plot_dialog)
-        toolbar.addAction(plot_action)
-        self._plot_action = plot_action
-
     def _open_plot_dialog(self) -> None:
         try:
             payload = json.loads(self.text())
@@ -95,7 +83,3 @@ class EMSolutionOutputViewer(_BaseEMSolutionJsonViewer):
         dialog.raise_()
         dialog.activateWindow()
         self._plot_dialog = dialog
-
-
-class EMSolutionInputViewer(_BaseEMSolutionJsonViewer):
-    toolbar_label = "EMSolution Input:"

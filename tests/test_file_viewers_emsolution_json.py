@@ -3,7 +3,7 @@ import json
 from PySide6.QtWidgets import QApplication
 
 from pyemsi.gui._viewers import _factory
-from pyemsi.gui._viewers import _emsolution_json
+from pyemsi.gui._viewers import _emsolution_output_viewer as _emsolution_output
 
 
 def _app():
@@ -138,7 +138,7 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
         def connect(self, callback):
             self._callbacks.append(callback)
 
-    class StubMonaco(_emsolution_json.QWidget):
+    class StubMonaco(_emsolution_output.QWidget):
         def __init__(self, language: str, parent=None):
             super().__init__(parent)
             self.language = language
@@ -190,11 +190,11 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
         def activateWindow(self):
             captured["activated"] = True
 
-    monkeypatch.setattr(_emsolution_json, "MonacoLspWidget", StubMonaco)
-    monkeypatch.setattr(_emsolution_json, "EMSolutionOutput", StubOutput)
-    monkeypatch.setattr(_emsolution_json, "EMSolutionPlotDialog", StubDialog)
+    monkeypatch.setattr(_emsolution_output, "MonacoLspWidget", StubMonaco)
+    monkeypatch.setattr(_emsolution_output, "EMSolutionOutput", StubOutput)
+    monkeypatch.setattr(_emsolution_output, "EMSolutionPlotDialog", StubDialog)
 
-    viewer = _emsolution_json.EMSolutionOutputViewer()
+    viewer = _emsolution_output.EMSolutionOutputViewer()
     viewer._plot_action.trigger()
 
     assert captured["payload"] == {"metaData": {"EMSolutionVersion": "2.0"}}
@@ -206,7 +206,7 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
 def test_emsolution_output_viewer_plot_action_has_graph_icon():
     _app()
 
-    viewer = _emsolution_json.EMSolutionOutputViewer()
+    viewer = _emsolution_output.EMSolutionOutputViewer()
 
     assert not viewer._plot_action.icon().isNull()
 
@@ -214,9 +214,9 @@ def test_emsolution_output_viewer_plot_action_has_graph_icon():
 def test_emsolution_output_viewer_plot_action_shows_text_beside_icon():
     _app()
 
-    viewer = _emsolution_json.EMSolutionOutputViewer()
+    viewer = _emsolution_output.EMSolutionOutputViewer()
 
-    assert viewer._toolbar.toolButtonStyle() == _emsolution_json.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+    assert viewer._toolbar.toolButtonStyle() == _emsolution_output.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
 
 
 def test_emsolution_output_viewer_shows_error_for_invalid_json(monkeypatch):
@@ -226,7 +226,7 @@ def test_emsolution_output_viewer_shows_error_for_invalid_json(monkeypatch):
         def connect(self, callback):
             self.callback = callback
 
-    class StubMonaco(_emsolution_json.QWidget):
+    class StubMonaco(_emsolution_output.QWidget):
         def __init__(self, language: str, parent=None):
             super().__init__(parent)
             self.textChanged = _Signal()
@@ -254,10 +254,10 @@ def test_emsolution_output_viewer_shows_error_for_invalid_json(monkeypatch):
 
     errors = []
 
-    monkeypatch.setattr(_emsolution_json, "MonacoLspWidget", StubMonaco)
-    monkeypatch.setattr(_emsolution_json.QMessageBox, "critical", lambda *args: errors.append(args[1:]))
+    monkeypatch.setattr(_emsolution_output, "MonacoLspWidget", StubMonaco)
+    monkeypatch.setattr(_emsolution_output.QMessageBox, "critical", lambda *args: errors.append(args[1:]))
 
-    viewer = _emsolution_json.EMSolutionOutputViewer()
+    viewer = _emsolution_output.EMSolutionOutputViewer()
     viewer._plot_action.trigger()
 
     assert errors
