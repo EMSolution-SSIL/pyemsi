@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 
 from matplotlib import style as mpl_style
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from matplotlib.figure import Figure
 
+import pyemsi.resources.resources  # noqa: F401
 from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput, PlotAxisOption, PlotSeriesDescriptor
 
@@ -124,6 +125,7 @@ class PlotSettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Plot Settings")
+        self.setWindowIcon(QIcon(":/icons/Gear.svg"))
         self._original_settings = replace(settings)
 
         self._x_axis_combo = QComboBox(self)
@@ -211,6 +213,7 @@ class SeriesStyleDialog(QDialog):
     def __init__(self, style: PlotSeriesStyle, default_label: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Series Style")
+        self.setWindowIcon(QIcon(":/icons/Style.svg"))
 
         self._label_edit = QLineEdit(self)
         self._label_edit.setPlaceholderText(default_label)
@@ -322,6 +325,7 @@ class EMSolutionPlotDialog(QDialog):
         self._plot_settings = PlotDialogSettings(x_axis_key=default_x_axis_key)
 
         self.setWindowTitle("EMSolution Plot")
+        self.setWindowIcon(QIcon(":/icons/Graph.svg"))
         self.resize(1200, 720)
 
         self._tree = QTreeWidget(self)
@@ -333,7 +337,9 @@ class EMSolutionPlotDialog(QDialog):
         self._tree.setRootIsDecorated(True)
 
         self._plot_settings_button = QPushButton("Plot Settings...", self)
+        self._plot_settings_button.setIcon(QIcon(":/icons/Gear.svg"))
         self._plot_button = QPushButton("Plot", self)
+        self._plot_button.setIcon(QIcon(":/icons/Graph.svg"))
         self._cancel_button = QPushButton("Cancel", self)
         self._warning_label = QLabel(self)
         self._warning_label.setWordWrap(True)
@@ -532,6 +538,7 @@ class EMSolutionPlotDialog(QDialog):
 
         if button is None:
             button = QPushButton("Style", self._tree)
+            button.setIcon(QIcon(":/icons/Style.svg"))
             button.setAutoDefault(False)
             button.setDefault(False)
             button.clicked.connect(lambda checked=False, tree_item=item: self._open_style_dialog_for_item(tree_item))

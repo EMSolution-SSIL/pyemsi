@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QLabel, QMessageBox, QToolBar, QVBoxLayout, QWidget
 
+import pyemsi.resources.resources  # noqa: F401
 from pyemsi.io import EMSolutionOutput
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
@@ -68,7 +69,8 @@ class EMSolutionOutputViewer(_BaseEMSolutionJsonViewer):
     toolbar_label = "EMSolution Output:"
 
     def _configure_toolbar(self, toolbar: QToolBar) -> None:
-        plot_action = QAction("Plot", self)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        plot_action = QAction(QIcon(":/icons/Graph.svg"), "Plot", self)
         plot_action.setToolTip("Open the plotting dialog for this EMSolution output")
         plot_action.triggered.connect(self._open_plot_dialog)
         toolbar.addAction(plot_action)

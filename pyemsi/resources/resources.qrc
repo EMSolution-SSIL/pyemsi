@@ -8,6 +8,8 @@
     <file>icons/First.svg</file>
     <file>icons/FolderOpen.svg</file>
     <file>icons/Forward.svg</file>
+    <file>icons/Gear.svg</file>
+    <file>icons/Graph.svg</file>
     <file>icons/Icon.svg</file>
     <file>icons/Image.svg</file>
     <file>icons/IPythonTerminal.svg</file>
@@ -32,6 +34,7 @@
     <file>icons/Run.svg</file>
     <file>icons/Settings.svg</file>
     <file>icons/Stop.svg</file>
+    <file>icons/Style.svg</file>
     <file>icons/XMinus.svg</file>
     <file>icons/XPlus.svg</file>
     <file>icons/YMinus.svg</file>

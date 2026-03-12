@@ -203,6 +203,22 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
     assert captured["shown"] is True
 
 
+def test_emsolution_output_viewer_plot_action_has_graph_icon():
+    _app()
+
+    viewer = _emsolution_json.EMSolutionOutputViewer()
+
+    assert not viewer._plot_action.icon().isNull()
+
+
+def test_emsolution_output_viewer_plot_action_shows_text_beside_icon():
+    _app()
+
+    viewer = _emsolution_json.EMSolutionOutputViewer()
+
+    assert viewer._toolbar.toolButtonStyle() == _emsolution_json.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+
+
 def test_emsolution_output_viewer_shows_error_for_invalid_json(monkeypatch):
     _app()
 

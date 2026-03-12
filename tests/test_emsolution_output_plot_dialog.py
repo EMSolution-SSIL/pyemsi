@@ -87,6 +87,28 @@ def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
     assert dialog._plot_settings_button.text() == "Plot Settings..."
 
 
+def test_emsolution_plot_dialog_and_subdialogs_expose_plot_icons():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+    result = EMSolutionOutput.from_dict(_positive_payload())
+    x_options = {option.key: option for option in result.get_plot_x_options()}
+    x_axis_key = next(iter(x_options))
+    settings_dialog = PlotSettingsDialog(
+        x_options,
+        PlotDialogSettings(x_axis_key=x_axis_key),
+        default_title="Default Title",
+        default_x_label="Default X",
+        default_y_label="Default Y",
+    )
+    style_dialog = _emsolution_plot_dialog.SeriesStyleDialog(PlotSeriesStyle(), "Series")
+
+    assert not dialog.windowIcon().isNull()
+    assert not settings_dialog.windowIcon().isNull()
+    assert not style_dialog.windowIcon().isNull()
+    assert not dialog._plot_settings_button.icon().isNull()
+    assert not dialog._plot_button.icon().isNull()
+
+
 def test_emsolution_plot_dialog_uses_default_axis_label_before_overrides():
     _app()
     dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
