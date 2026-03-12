@@ -106,8 +106,8 @@ def test_emsolution_plot_dialog_updates_preview_from_tree_and_labels():
             title="Custom Plot",
             x_label="Rotor Angle",
             y_label="Response",
-            show_legend=True,
-            show_grid=False,
+            legend_mode="best",
+            grid_mode="off",
         )
     )
     dialog._redraw_plot()
@@ -120,7 +120,7 @@ def test_emsolution_plot_dialog_updates_preview_from_tree_and_labels():
     assert ax.get_ylabel() == "Response"
 
 
-def test_emsolution_plot_dialog_toggles_legend_and_grid():
+def test_emsolution_plot_dialog_applies_legend_and_grid_modes():
     _app()
     dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
 
@@ -129,8 +129,8 @@ def test_emsolution_plot_dialog_toggles_legend_and_grid():
     dialog._apply_plot_settings(
         PlotDialogSettings(
             x_axis_key=dialog._plot_settings.x_axis_key,
-            show_legend=False,
-            show_grid=True,
+            legend_mode="none",
+            grid_mode="x",
         )
     )
     dialog._redraw_plot()
@@ -138,6 +138,48 @@ def test_emsolution_plot_dialog_toggles_legend_and_grid():
     ax = dialog._preview.figure.axes[0]
 
     assert ax.get_legend() is None
+    assert any(line.get_visible() for line in ax.xaxis.get_gridlines())
+    assert not any(line.get_visible() for line in ax.yaxis.get_gridlines())
+
+
+def test_emsolution_plot_dialog_applies_legend_location_mode():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            legend_mode="lower left",
+        )
+    )
+
+    legend = dialog._preview.figure.axes[0].get_legend()
+
+    assert legend is not None
+    assert legend._loc == 3
+
+
+def test_emsolution_plot_dialog_applies_major_only_grid_mode_for_log_scale():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_positive_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            x_log_scale=True,
+            y_log_scale=True,
+            grid_mode="major",
+        )
+    )
+
+    ax = dialog._preview.figure.axes[0]
+
+    assert ax.get_xscale() == "log"
+    assert ax.get_yscale() == "log"
     assert any(line.get_visible() for line in ax.xaxis.get_gridlines())
     assert any(line.get_visible() for line in ax.yaxis.get_gridlines())
 
@@ -246,8 +288,8 @@ def test_plot_settings_dialog_round_trips_style_and_log_scale_settings():
             x_label="Rotor Angle",
             y_label="Response",
             style_preset="ggplot",
-            show_legend=False,
-            show_grid=False,
+            legend_mode="none",
+            grid_mode="off",
             x_log_scale=True,
             y_log_scale=True,
         ),
@@ -261,8 +303,8 @@ def test_plot_settings_dialog_round_trips_style_and_log_scale_settings():
     assert settings.style_preset == "ggplot"
     assert settings.x_log_scale is True
     assert settings.y_log_scale is True
-    assert settings.show_legend is False
-    assert settings.show_grid is False
+    assert settings.legend_mode == "none"
+    assert settings.grid_mode == "off"
 
 
 def test_series_style_dialog_round_trips_custom_label():
@@ -317,7 +359,7 @@ def test_plot_settings_dialog_cancel_emits_original_settings():
         x_axis_key=x_axis_key,
         title="Original Title",
         style_preset="ggplot",
-        show_grid=False,
+        grid_mode="off",
         x_log_scale=True,
     )
     dialog = PlotSettingsDialog(
@@ -333,6 +375,7 @@ def test_plot_settings_dialog_cancel_emits_original_settings():
 
     dialog._title_edit.setText("Changed Title")
     dialog._style_preset_combo.setCurrentIndex(0)
+    dialog._grid_mode_combo.setCurrentIndex(1)
     dialog._x_log_scale_checkbox.setChecked(False)
     cancel_button = dialog._button_box.button(QDialogButtonBox.StandardButton.Cancel)
 
@@ -498,3 +541,25 @@ def test_emsolution_plot_dialog_warns_when_x_log_scale_is_invalid():
     assert len(ax.lines) == 0
     assert not dialog._warning_label.isHidden()
     assert "X-axis log scale requires all X values to be greater than zero." in dialog._warning_label.text()
+
+
+def test_plot_settings_dialog_round_trips_legend_and_grid_modes_from_comboboxes():
+    _app()
+    result = EMSolutionOutput.from_dict(_positive_payload())
+    x_options = {option.key: option for option in result.get_plot_x_options()}
+    x_axis_key = next(iter(x_options))
+    dialog = PlotSettingsDialog(
+        x_options,
+        PlotDialogSettings(x_axis_key=x_axis_key),
+        default_title="Default Title",
+        default_x_label="Default X",
+        default_y_label="Default Y",
+    )
+
+    dialog._legend_mode_combo.setCurrentIndex(dialog._legend_mode_combo.findData("upper left"))
+    dialog._grid_mode_combo.setCurrentIndex(dialog._grid_mode_combo.findData("y"))
+
+    settings = dialog.settings()
+
+    assert settings.legend_mode == "upper left"
+    assert settings.grid_mode == "y"

@@ -48,8 +48,8 @@ class PlotDialogSettings:
     x_label: str = ""
     y_label: str = ""
     style_preset: str = ""
-    show_legend: bool = True
-    show_grid: bool = True
+    legend_mode: str = "upper right"
+    grid_mode: str = "both"
     x_log_scale: bool = False
     y_log_scale: bool = False
 
@@ -82,6 +82,24 @@ PLOT_STYLE_PRESETS: tuple[tuple[str, str], ...] = (
     ("seaborn-v0_8-white", "seaborn-v0_8-white"),
     ("seaborn-v0_8-whitegrid", "seaborn-v0_8-whitegrid"),
     ("tableau-colorblind10", "tableau-colorblind10"),
+)
+
+LEGEND_MODE_PRESETS: tuple[tuple[str, str], ...] = (
+    ("Off", "none"),
+    ("Best Fit", "best"),
+    ("Upper Right", "upper right"),
+    ("Upper Left", "upper left"),
+    ("Lower Right", "lower right"),
+    ("Lower Left", "lower left"),
+    ("Center", "center"),
+)
+
+GRID_MODE_PRESETS: tuple[tuple[str, str], ...] = (
+    ("Off", "off"),
+    ("Both Axes", "both"),
+    ("X-axis Only", "x"),
+    ("Y-axis Only", "y"),
+    ("Major Only", "major"),
 )
 
 
@@ -125,10 +143,16 @@ class PlotSettingsDialog(QDialog):
             self._style_preset_combo.addItem(label, style_name)
         style_index = self._style_preset_combo.findData(settings.style_preset)
         self._style_preset_combo.setCurrentIndex(max(style_index, 0))
-        self._show_legend_checkbox = QCheckBox(self)
-        self._show_legend_checkbox.setChecked(settings.show_legend)
-        self._show_grid_checkbox = QCheckBox(self)
-        self._show_grid_checkbox.setChecked(settings.show_grid)
+        self._legend_mode_combo = QComboBox(self)
+        for label, mode in LEGEND_MODE_PRESETS:
+            self._legend_mode_combo.addItem(label, mode)
+        legend_mode_index = self._legend_mode_combo.findData(settings.legend_mode)
+        self._legend_mode_combo.setCurrentIndex(max(legend_mode_index, 0))
+        self._grid_mode_combo = QComboBox(self)
+        for label, mode in GRID_MODE_PRESETS:
+            self._grid_mode_combo.addItem(label, mode)
+        grid_mode_index = self._grid_mode_combo.findData(settings.grid_mode)
+        self._grid_mode_combo.setCurrentIndex(max(grid_mode_index, 0))
         self._x_log_scale_checkbox = QCheckBox(self)
         self._x_log_scale_checkbox.setChecked(settings.x_log_scale)
         self._y_log_scale_checkbox = QCheckBox(self)
@@ -140,8 +164,8 @@ class PlotSettingsDialog(QDialog):
         form_layout.addRow("X Label:", self._x_label_edit)
         form_layout.addRow("Y Label:", self._y_label_edit)
         form_layout.addRow("Style Preset:", self._style_preset_combo)
-        form_layout.addRow("Show Legend:", self._show_legend_checkbox)
-        form_layout.addRow("Show Grid:", self._show_grid_checkbox)
+        form_layout.addRow("Legend:", self._legend_mode_combo)
+        form_layout.addRow("Grid:", self._grid_mode_combo)
         form_layout.addRow("Log X Axis:", self._x_log_scale_checkbox)
         form_layout.addRow("Log Y Axis:", self._y_log_scale_checkbox)
 
@@ -176,8 +200,8 @@ class PlotSettingsDialog(QDialog):
             x_label=self._x_label_edit.text().strip(),
             y_label=self._y_label_edit.text().strip(),
             style_preset=str(self._style_preset_combo.currentData()),
-            show_legend=self._show_legend_checkbox.isChecked(),
-            show_grid=self._show_grid_checkbox.isChecked(),
+            legend_mode=str(self._legend_mode_combo.currentData()),
+            grid_mode=str(self._grid_mode_combo.currentData()),
             x_log_scale=self._x_log_scale_checkbox.isChecked(),
             y_log_scale=self._y_log_scale_checkbox.isChecked(),
         )
@@ -430,6 +454,21 @@ class EMSolutionPlotDialog(QDialog):
         style = self._style_for_descriptor(descriptor)
         return style.label or descriptor.label
 
+    def _apply_legend_mode(self, ax) -> None:
+        if self._plot_settings.legend_mode == "none":
+            return
+        ax.legend(loc=self._plot_settings.legend_mode)
+
+    def _apply_grid_mode(self, ax) -> None:
+        grid_mode = self._plot_settings.grid_mode
+        if grid_mode == "off":
+            ax.grid(False)
+            return
+        if grid_mode == "major":
+            ax.grid(True, axis="both", which="major")
+            return
+        ax.grid(True, axis=grid_mode)
+
     def _selected_x_option(self) -> PlotAxisOption:
         return self._x_options[self._plot_settings.x_axis_key]
 
@@ -589,8 +628,7 @@ class EMSolutionPlotDialog(QDialog):
                     transform=ax.transAxes,
                 )
             else:
-                if self._plot_settings.show_legend:
-                    ax.legend()
+                self._apply_legend_mode(ax)
                 if len(x_option.values) > 0:
                     if self._plot_settings.x_log_scale:
                         positive_x = x_option.values[x_option.values > 0]
@@ -599,7 +637,7 @@ class EMSolutionPlotDialog(QDialog):
                     else:
                         ax.set_xlim(x_option.values[0], x_option.values[-1])
 
-            ax.grid(self._plot_settings.show_grid)
+            self._apply_grid_mode(ax)
             ax.set_title(self._effective_title(selected_series))
             ax.set_xlabel(self._effective_x_label())
             ax.set_ylabel(self._effective_y_label(selected_series))
