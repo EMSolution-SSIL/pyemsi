@@ -3,6 +3,7 @@
     <file>icons/Back.svg</file>
     <file>icons/Bold.svg</file>
     <file>icons/Code.svg</file>
+    <file>icons/Copy.svg</file>
     <file>icons/Explorer.svg</file>
     <file>icons/ExternalTerminal.svg</file>
     <file>icons/First.svg</file>
@@ -27,6 +28,7 @@
     <file>icons/QueryPoint.svg</file>
     <file>icons/SampleArc.svg</file>
     <file>icons/SampleLine.svg</file>
+    <file>icons/Save-as.svg</file>
     <file>icons/Save.svg</file>
     <file>icons/SaveAll.svg</file>
     <file>icons/ResetCamera.svg</file>

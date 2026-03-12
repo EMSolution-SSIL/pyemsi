@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QPushButton, QSplitter
@@ -12,6 +14,7 @@ from pyemsi.gui._viewers._emsolution_plot_dialog import (
 )
 from pyemsi.gui.file_viewers import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput
+from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
 
 def _app():
@@ -201,9 +204,79 @@ def test_emsolution_plot_dialog_and_subdialogs_expose_plot_icons():
     assert not settings_dialog.windowIcon().isNull()
     assert not style_dialog.windowIcon().isNull()
     assert not script_dialog.windowIcon().isNull()
+    assert not script_dialog._copy_button.icon().isNull()
+    assert not script_dialog._save_button.icon().isNull()
     assert not dialog._plot_settings_button.icon().isNull()
     assert not dialog._script_button.icon().isNull()
     assert not dialog._plot_button.icon().isNull()
+
+
+def test_generated_script_dialog_uses_monaco_python_editor():
+    _app()
+    dialog = GeneratedScriptDialog("print('hello')")
+
+    assert isinstance(dialog._text_edit, MonacoLspWidget)
+    assert dialog._text_edit.language() == "python"
+    assert dialog._text_edit.isReadOnly() is True
+    assert dialog.script_text() == "print('hello')"
+
+
+def test_generated_script_dialog_copy_button_updates_clipboard():
+    app = _app()
+    dialog = GeneratedScriptDialog("print('copied')")
+
+    dialog._copy_button.click()
+
+    assert app.clipboard().text() == "print('copied')"
+
+
+def test_generated_script_dialog_save_button_writes_python_file(tmp_path, monkeypatch):
+    _app()
+    dialog = GeneratedScriptDialog("print('saved')")
+    save_target = tmp_path / "generated_script"
+
+    monkeypatch.setattr(
+        _emsolution_plot_dialog.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(save_target), "Python Files (*.py)"),
+    )
+
+    dialog._save_button.click()
+
+    saved_path = Path(f"{save_target}.py")
+    assert saved_path.exists()
+    assert saved_path.read_text(encoding="utf-8") == "print('saved')"
+
+
+def test_generated_script_dialog_uses_explorer_path_for_save_dialog(tmp_path, monkeypatch):
+    _app()
+    dialog = GeneratedScriptDialog("print('saved')")
+
+    class _Explorer:
+        current_path = str(tmp_path)
+
+    class _Window:
+        explorer = _Explorer()
+
+    captured = {}
+
+    monkeypatch.setattr(dialog, "_main_window", lambda: _Window())
+
+    def fake_get_save_file_name(parent, title, path, file_filter):
+        captured["parent"] = parent
+        captured["title"] = title
+        captured["path"] = path
+        captured["filter"] = file_filter
+        return ("", "")
+
+    monkeypatch.setattr(_emsolution_plot_dialog.QFileDialog, "getSaveFileName", fake_get_save_file_name)
+
+    dialog._save_button.click()
+
+    assert captured["parent"] is dialog
+    assert captured["title"] == "Save Plot Script"
+    assert captured["path"] == str(tmp_path / "plot_script.py")
+    assert captured["filter"] == "Python Files (*.py)"
 
 
 def test_emsolution_plot_dialog_uses_default_axis_label_before_overrides():

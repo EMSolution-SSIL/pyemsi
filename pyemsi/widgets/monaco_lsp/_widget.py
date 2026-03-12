@@ -2068,6 +2068,9 @@ __LSP_COMPLETION_ITEM_METADATA__
                 editor.getModel().setValue(data);
                 if (lspClient && lspClient._initialized) lspClient.changeDocument(data);
                 break;
+            case 'readOnly':
+                editor.updateOptions({ readOnly: !!data });
+                break;
             case 'language':
                 monaco.editor.setModelLanguage(editor.getModel(), data);
                 if (hasDocumentSymbolSupportForLanguage(data)) {
@@ -2152,6 +2155,7 @@ class MonacoLspWidget(QWebEngineView):
             semantic_requested=self._semantic_requested,
         )
         self._python_analysis_paths: list[str] = []
+        self._read_only = False
         if language == "python":
             self._python_analysis_paths = [str(_find_project_root(Path.cwd()))]
 
@@ -2323,19 +2327,29 @@ class MonacoLspWidget(QWebEngineView):
         return self._bridge.value
 
     def setText(self, text):
+        self._bridge.setValue(text)
         self._bridge.send_to_js("value", text)
 
     def language(self):
         return self._bridge.language
 
     def setLanguage(self, language):
+        self._bridge.setLanguage(language)
         self._bridge.send_to_js("language", language)
 
     def theme(self):
         return self._bridge.theme
 
     def setTheme(self, theme):
+        self._bridge.setTheme(theme)
         self._bridge.send_to_js("theme", theme)
+
+    def isReadOnly(self) -> bool:
+        return self._read_only
+
+    def setReadOnly(self, read_only: bool) -> None:
+        self._read_only = read_only
+        self._bridge.send_to_js("readOnly", read_only)
 
     def insertAtCursor(self, text: str) -> None:
         """Insert *text* at the current cursor position."""

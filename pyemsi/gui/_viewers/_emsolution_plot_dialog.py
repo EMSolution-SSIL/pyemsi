@@ -2,24 +2,26 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from matplotlib import style as mpl_style
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QIcon
+from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QPlainTextEdit,
     QPushButton,
     QSplitter,
     QTreeWidget,
@@ -33,6 +35,7 @@ from matplotlib.figure import Figure
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput, PlotAxisOption, PlotSeriesDescriptor
+from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
 
 @dataclass
@@ -122,13 +125,21 @@ class GeneratedScriptDialog(QDialog):
         self.setWindowTitle("Generated Plot Script")
         self.setWindowIcon(QIcon(":/icons/Code.svg"))
         self.resize(900, 700)
+        self._script_text = script_text
 
-        self._text_edit = QPlainTextEdit(self)
+        self._text_edit = MonacoLspWidget(language="python", parent=self)
+        self._text_edit.setLanguage("python")
+        self._text_edit.setTheme("vs")
         self._text_edit.setReadOnly(True)
-        self._text_edit.setPlainText(script_text)
-        self._text_edit.setFont(QFont("Courier", 10))
+        self._text_edit.setText(script_text)
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=self)
+        self._copy_button = button_box.addButton("Copy", QDialogButtonBox.ButtonRole.ActionRole)
+        self._copy_button.setIcon(QIcon(":/icons/Copy.svg"))
+        self._save_button = button_box.addButton("Save As...", QDialogButtonBox.ButtonRole.ActionRole)
+        self._save_button.setIcon(QIcon(":/icons/Save-as.svg"))
+        self._copy_button.clicked.connect(self._copy_script)
+        self._save_button.clicked.connect(self._save_script_as)
         button_box.rejected.connect(self.reject)
         button_box.accepted.connect(self.accept)
 
@@ -137,7 +148,49 @@ class GeneratedScriptDialog(QDialog):
         layout.addWidget(button_box)
 
     def script_text(self) -> str:
-        return self._text_edit.toPlainText()
+        return self._script_text
+
+    def _copy_script(self) -> None:
+        app = QApplication.instance()
+        if app is None:
+            return
+        app.clipboard().setText(self.script_text())
+
+    def _main_window(self) -> QWidget | None:
+        window = self.parentWidget()
+        while window is not None:
+            if hasattr(window, "explorer"):
+                return window
+            window = window.parentWidget()
+
+        try:
+            import pyemsi.gui as gui
+        except Exception:
+            return None
+        return getattr(gui, "_window", None)
+
+    def _default_save_path(self) -> str:
+        window = self._main_window()
+        explorer = getattr(window, "explorer", None)
+        current_path = getattr(explorer, "current_path", None)
+        if current_path:
+            return str(Path(current_path) / "plot_script.py")
+        return "plot_script.py"
+
+    def _save_script_as(self) -> None:
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Plot Script",
+            self._default_save_path(),
+            "Python Files (*.py)",
+        )
+        if not selected_path:
+            return
+
+        output_path = Path(selected_path)
+        if output_path.suffix.lower() != ".py":
+            output_path = output_path.with_suffix(".py")
+        output_path.write_text(self.script_text(), encoding="utf-8")
 
 
 class PlotSettingsDialog(QDialog):
