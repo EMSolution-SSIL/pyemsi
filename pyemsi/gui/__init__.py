@@ -37,7 +37,7 @@ _app = None
 
 def launch(
     title: str = "pyemsi",
-    size: tuple[int, int] = (1400, 900),
+    size: tuple[int, int] | None = None,
 ) -> None:
     """
     Create and show the pyemsi main window, then start the Qt event loop.
@@ -63,7 +63,6 @@ def launch(
 
     _window = PyEmsiMainWindow()
     _window.setWindowTitle(title)
-    _window.resize(*size)
 
     import pyemsi.gui as gui_module
 
@@ -75,7 +74,11 @@ def launch(
         add_figure=add_figure,
     )
 
-    _window.show()
+    if size is None:
+        _window.showMaximized()
+    else:
+        _window.resize(*size)
+        _window.show()
     _app.exec()
 
 

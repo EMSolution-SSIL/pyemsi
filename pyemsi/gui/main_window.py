@@ -53,7 +53,8 @@ class PyEmsiMainWindow(QMainWindow):
         self._external_terminal_dock = ExternalTerminalDock(self)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._external_terminal_dock)
         self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
-        self._ipython_dock.raise_()
+        self._ipython_dock.hide()
+        self._external_terminal_dock.hide()
 
         self._setup_view_menu()
 
@@ -144,7 +145,7 @@ class PyEmsiMainWindow(QMainWindow):
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
         viewer = self._container.open_file(path)
 
-        from pyemsi.gui.file_viewers import PythonViewer
+        from pyemsi.gui.file_viewers import PythonViewer, EMSolutionInputViewer
 
         if isinstance(viewer, PythonViewer):
             # Connect only once – guard via a dynamic attribute.
@@ -152,6 +153,12 @@ class PyEmsiMainWindow(QMainWindow):
                 viewer.run_ipython_requested.connect(self._run_python_file_ipython)
                 viewer.run_external_requested.connect(self._run_python_file_external)
                 viewer.stop_external_requested.connect(self._stop_python_file_external)
+                viewer._run_connected = True
+
+        elif isinstance(viewer, EMSolutionInputViewer):
+            if not getattr(viewer, "_run_connected", False):
+                viewer.run_external_requested.connect(self._run_emsol_external)
+                viewer.stop_external_requested.connect(self._stop_emsol_external)
                 viewer._run_connected = True
 
     @staticmethod
@@ -228,6 +235,44 @@ class PyEmsiMainWindow(QMainWindow):
             title=title,
             cmd=sys.executable,
             args=[path],
+            cwd=cwd,
+        )
+
+        if viewer is not None:
+            self._active_external_terminals[id(viewer)] = xterm
+            xterm.processFinished.connect(
+                lambda _code, v=viewer: (
+                    v.set_external_running(False),
+                    self._active_external_terminals.pop(id(v), None),
+                )
+            )
+
+    def _stop_emsol_external(self) -> None:
+        """Terminate the external pyemsol process for the requesting viewer."""
+        viewer = self.sender()
+        xterm = self._active_external_terminals.get(id(viewer))
+        if xterm is not None:
+            xterm.kill()
+
+    def _run_emsol_external(self, path: str) -> None:
+        """Run an EMSolution input file via pyemsol in an external terminal."""
+        import sys
+
+        viewer = self.sender()
+        cwd = os.path.dirname(path)
+        title = f"pyemsol — {os.path.basename(path)}"
+
+        if viewer is not None:
+            viewer.set_external_running(True)
+
+        run_emsol_script = os.path.join(os.path.dirname(__file__), os.pardir, "tools", "run_emsol.py")
+
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
+        xterm = self._external_terminal_dock.add_terminal(
+            title=title,
+            cmd=sys.executable,
+            args=[run_emsol_script, path],
             cwd=cwd,
         )
 
