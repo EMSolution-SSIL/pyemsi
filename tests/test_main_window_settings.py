@@ -170,3 +170,131 @@ def test_main_window_assigns_stable_dock_object_names(tmp_path, monkeypatch):
         assert window._external_terminal_dock.objectName() == "external_terminal_dock"
     finally:
         window.close()
+
+
+def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        file_actions = window._file_menu.actions()
+
+        assert file_actions[0].text() == "Open &Folder..."
+        assert file_actions[1].text() == "Open &Recent"
+        assert file_actions[2].isSeparator()
+        assert file_actions[3].text() == "&Settings"
+        assert file_actions[4].isSeparator()
+        assert file_actions[5].text() == "&Save"
+        assert file_actions[6].text() == "Save A&ll"
+    finally:
+        window.close()
+
+
+def test_main_window_global_settings_action_tracks_file_availability(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    opened_paths = []
+
+    def _capture_open_file(self, path):
+        opened_paths.append(path)
+        return QWidget()
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(main_window_module.SplitContainer, "open_file", _capture_open_file)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert not window._open_global_settings_action.isEnabled()
+
+        window._open_global_settings_action.trigger()
+
+        assert opened_paths == []
+
+        global_settings_path.parent.mkdir(parents=True)
+        global_settings_path.write_text('{"schemaVersion": 1}\n', encoding="utf-8")
+
+        window._update_settings_actions()
+        window._open_global_settings_action.trigger()
+
+        assert window._open_global_settings_action.isEnabled()
+        assert opened_paths == [os.path.abspath(os.path.normpath(str(global_settings_path)))]
+    finally:
+        window.close()
+
+
+def test_main_window_workspace_settings_action_tracks_workspace_state(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    local_settings_path = workspace / ".pyemsi" / "workspace.json"
+    opened_paths = []
+
+    def _capture_open_file(self, path):
+        opened_paths.append(path)
+        return QWidget()
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(main_window_module.SplitContainer, "open_file", _capture_open_file)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert not window._open_workspace_settings_action.isEnabled()
+
+        window._set_workspace_path(str(workspace))
+
+        assert not window._open_workspace_settings_action.isEnabled()
+
+        local_settings_path.parent.mkdir(parents=True)
+        local_settings_path.write_text('{"schemaVersion": 1}\n', encoding="utf-8")
+        window._update_settings_actions()
+
+        assert window._open_workspace_settings_action.isEnabled()
+
+        window._open_workspace_settings_action.trigger()
+
+        assert opened_paths == [os.path.abspath(os.path.normpath(str(local_settings_path)))]
+    finally:
+        window.close()
+
+
+def test_main_window_workspace_settings_action_stays_disabled_without_local_file(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    opened_paths = []
+
+    def _capture_open_file(self, path):
+        opened_paths.append(path)
+        return QWidget()
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(main_window_module.SplitContainer, "open_file", _capture_open_file)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._set_workspace_path(str(workspace))
+
+        assert not window._open_workspace_settings_action.isEnabled()
+
+        window._open_workspace_settings_action.trigger()
+
+        assert opened_paths == []
+    finally:
+        window.close()

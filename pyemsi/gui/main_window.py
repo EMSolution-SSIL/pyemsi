@@ -104,6 +104,21 @@ class PyEmsiMainWindow(QMainWindow):
 
         self._file_menu.addSeparator()
 
+        self._settings_menu = self._file_menu.addMenu("&Settings")
+        self._settings_menu.setIcon(QIcon(":/icons/Settings.svg"))
+
+        self._open_global_settings_action = QAction("Open &Global Settings", self)
+        self._open_global_settings_action.triggered.connect(self._open_global_settings)
+        self._settings_menu.addAction(self._open_global_settings_action)
+
+        self._open_workspace_settings_action = QAction("Open &Workspace Settings", self)
+        self._open_workspace_settings_action.triggered.connect(self._open_workspace_settings)
+        self._settings_menu.addAction(self._open_workspace_settings_action)
+
+        self._update_settings_actions()
+
+        self._file_menu.addSeparator()
+
         save_action = QAction("&Save", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
         save_action.setIcon(QIcon(":/icons/Save.svg"))
@@ -195,12 +210,36 @@ class PyEmsiMainWindow(QMainWindow):
         self._settings.add_recent_folder(normalized_path)
         self._settings.load_workspace(normalized_path)
         self._refresh_recent_folders_menu()
+        self._update_settings_actions()
 
         explorer_root = self._settings.get_local("workbench.explorer.root_path") or normalized_path
         self._explorer_widget.set_directory(explorer_root)
         self._settings.set_local("workbench.explorer.root_path", explorer_root)
 
         self.setWindowTitle(f"pyemsi — {normalized_path}")
+
+    def _update_settings_actions(self) -> None:
+        """Refresh settings-menu action state for the current workspace context."""
+        global_settings_path = self._settings.global_settings_path
+        local_settings_path = self._settings.local_settings_path
+        self._open_global_settings_action.setEnabled(global_settings_path.is_file())
+        self._open_workspace_settings_action.setEnabled(
+            local_settings_path is not None and local_settings_path.is_file()
+        )
+
+    def _open_global_settings(self) -> None:
+        """Open the global settings file in an editor tab."""
+        path = self._settings.global_settings_path
+        if not path.is_file():
+            return
+        self._container.open_file(os.fspath(path))
+
+    def _open_workspace_settings(self) -> None:
+        """Open the active workspace settings file in an editor tab."""
+        path = self._settings.local_settings_path
+        if path is None or not path.is_file():
+            return
+        self._container.open_file(os.fspath(path))
 
     def _on_file_activated(self, path: str) -> None:
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
