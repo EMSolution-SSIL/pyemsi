@@ -43,6 +43,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._setup_explorer()
 
         self._ipython_dock = QDockWidget("IPython Terminal", self)
+        self._ipython_dock.setObjectName("ipython_terminal_dock")
         self._ipython_dock.setWindowIcon(QIcon(":/icons/IPythonTerminal.svg"))
         self._ipython_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
         self._ipython_widget = None
@@ -54,13 +55,14 @@ class PyEmsiMainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._ipython_dock)
 
         self._external_terminal_dock = ExternalTerminalDock(self)
+        self._external_terminal_dock.setObjectName("external_terminal_dock")
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._external_terminal_dock)
         self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
         self._ipython_dock.hide()
         self._external_terminal_dock.hide()
 
         self._setup_view_menu()
-        self._restore_startup_state()
+        self._refresh_recent_folders_menu()
 
     @property
     def container(self) -> SplitContainer:
@@ -167,6 +169,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._explorer_widget.file_activated.connect(self._on_file_activated)
 
         self._explorer_dock = QDockWidget("Explorer", self)
+        self._explorer_dock.setObjectName("explorer_dock")
         self._explorer_dock.setWindowIcon(QIcon(":/icons/Explorer.svg"))
         self._explorer_dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
@@ -185,10 +188,9 @@ class PyEmsiMainWindow(QMainWindow):
         if path:
             self._set_workspace_path(path)
 
-    def _set_workspace_path(self, path: str, restore_state: bool = False, track_recent: bool = True) -> None:
+    def _set_workspace_path(self, path: str, restore_state: bool = True, track_recent: bool = True) -> None:
         """Switch the active workspace path and update persisted context."""
         normalized_path = os.path.abspath(os.path.normpath(path))
-        self._settings.set_global("app.last_workspace_path", normalized_path)
         if track_recent:
             self._settings.add_recent_folder(normalized_path)
         self._settings.load_workspace(normalized_path)
@@ -265,13 +267,6 @@ class PyEmsiMainWindow(QMainWindow):
 
         return {"pyemsi": pyemsi}
 
-    def _restore_startup_state(self) -> None:
-        """Restore the last workspace and its persisted UI state when available."""
-        self._refresh_recent_folders_menu()
-        last_workspace_path = self._settings.get_effective("app.last_workspace_path")
-        if last_workspace_path and os.path.isdir(last_workspace_path):
-            self._set_workspace_path(last_workspace_path, restore_state=True, track_recent=False)
-
     def _restore_workspace_state(self) -> None:
         """Restore persisted Qt window and layout state for the active workspace."""
         restored_any = False
@@ -301,10 +296,9 @@ class PyEmsiMainWindow(QMainWindow):
         self._show_maximized_on_launch = bool(maximized) if restored_any or maximized else True
 
     def _persist_workspace_state(self) -> None:
-        """Persist workspace-scoped UI state and the last active workspace."""
+        """Persist workspace-scoped UI state for the active workspace."""
         current_workspace = self.explorer.current_path
         if current_workspace and os.path.isdir(current_workspace):
-            self._settings.set_global("app.last_workspace_path", current_workspace)
             self._settings.load_workspace(current_workspace)
             self._settings.set_local("workbench.explorer.root_path", current_workspace)
             self._settings.set_local("workbench.window.geometry", encode_qt_state(self.saveGeometry()))

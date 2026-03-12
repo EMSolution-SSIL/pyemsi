@@ -19,7 +19,6 @@ SCOPE_BOTH = "both"
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "app": {
-        "last_workspace_path": None,
         "recent_folders": [],
     },
     "workbench": {
@@ -133,7 +132,6 @@ class SettingDefinition:
 
 
 SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
-    "app.last_workspace_path": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_path),
     "app.recent_folders": SettingDefinition([], SCOPE_GLOBAL, _normalize_recent_folders),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
     "workbench.layout.splitter_sizes": SettingDefinition([], SCOPE_LOCAL, _normalize_splitter_sizes),

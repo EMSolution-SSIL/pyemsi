@@ -33,14 +33,14 @@ def _stub_ipython_terminal(self) -> None:
     self._ipython_dock.setWidget(self._ipython_widget)
 
 
-def test_main_window_restores_last_workspace_from_settings(tmp_path, monkeypatch):
+def test_main_window_does_not_restore_workspace_from_global_settings(tmp_path, monkeypatch):
     _app()
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     global_settings_path = tmp_path / "config" / "settings.json"
 
     manager = SettingsManager(global_settings_path=global_settings_path)
-    manager.set_global("app.last_workspace_path", str(workspace))
+    manager.add_recent_folder(workspace)
     manager.load_workspace(workspace)
     manager.set_local("workbench.window.dock_visibility", {"ipython": True})
     manager.save()
@@ -52,9 +52,9 @@ def test_main_window_restores_last_workspace_from_settings(tmp_path, monkeypatch
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
     )
     try:
-        assert window.explorer.current_path == os.path.abspath(os.path.normpath(str(workspace)))
-        assert window.windowTitle().endswith("workspace")
-        assert not window._ipython_dock.isHidden()
+        assert window.explorer.current_path is None
+        assert window.windowTitle() == "pyemsi"
+        assert window._ipython_dock.isHidden()
     finally:
         window.close()
 
@@ -79,7 +79,6 @@ def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch)
     reloaded = SettingsManager(global_settings_path=global_settings_path)
     reloaded.load_workspace(workspace)
 
-    assert reloaded.get_effective("app.last_workspace_path") == os.path.abspath(os.path.normpath(str(workspace)))
     assert reloaded.get_local("workbench.window.geometry") is not None
     assert reloaded.get_effective("workbench.window.dock_visibility")["ipython"] is True
     assert window._kernel_manager.shutdown_calls == 1
@@ -141,5 +140,23 @@ def test_main_window_can_clear_recent_folders(tmp_path, monkeypatch):
         assert recent_actions[0].isSeparator()
         assert recent_actions[1].text() == "Clear Recently Opened"
         assert not recent_actions[1].isEnabled()
+    finally:
+        window.close()
+
+
+def test_main_window_assigns_stable_dock_object_names(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert window._explorer_dock.objectName() == "explorer_dock"
+        assert window._ipython_dock.objectName() == "ipython_terminal_dock"
+        assert window._external_terminal_dock.objectName() == "external_terminal_dock"
     finally:
         window.close()
