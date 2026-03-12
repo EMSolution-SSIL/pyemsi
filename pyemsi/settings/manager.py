@@ -1,0 +1,398 @@
+"""Headless JSON-backed settings manager for pyemsi."""
+
+from __future__ import annotations
+
+import base64
+import copy
+import json
+import os
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+SCHEMA_VERSION = 1
+SCOPE_GLOBAL = "global"
+SCOPE_LOCAL = "local"
+SCOPE_BOTH = "both"
+
+
+DEFAULT_SETTINGS: dict[str, Any] = {
+    "app": {
+        "last_workspace_path": None,
+    },
+    "workbench": {
+        "explorer": {
+            "root_path": None,
+        },
+        "layout": {
+            "splitter_sizes": [],
+        },
+        "window": {
+            "dock_visibility": {
+                "explorer": True,
+                "external_terminal": False,
+                "ipython": False,
+            },
+            "geometry": None,
+            "maximized": False,
+            "state": None,
+            "state_version": 1,
+        },
+    },
+}
+
+
+def _copy_default(value: Any) -> Any:
+    return copy.deepcopy(value)
+
+
+def _normalize_optional_path(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str):
+        raise ValueError("expected a path string or null")
+    return os.path.abspath(os.path.normpath(value))
+
+
+def _normalize_optional_base64(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str):
+        raise ValueError("expected a base64 string or null")
+    try:
+        base64.b64decode(value.encode("ascii"), validate=True)
+    except Exception as exc:
+        raise ValueError("expected valid base64") from exc
+    return value
+
+
+def _normalize_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise ValueError("expected a boolean")
+
+
+def _normalize_int(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("expected an integer")
+    return value
+
+
+def _normalize_splitter_sizes(value: Any) -> list[int]:
+    if value in (None, []):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("expected a list of integers")
+    normalized: list[int] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+            raise ValueError("expected a list of non-negative integers")
+        normalized.append(item)
+    return normalized
+
+
+def _normalize_dock_visibility(value: Any) -> dict[str, bool]:
+    default_keys = DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"].keys()
+    if not isinstance(value, dict):
+        raise ValueError("expected an object")
+    normalized: dict[str, bool] = {}
+    for key, item in value.items():
+        if key not in default_keys:
+            normalized[key] = item
+            continue
+        normalized[key] = _normalize_bool(item)
+    return normalized
+
+
+@dataclass(frozen=True)
+class SettingDefinition:
+    default: Any
+    scope: str
+    validator: Callable[[Any], Any]
+
+
+SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
+    "app.last_workspace_path": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_path),
+    "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
+    "workbench.layout.splitter_sizes": SettingDefinition([], SCOPE_LOCAL, _normalize_splitter_sizes),
+    "workbench.window.dock_visibility": SettingDefinition(
+        _copy_default(DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"]),
+        SCOPE_BOTH,
+        _normalize_dock_visibility,
+    ),
+    "workbench.window.geometry": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_base64),
+    "workbench.window.maximized": SettingDefinition(False, SCOPE_LOCAL, _normalize_bool),
+    "workbench.window.state": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_base64),
+    "workbench.window.state_version": SettingDefinition(1, SCOPE_LOCAL, _normalize_int),
+}
+
+_CONTAINER_PATHS = {
+    "app",
+    "workbench",
+    "workbench.explorer",
+    "workbench.layout",
+    "workbench.window",
+}
+
+
+def get_user_config_dir(app_name: str = "pyemsi") -> Path:
+    """Return a platform-appropriate configuration directory."""
+    if os.name == "nt":
+        base_dir = os.environ.get("APPDATA")
+        if not base_dir:
+            base_dir = os.path.join(Path.home(), "AppData", "Roaming")
+        return Path(base_dir) / app_name
+
+    xdg_dir = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_dir:
+        return Path(xdg_dir) / app_name
+    return Path.home() / ".config" / app_name
+
+
+def encode_qt_state(value: bytes | bytearray | memoryview | None) -> str | None:
+    """Encode Qt byte payloads for JSON storage."""
+    if not value:
+        return None
+    return base64.b64encode(bytes(value)).decode("ascii")
+
+
+def decode_qt_state(value: str | None) -> bytes | None:
+    """Decode Qt byte payloads from JSON storage."""
+    if not value:
+        return None
+    return base64.b64decode(value.encode("ascii"))
+
+
+def _deep_merge(base: Any, override: Any) -> Any:
+    if isinstance(base, dict) and isinstance(override, dict):
+        merged = {key: copy.deepcopy(value) for key, value in base.items()}
+        for key, value in override.items():
+            if key in merged:
+                merged[key] = _deep_merge(merged[key], value)
+            else:
+                merged[key] = copy.deepcopy(value)
+        return merged
+    return copy.deepcopy(override)
+
+
+def _path_parts(key: str) -> list[str]:
+    return key.split(".")
+
+
+def _has_path(data: Any, key: str) -> bool:
+    current = data
+    for part in _path_parts(key):
+        if not isinstance(current, dict) or part not in current:
+            return False
+        current = current[part]
+    return True
+
+
+def _get_path(data: dict[str, Any], key: str, default: Any = None) -> Any:
+    current: Any = data
+    for part in _path_parts(key):
+        if not isinstance(current, dict) or part not in current:
+            return default
+        current = current[part]
+    return current
+
+
+def _set_path(data: dict[str, Any], key: str, value: Any) -> None:
+    current = data
+    parts = _path_parts(key)
+    for part in parts[:-1]:
+        child = current.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            current[part] = child
+        current = child
+    current[parts[-1]] = value
+
+
+def _delete_path(data: dict[str, Any], key: str) -> None:
+    current = data
+    parents: list[tuple[dict[str, Any], str]] = []
+    parts = _path_parts(key)
+    for part in parts[:-1]:
+        child = current.get(part)
+        if not isinstance(child, dict):
+            return
+        parents.append((current, part))
+        current = child
+    if not isinstance(current, dict) or parts[-1] not in current:
+        return
+    del current[parts[-1]]
+    while parents and not current:
+        parent, parent_key = parents.pop()
+        del parent[parent_key]
+        current = parent
+
+
+class SettingsManager:
+    """Manage layered global and workspace-local JSON settings."""
+
+    def __init__(self, global_settings_path: str | os.PathLike[str] | None = None) -> None:
+        self._global_settings_path = (
+            Path(global_settings_path) if global_settings_path else get_user_config_dir() / "settings.json"
+        )
+        self._workspace_path: Path | None = None
+        self._global_data: dict[str, Any] = {}
+        self._local_data: dict[str, Any] = {}
+        self._warnings: list[str] = []
+        self.load()
+
+    @property
+    def global_settings_path(self) -> Path:
+        return self._global_settings_path
+
+    @property
+    def local_settings_path(self) -> Path | None:
+        if self._workspace_path is None:
+            return None
+        return self._workspace_path / ".pyemsi" / "workspace.json"
+
+    @property
+    def workspace_path(self) -> Path | None:
+        return self._workspace_path
+
+    @property
+    def warnings(self) -> list[str]:
+        return list(self._warnings)
+
+    def load(self) -> None:
+        """Reload global settings and the active workspace, if any."""
+        self._warnings.clear()
+        self._global_data = self._read_json_file(self.global_settings_path, label="global")
+        if self._workspace_path is not None:
+            local_path = self.local_settings_path
+            assert local_path is not None
+            self._local_data = self._read_json_file(local_path, label="local")
+        else:
+            self._local_data = {}
+
+    def load_workspace(self, path: str | os.PathLike[str] | None) -> None:
+        """Load local settings for *path* as the active workspace."""
+        if path is None:
+            self._workspace_path = None
+            self._local_data = {}
+            return
+        normalized = Path(os.path.abspath(os.path.normpath(os.fspath(path))))
+        self._workspace_path = normalized
+        local_path = self.local_settings_path
+        assert local_path is not None
+        self._local_data = self._read_json_file(local_path, label="local")
+
+    def get_effective(self, key: str | None = None) -> Any:
+        """Return merged defaults, global settings, and local settings."""
+        effective = _deep_merge(DEFAULT_SETTINGS, self.get_global())
+        effective = _deep_merge(effective, self.get_local())
+        if key is None:
+            return effective
+        return _get_path(effective, key)
+
+    def get_global(self, key: str | None = None) -> Any:
+        """Return sanitized global settings."""
+        sanitized = self._sanitize_scope(self._global_data, SCOPE_GLOBAL)
+        if key is None:
+            return sanitized
+        return _get_path(sanitized, key)
+
+    def get_local(self, key: str | None = None) -> Any:
+        """Return sanitized local settings."""
+        sanitized = self._sanitize_scope(self._local_data, SCOPE_LOCAL)
+        if key is None:
+            return sanitized
+        return _get_path(sanitized, key)
+
+    def set_global(self, key: str, value: Any) -> None:
+        """Set a validated global setting."""
+        self._set_value(self._global_data, SCOPE_GLOBAL, key, value)
+
+    def set_local(self, key: str, value: Any) -> None:
+        """Set a validated local setting."""
+        if self._workspace_path is None:
+            raise RuntimeError("cannot set local settings without an active workspace")
+        self._set_value(self._local_data, SCOPE_LOCAL, key, value)
+
+    def reset_key(self, key: str) -> None:
+        """Remove *key* from both override layers so defaults apply again."""
+        _delete_path(self._global_data, key)
+        _delete_path(self._local_data, key)
+
+    def save(self) -> None:
+        """Persist global settings and the active workspace settings."""
+        self._write_json_file(self.global_settings_path, self._global_data)
+        if self._workspace_path is not None:
+            local_path = self.local_settings_path
+            assert local_path is not None
+            self._write_json_file(local_path, self._local_data)
+
+    def _warn(self, message: str) -> None:
+        if message not in self._warnings:
+            self._warnings.append(message)
+
+    def _set_value(self, layer: dict[str, Any], scope: str, key: str, value: Any) -> None:
+        definition = SETTING_DEFINITIONS.get(key)
+        if definition is None:
+            raise KeyError(f"unknown setting key: {key}")
+        if definition.scope not in {scope, SCOPE_BOTH}:
+            raise ValueError(f"setting {key!r} is not valid in {scope} scope")
+        normalized = definition.validator(value)
+        _set_path(layer, key, normalized)
+
+    def _sanitize_scope(self, data: dict[str, Any], scope: str) -> dict[str, Any]:
+        if not isinstance(data, dict):
+            self._warn(f"ignored malformed {scope} settings payload")
+            return {}
+
+        sanitized = copy.deepcopy(data)
+        sanitized.pop("schemaVersion", None)
+
+        for container_key in sorted(_CONTAINER_PATHS, key=lambda item: item.count(".")):
+            if not _has_path(sanitized, container_key):
+                continue
+            value = _get_path(sanitized, container_key)
+            if value is not None and not isinstance(value, dict):
+                _delete_path(sanitized, container_key)
+                self._warn(f"ignored invalid object for {container_key}")
+
+        for key, definition in SETTING_DEFINITIONS.items():
+            if not _has_path(sanitized, key):
+                continue
+            if definition.scope not in {scope, SCOPE_BOTH}:
+                _delete_path(sanitized, key)
+                self._warn(f"ignored {key} in {scope} settings")
+                continue
+            try:
+                normalized = definition.validator(_get_path(sanitized, key))
+            except ValueError:
+                _delete_path(sanitized, key)
+                self._warn(f"ignored invalid value for {key}")
+                continue
+            _set_path(sanitized, key, normalized)
+
+        return sanitized
+
+    def _read_json_file(self, path: Path, label: str) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            self._warn(f"failed to read {label} settings: {exc}")
+            return {}
+        if not isinstance(payload, dict):
+            self._warn(f"ignored non-object {label} settings file")
+            return {}
+        return payload
+
+    def _write_json_file(self, path: Path, data: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = copy.deepcopy(data)
+        payload["schemaVersion"] = SCHEMA_VERSION
+        serialized = json.dumps(payload, indent=2, sort_keys=True)
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+            handle.write(serialized)
+            temp_path = Path(handle.name)
+        os.replace(temp_path, path)

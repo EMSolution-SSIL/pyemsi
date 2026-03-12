@@ -276,6 +276,21 @@ class SplitContainer(QWidget):
                 return True
         return False
 
+    def serialize_layout_state(self) -> list[int]:
+        """Return JSON-safe splitter sizes for persistence."""
+        return [int(size) for size in self._splitter.sizes()]
+
+    def restore_layout_state(self, sizes: list[int]) -> None:
+        """Restore persisted splitter sizes when available."""
+        if not sizes:
+            return
+        normalized = [max(0, int(size)) for size in sizes[:2]]
+        if len(normalized) == 1:
+            normalized.append(0)
+        self._left.setVisible(normalized[0] > 0 or normalized[1] == 0)
+        self._right.setVisible(normalized[1] > 0)
+        self._splitter.setSizes(normalized)
+
     def open_file(self, path: str, category: str | None = None) -> QWidget:
         """Open *path* in a viewer tab, or focus the existing tab.
 

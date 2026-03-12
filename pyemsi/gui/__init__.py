@@ -75,7 +75,10 @@ def launch(
     )
 
     if size is None:
-        _window.showMaximized()
+        if _window.should_show_maximized_on_launch():
+            _window.showMaximized()
+        else:
+            _window.show()
     else:
         _window.resize(*size)
         _window.show()

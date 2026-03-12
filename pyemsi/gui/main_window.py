@@ -17,6 +17,7 @@ import pyemsi.resources.resources  # noqa: F401
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
 from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
+from pyemsi.settings import SettingsManager, decode_qt_state, encode_qt_state
 
 
 class PyEmsiMainWindow(QMainWindow):
@@ -27,8 +28,10 @@ class PyEmsiMainWindow(QMainWindow):
     Bottom dock widget hosts an embedded IPython terminal.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings_manager: SettingsManager | None = None):
         super().__init__(parent)
+        self._settings = settings_manager or SettingsManager()
+        self._show_maximized_on_launch = True
         self.setWindowTitle("pyemsi")
         self.setWindowIcon(QIcon(":/icons/Icon.svg"))
         self.resize(1400, 900)
@@ -57,6 +60,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._external_terminal_dock.hide()
 
         self._setup_view_menu()
+        self._restore_startup_state()
 
     @property
     def container(self) -> SplitContainer:
@@ -72,6 +76,15 @@ class PyEmsiMainWindow(QMainWindow):
     def ipython_terminal(self):
         """The embedded IPython RichJupyterWidget."""
         return self._ipython_widget
+
+    @property
+    def settings_manager(self) -> SettingsManager:
+        """The layered settings manager for the GUI."""
+        return self._settings
+
+    def should_show_maximized_on_launch(self) -> bool:
+        """Return whether the window should start maximized."""
+        return self._show_maximized_on_launch
 
     def _setup_menu_bar(self) -> None:
         """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
@@ -137,9 +150,23 @@ class PyEmsiMainWindow(QMainWindow):
             QFileDialog.Option.ShowDirsOnly,
         )
         if path:
-            self._explorer_widget.set_directory(path)
-            folder_name = os.path.basename(path) or path
-            self.setWindowTitle(f"pyemsi — {folder_name}")
+            self._set_workspace_path(path)
+
+    def _set_workspace_path(self, path: str, restore_state: bool = False) -> None:
+        """Switch the active workspace path and update persisted context."""
+        normalized_path = os.path.abspath(os.path.normpath(path))
+        self._settings.set_global("app.last_workspace_path", normalized_path)
+        self._settings.load_workspace(normalized_path)
+
+        explorer_root = self._settings.get_local("workbench.explorer.root_path") or normalized_path
+        self._explorer_widget.set_directory(explorer_root)
+        self._settings.set_local("workbench.explorer.root_path", explorer_root)
+
+        folder_name = os.path.basename(normalized_path) or normalized_path
+        self.setWindowTitle(f"pyemsi — {folder_name}")
+
+        if restore_state:
+            self._restore_workspace_state()
 
     def _on_file_activated(self, path: str) -> None:
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
@@ -201,6 +228,64 @@ class PyEmsiMainWindow(QMainWindow):
         import pyemsi
 
         return {"pyemsi": pyemsi}
+
+    def _restore_startup_state(self) -> None:
+        """Restore the last workspace and its persisted UI state when available."""
+        last_workspace_path = self._settings.get_effective("app.last_workspace_path")
+        if last_workspace_path and os.path.isdir(last_workspace_path):
+            self._set_workspace_path(last_workspace_path, restore_state=True)
+
+    def _restore_workspace_state(self) -> None:
+        """Restore persisted Qt window and layout state for the active workspace."""
+        restored_any = False
+
+        geometry_state = decode_qt_state(self._settings.get_effective("workbench.window.geometry"))
+        if geometry_state:
+            self.restoreGeometry(geometry_state)
+            restored_any = True
+
+        state_version = self._settings.get_effective("workbench.window.state_version") or 1
+        window_state = decode_qt_state(self._settings.get_effective("workbench.window.state"))
+        if window_state:
+            self.restoreState(window_state, state_version)
+            restored_any = True
+
+        dock_visibility = self._settings.get_effective("workbench.window.dock_visibility") or {}
+        self._explorer_dock.setVisible(dock_visibility.get("explorer", True))
+        self._ipython_dock.setVisible(dock_visibility.get("ipython", False))
+        self._external_terminal_dock.setVisible(dock_visibility.get("external_terminal", False))
+
+        splitter_sizes = self._settings.get_effective("workbench.layout.splitter_sizes") or []
+        if splitter_sizes:
+            self._container.restore_layout_state(splitter_sizes)
+            restored_any = True
+
+        maximized = self._settings.get_effective("workbench.window.maximized")
+        self._show_maximized_on_launch = bool(maximized) if restored_any or maximized else True
+
+    def _persist_workspace_state(self) -> None:
+        """Persist workspace-scoped UI state and the last active workspace."""
+        current_workspace = self.explorer.current_path
+        if current_workspace and os.path.isdir(current_workspace):
+            self._settings.set_global("app.last_workspace_path", current_workspace)
+            self._settings.load_workspace(current_workspace)
+            self._settings.set_local("workbench.explorer.root_path", current_workspace)
+            self._settings.set_local("workbench.window.geometry", encode_qt_state(self.saveGeometry()))
+            self._settings.set_local("workbench.window.maximized", self.isMaximized())
+
+            state_version = self._settings.get_effective("workbench.window.state_version") or 1
+            self._settings.set_local("workbench.window.state", encode_qt_state(self.saveState(state_version)))
+            self._settings.set_local(
+                "workbench.window.dock_visibility",
+                {
+                    "explorer": self._explorer_dock.isVisible(),
+                    "ipython": self._ipython_dock.isVisible(),
+                    "external_terminal": self._external_terminal_dock.isVisible(),
+                },
+            )
+            self._settings.set_local("workbench.layout.splitter_sizes", self._container.serialize_layout_state())
+
+        self._settings.save()
 
     def _run_python_file_ipython(self, path: str) -> None:
         """Execute a Python file in the embedded IPython terminal."""
@@ -292,6 +377,7 @@ class PyEmsiMainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Clean up kernel on close."""
+        self._persist_workspace_state()
         if self._kernel_manager is not None:
             self._kernel_manager.shutdown_kernel()
         super().closeEvent(event)
