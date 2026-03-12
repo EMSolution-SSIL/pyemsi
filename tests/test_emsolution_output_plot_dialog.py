@@ -517,7 +517,9 @@ def test_emsolution_plot_dialog_only_shows_style_button_for_checked_leaf():
     button = dialog._tree.itemWidget(leaf, dialog.SETTINGS_COLUMN)
 
     assert isinstance(button, QPushButton)
-    assert button.text() == "Style"
+    assert button.text() == ""
+    assert not button.icon().isNull()
+    assert button.maximumHeight() == dialog._style_button_max_height(leaf)
 
     leaf.setCheckState(0, Qt.CheckState.Unchecked)
 

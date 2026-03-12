@@ -437,7 +437,6 @@ class EMSolutionPlotDialog(QDialog):
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.addWidget(self._tree, 1)
-        controls_layout.addWidget(self._plot_settings_button)
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.addWidget(controls_widget)
@@ -451,6 +450,7 @@ class EMSolutionPlotDialog(QDialog):
         layout.addWidget(self._warning_label)
 
         button_row = QHBoxLayout()
+        button_row.addWidget(self._plot_settings_button)
         button_row.addWidget(self._script_button)
         button_row.addStretch()
         button_row.addWidget(self._plot_button)
@@ -801,6 +801,13 @@ class EMSolutionPlotDialog(QDialog):
         lines.extend(["", f"gui.add_figure(fig, {self._effective_title(selected_series)!r})"])
         return "\n".join(lines)
 
+    def _style_button_max_height(self, item: QTreeWidgetItem) -> int:
+        item_index = self._tree.indexFromItem(item, 0)
+        item_height = self._tree.sizeHintForIndex(item_index).height()
+        if item_height > 0:
+            return item_height
+        return self._tree.fontMetrics().height() + 6
+
     def _refresh_style_button_for_item(self, item: QTreeWidgetItem) -> None:
         descriptor = self._descriptor_for_item(item)
         button = self._tree.itemWidget(item, self.SETTINGS_COLUMN)
@@ -814,12 +821,15 @@ class EMSolutionPlotDialog(QDialog):
             return
 
         if button is None:
-            button = QPushButton("Style", self._tree)
-            button.setIcon(QIcon(":/icons/Style.svg"))
+            button = QPushButton(QIcon(":/icons/Style.svg"), "", self._tree)
+            # button.setIcon(QIcon(":/icons/Style.svg"))
             button.setAutoDefault(False)
             button.setDefault(False)
+            button.setMinimumHeight(0)
+            button.setStyleSheet("padding-top: 0px; padding-bottom: 0px; border: none;")
             button.clicked.connect(lambda checked=False, tree_item=item: self._open_style_dialog_for_item(tree_item))
             self._tree.setItemWidget(item, self.SETTINGS_COLUMN, button)
+        button.setMaximumHeight(self._style_button_max_height(item))
 
     def _refresh_tree_action_buttons(self) -> None:
         for item in self._iter_tree_items():
