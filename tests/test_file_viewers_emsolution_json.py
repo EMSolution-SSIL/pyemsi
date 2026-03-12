@@ -1,6 +1,16 @@
 import json
 
+from PySide6.QtWidgets import QApplication
+
 from pyemsi.gui._viewers import _factory
+from pyemsi.gui._viewers import _emsolution_json
+
+
+def _app():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    return app
 
 
 def test_classify_emsolution_json_detects_output_files(tmp_path):
@@ -116,3 +126,123 @@ def test_create_viewer_falls_back_to_text_viewer_for_generic_json(tmp_path, monk
     assert viewer.set_language == "json"
     assert viewer.theme == "vs"
     assert viewer.loaded_path == str(path)
+
+
+def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypatch):
+    _app()
+
+    class _Signal:
+        def __init__(self):
+            self._callbacks = []
+
+        def connect(self, callback):
+            self._callbacks.append(callback)
+
+    class StubMonaco(_emsolution_json.QWidget):
+        def __init__(self, language: str, parent=None):
+            super().__init__(parent)
+            self.language = language
+            self._text = '{"metaData": {"EMSolutionVersion": "2.0"}}'
+            self.textChanged = _Signal()
+            self.dirtyChanged = _Signal()
+
+        def setTheme(self, theme: str) -> None:
+            self.theme = theme
+
+        def setLanguage(self, language: str) -> None:
+            self.set_language = language
+
+        def load_file(self, path: str) -> None:
+            self.file_path = path
+
+        def text(self) -> str:
+            return self._text
+
+        @property
+        def dirty(self) -> bool:
+            return False
+
+        def save(self, path: str | None = None) -> None:
+            self.saved_path = path
+
+    captured = {}
+
+    class StubOutput:
+        @classmethod
+        def from_dict(cls, payload):
+            captured["payload"] = payload
+            return {"parsed": True}
+
+    class StubDialog:
+        def __init__(self, result, parent=None):
+            captured["result"] = result
+            captured["parent"] = parent
+
+        def setAttribute(self, attr, value):
+            captured["attribute"] = (attr, value)
+
+        def show(self):
+            captured["shown"] = True
+
+        def raise_(self):
+            captured["raised"] = True
+
+        def activateWindow(self):
+            captured["activated"] = True
+
+    monkeypatch.setattr(_emsolution_json, "MonacoLspWidget", StubMonaco)
+    monkeypatch.setattr(_emsolution_json, "EMSolutionOutput", StubOutput)
+    monkeypatch.setattr(_emsolution_json, "EMSolutionPlotDialog", StubDialog)
+
+    viewer = _emsolution_json.EMSolutionOutputViewer()
+    viewer._plot_action.trigger()
+
+    assert captured["payload"] == {"metaData": {"EMSolutionVersion": "2.0"}}
+    assert captured["result"] == {"parsed": True}
+    assert captured["parent"] is viewer
+    assert captured["shown"] is True
+
+
+def test_emsolution_output_viewer_shows_error_for_invalid_json(monkeypatch):
+    _app()
+
+    class _Signal:
+        def connect(self, callback):
+            self.callback = callback
+
+    class StubMonaco(_emsolution_json.QWidget):
+        def __init__(self, language: str, parent=None):
+            super().__init__(parent)
+            self.textChanged = _Signal()
+            self.dirtyChanged = _Signal()
+
+        def setTheme(self, theme: str) -> None:
+            self.theme = theme
+
+        def setLanguage(self, language: str) -> None:
+            self.set_language = language
+
+        def text(self) -> str:
+            return "{invalid json"
+
+        @property
+        def file_path(self):
+            return None
+
+        @property
+        def dirty(self) -> bool:
+            return False
+
+        def save(self, path: str | None = None) -> None:
+            self.saved_path = path
+
+    errors = []
+
+    monkeypatch.setattr(_emsolution_json, "MonacoLspWidget", StubMonaco)
+    monkeypatch.setattr(_emsolution_json.QMessageBox, "critical", lambda *args: errors.append(args[1:]))
+
+    viewer = _emsolution_json.EMSolutionOutputViewer()
+    viewer._plot_action.trigger()
+
+    assert errors
+    assert errors[0][0] == "Invalid JSON"

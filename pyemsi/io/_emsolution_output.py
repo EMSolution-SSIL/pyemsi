@@ -159,7 +159,38 @@ class ForceNodalData:
     entries: list[ForceNodalEntry]
 
 
+@dataclass(frozen=True)
+class PlotAxisOption:
+    key: str
+    label: str
+    values: np.ndarray
+    unit: str | None = None
+
+    @property
+    def axis_label(self) -> str:
+        return _format_label_with_unit(self.label, self.unit)
+
+
+@dataclass(frozen=True)
+class PlotSeriesDescriptor:
+    tree_path: tuple[str, ...]
+    label: str
+    values: np.ndarray
+    quantity: str
+    unit: str | None = None
+
+    @property
+    def axis_label(self) -> str:
+        return _format_label_with_unit(self.quantity, self.unit)
+
+
 # ── Top-level result ───────────────────────────────────────────────────────
+
+
+def _format_label_with_unit(label: str, unit: str | None) -> str:
+    if unit:
+        return f"{label} ({unit})"
+    return label
 
 
 @dataclass
@@ -298,6 +329,119 @@ class EMSolutionOutput:
     def from_file(cls, path: str | Path) -> "EMSolutionOutput":
         with open(path, encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
+
+    def get_plot_x_options(self) -> list[PlotAxisOption]:
+        options = [PlotAxisOption(key="time", label="Time", values=self.time, unit=self.time_unit)]
+        if self.position is not None:
+            options.append(
+                PlotAxisOption(key="position", label="Position", values=self.position, unit=self.position_unit)
+            )
+        return options
+
+    def get_plot_x_option(self, key: str) -> PlotAxisOption:
+        for option in self.get_plot_x_options():
+            if option.key == key:
+                return option
+        raise KeyError(f"Unknown plot x-axis: {key}")
+
+    def get_plot_series(self) -> list[PlotSeriesDescriptor]:
+        series: list[PlotSeriesDescriptor] = []
+
+        if self.circuit is not None:
+            current_unit, voltage_unit, flux_unit = self.circuit.units
+            circuit_groups = (
+                ("Sources", self.circuit.sources, "Source"),
+                ("Power Sources", self.circuit.power_sources, "Power Source"),
+            )
+            for group_label, elements, item_label in circuit_groups:
+                for element in elements:
+                    base_path = ("Circuit", group_label, f"{item_label} #{element.serial_num}")
+                    series.append(
+                        PlotSeriesDescriptor(
+                            tree_path=base_path + ("Current",),
+                            label=f"{item_label} #{element.serial_num} Current",
+                            values=element.current,
+                            quantity="Current",
+                            unit=current_unit,
+                        )
+                    )
+                    series.append(
+                        PlotSeriesDescriptor(
+                            tree_path=base_path + ("Voltage",),
+                            label=f"{item_label} #{element.serial_num} Voltage",
+                            values=element.voltage,
+                            quantity="Voltage",
+                            unit=voltage_unit,
+                        )
+                    )
+                    if element.flux is not None:
+                        series.append(
+                            PlotSeriesDescriptor(
+                                tree_path=base_path + ("Flux",),
+                                label=f"{item_label} #{element.serial_num} Flux",
+                                values=element.flux,
+                                quantity="Flux",
+                                unit=flux_unit,
+                            )
+                        )
+
+        if self.network is not None:
+            current_unit, voltage_unit, flux_unit = self.network.units
+            for element in self.network.elements:
+                element_path = ("Network", f"{element.element_name} #{element.element_num}")
+                series.append(
+                    PlotSeriesDescriptor(
+                        tree_path=element_path + ("Current",),
+                        label=f"{element.element_name} #{element.element_num} Current",
+                        values=element.current,
+                        quantity="Current",
+                        unit=current_unit,
+                    )
+                )
+                series.append(
+                    PlotSeriesDescriptor(
+                        tree_path=element_path + ("Voltage",),
+                        label=f"{element.element_name} #{element.element_num} Voltage",
+                        values=element.voltage,
+                        quantity="Voltage",
+                        unit=voltage_unit,
+                    )
+                )
+                if element.flux is not None:
+                    series.append(
+                        PlotSeriesDescriptor(
+                            tree_path=element_path + ("Flux",),
+                            label=f"{element.element_name} #{element.element_num} Flux",
+                            values=element.flux,
+                            quantity="Flux",
+                            unit=flux_unit,
+                        )
+                    )
+
+        if self.force_nodal is not None:
+            force_unit, moment_unit = self.force_nodal.units
+            component_map = (
+                ("Force X", "force_x", force_unit),
+                ("Force Y", "force_y", force_unit),
+                ("Force Z", "force_z", force_unit),
+                ("Moment X", "force_mx", moment_unit),
+                ("Moment Y", "force_my", moment_unit),
+                ("Moment Z", "force_mz", moment_unit),
+            )
+            for entry in self.force_nodal.entries:
+                entry_path = ("Force Nodal", f"Property #{entry.property_num}")
+                for quantity, attr_name, unit in component_map:
+                    series.append(
+                        PlotSeriesDescriptor(
+                            tree_path=entry_path + (quantity,),
+                            label=f"Property #{entry.property_num} {quantity}",
+                            values=getattr(entry, attr_name),
+                            quantity=quantity,
+                            unit=unit,
+                        )
+                    )
+
+        return series
 
     # ── Aggregate plot helpers ─────────────────────────────────────────────
 

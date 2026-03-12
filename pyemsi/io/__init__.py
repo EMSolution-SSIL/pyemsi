@@ -8,6 +8,8 @@ from ._emsolution_output import (
     NetworkData,
     ForceNodalEntry,
     ForceNodalData,
+    PlotAxisOption,
+    PlotSeriesDescriptor,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "NetworkData",
     "ForceNodalEntry",
     "ForceNodalData",
+    "PlotAxisOption",
+    "PlotSeriesDescriptor",
 ]

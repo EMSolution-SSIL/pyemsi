@@ -1,21 +1,24 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Signal
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QLabel, QToolBar, QVBoxLayout, QWidget
+import json
 
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QLabel, QMessageBox, QToolBar, QVBoxLayout, QWidget
+
+from pyemsi.io import EMSolutionOutput
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+from ._emsolution_plot_dialog import EMSolutionPlotDialog
 
 
 class _BaseEMSolutionJsonViewer(QWidget):
-    """Shared Monaco-based JSON viewer with a placeholder toolbar action."""
+    """Shared Monaco-based JSON viewer with an extensible toolbar."""
 
     textChanged = Signal(str)
     dirtyChanged = Signal(bool)
 
     toolbar_label = "EMSolution"
-    dummy_action_text = "Dummy"
-    dummy_action_tooltip = "Placeholder action"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -28,11 +31,8 @@ class _BaseEMSolutionJsonViewer(QWidget):
         toolbar.setMovable(False)
         toolbar.setIconSize(QSize(16, 16))
         toolbar.addWidget(QLabel(self.toolbar_label))
-
-        dummy_action = QAction(self.dummy_action_text, self)
-        dummy_action.setToolTip(self.dummy_action_tooltip)
-        toolbar.addAction(dummy_action)
-        self._dummy_action = dummy_action
+        self._toolbar = toolbar
+        self._configure_toolbar(toolbar)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -60,14 +60,40 @@ class _BaseEMSolutionJsonViewer(QWidget):
     def save(self, path: str | None = None) -> None:
         self.editor.save(path)
 
+    def _configure_toolbar(self, toolbar: QToolBar) -> None:
+        del toolbar
+
 
 class EMSolutionOutputViewer(_BaseEMSolutionJsonViewer):
     toolbar_label = "EMSolution Output:"
-    dummy_action_text = "Output Dummy"
-    dummy_action_tooltip = "Placeholder output action"
+
+    def _configure_toolbar(self, toolbar: QToolBar) -> None:
+        plot_action = QAction("Plot", self)
+        plot_action.setToolTip("Open the plotting dialog for this EMSolution output")
+        plot_action.triggered.connect(self._open_plot_dialog)
+        toolbar.addAction(plot_action)
+        self._plot_action = plot_action
+
+    def _open_plot_dialog(self) -> None:
+        try:
+            payload = json.loads(self.text())
+        except json.JSONDecodeError as exc:
+            QMessageBox.critical(self, "Invalid JSON", f"Could not parse the current editor content.\n\n{exc}")
+            return
+
+        try:
+            result = EMSolutionOutput.from_dict(payload)
+        except Exception as exc:
+            QMessageBox.critical(self, "Invalid EMSolution Output", str(exc))
+            return
+
+        dialog = EMSolutionPlotDialog(result, parent=self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        self._plot_dialog = dialog
 
 
 class EMSolutionInputViewer(_BaseEMSolutionJsonViewer):
     toolbar_label = "EMSolution Input:"
-    dummy_action_text = "Input Dummy"
-    dummy_action_tooltip = "Placeholder input action"
