@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from contextlib import nullcontext
+from dataclasses import dataclass, replace
 
-from PySide6.QtCore import Qt
+from matplotlib import style as mpl_style
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
     QPushButton,
     QSplitter,
@@ -43,11 +46,54 @@ class PlotDialogSettings:
     title: str = ""
     x_label: str = ""
     y_label: str = ""
+    style_preset: str = ""
     show_legend: bool = True
     show_grid: bool = True
+    x_log_scale: bool = False
+    y_log_scale: bool = False
+
+
+PLOT_STYLE_PRESETS: tuple[tuple[str, str], ...] = (
+    ("Default", ""),
+    ("Solarize_Light2", "Solarize_Light2"),
+    ("bmh", "bmh"),
+    ("classic", "classic"),
+    ("dark_background", "dark_background"),
+    ("fast", "fast"),
+    ("fivethirtyeight", "fivethirtyeight"),
+    ("ggplot", "ggplot"),
+    ("grayscale", "grayscale"),
+    ("petroff10", "petroff10"),
+    ("seaborn-v0_8", "seaborn-v0_8"),
+    ("seaborn-v0_8-bright", "seaborn-v0_8-bright"),
+    ("seaborn-v0_8-colorblind", "seaborn-v0_8-colorblind"),
+    ("seaborn-v0_8-dark", "seaborn-v0_8-dark"),
+    ("seaborn-v0_8-dark-palette", "seaborn-v0_8-dark-palette"),
+    ("seaborn-v0_8-darkgrid", "seaborn-v0_8-darkgrid"),
+    ("seaborn-v0_8-deep", "seaborn-v0_8-deep"),
+    ("seaborn-v0_8-muted", "seaborn-v0_8-muted"),
+    ("seaborn-v0_8-notebook", "seaborn-v0_8-notebook"),
+    ("seaborn-v0_8-paper", "seaborn-v0_8-paper"),
+    ("seaborn-v0_8-pastel", "seaborn-v0_8-pastel"),
+    ("seaborn-v0_8-poster", "seaborn-v0_8-poster"),
+    ("seaborn-v0_8-talk", "seaborn-v0_8-talk"),
+    ("seaborn-v0_8-ticks", "seaborn-v0_8-ticks"),
+    ("seaborn-v0_8-white", "seaborn-v0_8-white"),
+    ("seaborn-v0_8-whitegrid", "seaborn-v0_8-whitegrid"),
+    ("tableau-colorblind10", "tableau-colorblind10"),
+)
+
+
+def _matplotlib_style_context(style_preset: str):
+    if not style_preset:
+        return nullcontext()
+    return mpl_style.context(style_preset)
 
 
 class PlotSettingsDialog(QDialog):
+    settingsApplied = Signal(object)
+    settingsCanceled = Signal(object)
+
     def __init__(
         self,
         x_options: dict[str, PlotAxisOption],
@@ -59,6 +105,7 @@ class PlotSettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Plot Settings")
+        self._original_settings = replace(settings)
 
         self._x_axis_combo = QComboBox(self)
         for option in x_options.values():
@@ -72,29 +119,53 @@ class PlotSettingsDialog(QDialog):
         self._x_label_edit.setPlaceholderText(default_x_label)
         self._y_label_edit = QLineEdit(settings.y_label, self)
         self._y_label_edit.setPlaceholderText(default_y_label)
+        self._style_preset_combo = QComboBox(self)
+        for label, style_name in PLOT_STYLE_PRESETS:
+            self._style_preset_combo.addItem(label, style_name)
+        style_index = self._style_preset_combo.findData(settings.style_preset)
+        self._style_preset_combo.setCurrentIndex(max(style_index, 0))
         self._show_legend_checkbox = QCheckBox(self)
         self._show_legend_checkbox.setChecked(settings.show_legend)
         self._show_grid_checkbox = QCheckBox(self)
         self._show_grid_checkbox.setChecked(settings.show_grid)
+        self._x_log_scale_checkbox = QCheckBox(self)
+        self._x_log_scale_checkbox.setChecked(settings.x_log_scale)
+        self._y_log_scale_checkbox = QCheckBox(self)
+        self._y_log_scale_checkbox.setChecked(settings.y_log_scale)
 
         form_layout = QFormLayout()
         form_layout.addRow("X Axis:", self._x_axis_combo)
         form_layout.addRow("Title:", self._title_edit)
         form_layout.addRow("X Label:", self._x_label_edit)
         form_layout.addRow("Y Label:", self._y_label_edit)
+        form_layout.addRow("Style Preset:", self._style_preset_combo)
         form_layout.addRow("Show Legend:", self._show_legend_checkbox)
         form_layout.addRow("Show Grid:", self._show_grid_checkbox)
+        form_layout.addRow("Log X Axis:", self._x_log_scale_checkbox)
+        form_layout.addRow("Log Y Axis:", self._y_log_scale_checkbox)
 
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+        self._button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+            | QDialogButtonBox.StandardButton.Apply,
             parent=self,
         )
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
+        self._button_box.accepted.connect(self.accept)
+        self._button_box.rejected.connect(self._on_rejected)
+        apply_button = self._button_box.button(QDialogButtonBox.StandardButton.Apply)
+        if apply_button is not None:
+            apply_button.clicked.connect(self._on_apply)
 
         layout = QVBoxLayout(self)
         layout.addLayout(form_layout)
-        layout.addWidget(button_box)
+        layout.addWidget(self._button_box)
+
+    def _on_apply(self) -> None:
+        self.settingsApplied.emit(self.settings())
+
+    def _on_rejected(self) -> None:
+        self.settingsCanceled.emit(replace(self._original_settings))
+        self.reject()
 
     def settings(self) -> PlotDialogSettings:
         x_axis_key = str(self._x_axis_combo.currentData())
@@ -103,8 +174,11 @@ class PlotSettingsDialog(QDialog):
             title=self._title_edit.text().strip(),
             x_label=self._x_label_edit.text().strip(),
             y_label=self._y_label_edit.text().strip(),
+            style_preset=str(self._style_preset_combo.currentData()),
             show_legend=self._show_legend_checkbox.isChecked(),
             show_grid=self._show_grid_checkbox.isChecked(),
+            x_log_scale=self._x_log_scale_checkbox.isChecked(),
+            y_log_scale=self._y_log_scale_checkbox.isChecked(),
         )
 
 
@@ -231,6 +305,10 @@ class EMSolutionPlotDialog(QDialog):
         self._plot_settings_button = QPushButton("Plot Settings...", self)
         self._plot_button = QPushButton("Plot", self)
         self._cancel_button = QPushButton("Cancel", self)
+        self._warning_label = QLabel(self)
+        self._warning_label.setWordWrap(True)
+        self._warning_label.setStyleSheet("color: #a94442;")
+        self._warning_label.hide()
 
         self._preview = MatplotlibViewer(parent=self)
 
@@ -249,6 +327,7 @@ class EMSolutionPlotDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(splitter)
+        layout.addWidget(self._warning_label)
 
         button_row = QHBoxLayout()
         button_row.addStretch()
@@ -377,6 +456,19 @@ class EMSolutionPlotDialog(QDialog):
     def _effective_y_label(self, selected_series: list[PlotSeriesDescriptor]) -> str:
         return self._plot_settings.y_label or self._default_y_label(selected_series)
 
+    def _set_warning_message(self, message: str) -> None:
+        self._warning_label.setText(message)
+        self._warning_label.setVisible(bool(message))
+
+    def _log_scale_warning_message(self, invalid_series: list[str], invalid_x: bool) -> str:
+        parts: list[str] = []
+        if invalid_x:
+            parts.append("X-axis log scale requires all X values to be greater than zero.")
+        if invalid_series:
+            labels = ", ".join(invalid_series)
+            parts.append(f"Skipped series with non-positive Y values for log scale: {labels}.")
+        return " ".join(parts)
+
     def _refresh_style_button_for_item(self, item: QTreeWidgetItem) -> None:
         descriptor = self._descriptor_for_item(item)
         button = self._tree.itemWidget(item, self.SETTINGS_COLUMN)
@@ -418,6 +510,8 @@ class EMSolutionPlotDialog(QDialog):
             self._default_y_label(selected_series),
             parent=self,
         )
+        dialog.settingsApplied.connect(self._apply_plot_settings)
+        dialog.settingsCanceled.connect(self._apply_plot_settings)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._apply_plot_settings(dialog.settings())
 
@@ -438,50 +532,70 @@ class EMSolutionPlotDialog(QDialog):
         self._redraw_plot()
 
     def _draw_onto(self, figure: Figure) -> None:
-        figure.clear()
-        ax = figure.add_subplot(111)
-
         selected_series = self._checked_series()
         x_option = self._selected_x_option()
         plotted_count = 0
+        invalid_y_series: list[str] = []
+        invalid_x = bool(self._plot_settings.x_log_scale and (x_option.values <= 0).any())
 
-        for descriptor in selected_series:
-            if len(descriptor.values) != len(x_option.values):
-                continue
-            style = self._style_for_descriptor(descriptor)
-            plot_kwargs = {
-                "label": descriptor.label,
-                "linestyle": style.line_style,
-                "linewidth": style.line_width,
-            }
-            if style.marker != "None":
-                plot_kwargs["marker"] = style.marker
-            if style.color is not None:
-                plot_kwargs["color"] = style.color
-            ax.plot(x_option.values, descriptor.values, **plot_kwargs)
-            plotted_count += 1
+        with _matplotlib_style_context(self._plot_settings.style_preset):
+            figure.clear()
+            ax = figure.add_subplot(111)
+            ax.set_xscale("log" if self._plot_settings.x_log_scale else "linear")
+            ax.set_yscale("log" if self._plot_settings.y_log_scale else "linear")
 
-        if plotted_count == 0:
-            ax.text(
-                0.5,
-                0.5,
-                "Select one or more series to preview.",
-                ha="center",
-                va="center",
-                transform=ax.transAxes,
-            )
-        else:
-            if self._plot_settings.show_legend:
-                ax.legend()
-            if len(x_option.values) > 0:
-                ax.set_xlim(x_option.values[0], x_option.values[-1])
+            for descriptor in selected_series:
+                if len(descriptor.values) != len(x_option.values):
+                    continue
+                if invalid_x:
+                    continue
+                if self._plot_settings.y_log_scale and (descriptor.values <= 0).any():
+                    invalid_y_series.append(descriptor.label)
+                    continue
 
-        ax.grid(self._plot_settings.show_grid)
+                style = self._style_for_descriptor(descriptor)
+                plot_kwargs = {
+                    "label": descriptor.label,
+                    "linestyle": style.line_style,
+                    "linewidth": style.line_width,
+                }
+                if style.marker != "None":
+                    plot_kwargs["marker"] = style.marker
+                if style.color is not None:
+                    plot_kwargs["color"] = style.color
+                ax.plot(x_option.values, descriptor.values, **plot_kwargs)
+                plotted_count += 1
 
-        ax.set_title(self._effective_title(selected_series))
-        ax.set_xlabel(self._effective_x_label())
-        ax.set_ylabel(self._effective_y_label(selected_series))
-        figure.tight_layout()
+            if plotted_count == 0:
+                empty_message = "Select one or more series to preview."
+                if selected_series and (invalid_x or invalid_y_series):
+                    empty_message = "No compatible series for the current plot settings."
+                ax.text(
+                    0.5,
+                    0.5,
+                    empty_message,
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                )
+            else:
+                if self._plot_settings.show_legend:
+                    ax.legend()
+                if len(x_option.values) > 0:
+                    if self._plot_settings.x_log_scale:
+                        positive_x = x_option.values[x_option.values > 0]
+                        if len(positive_x) > 0:
+                            ax.set_xlim(positive_x[0], positive_x[-1])
+                    else:
+                        ax.set_xlim(x_option.values[0], x_option.values[-1])
+
+            ax.grid(self._plot_settings.show_grid)
+            ax.set_title(self._effective_title(selected_series))
+            ax.set_xlabel(self._effective_x_label())
+            ax.set_ylabel(self._effective_y_label(selected_series))
+            figure.tight_layout()
+
+        self._set_warning_message(self._log_scale_warning_message(invalid_y_series, invalid_x))
 
     def _redraw_plot(self) -> None:
         self._draw_onto(self._preview.figure)
