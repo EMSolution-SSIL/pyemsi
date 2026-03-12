@@ -107,7 +107,7 @@ def open_file(path: str, category: str | None = None):
     return _window.container.open_file(path, category)
 
 
-def add_figure(figure=None, title: str = "Figure"):
+def add_figure(figure=None, title: str = "Figure", tight_layout: bool = True):
     """Embed a matplotlib Figure as a new tab.
 
     Parameters
@@ -116,6 +116,9 @@ def add_figure(figure=None, title: str = "Figure"):
         Figure to display.  A blank Figure is created when *None*.
     title : str
         Tab label.  Defaults to ``"Figure"``.
+    tight_layout : bool, optional
+        Whether to enable matplotlib tight layout on the viewer's figure.
+        Defaults to ``True``.
 
     Returns
     -------
@@ -125,4 +128,4 @@ def add_figure(figure=None, title: str = "Figure"):
     """
     if _window is None:
         raise RuntimeError("pyemsi.gui has not been launched yet; call gui.launch() first.")
-    return _window.container.add_figure(figure, title)
+    return _window.container.add_figure(figure, title, tight_layout=tight_layout)

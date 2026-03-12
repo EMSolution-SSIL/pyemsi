@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
+from typing import Any
 
 from matplotlib import style as mpl_style
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QIcon
+from PySide6.QtGui import QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QPushButton,
     QSplitter,
     QTreeWidget,
@@ -108,6 +110,34 @@ def _matplotlib_style_context(style_preset: str):
     if not style_preset:
         return nullcontext()
     return mpl_style.context(style_preset)
+
+
+def _indent_lines(lines: list[str], prefix: str) -> list[str]:
+    return [f"{prefix}{line}" if line else "" for line in lines]
+
+
+class GeneratedScriptDialog(QDialog):
+    def __init__(self, script_text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Generated Plot Script")
+        self.setWindowIcon(QIcon(":/icons/Code.svg"))
+        self.resize(900, 700)
+
+        self._text_edit = QPlainTextEdit(self)
+        self._text_edit.setReadOnly(True)
+        self._text_edit.setPlainText(script_text)
+        self._text_edit.setFont(QFont("Courier", 10))
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=self)
+        button_box.rejected.connect(self.reject)
+        button_box.accepted.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self._text_edit, 1)
+        layout.addWidget(button_box)
+
+    def script_text(self) -> str:
+        return self._text_edit.toPlainText()
 
 
 class PlotSettingsDialog(QDialog):
@@ -338,6 +368,8 @@ class EMSolutionPlotDialog(QDialog):
 
         self._plot_settings_button = QPushButton("Plot Settings...", self)
         self._plot_settings_button.setIcon(QIcon(":/icons/Gear.svg"))
+        self._script_button = QPushButton("Script...", self)
+        self._script_button.setIcon(QIcon(":/icons/Code.svg"))
         self._plot_button = QPushButton("Plot", self)
         self._plot_button.setIcon(QIcon(":/icons/Graph.svg"))
         self._cancel_button = QPushButton("Cancel", self)
@@ -366,6 +398,7 @@ class EMSolutionPlotDialog(QDialog):
         layout.addWidget(self._warning_label)
 
         button_row = QHBoxLayout()
+        button_row.addWidget(self._script_button)
         button_row.addStretch()
         button_row.addWidget(self._plot_button)
         button_row.addWidget(self._cancel_button)
@@ -377,6 +410,7 @@ class EMSolutionPlotDialog(QDialog):
 
         self._tree.itemChanged.connect(self._on_item_changed)
         self._plot_settings_button.clicked.connect(self._open_plot_settings_dialog)
+        self._script_button.clicked.connect(self._open_script_dialog)
         self._plot_button.clicked.connect(self._on_plot)
         self._cancel_button.clicked.connect(self.reject)
 
@@ -524,6 +558,196 @@ class EMSolutionPlotDialog(QDialog):
             parts.append(f"Skipped series with non-positive Y values for log scale: {labels}.")
         return " ".join(parts)
 
+    def _script_x_expression(self) -> str:
+        if self._plot_settings.x_axis_key == "position":
+            return "result.position"
+        return "result.time"
+
+    def _find_circuit_series_index(self, group_label: str, serial_num: int) -> int:
+        if self._result.circuit is None:
+            raise ValueError("No circuit data available for script generation.")
+        elements = self._result.circuit.sources if group_label == "Sources" else self._result.circuit.power_sources
+        for index, element in enumerate(elements):
+            if element.serial_num == serial_num:
+                return index
+        raise ValueError(f"Could not locate circuit element #{serial_num} in {group_label!r}.")
+
+    def _find_network_series_index(self, element_name: str, element_num: int) -> int:
+        if self._result.network is None:
+            raise ValueError("No network data available for script generation.")
+        for index, element in enumerate(self._result.network.elements):
+            if element.element_num == element_num and element.element_name == element_name:
+                return index
+        raise ValueError(f"Could not locate network element {element_name!r} #{element_num}.")
+
+    def _find_force_entry_index(self, property_num: int) -> int:
+        if self._result.force_nodal is None:
+            raise ValueError("No force nodal data available for script generation.")
+        for index, entry in enumerate(self._result.force_nodal.entries):
+            if entry.property_num == property_num:
+                return index
+        raise ValueError(f"Could not locate force nodal property #{property_num}.")
+
+    def _script_series_expression(self, descriptor: PlotSeriesDescriptor) -> str:
+        tree_path = descriptor.tree_path
+        section = tree_path[0]
+
+        if section == "Circuit" and len(tree_path) == 4:
+            group_label, item_label, quantity = tree_path[1], tree_path[2], tree_path[3]
+            _, _, serial_text = item_label.rpartition("#")
+            serial_num = int(serial_text)
+            element_index = self._find_circuit_series_index(group_label, serial_num)
+            group_expr = "result.circuit.sources" if group_label == "Sources" else "result.circuit.power_sources"
+            return f"{group_expr}[{element_index}].{quantity.lower()}"
+
+        if section == "Network" and len(tree_path) == 3:
+            item_label, quantity = tree_path[1], tree_path[2]
+            element_name, _, element_num_text = item_label.rpartition(" #")
+            element_num = int(element_num_text)
+            element_index = self._find_network_series_index(element_name, element_num)
+            return f"result.network.elements[{element_index}].{quantity.lower()}"
+
+        if section == "Force Nodal" and len(tree_path) == 3:
+            property_label, quantity = tree_path[1], tree_path[2]
+            _, _, property_num_text = property_label.rpartition("#")
+            property_num = int(property_num_text)
+            entry_index = self._find_force_entry_index(property_num)
+            component_map = {
+                "Force X": "force_x",
+                "Force Y": "force_y",
+                "Force Z": "force_z",
+                "Moment X": "force_mx",
+                "Moment Y": "force_my",
+                "Moment Z": "force_mz",
+            }
+            attr_name = component_map[quantity]
+            return f"result.force_nodal.entries[{entry_index}].{attr_name}"
+
+        raise ValueError(f"Unsupported plot series path: {tree_path!r}")
+
+    def _script_plot_kwargs(self, descriptor: PlotSeriesDescriptor) -> list[tuple[str, Any]]:
+        style = self._style_for_descriptor(descriptor)
+        kwargs: list[tuple[str, Any]] = [
+            ("label", self._display_label_for_descriptor(descriptor)),
+            ("linestyle", style.line_style),
+            ("linewidth", style.line_width),
+        ]
+        if style.marker != "None":
+            kwargs.append(("marker", style.marker))
+        if style.color is not None:
+            kwargs.append(("color", style.color))
+        return kwargs
+
+    def _generate_script_text(self) -> str:
+        selected_series = self._checked_series()
+        x_option = self._selected_x_option()
+        invalid_x = bool(self._plot_settings.x_log_scale and (x_option.values <= 0).any())
+        invalid_y_series: list[str] = []
+        mismatched_series: list[str] = []
+        plotted_series: list[PlotSeriesDescriptor] = []
+
+        for descriptor in selected_series:
+            if len(descriptor.values) != len(x_option.values):
+                mismatched_series.append(self._display_label_for_descriptor(descriptor))
+                continue
+            if invalid_x:
+                continue
+            if self._plot_settings.y_log_scale and (descriptor.values <= 0).any():
+                invalid_y_series.append(self._display_label_for_descriptor(descriptor))
+                continue
+            plotted_series.append(descriptor)
+
+        imports = [
+            "from matplotlib.figure import Figure",
+            "from pyemsi import EMSolutionOutput, gui",
+        ]
+        if self._plot_settings.style_preset:
+            imports.insert(1, "from matplotlib import style as mpl_style")
+
+        lines = [
+            *imports,
+            "",
+            'result = EMSolutionOutput.from_file("output.json")',
+            f"x_values = {self._script_x_expression()}",
+            "",
+        ]
+
+        body = [
+            "fig = Figure()",
+            "ax = fig.add_subplot(111)",
+            f"ax.set_xscale({('log' if self._plot_settings.x_log_scale else 'linear')!r})",
+            f"ax.set_yscale({('log' if self._plot_settings.y_log_scale else 'linear')!r})",
+        ]
+
+        if invalid_x:
+            body.append("# X-axis log scale requires all X values to be greater than zero.")
+        for label in mismatched_series:
+            body.append(f"# Skipped series with incompatible lengths: {label}")
+        for label in invalid_y_series:
+            body.append(f"# Skipped series with non-positive Y values for log scale: {label}")
+
+        for index, descriptor in enumerate(plotted_series, start=1):
+            variable_name = f"y_values_{index}"
+            body.append(f"{variable_name} = {self._script_series_expression(descriptor)}")
+            body.append("ax.plot(")
+            body.append("    x_values,")
+            body.append(f"    {variable_name},")
+            for key, value in self._script_plot_kwargs(descriptor):
+                body.append(f"    {key}={value!r},")
+            body.append(")")
+
+        if plotted_series:
+            if self._plot_settings.legend_mode != "none":
+                body.append(f"ax.legend(loc={self._plot_settings.legend_mode!r})")
+            if len(x_option.values) > 0:
+                if self._plot_settings.x_log_scale:
+                    body.append("positive_x = x_values[x_values > 0]")
+                    body.append("if len(positive_x) > 0:")
+                    body.append("    ax.set_xlim(positive_x[0], positive_x[-1])")
+                else:
+                    body.append("ax.set_xlim(x_values[0], x_values[-1])")
+        else:
+            empty_message = "Select one or more series to preview."
+            if selected_series and (invalid_x or invalid_y_series):
+                empty_message = "No compatible series for the current plot settings."
+            body.extend(
+                [
+                    "ax.text(",
+                    "    0.5,",
+                    "    0.5,",
+                    f"    {empty_message!r},",
+                    "    ha='center',",
+                    "    va='center',",
+                    "    transform=ax.transAxes,",
+                    ")",
+                ]
+            )
+
+        grid_mode = self._plot_settings.grid_mode
+        if grid_mode == "off":
+            body.append("ax.grid(False)")
+        elif grid_mode == "major":
+            body.append("ax.grid(True, axis='both', which='major')")
+        else:
+            body.append(f"ax.grid(True, axis={grid_mode!r})")
+
+        body.extend(
+            [
+                f"ax.set_title({self._effective_title(selected_series)!r})",
+                f"ax.set_xlabel({self._effective_x_label()!r})",
+                f"ax.set_ylabel({self._effective_y_label(selected_series)!r})",
+            ]
+        )
+
+        if self._plot_settings.style_preset:
+            lines.append(f"with mpl_style.context({self._plot_settings.style_preset!r}):")
+            lines.extend(_indent_lines(body, "    "))
+        else:
+            lines.extend(body)
+
+        lines.extend(["", f"gui.add_figure(fig, {self._effective_title(selected_series)!r})"])
+        return "\n".join(lines)
+
     def _refresh_style_button_for_item(self, item: QTreeWidgetItem) -> None:
         descriptor = self._descriptor_for_item(item)
         button = self._tree.itemWidget(item, self.SETTINGS_COLUMN)
@@ -580,6 +804,10 @@ class EMSolutionPlotDialog(QDialog):
         dialog = SeriesStyleDialog(self._style_for_descriptor(descriptor), descriptor.label, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._apply_series_style(descriptor, dialog.style())
+
+    def _open_script_dialog(self) -> None:
+        dialog = GeneratedScriptDialog(self._generate_script_text(), parent=self)
+        dialog.exec()
 
     def _on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
         if column != 0:

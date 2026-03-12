@@ -1,9 +1,11 @@
+from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QPushButton, QSplitter
 
 from pyemsi.gui._viewers import _emsolution_plot_dialog
 from pyemsi.gui._viewers._emsolution_plot_dialog import (
     EMSolutionPlotDialog,
+    GeneratedScriptDialog,
     PlotDialogSettings,
     PlotSeriesStyle,
     PlotSettingsDialog,
@@ -17,6 +19,13 @@ def _app():
     if app is None:
         app = QApplication([])
     return app
+
+
+def _uses_tight_layout(figure: Figure) -> bool:
+    if hasattr(figure, "get_layout_engine"):
+        engine = figure.get_layout_engine()
+        return engine is not None and engine.__class__.__name__ == "TightLayoutEngine"
+    return bool(figure.get_tight_layout())
 
 
 def _sample_payload():
@@ -69,10 +78,79 @@ def _mixed_sign_payload():
     return payload
 
 
+def _rich_payload():
+    return {
+        "metaData": {
+            "EMSolutionVersion": "1.0",
+            "releaseDate": "2026-01-01",
+            "creationDate": "2026-01-02",
+            "comments": "example",
+        },
+        "analysisCondition": {
+            "analysisType": "TRANSIENT",
+            "nonlinear": "LINEAR",
+            "motionType": "SLIDE_MOTION",
+            "circuitType": "NETWORK",
+        },
+        "timeStep": {
+            "time": [1.0, 2.0, 3.0],
+            "timeUnit": "s",
+            "position": [[5.0, 10.0, 15.0]],
+            "positionUnit": "deg",
+            "motionDirection": "CW",
+        },
+        "postData": {
+            "network": {
+                "networkUnit": ["A", "V", "Wb"],
+                "networkData": [
+                    {
+                        "elementNum": 3,
+                        "elementName": "Coil",
+                        "current": [1.0, 2.0, 3.0],
+                        "voltage": [4.0, 5.0, 6.0],
+                    }
+                ],
+            },
+            "forceNodal": {
+                "forceUnit": ["N", "Nm"],
+                "forceNodalData": [
+                    {
+                        "propertyNum": 12,
+                        "forceX": [1.0, 1.5, 2.0],
+                        "forceY": [2.0, 2.5, 3.0],
+                        "forceZ": [3.0, 3.5, 4.0],
+                        "forceMX": [4.0, 4.5, 5.0],
+                        "forceMY": [5.0, 5.5, 6.0],
+                        "forceMZ": [6.0, 6.5, 7.0],
+                    }
+                ],
+            },
+        },
+    }
+
+
 def _first_leaf(item):
     if item.childCount() == 0:
         return item
     return _first_leaf(item.child(0))
+
+
+def _find_item_by_path(tree, path):
+    current = None
+    for depth, text in enumerate(path):
+        if depth == 0:
+            matches = [
+                tree.topLevelItem(index)
+                for index in range(tree.topLevelItemCount())
+                if tree.topLevelItem(index).text(0) == text
+            ]
+        else:
+            matches = [
+                current.child(index) for index in range(current.childCount()) if current.child(index).text(0) == text
+            ]
+        assert matches
+        current = matches[0]
+    return current
 
 
 def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
@@ -85,6 +163,22 @@ def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
     assert splitter.widget(0).findChild(type(dialog._tree)) is dialog._tree
     assert isinstance(splitter.widget(1), MatplotlibViewer)
     assert dialog._plot_settings_button.text() == "Plot Settings..."
+
+
+def test_matplotlib_viewer_enables_tight_layout_by_default():
+    _app()
+
+    viewer = MatplotlibViewer()
+
+    assert _uses_tight_layout(viewer.figure)
+
+
+def test_matplotlib_viewer_can_disable_tight_layout():
+    _app()
+
+    viewer = MatplotlibViewer(Figure(), tight_layout=False)
+
+    assert not _uses_tight_layout(viewer.figure)
 
 
 def test_emsolution_plot_dialog_and_subdialogs_expose_plot_icons():
@@ -101,11 +195,14 @@ def test_emsolution_plot_dialog_and_subdialogs_expose_plot_icons():
         default_y_label="Default Y",
     )
     style_dialog = _emsolution_plot_dialog.SeriesStyleDialog(PlotSeriesStyle(), "Series")
+    script_dialog = GeneratedScriptDialog("print('hello')")
 
     assert not dialog.windowIcon().isNull()
     assert not settings_dialog.windowIcon().isNull()
     assert not style_dialog.windowIcon().isNull()
+    assert not script_dialog.windowIcon().isNull()
     assert not dialog._plot_settings_button.icon().isNull()
+    assert not dialog._script_button.icon().isNull()
     assert not dialog._plot_button.icon().isNull()
 
 
@@ -257,6 +354,83 @@ def test_emsolution_plot_dialog_preserves_distinct_styles_for_multiple_series():
     assert lines[0].get_linewidth() == 2.0
     assert lines[1].get_marker() == "s"
     assert lines[1].get_linewidth() == 3.0
+
+
+def test_emsolution_plot_dialog_generates_script_for_selected_network_series():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_positive_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    descriptor = dialog._descriptor_for_item(leaf)
+    assert descriptor is not None
+
+    dialog._apply_series_style(
+        descriptor,
+        PlotSeriesStyle(label="Custom Current", line_style="--", marker="o", line_width=2.5, color="#ff0000"),
+    )
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key="position",
+            title="Custom Plot",
+            x_label="Rotor Angle",
+            y_label="Response",
+            legend_mode="best",
+            grid_mode="off",
+        )
+    )
+
+    script = dialog._generate_script_text()
+
+    assert "from matplotlib.figure import Figure" in script
+    assert "from pyemsi import EMSolutionOutput, gui" in script
+    assert 'result = EMSolutionOutput.from_file("output.json")' in script
+    assert "x_values = result.position" in script
+    assert "y_values_1 = result.network.elements[0].current" in script
+    assert "label='Custom Current'" in script
+    assert "linestyle='--'" in script
+    assert "marker='o'" in script
+    assert "linewidth=2.5" in script
+    assert "color='#ff0000'" in script
+    assert "ax.set_title('Custom Plot')" in script
+    assert "ax.set_xlabel('Rotor Angle')" in script
+    assert "ax.set_ylabel('Response')" in script
+    assert "ax.grid(False)" in script
+    assert "gui.add_figure(fig, 'Custom Plot')" in script
+    assert "plt.show()" not in script
+
+
+def test_emsolution_plot_dialog_generates_script_for_mixed_series():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_rich_payload()))
+
+    network_leaf = _find_item_by_path(dialog._tree, ["Network", "Coil #3", "Current"])
+    force_leaf = _find_item_by_path(dialog._tree, ["Force Nodal", "Property #12", "Force Y"])
+    network_leaf.setCheckState(0, Qt.CheckState.Checked)
+    force_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key="time",
+            title="Mixed Plot",
+            legend_mode="upper left",
+            grid_mode="major",
+            x_log_scale=True,
+            y_log_scale=True,
+        )
+    )
+
+    script = dialog._generate_script_text()
+
+    assert "x_values = result.time" in script
+    assert "y_values_1 = result.network.elements[0].current" in script
+    assert "y_values_2 = result.force_nodal.entries[0].force_y" in script
+    assert "ax.set_xscale('log')" in script
+    assert "ax.set_yscale('log')" in script
+    assert "positive_x = x_values[x_values > 0]" in script
+    assert "ax.legend(loc='upper left')" in script
+    assert "ax.grid(True, axis='both', which='major')" in script
+    assert "ax.set_title('Mixed Plot')" in script
+    assert "gui.add_figure(fig, 'Mixed Plot')" in script
 
 
 def test_emsolution_plot_dialog_only_shows_style_button_for_checked_leaf():

@@ -242,7 +242,7 @@ class SplitContainer(QWidget):
         self._left.addTab(widget, title)
         self._left.setCurrentWidget(widget)
 
-    def add_figure(self, figure=None, title: str = "Figure"):
+    def add_figure(self, figure=None, title: str = "Figure", tight_layout: bool = True):
         """Embed a matplotlib Figure as a new tab in the left panel.
 
         Parameters
@@ -251,6 +251,9 @@ class SplitContainer(QWidget):
             Figure to display.  A blank Figure is created when *None*.
         title : str
             Tab label.  Defaults to ``"Figure"``.
+        tight_layout : bool, optional
+            Whether to enable matplotlib tight layout on the viewer's figure.
+            Defaults to ``True``.
 
         Returns
         -------
@@ -260,7 +263,7 @@ class SplitContainer(QWidget):
         """
         from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 
-        viewer = MatplotlibViewer(figure, parent=self._left)
+        viewer = MatplotlibViewer(figure, parent=self._left, tight_layout=tight_layout)
         self.add_tab(viewer, title)
         return viewer
 

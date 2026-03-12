@@ -17,15 +17,21 @@ class MatplotlibViewer(QWidget):
         *None* (the default).
     parent : QWidget, optional
         Parent widget.
+    tight_layout : bool, optional
+        Whether to enable matplotlib tight layout for the figure during
+        initialization. Defaults to *True*.
     """
 
     def __init__(
         self,
         figure: Figure | None = None,
         parent: QWidget | None = None,
+        tight_layout: bool = True,
     ) -> None:
         super().__init__(parent)
         self._figure = figure if figure is not None else Figure()
+        if tight_layout:
+            self._enable_tight_layout()
         self._canvas = FigureCanvas(self._figure)
         self._toolbar = NavigationToolbar(self._canvas, self)
 
@@ -34,6 +40,13 @@ class MatplotlibViewer(QWidget):
         layout.setSpacing(0)
         layout.addWidget(self._toolbar)
         layout.addWidget(self._canvas, 1)
+
+    def _enable_tight_layout(self) -> None:
+        """Prefer automatic tight layout across supported matplotlib versions."""
+        if hasattr(self._figure, "set_layout_engine"):
+            self._figure.set_layout_engine("tight")
+            return
+        self._figure.set_tight_layout(True)
 
     @property
     def figure(self) -> Figure:
