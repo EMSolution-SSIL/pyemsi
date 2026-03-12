@@ -88,24 +88,57 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _setup_menu_bar(self) -> None:
         """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
-        file_menu = self.menuBar().addMenu("&File")
+        self._file_menu = self.menuBar().addMenu("&File")
         open_action = QAction("Open &Folder...", self)
         open_action.setShortcut(QKeySequence("Ctrl+O"))
         open_action.setIcon(QIcon(":/icons/FolderOpen.svg"))
         open_action.triggered.connect(self._open_folder)
-        file_menu.addAction(open_action)
+        self._file_menu.addAction(open_action)
+
+        self._recent_menu = self._file_menu.addMenu("Open &Recent")
+        self._recent_menu.setIcon(QIcon(":/icons/FolderOpen.svg"))
+        self._refresh_recent_folders_menu()
+
+        self._file_menu.addSeparator()
 
         save_action = QAction("&Save", self)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
         save_action.setIcon(QIcon(":/icons/Save.svg"))
         save_action.triggered.connect(self._save_active_tab)
-        file_menu.addAction(save_action)
+        self._file_menu.addAction(save_action)
 
         save_all_action = QAction("Save A&ll", self)
         save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
         save_all_action.setIcon(QIcon(":/icons/SaveAll.svg"))
         save_all_action.triggered.connect(self._save_all_tabs)
-        file_menu.addAction(save_all_action)
+        self._file_menu.addAction(save_all_action)
+
+    def _refresh_recent_folders_menu(self) -> None:
+        """Rebuild the Open Recent submenu from global settings."""
+        self._recent_menu.clear()
+        recent_folders = self._settings.get_global("app.recent_folders") or []
+
+        for path in recent_folders:
+            action = QAction(path, self)
+            action.triggered.connect(lambda _checked=False, recent_path=path: self._open_recent_folder(recent_path))
+            self._recent_menu.addAction(action)
+
+        self._recent_menu.addSeparator()
+        clear_action = QAction("Clear Recently Opened", self)
+        clear_action.triggered.connect(self._clear_recent_folders)
+        clear_action.setEnabled(bool(recent_folders))
+        self._recent_menu.addAction(clear_action)
+
+    def _open_recent_folder(self, path: str) -> None:
+        """Open a folder from the recent-folders submenu."""
+        if os.path.isdir(path):
+            self._set_workspace_path(path)
+
+    def _clear_recent_folders(self) -> None:
+        """Clear the global recent-folders list and update the menu."""
+        self._settings.clear_recent_folders()
+        self._settings.save()
+        self._refresh_recent_folders_menu()
 
     def _setup_view_menu(self) -> None:
         """Add a View menu with toggles for the Explorer and Terminal docks."""
@@ -152,11 +185,14 @@ class PyEmsiMainWindow(QMainWindow):
         if path:
             self._set_workspace_path(path)
 
-    def _set_workspace_path(self, path: str, restore_state: bool = False) -> None:
+    def _set_workspace_path(self, path: str, restore_state: bool = False, track_recent: bool = True) -> None:
         """Switch the active workspace path and update persisted context."""
         normalized_path = os.path.abspath(os.path.normpath(path))
         self._settings.set_global("app.last_workspace_path", normalized_path)
+        if track_recent:
+            self._settings.add_recent_folder(normalized_path)
         self._settings.load_workspace(normalized_path)
+        self._refresh_recent_folders_menu()
 
         explorer_root = self._settings.get_local("workbench.explorer.root_path") or normalized_path
         self._explorer_widget.set_directory(explorer_root)
@@ -231,9 +267,10 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _restore_startup_state(self) -> None:
         """Restore the last workspace and its persisted UI state when available."""
+        self._refresh_recent_folders_menu()
         last_workspace_path = self._settings.get_effective("app.last_workspace_path")
         if last_workspace_path and os.path.isdir(last_workspace_path):
-            self._set_workspace_path(last_workspace_path, restore_state=True)
+            self._set_workspace_path(last_workspace_path, restore_state=True, track_recent=False)
 
     def _restore_workspace_state(self) -> None:
         """Restore persisted Qt window and layout state for the active workspace."""

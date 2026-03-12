@@ -20,6 +20,7 @@ SCOPE_BOTH = "both"
 DEFAULT_SETTINGS: dict[str, Any] = {
     "app": {
         "last_workspace_path": None,
+        "recent_folders": [],
     },
     "workbench": {
         "explorer": {
@@ -92,6 +93,25 @@ def _normalize_splitter_sizes(value: Any) -> list[int]:
     return normalized
 
 
+def _normalize_recent_folders(value: Any) -> list[str]:
+    if value in (None, []):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("expected a list of path strings")
+
+    normalized: list[str] = []
+    seen_paths: set[str] = set()
+    for item in value:
+        path = _normalize_optional_path(item)
+        if path is None or not os.path.isdir(path) or path in seen_paths:
+            continue
+        normalized.append(path)
+        seen_paths.add(path)
+        if len(normalized) == 10:
+            break
+    return normalized
+
+
 def _normalize_dock_visibility(value: Any) -> dict[str, bool]:
     default_keys = DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"].keys()
     if not isinstance(value, dict):
@@ -114,6 +134,7 @@ class SettingDefinition:
 
 SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "app.last_workspace_path": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_path),
+    "app.recent_folders": SettingDefinition([], SCOPE_GLOBAL, _normalize_recent_folders),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
     "workbench.layout.splitter_sizes": SettingDefinition([], SCOPE_LOCAL, _normalize_splitter_sizes),
     "workbench.window.dock_visibility": SettingDefinition(
@@ -314,6 +335,21 @@ class SettingsManager:
         if self._workspace_path is None:
             raise RuntimeError("cannot set local settings without an active workspace")
         self._set_value(self._local_data, SCOPE_LOCAL, key, value)
+
+    def add_recent_folder(self, path: str | os.PathLike[str]) -> list[str]:
+        """Prepend *path* to the global recent-folders list and return the result."""
+        normalized_path = _normalize_optional_path(os.fspath(path))
+        if normalized_path is None or not os.path.isdir(normalized_path):
+            return self.get_global("app.recent_folders") or []
+
+        current = self.get_global("app.recent_folders") or []
+        updated = [normalized_path, *[item for item in current if item != normalized_path]]
+        self.set_global("app.recent_folders", updated)
+        return self.get_global("app.recent_folders") or []
+
+    def clear_recent_folders(self) -> None:
+        """Clear the global recent-folders list."""
+        self.set_global("app.recent_folders", [])
 
     def reset_key(self, key: str) -> None:
         """Remove *key* from both override layers so defaults apply again."""

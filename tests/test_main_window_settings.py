@@ -83,3 +83,63 @@ def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch)
     assert reloaded.get_local("workbench.window.geometry") is not None
     assert reloaded.get_effective("workbench.window.dock_visibility")["ipython"] is True
     assert window._kernel_manager.shutdown_calls == 1
+
+
+def test_main_window_open_recent_menu_tracks_unique_folders(tmp_path, monkeypatch):
+    _app()
+    workspace_a = tmp_path / "workspace_a"
+    workspace_b = tmp_path / "workspace_b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._set_workspace_path(str(workspace_a))
+        window._set_workspace_path(str(workspace_b))
+        window._set_workspace_path(str(workspace_a))
+
+        recent_actions = window._recent_menu.actions()
+
+        assert recent_actions[0].text() == os.path.abspath(os.path.normpath(str(workspace_a)))
+        assert recent_actions[1].text() == os.path.abspath(os.path.normpath(str(workspace_b)))
+        assert recent_actions[-2].isSeparator()
+        assert recent_actions[-1].text() == "Clear Recently Opened"
+    finally:
+        window.close()
+
+
+def test_main_window_can_clear_recent_folders(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.add_recent_folder(workspace)
+    manager.save()
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._clear_recent_folders()
+
+        reloaded = SettingsManager(global_settings_path=global_settings_path)
+        recent_actions = window._recent_menu.actions()
+
+        assert reloaded.get_global("app.recent_folders") == []
+        assert len(recent_actions) == 2
+        assert recent_actions[0].isSeparator()
+        assert recent_actions[1].text() == "Clear Recently Opened"
+        assert not recent_actions[1].isEnabled()
+    finally:
+        window.close()

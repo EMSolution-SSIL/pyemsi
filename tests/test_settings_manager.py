@@ -69,3 +69,48 @@ def test_settings_manager_ignores_invalid_workspace_values(tmp_path):
         "ipython": False,
     }
     assert any("ignored invalid value for workbench.window.dock_visibility" in warning for warning in manager.warnings)
+
+
+def test_settings_manager_recent_folders_are_unique_and_limited_to_ten(tmp_path):
+    global_settings_path = tmp_path / "config" / "settings.json"
+    manager = SettingsManager(global_settings_path=global_settings_path)
+
+    folders = []
+    for index in range(12):
+        folder = tmp_path / f"workspace_{index}"
+        folder.mkdir()
+        folders.append(folder)
+        manager.add_recent_folder(folder)
+
+    manager.add_recent_folder(folders[5])
+
+    recent_folders = manager.get_global("app.recent_folders")
+
+    assert len(recent_folders) == 10
+    assert recent_folders[0] == os.path.abspath(os.path.normpath(str(folders[5])))
+    assert len(recent_folders) == len(set(recent_folders))
+    assert os.path.abspath(os.path.normpath(str(folders[0]))) not in recent_folders
+    assert os.path.abspath(os.path.normpath(str(folders[1]))) not in recent_folders
+
+
+def test_settings_manager_recent_folders_filters_missing_directories(tmp_path):
+    existing_folder = tmp_path / "existing"
+    existing_folder.mkdir()
+    missing_folder = tmp_path / "missing"
+    global_settings_path = tmp_path / "config" / "settings.json"
+    global_settings_path.parent.mkdir(parents=True)
+    global_settings_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "app": {
+                    "recent_folders": [str(existing_folder), str(missing_folder), str(existing_folder)],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+
+    assert manager.get_global("app.recent_folders") == [os.path.abspath(os.path.normpath(str(existing_folder)))]
