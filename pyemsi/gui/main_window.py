@@ -39,6 +39,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._container = SplitContainer()
         self.setCentralWidget(self._container)
 
+        self.menuBar().setStyleSheet("QMenuBar { padding: 0px; } QMenuBar::item { padding: 2px 8px; }")
         self._setup_menu_bar()
         self._setup_edit_menu()
         self._setup_explorer()
@@ -186,28 +187,28 @@ class PyEmsiMainWindow(QMainWindow):
         edit_menu = self.menuBar().addMenu("&Edit")
 
         _ACTIONS = [
-            ("&Undo", "Ctrl+Z", "undo"),
-            ("&Redo", "Ctrl+Y", "redo"),
+            ("&Undo", "Ctrl+Z", "undo", ":/icons/Undo.svg"),
+            ("&Redo", "Ctrl+Y", "redo", ":/icons/Redo.svg"),
             None,
-            ("Cu&t", "Ctrl+X", "editor.action.clipboardCutAction"),
-            ("&Copy", "Ctrl+C", "editor.action.clipboardCopyAction"),
-            ("&Paste", "Ctrl+V", "editor.action.clipboardPasteAction"),
+            ("Cu&t", "Ctrl+X", "editor.action.clipboardCutAction", ":/icons/Cut.svg"),
+            ("&Copy", "Ctrl+C", "editor.action.clipboardCopyAction", ":/icons/Copy.svg"),
+            ("&Paste", "Ctrl+V", "editor.action.clipboardPasteAction", ":/icons/Paste.svg"),
             None,
-            ("&Find", "Ctrl+F", "actions.find"),
-            ("&Replace", "Ctrl+H", "editor.action.startFindReplaceAction"),
+            ("&Find", "Ctrl+F", "actions.find", ":/icons/Find.svg"),
+            ("&Replace", "Ctrl+H", "editor.action.startFindReplaceAction", ":/icons/Replace.svg"),
             None,
-            ("Toggle &Line Comment", "Ctrl+/", "editor.action.commentLine"),
-            ("Toggle &Block Comment", "Shift+Alt+A", "editor.action.blockComment"),
+            ("Toggle &Line Comment", "Ctrl+/", "editor.action.commentLine", ":/icons/Comment.svg"),
+            ("Toggle &Block Comment", "Shift+Alt+A", "editor.action.blockComment", ":/icons/Code.svg"),
             None,
-            ("Select &All", "Ctrl+A", "editor.action.selectAll"),
+            ("Select &All", "Ctrl+A", "editor.action.selectAll", ":/icons/SelectAll.svg"),
         ]
 
         for item in _ACTIONS:
             if item is None:
                 edit_menu.addSeparator()
                 continue
-            label, shortcut_hint, action_id = item
-            action = QAction(f"{label}\t{shortcut_hint}", self)
+            label, shortcut_hint, action_id, icon_path = item
+            action = QAction(QIcon(icon_path), f"{label}\t{shortcut_hint}", self)
             action.triggered.connect(lambda checked=False, _id=action_id: self._dispatch_edit_action(_id))
             edit_menu.addAction(action)
 
