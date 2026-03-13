@@ -69,14 +69,14 @@ class ExplorerWidget(QWidget):
         self._tree.setRootIndex(root_index)
         self._stack.setCurrentWidget(self._tree_page)
 
-    def refresh(self) -> None:
-        """Re-read the current directory."""
-        if self._current_path is not None:
-            self.set_directory(self._current_path)
-
-    def collapse_all(self) -> None:
-        """Collapse all expanded tree nodes."""
-        self._tree.collapseAll()
+    def clear(self) -> None:
+        """Reset the explorer to the empty (no folder) state."""
+        self._current_path = None
+        if self._model is not None:
+            self._tree.setModel(None)
+            self._model.deleteLater()
+            self._model = None
+        self._stack.setCurrentWidget(self._empty_page)
 
     # ------------------------------------------------------------------
     # Internal setup

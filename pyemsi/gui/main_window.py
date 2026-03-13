@@ -104,6 +104,35 @@ class PyEmsiMainWindow(QMainWindow):
 
         self._file_menu.addSeparator()
 
+        save_action = QAction("&Save", self)
+        save_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_action.setIcon(QIcon(":/icons/Save.svg"))
+        save_action.triggered.connect(self._save_active_tab)
+        self._file_menu.addAction(save_action)
+
+        save_all_action = QAction("Save A&ll", self)
+        save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        save_all_action.setIcon(QIcon(":/icons/SaveAll.svg"))
+        save_all_action.triggered.connect(self._save_all_tabs)
+        self._file_menu.addAction(save_all_action)
+
+        self._file_menu.addSeparator()
+
+        close_tab_action = QAction("Close &Tab", self)
+        close_tab_action.setShortcut(QKeySequence("Ctrl+W"))
+        close_tab_action.triggered.connect(self._container.close_current_tab)
+        self._file_menu.addAction(close_tab_action)
+
+        close_all_action = QAction("Close &All Tabs", self)
+        close_all_action.triggered.connect(self._container.close_all_tabs)
+        self._file_menu.addAction(close_all_action)
+
+        close_workspace_action = QAction("Close &Workspace", self)
+        close_workspace_action.triggered.connect(lambda: self.close_workspace(restart_kernel=True))
+        self._file_menu.addAction(close_workspace_action)
+
+        self._file_menu.addSeparator()
+
         self._settings_menu = self._file_menu.addMenu("&Settings")
         self._settings_menu.setIcon(QIcon(":/icons/Settings.svg"))
 
@@ -119,17 +148,10 @@ class PyEmsiMainWindow(QMainWindow):
 
         self._file_menu.addSeparator()
 
-        save_action = QAction("&Save", self)
-        save_action.setShortcut(QKeySequence("Ctrl+S"))
-        save_action.setIcon(QIcon(":/icons/Save.svg"))
-        save_action.triggered.connect(self._save_active_tab)
-        self._file_menu.addAction(save_action)
-
-        save_all_action = QAction("Save A&ll", self)
-        save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
-        save_all_action.setIcon(QIcon(":/icons/SaveAll.svg"))
-        save_all_action.triggered.connect(self._save_all_tabs)
-        self._file_menu.addAction(save_all_action)
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut(QKeySequence("Alt+F4"))
+        exit_action.triggered.connect(self.close)
+        self._file_menu.addAction(exit_action)
 
     def _refresh_recent_folders_menu(self) -> None:
         """Rebuild the Open Recent submenu from global settings."""
@@ -177,6 +199,13 @@ class PyEmsiMainWindow(QMainWindow):
         external_action.setShortcut(QKeySequence("Ctrl+T"))
         view_menu.addAction(external_action)
 
+        view_menu.addSeparator()
+
+        restart_kernel_action = QAction("Restart IPython &Kernel", self)
+        restart_kernel_action.setIcon(QIcon(":/icons/IPythonTerminal.svg"))
+        restart_kernel_action.triggered.connect(self._reset_ipython_kernel)
+        view_menu.addAction(restart_kernel_action)
+
     def _setup_explorer(self) -> None:
         """Create the Explorer dock widget and wire its signals."""
         self._explorer_widget = ExplorerWidget()
@@ -204,8 +233,43 @@ class PyEmsiMainWindow(QMainWindow):
         if path:
             self._set_workspace_path(path)
 
+    def close_workspace(self, restart_kernel: bool = False) -> None:
+        """Reset the application to a fresh state.
+
+        Closes all editor tabs, kills external terminals, optionally restarts
+        the IPython kernel, clears the file explorer, and unloads workspace
+        settings.
+
+        Parameters
+        ----------
+        restart_kernel:
+            When *True* (explicit "Close Workspace" action) the embedded
+            IPython kernel is restarted.  Pass *False* when called internally
+            from :meth:`_set_workspace_path` to avoid an extra restart cycle.
+        """
+        self._container.close_all_tabs()
+        self._external_terminal_dock.close_all_terminals()
+
+        if restart_kernel:
+            self._reset_ipython_kernel()
+
+        self._explorer_widget.clear()
+        self._settings.load_workspace(None)
+        self._update_settings_actions()
+        self.setWindowTitle("pyemsi")
+
+    def _reset_ipython_kernel(self) -> None:
+        """Reset the in-process IPython shell to a clean state."""
+        if self._kernel_manager is None:
+            return
+        self._kernel_manager.kernel.shell.reset(new_session=True)
+        self._kernel_manager.kernel.shell.push(self._build_namespace())
+        if self._ipython_widget is not None:
+            self._ipython_widget.reset(clear=True)
+
     def _set_workspace_path(self, path: str) -> None:
         """Switch the active workspace path and update persisted context."""
+        self.close_workspace(restart_kernel=True)
         normalized_path = os.path.abspath(os.path.normpath(path))
         self._settings.add_recent_folder(normalized_path)
         self._settings.load_workspace(normalized_path)

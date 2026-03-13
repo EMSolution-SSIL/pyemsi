@@ -73,6 +73,15 @@ class ExternalTerminalDock(QDockWidget):
         xterm.start_process(cmd=cmd, args=args, cwd=cwd, env=env)
         return xterm
 
+    def close_all_terminals(self) -> None:
+        """Kill every open terminal tab and return to the empty-state page."""
+        for i in range(self._tabs.count()):
+            widget: XtermWidget = self._tabs.widget(i)
+            if widget is not None:
+                widget.kill()
+        self._tabs.clear()
+        self._stack.setCurrentWidget(self._empty_page)
+
     # ------------------------------------------------------------------
     # Private
     # ------------------------------------------------------------------

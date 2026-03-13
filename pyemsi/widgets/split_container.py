@@ -242,6 +242,31 @@ class SplitContainer(QWidget):
         self._left.addTab(widget, title)
         self._left.setCurrentWidget(widget)
 
+    def close_current_tab(self) -> None:
+        """Close the active tab in whichever panel currently has keyboard focus.
+
+        Falls back to the left panel's active tab when neither panel holds focus.
+        Respects the unsaved-changes prompt already built into :meth:`_TabPanel._close_tab`.
+        """
+        from PySide6.QtWidgets import QApplication
+
+        focused = QApplication.focusWidget()
+        for panel in (self._left, self._right):
+            if panel.isAncestorOf(focused) or panel is focused:
+                idx = panel.currentIndex()
+                if idx >= 0:
+                    panel._close_tab(idx)
+                return
+        # Fallback: active tab of the left panel
+        idx = self._left.currentIndex()
+        if idx >= 0:
+            self._left._close_tab(idx)
+
+    def close_all_tabs(self) -> None:
+        """Close every tab in both panels (with per-tab unsaved-changes prompts)."""
+        self._left._close_all()
+        self._right._close_all()
+
     def add_figure(self, figure=None, title: str = "Figure", tight_layout: bool = True):
         """Embed a matplotlib Figure as a new tab in the left panel.
 
