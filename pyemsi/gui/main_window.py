@@ -40,6 +40,7 @@ class PyEmsiMainWindow(QMainWindow):
         self.setCentralWidget(self._container)
 
         self._setup_menu_bar()
+        self._setup_edit_menu()
         self._setup_explorer()
 
         self._ipython_dock = QDockWidget("IPython Terminal", self)
@@ -179,6 +180,42 @@ class PyEmsiMainWindow(QMainWindow):
         self._settings.clear_recent_folders()
         self._settings.save()
         self._refresh_recent_folders_menu()
+
+    def _setup_edit_menu(self) -> None:
+        """Add an Edit menu delegating actions to the active Monaco editor."""
+        edit_menu = self.menuBar().addMenu("&Edit")
+
+        _ACTIONS = [
+            ("&Undo", "Ctrl+Z", "undo"),
+            ("&Redo", "Ctrl+Y", "redo"),
+            None,
+            ("Cu&t", "Ctrl+X", "editor.action.clipboardCutAction"),
+            ("&Copy", "Ctrl+C", "editor.action.clipboardCopyAction"),
+            ("&Paste", "Ctrl+V", "editor.action.clipboardPasteAction"),
+            None,
+            ("&Find", "Ctrl+F", "actions.find"),
+            ("&Replace", "Ctrl+H", "editor.action.startFindReplaceAction"),
+            None,
+            ("Toggle &Line Comment", "Ctrl+/", "editor.action.commentLine"),
+            ("Toggle &Block Comment", "Shift+Alt+A", "editor.action.blockComment"),
+            None,
+            ("Select &All", "Ctrl+A", "editor.action.selectAll"),
+        ]
+
+        for item in _ACTIONS:
+            if item is None:
+                edit_menu.addSeparator()
+                continue
+            label, shortcut_hint, action_id = item
+            action = QAction(f"{label}\t{shortcut_hint}", self)
+            action.triggered.connect(lambda checked=False, _id=action_id: self._dispatch_edit_action(_id))
+            edit_menu.addAction(action)
+
+    def _dispatch_edit_action(self, action_id: str) -> None:
+        """Send *action_id* to the currently active Monaco editor, if any."""
+        editor = self._container.active_monaco_editor()
+        if editor is not None:
+            editor.execute_editor_action(action_id)
 
     def _setup_view_menu(self) -> None:
         """Add a View menu with toggles for the Explorer and Terminal docks."""
@@ -372,6 +409,8 @@ class PyEmsiMainWindow(QMainWindow):
         self._explorer_dock.setVisible(dock_visibility.get("explorer", True))
         self._ipython_dock.setVisible(dock_visibility.get("ipython", False))
         self._external_terminal_dock.setVisible(dock_visibility.get("external_terminal", False))
+        if dock_visibility.get("ipython", False):
+            self._ipython_dock.raise_()
 
         maximized = self._settings.get_global("workbench.window.maximized")
         if maximized is not None:

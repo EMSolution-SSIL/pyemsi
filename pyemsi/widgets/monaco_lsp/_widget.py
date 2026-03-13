@@ -2108,6 +2108,10 @@ __LSP_COMPLETION_ITEM_METADATA__
             case 'pythonAnalysisPaths':
                 if (lspClient) lspClient.updatePythonAnalysisPaths(data);
                 break;
+            case 'editorAction':
+                editor.trigger('keyboard', data, null);
+                editor.focus();
+                break;
         }
     }
 
@@ -2361,3 +2365,7 @@ class MonacoLspWidget(QWebEngineView):
         If no text is selected the markers are inserted at the cursor.
         """
         self._bridge.send_to_js("wrapSelection", {"prefix": prefix, "suffix": suffix})
+
+    def execute_editor_action(self, action_id: str) -> None:
+        """Trigger a built-in Monaco editor action by its action ID."""
+        self._bridge.send_to_js("editorAction", action_id)

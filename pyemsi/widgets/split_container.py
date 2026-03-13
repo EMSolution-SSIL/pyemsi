@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pyemsi.widgets.monaco_lsp._widget import MonacoLspWidget
 
 def _resolve_open_path(path: str) -> str:
     """Return a normalized absolute path for viewer operations."""
@@ -261,6 +262,32 @@ class SplitContainer(QWidget):
         idx = self._left.currentIndex()
         if idx >= 0:
             self._left._close_tab(idx)
+
+    def active_viewer(self) -> QWidget | None:
+        """Return the current widget of the panel that has keyboard focus.
+
+        Falls back to the left panel's current widget when neither panel holds
+        focus, and returns *None* when the left panel has no tabs.
+        """
+        from PySide6.QtWidgets import QApplication
+
+        focused = QApplication.focusWidget()
+        for panel in (self._left, self._right):
+            if panel.isAncestorOf(focused) or panel is focused:
+                return panel.currentWidget()
+        return self._left.currentWidget()
+
+    def active_monaco_editor(self) -> MonacoLspWidget | None:
+        """Return the MonacoLspWidget in the currently active viewer tab, if any."""
+        viewer = self.active_viewer()
+        if viewer is None:
+            return None
+        if isinstance(viewer, MonacoLspWidget):
+            return viewer
+        editor = getattr(viewer, "editor", None)
+        if isinstance(editor, MonacoLspWidget):
+            return editor
+        return None
 
     def close_all_tabs(self) -> None:
         """Close every tab in both panels (with per-tab unsaved-changes prompts)."""
