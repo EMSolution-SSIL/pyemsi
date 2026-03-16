@@ -156,6 +156,13 @@ def _find_item_by_path(tree, path):
     return current
 
 
+def _find_combo_index_by_data(combo, data):
+    for index in range(combo.count()):
+        if combo.itemData(index) == data:
+            return index
+    raise AssertionError(f"Could not find combo data: {data!r}")
+
+
 def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
     _app()
     dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
@@ -310,6 +317,28 @@ def test_emsolution_plot_dialog_updates_preview_from_tree_and_labels():
     assert ax.get_title() == "Custom Plot"
     assert ax.get_xlabel() == "Rotor Angle"
     assert ax.get_ylabel() == "Response"
+
+
+def test_emsolution_plot_dialog_can_hide_plot_title():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            title="Hidden Plot",
+            show_title=False,
+            x_label="Rotor Angle",
+        )
+    )
+
+    ax = dialog._preview.figure.axes[0]
+
+    assert ax.get_title() == ""
+    assert ax.get_xlabel() == "Rotor Angle"
+    assert dialog._figure_title(dialog._all_checked_series()) == "Hidden Plot"
 
 
 def test_emsolution_plot_dialog_applies_legend_and_grid_modes():
@@ -473,6 +502,28 @@ def test_emsolution_plot_dialog_generates_script_for_selected_network_series():
     assert "plt.show()" not in script
 
 
+def test_emsolution_plot_dialog_generates_script_without_plot_title_when_hidden():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_positive_payload()))
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key="position",
+            title="Hidden Plot",
+            show_title=False,
+            x_label="Rotor Angle",
+        )
+    )
+
+    script = dialog._generate_script_text()
+
+    assert "ax.set_title(" not in script
+    assert "fig.suptitle(" not in script
+    assert "gui.add_figure(fig, 'Hidden Plot')" in script
+
+
 def test_emsolution_plot_dialog_generates_script_for_mixed_series():
     _app()
     dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_rich_payload()))
@@ -576,6 +627,70 @@ def test_plot_settings_dialog_round_trips_style_and_log_scale_settings():
     assert settings.y_log_scale is True
     assert settings.legend_mode == "none"
     assert settings.grid_mode == "off"
+
+
+def test_plot_settings_dialog_round_trips_hidden_title_setting():
+    _app()
+    result = EMSolutionOutput.from_dict(_positive_payload())
+    x_options = {option.key: option for option in result.get_plot_x_options()}
+    x_axis_key = next(iter(x_options))
+
+    dialog = PlotSettingsDialog(
+        x_options,
+        PlotDialogSettings(
+            x_axis_key=x_axis_key,
+            title="Hidden Plot",
+            show_title=False,
+        ),
+        default_title="Default Title",
+        default_x_label="Default X",
+        default_y_label="Default Y",
+    )
+
+    settings = dialog.settings()
+
+    assert settings.title == "Hidden Plot"
+    assert settings.show_title is False
+    assert dialog._title_edit.isEnabled() is False
+
+
+def test_plot_settings_dialog_defaults_shared_x_on_for_multiple_subplots():
+    _app()
+    result = EMSolutionOutput.from_dict(_positive_payload())
+    x_options = {option.key: option for option in result.get_plot_x_options()}
+    x_axis_key = next(iter(x_options))
+
+    dialog = PlotSettingsDialog(
+        x_options,
+        PlotDialogSettings(x_axis_key=x_axis_key),
+        default_title="Default Title",
+        default_x_label="Default X",
+        default_y_label="Default Y",
+        has_multiple_subplots=True,
+    )
+
+    settings = dialog.settings()
+
+    assert settings.share_x is True
+    assert dialog._share_x_checkbox.isEnabled() is True
+
+
+def test_plot_settings_dialog_disables_shared_x_for_single_subplot():
+    _app()
+    result = EMSolutionOutput.from_dict(_positive_payload())
+    x_options = {option.key: option for option in result.get_plot_x_options()}
+    x_axis_key = next(iter(x_options))
+
+    dialog = PlotSettingsDialog(
+        x_options,
+        PlotDialogSettings(x_axis_key=x_axis_key),
+        default_title="Default Title",
+        default_x_label="Default X",
+        default_y_label="Default Y",
+        has_multiple_subplots=False,
+    )
+
+    assert dialog._share_x_checkbox.isEnabled() is False
 
 
 def test_series_style_dialog_round_trips_custom_label():
@@ -685,14 +800,21 @@ def test_emsolution_plot_dialog_restores_original_settings_when_plot_settings_ca
         def __init__(self, *args, **kwargs):
             self.settingsApplied = _Signal()
             self.settingsCanceled = _Signal()
+            self.subplotYLabelApplied = _Signal()
+            self.subplotYLabelCanceled = _Signal()
 
         def exec(self):
             self.settingsApplied.emit(changed)
             self.settingsCanceled.emit(original)
+            self.subplotYLabelApplied.emit(changed.y_label)
+            self.subplotYLabelCanceled.emit(original.y_label)
             return QDialog.DialogCode.Rejected
 
         def settings(self):
             return changed
+
+        def subplot_y_label(self):
+            return changed.y_label
 
     monkeypatch.setattr(_emsolution_plot_dialog, "PlotSettingsDialog", StubDialog)
 
@@ -834,3 +956,219 @@ def test_plot_settings_dialog_round_trips_legend_and_grid_modes_from_comboboxes(
 
     assert settings.legend_mode == "upper left"
     assert settings.grid_mode == "y"
+
+
+def test_emsolution_plot_dialog_initializes_subplot_controls():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    assert dialog._subplot_combo.count() == 2
+    assert dialog._subplot_combo.itemText(0) == "1"
+    assert dialog._subplot_combo.itemData(0) == 0
+    assert dialog._subplot_combo.itemText(1) == "Add New Subplot..."
+    assert dialog._subplot_combo.itemData(1) == dialog.ADD_SUBPLOT_DATA
+    assert dialog._subplot_combo.currentIndex() == 0
+    assert dialog._delete_subplot_button.isEnabled() is False
+
+
+def test_emsolution_plot_dialog_restores_tree_selection_when_switching_subplots():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    top = dialog._tree.topLevelItem(0)
+    first_leaf = _first_leaf(top)
+    second_leaf = top.child(0).child(1)
+
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+
+    assert len(dialog._subplots) == 2
+    assert dialog._active_subplot_index == 1
+    assert dialog._subplot_combo.currentText() == "2"
+    assert first_leaf.checkState(0) == Qt.CheckState.Unchecked
+
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._subplot_combo.setCurrentIndex(0)
+
+    assert dialog._active_subplot_index == 0
+    assert first_leaf.checkState(0) == Qt.CheckState.Checked
+    assert second_leaf.checkState(0) == Qt.CheckState.Unchecked
+
+    dialog._subplot_combo.setCurrentIndex(1)
+
+    assert dialog._active_subplot_index == 1
+    assert first_leaf.checkState(0) == Qt.CheckState.Unchecked
+    assert second_leaf.checkState(0) == Qt.CheckState.Checked
+
+
+def test_emsolution_plot_dialog_deletes_current_subplot_and_restores_remaining_state():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    first_leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+
+    second_leaf = dialog._tree.topLevelItem(0).child(0).child(1)
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._delete_subplot_button.click()
+
+    assert len(dialog._subplots) == 1
+    assert dialog._active_subplot_index == 0
+    assert dialog._subplot_combo.count() == 2
+    assert dialog._subplot_combo.currentText() == "1"
+    assert dialog._delete_subplot_button.isEnabled() is False
+    assert first_leaf.checkState(0) == Qt.CheckState.Checked
+    assert second_leaf.checkState(0) == Qt.CheckState.Unchecked
+
+
+def test_emsolution_plot_dialog_renders_vertical_subplots_for_each_subplot_selection():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    top = dialog._tree.topLevelItem(0)
+    first_leaf = _first_leaf(top)
+    second_leaf = top.child(0).child(1)
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+
+    axes = dialog._preview.figure.axes
+
+    assert len(axes) == 2
+    assert axes[0].get_shared_x_axes().joined(axes[0], axes[1])
+    assert len(axes[0].lines) == 1
+    assert len(axes[1].lines) == 1
+    assert axes[0].get_legend_handles_labels()[1] == ["Coil #3 Current"]
+    assert axes[1].get_legend_handles_labels()[1] == ["Coil #3 Voltage"]
+
+
+def test_emsolution_plot_dialog_can_disable_shared_x_for_multiple_subplots():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    top = dialog._tree.topLevelItem(0)
+    first_leaf = _first_leaf(top)
+    second_leaf = top.child(0).child(1)
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            share_x=False,
+        )
+    )
+
+    axes = dialog._preview.figure.axes
+
+    assert len(axes) == 2
+    assert not axes[0].get_shared_x_axes().joined(axes[0], axes[1])
+
+
+def test_emsolution_plot_dialog_uses_subplot_specific_y_labels():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+
+    top = dialog._tree.topLevelItem(0)
+    first_leaf = _first_leaf(top)
+    second_leaf = top.child(0).child(1)
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            y_label="Current Response",
+        )
+    )
+
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key=dialog._plot_settings.x_axis_key,
+            y_label="Voltage Response",
+        )
+    )
+
+    axes = dialog._preview.figure.axes
+
+    assert axes[0].get_ylabel() == "Current Response"
+    assert axes[1].get_ylabel() == "Voltage Response"
+
+
+def test_emsolution_plot_dialog_generates_script_for_multiple_vertical_subplots():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_positive_payload()))
+
+    top = dialog._tree.topLevelItem(0)
+    first_leaf = _first_leaf(top)
+    second_leaf = top.child(0).child(1)
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key="position",
+            title="Stacked Plot",
+            x_label="Rotor Angle",
+            y_label="Current Response",
+            legend_mode="best",
+            grid_mode="off",
+        )
+    )
+
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key="position",
+            title="Stacked Plot",
+            x_label="Rotor Angle",
+            y_label="Voltage Response",
+            legend_mode="best",
+            grid_mode="off",
+        )
+    )
+
+    script = dialog._generate_script_text()
+
+    assert "axes = fig.subplots(2, 1, sharex=True, squeeze=False)" in script
+    assert "ax_1 = axes[0][0]" in script
+    assert "ax_2 = axes[1][0]" in script
+    assert "y_values_1_1 = result.network.elements[0].current" in script
+    assert "y_values_2_1 = result.network.elements[0].voltage" in script
+    assert "ax_1.label_outer()" in script
+    assert "fig.suptitle('Stacked Plot')" in script
+    assert "ax_2.set_xlabel('Rotor Angle')" in script
+    assert "ax_1.set_ylabel('Current Response')" in script
+    assert "ax_2.set_ylabel('Voltage Response')" in script
+    assert "gui.add_figure(fig, 'Stacked Plot')" in script
+
+
+def test_emsolution_plot_dialog_generates_script_without_shared_x_when_disabled():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_positive_payload()))
+
+    top = dialog._tree.topLevelItem(0)
+    first_leaf = _first_leaf(top)
+    second_leaf = top.child(0).child(1)
+    first_leaf.setCheckState(0, Qt.CheckState.Checked)
+    add_index = _find_combo_index_by_data(dialog._subplot_combo, dialog.ADD_SUBPLOT_DATA)
+    dialog._subplot_combo.setCurrentIndex(add_index)
+    second_leaf.setCheckState(0, Qt.CheckState.Checked)
+    dialog._apply_plot_settings(
+        PlotDialogSettings(
+            x_axis_key="position",
+            title="Stacked Plot",
+            share_x=False,
+        )
+    )
+
+    script = dialog._generate_script_text()
+
+    assert "axes = fig.subplots(2, 1, sharex=False, squeeze=False)" in script
+    assert "label_outer()" not in script

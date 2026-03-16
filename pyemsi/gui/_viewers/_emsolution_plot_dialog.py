@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +51,8 @@ class PlotSeriesStyle:
 class PlotDialogSettings:
     x_axis_key: str
     title: str = ""
+    show_title: bool = True
+    share_x: bool = True
     x_label: str = ""
     y_label: str = ""
     style_preset: str = ""
@@ -58,6 +60,12 @@ class PlotDialogSettings:
     grid_mode: str = "both"
     x_log_scale: bool = False
     y_log_scale: bool = False
+
+
+@dataclass
+class PlotSubplotState:
+    selected_series_keys: set[tuple[str, ...]] = field(default_factory=set)
+    y_label: str = ""
 
 
 PLOT_STYLE_PRESETS: tuple[tuple[str, str], ...] = (
@@ -196,6 +204,8 @@ class GeneratedScriptDialog(QDialog):
 class PlotSettingsDialog(QDialog):
     settingsApplied = Signal(object)
     settingsCanceled = Signal(object)
+    subplotYLabelApplied = Signal(str)
+    subplotYLabelCanceled = Signal(str)
 
     def __init__(
         self,
@@ -204,12 +214,16 @@ class PlotSettingsDialog(QDialog):
         default_title: str,
         default_x_label: str,
         default_y_label: str,
+        subplot_y_label: str = "",
+        default_subplot_y_label: str = "",
+        has_multiple_subplots: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Plot Settings")
         self.setWindowIcon(QIcon(":/icons/Gear.svg"))
         self._original_settings = replace(settings)
+        self._original_subplot_y_label = subplot_y_label
 
         self._x_axis_combo = QComboBox(self)
         for option in x_options.values():
@@ -219,10 +233,14 @@ class PlotSettingsDialog(QDialog):
 
         self._title_edit = QLineEdit(settings.title, self)
         self._title_edit.setPlaceholderText(default_title)
+        self._show_title_checkbox = QCheckBox(self)
+        self._show_title_checkbox.setChecked(settings.show_title)
         self._x_label_edit = QLineEdit(settings.x_label, self)
         self._x_label_edit.setPlaceholderText(default_x_label)
-        self._y_label_edit = QLineEdit(settings.y_label, self)
-        self._y_label_edit.setPlaceholderText(default_y_label)
+        y_label_text = subplot_y_label if subplot_y_label or not settings.y_label else settings.y_label
+        y_label_placeholder = default_subplot_y_label or default_y_label
+        self._y_label_edit = QLineEdit(y_label_text, self)
+        self._y_label_edit.setPlaceholderText(y_label_placeholder)
         self._style_preset_combo = QComboBox(self)
         for label, style_name in PLOT_STYLE_PRESETS:
             self._style_preset_combo.addItem(label, style_name)
@@ -242,9 +260,13 @@ class PlotSettingsDialog(QDialog):
         self._x_log_scale_checkbox.setChecked(settings.x_log_scale)
         self._y_log_scale_checkbox = QCheckBox(self)
         self._y_log_scale_checkbox.setChecked(settings.y_log_scale)
+        self._share_x_checkbox = QCheckBox(self)
+        self._share_x_checkbox.setChecked(settings.share_x)
+        self._share_x_checkbox.setEnabled(has_multiple_subplots)
 
         form_layout = QFormLayout()
         form_layout.addRow("X Axis:", self._x_axis_combo)
+        form_layout.addRow("Show Title:", self._show_title_checkbox)
         form_layout.addRow("Title:", self._title_edit)
         form_layout.addRow("X Label:", self._x_label_edit)
         form_layout.addRow("Y Label:", self._y_label_edit)
@@ -253,6 +275,7 @@ class PlotSettingsDialog(QDialog):
         form_layout.addRow("Grid:", self._grid_mode_combo)
         form_layout.addRow("Log X Axis:", self._x_log_scale_checkbox)
         form_layout.addRow("Log Y Axis:", self._y_log_scale_checkbox)
+        form_layout.addRow("Shared X:", self._share_x_checkbox)
 
         self._button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -270,11 +293,19 @@ class PlotSettingsDialog(QDialog):
         layout.addLayout(form_layout)
         layout.addWidget(self._button_box)
 
+        self._show_title_checkbox.toggled.connect(self._update_title_edit_state)
+        self._update_title_edit_state(self._show_title_checkbox.isChecked())
+
+    def _update_title_edit_state(self, checked: bool) -> None:
+        self._title_edit.setEnabled(checked)
+
     def _on_apply(self) -> None:
         self.settingsApplied.emit(self.settings())
+        self.subplotYLabelApplied.emit(self.subplot_y_label())
 
     def _on_rejected(self) -> None:
         self.settingsCanceled.emit(replace(self._original_settings))
+        self.subplotYLabelCanceled.emit(self._original_subplot_y_label)
         self.reject()
 
     def settings(self) -> PlotDialogSettings:
@@ -282,6 +313,8 @@ class PlotSettingsDialog(QDialog):
         return PlotDialogSettings(
             x_axis_key=x_axis_key,
             title=self._title_edit.text().strip(),
+            show_title=self._show_title_checkbox.isChecked(),
+            share_x=self._share_x_checkbox.isChecked(),
             x_label=self._x_label_edit.text().strip(),
             y_label=self._y_label_edit.text().strip(),
             style_preset=str(self._style_preset_combo.currentData()),
@@ -290,6 +323,9 @@ class PlotSettingsDialog(QDialog):
             x_log_scale=self._x_log_scale_checkbox.isChecked(),
             y_log_scale=self._y_log_scale_checkbox.isChecked(),
         )
+
+    def subplot_y_label(self) -> str:
+        return self._y_label_edit.text().strip()
 
 
 class SeriesStyleDialog(QDialog):
@@ -398,12 +434,17 @@ class SeriesStyleDialog(QDialog):
 class EMSolutionPlotDialog(QDialog):
     SERIES_ROLE = Qt.ItemDataRole.UserRole + 1
     SETTINGS_COLUMN = 1
+    ADD_SUBPLOT_DATA = "__add_subplot__"
 
     def __init__(self, result: EMSolutionOutput, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._result = result
         self._x_options = {option.key: option for option in result.get_plot_x_options()}
+        self._series_descriptors = list(result.get_plot_series())
+        self._descriptor_lookup = {descriptor.tree_path: descriptor for descriptor in self._series_descriptors}
         self._series_styles: dict[tuple[str, ...], PlotSeriesStyle] = {}
+        self._subplots: list[PlotSubplotState] = [PlotSubplotState()]
+        self._active_subplot_index = 0
         default_x_axis_key = next(iter(self._x_options))
         self._plot_settings = PlotDialogSettings(x_axis_key=default_x_axis_key)
 
@@ -418,6 +459,9 @@ class EMSolutionPlotDialog(QDialog):
         self._tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._tree.setRootIsDecorated(True)
+
+        self._subplot_combo = QComboBox(self)
+        self._delete_subplot_button = QPushButton("Delete Subplot", self)
 
         self._plot_settings_button = QPushButton("Plot Settings...", self)
         self._plot_settings_button.setIcon(QIcon(":/icons/Gear.svg"))
@@ -436,6 +480,12 @@ class EMSolutionPlotDialog(QDialog):
         controls_widget = QWidget(self)
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setContentsMargins(0, 0, 0, 0)
+        subplot_row = QHBoxLayout()
+        subplot_row.setContentsMargins(0, 0, 0, 0)
+        subplot_row.addWidget(QLabel("Subplot:", self))
+        subplot_row.addWidget(self._subplot_combo, 1)
+        subplot_row.addWidget(self._delete_subplot_button)
+        controls_layout.addLayout(subplot_row)
         controls_layout.addWidget(self._tree, 1)
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -458,10 +508,14 @@ class EMSolutionPlotDialog(QDialog):
         layout.addLayout(button_row)
 
         self._populate_tree()
+        self._rebuild_subplot_selector()
         self._tree.expandAll()
+        self._apply_subplot_selection_to_tree()
         self._refresh_tree_action_buttons()
 
         self._tree.itemChanged.connect(self._on_item_changed)
+        self._subplot_combo.currentIndexChanged.connect(self._on_subplot_changed)
+        self._delete_subplot_button.clicked.connect(self._delete_current_subplot)
         self._plot_settings_button.clicked.connect(self._open_plot_settings_dialog)
         self._script_button.clicked.connect(self._open_script_dialog)
         self._plot_button.clicked.connect(self._on_plot)
@@ -474,7 +528,7 @@ class EMSolutionPlotDialog(QDialog):
 
     def _populate_tree(self) -> None:
         parent_lookup: dict[tuple[str, ...], QTreeWidgetItem] = {}
-        for descriptor in self._result.get_plot_series():
+        for descriptor in self._series_descriptors:
             parent_item: QTreeWidgetItem | None = None
             current_path: tuple[str, ...] = ()
             for segment in descriptor.tree_path[:-1]:
@@ -512,19 +566,7 @@ class EMSolutionPlotDialog(QDialog):
         return items
 
     def _checked_series(self) -> list[PlotSeriesDescriptor]:
-        checked: list[PlotSeriesDescriptor] = []
-
-        def visit(item: QTreeWidgetItem) -> None:
-            descriptor = item.data(0, self.SERIES_ROLE)
-            if descriptor is not None and item.checkState(0) == Qt.CheckState.Checked:
-                checked.append(descriptor)
-            for index in range(item.childCount()):
-                visit(item.child(index))
-
-        for index in range(self._tree.topLevelItemCount()):
-            visit(self._tree.topLevelItem(index))
-
-        return checked
+        return self._checked_series_for_subplot(self._current_subplot_state())
 
     @staticmethod
     def _style_key(descriptor: PlotSeriesDescriptor) -> tuple[str, ...]:
@@ -549,6 +591,94 @@ class EMSolutionPlotDialog(QDialog):
     def _display_label_for_descriptor(self, descriptor: PlotSeriesDescriptor) -> str:
         style = self._style_for_descriptor(descriptor)
         return style.label or descriptor.label
+
+    def _current_subplot_state(self) -> PlotSubplotState:
+        return self._subplots[self._active_subplot_index]
+
+    def _checked_series_for_subplot(self, subplot_state: PlotSubplotState) -> list[PlotSeriesDescriptor]:
+        return [
+            descriptor
+            for descriptor in self._series_descriptors
+            if self._style_key(descriptor) in subplot_state.selected_series_keys
+        ]
+
+    def _all_checked_series(self) -> list[PlotSeriesDescriptor]:
+        selected: list[PlotSeriesDescriptor] = []
+        for subplot_state in self._subplots:
+            selected.extend(self._checked_series_for_subplot(subplot_state))
+        return selected
+
+    def _current_tree_checked_keys(self) -> set[tuple[str, ...]]:
+        checked: set[tuple[str, ...]] = set()
+
+        for item in self._iter_tree_items():
+            descriptor = self._descriptor_for_item(item)
+            if descriptor is not None and item.checkState(0) == Qt.CheckState.Checked:
+                checked.add(self._style_key(descriptor))
+
+        return checked
+
+    def _sync_active_subplot_selection_from_tree(self) -> None:
+        self._current_subplot_state().selected_series_keys = self._current_tree_checked_keys()
+
+    def _apply_subplot_selection_to_tree(self) -> None:
+        selected_keys = self._current_subplot_state().selected_series_keys
+        self._tree.blockSignals(True)
+        try:
+            for item in self._iter_tree_items():
+                descriptor = self._descriptor_for_item(item)
+                if descriptor is None:
+                    continue
+                state = (
+                    Qt.CheckState.Checked if self._style_key(descriptor) in selected_keys else Qt.CheckState.Unchecked
+                )
+                item.setCheckState(0, state)
+        finally:
+            self._tree.blockSignals(False)
+        self._refresh_tree_action_buttons()
+
+    def _rebuild_subplot_selector(self) -> None:
+        self._subplot_combo.blockSignals(True)
+        try:
+            self._subplot_combo.clear()
+            for index in range(len(self._subplots)):
+                self._subplot_combo.addItem(str(index + 1), index)
+            self._subplot_combo.addItem("Add New Subplot...", self.ADD_SUBPLOT_DATA)
+            self._subplot_combo.setCurrentIndex(self._active_subplot_index)
+        finally:
+            self._subplot_combo.blockSignals(False)
+        self._delete_subplot_button.setEnabled(len(self._subplots) > 1)
+
+    def _set_active_subplot(self, subplot_index: int) -> None:
+        self._active_subplot_index = subplot_index
+        self._rebuild_subplot_selector()
+        self._apply_subplot_selection_to_tree()
+        self._redraw_plot()
+
+    def _add_subplot(self) -> None:
+        self._sync_active_subplot_selection_from_tree()
+        self._subplots.append(PlotSubplotState())
+        self._set_active_subplot(len(self._subplots) - 1)
+
+    def _delete_current_subplot(self) -> None:
+        if len(self._subplots) <= 1:
+            return
+        del self._subplots[self._active_subplot_index]
+        next_index = min(self._active_subplot_index, len(self._subplots) - 1)
+        self._set_active_subplot(next_index)
+
+    def _on_subplot_changed(self, combo_index: int) -> None:
+        data = self._subplot_combo.itemData(combo_index)
+        if data == self.ADD_SUBPLOT_DATA:
+            self._add_subplot()
+            return
+
+        subplot_index = int(data)
+        if subplot_index == self._active_subplot_index:
+            return
+
+        self._sync_active_subplot_selection_from_tree()
+        self._set_active_subplot(subplot_index)
 
     def _apply_legend_mode(self, ax) -> None:
         if self._plot_settings.legend_mode == "none":
@@ -575,6 +705,9 @@ class EMSolutionPlotDialog(QDialog):
             return "EMSolution Output Plot"
         return "EMSolution Output"
 
+    def _figure_title(self, selected_series: list[PlotSeriesDescriptor]) -> str:
+        return self._plot_settings.title or self._default_title(selected_series)
+
     def _default_x_label(self) -> str:
         return self._selected_x_option().axis_label
 
@@ -593,13 +726,20 @@ class EMSolutionPlotDialog(QDialog):
         return "Value"
 
     def _effective_title(self, selected_series: list[PlotSeriesDescriptor]) -> str:
-        return self._plot_settings.title or self._default_title(selected_series)
+        if not self._plot_settings.show_title:
+            return ""
+        return self._figure_title(selected_series)
 
     def _effective_x_label(self) -> str:
         return self._plot_settings.x_label or self._default_x_label()
 
-    def _effective_y_label(self, selected_series: list[PlotSeriesDescriptor]) -> str:
-        return self._plot_settings.y_label or self._default_y_label(selected_series)
+    def _effective_y_label(
+        self,
+        selected_series: list[PlotSeriesDescriptor],
+        subplot_state: PlotSubplotState | None = None,
+    ) -> str:
+        state = subplot_state or self._current_subplot_state()
+        return state.y_label or self._default_y_label(selected_series)
 
     def _set_warning_message(self, message: str) -> None:
         self._warning_label.setText(message)
@@ -694,9 +834,12 @@ class EMSolutionPlotDialog(QDialog):
             kwargs.append(("color", style.color))
         return kwargs
 
-    def _generate_script_text(self) -> str:
-        selected_series = self._checked_series()
-        x_option = self._selected_x_option()
+    def _plotted_series_for_subplot(
+        self,
+        subplot_state: PlotSubplotState,
+        x_option: PlotAxisOption,
+    ) -> tuple[list[PlotSeriesDescriptor], list[str], list[str], bool]:
+        selected_series = self._checked_series_for_subplot(subplot_state)
         invalid_x = bool(self._plot_settings.x_log_scale and (x_option.values <= 0).any())
         invalid_y_series: list[str] = []
         mismatched_series: list[str] = []
@@ -712,6 +855,16 @@ class EMSolutionPlotDialog(QDialog):
                 invalid_y_series.append(self._display_label_for_descriptor(descriptor))
                 continue
             plotted_series.append(descriptor)
+
+        return plotted_series, mismatched_series, invalid_y_series, invalid_x
+
+    def _generate_script_text(self) -> str:
+        all_selected_series = self._all_checked_series()
+        x_option = self._selected_x_option()
+        subplot_details = [
+            (subplot_state, *self._plotted_series_for_subplot(subplot_state, x_option))
+            for subplot_state in self._subplots
+        ]
 
         imports = [
             "from matplotlib.figure import Figure",
@@ -730,70 +883,93 @@ class EMSolutionPlotDialog(QDialog):
 
         body = [
             "fig = Figure()",
-            "ax = fig.add_subplot(111)",
-            f"ax.set_xscale({('log' if self._plot_settings.x_log_scale else 'linear')!r})",
-            f"ax.set_yscale({('log' if self._plot_settings.y_log_scale else 'linear')!r})",
         ]
 
-        if invalid_x:
-            body.append("# X-axis log scale requires all X values to be greater than zero.")
-        for label in mismatched_series:
-            body.append(f"# Skipped series with incompatible lengths: {label}")
-        for label in invalid_y_series:
-            body.append(f"# Skipped series with non-positive Y values for log scale: {label}")
-
-        for index, descriptor in enumerate(plotted_series, start=1):
-            variable_name = f"y_values_{index}"
-            body.append(f"{variable_name} = {self._script_series_expression(descriptor)}")
-            body.append("ax.plot(")
-            body.append("    x_values,")
-            body.append(f"    {variable_name},")
-            for key, value in self._script_plot_kwargs(descriptor):
-                body.append(f"    {key}={value!r},")
-            body.append(")")
-
-        if plotted_series:
-            if self._plot_settings.legend_mode != "none":
-                body.append(f"ax.legend(loc={self._plot_settings.legend_mode!r})")
-            if len(x_option.values) > 0:
-                if self._plot_settings.x_log_scale:
-                    body.append("positive_x = x_values[x_values > 0]")
-                    body.append("if len(positive_x) > 0:")
-                    body.append("    ax.set_xlim(positive_x[0], positive_x[-1])")
-                else:
-                    body.append("ax.set_xlim(x_values[0], x_values[-1])")
-        else:
-            empty_message = "Select one or more series to preview."
-            if selected_series and (invalid_x or invalid_y_series):
-                empty_message = "No compatible series for the current plot settings."
-            body.extend(
-                [
-                    "ax.text(",
-                    "    0.5,",
-                    "    0.5,",
-                    f"    {empty_message!r},",
-                    "    ha='center',",
-                    "    va='center',",
-                    "    transform=ax.transAxes,",
-                    ")",
-                ]
+        if len(subplot_details) > 1:
+            body.append(
+                f"axes = fig.subplots({len(subplot_details)}, 1, sharex={self._plot_settings.share_x!r}, squeeze=False)"
             )
+            for subplot_index in range(1, len(subplot_details) + 1):
+                body.append(f"ax_{subplot_index} = axes[{subplot_index - 1}][0]")
 
-        grid_mode = self._plot_settings.grid_mode
-        if grid_mode == "off":
-            body.append("ax.grid(False)")
-        elif grid_mode == "major":
-            body.append("ax.grid(True, axis='both', which='major')")
+        for subplot_index, (subplot_state, plotted_series, mismatched_series, invalid_y_series, invalid_x) in enumerate(
+            subplot_details,
+            start=1,
+        ):
+            axis_name = "ax" if len(subplot_details) == 1 else f"ax_{subplot_index}"
+            if len(subplot_details) == 1:
+                body.append("ax = fig.add_subplot(111)")
+            body.append(f"{axis_name}.set_xscale({('log' if self._plot_settings.x_log_scale else 'linear')!r})")
+            body.append(f"{axis_name}.set_yscale({('log' if self._plot_settings.y_log_scale else 'linear')!r})")
+
+            if invalid_x:
+                body.append("# X-axis log scale requires all X values to be greater than zero.")
+            for label in mismatched_series:
+                body.append(f"# Skipped series with incompatible lengths: {label}")
+            for label in invalid_y_series:
+                body.append(f"# Skipped series with non-positive Y values for log scale: {label}")
+
+            for series_index, descriptor in enumerate(plotted_series, start=1):
+                if len(subplot_details) == 1:
+                    variable_name = f"y_values_{series_index}"
+                else:
+                    variable_name = f"y_values_{subplot_index}_{series_index}"
+                body.append(f"{variable_name} = {self._script_series_expression(descriptor)}")
+                body.append(f"{axis_name}.plot(")
+                body.append("    x_values,")
+                body.append(f"    {variable_name},")
+                for key, value in self._script_plot_kwargs(descriptor):
+                    body.append(f"    {key}={value!r},")
+                body.append(")")
+
+            selected_series = self._checked_series_for_subplot(subplot_state)
+            if plotted_series:
+                if self._plot_settings.legend_mode != "none":
+                    body.append(f"{axis_name}.legend(loc={self._plot_settings.legend_mode!r})")
+                if len(x_option.values) > 0:
+                    if self._plot_settings.x_log_scale:
+                        body.append("positive_x = x_values[x_values > 0]")
+                        body.append("if len(positive_x) > 0:")
+                        body.append(f"    {axis_name}.set_xlim(positive_x[0], positive_x[-1])")
+                    else:
+                        body.append(f"{axis_name}.set_xlim(x_values[0], x_values[-1])")
+            else:
+                empty_message = "Select one or more series to preview."
+                if selected_series and (invalid_x or invalid_y_series):
+                    empty_message = "No compatible series for the current plot settings."
+                body.extend(
+                    [
+                        f"{axis_name}.text(",
+                        "    0.5,",
+                        "    0.5,",
+                        f"    {empty_message!r},",
+                        "    ha='center',",
+                        "    va='center',",
+                        f"    transform={axis_name}.transAxes,",
+                        ")",
+                    ]
+                )
+
+            grid_mode = self._plot_settings.grid_mode
+            if grid_mode == "off":
+                body.append(f"{axis_name}.grid(False)")
+            elif grid_mode == "major":
+                body.append(f"{axis_name}.grid(True, axis='both', which='major')")
+            else:
+                body.append(f"{axis_name}.grid(True, axis={grid_mode!r})")
+            body.append(f"{axis_name}.set_ylabel({self._effective_y_label(selected_series, subplot_state)!r})")
+
+        if len(subplot_details) == 1:
+            if self._plot_settings.show_title:
+                body.append(f"ax.set_title({self._effective_title(all_selected_series)!r})")
+            body.append(f"ax.set_xlabel({self._effective_x_label()!r})")
         else:
-            body.append(f"ax.grid(True, axis={grid_mode!r})")
-
-        body.extend(
-            [
-                f"ax.set_title({self._effective_title(selected_series)!r})",
-                f"ax.set_xlabel({self._effective_x_label()!r})",
-                f"ax.set_ylabel({self._effective_y_label(selected_series)!r})",
-            ]
-        )
+            if self._plot_settings.share_x:
+                for subplot_index in range(1, len(subplot_details)):
+                    body.append(f"ax_{subplot_index}.label_outer()")
+            if self._plot_settings.show_title:
+                body.append(f"fig.suptitle({self._effective_title(all_selected_series)!r})")
+            body.append(f"ax_{len(subplot_details)}.set_xlabel({self._effective_x_label()!r})")
 
         if self._plot_settings.style_preset:
             lines.append(f"with mpl_style.context({self._plot_settings.style_preset!r}):")
@@ -801,7 +977,7 @@ class EMSolutionPlotDialog(QDialog):
         else:
             lines.extend(body)
 
-        lines.extend(["", f"gui.add_figure(fig, {self._effective_title(selected_series)!r})"])
+        lines.extend(["", f"gui.add_figure(fig, {self._figure_title(all_selected_series)!r})"])
         return "\n".join(lines)
 
     def _style_button_max_height(self, item: QTreeWidgetItem) -> int:
@@ -840,6 +1016,11 @@ class EMSolutionPlotDialog(QDialog):
 
     def _apply_plot_settings(self, settings: PlotDialogSettings) -> None:
         self._plot_settings = settings
+        self._current_subplot_state().y_label = settings.y_label
+        self._redraw_plot()
+
+    def _apply_active_subplot_y_label(self, y_label: str) -> None:
+        self._current_subplot_state().y_label = y_label
         self._redraw_plot()
 
     def _apply_series_style(self, descriptor: PlotSeriesDescriptor, style: PlotSeriesStyle) -> None:
@@ -851,15 +1032,21 @@ class EMSolutionPlotDialog(QDialog):
         dialog = PlotSettingsDialog(
             self._x_options,
             self._plot_settings,
-            self._default_title(selected_series),
+            self._default_title(self._all_checked_series()),
             self._default_x_label(),
             self._default_y_label(selected_series),
+            subplot_y_label=self._current_subplot_state().y_label,
+            default_subplot_y_label=self._default_y_label(selected_series),
+            has_multiple_subplots=len(self._subplots) > 1,
             parent=self,
         )
         dialog.settingsApplied.connect(self._apply_plot_settings)
         dialog.settingsCanceled.connect(self._apply_plot_settings)
+        dialog.subplotYLabelApplied.connect(self._apply_active_subplot_y_label)
+        dialog.subplotYLabelCanceled.connect(self._apply_active_subplot_y_label)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._apply_plot_settings(dialog.settings())
+            self._apply_active_subplot_y_label(dialog.subplot_y_label())
 
     def _open_style_dialog_for_item(self, item: QTreeWidgetItem) -> None:
         descriptor = self._descriptor_for_item(item)
@@ -878,73 +1065,99 @@ class EMSolutionPlotDialog(QDialog):
     def _on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
         if column != 0:
             return
+        self._sync_active_subplot_selection_from_tree()
         self._refresh_style_button_for_item(item)
         self._redraw_plot()
 
     def _draw_onto(self, figure: Figure) -> None:
-        selected_series = self._checked_series()
+        all_selected_series = self._all_checked_series()
         x_option = self._selected_x_option()
-        plotted_count = 0
-        invalid_y_series: list[str] = []
-        invalid_x = bool(self._plot_settings.x_log_scale and (x_option.values <= 0).any())
+        warning_invalid_y_series: list[str] = []
+        invalid_x = False
 
         with _matplotlib_style_context(self._plot_settings.style_preset):
             figure.clear()
-            ax = figure.add_subplot(111)
-            ax.set_xscale("log" if self._plot_settings.x_log_scale else "linear")
-            ax.set_yscale("log" if self._plot_settings.y_log_scale else "linear")
-
-            for descriptor in selected_series:
-                if len(descriptor.values) != len(x_option.values):
-                    continue
-                if invalid_x:
-                    continue
-                if self._plot_settings.y_log_scale and (descriptor.values <= 0).any():
-                    invalid_y_series.append(self._display_label_for_descriptor(descriptor))
-                    continue
-
-                style = self._style_for_descriptor(descriptor)
-                plot_kwargs = {
-                    "label": self._display_label_for_descriptor(descriptor),
-                    "linestyle": style.line_style,
-                    "linewidth": style.line_width,
-                }
-                if style.marker != "None":
-                    plot_kwargs["marker"] = style.marker
-                if style.color is not None:
-                    plot_kwargs["color"] = style.color
-                ax.plot(x_option.values, descriptor.values, **plot_kwargs)
-                plotted_count += 1
-
-            if plotted_count == 0:
-                empty_message = "Select one or more series to preview."
-                if selected_series and (invalid_x or invalid_y_series):
-                    empty_message = "No compatible series for the current plot settings."
-                ax.text(
-                    0.5,
-                    0.5,
-                    empty_message,
-                    ha="center",
-                    va="center",
-                    transform=ax.transAxes,
-                )
+            if len(self._subplots) == 1:
+                axes = [figure.add_subplot(111)]
             else:
-                self._apply_legend_mode(ax)
-                if len(x_option.values) > 0:
-                    if self._plot_settings.x_log_scale:
-                        positive_x = x_option.values[x_option.values > 0]
-                        if len(positive_x) > 0:
-                            ax.set_xlim(positive_x[0], positive_x[-1])
-                    else:
-                        ax.set_xlim(x_option.values[0], x_option.values[-1])
+                axes_array = figure.subplots(
+                    len(self._subplots),
+                    1,
+                    sharex=self._plot_settings.share_x,
+                    squeeze=False,
+                )
+                axes = [axes_array[index][0] for index in range(len(self._subplots))]
 
-            self._apply_grid_mode(ax)
-            ax.set_title(self._effective_title(selected_series))
-            ax.set_xlabel(self._effective_x_label())
-            ax.set_ylabel(self._effective_y_label(selected_series))
-            figure.tight_layout()
+            for axis, subplot_state in zip(axes, self._subplots):
+                selected_series = self._checked_series_for_subplot(subplot_state)
+                plotted_series, _, invalid_y_series, subplot_invalid_x = self._plotted_series_for_subplot(
+                    subplot_state,
+                    x_option,
+                )
+                plotted_count = 0
+                invalid_x = invalid_x or subplot_invalid_x
+                warning_invalid_y_series.extend(invalid_y_series)
 
-        self._set_warning_message(self._log_scale_warning_message(invalid_y_series, invalid_x))
+                axis.set_xscale("log" if self._plot_settings.x_log_scale else "linear")
+                axis.set_yscale("log" if self._plot_settings.y_log_scale else "linear")
+
+                for descriptor in plotted_series:
+                    style = self._style_for_descriptor(descriptor)
+                    plot_kwargs = {
+                        "label": self._display_label_for_descriptor(descriptor),
+                        "linestyle": style.line_style,
+                        "linewidth": style.line_width,
+                    }
+                    if style.marker != "None":
+                        plot_kwargs["marker"] = style.marker
+                    if style.color is not None:
+                        plot_kwargs["color"] = style.color
+                    axis.plot(x_option.values, descriptor.values, **plot_kwargs)
+                    plotted_count += 1
+
+                if plotted_count == 0:
+                    empty_message = "Select one or more series to preview."
+                    if selected_series and (subplot_invalid_x or invalid_y_series):
+                        empty_message = "No compatible series for the current plot settings."
+                    axis.text(
+                        0.5,
+                        0.5,
+                        empty_message,
+                        ha="center",
+                        va="center",
+                        transform=axis.transAxes,
+                    )
+                else:
+                    self._apply_legend_mode(axis)
+                    if len(x_option.values) > 0:
+                        if self._plot_settings.x_log_scale:
+                            positive_x = x_option.values[x_option.values > 0]
+                            if len(positive_x) > 0:
+                                axis.set_xlim(positive_x[0], positive_x[-1])
+                        else:
+                            axis.set_xlim(x_option.values[0], x_option.values[-1])
+
+                self._apply_grid_mode(axis)
+                axis.set_ylabel(self._effective_y_label(selected_series, subplot_state))
+
+            if len(axes) == 1:
+                if self._plot_settings.show_title:
+                    axes[0].set_title(self._effective_title(all_selected_series))
+                axes[0].set_xlabel(self._effective_x_label())
+            else:
+                if self._plot_settings.share_x:
+                    for axis in axes[:-1]:
+                        axis.label_outer()
+                if self._plot_settings.show_title:
+                    figure.suptitle(self._effective_title(all_selected_series))
+                axes[-1].set_xlabel(self._effective_x_label())
+
+            if len(axes) > 1 and self._plot_settings.show_title and self._effective_title(all_selected_series):
+                figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
+            else:
+                figure.tight_layout()
+
+        self._set_warning_message(self._log_scale_warning_message(warning_invalid_y_series, invalid_x))
 
     def _redraw_plot(self) -> None:
         self._draw_onto(self._preview.figure)
@@ -955,6 +1168,6 @@ class EMSolutionPlotDialog(QDialog):
 
         figure = Figure()
         self._draw_onto(figure)
-        title = self._effective_title(self._checked_series())
+        title = self._figure_title(self._all_checked_series())
         gui.add_figure(figure, title)
         self.accept()
