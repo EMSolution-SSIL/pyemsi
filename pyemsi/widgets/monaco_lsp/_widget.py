@@ -263,14 +263,18 @@ def build_symbol_breadcrumb_items(
     siblings: list[dict[str, Any]] = symbols
     for index, symbol in enumerate(trail):
         level_siblings = [candidate for candidate in siblings if isinstance(candidate, dict)]
+        children = symbol.get("children")
+        level_children = (
+            [candidate for candidate in children if isinstance(candidate, dict)] if isinstance(children, list) else []
+        )
         items.append(
             {
                 "symbol": symbol,
                 "siblings": level_siblings,
+                "children": level_children,
                 "isLeaf": index == len(trail) - 1,
             }
         )
-        children = symbol.get("children")
         siblings = children if isinstance(children, list) else []
     return items
 
@@ -382,8 +386,8 @@ _HTML = r"""<!DOCTYPE html>
     }
     .breadcrumb-separator {
         color: var(--breadcrumb-muted);
-        font-size: 11px;
-        padding: 0 2px;
+        font-size: 14px;
+        padding: 0;
         user-select: none;
     }
     #breadcrumb-menu {
@@ -935,9 +939,11 @@ _HTML = r"""<!DOCTYPE html>
         let siblings = Array.isArray(symbols) ? symbols : [];
         trail.forEach((symbol, index) => {
             const levelSiblings = siblings.filter(Boolean);
+            const levelChildren = Array.isArray(symbol.children) ? symbol.children.filter(Boolean) : [];
             items.push({
                 symbol,
                 siblings: levelSiblings,
+                children: levelChildren,
                 isLeaf: index === trail.length - 1,
             });
             siblings = Array.isArray(symbol.children) ? symbol.children : [];
@@ -1446,6 +1452,10 @@ _HTML = r"""<!DOCTYPE html>
 
     function getActiveDocumentUri() {
         if (_activeDocumentUri) return _activeDocumentUri;
+        if (editor) {
+            const model = editor.getModel();
+            if (model && model.uri) return model.uri.toString();
+        }
         if (lspClient && lspClient._fileUri) return lspClient._fileUri;
         return '';
     }
@@ -1542,6 +1552,24 @@ _HTML = r"""<!DOCTYPE html>
         renderBreadcrumbStrip(_breadcrumbTrail);
     }
 
+    function getBreadcrumbMenuSymbols(entry) {
+        if (!entry || entry.isFile) {
+            return [];
+        }
+        if (entry.isChildMenu) {
+            return Array.isArray(entry.menuSymbols) ? entry.menuSymbols : [];
+        }
+        return Array.isArray(entry.siblings) ? entry.siblings : [];
+    }
+
+    function breadcrumbEntryHasMenu(entry) {
+        const menuSymbols = getBreadcrumbMenuSymbols(entry);
+        if (entry && entry.isChildMenu) {
+            return menuSymbols.length > 0;
+        }
+        return menuSymbols.length > 1;
+    }
+
     function toggleBreadcrumbMenu(index, anchorEl) {
         if (!anchorEl) return;
         if (_openBreadcrumbMenuState && _openBreadcrumbMenuState.index === index) {
@@ -1566,7 +1594,8 @@ _HTML = r"""<!DOCTYPE html>
         }
 
         const entry = trail[_openBreadcrumbMenuState.index];
-        if (!entry || entry.isFile || !Array.isArray(entry.siblings) || entry.siblings.length <= 1) {
+        const menuSymbols = getBreadcrumbMenuSymbols(entry);
+        if (!entry || entry.isFile || menuSymbols.length === 0 || (!entry.isChildMenu && menuSymbols.length <= 1)) {
             _openBreadcrumbMenuState = null;
             hideBreadcrumbMenu();
             return;
@@ -1575,34 +1604,34 @@ _HTML = r"""<!DOCTYPE html>
         const surface = document.createElement('div');
         surface.className = 'breadcrumb-menu-surface';
 
-        entry.siblings.forEach((sibling) => {
+        menuSymbols.forEach((menuSymbol) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'breadcrumb-menu-item';
-            if (sibling === entry.symbol) {
+            if (!entry.isChildMenu && menuSymbol === entry.symbol) {
                 button.classList.add('active');
             }
 
             const name = document.createElement('span');
             name.className = 'breadcrumb-menu-item-name';
-            name.textContent = sibling.name || '(symbol)';
+            name.textContent = menuSymbol.name || '(symbol)';
             button.appendChild(name);
 
-            if (sibling.detail || sibling === entry.symbol) {
+            if (menuSymbol.detail || (!entry.isChildMenu && menuSymbol === entry.symbol)) {
                 const meta = document.createElement('span');
                 meta.className = 'breadcrumb-menu-item-meta';
 
-                if (sibling === entry.symbol) {
+                if (!entry.isChildMenu && menuSymbol === entry.symbol) {
                     const badge = document.createElement('span');
                     badge.className = 'breadcrumb-menu-item-badge';
                     badge.textContent = 'Current';
                     meta.appendChild(badge);
                 }
 
-                if (sibling.detail) {
-                const detail = document.createElement('span');
-                detail.className = 'breadcrumb-menu-item-detail';
-                detail.textContent = sibling.detail;
+                if (menuSymbol.detail) {
+                    const detail = document.createElement('span');
+                    detail.className = 'breadcrumb-menu-item-detail';
+                    detail.textContent = menuSymbol.detail;
                     meta.appendChild(detail);
                 }
 
@@ -1613,7 +1642,7 @@ _HTML = r"""<!DOCTYPE html>
                 event.preventDefault();
                 event.stopPropagation();
                 _openBreadcrumbMenuState = null;
-                navigateToSymbol(sibling);
+                navigateToSymbol(menuSymbol);
                 updateBreadcrumbsForActivePosition();
             });
             surface.appendChild(button);
@@ -1661,14 +1690,24 @@ _HTML = r"""<!DOCTYPE html>
                 const labelButton = document.createElement('button');
                 labelButton.type = 'button';
                 labelButton.className = 'breadcrumb-segment';
-                labelButton.title = entry.detail ? `${entry.name} - ${entry.detail}` : (entry.name || 'Symbol');
-                labelButton.setAttribute('aria-haspopup', Array.isArray(entry.siblings) && entry.siblings.length > 1 ? 'menu' : 'false');
+                const hasMenu = breadcrumbEntryHasMenu(entry);
+                if (entry.isChildMenu) {
+                    const parentName = entry.parentName || 'symbol';
+                    labelButton.title = `Show child symbols of ${parentName}`;
+                    labelButton.setAttribute('aria-label', `Show child symbols of ${parentName}`);
+                } else {
+                    labelButton.title = entry.detail ? `${entry.name} - ${entry.detail}` : (entry.name || 'Symbol');
+                }
+                labelButton.setAttribute('aria-haspopup', hasMenu ? 'menu' : 'false');
                 labelButton.setAttribute('aria-expanded', _openBreadcrumbMenuState && _openBreadcrumbMenuState.index === index ? 'true' : 'false');
                 labelButton.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (Array.isArray(entry.siblings) && entry.siblings.length > 1) {
+                    if (hasMenu) {
                         toggleBreadcrumbMenu(index, labelButton);
+                        return;
+                    }
+                    if (entry.isChildMenu) {
                         return;
                     }
                     navigateToSymbol(entry.symbol);
@@ -1688,7 +1727,7 @@ _HTML = r"""<!DOCTYPE html>
             if (index < trail.length - 1) {
                 const separator = document.createElement('span');
                 separator.className = 'breadcrumb-separator';
-                separator.textContent = '›';
+                separator.textContent = '>';
                 breadcrumbsEl.appendChild(separator);
             }
         });
@@ -1717,14 +1756,43 @@ _HTML = r"""<!DOCTYPE html>
             return trail;
         }
 
-        return trail.concat(buildSymbolBreadcrumbItems(position, _documentSymbols).map((item) => ({
+        const symbolTrail = buildSymbolBreadcrumbItems(position, _documentSymbols).map((item) => ({
             name: item.symbol.name || '',
             detail: item.symbol.detail || '',
             isFile: false,
             symbol: item.symbol,
             siblings: item.siblings,
+            children: item.children,
             isLeaf: item.isLeaf,
-        })));
+        }));
+
+        if (symbolTrail.length === 0 && Array.isArray(_documentSymbols) && _documentSymbols.length > 0) {
+            symbolTrail.push({
+                name: '...',
+                detail: '',
+                isFile: false,
+                isChildMenu: true,
+                parentName: fileBreadcrumb ? (fileBreadcrumb.name || 'file') : 'file',
+                symbol: null,
+                menuSymbols: _documentSymbols,
+            });
+        } else if (symbolTrail.length > 0) {
+            const currentEntry = symbolTrail[symbolTrail.length - 1];
+            const childSymbols = Array.isArray(currentEntry.children) ? currentEntry.children : [];
+            if (childSymbols.length > 0) {
+                symbolTrail.push({
+                    name: '...',
+                    detail: '',
+                    isFile: false,
+                    isChildMenu: true,
+                    parentName: currentEntry.name || 'symbol',
+                    symbol: currentEntry.symbol,
+                    menuSymbols: childSymbols,
+                });
+            }
+        }
+
+        return trail.concat(symbolTrail);
     }
 
     function updateBreadcrumbsForActivePosition() {
@@ -1750,8 +1818,8 @@ _HTML = r"""<!DOCTYPE html>
             return [];
         }
 
-        const modelUri = model.uri ? model.uri.toString() : lspClient._fileUri;
-        if (normalizeUriKey(modelUri) !== normalizeUriKey(lspClient._fileUri)) {
+        const activeUri = getActiveDocumentUri() || (model.uri ? model.uri.toString() : lspClient._fileUri);
+        if (normalizeUriKey(activeUri) !== normalizeUriKey(lspClient._fileUri)) {
             return [];
         }
 
@@ -2209,6 +2277,8 @@ class MonacoLspWidget(QWebEngineView):
 
         self._bridge.initialized.connect(self.initialized)
         self._bridge.valueChanged.connect(self._on_value_changed)
+        self._bridge.setLanguage(language)
+        self._bridge.send_to_js("language", language)
 
     def _resolve_python_server_command(self) -> tuple[list[str], str]:
         basedpyright_executable = resolve_basedpyright_executable(python_executable=sys.executable)

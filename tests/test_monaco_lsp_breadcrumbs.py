@@ -232,6 +232,8 @@ def test_build_symbol_breadcrumb_items_includes_siblings_for_each_level():
     assert [item["symbol"]["name"] for item in items] == ["Alpha", "second_method"]
     assert [symbol["name"] for symbol in items[0]["siblings"]] == ["Alpha", "Beta"]
     assert [symbol["name"] for symbol in items[1]["siblings"]] == ["first_method", "second_method"]
+    assert [symbol["name"] for symbol in items[0]["children"]] == ["first_method", "second_method"]
+    assert items[1]["children"] == []
     assert items[0]["isLeaf"] is False
     assert items[1]["isLeaf"] is True
 
@@ -336,8 +338,74 @@ def test_build_symbol_breadcrumb_items_tracks_json_array_indexes():
     items = build_symbol_breadcrumb_items(symbols, {"lineNumber": 3, "column": 8})
 
     assert [item["symbol"]["name"] for item in items] == ["items", "[0]", "name"]
+    assert [symbol["name"] for symbol in items[0]["children"]] == ["[0]", "[1]"]
+    assert [symbol["name"] for symbol in items[1]["children"]] == ["name"]
     assert [symbol["name"] for symbol in items[1]["siblings"]] == ["[0]", "[1]"]
+    assert items[2]["children"] == []
     assert items[2]["isLeaf"] is True
+
+
+def test_build_symbol_breadcrumb_items_exposes_children_for_active_non_leaf_symbol():
+    symbols = [
+        {
+            "name": "Example",
+            "detail": "class",
+            "range": {
+                "startLineNumber": 1,
+                "startColumn": 1,
+                "endLineNumber": 12,
+                "endColumn": 1,
+            },
+            "selectionRange": {
+                "startLineNumber": 1,
+                "startColumn": 7,
+                "endLineNumber": 1,
+                "endColumn": 14,
+            },
+            "children": [
+                {
+                    "name": "method_a",
+                    "detail": "method",
+                    "range": {
+                        "startLineNumber": 3,
+                        "startColumn": 5,
+                        "endLineNumber": 4,
+                        "endColumn": 20,
+                    },
+                    "selectionRange": {
+                        "startLineNumber": 3,
+                        "startColumn": 9,
+                        "endLineNumber": 3,
+                        "endColumn": 17,
+                    },
+                    "children": [],
+                },
+                {
+                    "name": "method_b",
+                    "detail": "method",
+                    "range": {
+                        "startLineNumber": 6,
+                        "startColumn": 5,
+                        "endLineNumber": 7,
+                        "endColumn": 20,
+                    },
+                    "selectionRange": {
+                        "startLineNumber": 6,
+                        "startColumn": 9,
+                        "endLineNumber": 6,
+                        "endColumn": 17,
+                    },
+                    "children": [],
+                },
+            ],
+        }
+    ]
+
+    items = build_symbol_breadcrumb_items(symbols, {"lineNumber": 2, "column": 1})
+
+    assert [item["symbol"]["name"] for item in items] == ["Example"]
+    assert [symbol["name"] for symbol in items[0]["children"]] == ["method_a", "method_b"]
+    assert items[0]["isLeaf"] is True
 
 
 def test_normalize_lsp_document_symbols_fails_open_for_empty_or_unsupported_payloads():
