@@ -6,7 +6,6 @@ FEMAP files contain blocks identified by IDs, and blocks can appear in any order
 """
 
 from typing import Dict, List, Tuple, Optional
-import re
 
 
 class FEMAPBlock:
@@ -322,16 +321,46 @@ class FEMAPParser:
 
         return output_sets
 
+    @staticmethod
+    def _locate_output_vector_header(lines: List[str], start_index: int) -> Tuple[Optional[int], int]:
+        """Locate the metadata line that precedes output vector result records."""
+        search_index = start_index + 3
+
+        while search_index + 1 < len(lines):
+            header_parts = FEMAPParser.parse_csv_line(lines[search_index])
+            flag_parts = FEMAPParser.parse_csv_line(lines[search_index + 1])
+
+            if len(header_parts) == 4 and len(flag_parts) == 3:
+                try:
+                    int(header_parts[0])
+                    int(header_parts[1])
+                    int(header_parts[2])
+                    ent_type = int(header_parts[3])
+                    int(flag_parts[0])
+                    int(flag_parts[1])
+                    int(flag_parts[2])
+                    return ent_type, search_index + 2
+                except ValueError:
+                    pass
+
+            search_index += 1
+
+        return None, len(lines)
+
+    def _get_output_vector_blocks(self) -> List[FEMAPBlock]:
+        """Return all output vector blocks supported by the parser."""
+        return self.get_blocks(1051) + self.get_blocks(451)
+
     def get_output_vectors(self) -> List[Dict[str, any]]:
         """
-        Extract all output data vectors from Block 1051.
+        Extract all output data vectors from Blocks 1051 and 451.
 
         Returns:
             List of output vector dictionaries with metadata and results
         """
         output_vectors = []
 
-        for block in self.get_blocks(1051):
+        for block in self._get_output_vector_blocks():
             i = 0
             while i < len(block.lines):
                 # Line 1: setID, vecID, flag
@@ -348,15 +377,7 @@ class FEMAPParser:
                             if title == "<NULL>":
                                 title = ""
 
-                        # Line 6: id_min, id_max, out_type, ent_type
-                        ent_type = None
-                        if i + 5 < len(block.lines):
-                            line6_parts = self.parse_csv_line(block.lines[i + 5])
-                            if len(line6_parts) >= 4:
-                                ent_type = int(line6_parts[3])  # 7=nodal, 8=elemental
-
-                        # Skip header lines (7 lines)
-                        i += 7
+                        ent_type, i = self._locate_output_vector_header(block.lines, i)
 
                         # Read result records until we hit -1,0. end marker
                         results = {}

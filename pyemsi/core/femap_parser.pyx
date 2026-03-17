@@ -478,9 +478,41 @@ cdef class FEMAPParser:
 
         return output_sets
 
+    @staticmethod
+    cdef tuple _locate_output_vector_header(list lines, int start_index):
+        """Locate the metadata line that precedes output vector result records."""
+        cdef int search_index = start_index + 3
+        cdef int ent_type_val
+        cdef list header_parts, flag_parts
+
+        while search_index + 1 < len(lines):
+            header_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index])
+            flag_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index + 1])
+
+            if len(header_parts) == 4 and len(flag_parts) == 3:
+                try:
+                    int(header_parts[0])
+                    int(header_parts[1])
+                    int(header_parts[2])
+                    ent_type_val = int(header_parts[3])
+                    int(flag_parts[0])
+                    int(flag_parts[1])
+                    int(flag_parts[2])
+                    return ent_type_val, True, search_index + 2
+                except ValueError:
+                    pass
+
+            search_index += 1
+
+        return -1, False, len(lines)
+
+    cdef list _get_output_vector_blocks(self):
+        """Return all output vector blocks supported by the parser."""
+        return self.get_blocks(1051) + self.get_blocks(451)
+
     cpdef list get_output_vectors(self):
         """
-        Extract all output data vectors from Block 1051.
+        Extract all output data vectors from Blocks 1051 and 451.
 
         Returns:
             List of output vector dictionaries with metadata and results
@@ -495,8 +527,9 @@ cdef class FEMAPParser:
         cdef double value
         cdef dict results
         cdef bint has_ent_type
+        cdef int result_start_index
 
-        all_blocks = self.get_blocks(1051)
+        all_blocks = self._get_output_vector_blocks()
         for block in all_blocks:
             i = 0
             n_lines = len(block.lines)
@@ -513,15 +546,10 @@ cdef class FEMAPParser:
                             if title == "<NULL>":
                                 title = ""
 
-                        ent_type_val = -1
-                        has_ent_type = False
-                        if i + 5 < n_lines:
-                            line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
-                            if len(line6_parts) >= 4:
-                                ent_type_val = int(line6_parts[3])
-                                has_ent_type = True
-
-                        i += 7
+                        ent_type_val, has_ent_type, result_start_index = (
+                            FEMAPParser._locate_output_vector_header(block.lines, i)
+                        )
+                        i = result_start_index
 
                         results = {}
                         while i < n_lines:
@@ -596,8 +624,9 @@ cdef class FEMAPParser:
         cdef int n_lines, offset, ent_type_val
         cdef double value
         cdef bint has_ent_type
+        cdef int result_start_index
 
-        all_blocks = self.get_blocks(1051)
+        all_blocks = self._get_output_vector_blocks()
         for block in all_blocks:
             i = 0
             n_lines = len(block.lines)
@@ -608,9 +637,13 @@ cdef class FEMAPParser:
                         set_id = int(parts[0])
                         vec_id = int(parts[1])
 
+                        ent_type_val, has_ent_type, result_start_index = (
+                            FEMAPParser._locate_output_vector_header(block.lines, i)
+                        )
+
                         # Check filters
                         if set_id_filter >= 0 and set_id != set_id_filter:
-                            i += 7
+                            i = result_start_index
                             # Skip to end marker
                             while i < n_lines:
                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
@@ -622,7 +655,7 @@ cdef class FEMAPParser:
                             continue
                             
                         if vec_id_filter >= 0 and vec_id != vec_id_filter:
-                            i += 7
+                            i = result_start_index
                             while i < n_lines:
                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
                                 i += 1
@@ -632,15 +665,7 @@ cdef class FEMAPParser:
                                     break
                             continue
 
-                        ent_type_val = -1
-                        has_ent_type = False
-                        if i + 5 < n_lines:
-                            line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
-                            if len(line6_parts) >= 4:
-                                ent_type_val = int(line6_parts[3])
-                                has_ent_type = True
-
-                        i += 7
+                        i = result_start_index
 
                         entity_ids_list = []
                         values_list = []

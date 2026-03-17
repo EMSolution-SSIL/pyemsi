@@ -270,6 +270,65 @@ value,
    -1
 ```
 
+## **Data Block 451 – Output Data Vectors (obsolete / simplified)**
+
+| **Line** | **Field** | **Description** | **Size** |
+| ---------- | --------- | --------------- | -------- |
+| **1** | setID    | ID of output set     | 4 byte, long integers    |
+|       | vecID    | ID of output vector, must be unique in each output set | 4 byte, long integers    |
+|       | 1        | always 1    | 2 byte, boolean |
+| **2** | title    | Output Vector title (max 79 characters) | character string |
+| **3** | min_val  | Minimum value in vector. If `max_val < min_val`, FEMAP searches the output for min, max and abs_max values. | 8 byte, double precision |
+|       | max_val  | Maximum value in vector | 8 byte, double precision |
+|       | abs_max  | Maximum absolute value in vector | 8 byte, double precision |
+| **4** | comp[0..1] | Component vectors. This simplified block only stores 2 component entries instead of the 20 entries used by Block 1051. | 4 byte, long integers |
+| **5** | id_min   | ID of entity where minimum value occurs. `0` if FEMAP recalculates min/max. | 4 byte, long integers |
+|       | id_max   | ID of entity where maximum value occurs. `0` if FEMAP recalculates min/max. | 4 byte, long integers |
+|       | out_type | Type of output (`0`=Any, `1`=Disp, `2`=Accel, `3`=Force, `4`=Stress, `5`=Strain, `6`=Temp, others=User) |  |
+|       | ent_type | Either nodal (`7`) or elemental (`8`) output |  |
+| **6** | calc_warn | If `1`, cannot linearly combine this output | 2 byte, boolean |
+|       | comp_dir | If `1`, `comp[0..1]` are component IDs / directions | 4 byte, long integers |
+|       | cent_total | If `1`, this vector is centroidal or nodal output | 2 byte, boolean |
+
+### **Result Records**
+
+Block 451 uses the same result record formats and the same `-1,0.,` terminator pattern as Block 1051.
+
+Repeated records exist for all result values in one of two formats, depending on entity numbering in the model.
+When reading the file, FEMAP reads a record and if there are only two fields, it assumes **Format 1**;
+if there are more fields, then it must be **Format 2**.
+
+#### **Format 1**
+
+| **Field** | **Description**| **Size** |
+| --------- | ----------------------------------------- | ------------------------ |
+| entityID  | ID of the single node/element for results | 4 byte, long integers    |
+| value     | Result value   | 8 byte, double precision |
+
+#### **Format 2**
+
+| **Field** | **Description** | **Size** |
+| --------- | --------------- | -------- |
+| start_entityID | First ID       | 4 byte, long integers |
+| end_entityID   | Final ID       | 4 byte, long integers |
+| values[0..n]   | Values for each entity from start_entityID to end_entityID. Results for all IDs in this range are included (no holes). Values are written so there are a total of 10 fields on each line — first line has 2 IDs and up to 8 values; remaining lines have up to 10 values (last line may have fewer). |  |
+
+template:
+```
+   -1
+   451
+setID,vecID,1,
+title,
+min_val,max_val,abs_max,
+comp0,comp1,
+id_min,id_max,out_type,ent_type,
+calc_warn,comp_dir,cent_total,
+<result records in Format 1 or Format 2>
+-1,0.,
+...
+   -1
+```
+
 # **Data Block 1051 – Output Data Vectors**
 
 | **Line** | **Field** | **Description** | **Size** |
@@ -283,13 +342,13 @@ value,
 |       | abs_max  | always 0. | 8 byte, double precision |
 | **4** | comp[0..9] | always 0,0,0,0,0,0,0,0,0,0, | 4 byte, long integers    |
 | **5** | comp[10..19] | always 0,0,0,0,0,0,0,0,0,0, | 4 byte, long integers    |
-| **6** | id_min   | always 0 | 4 byte, long integers    |
-|       | id_max   | always 0 | 4 byte, long integers    |
-|       | out_type | always 3 |        |
-|       | ent_type | Either nodal (7) or elemental (8) output |        |
-| **7** | calc_warn| always 0 | 2 byte, boolean |
-|       | comp_dir | always 1 | 4 byte, long integers |
-|       | cent_total | always 1 | 2 byte, boolean |
+| **6** | id_min   | ID of entity where minimum value occurs. `0` if FEMAP recalculates min/max. | 4 byte, long integers    |
+|       | id_max   | ID of entity where maximum value occurs. `0` if FEMAP recalculates min/max. | 4 byte, long integers    |
+|       | out_type | Type of output (`0`=Any, `1`=Disp, `2`=Accel, `3`=Force, `4`=Stress, `5`=Strain, `6`=Temp, others=User) |        |
+|       | ent_type | Either nodal (`7`) or elemental (`8`) output |        |
+| **7** | calc_warn| If `1`, cannot linearly combine this output | 2 byte, boolean |
+|       | comp_dir | If `1`, `comp[0..2]` are the X,Y,Z component values. If `2`, data at end of Beams. If `3`, reverse data at second end of beam. | 4 byte, long integers |
+|       | cent_total | If `1`, this vector is centroidal or nodal output | 2 byte, boolean |
 
 
 ### **Result Records**

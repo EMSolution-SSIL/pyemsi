@@ -10,14 +10,14 @@
             ]
         ],
         "depends": [
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-w_h30lu4\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayobject.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-w_h30lu4\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayscalars.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-w_h30lu4\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarrayobject.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-w_h30lu4\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarraytypes.h",
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-w_h30lu4\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ufuncobject.h"
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayobject.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\arrayscalars.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarrayobject.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ndarraytypes.h",
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include\\numpy\\ufuncobject.h"
         ],
         "include_dirs": [
-            "C:\\Users\\eskan\\AppData\\Local\\Temp\\build-env-w_h30lu4\\Lib\\site-packages\\numpy\\_core\\include"
+            "C:\\Users\\eskan\\OneDrive\\Documents\\Github\\pyemsi\\.venv311\\Lib\\site-packages\\numpy\\_core\\include"
         ],
         "name": "pyemsi.core.femap_parser",
         "sources": [
@@ -1394,10 +1394,10 @@ static const char *__pyx_filename;
 
 static const char* const __pyx_f[] = {
   "pyemsi/core/femap_parser.pyx",
-  "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd",
+  ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd",
   "pyemsi/core/femap_parser.pxd",
   "<stringsource>",
-  "cpython/type.pxd",
+  ".venv311/Lib/site-packages/Cython/Includes/cpython/type.pxd",
 };
 /* #### Code section: utility_code_proto_before_types ### */
 /* Atomics.proto (used by UnpackUnboundCMethod) */
@@ -1606,7 +1606,7 @@ typedef struct {
 
 /* #### Code section: numeric_typedefs ### */
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":744
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":744
  * # in Cython to enable them only on the right systems.
  * 
  * ctypedef npy_int8       int8_t             # <<<<<<<<<<<<<<
@@ -1615,7 +1615,7 @@ typedef struct {
 */
 typedef npy_int8 __pyx_t_5numpy_int8_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":745
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":745
  * 
  * ctypedef npy_int8       int8_t
  * ctypedef npy_int16      int16_t             # <<<<<<<<<<<<<<
@@ -1624,7 +1624,7 @@ typedef npy_int8 __pyx_t_5numpy_int8_t;
 */
 typedef npy_int16 __pyx_t_5numpy_int16_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":746
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":746
  * ctypedef npy_int8       int8_t
  * ctypedef npy_int16      int16_t
  * ctypedef npy_int32      int32_t             # <<<<<<<<<<<<<<
@@ -1633,7 +1633,7 @@ typedef npy_int16 __pyx_t_5numpy_int16_t;
 */
 typedef npy_int32 __pyx_t_5numpy_int32_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":747
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":747
  * ctypedef npy_int16      int16_t
  * ctypedef npy_int32      int32_t
  * ctypedef npy_int64      int64_t             # <<<<<<<<<<<<<<
@@ -1642,7 +1642,7 @@ typedef npy_int32 __pyx_t_5numpy_int32_t;
 */
 typedef npy_int64 __pyx_t_5numpy_int64_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":749
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":749
  * ctypedef npy_int64      int64_t
  * 
  * ctypedef npy_uint8      uint8_t             # <<<<<<<<<<<<<<
@@ -1651,7 +1651,7 @@ typedef npy_int64 __pyx_t_5numpy_int64_t;
 */
 typedef npy_uint8 __pyx_t_5numpy_uint8_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":750
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":750
  * 
  * ctypedef npy_uint8      uint8_t
  * ctypedef npy_uint16     uint16_t             # <<<<<<<<<<<<<<
@@ -1660,7 +1660,7 @@ typedef npy_uint8 __pyx_t_5numpy_uint8_t;
 */
 typedef npy_uint16 __pyx_t_5numpy_uint16_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":751
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":751
  * ctypedef npy_uint8      uint8_t
  * ctypedef npy_uint16     uint16_t
  * ctypedef npy_uint32     uint32_t             # <<<<<<<<<<<<<<
@@ -1669,7 +1669,7 @@ typedef npy_uint16 __pyx_t_5numpy_uint16_t;
 */
 typedef npy_uint32 __pyx_t_5numpy_uint32_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":752
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":752
  * ctypedef npy_uint16     uint16_t
  * ctypedef npy_uint32     uint32_t
  * ctypedef npy_uint64     uint64_t             # <<<<<<<<<<<<<<
@@ -1678,7 +1678,7 @@ typedef npy_uint32 __pyx_t_5numpy_uint32_t;
 */
 typedef npy_uint64 __pyx_t_5numpy_uint64_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":754
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":754
  * ctypedef npy_uint64     uint64_t
  * 
  * ctypedef npy_float32    float32_t             # <<<<<<<<<<<<<<
@@ -1687,7 +1687,7 @@ typedef npy_uint64 __pyx_t_5numpy_uint64_t;
 */
 typedef npy_float32 __pyx_t_5numpy_float32_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":755
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":755
  * 
  * ctypedef npy_float32    float32_t
  * ctypedef npy_float64    float64_t             # <<<<<<<<<<<<<<
@@ -1696,7 +1696,7 @@ typedef npy_float32 __pyx_t_5numpy_float32_t;
 */
 typedef npy_float64 __pyx_t_5numpy_float64_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":762
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":762
  * ctypedef double complex complex128_t
  * 
  * ctypedef npy_longlong   longlong_t             # <<<<<<<<<<<<<<
@@ -1705,7 +1705,7 @@ typedef npy_float64 __pyx_t_5numpy_float64_t;
 */
 typedef npy_longlong __pyx_t_5numpy_longlong_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":763
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":763
  * 
  * ctypedef npy_longlong   longlong_t
  * ctypedef npy_ulonglong  ulonglong_t             # <<<<<<<<<<<<<<
@@ -1714,7 +1714,7 @@ typedef npy_longlong __pyx_t_5numpy_longlong_t;
 */
 typedef npy_ulonglong __pyx_t_5numpy_ulonglong_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":765
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":765
  * ctypedef npy_ulonglong  ulonglong_t
  * 
  * ctypedef npy_intp       intp_t             # <<<<<<<<<<<<<<
@@ -1723,7 +1723,7 @@ typedef npy_ulonglong __pyx_t_5numpy_ulonglong_t;
 */
 typedef npy_intp __pyx_t_5numpy_intp_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":766
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":766
  * 
  * ctypedef npy_intp       intp_t
  * ctypedef npy_uintp      uintp_t             # <<<<<<<<<<<<<<
@@ -1732,7 +1732,7 @@ typedef npy_intp __pyx_t_5numpy_intp_t;
 */
 typedef npy_uintp __pyx_t_5numpy_uintp_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":768
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":768
  * ctypedef npy_uintp      uintp_t
  * 
  * ctypedef npy_double     float_t             # <<<<<<<<<<<<<<
@@ -1741,7 +1741,7 @@ typedef npy_uintp __pyx_t_5numpy_uintp_t;
 */
 typedef npy_double __pyx_t_5numpy_float_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":769
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":769
  * 
  * ctypedef npy_double     float_t
  * ctypedef npy_double     double_t             # <<<<<<<<<<<<<<
@@ -1750,7 +1750,7 @@ typedef npy_double __pyx_t_5numpy_float_t;
 */
 typedef npy_double __pyx_t_5numpy_double_t;
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":770
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":770
  * ctypedef npy_double     float_t
  * ctypedef npy_double     double_t
  * ctypedef npy_longdouble longdouble_t             # <<<<<<<<<<<<<<
@@ -1803,7 +1803,7 @@ struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser;
 struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes;
 struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays;
 
-/* "pyemsi/core/femap_parser.pxd":30
+/* "pyemsi/core/femap_parser.pxd":33
  *     cpdef list get_blocks(self, int block_id)
  *     cpdef dict get_header(self)
  *     cpdef dict get_nodes(self, bint force_2d=*)             # <<<<<<<<<<<<<<
@@ -1815,7 +1815,7 @@ struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_nodes {
   int force_2d;
 };
 
-/* "pyemsi/core/femap_parser.pxd":38
+/* "pyemsi/core/femap_parser.pxd":41
  *     cpdef dict get_output_sets(self)
  *     cpdef list get_output_vectors(self)
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=*, int vec_id_filter=*)             # <<<<<<<<<<<<<<
@@ -1868,6 +1868,8 @@ struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser {
 struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser {
   void (*_parse)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *);
   PyObject *(*_parse_csv_line_fast)(PyObject *);
+  PyObject *(*_locate_output_vector_header)(PyObject *, int);
+  PyObject *(*_get_output_vector_blocks)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *);
   PyObject *(*parse)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
   PyObject *(*get_blocks)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int, int __pyx_skip_dispatch);
   PyObject *(*get_header)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch);
@@ -2698,6 +2700,15 @@ static CYTHON_INLINE void __Pyx_SafeReleaseBuffer(Py_buffer* info);
 static Py_ssize_t __Pyx_minusones[] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 static Py_ssize_t __Pyx_zeros[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
+/* RaiseTooManyValuesToUnpack.proto */
+static CYTHON_INLINE void __Pyx_RaiseTooManyValuesError(Py_ssize_t expected);
+
+/* RaiseNeedMoreValuesToUnpack.proto */
+static CYTHON_INLINE void __Pyx_RaiseNeedMoreValuesError(Py_ssize_t index);
+
+/* RaiseNoneIterError.proto */
+static CYTHON_INLINE void __Pyx_RaiseNoneNotIterableError(void);
+
 /* SliceTupleAndList.proto */
 #if CYTHON_COMPILING_IN_CPYTHON
 static CYTHON_INLINE PyObject* __Pyx_PyList_GetSlice(PyObject* src, Py_ssize_t start, Py_ssize_t stop);
@@ -3262,6 +3273,8 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements
 static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_elements_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
 static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_materials(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
 static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_sets(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__locate_output_vector_header(PyObject *__pyx_v_lines, int __pyx_v_start_index); /* proto*/
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__get_output_vector_blocks(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self); /* proto*/
 static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch); /* proto*/
 static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self, int __pyx_skip_dispatch, struct __pyx_opt_args_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors_arrays *__pyx_optional_args); /* proto*/
 
@@ -3558,7 +3571,7 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_n_u_vec_id __pyx_string_tab[128]
 #define __pyx_n_u_vec_id_filter __pyx_string_tab[129]
 #define __pyx_n_u_version __pyx_string_tab[130]
-#define __pyx_kp_b_iso88591_A_1_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU __pyx_string_tab[131]
+#define __pyx_kp_b_iso88591_A_1_T_31_IQ_c_q_Ba_8_e6_3awc_AU __pyx_string_tab[131]
 #define __pyx_kp_b_iso88591_A_4_1_4q_1_F_1_3auHBa_1_e6_V1_5 __pyx_string_tab[132]
 #define __pyx_kp_b_iso88591_A_A_Q_T_AQ_IQ_Q_8_3awc_Qe1A_E_q __pyx_string_tab[133]
 #define __pyx_kp_b_iso88591_A_Q_T_AQ_IQ_c_q_Ba_8_e6_3awc_Qe1 __pyx_string_tab[134]
@@ -3569,7 +3582,7 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_kp_b_iso88591_A_q_T_AQ_IQ_c_q_Ba_8_e6_3awc_Qe1 __pyx_string_tab[139]
 #define __pyx_kp_b_iso88591_A_t1 __pyx_string_tab[140]
 #define __pyx_kp_b_iso88591_A_t7_az __pyx_string_tab[141]
-#define __pyx_kp_b_iso88591_CCYYZ_T_AQ_IQ_c_q_Ba_8_e6_3awc __pyx_string_tab[142]
+#define __pyx_kp_b_iso88591_CCYYZ_T_31_IQ_c_q_Ba_8_e6_3awc __pyx_string_tab[142]
 #define __pyx_kp_b_iso88591_Q_T_AQ_IQ_Q_8_3awc_Qe1A_E_q_E_q __pyx_string_tab[143]
 #define __pyx_kp_b_iso88591_T_4y_A_G1F_a_vWE_Q_q_t_G5_4xweS __pyx_string_tab[144]
 #define __pyx_kp_b_iso88591_T_D_G1F_a_vWE_Q_q_t7_q_4q_4q __pyx_string_tab[145]
@@ -3678,7 +3691,7 @@ return 0;
 #endif
 /* #### Code section: module_code ### */
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":243
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":243
  *         cdef int type_num
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3689,7 +3702,7 @@ return 0;
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_Descr *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":245
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":245
  *         @property
  *         cdef inline npy_intp itemsize(self) noexcept nogil:
  *             return PyDataType_ELSIZE(self)             # <<<<<<<<<<<<<<
@@ -3699,7 +3712,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_D
   __pyx_r = PyDataType_ELSIZE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":243
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":243
  *         cdef int type_num
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3712,7 +3725,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_D
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":247
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":247
  *             return PyDataType_ELSIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3723,7 +3736,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_8itemsize_itemsize(PyArray_D
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_9alignment_alignment(PyArray_Descr *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":249
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":249
  *         @property
  *         cdef inline npy_intp alignment(self) noexcept nogil:
  *             return PyDataType_ALIGNMENT(self)             # <<<<<<<<<<<<<<
@@ -3733,7 +3746,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_9alignment_alignment(PyArray
   __pyx_r = PyDataType_ALIGNMENT(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":247
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":247
  *             return PyDataType_ELSIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3746,7 +3759,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_5dtype_9alignment_alignment(PyArray
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":253
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":253
  *         # Use fields/names with care as they may be NULL.  You must check
  *         # for this using PyDataType_HASFIELDS.
  *         @property             # <<<<<<<<<<<<<<
@@ -3760,7 +3773,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_6fields_fields(PyArray_Desc
   PyObject *__pyx_t_1;
   __Pyx_RefNannySetupContext("fields", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":255
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":255
  *         @property
  *         cdef inline object fields(self):
  *             return <object>PyDataType_FIELDS(self)             # <<<<<<<<<<<<<<
@@ -3773,7 +3786,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_6fields_fields(PyArray_Desc
   __pyx_r = ((PyObject *)__pyx_t_1);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":253
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":253
  *         # Use fields/names with care as they may be NULL.  You must check
  *         # for this using PyDataType_HASFIELDS.
  *         @property             # <<<<<<<<<<<<<<
@@ -3788,7 +3801,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_6fields_fields(PyArray_Desc
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":257
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":257
  *             return <object>PyDataType_FIELDS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3802,7 +3815,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
   PyObject *__pyx_t_1;
   __Pyx_RefNannySetupContext("names", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":259
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":259
  *         @property
  *         cdef inline tuple names(self):
  *             return <tuple>PyDataType_NAMES(self)             # <<<<<<<<<<<<<<
@@ -3815,7 +3828,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
   __pyx_r = ((PyObject*)__pyx_t_1);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":257
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":257
  *             return <object>PyDataType_FIELDS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3830,7 +3843,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":264
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":264
  *         # valid (the pointer can be NULL). Most users should access
  *         # this field via the inline helper method PyDataType_SHAPE.
  *         @property             # <<<<<<<<<<<<<<
@@ -3841,7 +3854,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_5dtype_5names_names(PyArray_Descr 
 static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarray(PyArray_Descr *__pyx_v_self) {
   PyArray_ArrayDescr *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":266
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":266
  *         @property
  *         cdef inline PyArray_ArrayDescr* subarray(self) noexcept nogil:
  *             return PyDataType_SUBARRAY(self)             # <<<<<<<<<<<<<<
@@ -3851,7 +3864,7 @@ static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarra
   __pyx_r = PyDataType_SUBARRAY(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":264
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":264
  *         # valid (the pointer can be NULL). Most users should access
  *         # this field via the inline helper method PyDataType_SHAPE.
  *         @property             # <<<<<<<<<<<<<<
@@ -3864,7 +3877,7 @@ static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarra
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":268
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":268
  *             return PyDataType_SUBARRAY(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3875,7 +3888,7 @@ static CYTHON_INLINE PyArray_ArrayDescr *__pyx_f_5numpy_5dtype_8subarray_subarra
 static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr *__pyx_v_self) {
   npy_uint64 __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":271
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":271
  *         cdef inline npy_uint64 flags(self) noexcept nogil:
  *             """The data types flags."""
  *             return PyDataType_FLAGS(self)             # <<<<<<<<<<<<<<
@@ -3885,7 +3898,7 @@ static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr
   __pyx_r = PyDataType_FLAGS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":268
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":268
  *             return PyDataType_SUBARRAY(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3898,7 +3911,7 @@ static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":280
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":280
  *     ctypedef class numpy.broadcast [object PyArrayMultiIterObject, check_size ignore]:
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3909,7 +3922,7 @@ static CYTHON_INLINE npy_uint64 __pyx_f_5numpy_5dtype_5flags_flags(PyArray_Descr
 static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMultiIterObject *__pyx_v_self) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":283
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":283
  *         cdef inline int numiter(self) noexcept nogil:
  *             """The number of arrays that need to be broadcast to the same shape."""
  *             return PyArray_MultiIter_NUMITER(self)             # <<<<<<<<<<<<<<
@@ -3919,7 +3932,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMulti
   __pyx_r = PyArray_MultiIter_NUMITER(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":280
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":280
  *     ctypedef class numpy.broadcast [object PyArrayMultiIterObject, check_size ignore]:
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3932,7 +3945,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMulti
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":285
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":285
  *             return PyArray_MultiIter_NUMITER(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3943,7 +3956,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_7numiter_numiter(PyArrayMulti
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiIterObject *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":288
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":288
  *         cdef inline npy_intp size(self) noexcept nogil:
  *             """The total broadcasted size."""
  *             return PyArray_MultiIter_SIZE(self)             # <<<<<<<<<<<<<<
@@ -3953,7 +3966,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiI
   __pyx_r = PyArray_MultiIter_SIZE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":285
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":285
  *             return PyArray_MultiIter_NUMITER(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3966,7 +3979,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiI
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":290
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":290
  *             return PyArray_MultiIter_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -3977,7 +3990,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_4size_size(PyArrayMultiI
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMultiIterObject *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":293
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":293
  *         cdef inline npy_intp index(self) noexcept nogil:
  *             """The current (1-d) index into the broadcasted result."""
  *             return PyArray_MultiIter_INDEX(self)             # <<<<<<<<<<<<<<
@@ -3987,7 +4000,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMult
   __pyx_r = PyArray_MultiIter_INDEX(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":290
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":290
  *             return PyArray_MultiIter_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4000,7 +4013,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMult
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":295
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":295
  *             return PyArray_MultiIter_INDEX(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4011,7 +4024,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_9broadcast_5index_index(PyArrayMult
 static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject *__pyx_v_self) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":298
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":298
  *         cdef inline int nd(self) noexcept nogil:
  *             """The number of dimensions in the broadcasted result."""
  *             return PyArray_MultiIter_NDIM(self)             # <<<<<<<<<<<<<<
@@ -4021,7 +4034,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject
   __pyx_r = PyArray_MultiIter_NDIM(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":295
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":295
  *             return PyArray_MultiIter_INDEX(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4034,7 +4047,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":300
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":300
  *             return PyArray_MultiIter_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4045,7 +4058,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_9broadcast_2nd_nd(PyArrayMultiIterObject
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions(PyArrayMultiIterObject *__pyx_v_self) {
   npy_intp *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":303
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":303
  *         cdef inline npy_intp* dimensions(self) noexcept nogil:
  *             """The shape of the broadcasted result."""
  *             return PyArray_MultiIter_DIMS(self)             # <<<<<<<<<<<<<<
@@ -4055,7 +4068,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions
   __pyx_r = PyArray_MultiIter_DIMS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":300
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":300
  *             return PyArray_MultiIter_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4068,7 +4081,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":305
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":305
  *             return PyArray_MultiIter_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4079,7 +4092,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_9broadcast_10dimensions_dimensions
 static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiIterObject *__pyx_v_self) {
   void **__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":309
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":309
  *             """An array of iterator objects that holds the iterators for the arrays to be broadcast together.
  *             On return, the iterators are adjusted for broadcasting."""
  *             return PyArray_MultiIter_ITERS(self)             # <<<<<<<<<<<<<<
@@ -4089,7 +4102,7 @@ static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiI
   __pyx_r = PyArray_MultiIter_ITERS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":305
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":305
  *             return PyArray_MultiIter_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4102,7 +4115,7 @@ static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiI
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":323
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":323
  *         # Instead, we use properties that map to the corresponding C-API functions.
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4113,7 +4126,7 @@ static CYTHON_INLINE void **__pyx_f_5numpy_9broadcast_5iters_iters(PyArrayMultiI
 static CYTHON_INLINE PyObject *__pyx_f_5numpy_7ndarray_4base_base(PyArrayObject *__pyx_v_self) {
   PyObject *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":327
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":327
  *             """Returns a borrowed reference to the object owning the data/memory.
  *             """
  *             return PyArray_BASE(self)             # <<<<<<<<<<<<<<
@@ -4123,7 +4136,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_7ndarray_4base_base(PyArrayObject 
   __pyx_r = PyArray_BASE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":323
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":323
  *         # Instead, we use properties that map to the corresponding C-API functions.
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4136,7 +4149,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_7ndarray_4base_base(PyArrayObject 
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":329
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":329
  *             return PyArray_BASE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4150,7 +4163,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
   PyArray_Descr *__pyx_t_1;
   __Pyx_RefNannySetupContext("descr", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":333
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":333
  *             """Returns an owned reference to the dtype of the array.
  *             """
  *             return <dtype>PyArray_DESCR(self)             # <<<<<<<<<<<<<<
@@ -4163,7 +4176,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
   __pyx_r = ((PyArray_Descr *)__pyx_t_1);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":329
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":329
  *             return PyArray_BASE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4178,7 +4191,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":335
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":335
  *             return <dtype>PyArray_DESCR(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4189,7 +4202,7 @@ static CYTHON_INLINE PyArray_Descr *__pyx_f_5numpy_7ndarray_5descr_descr(PyArray
 static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx_v_self) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":339
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":339
  *             """Returns the number of dimensions in the array.
  *             """
  *             return PyArray_NDIM(self)             # <<<<<<<<<<<<<<
@@ -4199,7 +4212,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx
   __pyx_r = PyArray_NDIM(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":335
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":335
  *             return <dtype>PyArray_DESCR(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4212,7 +4225,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":341
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":341
  *             return PyArray_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4223,7 +4236,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_7ndarray_4ndim_ndim(PyArrayObject *__pyx
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObject *__pyx_v_self) {
   npy_intp *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":347
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":347
  *             Can return NULL for 0-dimensional arrays.
  *             """
  *             return PyArray_DIMS(self)             # <<<<<<<<<<<<<<
@@ -4233,7 +4246,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
   __pyx_r = PyArray_DIMS(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":341
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":341
  *             return PyArray_NDIM(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4246,7 +4259,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":349
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":349
  *             return PyArray_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4257,7 +4270,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_5shape_shape(PyArrayObjec
 static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayObject *__pyx_v_self) {
   npy_intp *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":354
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":354
  *             The number of elements matches the number of dimensions of the array (ndim).
  *             """
  *             return PyArray_STRIDES(self)             # <<<<<<<<<<<<<<
@@ -4267,7 +4280,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayO
   __pyx_r = PyArray_STRIDES(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":349
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":349
  *             return PyArray_DIMS(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4280,7 +4293,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayO
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":356
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":356
  *             return PyArray_STRIDES(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4291,7 +4304,7 @@ static CYTHON_INLINE npy_intp *__pyx_f_5numpy_7ndarray_7strides_strides(PyArrayO
 static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *__pyx_v_self) {
   npy_intp __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":360
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":360
  *             """Returns the total size (in number of elements) of the array.
  *             """
  *             return PyArray_SIZE(self)             # <<<<<<<<<<<<<<
@@ -4301,7 +4314,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *
   __pyx_r = PyArray_SIZE(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":356
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":356
  *             return PyArray_STRIDES(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4314,7 +4327,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":362
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":362
  *             return PyArray_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4325,7 +4338,7 @@ static CYTHON_INLINE npy_intp __pyx_f_5numpy_7ndarray_4size_size(PyArrayObject *
 static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__pyx_v_self) {
   char *__pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":369
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":369
  *             of `PyArray_DATA()` instead, which returns a 'void*'.
  *             """
  *             return PyArray_BYTES(self)             # <<<<<<<<<<<<<<
@@ -4335,7 +4348,7 @@ static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__p
   __pyx_r = PyArray_BYTES(__pyx_v_self);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":362
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":362
  *             return PyArray_SIZE(self)
  * 
  *         @property             # <<<<<<<<<<<<<<
@@ -4348,7 +4361,7 @@ static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__p
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":777
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":777
  * ctypedef long double complex clongdouble_t
  * 
  * cdef inline object PyArray_MultiIterNew1(a):             # <<<<<<<<<<<<<<
@@ -4365,7 +4378,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew1(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew1", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":778
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":778
  * 
  * cdef inline object PyArray_MultiIterNew1(a):
  *     return PyArray_MultiIterNew(1, <void*>a)             # <<<<<<<<<<<<<<
@@ -4379,7 +4392,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew1(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":777
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":777
  * ctypedef long double complex clongdouble_t
  * 
  * cdef inline object PyArray_MultiIterNew1(a):             # <<<<<<<<<<<<<<
@@ -4398,7 +4411,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew1(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":780
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":780
  *     return PyArray_MultiIterNew(1, <void*>a)
  * 
  * cdef inline object PyArray_MultiIterNew2(a, b):             # <<<<<<<<<<<<<<
@@ -4415,7 +4428,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew2(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew2", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":781
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":781
  * 
  * cdef inline object PyArray_MultiIterNew2(a, b):
  *     return PyArray_MultiIterNew(2, <void*>a, <void*>b)             # <<<<<<<<<<<<<<
@@ -4429,7 +4442,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew2(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":780
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":780
  *     return PyArray_MultiIterNew(1, <void*>a)
  * 
  * cdef inline object PyArray_MultiIterNew2(a, b):             # <<<<<<<<<<<<<<
@@ -4448,7 +4461,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew2(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":783
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":783
  *     return PyArray_MultiIterNew(2, <void*>a, <void*>b)
  * 
  * cdef inline object PyArray_MultiIterNew3(a, b, c):             # <<<<<<<<<<<<<<
@@ -4465,7 +4478,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew3(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew3", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":784
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":784
  * 
  * cdef inline object PyArray_MultiIterNew3(a, b, c):
  *     return PyArray_MultiIterNew(3, <void*>a, <void*>b, <void*> c)             # <<<<<<<<<<<<<<
@@ -4479,7 +4492,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew3(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":783
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":783
  *     return PyArray_MultiIterNew(2, <void*>a, <void*>b)
  * 
  * cdef inline object PyArray_MultiIterNew3(a, b, c):             # <<<<<<<<<<<<<<
@@ -4498,7 +4511,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew3(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":786
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":786
  *     return PyArray_MultiIterNew(3, <void*>a, <void*>b, <void*> c)
  * 
  * cdef inline object PyArray_MultiIterNew4(a, b, c, d):             # <<<<<<<<<<<<<<
@@ -4515,7 +4528,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew4(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew4", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":787
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":787
  * 
  * cdef inline object PyArray_MultiIterNew4(a, b, c, d):
  *     return PyArray_MultiIterNew(4, <void*>a, <void*>b, <void*>c, <void*> d)             # <<<<<<<<<<<<<<
@@ -4529,7 +4542,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew4(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":786
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":786
  *     return PyArray_MultiIterNew(3, <void*>a, <void*>b, <void*> c)
  * 
  * cdef inline object PyArray_MultiIterNew4(a, b, c, d):             # <<<<<<<<<<<<<<
@@ -4548,7 +4561,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew4(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":789
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":789
  *     return PyArray_MultiIterNew(4, <void*>a, <void*>b, <void*>c, <void*> d)
  * 
  * cdef inline object PyArray_MultiIterNew5(a, b, c, d, e):             # <<<<<<<<<<<<<<
@@ -4565,7 +4578,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew5(PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("PyArray_MultiIterNew5", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":790
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":790
  * 
  * cdef inline object PyArray_MultiIterNew5(a, b, c, d, e):
  *     return PyArray_MultiIterNew(5, <void*>a, <void*>b, <void*>c, <void*> d, <void*> e)             # <<<<<<<<<<<<<<
@@ -4579,7 +4592,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew5(PyObject *__
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":789
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":789
  *     return PyArray_MultiIterNew(4, <void*>a, <void*>b, <void*>c, <void*> d)
  * 
  * cdef inline object PyArray_MultiIterNew5(a, b, c, d, e):             # <<<<<<<<<<<<<<
@@ -4598,7 +4611,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyArray_MultiIterNew5(PyObject *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":792
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":792
  *     return PyArray_MultiIterNew(5, <void*>a, <void*>b, <void*>c, <void*> d, <void*> e)
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):             # <<<<<<<<<<<<<<
@@ -4613,7 +4626,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
   PyObject *__pyx_t_2;
   __Pyx_RefNannySetupContext("PyDataType_SHAPE", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":793
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":793
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):
  *     if PyDataType_HASSUBARRAY(d):             # <<<<<<<<<<<<<<
@@ -4623,7 +4636,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
   __pyx_t_1 = PyDataType_HASSUBARRAY(__pyx_v_d);
   if (__pyx_t_1) {
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":794
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":794
  * cdef inline tuple PyDataType_SHAPE(dtype d):
  *     if PyDataType_HASSUBARRAY(d):
  *         return <tuple>d.subarray.shape             # <<<<<<<<<<<<<<
@@ -4636,7 +4649,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
     __pyx_r = ((PyObject*)__pyx_t_2);
     goto __pyx_L0;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":793
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":793
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):
  *     if PyDataType_HASSUBARRAY(d):             # <<<<<<<<<<<<<<
@@ -4645,7 +4658,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
 */
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":796
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":796
  *         return <tuple>d.subarray.shape
  *     else:
  *         return ()             # <<<<<<<<<<<<<<
@@ -4659,7 +4672,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
     goto __pyx_L0;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":792
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":792
  *     return PyArray_MultiIterNew(5, <void*>a, <void*>b, <void*>c, <void*> d, <void*> e)
  * 
  * cdef inline tuple PyDataType_SHAPE(dtype d):             # <<<<<<<<<<<<<<
@@ -4674,7 +4687,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_PyDataType_SHAPE(PyArray_Descr *__
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":995
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":995
  *     int _import_umath() except -1
  * 
  * cdef inline void set_array_base(ndarray arr, object base) except *:             # <<<<<<<<<<<<<<
@@ -4688,7 +4701,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":996
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":996
  * 
  * cdef inline void set_array_base(ndarray arr, object base) except *:
  *     Py_INCREF(base) # important to do this before stealing the reference below!             # <<<<<<<<<<<<<<
@@ -4697,7 +4710,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
 */
   Py_INCREF(__pyx_v_base);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":997
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":997
  * cdef inline void set_array_base(ndarray arr, object base) except *:
  *     Py_INCREF(base) # important to do this before stealing the reference below!
  *     PyArray_SetBaseObject(arr, base)             # <<<<<<<<<<<<<<
@@ -4706,7 +4719,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
 */
   __pyx_t_1 = PyArray_SetBaseObject(__pyx_v_arr, __pyx_v_base); if (unlikely(__pyx_t_1 == ((int)-1))) __PYX_ERR(1, 997, __pyx_L1_error)
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":995
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":995
  *     int _import_umath() except -1
  * 
  * cdef inline void set_array_base(ndarray arr, object base) except *:             # <<<<<<<<<<<<<<
@@ -4721,7 +4734,7 @@ static CYTHON_INLINE void __pyx_f_5numpy_set_array_base(PyArrayObject *__pyx_v_a
   __pyx_L0:;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":999
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":999
  *     PyArray_SetBaseObject(arr, base)
  * 
  * cdef inline object get_array_base(ndarray arr):             # <<<<<<<<<<<<<<
@@ -4736,7 +4749,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   int __pyx_t_1;
   __Pyx_RefNannySetupContext("get_array_base", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1000
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1000
  * 
  * cdef inline object get_array_base(ndarray arr):
  *     base = PyArray_BASE(arr)             # <<<<<<<<<<<<<<
@@ -4745,7 +4758,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
 */
   __pyx_v_base = PyArray_BASE(__pyx_v_arr);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
  * cdef inline object get_array_base(ndarray arr):
  *     base = PyArray_BASE(arr)
  *     if base is NULL:             # <<<<<<<<<<<<<<
@@ -4755,7 +4768,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   __pyx_t_1 = (__pyx_v_base == NULL);
   if (__pyx_t_1) {
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1002
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1002
  *     base = PyArray_BASE(arr)
  *     if base is NULL:
  *         return None             # <<<<<<<<<<<<<<
@@ -4766,7 +4779,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
     __pyx_r = Py_None; __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1001
  * cdef inline object get_array_base(ndarray arr):
  *     base = PyArray_BASE(arr)
  *     if base is NULL:             # <<<<<<<<<<<<<<
@@ -4775,7 +4788,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
 */
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1003
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1003
  *     if base is NULL:
  *         return None
  *     return <object>base             # <<<<<<<<<<<<<<
@@ -4787,7 +4800,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   __pyx_r = ((PyObject *)__pyx_v_base);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":999
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":999
  *     PyArray_SetBaseObject(arr, base)
  * 
  * cdef inline object get_array_base(ndarray arr):             # <<<<<<<<<<<<<<
@@ -4802,7 +4815,7 @@ static CYTHON_INLINE PyObject *__pyx_f_5numpy_get_array_base(PyArrayObject *__py
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
  * # Versions of the import_* functions which are more suitable for
  * # Cython code.
  * cdef inline int import_array() except -1:             # <<<<<<<<<<<<<<
@@ -4828,7 +4841,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("import_array", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
  * # Cython code.
  * cdef inline int import_array() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4844,7 +4857,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     __Pyx_XGOTREF(__pyx_t_3);
     /*try:*/ {
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1009
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1009
  * cdef inline int import_array() except -1:
  *     try:
  *         __pyx_import_array()             # <<<<<<<<<<<<<<
@@ -4853,7 +4866,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
 */
       __pyx_t_4 = _import_array(); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(1, 1009, __pyx_L3_error)
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
  * # Cython code.
  * cdef inline int import_array() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4867,7 +4880,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     goto __pyx_L8_try_end;
     __pyx_L3_error:;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1010
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1010
  *     try:
  *         __pyx_import_array()
  *     except Exception:             # <<<<<<<<<<<<<<
@@ -4882,7 +4895,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
       __Pyx_XGOTREF(__pyx_t_6);
       __Pyx_XGOTREF(__pyx_t_7);
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1011
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1011
  *         __pyx_import_array()
  *     except Exception:
  *         raise ImportError("numpy._core.multiarray failed to import")             # <<<<<<<<<<<<<<
@@ -4904,7 +4917,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     }
     goto __pyx_L5_except_error;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1008
  * # Cython code.
  * cdef inline int import_array() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4920,7 +4933,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
     __pyx_L8_try_end:;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1007
  * # Versions of the import_* functions which are more suitable for
  * # Cython code.
  * cdef inline int import_array() except -1:             # <<<<<<<<<<<<<<
@@ -4944,7 +4957,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_array(void) {
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
  *         raise ImportError("numpy._core.multiarray failed to import")
  * 
  * cdef inline int import_umath() except -1:             # <<<<<<<<<<<<<<
@@ -4970,7 +4983,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("import_umath", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
  * 
  * cdef inline int import_umath() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -4986,7 +4999,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     __Pyx_XGOTREF(__pyx_t_3);
     /*try:*/ {
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1015
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1015
  * cdef inline int import_umath() except -1:
  *     try:
  *         _import_umath()             # <<<<<<<<<<<<<<
@@ -4995,7 +5008,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
 */
       __pyx_t_4 = _import_umath(); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(1, 1015, __pyx_L3_error)
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
  * 
  * cdef inline int import_umath() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5009,7 +5022,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     goto __pyx_L8_try_end;
     __pyx_L3_error:;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1016
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1016
  *     try:
  *         _import_umath()
  *     except Exception:             # <<<<<<<<<<<<<<
@@ -5024,7 +5037,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
       __Pyx_XGOTREF(__pyx_t_6);
       __Pyx_XGOTREF(__pyx_t_7);
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1017
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1017
  *         _import_umath()
  *     except Exception:
  *         raise ImportError("numpy._core.umath failed to import")             # <<<<<<<<<<<<<<
@@ -5046,7 +5059,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     }
     goto __pyx_L5_except_error;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1014
  * 
  * cdef inline int import_umath() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5062,7 +5075,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
     __pyx_L8_try_end:;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1013
  *         raise ImportError("numpy._core.multiarray failed to import")
  * 
  * cdef inline int import_umath() except -1:             # <<<<<<<<<<<<<<
@@ -5086,7 +5099,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_umath(void) {
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
  *         raise ImportError("numpy._core.umath failed to import")
  * 
  * cdef inline int import_ufunc() except -1:             # <<<<<<<<<<<<<<
@@ -5112,7 +5125,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("import_ufunc", 0);
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
  * 
  * cdef inline int import_ufunc() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5128,7 +5141,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     __Pyx_XGOTREF(__pyx_t_3);
     /*try:*/ {
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1021
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1021
  * cdef inline int import_ufunc() except -1:
  *     try:
  *         _import_umath()             # <<<<<<<<<<<<<<
@@ -5137,7 +5150,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
 */
       __pyx_t_4 = _import_umath(); if (unlikely(__pyx_t_4 == ((int)-1))) __PYX_ERR(1, 1021, __pyx_L3_error)
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
  * 
  * cdef inline int import_ufunc() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5151,7 +5164,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     goto __pyx_L8_try_end;
     __pyx_L3_error:;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1022
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1022
  *     try:
  *         _import_umath()
  *     except Exception:             # <<<<<<<<<<<<<<
@@ -5166,7 +5179,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
       __Pyx_XGOTREF(__pyx_t_6);
       __Pyx_XGOTREF(__pyx_t_7);
 
-      /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1023
+      /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1023
  *         _import_umath()
  *     except Exception:
  *         raise ImportError("numpy._core.umath failed to import")             # <<<<<<<<<<<<<<
@@ -5188,7 +5201,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     }
     goto __pyx_L5_except_error;
 
-    /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
+    /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1020
  * 
  * cdef inline int import_ufunc() except -1:
  *     try:             # <<<<<<<<<<<<<<
@@ -5204,7 +5217,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
     __pyx_L8_try_end:;
   }
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1019
  *         raise ImportError("numpy._core.umath failed to import")
  * 
  * cdef inline int import_ufunc() except -1:             # <<<<<<<<<<<<<<
@@ -5228,7 +5241,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
  * 
  * 
  * cdef inline bint is_timedelta64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5239,7 +5252,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_import_ufunc(void) {
 static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_obj) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1038
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1038
  *     bool
  *     """
  *     return PyObject_TypeCheck(obj, &PyTimedeltaArrType_Type)             # <<<<<<<<<<<<<<
@@ -5249,7 +5262,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_
   __pyx_r = PyObject_TypeCheck(__pyx_v_obj, (&PyTimedeltaArrType_Type));
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1026
  * 
  * 
  * cdef inline bint is_timedelta64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5262,7 +5275,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
  * 
  * 
  * cdef inline bint is_datetime64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5273,7 +5286,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_timedelta64_object(PyObject *__pyx_v_
 static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_obj) {
   int __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1053
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1053
  *     bool
  *     """
  *     return PyObject_TypeCheck(obj, &PyDatetimeArrType_Type)             # <<<<<<<<<<<<<<
@@ -5283,7 +5296,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_o
   __pyx_r = PyObject_TypeCheck(__pyx_v_obj, (&PyDatetimeArrType_Type));
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1041
  * 
  * 
  * cdef inline bint is_datetime64_object(object obj) noexcept:             # <<<<<<<<<<<<<<
@@ -5296,7 +5309,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_o
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
  * 
  * 
  * cdef inline npy_datetime get_datetime64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5307,7 +5320,7 @@ static CYTHON_INLINE int __pyx_f_5numpy_is_datetime64_object(PyObject *__pyx_v_o
 static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *__pyx_v_obj) {
   npy_datetime __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1063
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1063
  *     also needed.  That can be found using `get_datetime64_unit`.
  *     """
  *     return (<PyDatetimeScalarObject*>obj).obval             # <<<<<<<<<<<<<<
@@ -5317,7 +5330,7 @@ static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *
   __pyx_r = ((PyDatetimeScalarObject *)__pyx_v_obj)->obval;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1056
  * 
  * 
  * cdef inline npy_datetime get_datetime64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5330,7 +5343,7 @@ static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
  * 
  * 
  * cdef inline npy_timedelta get_timedelta64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5341,7 +5354,7 @@ static CYTHON_INLINE npy_datetime __pyx_f_5numpy_get_datetime64_value(PyObject *
 static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject *__pyx_v_obj) {
   npy_timedelta __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1070
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1070
  *     returns the int64 value underlying scalar numpy timedelta64 object
  *     """
  *     return (<PyTimedeltaScalarObject*>obj).obval             # <<<<<<<<<<<<<<
@@ -5351,7 +5364,7 @@ static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject
   __pyx_r = ((PyTimedeltaScalarObject *)__pyx_v_obj)->obval;
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1066
  * 
  * 
  * cdef inline npy_timedelta get_timedelta64_value(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5364,7 +5377,7 @@ static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject
   return __pyx_r;
 }
 
-/* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
+/* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
  * 
  * 
  * cdef inline NPY_DATETIMEUNIT get_datetime64_unit(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -5375,7 +5388,7 @@ static CYTHON_INLINE npy_timedelta __pyx_f_5numpy_get_timedelta64_value(PyObject
 static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObject *__pyx_v_obj) {
   NPY_DATETIMEUNIT __pyx_r;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1077
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1077
  *     returns the unit part of the dtype for a numpy datetime64 object.
  *     """
  *     return <NPY_DATETIMEUNIT>(<PyDatetimeScalarObject*>obj).obmeta.base             # <<<<<<<<<<<<<<
@@ -5385,7 +5398,7 @@ static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObjec
   __pyx_r = ((NPY_DATETIMEUNIT)((PyDatetimeScalarObject *)__pyx_v_obj)->obmeta.base);
   goto __pyx_L0;
 
-  /* "../../../../AppData/Local/Temp/build-env-w_h30lu4/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
+  /* ".venv311/Lib/site-packages/numpy/__init__.cython-30.pxd":1073
  * 
  * 
  * cdef inline NPY_DATETIMEUNIT get_datetime64_unit(object obj) noexcept nogil:             # <<<<<<<<<<<<<<
@@ -13288,7 +13301,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_s
  * 
  *         return output_sets             # <<<<<<<<<<<<<<
  * 
- *     cpdef list get_output_vectors(self):
+ *     @staticmethod
 */
   __Pyx_XDECREF(__pyx_r);
   __Pyx_INCREF(__pyx_v_output_sets);
@@ -13396,9 +13409,467 @@ static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_22get_outpu
 /* "pyemsi/core/femap_parser.pyx":481
  *         return output_sets
  * 
+ *     @staticmethod             # <<<<<<<<<<<<<<
+ *     cdef tuple _locate_output_vector_header(list lines, int start_index):
+ *         """Locate the metadata line that precedes output vector result records."""
+*/
+
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__locate_output_vector_header(PyObject *__pyx_v_lines, int __pyx_v_start_index) {
+  int __pyx_v_search_index;
+  int __pyx_v_ent_type_val;
+  PyObject *__pyx_v_header_parts = 0;
+  PyObject *__pyx_v_flag_parts = 0;
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  Py_ssize_t __pyx_t_1;
+  int __pyx_t_2;
+  PyObject *__pyx_t_3 = NULL;
+  PyObject *__pyx_t_4 = NULL;
+  long __pyx_t_5;
+  int __pyx_t_6;
+  PyObject *__pyx_t_7 = NULL;
+  PyObject *__pyx_t_8 = NULL;
+  PyObject *__pyx_t_9 = NULL;
+  int __pyx_t_10;
+  PyObject *__pyx_t_11 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("_locate_output_vector_header", 0);
+
+  /* "pyemsi/core/femap_parser.pyx":484
+ *     cdef tuple _locate_output_vector_header(list lines, int start_index):
+ *         """Locate the metadata line that precedes output vector result records."""
+ *         cdef int search_index = start_index + 3             # <<<<<<<<<<<<<<
+ *         cdef int ent_type_val
+ *         cdef list header_parts, flag_parts
+*/
+  __pyx_v_search_index = (__pyx_v_start_index + 3);
+
+  /* "pyemsi/core/femap_parser.pyx":488
+ *         cdef list header_parts, flag_parts
+ * 
+ *         while search_index + 1 < len(lines):             # <<<<<<<<<<<<<<
+ *             header_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index])
+ *             flag_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index + 1])
+*/
+  while (1) {
+    if (unlikely(__pyx_v_lines == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
+      __PYX_ERR(0, 488, __pyx_L1_error)
+    }
+    __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_lines); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 488, __pyx_L1_error)
+    __pyx_t_2 = ((__pyx_v_search_index + 1) < __pyx_t_1);
+    if (!__pyx_t_2) break;
+
+    /* "pyemsi/core/femap_parser.pyx":489
+ * 
+ *         while search_index + 1 < len(lines):
+ *             header_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index])             # <<<<<<<<<<<<<<
+ *             flag_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index + 1])
+ * 
+*/
+    if (unlikely(__pyx_v_lines == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+      __PYX_ERR(0, 489, __pyx_L1_error)
+    }
+    __pyx_t_3 = __Pyx_PyList_GET_ITEM(__pyx_v_lines, __pyx_v_search_index);
+    __Pyx_INCREF(__pyx_t_3);
+    __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_3)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 489, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_4);
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __Pyx_XDECREF_SET(__pyx_v_header_parts, ((PyObject*)__pyx_t_4));
+    __pyx_t_4 = 0;
+
+    /* "pyemsi/core/femap_parser.pyx":490
+ *         while search_index + 1 < len(lines):
+ *             header_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index])
+ *             flag_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index + 1])             # <<<<<<<<<<<<<<
+ * 
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:
+*/
+    if (unlikely(__pyx_v_lines == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+      __PYX_ERR(0, 490, __pyx_L1_error)
+    }
+    __pyx_t_5 = (__pyx_v_search_index + 1);
+    __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_lines, __pyx_t_5);
+    __Pyx_INCREF(__pyx_t_4);
+    __pyx_t_3 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 490, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+    __Pyx_XDECREF_SET(__pyx_v_flag_parts, ((PyObject*)__pyx_t_3));
+    __pyx_t_3 = 0;
+
+    /* "pyemsi/core/femap_parser.pyx":492
+ *             flag_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index + 1])
+ * 
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:             # <<<<<<<<<<<<<<
+ *                 try:
+ *                     int(header_parts[0])
+*/
+    if (unlikely(__pyx_v_header_parts == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
+      __PYX_ERR(0, 492, __pyx_L1_error)
+    }
+    __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_header_parts); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 492, __pyx_L1_error)
+    __pyx_t_6 = (__pyx_t_1 == 4);
+    if (__pyx_t_6) {
+    } else {
+      __pyx_t_2 = __pyx_t_6;
+      goto __pyx_L6_bool_binop_done;
+    }
+    if (unlikely(__pyx_v_flag_parts == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
+      __PYX_ERR(0, 492, __pyx_L1_error)
+    }
+    __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_flag_parts); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 492, __pyx_L1_error)
+    __pyx_t_6 = (__pyx_t_1 == 3);
+    __pyx_t_2 = __pyx_t_6;
+    __pyx_L6_bool_binop_done:;
+    if (__pyx_t_2) {
+
+      /* "pyemsi/core/femap_parser.pyx":493
+ * 
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:
+ *                 try:             # <<<<<<<<<<<<<<
+ *                     int(header_parts[0])
+ *                     int(header_parts[1])
+*/
+      {
+        __Pyx_PyThreadState_declare
+        __Pyx_PyThreadState_assign
+        __Pyx_ExceptionSave(&__pyx_t_7, &__pyx_t_8, &__pyx_t_9);
+        __Pyx_XGOTREF(__pyx_t_7);
+        __Pyx_XGOTREF(__pyx_t_8);
+        __Pyx_XGOTREF(__pyx_t_9);
+        /*try:*/ {
+
+          /* "pyemsi/core/femap_parser.pyx":494
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:
+ *                 try:
+ *                     int(header_parts[0])             # <<<<<<<<<<<<<<
+ *                     int(header_parts[1])
+ *                     int(header_parts[2])
+*/
+          if (unlikely(__pyx_v_header_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 494, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_header_parts, 0)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 494, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+          /* "pyemsi/core/femap_parser.pyx":495
+ *                 try:
+ *                     int(header_parts[0])
+ *                     int(header_parts[1])             # <<<<<<<<<<<<<<
+ *                     int(header_parts[2])
+ *                     ent_type_val = int(header_parts[3])
+*/
+          if (unlikely(__pyx_v_header_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 495, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_header_parts, 1)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 495, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+          /* "pyemsi/core/femap_parser.pyx":496
+ *                     int(header_parts[0])
+ *                     int(header_parts[1])
+ *                     int(header_parts[2])             # <<<<<<<<<<<<<<
+ *                     ent_type_val = int(header_parts[3])
+ *                     int(flag_parts[0])
+*/
+          if (unlikely(__pyx_v_header_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 496, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_header_parts, 2)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 496, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+          /* "pyemsi/core/femap_parser.pyx":497
+ *                     int(header_parts[1])
+ *                     int(header_parts[2])
+ *                     ent_type_val = int(header_parts[3])             # <<<<<<<<<<<<<<
+ *                     int(flag_parts[0])
+ *                     int(flag_parts[1])
+*/
+          if (unlikely(__pyx_v_header_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 497, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_header_parts, 3)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 497, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __pyx_t_10 = __Pyx_PyLong_As_int(__pyx_t_3); if (unlikely((__pyx_t_10 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 497, __pyx_L8_error)
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+          __pyx_v_ent_type_val = __pyx_t_10;
+
+          /* "pyemsi/core/femap_parser.pyx":498
+ *                     int(header_parts[2])
+ *                     ent_type_val = int(header_parts[3])
+ *                     int(flag_parts[0])             # <<<<<<<<<<<<<<
+ *                     int(flag_parts[1])
+ *                     int(flag_parts[2])
+*/
+          if (unlikely(__pyx_v_flag_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 498, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_flag_parts, 0)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 498, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+          /* "pyemsi/core/femap_parser.pyx":499
+ *                     ent_type_val = int(header_parts[3])
+ *                     int(flag_parts[0])
+ *                     int(flag_parts[1])             # <<<<<<<<<<<<<<
+ *                     int(flag_parts[2])
+ *                     return ent_type_val, True, search_index + 2
+*/
+          if (unlikely(__pyx_v_flag_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 499, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_flag_parts, 1)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 499, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+          /* "pyemsi/core/femap_parser.pyx":500
+ *                     int(flag_parts[0])
+ *                     int(flag_parts[1])
+ *                     int(flag_parts[2])             # <<<<<<<<<<<<<<
+ *                     return ent_type_val, True, search_index + 2
+ *                 except ValueError:
+*/
+          if (unlikely(__pyx_v_flag_parts == Py_None)) {
+            PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+            __PYX_ERR(0, 500, __pyx_L8_error)
+          }
+          __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_flag_parts, 2)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 500, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+
+          /* "pyemsi/core/femap_parser.pyx":501
+ *                     int(flag_parts[1])
+ *                     int(flag_parts[2])
+ *                     return ent_type_val, True, search_index + 2             # <<<<<<<<<<<<<<
+ *                 except ValueError:
+ *                     pass
+*/
+          __Pyx_XDECREF(__pyx_r);
+          __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_ent_type_val); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 501, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_3);
+          __pyx_t_4 = __Pyx_PyLong_From_long((__pyx_v_search_index + 2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 501, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_4);
+          __pyx_t_11 = PyTuple_New(3); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 501, __pyx_L8_error)
+          __Pyx_GOTREF(__pyx_t_11);
+          __Pyx_GIVEREF(__pyx_t_3);
+          if (__Pyx_PyTuple_SET_ITEM(__pyx_t_11, 0, __pyx_t_3) != (0)) __PYX_ERR(0, 501, __pyx_L8_error);
+          __Pyx_INCREF(Py_True);
+          __Pyx_GIVEREF(Py_True);
+          if (__Pyx_PyTuple_SET_ITEM(__pyx_t_11, 1, Py_True) != (0)) __PYX_ERR(0, 501, __pyx_L8_error);
+          __Pyx_GIVEREF(__pyx_t_4);
+          if (__Pyx_PyTuple_SET_ITEM(__pyx_t_11, 2, __pyx_t_4) != (0)) __PYX_ERR(0, 501, __pyx_L8_error);
+          __pyx_t_3 = 0;
+          __pyx_t_4 = 0;
+          __pyx_r = ((PyObject*)__pyx_t_11);
+          __pyx_t_11 = 0;
+          goto __pyx_L12_try_return;
+
+          /* "pyemsi/core/femap_parser.pyx":493
+ * 
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:
+ *                 try:             # <<<<<<<<<<<<<<
+ *                     int(header_parts[0])
+ *                     int(header_parts[1])
+*/
+        }
+        __pyx_L8_error:;
+        __Pyx_XDECREF(__pyx_t_11); __pyx_t_11 = 0;
+        __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
+        __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+
+        /* "pyemsi/core/femap_parser.pyx":502
+ *                     int(flag_parts[2])
+ *                     return ent_type_val, True, search_index + 2
+ *                 except ValueError:             # <<<<<<<<<<<<<<
+ *                     pass
+ * 
+*/
+        __pyx_t_10 = __Pyx_PyErr_ExceptionMatches(((PyObject *)(((PyTypeObject*)PyExc_ValueError))));
+        if (__pyx_t_10) {
+          __Pyx_ErrRestore(0,0,0);
+          goto __pyx_L9_exception_handled;
+        }
+        goto __pyx_L10_except_error;
+
+        /* "pyemsi/core/femap_parser.pyx":493
+ * 
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:
+ *                 try:             # <<<<<<<<<<<<<<
+ *                     int(header_parts[0])
+ *                     int(header_parts[1])
+*/
+        __pyx_L10_except_error:;
+        __Pyx_XGIVEREF(__pyx_t_7);
+        __Pyx_XGIVEREF(__pyx_t_8);
+        __Pyx_XGIVEREF(__pyx_t_9);
+        __Pyx_ExceptionReset(__pyx_t_7, __pyx_t_8, __pyx_t_9);
+        goto __pyx_L1_error;
+        __pyx_L12_try_return:;
+        __Pyx_XGIVEREF(__pyx_t_7);
+        __Pyx_XGIVEREF(__pyx_t_8);
+        __Pyx_XGIVEREF(__pyx_t_9);
+        __Pyx_ExceptionReset(__pyx_t_7, __pyx_t_8, __pyx_t_9);
+        goto __pyx_L0;
+        __pyx_L9_exception_handled:;
+        __Pyx_XGIVEREF(__pyx_t_7);
+        __Pyx_XGIVEREF(__pyx_t_8);
+        __Pyx_XGIVEREF(__pyx_t_9);
+        __Pyx_ExceptionReset(__pyx_t_7, __pyx_t_8, __pyx_t_9);
+      }
+
+      /* "pyemsi/core/femap_parser.pyx":492
+ *             flag_parts = FEMAPParser._parse_csv_line_fast(<str>lines[search_index + 1])
+ * 
+ *             if len(header_parts) == 4 and len(flag_parts) == 3:             # <<<<<<<<<<<<<<
+ *                 try:
+ *                     int(header_parts[0])
+*/
+    }
+
+    /* "pyemsi/core/femap_parser.pyx":505
+ *                     pass
+ * 
+ *             search_index += 1             # <<<<<<<<<<<<<<
+ * 
+ *         return -1, False, len(lines)
+*/
+    __pyx_v_search_index = (__pyx_v_search_index + 1);
+  }
+
+  /* "pyemsi/core/femap_parser.pyx":507
+ *             search_index += 1
+ * 
+ *         return -1, False, len(lines)             # <<<<<<<<<<<<<<
+ * 
+ *     cdef list _get_output_vector_blocks(self):
+*/
+  __Pyx_XDECREF(__pyx_r);
+  if (unlikely(__pyx_v_lines == Py_None)) {
+    PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
+    __PYX_ERR(0, 507, __pyx_L1_error)
+  }
+  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_lines); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 507, __pyx_L1_error)
+  __pyx_t_11 = PyLong_FromSsize_t(__pyx_t_1); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 507, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_11);
+  __pyx_t_4 = PyTuple_New(3); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 507, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __Pyx_INCREF(__pyx_mstate_global->__pyx_int_neg_1);
+  __Pyx_GIVEREF(__pyx_mstate_global->__pyx_int_neg_1);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_mstate_global->__pyx_int_neg_1) != (0)) __PYX_ERR(0, 507, __pyx_L1_error);
+  __Pyx_INCREF(Py_False);
+  __Pyx_GIVEREF(Py_False);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 1, Py_False) != (0)) __PYX_ERR(0, 507, __pyx_L1_error);
+  __Pyx_GIVEREF(__pyx_t_11);
+  if (__Pyx_PyTuple_SET_ITEM(__pyx_t_4, 2, __pyx_t_11) != (0)) __PYX_ERR(0, 507, __pyx_L1_error);
+  __pyx_t_11 = 0;
+  __pyx_r = ((PyObject*)__pyx_t_4);
+  __pyx_t_4 = 0;
+  goto __pyx_L0;
+
+  /* "pyemsi/core/femap_parser.pyx":481
+ *         return output_sets
+ * 
+ *     @staticmethod             # <<<<<<<<<<<<<<
+ *     cdef tuple _locate_output_vector_header(list lines, int start_index):
+ *         """Locate the metadata line that precedes output vector result records."""
+*/
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_XDECREF(__pyx_t_4);
+  __Pyx_XDECREF(__pyx_t_11);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser._locate_output_vector_header", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XDECREF(__pyx_v_header_parts);
+  __Pyx_XDECREF(__pyx_v_flag_parts);
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "pyemsi/core/femap_parser.pyx":509
+ *         return -1, False, len(lines)
+ * 
+ *     cdef list _get_output_vector_blocks(self):             # <<<<<<<<<<<<<<
+ *         """Return all output vector blocks supported by the parser."""
+ *         return self.get_blocks(1051) + self.get_blocks(451)
+*/
+
+static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__get_output_vector_blocks(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *__pyx_v_self) {
+  PyObject *__pyx_r = NULL;
+  __Pyx_RefNannyDeclarations
+  PyObject *__pyx_t_1 = NULL;
+  PyObject *__pyx_t_2 = NULL;
+  PyObject *__pyx_t_3 = NULL;
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
+  __Pyx_RefNannySetupContext("_get_output_vector_blocks", 0);
+
+  /* "pyemsi/core/femap_parser.pyx":511
+ *     cdef list _get_output_vector_blocks(self):
+ *         """Return all output vector blocks supported by the parser."""
+ *         return self.get_blocks(1051) + self.get_blocks(451)             # <<<<<<<<<<<<<<
+ * 
+ *     cpdef list get_output_vectors(self):
+*/
+  __Pyx_XDECREF(__pyx_r);
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 511, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_2 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x1C3, 0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 511, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = PyNumber_Add(__pyx_t_1, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 511, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_r = ((PyObject*)__pyx_t_3);
+  __pyx_t_3 = 0;
+  goto __pyx_L0;
+
+  /* "pyemsi/core/femap_parser.pyx":509
+ *         return -1, False, len(lines)
+ * 
+ *     cdef list _get_output_vector_blocks(self):             # <<<<<<<<<<<<<<
+ *         """Return all output vector blocks supported by the parser."""
+ *         return self.get_blocks(1051) + self.get_blocks(451)
+*/
+
+  /* function exit code */
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_1);
+  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser._get_output_vector_blocks", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = 0;
+  __pyx_L0:;
+  __Pyx_XGIVEREF(__pyx_r);
+  __Pyx_RefNannyFinishContext();
+  return __pyx_r;
+}
+
+/* "pyemsi/core/femap_parser.pyx":513
+ *         return self.get_blocks(1051) + self.get_blocks(451)
+ * 
  *     cpdef list get_output_vectors(self):             # <<<<<<<<<<<<<<
  *         """
- *         Extract all output data vectors from Block 1051.
+ *         Extract all output data vectors from Blocks 1051 and 451.
 */
 
 static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
@@ -13415,7 +13886,6 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   PyObject *__pyx_v_result_parts = 0;
   PyObject *__pyx_v_cont_parts = 0;
   PyObject *__pyx_v_values = 0;
-  PyObject *__pyx_v_line6_parts = 0;
   struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
   int __pyx_v_i;
   int __pyx_v_set_id;
@@ -13431,6 +13901,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   double __pyx_v_value;
   PyObject *__pyx_v_results = 0;
   int __pyx_v_has_ent_type;
+  int __pyx_v_result_start_index;
   PyObject *__pyx_8genexpr1__pyx_v_v = NULL;
   PyObject *__pyx_8genexpr2__pyx_v_v = NULL;
   PyObject *__pyx_r = NULL;
@@ -13450,9 +13921,10 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   PyObject *__pyx_t_13 = NULL;
   long __pyx_t_14;
   int __pyx_t_15;
-  double __pyx_t_16;
-  int __pyx_t_17;
-  Py_ssize_t __pyx_t_18;
+  int __pyx_t_16;
+  double __pyx_t_17;
+  int __pyx_t_18;
+  Py_ssize_t __pyx_t_19;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -13473,7 +13945,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     if (unlikely(!__Pyx_object_dict_version_matches(((PyObject *)__pyx_v_self), __pyx_tp_dict_version, __pyx_obj_dict_version))) {
       PY_UINT64_T __pyx_typedict_guard = __Pyx_get_tp_dict_version(((PyObject *)__pyx_v_self));
       #endif
-      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_vectors); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 481, __pyx_L1_error)
+      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_vectors); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 513, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
       if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors)) {
         __Pyx_XDECREF(__pyx_r);
@@ -13497,10 +13969,10 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __pyx_t_2 = __Pyx_PyObject_FastCall((PyObject*)__pyx_t_4, __pyx_callargs+__pyx_t_5, (1-__pyx_t_5) | (__pyx_t_5*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-          if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 481, __pyx_L1_error)
+          if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 513, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_2);
         }
-        if (!(likely(PyList_CheckExact(__pyx_t_2))||((__pyx_t_2) == Py_None) || __Pyx_RaiseUnexpectedTypeError("list", __pyx_t_2))) __PYX_ERR(0, 481, __pyx_L1_error)
+        if (!(likely(PyList_CheckExact(__pyx_t_2))||((__pyx_t_2) == Py_None) || __Pyx_RaiseUnexpectedTypeError("list", __pyx_t_2))) __PYX_ERR(0, 513, __pyx_L1_error)
         __pyx_r = ((PyObject*)__pyx_t_2);
         __pyx_t_2 = 0;
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -13519,40 +13991,40 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     #endif
   }
 
-  /* "pyemsi/core/femap_parser.pyx":488
+  /* "pyemsi/core/femap_parser.pyx":520
  *             List of output vector dictionaries with metadata and results
  *         """
  *         cdef list output_vectors = []             # <<<<<<<<<<<<<<
  *         cdef list all_blocks, parts, result_parts, cont_parts, values
  *         cdef list line6_parts
 */
-  __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 488, __pyx_L1_error)
+  __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 520, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_output_vectors = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":499
- *         cdef bint has_ent_type
+  /* "pyemsi/core/femap_parser.pyx":532
+ *         cdef int result_start_index
  * 
- *         all_blocks = self.get_blocks(1051)             # <<<<<<<<<<<<<<
+ *         all_blocks = self._get_output_vector_blocks()             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 499, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->_get_output_vector_blocks(__pyx_v_self); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 532, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":500
+  /* "pyemsi/core/femap_parser.pyx":533
  * 
- *         all_blocks = self.get_blocks(1051)
+ *         all_blocks = self._get_output_vector_blocks()
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
  *             i = 0
  *             n_lines = len(block.lines)
 */
   if (unlikely(__pyx_v_all_blocks == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not iterable");
-    __PYX_ERR(0, 500, __pyx_L1_error)
+    __PYX_ERR(0, 533, __pyx_L1_error)
   }
   __pyx_t_1 = __pyx_v_all_blocks; __Pyx_INCREF(__pyx_t_1);
   __pyx_t_6 = 0;
@@ -13560,20 +14032,20 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     {
       Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_1);
       #if !CYTHON_ASSUME_SAFE_SIZE
-      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 500, __pyx_L1_error)
+      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 533, __pyx_L1_error)
       #endif
       if (__pyx_t_6 >= __pyx_temp) break;
     }
     __pyx_t_2 = __Pyx_PyList_GetItemRefFast(__pyx_t_1, __pyx_t_6, __Pyx_ReferenceSharing_OwnStrongReference);
     ++__pyx_t_6;
-    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 500, __pyx_L1_error)
+    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 533, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 500, __pyx_L1_error)
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 533, __pyx_L1_error)
     __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/core/femap_parser.pyx":501
- *         all_blocks = self.get_blocks(1051)
+    /* "pyemsi/core/femap_parser.pyx":534
+ *         all_blocks = self._get_output_vector_blocks()
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
  *             n_lines = len(block.lines)
@@ -13581,7 +14053,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/core/femap_parser.pyx":502
+    /* "pyemsi/core/femap_parser.pyx":535
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -13592,13 +14064,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     __Pyx_INCREF(__pyx_t_2);
     if (unlikely(__pyx_t_2 == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-      __PYX_ERR(0, 502, __pyx_L1_error)
+      __PYX_ERR(0, 535, __pyx_L1_error)
     }
-    __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_t_2); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 502, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_t_2); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 535, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_7;
 
-    /* "pyemsi/core/femap_parser.pyx":503
+    /* "pyemsi/core/femap_parser.pyx":536
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -13609,7 +14081,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
       __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_8) break;
 
-      /* "pyemsi/core/femap_parser.pyx":504
+      /* "pyemsi/core/femap_parser.pyx":537
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -13618,17 +14090,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
       if (unlikely(__pyx_v_block->lines == Py_None)) {
         PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-        __PYX_ERR(0, 504, __pyx_L1_error)
+        __PYX_ERR(0, 537, __pyx_L1_error)
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 504, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 537, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/core/femap_parser.pyx":505
+      /* "pyemsi/core/femap_parser.pyx":538
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -13637,13 +14109,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
       if (unlikely(__pyx_v_parts == Py_None)) {
         PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-        __PYX_ERR(0, 505, __pyx_L1_error)
+        __PYX_ERR(0, 538, __pyx_L1_error)
       }
-      __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 505, __pyx_L1_error)
+      __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 538, __pyx_L1_error)
       __pyx_t_8 = (__pyx_t_7 >= 2);
       if (__pyx_t_8) {
 
-        /* "pyemsi/core/femap_parser.pyx":506
+        /* "pyemsi/core/femap_parser.pyx":539
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -13659,7 +14131,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __Pyx_XGOTREF(__pyx_t_11);
           /*try:*/ {
 
-            /* "pyemsi/core/femap_parser.pyx":507
+            /* "pyemsi/core/femap_parser.pyx":540
  *                 if len(parts) >= 2:
  *                     try:
  *                         set_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -13668,15 +14140,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
             if (unlikely(__pyx_v_parts == Py_None)) {
               PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-              __PYX_ERR(0, 507, __pyx_L8_error)
+              __PYX_ERR(0, 540, __pyx_L8_error)
             }
-            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 507, __pyx_L8_error)
+            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 540, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_4);
-            __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 507, __pyx_L8_error)
+            __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 540, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_set_id = __pyx_t_12;
 
-            /* "pyemsi/core/femap_parser.pyx":508
+            /* "pyemsi/core/femap_parser.pyx":541
  *                     try:
  *                         set_id = int(parts[0])
  *                         vec_id = int(parts[1])             # <<<<<<<<<<<<<<
@@ -13685,15 +14157,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
             if (unlikely(__pyx_v_parts == Py_None)) {
               PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-              __PYX_ERR(0, 508, __pyx_L8_error)
+              __PYX_ERR(0, 541, __pyx_L8_error)
             }
-            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 1)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 508, __pyx_L8_error)
+            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 1)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 541, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_4);
-            __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 508, __pyx_L8_error)
+            __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 541, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_vec_id = __pyx_t_12;
 
-            /* "pyemsi/core/femap_parser.pyx":510
+            /* "pyemsi/core/femap_parser.pyx":543
  *                         vec_id = int(parts[1])
  * 
  *                         title = ""             # <<<<<<<<<<<<<<
@@ -13703,7 +14175,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
             __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
             __Pyx_XDECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-            /* "pyemsi/core/femap_parser.pyx":511
+            /* "pyemsi/core/femap_parser.pyx":544
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -13713,7 +14185,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
             __pyx_t_8 = ((__pyx_v_i + 1) < __pyx_v_n_lines);
             if (__pyx_t_8) {
 
-              /* "pyemsi/core/femap_parser.pyx":512
+              /* "pyemsi/core/femap_parser.pyx":545
  *                         title = ""
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")             # <<<<<<<<<<<<<<
@@ -13722,7 +14194,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_block->lines == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 512, __pyx_L8_error)
+                __PYX_ERR(0, 545, __pyx_L8_error)
               }
               __pyx_t_14 = (__pyx_v_i + 1);
               __pyx_t_13 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_14);
@@ -13732,7 +14204,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
                 PyObject *__pyx_callargs[2] = {__pyx_t_13, NULL};
                 __pyx_t_3 = __Pyx_PyObject_FastCallMethod((PyObject*)__pyx_mstate_global->__pyx_n_u_strip, __pyx_callargs+__pyx_t_5, (1-__pyx_t_5) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
                 __Pyx_XDECREF(__pyx_t_13); __pyx_t_13 = 0;
-                if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 512, __pyx_L8_error)
+                if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 545, __pyx_L8_error)
                 __Pyx_GOTREF(__pyx_t_3);
               }
               __pyx_t_2 = __pyx_t_3;
@@ -13743,33 +14215,33 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
                 __pyx_t_4 = __Pyx_PyObject_FastCallMethod((PyObject*)__pyx_mstate_global->__pyx_n_u_rstrip, __pyx_callargs+__pyx_t_5, (2-__pyx_t_5) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
                 __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
                 __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-                if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 512, __pyx_L8_error)
+                if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 545, __pyx_L8_error)
                 __Pyx_GOTREF(__pyx_t_4);
               }
               __Pyx_DECREF_SET(__pyx_v_title, ((PyObject*)__pyx_t_4));
               __pyx_t_4 = 0;
 
-              /* "pyemsi/core/femap_parser.pyx":513
+              /* "pyemsi/core/femap_parser.pyx":546
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
  *                                 title = ""
  * 
 */
-              __pyx_t_8 = (__Pyx_PyUnicode_Equals(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u_NULL, Py_EQ)); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 513, __pyx_L8_error)
+              __pyx_t_8 = (__Pyx_PyUnicode_Equals(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u_NULL, Py_EQ)); if (unlikely((__pyx_t_8 < 0))) __PYX_ERR(0, 546, __pyx_L8_error)
               if (__pyx_t_8) {
 
-                /* "pyemsi/core/femap_parser.pyx":514
+                /* "pyemsi/core/femap_parser.pyx":547
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":
  *                                 title = ""             # <<<<<<<<<<<<<<
  * 
- *                         ent_type_val = -1
+ *                         ent_type_val, has_ent_type, result_start_index = (
 */
                 __Pyx_INCREF(__pyx_mstate_global->__pyx_kp_u__4);
                 __Pyx_DECREF_SET(__pyx_v_title, __pyx_mstate_global->__pyx_kp_u__4);
 
-                /* "pyemsi/core/femap_parser.pyx":513
+                /* "pyemsi/core/femap_parser.pyx":546
  *                         if i + 1 < n_lines:
  *                             title = (<str>block.lines[i + 1]).strip().rstrip(",")
  *                             if title == "<NULL>":             # <<<<<<<<<<<<<<
@@ -13778,7 +14250,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               }
 
-              /* "pyemsi/core/femap_parser.pyx":511
+              /* "pyemsi/core/femap_parser.pyx":544
  * 
  *                         title = ""
  *                         if i + 1 < n_lines:             # <<<<<<<<<<<<<<
@@ -13787,135 +14259,85 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
             }
 
-            /* "pyemsi/core/femap_parser.pyx":516
- *                                 title = ""
+            /* "pyemsi/core/femap_parser.pyx":550
  * 
- *                         ent_type_val = -1             # <<<<<<<<<<<<<<
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:
+ *                         ent_type_val, has_ent_type, result_start_index = (
+ *                             FEMAPParser._locate_output_vector_header(block.lines, i)             # <<<<<<<<<<<<<<
+ *                         )
+ *                         i = result_start_index
 */
-            __pyx_v_ent_type_val = -1;
-
-            /* "pyemsi/core/femap_parser.pyx":517
- * 
- *                         ent_type_val = -1
- *                         has_ent_type = False             # <<<<<<<<<<<<<<
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
-*/
-            __pyx_v_has_ent_type = 0;
-
-            /* "pyemsi/core/femap_parser.pyx":518
- *                         ent_type_val = -1
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:
-*/
-            __pyx_t_8 = ((__pyx_v_i + 5) < __pyx_v_n_lines);
-            if (__pyx_t_8) {
-
-              /* "pyemsi/core/femap_parser.pyx":519
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])             # <<<<<<<<<<<<<<
- *                             if len(line6_parts) >= 4:
- *                                 ent_type_val = int(line6_parts[3])
-*/
-              if (unlikely(__pyx_v_block->lines == Py_None)) {
-                PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 519, __pyx_L8_error)
+            __pyx_t_4 = __pyx_v_block->lines;
+            __Pyx_INCREF(__pyx_t_4);
+            __pyx_t_3 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__locate_output_vector_header(((PyObject*)__pyx_t_4), __pyx_v_i); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 550, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_3);
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            if (likely(__pyx_t_3 != Py_None)) {
+              PyObject* sequence = __pyx_t_3;
+              Py_ssize_t size = __Pyx_PyTuple_GET_SIZE(sequence);
+              if (unlikely(size != 3)) {
+                if (size > 3) __Pyx_RaiseTooManyValuesError(3);
+                else if (size >= 0) __Pyx_RaiseNeedMoreValuesError(size);
+                __PYX_ERR(0, 549, __pyx_L8_error)
               }
-              __pyx_t_14 = (__pyx_v_i + 5);
-              __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_14);
+              #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+              __pyx_t_4 = PyTuple_GET_ITEM(sequence, 0);
               __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_3 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 519, __pyx_L8_error)
-              __Pyx_GOTREF(__pyx_t_3);
-              __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-              __Pyx_XDECREF_SET(__pyx_v_line6_parts, ((PyObject*)__pyx_t_3));
-              __pyx_t_3 = 0;
-
-              /* "pyemsi/core/femap_parser.pyx":520
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
- *                                 ent_type_val = int(line6_parts[3])
- *                                 has_ent_type = True
-*/
-              if (unlikely(__pyx_v_line6_parts == Py_None)) {
-                PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 520, __pyx_L8_error)
-              }
-              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_line6_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 520, __pyx_L8_error)
-              __pyx_t_8 = (__pyx_t_7 >= 4);
-              if (__pyx_t_8) {
-
-                /* "pyemsi/core/femap_parser.pyx":521
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:
- *                                 ent_type_val = int(line6_parts[3])             # <<<<<<<<<<<<<<
- *                                 has_ent_type = True
- * 
-*/
-                if (unlikely(__pyx_v_line6_parts == Py_None)) {
-                  PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 521, __pyx_L8_error)
-                }
-                __pyx_t_3 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_line6_parts, 3)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 521, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_3);
-                __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_3); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 521, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-                __pyx_v_ent_type_val = __pyx_t_12;
-
-                /* "pyemsi/core/femap_parser.pyx":522
- *                             if len(line6_parts) >= 4:
- *                                 ent_type_val = int(line6_parts[3])
- *                                 has_ent_type = True             # <<<<<<<<<<<<<<
- * 
- *                         i += 7
-*/
-                __pyx_v_has_ent_type = 1;
-
-                /* "pyemsi/core/femap_parser.pyx":520
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
- *                                 ent_type_val = int(line6_parts[3])
- *                                 has_ent_type = True
-*/
-              }
-
-              /* "pyemsi/core/femap_parser.pyx":518
- *                         ent_type_val = -1
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:
-*/
+              __pyx_t_2 = PyTuple_GET_ITEM(sequence, 1);
+              __Pyx_INCREF(__pyx_t_2);
+              __pyx_t_13 = PyTuple_GET_ITEM(sequence, 2);
+              __Pyx_INCREF(__pyx_t_13);
+              #else
+              __pyx_t_4 = __Pyx_PySequence_ITEM(sequence, 0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 549, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_4);
+              __pyx_t_2 = __Pyx_PySequence_ITEM(sequence, 1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 549, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_2);
+              __pyx_t_13 = __Pyx_PySequence_ITEM(sequence, 2); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 549, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_13);
+              #endif
+              __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+            } else {
+              __Pyx_RaiseNoneNotIterableError(); __PYX_ERR(0, 549, __pyx_L8_error)
             }
 
-            /* "pyemsi/core/femap_parser.pyx":524
- *                                 has_ent_type = True
+            /* "pyemsi/core/femap_parser.pyx":549
+ *                                 title = ""
  * 
- *                         i += 7             # <<<<<<<<<<<<<<
+ *                         ent_type_val, has_ent_type, result_start_index = (             # <<<<<<<<<<<<<<
+ *                             FEMAPParser._locate_output_vector_header(block.lines, i)
+ *                         )
+*/
+            __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 549, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __pyx_t_8 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_8 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 549, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+            __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_13); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 549, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+            __pyx_v_ent_type_val = __pyx_t_12;
+            __pyx_v_has_ent_type = __pyx_t_8;
+            __pyx_v_result_start_index = __pyx_t_15;
+
+            /* "pyemsi/core/femap_parser.pyx":552
+ *                             FEMAPParser._locate_output_vector_header(block.lines, i)
+ *                         )
+ *                         i = result_start_index             # <<<<<<<<<<<<<<
  * 
  *                         results = {}
 */
-            __pyx_v_i = (__pyx_v_i + 7);
+            __pyx_v_i = __pyx_v_result_start_index;
 
-            /* "pyemsi/core/femap_parser.pyx":526
- *                         i += 7
+            /* "pyemsi/core/femap_parser.pyx":554
+ *                         i = result_start_index
  * 
  *                         results = {}             # <<<<<<<<<<<<<<
  *                         while i < n_lines:
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
 */
-            __pyx_t_3 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 526, __pyx_L8_error)
+            __pyx_t_3 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 554, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_3);
             __Pyx_XDECREF_SET(__pyx_v_results, ((PyObject*)__pyx_t_3));
             __pyx_t_3 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":527
+            /* "pyemsi/core/femap_parser.pyx":555
  * 
  *                         results = {}
  *                         while i < n_lines:             # <<<<<<<<<<<<<<
@@ -13926,7 +14348,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               __pyx_t_8 = (__pyx_v_i < __pyx_v_n_lines);
               if (!__pyx_t_8) break;
 
-              /* "pyemsi/core/femap_parser.pyx":528
+              /* "pyemsi/core/femap_parser.pyx":556
  *                         results = {}
  *                         while i < n_lines:
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -13935,17 +14357,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_block->lines == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 528, __pyx_L8_error)
+                __PYX_ERR(0, 556, __pyx_L8_error)
               }
               __pyx_t_3 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
               __Pyx_INCREF(__pyx_t_3);
-              __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_3)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 528, __pyx_L8_error)
-              __Pyx_GOTREF(__pyx_t_4);
+              __pyx_t_13 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_3)); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 556, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_13);
               __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-              __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_4));
-              __pyx_t_4 = 0;
+              __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_13));
+              __pyx_t_13 = 0;
 
-              /* "pyemsi/core/femap_parser.pyx":530
+              /* "pyemsi/core/femap_parser.pyx":558
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -13954,17 +14376,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 530, __pyx_L8_error)
+                __PYX_ERR(0, 558, __pyx_L8_error)
               }
-              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 530, __pyx_L8_error)
-              __pyx_t_15 = (__pyx_t_7 >= 2);
-              if (__pyx_t_15) {
+              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 558, __pyx_L8_error)
+              __pyx_t_16 = (__pyx_t_7 >= 2);
+              if (__pyx_t_16) {
               } else {
-                __pyx_t_8 = __pyx_t_15;
-                goto __pyx_L23_bool_binop_done;
+                __pyx_t_8 = __pyx_t_16;
+                goto __pyx_L21_bool_binop_done;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":531
+              /* "pyemsi/core/femap_parser.pyx":559
  * 
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -13973,16 +14395,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 531, __pyx_L8_error)
+                __PYX_ERR(0, 559, __pyx_L8_error)
               }
-              __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 531, __pyx_L8_error)
-              if (__pyx_t_15) {
+              __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 559, __pyx_L8_error)
+              if (__pyx_t_16) {
               } else {
-                __pyx_t_8 = __pyx_t_15;
-                goto __pyx_L23_bool_binop_done;
+                __pyx_t_8 = __pyx_t_16;
+                goto __pyx_L21_bool_binop_done;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":532
+              /* "pyemsi/core/femap_parser.pyx":560
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -13991,13 +14413,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 532, __pyx_L8_error)
+                __PYX_ERR(0, 560, __pyx_L8_error)
               }
-              __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 532, __pyx_L8_error)
-              __pyx_t_8 = __pyx_t_15;
-              __pyx_L23_bool_binop_done:;
+              __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 560, __pyx_L8_error)
+              __pyx_t_8 = __pyx_t_16;
+              __pyx_L21_bool_binop_done:;
 
-              /* "pyemsi/core/femap_parser.pyx":530
+              /* "pyemsi/core/femap_parser.pyx":558
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14006,7 +14428,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (__pyx_t_8) {
 
-                /* "pyemsi/core/femap_parser.pyx":533
+                /* "pyemsi/core/femap_parser.pyx":561
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14015,16 +14437,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":534
+                /* "pyemsi/core/femap_parser.pyx":562
  *                                 result_parts[1] == "0."):
  *                                 i += 1
  *                                 break             # <<<<<<<<<<<<<<
  * 
  *                             if len(result_parts) == 2:
 */
-                goto __pyx_L21_break;
+                goto __pyx_L19_break;
 
-                /* "pyemsi/core/femap_parser.pyx":530
+                /* "pyemsi/core/femap_parser.pyx":558
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14033,7 +14455,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               }
 
-              /* "pyemsi/core/femap_parser.pyx":536
+              /* "pyemsi/core/femap_parser.pyx":564
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
@@ -14042,13 +14464,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 536, __pyx_L8_error)
+                __PYX_ERR(0, 564, __pyx_L8_error)
               }
-              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 536, __pyx_L8_error)
+              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 564, __pyx_L8_error)
               __pyx_t_8 = (__pyx_t_7 == 2);
               if (__pyx_t_8) {
 
-                /* "pyemsi/core/femap_parser.pyx":537
+                /* "pyemsi/core/femap_parser.pyx":565
  * 
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -14057,15 +14479,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 537, __pyx_L8_error)
+                  __PYX_ERR(0, 565, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 537, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 537, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __pyx_v_entity_id = __pyx_t_12;
+                __pyx_t_13 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 565, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_13);
+                __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_13); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 565, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+                __pyx_v_entity_id = __pyx_t_15;
 
-                /* "pyemsi/core/femap_parser.pyx":538
+                /* "pyemsi/core/femap_parser.pyx":566
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])             # <<<<<<<<<<<<<<
@@ -14074,27 +14496,27 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 538, __pyx_L8_error)
+                  __PYX_ERR(0, 566, __pyx_L8_error)
                 }
-                __pyx_t_16 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_16, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 538, __pyx_L8_error)
-                __pyx_v_value = __pyx_t_16;
+                __pyx_t_17 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_17, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 566, __pyx_L8_error)
+                __pyx_v_value = __pyx_t_17;
 
-                /* "pyemsi/core/femap_parser.pyx":539
+                /* "pyemsi/core/femap_parser.pyx":567
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])
  *                                 results[entity_id] = value             # <<<<<<<<<<<<<<
  *                                 i += 1
  * 
 */
-                __pyx_t_4 = PyFloat_FromDouble(__pyx_v_value); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 539, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_entity_id); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 539, __pyx_L8_error)
+                __pyx_t_13 = PyFloat_FromDouble(__pyx_v_value); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 567, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_13);
+                __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_entity_id); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 567, __pyx_L8_error)
                 __Pyx_GOTREF(__pyx_t_3);
-                if (unlikely((PyDict_SetItem(__pyx_v_results, __pyx_t_3, __pyx_t_4) < 0))) __PYX_ERR(0, 539, __pyx_L8_error)
+                if (unlikely((PyDict_SetItem(__pyx_v_results, __pyx_t_3, __pyx_t_13) < 0))) __PYX_ERR(0, 567, __pyx_L8_error)
                 __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":540
+                /* "pyemsi/core/femap_parser.pyx":568
  *                                 value = float(result_parts[1])
  *                                 results[entity_id] = value
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14103,17 +14525,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":536
+                /* "pyemsi/core/femap_parser.pyx":564
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])
 */
-                goto __pyx_L26;
+                goto __pyx_L24;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":542
+              /* "pyemsi/core/femap_parser.pyx":570
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
@@ -14122,13 +14544,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 542, __pyx_L8_error)
+                __PYX_ERR(0, 570, __pyx_L8_error)
               }
-              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 542, __pyx_L8_error)
+              __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 570, __pyx_L8_error)
               __pyx_t_8 = (__pyx_t_7 > 2);
               if (__pyx_t_8) {
 
-                /* "pyemsi/core/femap_parser.pyx":543
+                /* "pyemsi/core/femap_parser.pyx":571
  * 
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -14137,15 +14559,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 543, __pyx_L8_error)
+                  __PYX_ERR(0, 571, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 543, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 543, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __pyx_v_start_id = __pyx_t_12;
+                __pyx_t_13 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 571, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_13);
+                __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_13); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 571, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+                __pyx_v_start_id = __pyx_t_15;
 
-                /* "pyemsi/core/femap_parser.pyx":544
+                /* "pyemsi/core/femap_parser.pyx":572
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])             # <<<<<<<<<<<<<<
@@ -14154,15 +14576,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 544, __pyx_L8_error)
+                  __PYX_ERR(0, 572, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 544, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_12 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_12 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 544, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __pyx_v_end_id = __pyx_t_12;
+                __pyx_t_13 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 572, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_13);
+                __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_13); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 572, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
+                __pyx_v_end_id = __pyx_t_15;
 
-                /* "pyemsi/core/femap_parser.pyx":545
+                /* "pyemsi/core/femap_parser.pyx":573
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])
  *                                 values = [float(v) for v in result_parts[2:]]             # <<<<<<<<<<<<<<
@@ -14170,13 +14592,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  *                                 entity_count = end_id - start_id + 1
 */
                 { /* enter inner scope */
-                  __pyx_t_4 = PyList_New(0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 545, __pyx_L29_error)
-                  __Pyx_GOTREF(__pyx_t_4);
+                  __pyx_t_13 = PyList_New(0); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 573, __pyx_L27_error)
+                  __Pyx_GOTREF(__pyx_t_13);
                   if (unlikely(__pyx_v_result_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 545, __pyx_L29_error)
+                    __PYX_ERR(0, 573, __pyx_L27_error)
                   }
-                  __pyx_t_3 = __Pyx_PyList_GetSlice(__pyx_v_result_parts, 2, PY_SSIZE_T_MAX); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 545, __pyx_L29_error)
+                  __pyx_t_3 = __Pyx_PyList_GetSlice(__pyx_v_result_parts, 2, PY_SSIZE_T_MAX); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 573, __pyx_L27_error)
                   __Pyx_GOTREF(__pyx_t_3);
                   __pyx_t_2 = __pyx_t_3; __Pyx_INCREF(__pyx_t_2);
                   __pyx_t_7 = 0;
@@ -14185,33 +14607,33 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
                     {
                       Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_2);
                       #if !CYTHON_ASSUME_SAFE_SIZE
-                      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 545, __pyx_L29_error)
+                      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 573, __pyx_L27_error)
                       #endif
                       if (__pyx_t_7 >= __pyx_temp) break;
                     }
                     __pyx_t_3 = __Pyx_PyList_GetItemRefFast(__pyx_t_2, __pyx_t_7, __Pyx_ReferenceSharing_OwnStrongReference);
                     ++__pyx_t_7;
-                    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 545, __pyx_L29_error)
+                    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 573, __pyx_L27_error)
                     __Pyx_GOTREF(__pyx_t_3);
                     __Pyx_XDECREF_SET(__pyx_8genexpr1__pyx_v_v, __pyx_t_3);
                     __pyx_t_3 = 0;
-                    __pyx_t_3 = __Pyx_PyNumber_Float(__pyx_8genexpr1__pyx_v_v); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 545, __pyx_L29_error)
+                    __pyx_t_3 = __Pyx_PyNumber_Float(__pyx_8genexpr1__pyx_v_v); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 573, __pyx_L27_error)
                     __Pyx_GOTREF(__pyx_t_3);
-                    if (unlikely(__Pyx_ListComp_Append(__pyx_t_4, (PyObject*)__pyx_t_3))) __PYX_ERR(0, 545, __pyx_L29_error)
+                    if (unlikely(__Pyx_ListComp_Append(__pyx_t_13, (PyObject*)__pyx_t_3))) __PYX_ERR(0, 573, __pyx_L27_error)
                     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
                   }
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                   __Pyx_XDECREF(__pyx_8genexpr1__pyx_v_v); __pyx_8genexpr1__pyx_v_v = 0;
-                  goto __pyx_L33_exit_scope;
-                  __pyx_L29_error:;
+                  goto __pyx_L31_exit_scope;
+                  __pyx_L27_error:;
                   __Pyx_XDECREF(__pyx_8genexpr1__pyx_v_v); __pyx_8genexpr1__pyx_v_v = 0;
                   goto __pyx_L8_error;
-                  __pyx_L33_exit_scope:;
+                  __pyx_L31_exit_scope:;
                 } /* exit inner scope */
-                __Pyx_XDECREF_SET(__pyx_v_values, ((PyObject*)__pyx_t_4));
-                __pyx_t_4 = 0;
+                __Pyx_XDECREF_SET(__pyx_v_values, ((PyObject*)__pyx_t_13));
+                __pyx_t_13 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":547
+                /* "pyemsi/core/femap_parser.pyx":575
  *                                 values = [float(v) for v in result_parts[2:]]
  * 
  *                                 entity_count = end_id - start_id + 1             # <<<<<<<<<<<<<<
@@ -14220,7 +14642,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_entity_count = ((__pyx_v_end_id - __pyx_v_start_id) + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":548
+                /* "pyemsi/core/femap_parser.pyx":576
  * 
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14229,7 +14651,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":549
+                /* "pyemsi/core/femap_parser.pyx":577
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:             # <<<<<<<<<<<<<<
@@ -14237,19 +14659,19 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  *                                     if (len(cont_parts) >= 2 and
 */
                 while (1) {
-                  __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 549, __pyx_L8_error)
-                  __pyx_t_15 = (__pyx_t_7 < __pyx_v_entity_count);
-                  if (__pyx_t_15) {
+                  __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 577, __pyx_L8_error)
+                  __pyx_t_16 = (__pyx_t_7 < __pyx_v_entity_count);
+                  if (__pyx_t_16) {
                   } else {
-                    __pyx_t_8 = __pyx_t_15;
-                    goto __pyx_L36_bool_binop_done;
+                    __pyx_t_8 = __pyx_t_16;
+                    goto __pyx_L34_bool_binop_done;
                   }
-                  __pyx_t_15 = (__pyx_v_i < __pyx_v_n_lines);
-                  __pyx_t_8 = __pyx_t_15;
-                  __pyx_L36_bool_binop_done:;
+                  __pyx_t_16 = (__pyx_v_i < __pyx_v_n_lines);
+                  __pyx_t_8 = __pyx_t_16;
+                  __pyx_L34_bool_binop_done:;
                   if (!__pyx_t_8) break;
 
-                  /* "pyemsi/core/femap_parser.pyx":550
+                  /* "pyemsi/core/femap_parser.pyx":578
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -14258,17 +14680,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_block->lines == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 550, __pyx_L8_error)
+                    __PYX_ERR(0, 578, __pyx_L8_error)
                   }
-                  __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
-                  __Pyx_INCREF(__pyx_t_4);
-                  __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 550, __pyx_L8_error)
+                  __pyx_t_13 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
+                  __Pyx_INCREF(__pyx_t_13);
+                  __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_13)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 578, __pyx_L8_error)
                   __Pyx_GOTREF(__pyx_t_2);
-                  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                  __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
                   __Pyx_XDECREF_SET(__pyx_v_cont_parts, ((PyObject*)__pyx_t_2));
                   __pyx_t_2 = 0;
 
-                  /* "pyemsi/core/femap_parser.pyx":551
+                  /* "pyemsi/core/femap_parser.pyx":579
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14277,17 +14699,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_cont_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                    __PYX_ERR(0, 551, __pyx_L8_error)
+                    __PYX_ERR(0, 579, __pyx_L8_error)
                   }
-                  __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_cont_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 551, __pyx_L8_error)
-                  __pyx_t_15 = (__pyx_t_7 >= 2);
-                  if (__pyx_t_15) {
+                  __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_cont_parts); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 579, __pyx_L8_error)
+                  __pyx_t_16 = (__pyx_t_7 >= 2);
+                  if (__pyx_t_16) {
                   } else {
-                    __pyx_t_8 = __pyx_t_15;
-                    goto __pyx_L39_bool_binop_done;
+                    __pyx_t_8 = __pyx_t_16;
+                    goto __pyx_L37_bool_binop_done;
                   }
 
-                  /* "pyemsi/core/femap_parser.pyx":552
+                  /* "pyemsi/core/femap_parser.pyx":580
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -14296,16 +14718,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_cont_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 552, __pyx_L8_error)
+                    __PYX_ERR(0, 580, __pyx_L8_error)
                   }
-                  __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 552, __pyx_L8_error)
-                  if (__pyx_t_15) {
+                  __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 580, __pyx_L8_error)
+                  if (__pyx_t_16) {
                   } else {
-                    __pyx_t_8 = __pyx_t_15;
-                    goto __pyx_L39_bool_binop_done;
+                    __pyx_t_8 = __pyx_t_16;
+                    goto __pyx_L37_bool_binop_done;
                   }
 
-                  /* "pyemsi/core/femap_parser.pyx":553
+                  /* "pyemsi/core/femap_parser.pyx":581
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -14314,13 +14736,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_cont_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 553, __pyx_L8_error)
+                    __PYX_ERR(0, 581, __pyx_L8_error)
                   }
-                  __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 553, __pyx_L8_error)
-                  __pyx_t_8 = __pyx_t_15;
-                  __pyx_L39_bool_binop_done:;
+                  __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 581, __pyx_L8_error)
+                  __pyx_t_8 = __pyx_t_16;
+                  __pyx_L37_bool_binop_done:;
 
-                  /* "pyemsi/core/femap_parser.pyx":551
+                  /* "pyemsi/core/femap_parser.pyx":579
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14329,16 +14751,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (__pyx_t_8) {
 
-                    /* "pyemsi/core/femap_parser.pyx":554
+                    /* "pyemsi/core/femap_parser.pyx":582
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):
  *                                         break             # <<<<<<<<<<<<<<
  *                                     values.extend([float(v) for v in cont_parts])
  *                                     i += 1
 */
-                    goto __pyx_L35_break;
+                    goto __pyx_L33_break;
 
-                    /* "pyemsi/core/femap_parser.pyx":551
+                    /* "pyemsi/core/femap_parser.pyx":579
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -14347,7 +14769,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   }
 
-                  /* "pyemsi/core/femap_parser.pyx":555
+                  /* "pyemsi/core/femap_parser.pyx":583
  *                                         cont_parts[1] == "0."):
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])             # <<<<<<<<<<<<<<
@@ -14355,45 +14777,45 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  * 
 */
                   { /* enter inner scope */
-                    __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 555, __pyx_L44_error)
+                    __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 583, __pyx_L42_error)
                     __Pyx_GOTREF(__pyx_t_2);
                     if (unlikely(__pyx_v_cont_parts == Py_None)) {
                       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not iterable");
-                      __PYX_ERR(0, 555, __pyx_L44_error)
+                      __PYX_ERR(0, 583, __pyx_L42_error)
                     }
-                    __pyx_t_4 = __pyx_v_cont_parts; __Pyx_INCREF(__pyx_t_4);
+                    __pyx_t_13 = __pyx_v_cont_parts; __Pyx_INCREF(__pyx_t_13);
                     __pyx_t_7 = 0;
                     for (;;) {
                       {
-                        Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_4);
+                        Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_13);
                         #if !CYTHON_ASSUME_SAFE_SIZE
-                        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 555, __pyx_L44_error)
+                        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 583, __pyx_L42_error)
                         #endif
                         if (__pyx_t_7 >= __pyx_temp) break;
                       }
-                      __pyx_t_3 = __Pyx_PyList_GetItemRefFast(__pyx_t_4, __pyx_t_7, __Pyx_ReferenceSharing_OwnStrongReference);
+                      __pyx_t_3 = __Pyx_PyList_GetItemRefFast(__pyx_t_13, __pyx_t_7, __Pyx_ReferenceSharing_OwnStrongReference);
                       ++__pyx_t_7;
-                      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 555, __pyx_L44_error)
+                      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 583, __pyx_L42_error)
                       __Pyx_GOTREF(__pyx_t_3);
                       __Pyx_XDECREF_SET(__pyx_8genexpr2__pyx_v_v, __pyx_t_3);
                       __pyx_t_3 = 0;
-                      __pyx_t_3 = __Pyx_PyNumber_Float(__pyx_8genexpr2__pyx_v_v); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 555, __pyx_L44_error)
+                      __pyx_t_3 = __Pyx_PyNumber_Float(__pyx_8genexpr2__pyx_v_v); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 583, __pyx_L42_error)
                       __Pyx_GOTREF(__pyx_t_3);
-                      if (unlikely(__Pyx_ListComp_Append(__pyx_t_2, (PyObject*)__pyx_t_3))) __PYX_ERR(0, 555, __pyx_L44_error)
+                      if (unlikely(__Pyx_ListComp_Append(__pyx_t_2, (PyObject*)__pyx_t_3))) __PYX_ERR(0, 583, __pyx_L42_error)
                       __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
                     }
-                    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                    __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
                     __Pyx_XDECREF(__pyx_8genexpr2__pyx_v_v); __pyx_8genexpr2__pyx_v_v = 0;
-                    goto __pyx_L48_exit_scope;
-                    __pyx_L44_error:;
+                    goto __pyx_L46_exit_scope;
+                    __pyx_L42_error:;
                     __Pyx_XDECREF(__pyx_8genexpr2__pyx_v_v); __pyx_8genexpr2__pyx_v_v = 0;
                     goto __pyx_L8_error;
-                    __pyx_L48_exit_scope:;
+                    __pyx_L46_exit_scope:;
                   } /* exit inner scope */
-                  __pyx_t_17 = __Pyx_PyList_Extend(__pyx_v_values, __pyx_t_2); if (unlikely(__pyx_t_17 == ((int)-1))) __PYX_ERR(0, 555, __pyx_L8_error)
+                  __pyx_t_18 = __Pyx_PyList_Extend(__pyx_v_values, __pyx_t_2); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 583, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-                  /* "pyemsi/core/femap_parser.pyx":556
+                  /* "pyemsi/core/femap_parser.pyx":584
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])
  *                                     i += 1             # <<<<<<<<<<<<<<
@@ -14402,29 +14824,29 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   __pyx_v_i = (__pyx_v_i + 1);
                 }
-                __pyx_L35_break:;
+                __pyx_L33_break:;
 
-                /* "pyemsi/core/femap_parser.pyx":558
+                /* "pyemsi/core/femap_parser.pyx":586
  *                                     i += 1
  * 
  *                                 for offset in range(min(len(values), entity_count)):             # <<<<<<<<<<<<<<
  *                                     results[start_id + offset] = values[offset]
  *                             else:
 */
-                __pyx_t_12 = __pyx_v_entity_count;
-                __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 558, __pyx_L8_error)
-                __pyx_t_8 = (__pyx_t_12 < __pyx_t_7);
+                __pyx_t_15 = __pyx_v_entity_count;
+                __pyx_t_7 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 586, __pyx_L8_error)
+                __pyx_t_8 = (__pyx_t_15 < __pyx_t_7);
                 if (__pyx_t_8) {
-                  __pyx_t_18 = __pyx_t_12;
+                  __pyx_t_19 = __pyx_t_15;
                 } else {
-                  __pyx_t_18 = __pyx_t_7;
+                  __pyx_t_19 = __pyx_t_7;
                 }
-                __pyx_t_7 = __pyx_t_18;
-                __pyx_t_18 = __pyx_t_7;
-                for (__pyx_t_12 = 0; __pyx_t_12 < __pyx_t_18; __pyx_t_12+=1) {
-                  __pyx_v_offset = __pyx_t_12;
+                __pyx_t_7 = __pyx_t_19;
+                __pyx_t_19 = __pyx_t_7;
+                for (__pyx_t_15 = 0; __pyx_t_15 < __pyx_t_19; __pyx_t_15+=1) {
+                  __pyx_v_offset = __pyx_t_15;
 
-                  /* "pyemsi/core/femap_parser.pyx":559
+                  /* "pyemsi/core/femap_parser.pyx":587
  * 
  *                                 for offset in range(min(len(values), entity_count)):
  *                                     results[start_id + offset] = values[offset]             # <<<<<<<<<<<<<<
@@ -14433,24 +14855,24 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_values, __pyx_v_offset);
                   __Pyx_INCREF(__pyx_t_2);
-                  __pyx_t_4 = __Pyx_PyLong_From_int((__pyx_v_start_id + __pyx_v_offset)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 559, __pyx_L8_error)
-                  __Pyx_GOTREF(__pyx_t_4);
-                  if (unlikely((PyDict_SetItem(__pyx_v_results, __pyx_t_4, __pyx_t_2) < 0))) __PYX_ERR(0, 559, __pyx_L8_error)
-                  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                  __pyx_t_13 = __Pyx_PyLong_From_int((__pyx_v_start_id + __pyx_v_offset)); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 587, __pyx_L8_error)
+                  __Pyx_GOTREF(__pyx_t_13);
+                  if (unlikely((PyDict_SetItem(__pyx_v_results, __pyx_t_13, __pyx_t_2) < 0))) __PYX_ERR(0, 587, __pyx_L8_error)
+                  __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
                   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                 }
 
-                /* "pyemsi/core/femap_parser.pyx":542
+                /* "pyemsi/core/femap_parser.pyx":570
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])
 */
-                goto __pyx_L26;
+                goto __pyx_L24;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":561
+              /* "pyemsi/core/femap_parser.pyx":589
  *                                     results[start_id + offset] = values[offset]
  *                             else:
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -14460,46 +14882,46 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               /*else*/ {
                 __pyx_v_i = (__pyx_v_i + 1);
               }
-              __pyx_L26:;
+              __pyx_L24:;
             }
-            __pyx_L21_break:;
+            __pyx_L19_break:;
 
-            /* "pyemsi/core/femap_parser.pyx":564
+            /* "pyemsi/core/femap_parser.pyx":592
  * 
  *                         output_vectors.append({
  *                             "set_id": set_id,             # <<<<<<<<<<<<<<
  *                             "vec_id": vec_id,
  *                             "title": title,
 */
-            __pyx_t_2 = __Pyx_PyDict_NewPresized(5); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 564, __pyx_L8_error)
+            __pyx_t_2 = __Pyx_PyDict_NewPresized(5); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 592, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_2);
-            __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_set_id); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 564, __pyx_L8_error)
-            __Pyx_GOTREF(__pyx_t_4);
-            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_set_id, __pyx_t_4) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
-            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __pyx_t_13 = __Pyx_PyLong_From_int(__pyx_v_set_id); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 592, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_13);
+            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_set_id, __pyx_t_13) < (0)) __PYX_ERR(0, 592, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":565
+            /* "pyemsi/core/femap_parser.pyx":593
  *                         output_vectors.append({
  *                             "set_id": set_id,
  *                             "vec_id": vec_id,             # <<<<<<<<<<<<<<
  *                             "title": title,
  *                             "ent_type": ent_type_val if has_ent_type else None,
 */
-            __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_vec_id); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 565, __pyx_L8_error)
-            __Pyx_GOTREF(__pyx_t_4);
-            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_vec_id, __pyx_t_4) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
-            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __pyx_t_13 = __Pyx_PyLong_From_int(__pyx_v_vec_id); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 593, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_13);
+            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_vec_id, __pyx_t_13) < (0)) __PYX_ERR(0, 592, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":566
+            /* "pyemsi/core/femap_parser.pyx":594
  *                             "set_id": set_id,
  *                             "vec_id": vec_id,
  *                             "title": title,             # <<<<<<<<<<<<<<
  *                             "ent_type": ent_type_val if has_ent_type else None,
  *                             "results": results,
 */
-            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_title, __pyx_v_title) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
+            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_title, __pyx_v_title) < (0)) __PYX_ERR(0, 592, __pyx_L8_error)
 
-            /* "pyemsi/core/femap_parser.pyx":567
+            /* "pyemsi/core/femap_parser.pyx":595
  *                             "vec_id": vec_id,
  *                             "title": title,
  *                             "ent_type": ent_type_val if has_ent_type else None,             # <<<<<<<<<<<<<<
@@ -14507,37 +14929,37 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  *                         })
 */
             if (__pyx_v_has_ent_type) {
-              __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_ent_type_val); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 567, __pyx_L8_error)
+              __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_ent_type_val); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 595, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_3);
-              __pyx_t_4 = __pyx_t_3;
+              __pyx_t_13 = __pyx_t_3;
               __pyx_t_3 = 0;
             } else {
               __Pyx_INCREF(Py_None);
-              __pyx_t_4 = Py_None;
+              __pyx_t_13 = Py_None;
             }
-            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_ent_type, __pyx_t_4) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
-            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_ent_type, __pyx_t_13) < (0)) __PYX_ERR(0, 592, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":568
+            /* "pyemsi/core/femap_parser.pyx":596
  *                             "title": title,
  *                             "ent_type": ent_type_val if has_ent_type else None,
  *                             "results": results,             # <<<<<<<<<<<<<<
  *                         })
  * 
 */
-            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_results, __pyx_v_results) < (0)) __PYX_ERR(0, 564, __pyx_L8_error)
+            if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_results, __pyx_v_results) < (0)) __PYX_ERR(0, 592, __pyx_L8_error)
 
-            /* "pyemsi/core/femap_parser.pyx":563
+            /* "pyemsi/core/femap_parser.pyx":591
  *                                 i += 1
  * 
  *                         output_vectors.append({             # <<<<<<<<<<<<<<
  *                             "set_id": set_id,
  *                             "vec_id": vec_id,
 */
-            __pyx_t_17 = __Pyx_PyList_Append(__pyx_v_output_vectors, __pyx_t_2); if (unlikely(__pyx_t_17 == ((int)-1))) __PYX_ERR(0, 563, __pyx_L8_error)
+            __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_output_vectors, __pyx_t_2); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 591, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":506
+            /* "pyemsi/core/femap_parser.pyx":539
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -14555,22 +14977,22 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
           __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-          /* "pyemsi/core/femap_parser.pyx":571
+          /* "pyemsi/core/femap_parser.pyx":599
  *                         })
  * 
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
  *                         i += 1
  *                 else:
 */
-          __pyx_t_12 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
-          if (__pyx_t_12) {
+          __pyx_t_15 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
+          if (__pyx_t_15) {
             __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors", __pyx_clineno, __pyx_lineno, __pyx_filename);
-            if (__Pyx_GetException(&__pyx_t_2, &__pyx_t_4, &__pyx_t_3) < 0) __PYX_ERR(0, 571, __pyx_L10_except_error)
+            if (__Pyx_GetException(&__pyx_t_2, &__pyx_t_13, &__pyx_t_3) < 0) __PYX_ERR(0, 599, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_2);
-            __Pyx_XGOTREF(__pyx_t_4);
+            __Pyx_XGOTREF(__pyx_t_13);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/core/femap_parser.pyx":572
+            /* "pyemsi/core/femap_parser.pyx":600
  * 
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -14579,13 +15001,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
             __pyx_v_i = (__pyx_v_i + 1);
             __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
-            __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __Pyx_XDECREF(__pyx_t_13); __pyx_t_13 = 0;
             __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
             goto __pyx_L9_exception_handled;
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/core/femap_parser.pyx":506
+          /* "pyemsi/core/femap_parser.pyx":539
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -14606,7 +15028,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __pyx_L15_try_end:;
         }
 
-        /* "pyemsi/core/femap_parser.pyx":505
+        /* "pyemsi/core/femap_parser.pyx":538
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -14616,7 +15038,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
         goto __pyx_L7;
       }
 
-      /* "pyemsi/core/femap_parser.pyx":574
+      /* "pyemsi/core/femap_parser.pyx":602
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -14629,9 +15051,9 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
       __pyx_L7:;
     }
 
-    /* "pyemsi/core/femap_parser.pyx":500
+    /* "pyemsi/core/femap_parser.pyx":533
  * 
- *         all_blocks = self.get_blocks(1051)
+ *         all_blocks = self._get_output_vector_blocks()
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
  *             i = 0
  *             n_lines = len(block.lines)
@@ -14639,7 +15061,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":576
+  /* "pyemsi/core/femap_parser.pyx":604
  *                     i += 1
  * 
  *         return output_vectors             # <<<<<<<<<<<<<<
@@ -14651,12 +15073,12 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   __pyx_r = __pyx_v_output_vectors;
   goto __pyx_L0;
 
-  /* "pyemsi/core/femap_parser.pyx":481
- *         return output_sets
+  /* "pyemsi/core/femap_parser.pyx":513
+ *         return self.get_blocks(1051) + self.get_blocks(451)
  * 
  *     cpdef list get_output_vectors(self):             # <<<<<<<<<<<<<<
  *         """
- *         Extract all output data vectors from Block 1051.
+ *         Extract all output data vectors from Blocks 1051 and 451.
 */
 
   /* function exit code */
@@ -14675,7 +15097,6 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   __Pyx_XDECREF(__pyx_v_result_parts);
   __Pyx_XDECREF(__pyx_v_cont_parts);
   __Pyx_XDECREF(__pyx_v_values);
-  __Pyx_XDECREF(__pyx_v_line6_parts);
   __Pyx_XDECREF((PyObject *)__pyx_v_block);
   __Pyx_XDECREF(__pyx_v_title);
   __Pyx_XDECREF(__pyx_v_results);
@@ -14694,7 +15115,7 @@ PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors, "\n        Extract all output data vectors from Block 1051.\n\n        Returns:\n            List of output vector dictionaries with metadata and results\n        ");
+PyDoc_STRVAR(__pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors, "\n        Extract all output data vectors from Blocks 1051 and 451.\n\n        Returns:\n            List of output vector dictionaries with metadata and results\n        ");
 static PyMethodDef __pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors = {"get_output_vectors", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_output_vectors};
 static PyObject *__pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors(PyObject *__pyx_v_self, 
 #if CYTHON_METH_FASTCALL
@@ -14738,7 +15159,7 @@ static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_outpu
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_output_vectors", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 481, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_vectors(__pyx_v_self, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 513, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -14755,7 +15176,7 @@ static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_24get_outpu
   return __pyx_r;
 }
 
-/* "pyemsi/core/femap_parser.pyx":578
+/* "pyemsi/core/femap_parser.pyx":606
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
@@ -14778,7 +15199,6 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   PyObject *__pyx_v_result_parts = 0;
   PyObject *__pyx_v_cont_parts = 0;
   PyObject *__pyx_v_values = 0;
-  PyObject *__pyx_v_line6_parts = 0;
   PyObject *__pyx_v_entity_ids_list = 0;
   PyObject *__pyx_v_values_list = 0;
   struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *__pyx_v_block = 0;
@@ -14794,6 +15214,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   int __pyx_v_ent_type_val;
   double __pyx_v_value;
   int __pyx_v_has_ent_type;
+  int __pyx_v_result_start_index;
   PyObject *__pyx_8genexpr3__pyx_v_v = NULL;
   PyObject *__pyx_8genexpr4__pyx_v_v = NULL;
   PyObject *__pyx_r = NULL;
@@ -14813,7 +15234,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   PyObject *__pyx_t_13 = NULL;
   int __pyx_t_14;
   int __pyx_t_15;
-  long __pyx_t_16;
+  int __pyx_t_16;
   double __pyx_t_17;
   int __pyx_t_18;
   Py_ssize_t __pyx_t_19;
@@ -14846,16 +15267,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     if (unlikely(!__Pyx_object_dict_version_matches(((PyObject *)__pyx_v_self), __pyx_tp_dict_version, __pyx_obj_dict_version))) {
       PY_UINT64_T __pyx_typedict_guard = __Pyx_get_tp_dict_version(((PyObject *)__pyx_v_self));
       #endif
-      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 578, __pyx_L1_error)
+      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_self), __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 606, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
       if (!__Pyx_IsSameCFunction(__pyx_t_1, (void(*)(void)) __pyx_pw_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays)) {
         __Pyx_XDECREF(__pyx_r);
         __pyx_t_3 = NULL;
         __Pyx_INCREF(__pyx_t_1);
         __pyx_t_4 = __pyx_t_1; 
-        __pyx_t_5 = __Pyx_PyLong_From_int(__pyx_v_set_id_filter); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 578, __pyx_L1_error)
+        __pyx_t_5 = __Pyx_PyLong_From_int(__pyx_v_set_id_filter); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 606, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_5);
-        __pyx_t_6 = __Pyx_PyLong_From_int(__pyx_v_vec_id_filter); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 578, __pyx_L1_error)
+        __pyx_t_6 = __Pyx_PyLong_From_int(__pyx_v_vec_id_filter); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 606, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_6);
         __pyx_t_7 = 1;
         #if CYTHON_UNPACK_METHODS
@@ -14876,10 +15297,10 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
           __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
           __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-          if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 578, __pyx_L1_error)
+          if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 606, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_2);
         }
-        if (!(likely(PyTuple_CheckExact(__pyx_t_2))||((__pyx_t_2) == Py_None) || __Pyx_RaiseUnexpectedTypeError("tuple", __pyx_t_2))) __PYX_ERR(0, 578, __pyx_L1_error)
+        if (!(likely(PyTuple_CheckExact(__pyx_t_2))||((__pyx_t_2) == Py_None) || __Pyx_RaiseUnexpectedTypeError("tuple", __pyx_t_2))) __PYX_ERR(0, 606, __pyx_L1_error)
         __pyx_r = ((PyObject*)__pyx_t_2);
         __pyx_t_2 = 0;
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -14898,28 +15319,28 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     #endif
   }
 
-  /* "pyemsi/core/femap_parser.pyx":600
- *         cdef bint has_ent_type
+  /* "pyemsi/core/femap_parser.pyx":629
+ *         cdef int result_start_index
  * 
- *         all_blocks = self.get_blocks(1051)             # <<<<<<<<<<<<<<
+ *         all_blocks = self._get_output_vector_blocks()             # <<<<<<<<<<<<<<
  *         for block in all_blocks:
  *             i = 0
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->get_blocks(__pyx_v_self, 0x41B, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 600, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_6pyemsi_4core_12femap_parser_FEMAPParser *)__pyx_v_self->__pyx_vtab)->_get_output_vector_blocks(__pyx_v_self); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 629, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_all_blocks = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":601
+  /* "pyemsi/core/femap_parser.pyx":630
  * 
- *         all_blocks = self.get_blocks(1051)
+ *         all_blocks = self._get_output_vector_blocks()
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
  *             i = 0
  *             n_lines = len(block.lines)
 */
   if (unlikely(__pyx_v_all_blocks == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not iterable");
-    __PYX_ERR(0, 601, __pyx_L1_error)
+    __PYX_ERR(0, 630, __pyx_L1_error)
   }
   __pyx_t_1 = __pyx_v_all_blocks; __Pyx_INCREF(__pyx_t_1);
   __pyx_t_8 = 0;
@@ -14927,20 +15348,20 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     {
       Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_1);
       #if !CYTHON_ASSUME_SAFE_SIZE
-      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 601, __pyx_L1_error)
+      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 630, __pyx_L1_error)
       #endif
       if (__pyx_t_8 >= __pyx_temp) break;
     }
     __pyx_t_2 = __Pyx_PyList_GetItemRefFast(__pyx_t_1, __pyx_t_8, __Pyx_ReferenceSharing_OwnStrongReference);
     ++__pyx_t_8;
-    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 601, __pyx_L1_error)
+    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 630, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 601, __pyx_L1_error)
+    if (!(likely(((__pyx_t_2) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_2, __pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPBlock))))) __PYX_ERR(0, 630, __pyx_L1_error)
     __Pyx_XDECREF_SET(__pyx_v_block, ((struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPBlock *)__pyx_t_2));
     __pyx_t_2 = 0;
 
-    /* "pyemsi/core/femap_parser.pyx":602
- *         all_blocks = self.get_blocks(1051)
+    /* "pyemsi/core/femap_parser.pyx":631
+ *         all_blocks = self._get_output_vector_blocks()
  *         for block in all_blocks:
  *             i = 0             # <<<<<<<<<<<<<<
  *             n_lines = len(block.lines)
@@ -14948,7 +15369,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
     __pyx_v_i = 0;
 
-    /* "pyemsi/core/femap_parser.pyx":603
+    /* "pyemsi/core/femap_parser.pyx":632
  *         for block in all_blocks:
  *             i = 0
  *             n_lines = len(block.lines)             # <<<<<<<<<<<<<<
@@ -14959,13 +15380,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
     __Pyx_INCREF(__pyx_t_2);
     if (unlikely(__pyx_t_2 == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-      __PYX_ERR(0, 603, __pyx_L1_error)
+      __PYX_ERR(0, 632, __pyx_L1_error)
     }
-    __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_t_2); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 603, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_t_2); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 632, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_v_n_lines = __pyx_t_9;
 
-    /* "pyemsi/core/femap_parser.pyx":604
+    /* "pyemsi/core/femap_parser.pyx":633
  *             i = 0
  *             n_lines = len(block.lines)
  *             while i < n_lines:             # <<<<<<<<<<<<<<
@@ -14976,7 +15397,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
       __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
       if (!__pyx_t_10) break;
 
-      /* "pyemsi/core/femap_parser.pyx":605
+      /* "pyemsi/core/femap_parser.pyx":634
  *             n_lines = len(block.lines)
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -14985,17 +15406,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
       if (unlikely(__pyx_v_block->lines == Py_None)) {
         PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-        __PYX_ERR(0, 605, __pyx_L1_error)
+        __PYX_ERR(0, 634, __pyx_L1_error)
       }
       __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
       __Pyx_INCREF(__pyx_t_2);
-      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 605, __pyx_L1_error)
+      __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 634, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_XDECREF_SET(__pyx_v_parts, ((PyObject*)__pyx_t_4));
       __pyx_t_4 = 0;
 
-      /* "pyemsi/core/femap_parser.pyx":606
+      /* "pyemsi/core/femap_parser.pyx":635
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -15004,13 +15425,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
       if (unlikely(__pyx_v_parts == Py_None)) {
         PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-        __PYX_ERR(0, 606, __pyx_L1_error)
+        __PYX_ERR(0, 635, __pyx_L1_error)
       }
-      __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 606, __pyx_L1_error)
+      __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 635, __pyx_L1_error)
       __pyx_t_10 = (__pyx_t_9 >= 2);
       if (__pyx_t_10) {
 
-        /* "pyemsi/core/femap_parser.pyx":607
+        /* "pyemsi/core/femap_parser.pyx":636
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -15026,7 +15447,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __Pyx_XGOTREF(__pyx_t_13);
           /*try:*/ {
 
-            /* "pyemsi/core/femap_parser.pyx":608
+            /* "pyemsi/core/femap_parser.pyx":637
  *                 if len(parts) >= 2:
  *                     try:
  *                         set_id = int(parts[0])             # <<<<<<<<<<<<<<
@@ -15035,60 +15456,117 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
             if (unlikely(__pyx_v_parts == Py_None)) {
               PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-              __PYX_ERR(0, 608, __pyx_L8_error)
+              __PYX_ERR(0, 637, __pyx_L8_error)
             }
-            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 608, __pyx_L8_error)
+            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 637, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_4);
-            __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 608, __pyx_L8_error)
+            __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 637, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_set_id = __pyx_t_14;
 
-            /* "pyemsi/core/femap_parser.pyx":609
+            /* "pyemsi/core/femap_parser.pyx":638
  *                     try:
  *                         set_id = int(parts[0])
  *                         vec_id = int(parts[1])             # <<<<<<<<<<<<<<
  * 
- *                         # Check filters
+ *                         ent_type_val, has_ent_type, result_start_index = (
 */
             if (unlikely(__pyx_v_parts == Py_None)) {
               PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-              __PYX_ERR(0, 609, __pyx_L8_error)
+              __PYX_ERR(0, 638, __pyx_L8_error)
             }
-            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 1)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 609, __pyx_L8_error)
+            __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_parts, 1)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 638, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_4);
-            __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 609, __pyx_L8_error)
+            __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 638, __pyx_L8_error)
             __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
             __pyx_v_vec_id = __pyx_t_14;
 
-            /* "pyemsi/core/femap_parser.pyx":612
+            /* "pyemsi/core/femap_parser.pyx":641
+ * 
+ *                         ent_type_val, has_ent_type, result_start_index = (
+ *                             FEMAPParser._locate_output_vector_header(block.lines, i)             # <<<<<<<<<<<<<<
+ *                         )
+ * 
+*/
+            __pyx_t_4 = __pyx_v_block->lines;
+            __Pyx_INCREF(__pyx_t_4);
+            __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__locate_output_vector_header(((PyObject*)__pyx_t_4), __pyx_v_i); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 641, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_2);
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            if (likely(__pyx_t_2 != Py_None)) {
+              PyObject* sequence = __pyx_t_2;
+              Py_ssize_t size = __Pyx_PyTuple_GET_SIZE(sequence);
+              if (unlikely(size != 3)) {
+                if (size > 3) __Pyx_RaiseTooManyValuesError(3);
+                else if (size >= 0) __Pyx_RaiseNeedMoreValuesError(size);
+                __PYX_ERR(0, 640, __pyx_L8_error)
+              }
+              #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
+              __pyx_t_4 = PyTuple_GET_ITEM(sequence, 0);
+              __Pyx_INCREF(__pyx_t_4);
+              __pyx_t_6 = PyTuple_GET_ITEM(sequence, 1);
+              __Pyx_INCREF(__pyx_t_6);
+              __pyx_t_5 = PyTuple_GET_ITEM(sequence, 2);
+              __Pyx_INCREF(__pyx_t_5);
+              #else
+              __pyx_t_4 = __Pyx_PySequence_ITEM(sequence, 0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 640, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_4);
+              __pyx_t_6 = __Pyx_PySequence_ITEM(sequence, 1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 640, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_6);
+              __pyx_t_5 = __Pyx_PySequence_ITEM(sequence, 2); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 640, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_5);
+              #endif
+              __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+            } else {
+              __Pyx_RaiseNoneNotIterableError(); __PYX_ERR(0, 640, __pyx_L8_error)
+            }
+
+            /* "pyemsi/core/femap_parser.pyx":640
+ *                         vec_id = int(parts[1])
+ * 
+ *                         ent_type_val, has_ent_type, result_start_index = (             # <<<<<<<<<<<<<<
+ *                             FEMAPParser._locate_output_vector_header(block.lines, i)
+ *                         )
+*/
+            __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 640, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+            __pyx_t_10 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely((__pyx_t_10 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 640, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+            __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_5); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 640, __pyx_L8_error)
+            __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+            __pyx_v_ent_type_val = __pyx_t_14;
+            __pyx_v_has_ent_type = __pyx_t_10;
+            __pyx_v_result_start_index = __pyx_t_15;
+
+            /* "pyemsi/core/femap_parser.pyx":645
  * 
  *                         # Check filters
  *                         if set_id_filter >= 0 and set_id != set_id_filter:             # <<<<<<<<<<<<<<
- *                             i += 7
+ *                             i = result_start_index
  *                             # Skip to end marker
 */
-            __pyx_t_15 = (__pyx_v_set_id_filter >= 0);
-            if (__pyx_t_15) {
+            __pyx_t_16 = (__pyx_v_set_id_filter >= 0);
+            if (__pyx_t_16) {
             } else {
-              __pyx_t_10 = __pyx_t_15;
+              __pyx_t_10 = __pyx_t_16;
               goto __pyx_L17_bool_binop_done;
             }
-            __pyx_t_15 = (__pyx_v_set_id != __pyx_v_set_id_filter);
-            __pyx_t_10 = __pyx_t_15;
+            __pyx_t_16 = (__pyx_v_set_id != __pyx_v_set_id_filter);
+            __pyx_t_10 = __pyx_t_16;
             __pyx_L17_bool_binop_done:;
             if (__pyx_t_10) {
 
-              /* "pyemsi/core/femap_parser.pyx":613
+              /* "pyemsi/core/femap_parser.pyx":646
  *                         # Check filters
  *                         if set_id_filter >= 0 and set_id != set_id_filter:
- *                             i += 7             # <<<<<<<<<<<<<<
+ *                             i = result_start_index             # <<<<<<<<<<<<<<
  *                             # Skip to end marker
  *                             while i < n_lines:
 */
-              __pyx_v_i = (__pyx_v_i + 7);
+              __pyx_v_i = __pyx_v_result_start_index;
 
-              /* "pyemsi/core/femap_parser.pyx":615
- *                             i += 7
+              /* "pyemsi/core/femap_parser.pyx":648
+ *                             i = result_start_index
  *                             # Skip to end marker
  *                             while i < n_lines:             # <<<<<<<<<<<<<<
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
@@ -15098,7 +15576,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
                 __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
                 if (!__pyx_t_10) break;
 
-                /* "pyemsi/core/femap_parser.pyx":616
+                /* "pyemsi/core/femap_parser.pyx":649
  *                             # Skip to end marker
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15107,17 +15585,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_block->lines == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 616, __pyx_L8_error)
+                  __PYX_ERR(0, 649, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
-                __Pyx_INCREF(__pyx_t_4);
-                __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 616, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_2);
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_2));
-                __pyx_t_2 = 0;
+                __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
+                __Pyx_INCREF(__pyx_t_2);
+                __pyx_t_5 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 649, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_5);
+                __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+                __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_5));
+                __pyx_t_5 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":617
+                /* "pyemsi/core/femap_parser.pyx":650
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15126,7 +15604,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":618
+                /* "pyemsi/core/femap_parser.pyx":651
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15135,17 +15613,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                  __PYX_ERR(0, 618, __pyx_L8_error)
+                  __PYX_ERR(0, 651, __pyx_L8_error)
                 }
-                __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 618, __pyx_L8_error)
-                __pyx_t_15 = (__pyx_t_9 >= 2);
-                if (__pyx_t_15) {
+                __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 651, __pyx_L8_error)
+                __pyx_t_16 = (__pyx_t_9 >= 2);
+                if (__pyx_t_16) {
                 } else {
-                  __pyx_t_10 = __pyx_t_15;
+                  __pyx_t_10 = __pyx_t_16;
                   goto __pyx_L22_bool_binop_done;
                 }
 
-                /* "pyemsi/core/femap_parser.pyx":619
+                /* "pyemsi/core/femap_parser.pyx":652
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15154,16 +15632,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 619, __pyx_L8_error)
+                  __PYX_ERR(0, 652, __pyx_L8_error)
                 }
-                __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 619, __pyx_L8_error)
-                if (__pyx_t_15) {
+                __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 652, __pyx_L8_error)
+                if (__pyx_t_16) {
                 } else {
-                  __pyx_t_10 = __pyx_t_15;
+                  __pyx_t_10 = __pyx_t_16;
                   goto __pyx_L22_bool_binop_done;
                 }
 
-                /* "pyemsi/core/femap_parser.pyx":620
+                /* "pyemsi/core/femap_parser.pyx":653
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15172,13 +15650,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 620, __pyx_L8_error)
+                  __PYX_ERR(0, 653, __pyx_L8_error)
                 }
-                __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 620, __pyx_L8_error)
-                __pyx_t_10 = __pyx_t_15;
+                __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 653, __pyx_L8_error)
+                __pyx_t_10 = __pyx_t_16;
                 __pyx_L22_bool_binop_done:;
 
-                /* "pyemsi/core/femap_parser.pyx":618
+                /* "pyemsi/core/femap_parser.pyx":651
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15187,7 +15665,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (__pyx_t_10) {
 
-                  /* "pyemsi/core/femap_parser.pyx":621
+                  /* "pyemsi/core/femap_parser.pyx":654
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):
  *                                     break             # <<<<<<<<<<<<<<
@@ -15196,7 +15674,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   goto __pyx_L20_break;
 
-                  /* "pyemsi/core/femap_parser.pyx":618
+                  /* "pyemsi/core/femap_parser.pyx":651
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15207,7 +15685,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               }
               __pyx_L20_break:;
 
-              /* "pyemsi/core/femap_parser.pyx":622
+              /* "pyemsi/core/femap_parser.pyx":655
  *                                     result_parts[1] == "0."):
  *                                     break
  *                             continue             # <<<<<<<<<<<<<<
@@ -15216,45 +15694,45 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               goto __pyx_L14_try_continue;
 
-              /* "pyemsi/core/femap_parser.pyx":612
+              /* "pyemsi/core/femap_parser.pyx":645
  * 
  *                         # Check filters
  *                         if set_id_filter >= 0 and set_id != set_id_filter:             # <<<<<<<<<<<<<<
- *                             i += 7
+ *                             i = result_start_index
  *                             # Skip to end marker
 */
             }
 
-            /* "pyemsi/core/femap_parser.pyx":624
+            /* "pyemsi/core/femap_parser.pyx":657
  *                             continue
  * 
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:             # <<<<<<<<<<<<<<
- *                             i += 7
+ *                             i = result_start_index
  *                             while i < n_lines:
 */
-            __pyx_t_15 = (__pyx_v_vec_id_filter >= 0);
-            if (__pyx_t_15) {
+            __pyx_t_16 = (__pyx_v_vec_id_filter >= 0);
+            if (__pyx_t_16) {
             } else {
-              __pyx_t_10 = __pyx_t_15;
+              __pyx_t_10 = __pyx_t_16;
               goto __pyx_L26_bool_binop_done;
             }
-            __pyx_t_15 = (__pyx_v_vec_id != __pyx_v_vec_id_filter);
-            __pyx_t_10 = __pyx_t_15;
+            __pyx_t_16 = (__pyx_v_vec_id != __pyx_v_vec_id_filter);
+            __pyx_t_10 = __pyx_t_16;
             __pyx_L26_bool_binop_done:;
             if (__pyx_t_10) {
 
-              /* "pyemsi/core/femap_parser.pyx":625
+              /* "pyemsi/core/femap_parser.pyx":658
  * 
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:
- *                             i += 7             # <<<<<<<<<<<<<<
+ *                             i = result_start_index             # <<<<<<<<<<<<<<
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
 */
-              __pyx_v_i = (__pyx_v_i + 7);
+              __pyx_v_i = __pyx_v_result_start_index;
 
-              /* "pyemsi/core/femap_parser.pyx":626
+              /* "pyemsi/core/femap_parser.pyx":659
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:
- *                             i += 7
+ *                             i = result_start_index
  *                             while i < n_lines:             # <<<<<<<<<<<<<<
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
@@ -15263,8 +15741,8 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
                 __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
                 if (!__pyx_t_10) break;
 
-                /* "pyemsi/core/femap_parser.pyx":627
- *                             i += 7
+                /* "pyemsi/core/femap_parser.pyx":660
+ *                             i = result_start_index
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
  *                                 i += 1
@@ -15272,17 +15750,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_block->lines == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 627, __pyx_L8_error)
+                  __PYX_ERR(0, 660, __pyx_L8_error)
                 }
-                __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
-                __Pyx_INCREF(__pyx_t_2);
-                __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 627, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-                __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_4));
-                __pyx_t_4 = 0;
+                __pyx_t_5 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
+                __Pyx_INCREF(__pyx_t_5);
+                __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_5)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 660, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_2);
+                __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+                __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_2));
+                __pyx_t_2 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":628
+                /* "pyemsi/core/femap_parser.pyx":661
  *                             while i < n_lines:
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15291,7 +15769,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":629
+                /* "pyemsi/core/femap_parser.pyx":662
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15300,17 +15778,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                  __PYX_ERR(0, 629, __pyx_L8_error)
+                  __PYX_ERR(0, 662, __pyx_L8_error)
                 }
-                __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 629, __pyx_L8_error)
-                __pyx_t_15 = (__pyx_t_9 >= 2);
-                if (__pyx_t_15) {
+                __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 662, __pyx_L8_error)
+                __pyx_t_16 = (__pyx_t_9 >= 2);
+                if (__pyx_t_16) {
                 } else {
-                  __pyx_t_10 = __pyx_t_15;
+                  __pyx_t_10 = __pyx_t_16;
                   goto __pyx_L31_bool_binop_done;
                 }
 
-                /* "pyemsi/core/femap_parser.pyx":630
+                /* "pyemsi/core/femap_parser.pyx":663
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15319,16 +15797,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 630, __pyx_L8_error)
+                  __PYX_ERR(0, 663, __pyx_L8_error)
                 }
-                __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 630, __pyx_L8_error)
-                if (__pyx_t_15) {
+                __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 663, __pyx_L8_error)
+                if (__pyx_t_16) {
                 } else {
-                  __pyx_t_10 = __pyx_t_15;
+                  __pyx_t_10 = __pyx_t_16;
                   goto __pyx_L31_bool_binop_done;
                 }
 
-                /* "pyemsi/core/femap_parser.pyx":631
+                /* "pyemsi/core/femap_parser.pyx":664
  *                                 if (len(result_parts) >= 2 and
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15337,13 +15815,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 631, __pyx_L8_error)
+                  __PYX_ERR(0, 664, __pyx_L8_error)
                 }
-                __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 631, __pyx_L8_error)
-                __pyx_t_10 = __pyx_t_15;
+                __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 664, __pyx_L8_error)
+                __pyx_t_10 = __pyx_t_16;
                 __pyx_L31_bool_binop_done:;
 
-                /* "pyemsi/core/femap_parser.pyx":629
+                /* "pyemsi/core/femap_parser.pyx":662
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15352,7 +15830,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (__pyx_t_10) {
 
-                  /* "pyemsi/core/femap_parser.pyx":632
+                  /* "pyemsi/core/femap_parser.pyx":665
  *                                     result_parts[0] == "-1" and
  *                                     result_parts[1] == "0."):
  *                                     break             # <<<<<<<<<<<<<<
@@ -15361,7 +15839,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   goto __pyx_L29_break;
 
-                  /* "pyemsi/core/femap_parser.pyx":629
+                  /* "pyemsi/core/femap_parser.pyx":662
  *                                 result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                 i += 1
  *                                 if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15372,165 +15850,58 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               }
               __pyx_L29_break:;
 
-              /* "pyemsi/core/femap_parser.pyx":633
+              /* "pyemsi/core/femap_parser.pyx":666
  *                                     result_parts[1] == "0."):
  *                                     break
  *                             continue             # <<<<<<<<<<<<<<
  * 
- *                         ent_type_val = -1
+ *                         i = result_start_index
 */
               goto __pyx_L14_try_continue;
 
-              /* "pyemsi/core/femap_parser.pyx":624
+              /* "pyemsi/core/femap_parser.pyx":657
  *                             continue
  * 
  *                         if vec_id_filter >= 0 and vec_id != vec_id_filter:             # <<<<<<<<<<<<<<
- *                             i += 7
+ *                             i = result_start_index
  *                             while i < n_lines:
 */
             }
 
-            /* "pyemsi/core/femap_parser.pyx":635
+            /* "pyemsi/core/femap_parser.pyx":668
  *                             continue
  * 
- *                         ent_type_val = -1             # <<<<<<<<<<<<<<
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:
-*/
-            __pyx_v_ent_type_val = -1;
-
-            /* "pyemsi/core/femap_parser.pyx":636
- * 
- *                         ent_type_val = -1
- *                         has_ent_type = False             # <<<<<<<<<<<<<<
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
-*/
-            __pyx_v_has_ent_type = 0;
-
-            /* "pyemsi/core/femap_parser.pyx":637
- *                         ent_type_val = -1
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:
-*/
-            __pyx_t_10 = ((__pyx_v_i + 5) < __pyx_v_n_lines);
-            if (__pyx_t_10) {
-
-              /* "pyemsi/core/femap_parser.pyx":638
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])             # <<<<<<<<<<<<<<
- *                             if len(line6_parts) >= 4:
- *                                 ent_type_val = int(line6_parts[3])
-*/
-              if (unlikely(__pyx_v_block->lines == Py_None)) {
-                PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 638, __pyx_L8_error)
-              }
-              __pyx_t_16 = (__pyx_v_i + 5);
-              __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_t_16);
-              __Pyx_INCREF(__pyx_t_4);
-              __pyx_t_2 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 638, __pyx_L8_error)
-              __Pyx_GOTREF(__pyx_t_2);
-              __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-              __Pyx_XDECREF_SET(__pyx_v_line6_parts, ((PyObject*)__pyx_t_2));
-              __pyx_t_2 = 0;
-
-              /* "pyemsi/core/femap_parser.pyx":639
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
- *                                 ent_type_val = int(line6_parts[3])
- *                                 has_ent_type = True
-*/
-              if (unlikely(__pyx_v_line6_parts == Py_None)) {
-                PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 639, __pyx_L8_error)
-              }
-              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_line6_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 639, __pyx_L8_error)
-              __pyx_t_10 = (__pyx_t_9 >= 4);
-              if (__pyx_t_10) {
-
-                /* "pyemsi/core/femap_parser.pyx":640
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:
- *                                 ent_type_val = int(line6_parts[3])             # <<<<<<<<<<<<<<
- *                                 has_ent_type = True
- * 
-*/
-                if (unlikely(__pyx_v_line6_parts == Py_None)) {
-                  PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 640, __pyx_L8_error)
-                }
-                __pyx_t_2 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_line6_parts, 3)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 640, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_2);
-                __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_2); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 640, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-                __pyx_v_ent_type_val = __pyx_t_14;
-
-                /* "pyemsi/core/femap_parser.pyx":641
- *                             if len(line6_parts) >= 4:
- *                                 ent_type_val = int(line6_parts[3])
- *                                 has_ent_type = True             # <<<<<<<<<<<<<<
- * 
- *                         i += 7
-*/
-                __pyx_v_has_ent_type = 1;
-
-                /* "pyemsi/core/femap_parser.pyx":639
- *                         if i + 5 < n_lines:
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:             # <<<<<<<<<<<<<<
- *                                 ent_type_val = int(line6_parts[3])
- *                                 has_ent_type = True
-*/
-              }
-
-              /* "pyemsi/core/femap_parser.pyx":637
- *                         ent_type_val = -1
- *                         has_ent_type = False
- *                         if i + 5 < n_lines:             # <<<<<<<<<<<<<<
- *                             line6_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 5])
- *                             if len(line6_parts) >= 4:
-*/
-            }
-
-            /* "pyemsi/core/femap_parser.pyx":643
- *                                 has_ent_type = True
- * 
- *                         i += 7             # <<<<<<<<<<<<<<
+ *                         i = result_start_index             # <<<<<<<<<<<<<<
  * 
  *                         entity_ids_list = []
 */
-            __pyx_v_i = (__pyx_v_i + 7);
+            __pyx_v_i = __pyx_v_result_start_index;
 
-            /* "pyemsi/core/femap_parser.pyx":645
- *                         i += 7
+            /* "pyemsi/core/femap_parser.pyx":670
+ *                         i = result_start_index
  * 
  *                         entity_ids_list = []             # <<<<<<<<<<<<<<
  *                         values_list = []
  * 
 */
-            __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 645, __pyx_L8_error)
+            __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 670, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_2);
             __Pyx_XDECREF_SET(__pyx_v_entity_ids_list, ((PyObject*)__pyx_t_2));
             __pyx_t_2 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":646
+            /* "pyemsi/core/femap_parser.pyx":671
  * 
  *                         entity_ids_list = []
  *                         values_list = []             # <<<<<<<<<<<<<<
  * 
  *                         while i < n_lines:
 */
-            __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 646, __pyx_L8_error)
+            __pyx_t_2 = PyList_New(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 671, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_2);
             __Pyx_XDECREF_SET(__pyx_v_values_list, ((PyObject*)__pyx_t_2));
             __pyx_t_2 = 0;
 
-            /* "pyemsi/core/femap_parser.pyx":648
+            /* "pyemsi/core/femap_parser.pyx":673
  *                         values_list = []
  * 
  *                         while i < n_lines:             # <<<<<<<<<<<<<<
@@ -15541,7 +15912,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               __pyx_t_10 = (__pyx_v_i < __pyx_v_n_lines);
               if (!__pyx_t_10) break;
 
-              /* "pyemsi/core/femap_parser.pyx":649
+              /* "pyemsi/core/femap_parser.pyx":674
  * 
  *                         while i < n_lines:
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15550,17 +15921,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_block->lines == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 649, __pyx_L8_error)
+                __PYX_ERR(0, 674, __pyx_L8_error)
               }
               __pyx_t_2 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
               __Pyx_INCREF(__pyx_t_2);
-              __pyx_t_4 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 649, __pyx_L8_error)
-              __Pyx_GOTREF(__pyx_t_4);
+              __pyx_t_5 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_2)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 674, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_5);
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-              __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_4));
-              __pyx_t_4 = 0;
+              __Pyx_XDECREF_SET(__pyx_v_result_parts, ((PyObject*)__pyx_t_5));
+              __pyx_t_5 = 0;
 
-              /* "pyemsi/core/femap_parser.pyx":651
+              /* "pyemsi/core/femap_parser.pyx":676
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15569,17 +15940,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 651, __pyx_L8_error)
+                __PYX_ERR(0, 676, __pyx_L8_error)
               }
-              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 651, __pyx_L8_error)
-              __pyx_t_15 = (__pyx_t_9 >= 2);
-              if (__pyx_t_15) {
+              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 676, __pyx_L8_error)
+              __pyx_t_16 = (__pyx_t_9 >= 2);
+              if (__pyx_t_16) {
               } else {
-                __pyx_t_10 = __pyx_t_15;
-                goto __pyx_L39_bool_binop_done;
+                __pyx_t_10 = __pyx_t_16;
+                goto __pyx_L37_bool_binop_done;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":652
+              /* "pyemsi/core/femap_parser.pyx":677
  * 
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15588,16 +15959,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 652, __pyx_L8_error)
+                __PYX_ERR(0, 677, __pyx_L8_error)
               }
-              __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 652, __pyx_L8_error)
-              if (__pyx_t_15) {
+              __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 677, __pyx_L8_error)
+              if (__pyx_t_16) {
               } else {
-                __pyx_t_10 = __pyx_t_15;
-                goto __pyx_L39_bool_binop_done;
+                __pyx_t_10 = __pyx_t_16;
+                goto __pyx_L37_bool_binop_done;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":653
+              /* "pyemsi/core/femap_parser.pyx":678
  *                             if (len(result_parts) >= 2 and
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15606,13 +15977,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                __PYX_ERR(0, 653, __pyx_L8_error)
+                __PYX_ERR(0, 678, __pyx_L8_error)
               }
-              __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 653, __pyx_L8_error)
-              __pyx_t_10 = __pyx_t_15;
-              __pyx_L39_bool_binop_done:;
+              __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 678, __pyx_L8_error)
+              __pyx_t_10 = __pyx_t_16;
+              __pyx_L37_bool_binop_done:;
 
-              /* "pyemsi/core/femap_parser.pyx":651
+              /* "pyemsi/core/femap_parser.pyx":676
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15621,7 +15992,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (__pyx_t_10) {
 
-                /* "pyemsi/core/femap_parser.pyx":654
+                /* "pyemsi/core/femap_parser.pyx":679
  *                                 result_parts[0] == "-1" and
  *                                 result_parts[1] == "0."):
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15630,16 +16001,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":655
+                /* "pyemsi/core/femap_parser.pyx":680
  *                                 result_parts[1] == "0."):
  *                                 i += 1
  *                                 break             # <<<<<<<<<<<<<<
  * 
  *                             if len(result_parts) == 2:
 */
-                goto __pyx_L37_break;
+                goto __pyx_L35_break;
 
-                /* "pyemsi/core/femap_parser.pyx":651
+                /* "pyemsi/core/femap_parser.pyx":676
  *                             result_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  * 
  *                             if (len(result_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15648,7 +16019,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               }
 
-              /* "pyemsi/core/femap_parser.pyx":657
+              /* "pyemsi/core/femap_parser.pyx":682
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
@@ -15657,13 +16028,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 657, __pyx_L8_error)
+                __PYX_ERR(0, 682, __pyx_L8_error)
               }
-              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 657, __pyx_L8_error)
+              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 682, __pyx_L8_error)
               __pyx_t_10 = (__pyx_t_9 == 2);
               if (__pyx_t_10) {
 
-                /* "pyemsi/core/femap_parser.pyx":658
+                /* "pyemsi/core/femap_parser.pyx":683
  * 
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -15672,15 +16043,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 658, __pyx_L8_error)
+                  __PYX_ERR(0, 683, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 658, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 658, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __pyx_v_entity_id = __pyx_t_14;
+                __pyx_t_5 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 683, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_5);
+                __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_5); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 683, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+                __pyx_v_entity_id = __pyx_t_15;
 
-                /* "pyemsi/core/femap_parser.pyx":659
+                /* "pyemsi/core/femap_parser.pyx":684
  *                             if len(result_parts) == 2:
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])             # <<<<<<<<<<<<<<
@@ -15689,36 +16060,36 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 659, __pyx_L8_error)
+                  __PYX_ERR(0, 684, __pyx_L8_error)
                 }
-                __pyx_t_17 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_17, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 659, __pyx_L8_error)
+                __pyx_t_17 = __Pyx_PyObject_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(__PYX_CHECK_FLOAT_EXCEPTION(__pyx_t_17, ((double)((double)-1))) && PyErr_Occurred())) __PYX_ERR(0, 684, __pyx_L8_error)
                 __pyx_v_value = __pyx_t_17;
 
-                /* "pyemsi/core/femap_parser.pyx":660
+                /* "pyemsi/core/femap_parser.pyx":685
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])
  *                                 entity_ids_list.append(entity_id)             # <<<<<<<<<<<<<<
  *                                 values_list.append(value)
  *                                 i += 1
 */
-                __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_entity_id); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 660, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_entity_ids_list, __pyx_t_4); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 660, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                __pyx_t_5 = __Pyx_PyLong_From_int(__pyx_v_entity_id); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 685, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_5);
+                __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_entity_ids_list, __pyx_t_5); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 685, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":661
+                /* "pyemsi/core/femap_parser.pyx":686
  *                                 value = float(result_parts[1])
  *                                 entity_ids_list.append(entity_id)
  *                                 values_list.append(value)             # <<<<<<<<<<<<<<
  *                                 i += 1
  * 
 */
-                __pyx_t_4 = PyFloat_FromDouble(__pyx_v_value); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 661, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_values_list, __pyx_t_4); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 661, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                __pyx_t_5 = PyFloat_FromDouble(__pyx_v_value); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 686, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_5);
+                __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_values_list, __pyx_t_5); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 686, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":662
+                /* "pyemsi/core/femap_parser.pyx":687
  *                                 entity_ids_list.append(entity_id)
  *                                 values_list.append(value)
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15727,17 +16098,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":657
+                /* "pyemsi/core/femap_parser.pyx":682
  *                                 break
  * 
  *                             if len(result_parts) == 2:             # <<<<<<<<<<<<<<
  *                                 entity_id = int(result_parts[0])
  *                                 value = float(result_parts[1])
 */
-                goto __pyx_L42;
+                goto __pyx_L40;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":664
+              /* "pyemsi/core/femap_parser.pyx":689
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
@@ -15746,13 +16117,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
               if (unlikely(__pyx_v_result_parts == Py_None)) {
                 PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                __PYX_ERR(0, 664, __pyx_L8_error)
+                __PYX_ERR(0, 689, __pyx_L8_error)
               }
-              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 664, __pyx_L8_error)
+              __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_result_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 689, __pyx_L8_error)
               __pyx_t_10 = (__pyx_t_9 > 2);
               if (__pyx_t_10) {
 
-                /* "pyemsi/core/femap_parser.pyx":665
+                /* "pyemsi/core/femap_parser.pyx":690
  * 
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])             # <<<<<<<<<<<<<<
@@ -15761,15 +16132,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 665, __pyx_L8_error)
+                  __PYX_ERR(0, 690, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 665, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 665, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __pyx_v_start_id = __pyx_t_14;
+                __pyx_t_5 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 0)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 690, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_5);
+                __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_5); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 690, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+                __pyx_v_start_id = __pyx_t_15;
 
-                /* "pyemsi/core/femap_parser.pyx":666
+                /* "pyemsi/core/femap_parser.pyx":691
  *                             elif len(result_parts) > 2:
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])             # <<<<<<<<<<<<<<
@@ -15778,15 +16149,15 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 if (unlikely(__pyx_v_result_parts == Py_None)) {
                   PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                  __PYX_ERR(0, 666, __pyx_L8_error)
+                  __PYX_ERR(0, 691, __pyx_L8_error)
                 }
-                __pyx_t_4 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 666, __pyx_L8_error)
-                __Pyx_GOTREF(__pyx_t_4);
-                __pyx_t_14 = __Pyx_PyLong_As_int(__pyx_t_4); if (unlikely((__pyx_t_14 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 666, __pyx_L8_error)
-                __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-                __pyx_v_end_id = __pyx_t_14;
+                __pyx_t_5 = __Pyx_PyNumber_Int(__Pyx_PyList_GET_ITEM(__pyx_v_result_parts, 1)); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 691, __pyx_L8_error)
+                __Pyx_GOTREF(__pyx_t_5);
+                __pyx_t_15 = __Pyx_PyLong_As_int(__pyx_t_5); if (unlikely((__pyx_t_15 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 691, __pyx_L8_error)
+                __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+                __pyx_v_end_id = __pyx_t_15;
 
-                /* "pyemsi/core/femap_parser.pyx":667
+                /* "pyemsi/core/femap_parser.pyx":692
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])
  *                                 values = [float(v) for v in result_parts[2:]]             # <<<<<<<<<<<<<<
@@ -15794,13 +16165,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  *                                 entity_count = end_id - start_id + 1
 */
                 { /* enter inner scope */
-                  __pyx_t_4 = PyList_New(0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 667, __pyx_L45_error)
-                  __Pyx_GOTREF(__pyx_t_4);
+                  __pyx_t_5 = PyList_New(0); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 692, __pyx_L43_error)
+                  __Pyx_GOTREF(__pyx_t_5);
                   if (unlikely(__pyx_v_result_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 667, __pyx_L45_error)
+                    __PYX_ERR(0, 692, __pyx_L43_error)
                   }
-                  __pyx_t_2 = __Pyx_PyList_GetSlice(__pyx_v_result_parts, 2, PY_SSIZE_T_MAX); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 667, __pyx_L45_error)
+                  __pyx_t_2 = __Pyx_PyList_GetSlice(__pyx_v_result_parts, 2, PY_SSIZE_T_MAX); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 692, __pyx_L43_error)
                   __Pyx_GOTREF(__pyx_t_2);
                   __pyx_t_6 = __pyx_t_2; __Pyx_INCREF(__pyx_t_6);
                   __pyx_t_9 = 0;
@@ -15809,33 +16180,33 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
                     {
                       Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_6);
                       #if !CYTHON_ASSUME_SAFE_SIZE
-                      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 667, __pyx_L45_error)
+                      if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 692, __pyx_L43_error)
                       #endif
                       if (__pyx_t_9 >= __pyx_temp) break;
                     }
                     __pyx_t_2 = __Pyx_PyList_GetItemRefFast(__pyx_t_6, __pyx_t_9, __Pyx_ReferenceSharing_OwnStrongReference);
                     ++__pyx_t_9;
-                    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 667, __pyx_L45_error)
+                    if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 692, __pyx_L43_error)
                     __Pyx_GOTREF(__pyx_t_2);
                     __Pyx_XDECREF_SET(__pyx_8genexpr3__pyx_v_v, __pyx_t_2);
                     __pyx_t_2 = 0;
-                    __pyx_t_2 = __Pyx_PyNumber_Float(__pyx_8genexpr3__pyx_v_v); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 667, __pyx_L45_error)
+                    __pyx_t_2 = __Pyx_PyNumber_Float(__pyx_8genexpr3__pyx_v_v); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 692, __pyx_L43_error)
                     __Pyx_GOTREF(__pyx_t_2);
-                    if (unlikely(__Pyx_ListComp_Append(__pyx_t_4, (PyObject*)__pyx_t_2))) __PYX_ERR(0, 667, __pyx_L45_error)
+                    if (unlikely(__Pyx_ListComp_Append(__pyx_t_5, (PyObject*)__pyx_t_2))) __PYX_ERR(0, 692, __pyx_L43_error)
                     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                   }
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
                   __Pyx_XDECREF(__pyx_8genexpr3__pyx_v_v); __pyx_8genexpr3__pyx_v_v = 0;
-                  goto __pyx_L49_exit_scope;
-                  __pyx_L45_error:;
+                  goto __pyx_L47_exit_scope;
+                  __pyx_L43_error:;
                   __Pyx_XDECREF(__pyx_8genexpr3__pyx_v_v); __pyx_8genexpr3__pyx_v_v = 0;
                   goto __pyx_L8_error;
-                  __pyx_L49_exit_scope:;
+                  __pyx_L47_exit_scope:;
                 } /* exit inner scope */
-                __Pyx_XDECREF_SET(__pyx_v_values, ((PyObject*)__pyx_t_4));
-                __pyx_t_4 = 0;
+                __Pyx_XDECREF_SET(__pyx_v_values, ((PyObject*)__pyx_t_5));
+                __pyx_t_5 = 0;
 
-                /* "pyemsi/core/femap_parser.pyx":669
+                /* "pyemsi/core/femap_parser.pyx":694
  *                                 values = [float(v) for v in result_parts[2:]]
  * 
  *                                 entity_count = end_id - start_id + 1             # <<<<<<<<<<<<<<
@@ -15844,7 +16215,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_entity_count = ((__pyx_v_end_id - __pyx_v_start_id) + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":670
+                /* "pyemsi/core/femap_parser.pyx":695
  * 
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -15853,7 +16224,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                 __pyx_v_i = (__pyx_v_i + 1);
 
-                /* "pyemsi/core/femap_parser.pyx":671
+                /* "pyemsi/core/femap_parser.pyx":696
  *                                 entity_count = end_id - start_id + 1
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:             # <<<<<<<<<<<<<<
@@ -15861,19 +16232,19 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  *                                     if (len(cont_parts) >= 2 and
 */
                 while (1) {
-                  __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 671, __pyx_L8_error)
-                  __pyx_t_15 = (__pyx_t_9 < __pyx_v_entity_count);
-                  if (__pyx_t_15) {
+                  __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 696, __pyx_L8_error)
+                  __pyx_t_16 = (__pyx_t_9 < __pyx_v_entity_count);
+                  if (__pyx_t_16) {
                   } else {
-                    __pyx_t_10 = __pyx_t_15;
-                    goto __pyx_L52_bool_binop_done;
+                    __pyx_t_10 = __pyx_t_16;
+                    goto __pyx_L50_bool_binop_done;
                   }
-                  __pyx_t_15 = (__pyx_v_i < __pyx_v_n_lines);
-                  __pyx_t_10 = __pyx_t_15;
-                  __pyx_L52_bool_binop_done:;
+                  __pyx_t_16 = (__pyx_v_i < __pyx_v_n_lines);
+                  __pyx_t_10 = __pyx_t_16;
+                  __pyx_L50_bool_binop_done:;
                   if (!__pyx_t_10) break;
 
-                  /* "pyemsi/core/femap_parser.pyx":672
+                  /* "pyemsi/core/femap_parser.pyx":697
  *                                 i += 1
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])             # <<<<<<<<<<<<<<
@@ -15882,17 +16253,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_block->lines == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 672, __pyx_L8_error)
+                    __PYX_ERR(0, 697, __pyx_L8_error)
                   }
-                  __pyx_t_4 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
-                  __Pyx_INCREF(__pyx_t_4);
-                  __pyx_t_6 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_4)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 672, __pyx_L8_error)
+                  __pyx_t_5 = __Pyx_PyList_GET_ITEM(__pyx_v_block->lines, __pyx_v_i);
+                  __Pyx_INCREF(__pyx_t_5);
+                  __pyx_t_6 = __pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast(((PyObject*)__pyx_t_5)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 697, __pyx_L8_error)
                   __Pyx_GOTREF(__pyx_t_6);
-                  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                  __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
                   __Pyx_XDECREF_SET(__pyx_v_cont_parts, ((PyObject*)__pyx_t_6));
                   __pyx_t_6 = 0;
 
-                  /* "pyemsi/core/femap_parser.pyx":673
+                  /* "pyemsi/core/femap_parser.pyx":698
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15901,17 +16272,17 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_cont_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-                    __PYX_ERR(0, 673, __pyx_L8_error)
+                    __PYX_ERR(0, 698, __pyx_L8_error)
                   }
-                  __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_cont_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 673, __pyx_L8_error)
-                  __pyx_t_15 = (__pyx_t_9 >= 2);
-                  if (__pyx_t_15) {
+                  __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_cont_parts); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 698, __pyx_L8_error)
+                  __pyx_t_16 = (__pyx_t_9 >= 2);
+                  if (__pyx_t_16) {
                   } else {
-                    __pyx_t_10 = __pyx_t_15;
-                    goto __pyx_L55_bool_binop_done;
+                    __pyx_t_10 = __pyx_t_16;
+                    goto __pyx_L53_bool_binop_done;
                   }
 
-                  /* "pyemsi/core/femap_parser.pyx":674
+                  /* "pyemsi/core/femap_parser.pyx":699
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and             # <<<<<<<<<<<<<<
@@ -15920,16 +16291,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_cont_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 674, __pyx_L8_error)
+                    __PYX_ERR(0, 699, __pyx_L8_error)
                   }
-                  __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 674, __pyx_L8_error)
-                  if (__pyx_t_15) {
+                  __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 0), __pyx_mstate_global->__pyx_kp_u_1_2, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 699, __pyx_L8_error)
+                  if (__pyx_t_16) {
                   } else {
-                    __pyx_t_10 = __pyx_t_15;
-                    goto __pyx_L55_bool_binop_done;
+                    __pyx_t_10 = __pyx_t_16;
+                    goto __pyx_L53_bool_binop_done;
                   }
 
-                  /* "pyemsi/core/femap_parser.pyx":675
+                  /* "pyemsi/core/femap_parser.pyx":700
  *                                     if (len(cont_parts) >= 2 and
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):             # <<<<<<<<<<<<<<
@@ -15938,13 +16309,13 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (unlikely(__pyx_v_cont_parts == Py_None)) {
                     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-                    __PYX_ERR(0, 675, __pyx_L8_error)
+                    __PYX_ERR(0, 700, __pyx_L8_error)
                   }
-                  __pyx_t_15 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_15 < 0))) __PYX_ERR(0, 675, __pyx_L8_error)
-                  __pyx_t_10 = __pyx_t_15;
-                  __pyx_L55_bool_binop_done:;
+                  __pyx_t_16 = (__Pyx_PyUnicode_Equals(__Pyx_PyList_GET_ITEM(__pyx_v_cont_parts, 1), __pyx_mstate_global->__pyx_kp_u_0, Py_EQ)); if (unlikely((__pyx_t_16 < 0))) __PYX_ERR(0, 700, __pyx_L8_error)
+                  __pyx_t_10 = __pyx_t_16;
+                  __pyx_L53_bool_binop_done:;
 
-                  /* "pyemsi/core/femap_parser.pyx":673
+                  /* "pyemsi/core/femap_parser.pyx":698
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15953,16 +16324,16 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   if (__pyx_t_10) {
 
-                    /* "pyemsi/core/femap_parser.pyx":676
+                    /* "pyemsi/core/femap_parser.pyx":701
  *                                         cont_parts[0] == "-1" and
  *                                         cont_parts[1] == "0."):
  *                                         break             # <<<<<<<<<<<<<<
  *                                     values.extend([float(v) for v in cont_parts])
  *                                     i += 1
 */
-                    goto __pyx_L51_break;
+                    goto __pyx_L49_break;
 
-                    /* "pyemsi/core/femap_parser.pyx":673
+                    /* "pyemsi/core/femap_parser.pyx":698
  *                                 while len(values) < entity_count and i < n_lines:
  *                                     cont_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                                     if (len(cont_parts) >= 2 and             # <<<<<<<<<<<<<<
@@ -15971,7 +16342,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   }
 
-                  /* "pyemsi/core/femap_parser.pyx":677
+                  /* "pyemsi/core/femap_parser.pyx":702
  *                                         cont_parts[1] == "0."):
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])             # <<<<<<<<<<<<<<
@@ -15979,45 +16350,45 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  * 
 */
                   { /* enter inner scope */
-                    __pyx_t_6 = PyList_New(0); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 677, __pyx_L60_error)
+                    __pyx_t_6 = PyList_New(0); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 702, __pyx_L58_error)
                     __Pyx_GOTREF(__pyx_t_6);
                     if (unlikely(__pyx_v_cont_parts == Py_None)) {
                       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not iterable");
-                      __PYX_ERR(0, 677, __pyx_L60_error)
+                      __PYX_ERR(0, 702, __pyx_L58_error)
                     }
-                    __pyx_t_4 = __pyx_v_cont_parts; __Pyx_INCREF(__pyx_t_4);
+                    __pyx_t_5 = __pyx_v_cont_parts; __Pyx_INCREF(__pyx_t_5);
                     __pyx_t_9 = 0;
                     for (;;) {
                       {
-                        Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_4);
+                        Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_5);
                         #if !CYTHON_ASSUME_SAFE_SIZE
-                        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 677, __pyx_L60_error)
+                        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 702, __pyx_L58_error)
                         #endif
                         if (__pyx_t_9 >= __pyx_temp) break;
                       }
-                      __pyx_t_2 = __Pyx_PyList_GetItemRefFast(__pyx_t_4, __pyx_t_9, __Pyx_ReferenceSharing_OwnStrongReference);
+                      __pyx_t_2 = __Pyx_PyList_GetItemRefFast(__pyx_t_5, __pyx_t_9, __Pyx_ReferenceSharing_OwnStrongReference);
                       ++__pyx_t_9;
-                      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 677, __pyx_L60_error)
+                      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 702, __pyx_L58_error)
                       __Pyx_GOTREF(__pyx_t_2);
                       __Pyx_XDECREF_SET(__pyx_8genexpr4__pyx_v_v, __pyx_t_2);
                       __pyx_t_2 = 0;
-                      __pyx_t_2 = __Pyx_PyNumber_Float(__pyx_8genexpr4__pyx_v_v); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 677, __pyx_L60_error)
+                      __pyx_t_2 = __Pyx_PyNumber_Float(__pyx_8genexpr4__pyx_v_v); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 702, __pyx_L58_error)
                       __Pyx_GOTREF(__pyx_t_2);
-                      if (unlikely(__Pyx_ListComp_Append(__pyx_t_6, (PyObject*)__pyx_t_2))) __PYX_ERR(0, 677, __pyx_L60_error)
+                      if (unlikely(__Pyx_ListComp_Append(__pyx_t_6, (PyObject*)__pyx_t_2))) __PYX_ERR(0, 702, __pyx_L58_error)
                       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
                     }
-                    __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+                    __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
                     __Pyx_XDECREF(__pyx_8genexpr4__pyx_v_v); __pyx_8genexpr4__pyx_v_v = 0;
-                    goto __pyx_L64_exit_scope;
-                    __pyx_L60_error:;
+                    goto __pyx_L62_exit_scope;
+                    __pyx_L58_error:;
                     __Pyx_XDECREF(__pyx_8genexpr4__pyx_v_v); __pyx_8genexpr4__pyx_v_v = 0;
                     goto __pyx_L8_error;
-                    __pyx_L64_exit_scope:;
+                    __pyx_L62_exit_scope:;
                   } /* exit inner scope */
-                  __pyx_t_18 = __Pyx_PyList_Extend(__pyx_v_values, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 677, __pyx_L8_error)
+                  __pyx_t_18 = __Pyx_PyList_Extend(__pyx_v_values, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 702, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-                  /* "pyemsi/core/femap_parser.pyx":678
+                  /* "pyemsi/core/femap_parser.pyx":703
  *                                         break
  *                                     values.extend([float(v) for v in cont_parts])
  *                                     i += 1             # <<<<<<<<<<<<<<
@@ -16026,41 +16397,41 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   __pyx_v_i = (__pyx_v_i + 1);
                 }
-                __pyx_L51_break:;
+                __pyx_L49_break:;
 
-                /* "pyemsi/core/femap_parser.pyx":680
+                /* "pyemsi/core/femap_parser.pyx":705
  *                                     i += 1
  * 
  *                                 for offset in range(min(len(values), entity_count)):             # <<<<<<<<<<<<<<
  *                                     entity_ids_list.append(start_id + offset)
  *                                     values_list.append(values[offset])
 */
-                __pyx_t_14 = __pyx_v_entity_count;
-                __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 680, __pyx_L8_error)
-                __pyx_t_10 = (__pyx_t_14 < __pyx_t_9);
+                __pyx_t_15 = __pyx_v_entity_count;
+                __pyx_t_9 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_9 == ((Py_ssize_t)-1))) __PYX_ERR(0, 705, __pyx_L8_error)
+                __pyx_t_10 = (__pyx_t_15 < __pyx_t_9);
                 if (__pyx_t_10) {
-                  __pyx_t_19 = __pyx_t_14;
+                  __pyx_t_19 = __pyx_t_15;
                 } else {
                   __pyx_t_19 = __pyx_t_9;
                 }
                 __pyx_t_9 = __pyx_t_19;
                 __pyx_t_19 = __pyx_t_9;
-                for (__pyx_t_14 = 0; __pyx_t_14 < __pyx_t_19; __pyx_t_14+=1) {
-                  __pyx_v_offset = __pyx_t_14;
+                for (__pyx_t_15 = 0; __pyx_t_15 < __pyx_t_19; __pyx_t_15+=1) {
+                  __pyx_v_offset = __pyx_t_15;
 
-                  /* "pyemsi/core/femap_parser.pyx":681
+                  /* "pyemsi/core/femap_parser.pyx":706
  * 
  *                                 for offset in range(min(len(values), entity_count)):
  *                                     entity_ids_list.append(start_id + offset)             # <<<<<<<<<<<<<<
  *                                     values_list.append(values[offset])
  *                             else:
 */
-                  __pyx_t_6 = __Pyx_PyLong_From_int((__pyx_v_start_id + __pyx_v_offset)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 681, __pyx_L8_error)
+                  __pyx_t_6 = __Pyx_PyLong_From_int((__pyx_v_start_id + __pyx_v_offset)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 706, __pyx_L8_error)
                   __Pyx_GOTREF(__pyx_t_6);
-                  __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_entity_ids_list, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 681, __pyx_L8_error)
+                  __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_entity_ids_list, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 706, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-                  /* "pyemsi/core/femap_parser.pyx":682
+                  /* "pyemsi/core/femap_parser.pyx":707
  *                                 for offset in range(min(len(values), entity_count)):
  *                                     entity_ids_list.append(start_id + offset)
  *                                     values_list.append(values[offset])             # <<<<<<<<<<<<<<
@@ -16069,21 +16440,21 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
                   __pyx_t_6 = __Pyx_PyList_GET_ITEM(__pyx_v_values, __pyx_v_offset);
                   __Pyx_INCREF(__pyx_t_6);
-                  __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_values_list, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 682, __pyx_L8_error)
+                  __pyx_t_18 = __Pyx_PyList_Append(__pyx_v_values_list, __pyx_t_6); if (unlikely(__pyx_t_18 == ((int)-1))) __PYX_ERR(0, 707, __pyx_L8_error)
                   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
                 }
 
-                /* "pyemsi/core/femap_parser.pyx":664
+                /* "pyemsi/core/femap_parser.pyx":689
  *                                 i += 1
  * 
  *                             elif len(result_parts) > 2:             # <<<<<<<<<<<<<<
  *                                 start_id = int(result_parts[0])
  *                                 end_id = int(result_parts[1])
 */
-                goto __pyx_L42;
+                goto __pyx_L40;
               }
 
-              /* "pyemsi/core/femap_parser.pyx":684
+              /* "pyemsi/core/femap_parser.pyx":709
  *                                     values_list.append(values[offset])
  *                             else:
  *                                 i += 1             # <<<<<<<<<<<<<<
@@ -16093,11 +16464,11 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               /*else*/ {
                 __pyx_v_i = (__pyx_v_i + 1);
               }
-              __pyx_L42:;
+              __pyx_L40:;
             }
-            __pyx_L37_break:;
+            __pyx_L35_break:;
 
-            /* "pyemsi/core/femap_parser.pyx":686
+            /* "pyemsi/core/femap_parser.pyx":711
  *                                 i += 1
  * 
  *                         return (             # <<<<<<<<<<<<<<
@@ -16106,51 +16477,51 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
 */
             __Pyx_XDECREF(__pyx_r);
 
-            /* "pyemsi/core/femap_parser.pyx":687
+            /* "pyemsi/core/femap_parser.pyx":712
  * 
  *                         return (
  *                             np.array(entity_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
  *                             np.array(values_list, dtype=np.float64),
  *                             set_id,
 */
-            __pyx_t_4 = NULL;
-            __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 687, __pyx_L8_error)
+            __pyx_t_5 = NULL;
+            __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 712, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_2);
-            __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_array); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 687, __pyx_L8_error)
-            __Pyx_GOTREF(__pyx_t_5);
+            __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_array); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 712, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_4);
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-            __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 687, __pyx_L8_error)
+            __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 712, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_2);
-            __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_int32); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 687, __pyx_L8_error)
+            __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_int32); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 712, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_3);
             __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
             __pyx_t_7 = 1;
             #if CYTHON_UNPACK_METHODS
-            if (unlikely(PyMethod_Check(__pyx_t_5))) {
-              __pyx_t_4 = PyMethod_GET_SELF(__pyx_t_5);
-              assert(__pyx_t_4);
-              PyObject* __pyx__function = PyMethod_GET_FUNCTION(__pyx_t_5);
-              __Pyx_INCREF(__pyx_t_4);
+            if (unlikely(PyMethod_Check(__pyx_t_4))) {
+              __pyx_t_5 = PyMethod_GET_SELF(__pyx_t_4);
+              assert(__pyx_t_5);
+              PyObject* __pyx__function = PyMethod_GET_FUNCTION(__pyx_t_4);
+              __Pyx_INCREF(__pyx_t_5);
               __Pyx_INCREF(__pyx__function);
-              __Pyx_DECREF_SET(__pyx_t_5, __pyx__function);
+              __Pyx_DECREF_SET(__pyx_t_4, __pyx__function);
               __pyx_t_7 = 0;
             }
             #endif
             {
-              PyObject *__pyx_callargs[2 + ((CYTHON_VECTORCALL) ? 1 : 0)] = {__pyx_t_4, __pyx_v_entity_ids_list};
-              __pyx_t_2 = __Pyx_MakeVectorcallBuilderKwds(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 687, __pyx_L8_error)
+              PyObject *__pyx_callargs[2 + ((CYTHON_VECTORCALL) ? 1 : 0)] = {__pyx_t_5, __pyx_v_entity_ids_list};
+              __pyx_t_2 = __Pyx_MakeVectorcallBuilderKwds(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 712, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_2);
-              if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_dtype, __pyx_t_3, __pyx_t_2, __pyx_callargs+2, 0) < (0)) __PYX_ERR(0, 687, __pyx_L8_error)
-              __pyx_t_6 = __Pyx_Object_Vectorcall_CallFromBuilder((PyObject*)__pyx_t_5, __pyx_callargs+__pyx_t_7, (2-__pyx_t_7) | (__pyx_t_7*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET), __pyx_t_2);
-              __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
+              if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_dtype, __pyx_t_3, __pyx_t_2, __pyx_callargs+2, 0) < (0)) __PYX_ERR(0, 712, __pyx_L8_error)
+              __pyx_t_6 = __Pyx_Object_Vectorcall_CallFromBuilder((PyObject*)__pyx_t_4, __pyx_callargs+__pyx_t_7, (2-__pyx_t_7) | (__pyx_t_7*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET), __pyx_t_2);
+              __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
               __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
               __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-              __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-              if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 687, __pyx_L8_error)
+              __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+              if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 712, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_6);
             }
 
-            /* "pyemsi/core/femap_parser.pyx":688
+            /* "pyemsi/core/femap_parser.pyx":713
  *                         return (
  *                             np.array(entity_ids_list, dtype=np.int32),
  *                             np.array(values_list, dtype=np.float64),             # <<<<<<<<<<<<<<
@@ -16158,63 +16529,63 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  *                             vec_id,
 */
             __pyx_t_2 = NULL;
-            __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 688, __pyx_L8_error)
+            __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 713, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_3);
-            __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_array); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 688, __pyx_L8_error)
-            __Pyx_GOTREF(__pyx_t_4);
+            __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_array); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 713, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_5);
             __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-            __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 688, __pyx_L8_error)
+            __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_np); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 713, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_3);
-            __pyx_t_20 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_float64); if (unlikely(!__pyx_t_20)) __PYX_ERR(0, 688, __pyx_L8_error)
+            __pyx_t_20 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_float64); if (unlikely(!__pyx_t_20)) __PYX_ERR(0, 713, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_20);
             __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
             __pyx_t_7 = 1;
             #if CYTHON_UNPACK_METHODS
-            if (unlikely(PyMethod_Check(__pyx_t_4))) {
-              __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_4);
+            if (unlikely(PyMethod_Check(__pyx_t_5))) {
+              __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_5);
               assert(__pyx_t_2);
-              PyObject* __pyx__function = PyMethod_GET_FUNCTION(__pyx_t_4);
+              PyObject* __pyx__function = PyMethod_GET_FUNCTION(__pyx_t_5);
               __Pyx_INCREF(__pyx_t_2);
               __Pyx_INCREF(__pyx__function);
-              __Pyx_DECREF_SET(__pyx_t_4, __pyx__function);
+              __Pyx_DECREF_SET(__pyx_t_5, __pyx__function);
               __pyx_t_7 = 0;
             }
             #endif
             {
               PyObject *__pyx_callargs[2 + ((CYTHON_VECTORCALL) ? 1 : 0)] = {__pyx_t_2, __pyx_v_values_list};
-              __pyx_t_3 = __Pyx_MakeVectorcallBuilderKwds(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 688, __pyx_L8_error)
+              __pyx_t_3 = __Pyx_MakeVectorcallBuilderKwds(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 713, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_3);
-              if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_dtype, __pyx_t_20, __pyx_t_3, __pyx_callargs+2, 0) < (0)) __PYX_ERR(0, 688, __pyx_L8_error)
-              __pyx_t_5 = __Pyx_Object_Vectorcall_CallFromBuilder((PyObject*)__pyx_t_4, __pyx_callargs+__pyx_t_7, (2-__pyx_t_7) | (__pyx_t_7*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET), __pyx_t_3);
+              if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_dtype, __pyx_t_20, __pyx_t_3, __pyx_callargs+2, 0) < (0)) __PYX_ERR(0, 713, __pyx_L8_error)
+              __pyx_t_4 = __Pyx_Object_Vectorcall_CallFromBuilder((PyObject*)__pyx_t_5, __pyx_callargs+__pyx_t_7, (2-__pyx_t_7) | (__pyx_t_7*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET), __pyx_t_3);
               __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
               __Pyx_DECREF(__pyx_t_20); __pyx_t_20 = 0;
               __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-              __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-              if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 688, __pyx_L8_error)
-              __Pyx_GOTREF(__pyx_t_5);
+              __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
+              if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 713, __pyx_L8_error)
+              __Pyx_GOTREF(__pyx_t_4);
             }
 
-            /* "pyemsi/core/femap_parser.pyx":689
+            /* "pyemsi/core/femap_parser.pyx":714
  *                             np.array(entity_ids_list, dtype=np.int32),
  *                             np.array(values_list, dtype=np.float64),
  *                             set_id,             # <<<<<<<<<<<<<<
  *                             vec_id,
  *                             ent_type_val if has_ent_type else -1
 */
-            __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_set_id); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 689, __pyx_L8_error)
-            __Pyx_GOTREF(__pyx_t_4);
+            __pyx_t_5 = __Pyx_PyLong_From_int(__pyx_v_set_id); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 714, __pyx_L8_error)
+            __Pyx_GOTREF(__pyx_t_5);
 
-            /* "pyemsi/core/femap_parser.pyx":690
+            /* "pyemsi/core/femap_parser.pyx":715
  *                             np.array(values_list, dtype=np.float64),
  *                             set_id,
  *                             vec_id,             # <<<<<<<<<<<<<<
  *                             ent_type_val if has_ent_type else -1
  *                         )
 */
-            __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_vec_id); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 690, __pyx_L8_error)
+            __pyx_t_3 = __Pyx_PyLong_From_int(__pyx_v_vec_id); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 715, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_3);
 
-            /* "pyemsi/core/femap_parser.pyx":691
+            /* "pyemsi/core/femap_parser.pyx":716
  *                             set_id,
  *                             vec_id,
  *                             ent_type_val if has_ent_type else -1             # <<<<<<<<<<<<<<
@@ -16222,7 +16593,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
  * 
 */
             if (__pyx_v_has_ent_type) {
-              __pyx_t_2 = __Pyx_PyLong_From_int(__pyx_v_ent_type_val); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 691, __pyx_L8_error)
+              __pyx_t_2 = __Pyx_PyLong_From_int(__pyx_v_ent_type_val); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 716, __pyx_L8_error)
               __Pyx_GOTREF(__pyx_t_2);
               __pyx_t_20 = __pyx_t_2;
               __pyx_t_2 = 0;
@@ -16231,28 +16602,28 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
               __pyx_t_20 = __pyx_mstate_global->__pyx_int_neg_1;
             }
 
-            /* "pyemsi/core/femap_parser.pyx":687
+            /* "pyemsi/core/femap_parser.pyx":712
  * 
  *                         return (
  *                             np.array(entity_ids_list, dtype=np.int32),             # <<<<<<<<<<<<<<
  *                             np.array(values_list, dtype=np.float64),
  *                             set_id,
 */
-            __pyx_t_2 = PyTuple_New(5); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 687, __pyx_L8_error)
+            __pyx_t_2 = PyTuple_New(5); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 712, __pyx_L8_error)
             __Pyx_GOTREF(__pyx_t_2);
             __Pyx_GIVEREF(__pyx_t_6);
-            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_6) != (0)) __PYX_ERR(0, 687, __pyx_L8_error);
-            __Pyx_GIVEREF(__pyx_t_5);
-            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_t_5) != (0)) __PYX_ERR(0, 687, __pyx_L8_error);
+            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_6) != (0)) __PYX_ERR(0, 712, __pyx_L8_error);
             __Pyx_GIVEREF(__pyx_t_4);
-            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_t_4) != (0)) __PYX_ERR(0, 687, __pyx_L8_error);
+            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 1, __pyx_t_4) != (0)) __PYX_ERR(0, 712, __pyx_L8_error);
+            __Pyx_GIVEREF(__pyx_t_5);
+            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 2, __pyx_t_5) != (0)) __PYX_ERR(0, 712, __pyx_L8_error);
             __Pyx_GIVEREF(__pyx_t_3);
-            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 3, __pyx_t_3) != (0)) __PYX_ERR(0, 687, __pyx_L8_error);
+            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 3, __pyx_t_3) != (0)) __PYX_ERR(0, 712, __pyx_L8_error);
             __Pyx_GIVEREF(__pyx_t_20);
-            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 4, __pyx_t_20) != (0)) __PYX_ERR(0, 687, __pyx_L8_error);
+            if (__Pyx_PyTuple_SET_ITEM(__pyx_t_2, 4, __pyx_t_20) != (0)) __PYX_ERR(0, 712, __pyx_L8_error);
             __pyx_t_6 = 0;
-            __pyx_t_5 = 0;
             __pyx_t_4 = 0;
+            __pyx_t_5 = 0;
             __pyx_t_3 = 0;
             __pyx_t_20 = 0;
             __pyx_r = ((PyObject*)__pyx_t_2);
@@ -16260,7 +16631,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
             __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
             goto __pyx_L12_try_return;
 
-            /* "pyemsi/core/femap_parser.pyx":607
+            /* "pyemsi/core/femap_parser.pyx":636
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -16276,22 +16647,22 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
           __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
 
-          /* "pyemsi/core/femap_parser.pyx":694
+          /* "pyemsi/core/femap_parser.pyx":719
  *                         )
  * 
  *                     except (ValueError, IndexError):             # <<<<<<<<<<<<<<
  *                         i += 1
  *                 else:
 */
-          __pyx_t_14 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
-          if (__pyx_t_14) {
+          __pyx_t_15 = __Pyx_PyErr_ExceptionMatches2(((PyObject *)(((PyTypeObject*)PyExc_ValueError))), ((PyObject *)(((PyTypeObject*)PyExc_IndexError))));
+          if (__pyx_t_15) {
             __Pyx_AddTraceback("pyemsi.core.femap_parser.FEMAPParser.get_output_vectors_arrays", __pyx_clineno, __pyx_lineno, __pyx_filename);
-            if (__Pyx_GetException(&__pyx_t_2, &__pyx_t_20, &__pyx_t_3) < 0) __PYX_ERR(0, 694, __pyx_L10_except_error)
+            if (__Pyx_GetException(&__pyx_t_2, &__pyx_t_20, &__pyx_t_3) < 0) __PYX_ERR(0, 719, __pyx_L10_except_error)
             __Pyx_XGOTREF(__pyx_t_2);
             __Pyx_XGOTREF(__pyx_t_20);
             __Pyx_XGOTREF(__pyx_t_3);
 
-            /* "pyemsi/core/femap_parser.pyx":695
+            /* "pyemsi/core/femap_parser.pyx":720
  * 
  *                     except (ValueError, IndexError):
  *                         i += 1             # <<<<<<<<<<<<<<
@@ -16306,7 +16677,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           }
           goto __pyx_L10_except_error;
 
-          /* "pyemsi/core/femap_parser.pyx":607
+          /* "pyemsi/core/femap_parser.pyx":636
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:
  *                     try:             # <<<<<<<<<<<<<<
@@ -16338,7 +16709,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
           __Pyx_ExceptionReset(__pyx_t_11, __pyx_t_12, __pyx_t_13);
         }
 
-        /* "pyemsi/core/femap_parser.pyx":606
+        /* "pyemsi/core/femap_parser.pyx":635
  *             while i < n_lines:
  *                 parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i])
  *                 if len(parts) >= 2:             # <<<<<<<<<<<<<<
@@ -16348,7 +16719,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
         goto __pyx_L7;
       }
 
-      /* "pyemsi/core/femap_parser.pyx":697
+      /* "pyemsi/core/femap_parser.pyx":722
  *                         i += 1
  *                 else:
  *                     i += 1             # <<<<<<<<<<<<<<
@@ -16362,9 +16733,9 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
       __pyx_L5_continue:;
     }
 
-    /* "pyemsi/core/femap_parser.pyx":601
+    /* "pyemsi/core/femap_parser.pyx":630
  * 
- *         all_blocks = self.get_blocks(1051)
+ *         all_blocks = self._get_output_vector_blocks()
  *         for block in all_blocks:             # <<<<<<<<<<<<<<
  *             i = 0
  *             n_lines = len(block.lines)
@@ -16372,7 +16743,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   }
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":699
+  /* "pyemsi/core/femap_parser.pyx":724
  *                     i += 1
  * 
  *         return (None, None, -1, -1, -1)             # <<<<<<<<<<<<<<
@@ -16382,7 +16753,7 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   __pyx_r = __pyx_mstate_global->__pyx_tuple[1];
   goto __pyx_L0;
 
-  /* "pyemsi/core/femap_parser.pyx":578
+  /* "pyemsi/core/femap_parser.pyx":606
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
@@ -16407,7 +16778,6 @@ static PyObject *__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_output_v
   __Pyx_XDECREF(__pyx_v_result_parts);
   __Pyx_XDECREF(__pyx_v_cont_parts);
   __Pyx_XDECREF(__pyx_v_values);
-  __Pyx_XDECREF(__pyx_v_line6_parts);
   __Pyx_XDECREF(__pyx_v_entity_ids_list);
   __Pyx_XDECREF(__pyx_v_values_list);
   __Pyx_XDECREF((PyObject *)__pyx_v_block);
@@ -16459,50 +16829,50 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_set_id_filter,&__pyx_mstate_global->__pyx_n_u_vec_id_filter,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 578, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 606, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 578, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 606, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 578, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 606, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "get_output_vectors_arrays", 0) < (0)) __PYX_ERR(0, 578, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "get_output_vectors_arrays", 0) < (0)) __PYX_ERR(0, 606, __pyx_L3_error)
     } else {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 578, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 606, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 578, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 606, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
     }
     if (values[0]) {
-      __pyx_v_set_id_filter = __Pyx_PyLong_As_int(values[0]); if (unlikely((__pyx_v_set_id_filter == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 578, __pyx_L3_error)
+      __pyx_v_set_id_filter = __Pyx_PyLong_As_int(values[0]); if (unlikely((__pyx_v_set_id_filter == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 606, __pyx_L3_error)
     } else {
       __pyx_v_set_id_filter = ((int)-1);
     }
     if (values[1]) {
-      __pyx_v_vec_id_filter = __Pyx_PyLong_As_int(values[1]); if (unlikely((__pyx_v_vec_id_filter == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 578, __pyx_L3_error)
+      __pyx_v_vec_id_filter = __Pyx_PyLong_As_int(values[1]); if (unlikely((__pyx_v_vec_id_filter == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 606, __pyx_L3_error)
     } else {
       __pyx_v_vec_id_filter = ((int)-1);
     }
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("get_output_vectors_arrays", 0, 0, 2, __pyx_nargs); __PYX_ERR(0, 578, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("get_output_vectors_arrays", 0, 0, 2, __pyx_nargs); __PYX_ERR(0, 606, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -16536,7 +16906,7 @@ static PyObject *__pyx_pf_6pyemsi_4core_12femap_parser_11FEMAPParser_26get_outpu
   __pyx_t_2.__pyx_n = 2;
   __pyx_t_2.set_id_filter = __pyx_v_set_id_filter;
   __pyx_t_2.vec_id_filter = __pyx_v_vec_id_filter;
-  __pyx_t_1 = __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser->get_output_vectors_arrays(__pyx_v_self, 1, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 578, __pyx_L1_error)
+  __pyx_t_1 = __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser->get_output_vectors_arrays(__pyx_v_self, 1, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 606, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -18143,6 +18513,8 @@ static int __Pyx_modinit_type_init_code(__pyx_mstatetype *__pyx_mstate) {
   __pyx_vtabptr_6pyemsi_4core_12femap_parser_FEMAPParser = &__pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser;
   __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser._parse = (void (*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse;
   __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser._parse_csv_line_fast = (PyObject *(*)(PyObject *))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__parse_csv_line_fast;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser._locate_output_vector_header = (PyObject *(*)(PyObject *, int))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__locate_output_vector_header;
+  __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser._get_output_vector_blocks = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser__get_output_vector_blocks;
   __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.parse = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_parse;
   __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_blocks = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_blocks;
   __pyx_vtable_6pyemsi_4core_12femap_parser_FEMAPParser.get_header = (PyObject *(*)(struct __pyx_obj_6pyemsi_4core_12femap_parser_FEMAPParser *, int __pyx_skip_dispatch))__pyx_f_6pyemsi_4core_12femap_parser_11FEMAPParser_get_header;
@@ -18899,35 +19271,35 @@ __Pyx_RefNannySetupContext("PyInit_femap_parser", 0);
   if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_sets, __pyx_t_5) < (0)) __PYX_ERR(0, 436, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":481
- *         return output_sets
+  /* "pyemsi/core/femap_parser.pyx":513
+ *         return self.get_blocks(1051) + self.get_blocks(451)
  * 
  *     cpdef list get_output_vectors(self):             # <<<<<<<<<<<<<<
  *         """
- *         Extract all output data vectors from Block 1051.
+ *         Extract all output data vectors from Blocks 1051 and 451.
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[13])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 481, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_25get_output_vectors, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[13])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 513, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors, __pyx_t_5) < (0)) __PYX_ERR(0, 481, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors, __pyx_t_5) < (0)) __PYX_ERR(0, 513, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "pyemsi/core/femap_parser.pyx":578
+  /* "pyemsi/core/femap_parser.pyx":606
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
  *         """
  *         Extract output vectors as NumPy arrays (high performance).
 */
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors_a, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[14])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 578, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_6pyemsi_4core_12femap_parser_11FEMAPParser_27get_output_vectors_arrays, __Pyx_CYFUNCTION_CCLASS, __pyx_mstate_global->__pyx_n_u_FEMAPParser_get_output_vectors_a, NULL, __pyx_mstate_global->__pyx_n_u_pyemsi_core_femap_parser, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[14])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 606, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_5, __pyx_mstate_global->__pyx_tuple[3]);
-  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 578, __pyx_L1_error)
+  if (__Pyx_SetItemOnTypeDict(__pyx_mstate_global->__pyx_ptype_6pyemsi_4core_12femap_parser_FEMAPParser, __pyx_mstate_global->__pyx_n_u_get_output_vectors_arrays, __pyx_t_5) < (0)) __PYX_ERR(0, 606, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
   /* "(tree fragment)":1
@@ -19069,12 +19441,12 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[0]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[0]);
 
-  /* "pyemsi/core/femap_parser.pyx":699
+  /* "pyemsi/core/femap_parser.pyx":724
  *                     i += 1
  * 
  *         return (None, None, -1, -1, -1)             # <<<<<<<<<<<<<<
 */
-  __pyx_mstate_global->__pyx_tuple[1] = PyTuple_Pack(5, Py_None, Py_None, __pyx_mstate_global->__pyx_int_neg_1, __pyx_mstate_global->__pyx_int_neg_1, __pyx_mstate_global->__pyx_int_neg_1); if (unlikely(!__pyx_mstate_global->__pyx_tuple[1])) __PYX_ERR(0, 699, __pyx_L1_error)
+  __pyx_mstate_global->__pyx_tuple[1] = PyTuple_Pack(5, Py_None, Py_None, __pyx_mstate_global->__pyx_int_neg_1, __pyx_mstate_global->__pyx_int_neg_1, __pyx_mstate_global->__pyx_int_neg_1); if (unlikely(!__pyx_mstate_global->__pyx_tuple[1])) __PYX_ERR(0, 724, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[1]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[1]);
 
@@ -19089,14 +19461,14 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[2]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[2]);
 
-  /* "pyemsi/core/femap_parser.pyx":578
+  /* "pyemsi/core/femap_parser.pyx":606
  *         return output_vectors
  * 
  *     cpdef tuple get_output_vectors_arrays(self, int set_id_filter=-1, int vec_id_filter=-1):             # <<<<<<<<<<<<<<
  *         """
  *         Extract output vectors as NumPy arrays (high performance).
 */
-  __pyx_mstate_global->__pyx_tuple[3] = PyTuple_Pack(2, __pyx_mstate_global->__pyx_int_neg_1, __pyx_mstate_global->__pyx_int_neg_1); if (unlikely(!__pyx_mstate_global->__pyx_tuple[3])) __PYX_ERR(0, 578, __pyx_L1_error)
+  __pyx_mstate_global->__pyx_tuple[3] = PyTuple_Pack(2, __pyx_mstate_global->__pyx_int_neg_1, __pyx_mstate_global->__pyx_int_neg_1); if (unlikely(!__pyx_mstate_global->__pyx_tuple[3])) __PYX_ERR(0, 606, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[3]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[3]);
   #if CYTHON_IMMORTAL_CONSTANTS
@@ -19129,25 +19501,25 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
 static int __Pyx_InitConstants(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
   {
-    const struct { const unsigned int length: 10; } index[] = {{1},{2},{5},{2},{14},{6},{179},{1},{1},{0},{1},{1},{8},{7},{6},{2},{9},{8},{39},{34},{28},{14},{4},{10},{28},{30},{11},{29},{31},{22},{24},{31},{22},{25},{21},{28},{27},{30},{37},{26},{17},{26},{4},{8},{20},{5},{5},{18},{8},{18},{8},{5},{5},{8},{9},{8},{8},{7},{8},{8},{3},{10},{12},{19},{10},{13},{9},{16},{15},{18},{25},{14},{12},{2},{5},{13},{5},{4},{5},{4},{8},{11},{10},{8},{7},{5},{2},{5},{4},{5},{14},{3},{7},{24},{14},{12},{11},{10},{25},{26},{14},{12},{1},{9},{10},{17},{13},{7},{6},{6},{4},{6},{13},{12},{10},{12},{19},{5},{12},{5},{8},{5},{8},{6},{6},{12},{5},{6},{6},{13},{7},{684},{113},{194},{332},{272},{137},{447},{17},{213},{11},{17},{876},{162},{132},{101},{11},{11},{55},{55}};
-    #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (2522 bytes) */
-const char* const cstring = "BZh91AY&SY\336\234\2304\000\002]\177\377\377\377\377\377\377\377\377\377\277\377\377\377\377\377\377\374\300@@@@@@@@@@@@\000@\000`\t\367\300\032\036\234\224W\252\320V\330\252\025\340\320\001X8I\022B\220\361CG\250\375\024~\250i\232'\350z4i5M7\252z\217I\345?)\251\352h\317T\374\222h\321\372\204\332M\221=2F\3652\233M=OT\362\217$\022T\304\321O\023@\211\345=4\312zF'\241\000\000\000\000\032\006\200\001\240\r4\000\000\033D\001\251\244\332I\211\250\320\320\000\000\000\r\000h\000\000\000\000\000\000\000\000\320\320\002)\251\251\264\324\321\243\365\020\364\2324d\320\323'\250\0322\031\006 \311\241\211\223C\010d\320d`\206\t\200\021\246\004\0310\002`\023\023&L\000\t\2010\023\023\004\300\000\000\000\t\221\200\230\020\302\000H\240\020M4\236\223A\250\302\231\245<\312\236\223\324\032\003\324\003\324\0004\000\000\000\003\322\000\000\r6\2225=\211\253d\272\223\230\372\317j\"\202u\331K<\321\274\230\006\202CV\207\350t7\222\2019\014&\322$\322(0\240\324\240MH\031%4\021G\250\013\3143\314Ki\352*\2571\352\255XKx\241c\032\0068\244\330\300m\260m\203c\030\233\261@\300\021\n\0345<r\274\225\345\014kx\222\347\251T\026\261]VA\314r\242&\300\262F\002\014&\224X\324\231\261,\320U\030\031-\022\211\002H \345\"D\362h\213\225\035 H\251rRH\221c\"Gq\0053*\225B\341X3\326\203D\265\025\236&\274\3613\232\016T\030\023\0034\262\231u\202\362FF\254\222i\246\3046\003\033I\210c\001\261\266\333\032\333\212Z\374\013#3\\Ag4\021\270E\303Li6\204\241\327A^4\227\255\tk\211\022:\020A\305\342\271\n\361\211\2146\330\021\006D\014a\314\033\323\267\254\370\360}\034;\274\202v^\031\321n\314\235\021\207\223\215\007\232\246\342c\373\210\341\033\r\247N\371\362R\203A\322\227H\035(<\345\324\035$\313\310\245\315\032\322\022d\0109\021\235\022\265\356\364\300\231qy\314\203\031\336\014\364*\005jb\273\310:\000Y_\356\214\005\2031\232Z\242\223i\251\030\213\024{\325\256d\350:S/\3472e\n\024(i\220\261\376\335VJ\341\336\265\rx\360%\362=\3412\325 1\250`\234 \220\340\001\017U6\340\314\002\200\014\020\026\014\306H\376\n\036{\215\023rU\000\225\205CK:A""\000&\237\021\335\234}\276h\233>6\340\210D\320=_\224>\347OZ\347\010$d\035\204c\336k\232)\021*:4\325J\"\1773\307a\021\016\240\261b\345\353\361\301\005L\025(\303\243G.:\021\306DMUK(\344\252*\211N\362I2\251%\021\024\211\363\\%\213k.R\013\372M$\254A\030\343\255\t\243N\251\221\250j\265\344\2524\253\272\305\362\211\024\202\024\202i\032\303\211J[!1\023\010\236H\014Gb&\226\025*S\217N\031\2452\360\354\373=w\314\274\374\002F\255D\305\341\014\317?\317\357\367_\205\233\324\032[\342m\300\303i\206(\312p\275\310\033L\204\353,v]-\372\247\214\214\360\211\030'v\236\014\243\360;\204}\344T\201\001\316\203\264\200\274\202\\W\201\220d\261\350\tk\032\n\034H\031S\2158\"H\263,@\262\200\331:\321*\021\203\204\030\341r\316\",\254~\220\231T\252\210\307\311\313z\013\241\345\364\274\265E\3428\021\372\242\225\245\216j\201mEE)\021D\242\275a94H\315\366\003\026\020\377sR\253J\024\340rT\307\237\005\031\000H\312\177\304\212\276DW\3627\245\322\333O\227\331D\017D?\314\022\353\240I\323\262q\215d*U)\223\372k\340\326\033S\312\360\351\250\226\240\3346\031\010 \311\206\026\000t\030\004\222z5\023'\2262\276R\257\245\351\224&6\207t\005Q\221\021\213\010\rV0N\251\204\220H\004\374F\240B\036\3105\276#\021p\373\336\242\220G3\205\244Vd\374)\032p5\036\005\267\302-\301\342I6\333\355\036\356\377Gp\266\340\241\275\302\3204\230\036-\350<=K\274x\215Q\2368!\036\223\234\234\032\346\2216\006?\002\311l\257x.X,\306K-\024d\021\234\332\214M\014\221<i\365yBL\314e\335\303|\272\356?\203\203\"\212\n\002\343KD\032\032h,\rv\013\274\rj\355\303>\337\024\016\004fNWn\244\212Vh\204r;\375gM{\335\255\3418pC\272\273\216\025\340c\221BD\206\335#qkN\342R\200\177\331\232\335\323E\321\303\320\341\214\247\302\032\247+u\025\016\361\034\253\216.\374\302V\276\321@a\010\017\2220Y\336Bd)=\244 6\334\315gMz@c\033\004\3368\305F\000\205\357\202:\031\233{\232d\254\030\211b\206\342\327\346\276\031\00664\352\3172\263r\021t\273\201%\366\222\003\220m\3622\003lcw\0243\335\272\3013\252\0021\335q\202\226\276r\037\334\347\017\031\300\001\212\021<\211\211 \245\033\201""\202\000\211\306\211\270\223\016\230SO\022\273\266\240G\266%\322\264\0310+\216/\250\2166E;\2655#\024\240\311\230R\216\253*M\013\246\277\373\242Ue\312sP\333\201n^\003d\362\230\324(\242\032\345bjK\232\227\306pCm\300~\263\212\326\354\265\215\032Uj4GC\276\306\233\353!|\276.=zD)\232\014Q\325\331\262WI*,x\031t\3718E\020\211\207[\256\313\032\n\374\366\233\215\267P\331\036\034\025\223\240\306\261\256\2522x\311oR\023\313,e\007\245^\2660\261\020\230\226!\246\264d\020\345\rJ(\222g\201Tg\200\270\224\253\265$k|\240qnD8v-\207$\r\366\013\202\352\352C\004\010\230\230\222 }\210\006\020PH\250i\t\335,\314Xm\263q\314mF55\306\020\205HN+<\347\020E\306\316\327F\211mx\345\226YC\t\303\266E\314\360\317r\326J%\3557\014\276\006\273\342H\325\347\020\277r7\220\217$'\267\277\003\\t\035P.\"\314=t\220o\235\241x\233\2726\272I\351\005W\254\0347%8\354!\250\217%\257\302\267\205\362\013\nT\324\022\306\215<\032S4\272\032\272\016s?O\022\310\274\357\302<\033\340j(\253S\230\\:\026\252\327\023@\251\2470\302\200\362\3056\314\032X1\013j\372\332\222M*\006\207sy&\223;\274\233\364=\254`f\371\267\nB\362t\013\226\226il\327\217\007\003f\204\226\326\267\307\324\031\206\035\240\337\023\277\362/\351l\202\333(\227\235\037\260\272\035\367\310t/\001F\372\n\030M\300\\d\034\244\215\2372V\314\203;\353A3\310\2237\\1\320}IA(\274\236P\307A\336;y\251_J\361\343\310A\267\350<MA.\271\004\215\237\232\204!\300\356.u\375\323\373\034K\177\260\"\304[\036)\237\007\235\315d\014px\"/\245\245\332\021\004\034\252\335\231\210\317\2709\260\310\206\327,O\224\201\216\242C%\314c\225.\242\032\373\033\3475\3202X\372\226\2679\377rM\322E\267%\234\341]A\271Kr\362\tF\013q\22611~\344K&\302\016X-%\030A()\214:\356g\233\245\034*\220\331\354A&\344\n\350m1\232\346\243\016B=\003\277I\216\232\030\336d\316\351\203D/\245\004b\260D\246*G\026/T\210\253\0077\010\234\334K\217\206R\364\204\304\321\014R\351\026\331\037\355RZ\240@\232\312+e\263(%\032\251 \020 \207VV\010\316\225G!#\206+*f\271M\3448\212\201r\374\244\205B\001\004\301\307)\265%:\306\000\323+\347+\352h\346""\273\223F%+\312V\030Z?8HY:\005\363\177d\226\241++C\203\2141\234W\346\304z%\025bE\305\311$;7\216\261\032c\020\356\014h\321\325)\024\006)\221Eh\302b\014\223\021\346'7\206\313\201H\363\233\277!\226\031\203\231\220\035-R\321\355\335\244\231fwJ'8\264:}s\264i\231e\243L\325\201\002\006\304vB25r\361g\274H\311zm\031\246\032Q\351\035\023`\340?\036\261\357\374'Eh%\017Ol.\237I<\311S\347\207c$\237`\363kX.\330\310\320J\261\317\256\\Z\225\322\177\226\331YP\n\022\252\205jj\316\003\313C\033l?y\335\337\014\362\272\007s\373]\020\343\254#\223\232uL\251G\245L\344\021\353\214\314s\253k\0031\0334\255\213A\027\226\255.\252]3\363\\(\262]?\003\364\307\312\2715d\307T\346O\034\216\200\023FO2j\234\314\307\034j\376\014*\202\300V)T0\032\231$\242\202@LeFR\021\215\315)C\343\204\340J\322D\212\2624\230\374\277p\277\363\337\005U\304\027\030\341<*\241\\\tN(\243\302\251Pq(\003 m\031\006\307\024\340H\270\201Y\214\210\311\253\210\021\320\241C\361\220T\231R30\t\221\"D\324\321G{\2375\210`V\000L\273TfF\2127\321\302\351\300\215a#\214\242\245 L\255\211\tefn,\322\020\245\276`I\377\213\271\"\234(HoNL\032\000";
-    PyObject *data = __Pyx_DecompressString(cstring, 2522, 2);
+    const struct { const unsigned int length: 10; } index[] = {{1},{2},{5},{2},{14},{6},{179},{1},{1},{0},{1},{1},{8},{7},{6},{2},{9},{8},{39},{34},{28},{14},{4},{10},{28},{30},{11},{29},{31},{22},{24},{31},{22},{25},{21},{28},{27},{30},{37},{26},{17},{26},{4},{8},{20},{5},{5},{18},{8},{18},{8},{5},{5},{8},{9},{8},{8},{7},{8},{8},{3},{10},{12},{19},{10},{13},{9},{16},{15},{18},{25},{14},{12},{2},{5},{13},{5},{4},{5},{4},{8},{11},{10},{8},{7},{5},{2},{5},{4},{5},{14},{3},{7},{24},{14},{12},{11},{10},{25},{26},{14},{12},{1},{9},{10},{17},{13},{7},{6},{6},{4},{6},{13},{12},{10},{12},{19},{5},{12},{5},{8},{5},{8},{6},{6},{12},{5},{6},{6},{13},{7},{620},{113},{194},{332},{272},{137},{447},{17},{213},{11},{17},{812},{162},{132},{101},{11},{11},{55},{55}};
+    #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (2496 bytes) */
+const char* const cstring = "BZh91AY&SY\025\317U\200\000\002P\177\377\377\377\377\377\377\377\377\377\277\377\377\377\377\377\377\374\300@@@@@@@@@@@@\000@\000`\t\317\203F\2054Rl\243F\2324\032`\000\004\001$\210E4\301\023y\036\244\237\224jg\251\247\246\2314\304I\260\215L\321\242zM=O\004\233P\332\021\372\2465=OM\023=G\250\320\364\325?I1\004\2254i\240\023\324\365\"\017L\240d1\000\000\000\000\006\200\000\000\0004\320\000\000\001\006L\000\230\004\304\311\223\000\002`L\004\304\3010\000\000\000\002d`&\0040\200A\223\000&\00112d\300\000\230\023\00110L\000\000\000\000\231\030\t\201\014 \020d\300\t\200LL\2310\000&\004\300LL\023\000\000\000\000&F\002`C\010\001\"@A4\232h\320\025?\010\236\222f\247\251\344\206\2154\323F\214\232\000\310\000\0004\000\310\000\001\223LI*\367\n\355\327\256t\021\322\300\216\024Ih\257\216\362_\351\361\270\234\007\nC\327\r\262\010n$\312haF\0049\264\212\214*5:H\2050d\325\022\222=\200^\310\317d\237\t\354+/d\366\215YO\234Qs:\243<\322l`6\3306\301\261\214M\334\250d\010\212\233,n\236$\361*glD\227M\213 \275\313j\272\016\203\231\0226\005\3222\020eD\244\306\246\315\211o \26224[R\221\004\320D\346L\246\215\022s\243d\213\030%t\023.hHa\240\225\343\222pN)\201\366\220\\J\261\315\250\264\372\207\265\005\324\024\320\r\344\264\241\205\303\022f\205\365h\223M\246!\264\r&!\214\006\306\333a\301\241\251-|\312\304\315r\021\275D\245\200\030\r\014hm!G\211P1\032\027t'\256D\211m!..\376\010X\214La\3520C\331\345\350\342\326\374\215\376\277\246\326w\r\231$\215\013r \263\014\210\013|{\327\272%\025\334\251h\224\r\207\001\327\315NJ\210\353GX\035iv\227a\326P\300\222]\022\265bl\202\034\311R\251_\007\2510(`bt \316\230\203<{\001k\031\256\342\016\240\026\230\371fB\311\231\321-RI\264\324\314\305\232<\305\256\205*5Z\351\375u\025,T\251SmE\237\370\354\270\030-C^V$\367\0373\341\225/r\006y\346\310R3\206\343M\350_\313!\tlH>\353\367\337m\305}O\231\333\235B>x\323\317u\t0\2443&\300'C/'e\031\362\270\202A#\200=\257\234?\013\265\335]!\t\032\007l\227p\233k\246H$XumX\252)\363\374\253\201 \354\013\2270^6y \261\222\362\r\230\007\323\177.{'""\234q^\005T\222%r\342-JQFE\264\234:\205-Xe.\330S\220\203\005\361\230\361\216G\330\231\353\354\332w\273%\323\371\266\2226\371~\037\347\0225\205\020\024H\326\034\007\022\2457EDT$y\260A\031\r\007y\025JV,[\r\2744J\206!\336\373\235\334hby\207\244$i\241Qw\303a\343x<^\307\337g:\206\227<\216\034\214\270L\2741\220l\262 \216\003N\216\211\230\346s*\311\211\216\350\221x\354[\275I.\017\\\233\264\210D\200\352K\235\001\211\tqb\006\201\242\317\254'\254iT\342@\313\034i\302&\213\262\344\027P6R\325J\244\206\2420F\364\200\272\271\372\302\205\222r#\311$\337aR\225\014`\3376K\225\002) \262\244J\206\326\365(O`\341V8\264R\274\341aS\221\342\364\003\025\362_Th\270\366\310\022\"\331)\354\230\210$,m\221\367P\017\366\034\224\260\331\2316\026K\300\324\016\007%\213\020@\321P\205\357\312\265F\010$C\361\303\325\245Lg\177~j\244\335fc\353J\302e\250J\240j(\016\036cR4zg<g;z\236\271R\203hx@\2542B3a\003V\224-S\2242\001\271\004\245h\340\206+\366\204\343\334\263v\261\211r;}\346\315nA\002\332\255\322\222Eu(R\302\232I\266\3379\360\261\364w\013\203%\034\316/\006\332\001\340\346A\336\354]\303\300z\244\202e\022\3673\230x\322-'\025\341\347:N?X:\371N{\231e\255\035\322\347F\2433i\242)\235~\317(M\233\3030\355\234\323\361p?\223\206I\025\024\013\215-\2506\233v\213#]\302|h\225w\330\373\371v\020C\306\311>ZY\t\\\3242;\014\\s:\355\005\354 k \314E\333qm\3669\225&Lm\326X\027\2750'8\017\373C[\302\210\302Yx\3742\2358CU'~\302\301\334%\245\263\315\343\274\023\2767\222\003(\201\362J\026\366$P\212\323\200\210\033n\206\263\256\335`1\215\202o<\344\244\302\225\253\276\257\303\344\365\365%\204NK\234\031\223x0~\301\2611/W\327\247\200\372\010\236O\225u\304\226\304c3F\303\206f\030\336\005M\355\333\256\024; F{\2602S\327\322G\371:Jz\031\001C\304;\213\253\224\234\351\221&\r\345\203\307]\rT'\205\342\276v\036\363\213\023\246*\203\3345\3273\rd\315ao\032\030\243\025 \312\230>k\214\205M\222\254\017\232)W\244V\025\221E\023\t\256\300\266\335(5\025R\rs\271E5\321\\eHCm\300\374>+\337\273{\233ZVjUGS\306\346\336kL^\217\027\036\276\243\202am\2105#\263""\273\277<f\225V\255\254\302\234\273\205 \221\227\212\355\277s\200X\354\3418\216\034*l\226\354\225\323\250\311D\247\264\215.er\374Q\023\034\353\310\222\217\003\020Q\2419)\307.i@\207\361\036\224\210 '\242x\3511p$\215o\224\016-\310\216\035\213a\311\0075\303\000\303\215bs\001hP\222\035yY\003\324\203a\302i<\263\205\332\227?\\\342[\361%'(\210\261\024\222\336\336\244\201\030\0339\372\266\245\300\363\323M4\214\251\036\330\223\241\336\246\345\254\234\214Zn4\363\265\343\"f\256\321\030\356N8\342{}\274\032K|v@\267\027a\337\232\016Z^1\023xJ\370M=\370Vz\003\216\024\251-\3425\022\343\2769[\020\306aqN\272\202y\325\247\224I4\204\354\2576f\207\376\252&E\006+#\205\326\030\226\225\373\013\333\332\357\334\314\n0!\236:\303QS\227d\263\016G\341\035\013\016\305\216<\210$\035\276bm&x\\\234\333O\"Po>\215\302\230\274\336\241r\326\355-\232\363\337\337l\332Mz~\227k\320\033\031\016O\252#\366\213\320\267Ay\211\347}\310\256,\275\307F\344/\354\237a\004\313g\254\027\314{\212H\362\373\222\324#2z\310!\365!\231wBR\016\242OJ\017W\264% \361\236\034d\267\022\332=1\245\347\340?\306\230\227tz\r\336\214\307\275\\s\205\211b\311\354\034\013\337\372\201\231\006\337\236\031\277\007\025\3201sr\002\302Z\036\000\036\226\035n\374)gk\0166\331\017\336\346\t\323\220i\240r\\\3260\352\351&\260\307\274\3479\003%\213\317{\367b\370\027Y\3109P%\273\000OK5,\330\206\342\216\026f\270\344\345\377]%\215\230\2270\026\202\242\017I\352\026\034\277\214\342\311>\332\2446s\017I\224\221k\206\363\030\332O\034>\216y\375Rc\360C\033\354\231\316`\352\205\204\236\213\306\010\024*\221\362\274\374\210\n\217q\353 q\353K\347\303T\332\246B\232\001\212]\203Q\221\361\250U\250\003\310\231A\250j\023\202\250\325\n`<z\034\272\352\325\023\261\220\341\364\334\027\214\261\317!\216\352g\310\310\rk\025Jf@\344\360\371\3257\251\343\326-\007d\312\311V\"\034y\034D1T\312\252V\030]\\\320\246tK\007\277t\345\025)\225\033\2568\0340\305c&.\n\205q\202\261M|\270\3453\301\337?2\212b\354\2561\325\237\334)\023\0061\310 \321-\227c$\305\032\t\306\370\330\257)\037\002\317<""\305\n\003\212\017\034\227p\3219\032\364\223,o\021<\3054G'm\236\023\262b\232'd\330x\361\345*=`\242QZ\272\0363\035\222\372u\213thu\016\231\266\\65\314)\206z\351\244\376!\364\360\006\251\322%\221\221\254\034\020\331\256`\345\236\352\371f\266_'=*\247C$\325\322\311I\331[&\241[\226\034\272\253 \2551h\332=\263o\274\301\342\220\305\177,fR\010u\266\266\003\357\232v\267\r\223O\212D\2161\244I\250]\236\032\006\314\331Xk\240\227(\\(\270\251#M\035\243\364\341[\006\271\252~\322\347kD\2714j\034\334\021\307{\241\215\025\032\212UY\266q\312\317\317\213 \270\026\222V\014\206\250M) \230\213\014\244VX4\247\037,)\004\3574L\263%S\323\373\306?\243\030\252\261\304\031\347GU\025\304\236RE^VEG\"\2402\016\001\220\330\344\234\0231 \265\006H\246\004\211m*T\374\204*\320\261*\031\023\031Bd\311\032\232(\361t\350\271\031\026\200(a\253\251\316VQ\225^YV\204\353J\034\204\354Z \261\221\"\366\306\325\256\026\254\n{/#\237\377\213\271\"\234(H\n\347\252\300\000";
+    PyObject *data = __Pyx_DecompressString(cstring, 2496, 2);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (2239 bytes) */
-const char* const cstring = "x\332\335VKs\323X\026\306M\000\007<\020\345E\350\030\220\023\347A\023\014\316\223\001\232.'$\014\3354\035\205\220L\363R\313\322u\242\211\"\331z\230\270\273\253\206\245\227Zjy\227w\251\245\226Zz\251\245\226\376\t\371\ts\256\024\3428\017\272\253&\364TMU\"\337\347y|\347;\347\236[\367r,\313\336\311\337\311/-\376XX\236W4qk\\\226\276}\364\342\325\363\347\217_h&b\315M\301d\027j\346\246\246\262\262\301JH\221\213H\027L\244\324X\303\324e\321D:=\244\262\313\213\313w\246\357O\263\202*\261:\372\027\022M\2035\254\242\250\010\206\201\014V+\261EKVLYe\315Z\031\0319\366Y\211\255i\026\253\"$\261\246\306\226\341\334\301\013\346&RY\003\231t\300\216\t\252\252\231\202)k*\017\327euc\214\225d\035\224\310UDo/\t\212\201r\027'r\337\t\222\304\303Y$\311\206PT\020R\351wC\224\215x$M\260\212\254\"\343[\325\332.\327r\274\250\351(\267m\201a\202\256\0135\266$\310Jl\220\274]\326t\363\3401k[07\217\234(\327\320\266!\337\245'\356\226\320\266P\346\313\202n =W\256\355<\242\030\251\033\206f\351\"z\374\004\340j!\335\032\345x^G\222%\"^\214\220\346\371\266=\000\301\000\337\017\355.GJ\016\014O\220\262\277\37191\271\rd\362E\252\3178\274\212\024\264\215T\363\304u>\302\355\310\366&\022\244v\363\350*\000\210t\031buxC\325$t\374\342\t\3625\313,[f\344\324\t[U`\207\246\377\301\356\t\322\313\272VF\272)\267\333\024\305\365\310\002/\032U\236r\352\271l\230?\225)G\005\205\347\227k;\360OC\316\277@;\346\n*\255Ze\005E\372\004\243\246\212\262\226\003\316\2009\224\216\021\366\274,\211T\020/\003\313uADE\001\026y\211\312\210\177$\232;\200:M\002\304\3630B:l\361hG\206#% f\031(ZR4\301\234\235.i@:~R\202\rK\025y\036\034k\205\371`\010\217\tg+\204ma\333\217\312\341\360\034\n\311Q\240O\204\276\035\356\310\312\230\246\200\206\254\232S\223\274l\360\373@\311&$\033\305(Jb\005\020\347\301:\300k\337F\270\006\023M\262\024D\221Q\205\355\370\027}\340c\213\325r\224\323\240Q\215\342\327\036\304\262V\246\326\200\2248\257sQ\346\037\314k\236\207\304\346\305M\004(Z\333\361LG\006\224\220x\274g=\035\306Q\242#K-\313\342\026\230\324\312\354\3436\226\017h""\250\232\264^Q\333+\226\240\304~\350:\304$r}?\331\371#i\277\277\200v\370=\313\014\035\231\226\256\352\264\034\225\r\244\224 H\340b\374\245\274\211xD\247\261\036\030I\250$D>\355\327\r\376\230\032\022\315\350G\026\267\021,I\221\006\236\247\213\360\225M\005\231ZYS\264\215Z\\\267\255\262\0047,@\374\223\254\252\240X\361\307\000f\200=\361w\317\252*\322\r\310\250\217\205\335\313g:\2638\277\333\177\246\263\337^u\006q\001sa2U\177fsa\252\313N\204\251~[t\030g\304\251\204\251n{\310\236\267\205\260k8\030\276\357%\274>\017\371\263\r\246\221\t\273z\354)[\260?8\"f\302\336\276p \203{@\324+\222!\371\266Is\200\305\211p`\320\231tV\034\035w\343|\230\036\201\255\021Ru9\267\350}\345\r{k\376\244\277\336(4\2700}\323\251\342\227$\021\262\343$\321\034\200O80\206+\207\356\317\0043\33772\215\231`\371U\360\352M\360\346m\360\366}\360\376\227\340\027\201\n0p\006\177\353\236u\363!{\227\030n\306}\350\t^\205N*\315\201\353\016\327\034\030\302\231p\340\206S\304_\301 =\033\314\376\320\3107\026\003n-X\003Q\357\202w\357\233i\026\237\305y\374\302\035vW\\\270<A\n\344%\010\235\361\022\255\th\030\001\364\330LsO\355c\267\307-\320\375\005RqS^\301\343\250#\347\010G\024/\343\301q\360\205\374\315\345\242{\315L\026@z\357N\322\371m2E\004\362\273\227\367\340\376-\322\003\032\336z\214\227\241\023\006\300\252\200\272i\327\362\2367\022\r\246\t\276|\000\354:\375n\377\223\r\243X\204\203\343\356\220\373\243\337\353\257\370z\203\t\263\217\202G\\\300\255\004+\353\301:xV\014\212b Jav\234\234%y\362\334;\353M\202\211\343\223\000\322\224+Bx\205\326\204\t\307o\205\331o\310\230\313\300\n\370\355\365xO\374s>\027f\301\244&\233\305\337\023\004\353g\301\346gt\3656\210|\006h\375\352\367\373\225F\242\031\37180\2127\010\304u\024\013{\037jmz<\030\277\037\334\207 \206i\200d\367\374\231\353\267h\250itz\2579L3y\245^\211\271\232v\246\235\337(\221v\223g:S\365\351:\320\262\307\3167\223]v\312Y\002\314\363a\362R}\252.\324-\373\037\316\274#\354m3v\237\215\234Y\314\340a\274\006\234L\366\3303\3169g\r\202\272\200\253\204\243\002:\235kx\024\240x\354""\365zo\032\tP\370\365\231\316>\273\020&\373l8\320wL~$A\006\267\237\017\314\321<\030\002}\034F\200E!\034H;\213`\300\010\004=\361\271I\006_%\t\302\320\313c\244\033\230 \272\014`D\267\2565\223s\256\356\365{\025\377Rc6\340^\006/W\303\375\245Tc)XY\rV_Qo.:\231\030\262\033\016\267{\361\224\323\273\315\255\266\3110\236\302\002\266\200\260\334q\271~/\270\267\350s>\242\331\n\371\005D\3749\370\231\346l\010)\226\244\231\236\205\200P\030\330a<\031\345>\360\353\252\233p\231\346)Jb\361\005(#i\232\371\224q1\272\351\210\241@\272=\260\217\241_\006'\350\317\227*\225\377Uu<z\365O\027\306\270(m\321\n\323\204\010\346\361\017\244\346]\360j\215\030\205\223\361\270\351\010\247\316\255CO\007\203o\22350\3623\206@\232\016C$\2234\234\311\033\220\363IZZ\222\364n\206\326\211\003\34616\334\372\313\370?\202\327\351 l\r\366r\373\024\270<\343\256G/J6G\204S\027\227\305Ocw\216\003\2753L]\256\227\354\202\315\343%2\004\247\216\237\276\301\347q\021n\306\323\240o\234\234'E\367\323\334~\217g\241\270\345?\026\302\354\010m?\006\203\257\341Iv\0231\261X\247\262\233\372\222E\353\264\262\0168\207\037\221\177{\233\276\334\250\374A\266t\325M\033\034\246+\246=\347d\035\301\371\2250A\307B\260\000\001z\275;\361\0275a\360\300^K;\217\241\255\230'\222;\006/y!LC\2664\241 \016\341y\310\035\366A\360\340\247F%*\034\257\203\327\264d\004Bq\257\267\210\311s\031\232\202nhb\262\367\240\244\366\270\013\320\215\024Z\223\nD5L_\247\304<\252'\374\002z\276Po\370\r\201\336\020\252I\363\177\323 \322\306N\240\362n\22390/\377\177\331)N\271s\340\355\337\375y_\010\263\261\307U\217\363\204\275\226\361Z\230\276\341\224p!\030\231uK\336<\250\212\347\370\235;\n\271\t\021\271\036\375M\004\023\337y\3075\217]\366y{\303Y\305\275\230\013:\356\020n\267\027\252\215\2239\351!\377\"=\335\240\223\247\204\213Y\311f\"\363\034\205\014\003/\022\255\336\216V\212\004\274X\347.\327W\003f\030O\343\232\333\001\014\351H\325\237\332y{\311\231\200\234\351\270\360\261Z_\267\027\235^03\331m\303\233w\325\2564\341c\006\203\023\344i\004\355\264\267\343\177h\240\340%p\024""\022K\n\244\255`K\241w+a\362Jpe\202<\201\014\272\352]\362\347\032\231f\373J~\337\006{\320y\002\245\361\317\252w\346\240aeZJn\223i\340\337\005\3677\177\254\3014\333W2\037A.\245\350(\224|\030\002\004\244\237\200\373\315\216\233N%`\357\271\227\274\207\376\026\2200\354\350\261\0378\377\004\310#\345\277C\345\004\2354\247\336y9\350P:.\325\363'\\{\350l\302c\\9p\r\302OT\357\005TKz\355?)A\304\276";
-    PyObject *data = __Pyx_DecompressString(cstring, 2239, 1);
+    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (2247 bytes) */
+const char* const cstring = "x\332\335VIs\333F\026\026c\331\246l\215-j\263\024\3216(Q\213c\2316\265z\034\333)J\226<N\034G\320:\361\206\200@S\302\010\002H,\262\230\244j|\344\021G\034\373\330G\034q\304\221\307>\342\310\237\240\237\220\327\200\254]\316\324\224\234\251\232*\251\331\373{\357{\337\367\320w\036\3448\216\273\227\277\227\237\237\373\261\2600\243\352\322\346\210\"?y\374j\345\345\313\247\257t\013q\326\206hq\263UkC\3278\305\344d\244*Ed\210\026R\253\234i\031\212d!\203m\322\270\205\271\205{\023\017'8Q\2239\003\375\013I\226\311\231vQRE\323D&\247\227\270\242\255\250\226\242qV\265\214\314\034\367\242\304Uu\233\323\020\2229K\347\312\260\357\360\001k\003i\234\211,\326\341\206EM\323-\321RtM\200\343\212\266>\314\311\212\001F\224m\304N\317\213\252\211rWFs\337\211\262,\300^$+\246XT\021\322X\273.)f\334\223G9U\321\220\371D\263\267\312\325\234 \351\006\312m\331\340\230h\030b\225+\211\212\032;\244l\225u\303:\274\315\336\022\255\215\023;\312U\264e*\367\331\216\373%\264%\226\205\262h\230\310\310\225\253;\217\031F\332\272\251\333\206\204\236>\003\270\016\220>\350\345\004\301@\262-!A\212\220\026\204#k\000\202\t\261\037[]\210\214\034\352\236q\313\376\342\347\256\311\255#K(2{\346\361Y\244\242-\244Yg\316\013\021n'\2267\220(\037u\217\315\002\200\310P W\307\0274]F\247O\236q\277n[e\333\212\202:ci\033\330\241\033\177\262z\306\355eC/#\303R\216\372\024\345\365\304\204 \231\333\002\343\324K\305\264~*3\216\212\252 ,Tw\340\237\245\\x\205v\254ETZ\266\313*\212\354\211fU\223\024=\007\234\001w\030\035#\354\005E\226\330E\202\002,7D\t\025E\230\024dvG\374#3\355\000\352L\004H\020\240\207\014X\022\320\216\002[J@\3142P\264\244\352\24255Q\322\201t\302\230\014\013\266&\t\002\004v\220\346\303)<%\235\007)<\222\266\375\254\034O\317\261\224\234\004\372L\350\217\302\035y\031\323\024\320P4k|LPLa\037(\305\002\2611\214\"\021\253\200\270\000\336\001^\373>\3021\030\350\262\255\"\206\214&n\305\277\350\203\020{\254\225#M\203E-\312\337\321$\226\3652\363\006n\211u\235\213\224\177X\327\202\000\302\026\244\r\004(\332[\361\310@&\224\220\270\277""\347=\353\306Yb=[++\322&\270t\240\354\323\026\026\016Y\330\266X\275b\276WlQ\215\3430\014\310I\024\372\276\330\205\023\262\337\237@;\302\236g\246\201,\333\320\014V\216\312&RK\220$\0101n\031o\"\036\261al\007z2*\211QL\373uC8\245\206D#\326(\322\026\202)9\262 \010l\022Z\305R\221\245\227uU_\257\306u\333.\313p\302\006\304?\335\265-\252v\334\230\300\014\360'n\367\274\332F\206\t\212\372X\330\275\326\324\222\305\371\335\236\246\226ng\231\366\216{\3710\331Z{\341\360ak\233\223\010[\273\035\311M\271\203n%lmw\372\235\031G\014\333\006\350\300C?\341w\371(\230\252\247\352\231\260\255\303\031wD\347\203+\341T\330\331\025\366dp\007.\340\025\222!\371#\203F\017\207\023aO\237;\346.\272\006n\307\3710=\010K\203d\333\343\275\242\377\225?\340\257\006c\301Z\275P\347\303\364mw\033/\221D\310\215\220D\243g\010k^!\034~\026\024\202\225\372\010]\\j\364\244\335B\243\247\037g\302\236[n\021\177\005\235\364\024\235\372\241\236\257\317Q~\225\256\276\245o\337\321w\357\033i\016_\300y\374\312\033\360\026\275J\310\215\222\002Y\362.x\223~\342`\220\017\271A\314\207\\\246\001\206M\234\301O\275\0160\010\353\263\244\342\265\372\005\237g\236\\$<Q\375\214\017\333\207q\205\374\315\343\243s\215L\026\242|\357\215\261\361]2ND\362\273\237\367\341\374\035\322\001\026\336\372)?\303\006)\210\266\002\346&<\333\177YO\324S\r\356>\371\000\301\267\004\355\301'\037\206\260\004\033G\274~\357\307\2403X\014\214z*\314>\246\217y\312/\322\3055\272\006\221\025iQ\242\222\034fG\310\005\222'/\375\013\376\030\27082\346e\274qO\202\374\210\007\203T8r'\314~C\206\275\024\314@\334~\207\377,\270\030\360a\026\\jpY\374=A0\177\001|~\301f\357\302\225/\000\255_\203\356\240RO4\242\030!\007\353\004\0223\204\305\275\206y\233\036\241#\017\351\303\357\201\ti\200d\367R\323\315;\220\265\236\233.\337\350\354uS\215\344\365Z%\346Z\332\235p\177cL\330M6\265\264\326&j\300\253\016'\337H\2669\255\356<`\016\364\273Z\033\257\2115\333\371\207;\343\212{\313)\247\313A\356\024N\341\001\274\n\244Jv8\223\356Ew\025\222:\213\267\t\317.hq{\361\020@\361\324\357\364\337\324""\023`\360\353\246\226.\247\020&\273\034\330\320\345,\273}\220\"\376\020\301\223p\007\277O\350\324I\"\367\203=\036#\300\242\020\002\333\346\300\201AHz\342s\203\014\276A\022$\305\016\017\223v`\202\344\245\000#\266\324\333HN{\206\337\355W\202\253\365)\312/\321\245\345p\177\252\265>O\027\227\351\362\n\213\346\212\233\211!\273\345\362\273W\"y\236p\377\277\326\347\221\260\216\014\006\3608\026\261\r\204\345O\023\353\003\372`.\340\003T\237\244\013\240/ \342\317\364\3477\364\315\333\020$\226dR\315BB\030\014\334\000\036\213\304\013\374\272\341%\274T\343\034o\342\360e\\\t\323L\371\214q1\272\351\210\241@\272=\260O\241_\006'\330\317\271by^\345\355\344\321I:\t\232b\000\255\320\025\006\r}\373\236\276\377\205\376\"\206{\025\352I\\\266\342\242\264\311*L\0032\230\307?\220\252\177\331\257\326c\024\316\306\343\266+\236;\267\216\325\376\024\276KV\301\311\3178\0022\035\200L&Y:\223\267@\363IVZ\222\354l\206\325\211C\356\245\0348\365\227\361\177\020\257\261Nx\320\331\323\3669py\322[\213\276(\331\034\021\317\375\272,~\036\207s\032\350-a\353\265Z\311)8\002\236'\375\260\353\364\341\033|\t\027\341d<\244]#\344\022)z\237\306\316{<\005\305-\377\261\020f\007w\273\233Z\372\350\327\367\341\273\226\210\211\305\271\225\335\326/Y\264\316Ku\3009\374\230\374\333\337\010\224z\345O\324\322V\263\034\010\230\315X\316\264\233uE\367W\222\242\315\263t\026\022\364z7\367W=\242N\274\204@%\275i\367)<4f\210\354\r\303\267\275\300\270\222h@\211\354\3073\240&\356\021}\364S\275\022\225\222\327\3645+\"T,\356\2756b:]\203gB;<k\262\017\240\310vx\263\360>)\034\014*\220\3470}\223Q\365\244\235\360\013\330\211\336v\337\020x\333A5h\374o\036x\354a&\262\373\356\222ix6\345\377/_z\343\3364D\373\367`&\020\303l\034\361\266\317\373\342\336\223\2577L\337rK\270@\007\247\274\222?\003\246\3421~\347\r\201\266 #7\243\277Q:\372\235\177\332\343\257\315\271\344\254\273\313\270\023\363\264\371\036\341w;\241Z\270\231\263>\304_\344M\326\347\346\231\362\343\352\300e\"\367\\\225\014\000/\022\007o3\246\364\004h\351\342\265\3322M\r\340\t\\\365\232\201!""\315\255\265\347N\336\231wG\201\341\315\227?n\327\326\2349\267\023\334L\266;\360\315\272\341T\032\320X\264o\224<\217\240\235\360w\202\017uD\227\200\243 \003\231\312\233tSeg+a\362:\275>J\236\001\337o\370W\203\351z\246qt&\277\357\203\323\347>\003q\375\247\346\335ixp\246\016\214\334%\023\300\277\313\336o\301p=\3258:\223\371\010\3672\212\016A\311\206.@@\272\t\204\337h\276\355V(\367\300\273\352\177\033l\002\t\303\346\016\347\221\373O\200<2\376;T>\260\3114\365\316\317\301\013\243\371j-\177\306\261o\335\r\370\230V\016\035\203\364\023\315\177\005\345\216\035\373\003\307\321\214\006";
+    PyObject *data = __Pyx_DecompressString(cstring, 2247, 1);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #else /* compression: none (5547 bytes) */
-const char* const bytes = ")0.   -1-1FEMAPBlock(id=<NULL>Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.\n,.?add_notedisableenablegcisenabled, lines=numpy._core.multiarray failed to importnumpy._core.umath failed to importpyemsi/core/femap_parser.pyx<stringsource>DictFEMAPBlockFEMAPBlock.__reduce_cython__FEMAPBlock.__setstate_cython__FEMAPParserFEMAPParser.__reduce_cython__FEMAPParser.__setstate_cython__FEMAPParser.get_blocksFEMAPParser.get_elementsFEMAPParser.get_elements_arraysFEMAPParser.get_headerFEMAPParser.get_materialsFEMAPParser.get_nodesFEMAPParser.get_nodes_arraysFEMAPParser.get_output_setsFEMAPParser.get_output_vectorsFEMAPParser.get_output_vectors_arraysFEMAPParser.get_propertiesFEMAPParser.parseFEMAPParser.parse_csv_lineListOptional__Pyx_PyDict_NextRefTuplearrayasyncio.coroutinesblock_idcline_in_traceback__dict___dictdtypeent_type__enter____exit__filepathfloat64force_2d__func__getget_blocksget_elementsget_elements_arraysget_headerget_materialsget_nodesget_nodes_arraysget_output_setsget_output_vectorsget_output_vectors_arraysget_properties__getstate__idint32_is_coroutineitemslinelineslist__main__material_id__module____name____new__nodesnpnumpyopenparseparse_csv_linepopprop_idpyemsi.core.femap_parser__pyx_checksum__pyx_result__pyx_state__pyx_type__pyx_unpickle_FEMAPBlock__pyx_unpickle_FEMAPParser__pyx_vtable____qualname__rreadlines__reduce____reduce_cython____reduce_ex__resultsreturnrstripselfset_idset_id_filter__set_name__setdefault__setstate____setstate_cython__statestaticmethodstrip__test__titletopologytypingupdateuse_setstatevaluevaluesvec_idvec_id_filterversion\200A\360\016\000\t$\2401\360\026\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240""\023\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030(\250\001\330\030'\240q\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 /\250s\260!\260;\270a\270q\330 /\250q\340\030\035\230Q\340\030\"\240!\330\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 '\240q\250\r\260Q\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$+\2501\250I\260R\260z\300\026\300q\310\001\340 %\240Q\340\030&\240g\250Q\330\034&\240a\330\034&\240a\330\034%\240Q\330\034(\320(8\3208J\310!\330\034'\240q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\034\2304\230{\250!\2501\360\010\000\t\014\2104\210q\330\014\023\2201\340\010\020\220\014\230F\240!\2401\330\010\013\2103\210a\210u\220H\230B\230a\330\014\023\2201\340\010\021\220\025\220e\2306\240\021\240#\240V\2501\330\010\023\2205\230\005\230V\2401\240C\240v\250Q\340\010\020\220\t\230\031\240&\250\003\250>\270\024\270[\310\001\200A\360\032\000\t\025\220A\330""\010\025\220Q\340\010\025\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030!\240\027\250\001\250\021\330\030\"\240'\250\022\2503\250c\260\021\330\034(\250\001\330\030\031\340\0107\260r\270\026\270q\300\013\3106\320QS\320ST\330\0107\260r\270\026\270q\300\014\310F\320RT\320TU\340\010\020\220\n\230!\200A\360\016\000\t\036\230Q\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030 \240\007\240q\330\034\"\240!\330\034'\240q\330\034(\250\001\330\034%\240Q\340\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t!\240\001\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A""\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 (\250\005\250Q\250k\270\021\270!\340\030#\2401\240K\250y\270\007\270y\310\001\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\037\230a\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\021\240+\250V\2601\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\032\000\t#\240!\330\010\"\240!\330\010\036\230a\330\010&\240a\330\010!\240\021\240!\360\010\000\t\026\220T\230\033\240A\240Q\330\010\021\220\021\340\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030%\240W\250A\250Q\330\030%\240W\250A\250Q\330\030!\240\027\250\001\250\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030$\240G\2501\250A\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\t\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220[\240""\006\240b\250\001\330\014\016\210f\220A\320\025(\250\006\250b\260\001\330\014\016\210f\220A\220^\2406\250\022\2501\200A\330$%\360\026\000\t\033\320\032/\250q\260\001\200A\360\016\000\t \230q\360\014\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030\"\240!\240<\250\177\270h\300i\310q\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\020\210t\2201\200A\340\010\017\210t\2207\230$\230a\230z\250\021\320\004C\320CY\320YZ\360,\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\360\006\000\031\034\230>\250\023\250B\250d\260'\270\023\270A\330\034!\240\021\340\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030\033\230>\250\023\250B\250d\260'\270\023\270A\330\034!\240\021\330\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030(\250\001\330\030'\240q\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330\034\037\230s\240!\240=\260\003\2601\330 /""\250s\260!\260;\270a\270q\330 /\250q\340\030\035\230Q\340\030*\250!\330\030&\240a\340\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 /\250w\260a\260q\330 +\2507\260!\2601\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$3\2607\270!\2709\300B\300a\330$/\250w\260a\260v\270Q\270a\340 %\240Q\340\030\031\330\034\036\230f\240A\320%6\260f\270B\270a\330\034\036\230f\240A\240]\260&\270\002\270!\330\034\035\330\034\035\330\034,\320,?\270q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\020\220\006\220g\230T\240\024\240Q\320\004-\250Q\360\024\000\t\033\230!\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\033\2301\330\034\037\230r\240\022\2401\330 !\330\030\035\230Q\230l\250#\250S\260\001\330\034(\250\001\330\030\031\340\010\017\210q\200\001\360\010\000\005\016\210T\320\021#\2404\240y\260\004\260A\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330""\010\027\220q\340\010\027\220t\320\033,\250G\2605\270\003\2704\270x\300w\310e\320SV\320VZ\320Zd\320dk\320kl\330\004\007\200q\330\010\017\320\017,\250D\260\001\260\027\270\013\3007\310!\340\010\017\320\017,\250D\260\001\260\027\270\013\3001\200\001\360\010\000\005\016\210T\220\033\230D\240\001\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330\010\027\220q\340\010\027\220t\2307\240'\250\021\330\004\007\200q\330\010\017\320\017+\2504\250q\260\007\260{\300'\310\021\340\010\017\320\017+\2504\250q\260\007\260{\300!\200\001\330\004)\250\021\250&\260\001\200\001\330\004(\250\001\250\026\250q\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220:\230X\240Q\240a\330\004\007\200|\2207\230!\330\010,\250A\250]\270.\310\001\330\004\013\2101\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220;\230h\240a\240q\330\004\007\200|\2207\230!\330\010-\250Q\250n\270N\310!\330\004\013\2101";
+    #else /* compression: none (5419 bytes) */
+const char* const bytes = ")0.   -1-1FEMAPBlock(id=<NULL>Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.\n,.?add_notedisableenablegcisenabled, lines=numpy._core.multiarray failed to importnumpy._core.umath failed to importpyemsi/core/femap_parser.pyx<stringsource>DictFEMAPBlockFEMAPBlock.__reduce_cython__FEMAPBlock.__setstate_cython__FEMAPParserFEMAPParser.__reduce_cython__FEMAPParser.__setstate_cython__FEMAPParser.get_blocksFEMAPParser.get_elementsFEMAPParser.get_elements_arraysFEMAPParser.get_headerFEMAPParser.get_materialsFEMAPParser.get_nodesFEMAPParser.get_nodes_arraysFEMAPParser.get_output_setsFEMAPParser.get_output_vectorsFEMAPParser.get_output_vectors_arraysFEMAPParser.get_propertiesFEMAPParser.parseFEMAPParser.parse_csv_lineListOptional__Pyx_PyDict_NextRefTuplearrayasyncio.coroutinesblock_idcline_in_traceback__dict___dictdtypeent_type__enter____exit__filepathfloat64force_2d__func__getget_blocksget_elementsget_elements_arraysget_headerget_materialsget_nodesget_nodes_arraysget_output_setsget_output_vectorsget_output_vectors_arraysget_properties__getstate__idint32_is_coroutineitemslinelineslist__main__material_id__module____name____new__nodesnpnumpyopenparseparse_csv_linepopprop_idpyemsi.core.femap_parser__pyx_checksum__pyx_result__pyx_state__pyx_type__pyx_unpickle_FEMAPBlock__pyx_unpickle_FEMAPParser__pyx_vtable____qualname__rreadlines__reduce____reduce_cython____reduce_ex__resultsreturnrstripselfset_idset_id_filter__set_name__setdefault__setstate____setstate_cython__statestaticmethodstrip__test__titletopologytypingupdateuse_setstatevaluevaluesvec_idvec_id_filterversion\200A\360\016\000\t$\2401\360\030\000\t\026\220T\320\0313\2601\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023""\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030&\240n\260A\330'D\300A\300U\310(\320RS\340\030\034\230A\340\030\"\240!\330\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 '\240q\250\r\260Q\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$+\2501\250I\260R\260z\300\026\300q\310\001\340 %\240Q\340\030&\240g\250Q\330\034&\240a\330\034&\240a\330\034%\240Q\330\034(\320(8\3208J\310!\330\034'\240q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\034\2304\230{\250!\2501\360\010\000\t\014\2104\210q\330\014\023\2201\340\010\020\220\014\230F\240!\2401\330\010\013\2103\210a\210u\220H\230B\230a\330\014\023\2201\340\010\021\220\025\220e\2306\240\021\240#\240V\2501\330\010\023\2205\230\005\230V\2401\240C\240v\250Q\340\010\020\220\t\230\031\240&\250\003\250>\270\024\270[\310\001\200A\360\032\000\t\025\220A\330\010\025\220Q\340\010\025\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021""\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030!\240\027\250\001\250\021\330\030\"\240'\250\022\2503\250c\260\021\330\034(\250\001\330\030\031\340\0107\260r\270\026\270q\300\013\3106\320QS\320ST\330\0107\260r\270\026\270q\300\014\310F\320RT\320TU\340\010\020\220\n\230!\200A\360\016\000\t\036\230Q\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$)\250\027\260\001\260\021\340\030 \240\007\240q\330\034\"\240!\330\034'\240q\330\034(\250\001\330\034%\240Q\340\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t!\240\001\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\0345\3205J\310!\3105\320PU\320U[\320[\\\320\\^\320^`\320`a\330""\034\037\230s\240!\240=\260\003\2601\330 (\250\005\250Q\250k\270\021\270!\340\030#\2401\240K\250y\270\007\270y\310\001\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\037\230a\360\n\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\021\240+\250V\2601\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\032\000\t#\240!\330\010\"\240!\330\010\036\230a\330\010&\240a\330\010!\240\021\240!\360\010\000\t\026\220T\230\033\240A\240Q\330\010\021\220\021\340\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\"\240#\240Q\240e\2501\250A\330\030#\2403\240a\240u\250A\250Q\340\030%\240W\250A\250Q\330\030%\240W\250A\250Q\330\030!\240\027\250\001\250\021\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030\033\2302\230R\230r\240\022\2401\330\0340\3200E\300Q\300e\3105\320PV\320VW\320WY\320Y[\320[\\\330\034 \240\010\250\001\330 $\240C\240q\250\001\330 #\2402\240S\250\001\330$5\260W\270A\270Q\330$.\250a\340\030$\240G\2501\250A\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\t\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220_\240F\250\"\250A\330\014\016\210f\220A\220[\240\006\240b\250\001\330\014\016\210f\220A\320\025(\250\006\250b\260\001\330\014\016\210f\220A\220^\2406\250\022\2501\200A\330$%\360\026\000\t\033\320\032/\250q\260\001\200A\360""\016\000\t \230q\360\014\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030!\240\023\240A\240U\250!\2501\340\030 \240\001\330\030\033\2302\230R\230r\240\022\2401\330\034%\240U\250%\250v\260Q\260b\270\002\270#\270V\3002\300W\310A\310Q\330\034\037\230v\240S\250\001\330 (\250\001\340\030\"\240!\240<\250\177\270h\300i\310q\330\030\035\230Q\330\034(\250\001\330\030\035\230Q\340\024\031\230\021\340\010\017\210q\200A\360\016\000\t\020\210t\2201\200A\340\010\017\210t\2207\230$\230a\230z\250\021\320\004C\320CY\320YZ\360.\000\t\026\220T\320\0313\2601\330\010\014\210I\220Q\330\014\020\220\001\330\014\026\220c\230\021\230%\230q\330\014\022\220\"\220B\220a\330\020#\320#8\270\001\270\025\270e\3006\310\021\310!\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030!\240\023\240A\240U\250!\2501\330\030!\240\023\240A\240U\250!\2501\340\030&\240n\260A\330'D\300A\300U\310(\320RS\360\010\000\031\034\230>\250\023\250B\250d\260'\270\023\270A\330\034 \240\001\340\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030\033\230>\250\023\250B\250d\260'\270\023\270A\330\034 \240\001\330\034\"\240\"\240B\240a\330 :\320:O\310q\320PU\320UZ\320Z`\320`a\320ab\330 %\240Q\330 $\240C\240q\250\016\260c\270\022\2701\330$0\260\001\260\023\260C\260u\270A\330$0\260\001\260\023\260C\260q\330$%\330\034\035\340\030\034\230A\340\030*\250!\330\030&\240a\340\030\036\230b\240\002\240!\330\0346\3206K\3101\310E\320QV\320V\\\320\\]\320]^\340\034 \240\003\2401\240N\260#\260R\260q\330 ,\250A\250S\260\003\2605\270\001\330 ,\250A\250S\260\003\2601\330 %\240Q\330 !\340\034\037\230s\240!\240>\260\023\260A\330 ,\250C\250q\260""\014\270A\270Q\330 (\250\005\250Q\250l\270!\2701\330 /\250w\260a\260q\330 +\2507\260!\2601\330 %\240Q\340!$\240A\240^\2602\260Q\330 +\2503\250a\250|\2701\270A\330 )\250\023\250A\250\\\270\021\270!\330 )\250\021\250%\250q\260\003\2604\260u\270L\310\001\310\021\340 /\250w\260b\270\t\300\022\3001\330 %\240Q\330 &\240c\250\021\250(\260\"\260M\300\024\300R\300r\310\021\330$<\320<Q\320QR\320RW\320W\\\320\\b\320bc\320cd\330$(\250\003\2501\250L\270\003\2702\270Q\330(2\260!\2603\260c\270\025\270a\330(2\260!\2603\260c\270\021\330()\330$*\250'\260\021\260!\2605\270\001\270\023\270D\300\005\300Q\330$)\250\021\340 $\240J\250e\2605\270\003\2701\270I\300Q\330$3\2607\270!\2709\300B\300a\330$/\250w\260a\260v\270Q\270a\340 %\240Q\340\030\031\330\034\036\230f\240A\320%6\260f\270B\270a\330\034\036\230f\240A\240]\260&\270\002\270!\330\034\035\330\034\035\330\034,\320,?\270q\360\006\000\035)\250\001\330\030\035\230Q\340\024\031\230\021\340\010\020\220\006\220g\230T\240\024\240Q\320\004-\250Q\360\024\000\t\033\230!\360\016\000\t\026\220T\230\033\240A\240Q\330\010\014\210I\220Q\330\014\020\220\010\230\005\230Q\330\020#\320#8\270\001\270\021\330\020\023\2203\220a\220w\230c\240\021\330\024\025\330\030\"\240#\240Q\240e\2501\250A\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\034\230E\240\021\240%\240q\250\001\330\030\033\2301\330\034\037\230r\240\022\2401\330 !\330\030\035\230Q\230l\250#\250S\260\001\330\034(\250\001\330\030\031\340\010\017\210q\200\001\360\010\000\005\016\210T\320\021#\2404\240y\260\004\260A\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v\210W\220E\230\024\230Q\330\010\022\220!\330\010\027\220q\340\010\027\220t\320\033,\250G\2605\270\003\2704\270x\300w\310e\320SV\320VZ\320Zd\320dk\320kl\330\004\007\200q\330\010\017\320\017,\250D\260\001\260\027\270\013\3007\310!\340\010\017\320\017,\250D\260\001\260\027\270\013\3001\200\001\360\010\000\005\016\210T\220\033\230D\240\001\330\004\014\210G\2201\220F\230,\240a\330\004\007\200v""\210W\220E\230\024\230Q\330\010\022\220!\330\010\027\220q\340\010\027\220t\2307\240'\250\021\330\004\007\200q\330\010\017\320\017+\2504\250q\260\007\260{\300'\310\021\340\010\017\320\017+\2504\250q\260\007\260{\300!\200\001\330\004)\250\021\250&\260\001\200\001\330\004(\250\001\250\026\250q\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220:\230X\240Q\240a\330\004\007\200|\2207\230!\330\010,\250A\250]\270.\310\001\330\004\013\2101\200\001\340\004\037\230q\320 0\260\013\270;\300k\320QR\330\004\023\220;\230h\240a\240q\330\004\007\200|\2207\230!\330\010-\250Q\250n\270N\310!\330\004\013\2101";
     PyObject *data = NULL;
     CYTHON_UNUSED_VAR(__Pyx_DecompressString);
     #endif
@@ -19321,14 +19693,14 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
     __pyx_mstate_global->__pyx_codeobj_tab[12] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_sets, __pyx_mstate->__pyx_kp_b_iso88591_A_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[12])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 481};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 513};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self};
-    __pyx_mstate_global->__pyx_codeobj_tab[13] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors, __pyx_mstate->__pyx_kp_b_iso88591_A_1_T_AQ_IQ_c_q_Ba_8_e6_3awc_AU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[13])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[13] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors, __pyx_mstate->__pyx_kp_b_iso88591_A_1_T_31_IQ_c_q_Ba_8_e6_3awc_AU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[13])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 3, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 578};
+    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 3, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 606};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_self, __pyx_mstate->__pyx_n_u_set_id_filter, __pyx_mstate->__pyx_n_u_vec_id_filter};
-    __pyx_mstate_global->__pyx_codeobj_tab[14] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors_arrays, __pyx_mstate->__pyx_kp_b_iso88591_CCYYZ_T_AQ_IQ_c_q_Ba_8_e6_3awc, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[14])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[14] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_pyemsi_core_femap_parser_pyx, __pyx_mstate->__pyx_n_u_get_output_vectors_arrays, __pyx_mstate->__pyx_kp_b_iso88591_CCYYZ_T_31_IQ_c_q_Ba_8_e6_3awc, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[14])) goto bad;
   }
   {
     const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 4, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 1};
@@ -22484,6 +22856,24 @@ static const char* __Pyx_BufFmt_CheckString(__Pyx_BufFmt_Context* ctx, const cha
   fail:;
     __Pyx_SafeReleaseBuffer(buf);
     return -1;
+  }
+  
+/* RaiseTooManyValuesToUnpack */
+  static CYTHON_INLINE void __Pyx_RaiseTooManyValuesError(Py_ssize_t expected) {
+      PyErr_Format(PyExc_ValueError,
+                   "too many values to unpack (expected %" CYTHON_FORMAT_SSIZE_T "d)", expected);
+  }
+  
+/* RaiseNeedMoreValuesToUnpack */
+  static CYTHON_INLINE void __Pyx_RaiseNeedMoreValuesError(Py_ssize_t index) {
+      PyErr_Format(PyExc_ValueError,
+                   "need more than %" CYTHON_FORMAT_SSIZE_T "d value%.1s to unpack",
+                   index, (index == 1) ? "" : "s");
+  }
+  
+/* RaiseNoneIterError */
+  static CYTHON_INLINE void __Pyx_RaiseNoneNotIterableError(void) {
+      PyErr_SetString(PyExc_TypeError, "'NoneType' object is not iterable");
   }
   
 /* SliceTupleAndList */

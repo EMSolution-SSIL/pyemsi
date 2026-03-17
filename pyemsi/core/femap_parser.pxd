@@ -23,6 +23,9 @@ cdef class FEMAPParser:
     
     @staticmethod
     cdef list _parse_csv_line_fast(str line)
+    @staticmethod
+    cdef tuple _locate_output_vector_header(list lines, int start_index)
+    cdef list _get_output_vector_blocks(self)
     
     cpdef dict parse(self)
     cpdef list get_blocks(self, int block_id)
