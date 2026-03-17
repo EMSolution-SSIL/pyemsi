@@ -7,7 +7,9 @@ a bottom dock hosting an embedded IPython terminal.
 
 from __future__ import annotations
 
+import json
 import os
+import tempfile
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence
@@ -17,6 +19,7 @@ import pyemsi.resources.resources  # noqa: F401
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
 from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
+from pyemsi.gui.femap_converter_dialog import FemapConverterDialog, FemapConverterDialogConfig
 from pyemsi.settings import SettingsManager
 
 
@@ -51,6 +54,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._ipython_widget = None
         self._kernel_manager = None
         self._active_external_terminals: dict = {}
+        self._temp_converter_configs: set[str] = set()
 
         self._setup_ipython_terminal()
 
@@ -103,6 +107,13 @@ class PyEmsiMainWindow(QMainWindow):
         self._recent_menu = self._file_menu.addMenu("Open &Recent")
         self._recent_menu.setIcon(QIcon(":/icons/FolderOpen.svg"))
         self._refresh_recent_folders_menu()
+
+        self._file_menu.addSeparator()
+
+        self._open_femap_converter_action = QAction("Convert &FEMAP...", self)
+        self._open_femap_converter_action.setIcon(QIcon(":/icons/VTK.svg"))
+        self._open_femap_converter_action.triggered.connect(self._open_femap_converter_dialog)
+        self._file_menu.addAction(self._open_femap_converter_action)
 
         self._file_menu.addSeparator()
 
@@ -271,6 +282,67 @@ class PyEmsiMainWindow(QMainWindow):
         if path:
             self._set_workspace_path(path)
 
+    def _open_femap_converter_dialog(self) -> None:
+        """Open the FEMAP conversion dialog and launch a conversion if accepted."""
+        dialog = FemapConverterDialog(self._settings, parent=self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        config = dialog.config()
+        if config is None:
+            return
+
+        self._persist_femap_converter_settings(config)
+        self._run_femap_converter(config)
+
+    def _persist_femap_converter_settings(self, config: FemapConverterDialogConfig) -> None:
+        """Persist the last-used FEMAP converter dialog settings."""
+        setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
+        for key, value in config.to_settings().items():
+            setter(key, value)
+        self._settings.save()
+
+    def _run_femap_converter(self, config: FemapConverterDialogConfig) -> None:
+        """Launch the FEMAP converter in an external terminal tab."""
+        import sys
+
+        config_path = self._write_femap_converter_config(config)
+        run_converter_script = os.path.join(os.path.dirname(__file__), os.pardir, "tools", "run_femap_converter.py")
+
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
+        xterm = self._external_terminal_dock.add_terminal(
+            title=f"FemapConverter - {config.output_name}",
+            cmd=sys.executable,
+            args=[run_converter_script, "--config", config_path],
+            cwd=config.input_dir,
+        )
+        xterm.processFinished.connect(lambda _code, path=config_path: self._cleanup_temp_converter_config(path))
+
+    def _write_femap_converter_config(self, config: FemapConverterDialogConfig) -> str:
+        """Serialize a converter launch payload to a temporary JSON file."""
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            delete=False,
+            prefix="pyemsi_femap_converter_",
+            suffix=".json",
+        ) as handle:
+            json.dump(config.to_payload(), handle, indent=2, sort_keys=True)
+            config_path = os.path.abspath(os.path.normpath(handle.name))
+        self._temp_converter_configs.add(config_path)
+        return config_path
+
+    def _cleanup_temp_converter_config(self, path: str) -> None:
+        """Remove a temporary converter payload file if it still exists."""
+        normalized_path = os.path.abspath(os.path.normpath(path))
+        self._temp_converter_configs.discard(normalized_path)
+        try:
+            if os.path.isfile(normalized_path):
+                os.unlink(normalized_path)
+        except OSError:
+            pass
+
     def close_workspace(self, restart_kernel: bool = False) -> None:
         """Reset the application to a fresh state.
 
@@ -324,6 +396,7 @@ class PyEmsiMainWindow(QMainWindow):
         """Refresh settings-menu action state for the current workspace context."""
         global_settings_path = self._settings.global_settings_path
         local_settings_path = self._settings.local_settings_path
+        self._open_femap_converter_action.setEnabled(self._settings.workspace_path is not None)
         self._open_global_settings_action.setEnabled(global_settings_path.is_file())
         self._open_workspace_settings_action.setEnabled(
             local_settings_path is not None and local_settings_path.is_file()
@@ -527,6 +600,8 @@ class PyEmsiMainWindow(QMainWindow):
     def closeEvent(self, event):
         """Clean up kernel on close."""
         self._persist_workspace_state()
+        for path in list(self._temp_converter_configs):
+            self._cleanup_temp_converter_config(path)
         if self._kernel_manager is not None:
             self._kernel_manager.shutdown_kernel()
         super().closeEvent(event)

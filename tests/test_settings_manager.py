@@ -175,3 +175,29 @@ def test_settings_manager_drops_removed_legacy_settings_on_load_and_save(tmp_pat
     assert "geometry" not in local_payload.get("workbench", {}).get("window", {})
     assert "state" not in local_payload.get("workbench", {}).get("window", {})
     assert "state_version" not in local_payload.get("workbench", {}).get("window", {})
+
+
+def test_settings_manager_persists_femap_converter_values_in_local_scope(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+    manager.set_local("tools.femap_converter.input_dir", str(workspace))
+    manager.set_local("tools.femap_converter.output_dir", ".pyemsi")
+    manager.set_local("tools.femap_converter.output_name", "transient")
+    manager.set_local("tools.femap_converter.mesh", "post_geom")
+    manager.set_local("tools.femap_converter.displacement", None)
+    manager.set_local("tools.femap_converter.force_2d", True)
+    manager.save()
+
+    reloaded = SettingsManager(global_settings_path=global_settings_path)
+    reloaded.load_workspace(workspace)
+
+    assert reloaded.get_local("tools.femap_converter.input_dir") == os.path.abspath(os.path.normpath(str(workspace)))
+    assert reloaded.get_local("tools.femap_converter.output_dir") == ".pyemsi"
+    assert reloaded.get_local("tools.femap_converter.output_name") == "transient"
+    assert reloaded.get_local("tools.femap_converter.mesh") == "post_geom"
+    assert reloaded.get_local("tools.femap_converter.displacement") is None
+    assert reloaded.get_local("tools.femap_converter.force_2d") is True

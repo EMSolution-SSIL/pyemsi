@@ -18,6 +18,15 @@ import os
 import sys
 
 
+def _ensure_repo_root_on_sys_path() -> None:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
+
+_ensure_repo_root_on_sys_path()
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: python -m pyemsi.tools.run_emsol <input.json>", file=sys.stderr)

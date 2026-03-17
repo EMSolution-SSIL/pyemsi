@@ -20,6 +20,22 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "app": {
         "recent_folders": [],
     },
+    "tools": {
+        "femap_converter": {
+            "ascii_mode": False,
+            "current": "current",
+            "displacement": "disp",
+            "force": "force",
+            "force_2d": False,
+            "force_J_B": "force_J_B",
+            "heat": "heat",
+            "input_dir": None,
+            "magnetic": "magnetic",
+            "mesh": "post_geom",
+            "output_dir": ".pyemsi",
+            "output_name": "output",
+        },
+    },
     "workbench": {
         "explorer": {
             "root_path": None,
@@ -52,6 +68,21 @@ def _normalize_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     raise ValueError("expected a boolean")
+
+
+def _normalize_optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("expected a string or null")
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_text(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("expected a string")
+    return value.strip()
 
 
 def _normalize_recent_folders(value: Any) -> list[str]:
@@ -95,6 +126,18 @@ class SettingDefinition:
 
 SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "app.recent_folders": SettingDefinition([], SCOPE_GLOBAL, _normalize_recent_folders),
+    "tools.femap_converter.ascii_mode": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
+    "tools.femap_converter.current": SettingDefinition("current", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.displacement": SettingDefinition("disp", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.force": SettingDefinition("force", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.force_2d": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
+    "tools.femap_converter.force_J_B": SettingDefinition("force_J_B", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.heat": SettingDefinition("heat", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.input_dir": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
+    "tools.femap_converter.magnetic": SettingDefinition("magnetic", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.mesh": SettingDefinition("post_geom", SCOPE_BOTH, _normalize_text),
+    "tools.femap_converter.output_dir": SettingDefinition(".pyemsi", SCOPE_BOTH, _normalize_text),
+    "tools.femap_converter.output_name": SettingDefinition("output", SCOPE_BOTH, _normalize_text),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
     "workbench.window.dock_visibility": SettingDefinition(
         _copy_default(DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"]),
@@ -106,6 +149,8 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
 
 _CONTAINER_PATHS = {
     "app",
+    "tools",
+    "tools.femap_converter",
     "workbench",
     "workbench.explorer",
     "workbench.window",
@@ -299,10 +344,12 @@ class SettingsManager:
 
     def save(self) -> None:
         """Persist global settings and the active workspace settings."""
+        self._global_data = self._sanitize_scope(self._global_data, SCOPE_GLOBAL)
         self._write_json_file(self.global_settings_path, self._global_data)
         if self._workspace_path is not None:
             local_path = self.local_settings_path
             assert local_path is not None
+            self._local_data = self._sanitize_scope(self._local_data, SCOPE_LOCAL)
             self._write_json_file(local_path, self._local_data)
 
     def _warn(self, message: str) -> None:
@@ -323,28 +370,26 @@ class SettingsManager:
             self._warn(f"ignored malformed {scope} settings payload")
             return {}
 
-        sanitized = copy.deepcopy(data)
-        sanitized.pop("schemaVersion", None)
+        sanitized: dict[str, Any] = {}
+        raw_data = copy.deepcopy(data)
+        raw_data.pop("schemaVersion", None)
 
         for container_key in sorted(_CONTAINER_PATHS, key=lambda item: item.count(".")):
-            if not _has_path(sanitized, container_key):
+            if not _has_path(raw_data, container_key):
                 continue
-            value = _get_path(sanitized, container_key)
+            value = _get_path(raw_data, container_key)
             if value is not None and not isinstance(value, dict):
-                _delete_path(sanitized, container_key)
                 self._warn(f"ignored invalid object for {container_key}")
 
         for key, definition in SETTING_DEFINITIONS.items():
-            if not _has_path(sanitized, key):
+            if not _has_path(raw_data, key):
                 continue
             if definition.scope not in {scope, SCOPE_BOTH}:
-                _delete_path(sanitized, key)
                 self._warn(f"ignored {key} in {scope} settings")
                 continue
             try:
-                normalized = definition.validator(_get_path(sanitized, key))
+                normalized = definition.validator(_get_path(raw_data, key))
             except ValueError:
-                _delete_path(sanitized, key)
                 self._warn(f"ignored invalid value for {key}")
                 continue
             _set_path(sanitized, key, normalized)

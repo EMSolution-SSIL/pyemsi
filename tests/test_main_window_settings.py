@@ -2,23 +2,84 @@ import json
 import os
 
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QApplication, QDockWidget, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QWidget
 
 from pyemsi.gui import main_window as main_window_module
+from pyemsi.gui.femap_converter_dialog import FemapConverterDialogConfig
 from pyemsi.settings import SettingsManager
+
+
+class _DummySignal:
+    def __init__(self) -> None:
+        self._callbacks = []
+
+    def connect(self, callback) -> None:
+        self._callbacks.append(callback)
+
+    def emit(self, *args) -> None:
+        for callback in list(self._callbacks):
+            callback(*args)
+
+
+class _DummyXterm:
+    def __init__(self) -> None:
+        self.processFinished = _DummySignal()
 
 
 class _DummyExternalTerminalDock(QDockWidget):
     def __init__(self, parent=None) -> None:
         super().__init__("External Terminal", parent)
+        self.calls = []
+
+    def add_terminal(self, title="Terminal", cmd=None, args=None, cwd=None, env=None):
+        self.calls.append(
+            {
+                "title": title,
+                "cmd": cmd,
+                "args": args or [],
+                "cwd": cwd,
+                "env": env,
+            }
+        )
+        return _DummyXterm()
+
+    def close_all_terminals(self) -> None:
+        return None
 
 
 class _DummyKernelManager:
     def __init__(self) -> None:
         self.shutdown_calls = 0
+        self.pushed_namespaces = []
+
+        class _DummyShell:
+            def __init__(shell_self, owner) -> None:
+                shell_self._owner = owner
+                shell_self.reset_calls = 0
+
+            def reset(shell_self, new_session=True) -> None:
+                shell_self.reset_calls += 1
+
+            def push(shell_self, namespace) -> None:
+                shell_self._owner.pushed_namespaces.append(namespace)
+
+        class _DummyKernel:
+            def __init__(kernel_self, owner) -> None:
+                kernel_self.shell = _DummyShell(owner)
+
+        self.kernel = _DummyKernel(self)
 
     def shutdown_kernel(self) -> None:
         self.shutdown_calls += 1
+
+
+class _DummyIPythonWidget(QWidget):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.reset_calls = []
+
+    def reset(self, clear=False) -> None:
+        self.reset_calls.append(clear)
 
 
 def _app():
@@ -29,7 +90,7 @@ def _app():
 
 
 def _stub_ipython_terminal(self) -> None:
-    self._ipython_widget = QWidget(self._ipython_dock)
+    self._ipython_widget = _DummyIPythonWidget(self._ipython_dock)
     self._kernel_manager = _DummyKernelManager()
     self._ipython_dock.setWidget(self._ipython_widget)
 
@@ -184,14 +245,98 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
     )
     try:
         file_actions = window._file_menu.actions()
+        action_texts = [action.text() for action in file_actions if not action.isSeparator()]
 
         assert file_actions[0].text() == "Open &Folder..."
         assert file_actions[1].text() == "Open &Recent"
         assert file_actions[2].isSeparator()
-        assert file_actions[3].text() == "&Settings"
-        assert file_actions[4].isSeparator()
-        assert file_actions[5].text() == "&Save"
-        assert file_actions[6].text() == "Save A&ll"
+        assert "Convert &FEMAP..." in action_texts
+        assert "&Settings" in action_texts
+        assert "&Save" in action_texts
+        assert action_texts.index("Convert &FEMAP...") < action_texts.index("&Save")
+    finally:
+        window.close()
+
+
+def test_main_window_femap_converter_action_tracks_workspace_state(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert not window._open_femap_converter_action.isEnabled()
+
+        window._set_workspace_path(str(workspace))
+
+        assert window._open_femap_converter_action.isEnabled()
+
+        window.close_workspace(restart_kernel=False)
+
+        assert not window._open_femap_converter_action.isEnabled()
+    finally:
+        window.close()
+
+
+def test_main_window_launches_femap_converter_in_external_terminal(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    input_dir = workspace / "model"
+    input_dir.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    config = FemapConverterDialogConfig(
+        input_dir=os.path.abspath(os.path.normpath(str(input_dir))),
+        output_dir=".pyemsi",
+        output_name="transient",
+        force_2d=True,
+        ascii_mode=False,
+        mesh="post_geom",
+        magnetic=None,
+        current=None,
+        force=None,
+        force_J_B=None,
+        heat=None,
+        displacement="disp",
+    )
+
+    class _AcceptedDialog:
+        DialogCode = QDialog.DialogCode
+
+        def __init__(self, settings_manager, parent=None) -> None:
+            self._config = config
+
+        def exec(self) -> int:
+            return QDialog.DialogCode.Accepted
+
+        def config(self):
+            return self._config
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "FemapConverterDialog", _AcceptedDialog)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+    window = main_window_module.PyEmsiMainWindow(settings_manager=manager)
+    try:
+        window._open_femap_converter_dialog()
+
+        assert len(window._external_terminal_dock.calls) == 1
+        launch_call = window._external_terminal_dock.calls[0]
+        assert launch_call["title"] == "FemapConverter - transient"
+        assert launch_call["cwd"] == os.path.abspath(os.path.normpath(str(input_dir)))
+        assert launch_call["args"][0].endswith("run_femap_converter.py")
+        assert launch_call["args"][1:] and launch_call["args"][1] == "--config"
+        assert manager.get_local("tools.femap_converter.output_name") == "transient"
+        assert len(window._temp_converter_configs) == 1
     finally:
         window.close()
 
