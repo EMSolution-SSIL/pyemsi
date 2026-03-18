@@ -37,6 +37,7 @@ def test_field_plot_builder_dialog_defaults_to_disabled_stages(tmp_path):
     assert not dialog._scalar_enabled_checkbox.isChecked()
     assert not dialog._contour_enabled_checkbox.isChecked()
     assert not dialog._vector_enabled_checkbox.isChecked()
+    assert dialog._scalar_kwargs()["cmap"] == "viridis"
 
 
 def test_field_plot_builder_dialog_plot_requires_existing_file_and_stage(tmp_path, monkeypatch):
@@ -118,7 +119,11 @@ def test_field_plot_builder_dialog_script_uses_widget_state_without_creating_plo
     assert captured["exec"] is True
     assert "from pyemsi import gui, Plotter" in script
     assert f"field_plot = Plotter({os.fspath(plot_path)!r})" in script
-    assert "field_plot.set_scalar(name='B-Mag (T)', mode='element', cell2point=True)" in script
+    assert "field_plot.set_scalar(" in script
+    assert "name='B-Mag (T)'" in script
+    assert "mode='element'" in script
+    assert "cell2point=True" in script
+    assert "cmap='viridis'" in script
     assert "field_plot.set_vector(" in script
     assert "scale=False" in script
     assert "gui.add_field(field_plot, 'Rotor Field')" in script
@@ -170,6 +175,7 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
 
     assert calls[0] == ("init", os.fspath(plot_path))
     assert calls[1][0] == "set_scalar"
+    assert calls[1][1]["cmap"] == "viridis"
     assert calls[2][0] == "set_contour"
     assert calls[3][0] == "set_vector"
     assert added["title"] == "Field Plot"
@@ -188,3 +194,15 @@ def test_field_plot_builder_dialog_vector_scale_preserves_uniform_option(tmp_pat
     dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
 
     assert dialog._vector_kwargs()["scale"] is False
+
+
+def test_field_plot_builder_dialog_scalar_colormap_selection_uses_display_settings_choices(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+
+    dialog._scalar_cmap_combo.setCurrentIndex(
+        dialog_module._combo_index_for_data(dialog._scalar_cmap_combo, "turbo : miscellaneous")
+    )
+
+    assert dialog._scalar_kwargs()["cmap"] == "turbo"
