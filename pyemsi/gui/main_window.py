@@ -16,10 +16,14 @@ from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow
 
 import pyemsi.resources.resources  # noqa: F401
+from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
 from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
-from pyemsi.gui.femap_converter_dialog import FemapConverterDialog, FemapConverterDialogConfig
+from pyemsi.gui.femap_converter_dialog import (
+    FemapConverterDialog,
+    FemapConverterDialogConfig,
+)
 from pyemsi.settings import SettingsManager
 
 
@@ -115,6 +119,11 @@ class PyEmsiMainWindow(QMainWindow):
         self._open_femap_converter_action.triggered.connect(self._open_femap_converter_dialog)
         self._file_menu.addAction(self._open_femap_converter_action)
 
+        self._open_field_plot_action = QAction("Build &Field Plot...", self)
+        self._open_field_plot_action.setIcon(QIcon(":/icons/Graph.svg"))
+        self._open_field_plot_action.triggered.connect(self._open_field_plot_dialog)
+        self._file_menu.addAction(self._open_field_plot_action)
+
         self._file_menu.addSeparator()
 
         save_action = QAction("&Save", self)
@@ -202,16 +211,46 @@ class PyEmsiMainWindow(QMainWindow):
             ("&Redo", "Ctrl+Y", "redo", ":/icons/Redo.svg"),
             None,
             ("Cu&t", "Ctrl+X", "editor.action.clipboardCutAction", ":/icons/Cut.svg"),
-            ("&Copy", "Ctrl+C", "editor.action.clipboardCopyAction", ":/icons/Copy.svg"),
-            ("&Paste", "Ctrl+V", "editor.action.clipboardPasteAction", ":/icons/Paste.svg"),
+            (
+                "&Copy",
+                "Ctrl+C",
+                "editor.action.clipboardCopyAction",
+                ":/icons/Copy.svg",
+            ),
+            (
+                "&Paste",
+                "Ctrl+V",
+                "editor.action.clipboardPasteAction",
+                ":/icons/Paste.svg",
+            ),
             None,
             ("&Find", "Ctrl+F", "actions.find", ":/icons/Find.svg"),
-            ("&Replace", "Ctrl+H", "editor.action.startFindReplaceAction", ":/icons/Replace.svg"),
+            (
+                "&Replace",
+                "Ctrl+H",
+                "editor.action.startFindReplaceAction",
+                ":/icons/Replace.svg",
+            ),
             None,
-            ("Toggle &Line Comment", "Ctrl+/", "editor.action.commentLine", ":/icons/Comment.svg"),
-            ("Toggle &Block Comment", "Shift+Alt+A", "editor.action.blockComment", ":/icons/Code.svg"),
+            (
+                "Toggle &Line Comment",
+                "Ctrl+/",
+                "editor.action.commentLine",
+                ":/icons/Comment.svg",
+            ),
+            (
+                "Toggle &Block Comment",
+                "Shift+Alt+A",
+                "editor.action.blockComment",
+                ":/icons/Code.svg",
+            ),
             None,
-            ("Select &All", "Ctrl+A", "editor.action.selectAll", ":/icons/SelectAll.svg"),
+            (
+                "Select &All",
+                "Ctrl+A",
+                "editor.action.selectAll",
+                ":/icons/SelectAll.svg",
+            ),
         ]
 
         for item in _ACTIONS:
@@ -295,6 +334,21 @@ class PyEmsiMainWindow(QMainWindow):
         self._persist_femap_converter_settings(config)
         self._run_femap_converter(config)
 
+    def _open_field_plot_dialog(self) -> None:
+        """Open the field plot builder dialog."""
+        current_path = self.explorer.current_path
+        if not current_path or not os.path.isdir(current_path):
+            return
+
+        dialog = FieldPlotBuilderDialog(
+            self._settings,
+            browse_dir_getter=lambda: self.explorer.current_path,
+            parent=self,
+        )
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
     def _persist_femap_converter_settings(self, config: FemapConverterDialogConfig) -> None:
         """Persist the last-used FEMAP converter dialog settings."""
         setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
@@ -343,7 +397,7 @@ class PyEmsiMainWindow(QMainWindow):
         except OSError:
             pass
 
-    def close_workspace(self, restart_kernel: bool = False) -> None:
+    def close_workspace(self, restart_kernel: bool = False) -> bool:
         """Reset the application to a fresh state.
 
         Closes all editor tabs, kills external terminals, optionally restarts
@@ -357,7 +411,8 @@ class PyEmsiMainWindow(QMainWindow):
             IPython kernel is restarted.  Pass *False* when called internally
             from :meth:`_set_workspace_path` to avoid an extra restart cycle.
         """
-        self._container.close_all_tabs()
+        if not self._container.close_all_tabs():
+            return False
         self._external_terminal_dock.close_all_terminals()
 
         if restart_kernel:
@@ -367,6 +422,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._settings.load_workspace(None)
         self._update_settings_actions()
         self.setWindowTitle("pyemsi")
+        return True
 
     def _reset_ipython_kernel(self) -> None:
         """Reset the in-process IPython shell to a clean state."""
@@ -379,7 +435,8 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _set_workspace_path(self, path: str) -> None:
         """Switch the active workspace path and update persisted context."""
-        self.close_workspace(restart_kernel=True)
+        if not self.close_workspace(restart_kernel=True):
+            return
         normalized_path = os.path.abspath(os.path.normpath(path))
         self._settings.add_recent_folder(normalized_path)
         self._settings.load_workspace(normalized_path)
@@ -397,6 +454,11 @@ class PyEmsiMainWindow(QMainWindow):
         global_settings_path = self._settings.global_settings_path
         local_settings_path = self._settings.local_settings_path
         self._open_femap_converter_action.setEnabled(self._settings.workspace_path is not None)
+        explorer_widget = getattr(self, "_explorer_widget", None)
+        explorer_path = getattr(explorer_widget, "current_path", None) or (
+            os.fspath(self._settings.workspace_path) if self._settings.workspace_path is not None else None
+        )
+        self._open_field_plot_action.setEnabled(bool(explorer_path and os.path.isdir(explorer_path)))
         self._open_global_settings_action.setEnabled(global_settings_path.is_file())
         self._open_workspace_settings_action.setEnabled(
             local_settings_path is not None and local_settings_path.is_file()
@@ -599,9 +661,14 @@ class PyEmsiMainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Clean up kernel on close."""
+        if not self._container.close_all_tabs():
+            event.ignore()
+            return
+
         self._persist_workspace_state()
         for path in list(self._temp_converter_configs):
             self._cleanup_temp_converter_config(path)
+        self._external_terminal_dock.close_all_terminals()
         if self._kernel_manager is not None:
             self._kernel_manager.shutdown_kernel()
         super().closeEvent(event)

@@ -17,6 +17,7 @@ Convenience helpers are also available directly on the module::
 
     >>> gui.open_file("/path/to/file.txt")
     >>> gui.add_figure(fig, title="My Plot")
+    >>> gui.add_field(plotter, title="Field")
 
 From the IPython terminal, pre-injected locals are also available::
 
@@ -72,6 +73,7 @@ def launch(
         container=_window.container,
         open_file=open_file,
         add_figure=add_figure,
+        add_field=add_field,
     )
 
     if size is None:
@@ -135,3 +137,23 @@ def add_figure(figure=None, title: str = "Figure", tight_layout: bool = True):
     if _window is None:
         raise RuntimeError("pyemsi.gui has not been launched yet; call gui.launch() first.")
     return _window.container.add_figure(figure, title, tight_layout=tight_layout)
+
+
+def add_field(plotter, title: str = "Field"):
+    """Embed an existing Plotter as a new tab.
+
+    Parameters
+    ----------
+    plotter : pyemsi.Plotter
+        Existing desktop plotter to embed.
+    title : str
+        Tab label. Defaults to ``"Field"``.
+
+    Returns
+    -------
+    FieldViewer
+        The viewer widget hosting the supplied plotter.
+    """
+    if _window is None:
+        raise RuntimeError("pyemsi.gui has not been launched yet; call gui.launch() first.")
+    return _window.container.add_field(plotter, title)

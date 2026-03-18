@@ -33,6 +33,7 @@ Right-click a tab to:
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -48,6 +49,10 @@ from PySide6.QtWidgets import (
 )
 
 from pyemsi.widgets.monaco_lsp._widget import MonacoLspWidget
+
+if TYPE_CHECKING:
+    from pyemsi.plotter import Plotter
+
 
 def _resolve_open_path(path: str) -> str:
     """Return a normalized absolute path for viewer operations."""
@@ -87,7 +92,7 @@ class _TabPanel(QTabWidget):
     # private helpers
     # ------------------------------------------------------------------
 
-    def _close_tab(self, index: int) -> None:
+    def _close_tab(self, index: int) -> bool:
         widget = self.widget(index)
         if widget is not None and self._is_dirty(widget):
             title = self.tabText(index).rstrip(" *")
@@ -100,17 +105,19 @@ class _TabPanel(QTabWidget):
                 | QMessageBox.StandardButton.Cancel,
             )
             if ans == QMessageBox.StandardButton.Cancel:
-                return
+                return False
             if ans == QMessageBox.StandardButton.Save:
                 try:
                     widget.save()
                 except Exception:
-                    return
+                    return False
         self.removeTab(index)
         if widget is not None:
+            widget.close()
             widget.deleteLater()
         if self.count() == 0:
             self.last_tab_closed.emit()
+        return True
 
     @staticmethod
     def _is_dirty(widget: QWidget) -> bool:
@@ -154,15 +161,19 @@ class _TabPanel(QTabWidget):
 
         menu.exec(self.mapToGlobal(pos))
 
-    def _close_others(self, keep_index: int) -> None:
+    def _close_others(self, keep_index: int) -> bool:
         # Collect indices first; close high-to-low to avoid index shifting.
         to_close = [i for i in range(self.count()) if i != keep_index]
         for i in sorted(to_close, reverse=True):
-            self._close_tab(i)
+            if not self._close_tab(i):
+                return False
+        return True
 
-    def _close_all(self) -> None:
+    def _close_all(self) -> bool:
         while self.count():
-            self._close_tab(0)
+            if not self._close_tab(0):
+                return False
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +300,20 @@ class SplitContainer(QWidget):
             return editor
         return None
 
-    def close_all_tabs(self) -> None:
-        """Close every tab in both panels (with per-tab unsaved-changes prompts)."""
-        self._left._close_all()
-        self._right._close_all()
+    def close_all_tabs(self) -> bool:
+        """Close every tab in both panels.
+
+        Returns
+        -------
+        bool
+            ``True`` when all tabs closed successfully, ``False`` when a tab
+            close was canceled.
+        """
+        if not self._left._close_all():
+            return False
+        if not self._right._close_all():
+            return False
+        return True
 
     def add_figure(self, figure=None, title: str = "Figure", tight_layout: bool = True):
         """Embed a matplotlib Figure as a new tab in the left panel.
@@ -316,6 +337,14 @@ class SplitContainer(QWidget):
         from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 
         viewer = MatplotlibViewer(figure, parent=self._left, tight_layout=tight_layout)
+        self.add_tab(viewer, title)
+        return viewer
+
+    def add_field(self, plotter: "Plotter", title: str = "Field"):
+        """Embed an existing Plotter as a new tab in the left panel."""
+        from pyemsi.gui._viewers._field_viewer import FieldViewer
+
+        viewer = FieldViewer(plotter, parent=self._left)
         self.add_tab(viewer, title)
         return viewer
 

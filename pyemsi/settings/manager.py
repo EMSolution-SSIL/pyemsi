@@ -35,6 +35,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "output_dir": ".pyemsi",
             "output_name": "output",
         },
+        "field_plot": {
+            "filepath": None,
+        },
     },
     "workbench": {
         "explorer": {
@@ -138,6 +141,7 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "tools.femap_converter.mesh": SettingDefinition("post_geom", SCOPE_BOTH, _normalize_text),
     "tools.femap_converter.output_dir": SettingDefinition(".pyemsi", SCOPE_BOTH, _normalize_text),
     "tools.femap_converter.output_name": SettingDefinition("output", SCOPE_BOTH, _normalize_text),
+    "tools.field_plot.filepath": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
     "workbench.window.dock_visibility": SettingDefinition(
         _copy_default(DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"]),
@@ -151,6 +155,7 @@ _CONTAINER_PATHS = {
     "app",
     "tools",
     "tools.femap_converter",
+    "tools.field_plot",
     "workbench",
     "workbench.explorer",
     "workbench.window",
@@ -329,7 +334,10 @@ class SettingsManager:
             return self.get_global("app.recent_folders") or []
 
         current = self.get_global("app.recent_folders") or []
-        updated = [normalized_path, *[item for item in current if item != normalized_path]]
+        updated = [
+            normalized_path,
+            *[item for item in current if item != normalized_path],
+        ]
         self.set_global("app.recent_folders", updated)
         return self.get_global("app.recent_folders") or []
 

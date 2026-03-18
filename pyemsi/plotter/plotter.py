@@ -161,6 +161,20 @@ class Plotter:
         self.plotter = pv.Plotter(**kwargs)
         self._window = None
 
+    @property
+    def notebook(self) -> bool:
+        """Whether the plotter is using a notebook backend."""
+        return self._notebook
+
+    @property
+    def widget(self):
+        """Return the embeddable Qt widget for desktop plotters."""
+        if self._notebook:
+            raise RuntimeError("Notebook plotters cannot be embedded in the Qt field viewer.")
+        if self._window is None or self._window.is_closed:
+            self._init_qt_mode()
+        return self._window.widget
+
     def set_file(self, filepath: str | Path) -> "Plotter":
         """
         Load a mesh file and display its feature edges.
@@ -912,6 +926,16 @@ class Plotter:
         """
         if hasattr(self, "plotter") and self.plotter is not None:
             self.plotter.close()
+
+    def close(self) -> None:
+        """Close the underlying plotter and release its resources."""
+        if self._notebook:
+            if hasattr(self, "plotter") and self.plotter is not None:
+                self.plotter.close()
+            return
+
+        if self._window is not None:
+            self._window.close()
 
     def _find_block_by_name(self, block_name: str | None) -> tuple[int, pv.DataSet, str | None]:
         """

@@ -18,6 +18,7 @@ from ._viewers._constants import (
 )
 from ._viewers._emsolution_input_viewer import EMSolutionInputViewer
 from ._viewers._emsolution_output_viewer import EMSolutionOutputViewer
+from ._viewers._field_viewer import FieldViewer
 from ._viewers._factory import create_viewer
 from ._viewers._image import ImageViewer
 from ._viewers._markdown import MarkdownPreviewViewer, MarkdownViewer
@@ -47,5 +48,6 @@ __all__ = [
     "UnsupportedViewer",
     "create_viewer",
     "MatplotlibViewer",
+    "FieldViewer",
     "_HAS_MATPLOTLIB",
 ]

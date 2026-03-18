@@ -85,6 +85,7 @@ class QtPlotterWindow:
     _cell_pick_mode_active_cell: tuple[str | None, int] | None
     _cell_pick_mode_world_picker: vtkCellPicker | None
     _cell_pick_mode_visible_blocks: list[tuple[str | None, pv.DataSet]]
+    _is_closing: bool
 
     def __init__(
         self,
@@ -123,6 +124,7 @@ class QtPlotterWindow:
         # Action references for toggle behavior
         self._check_point_action: QAction | None = None
         self._check_cell_action: QAction | None = None
+        self._is_closing = False
 
         # One-shot point-picking mode state
         self._point_pick_mode_enabled = False
@@ -1242,6 +1244,11 @@ class QtPlotterWindow:
         """
         return getattr(self.plotter, "_closed", False)
 
+    @property
+    def widget(self) -> QMainWindow:
+        """Return the Qt widget hosting the plotter for embedding."""
+        return self._window
+
     def show(self) -> None:
         """
         Display the window and start the Qt event loop.
@@ -1354,6 +1361,10 @@ class QtPlotterWindow:
 
         This method closes both the QtInteractor plotter and the QMainWindow.
         """
+        if self._is_closing:
+            return
+
+        self._is_closing = True
         self.disable_point_picking_mode(render=False)
         self.disable_cell_picking_mode(render=False)
 
@@ -1369,6 +1380,7 @@ class QtPlotterWindow:
             self.plotter.close()
         if hasattr(self, "_window") and self._window is not None:
             self._window.close()
+        self._is_closing = False
 
     def _on_close(self, event) -> None:
         """
@@ -1380,3 +1392,4 @@ class QtPlotterWindow:
             The close event from Qt.
         """
         self.close()
+        event.accept()

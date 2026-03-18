@@ -108,7 +108,11 @@ def test_main_window_does_not_restore_workspace_from_global_settings(tmp_path, m
     manager.save()
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -129,7 +133,11 @@ def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch)
     global_settings_path = tmp_path / "config" / "settings.json"
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     manager = SettingsManager(global_settings_path=global_settings_path)
     window = main_window_module.PyEmsiMainWindow(settings_manager=manager)
@@ -155,6 +163,59 @@ def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch)
     assert window._kernel_manager.shutdown_calls == 1
 
 
+def test_main_window_close_event_closes_tabs_before_shutdown(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    close_calls = []
+
+    def _close_all_tabs():
+        close_calls.append("tabs")
+        return True
+
+    window._container.close_all_tabs = _close_all_tabs
+    window.closeEvent(QCloseEvent())
+
+    assert close_calls == ["tabs"]
+    assert window._kernel_manager.shutdown_calls == 1
+
+
+def test_main_window_close_event_aborts_when_tab_close_is_canceled(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+
+    def _close_all_tabs():
+        return False
+
+    window._container.close_all_tabs = _close_all_tabs
+    event = QCloseEvent()
+    window.closeEvent(event)
+
+    assert not event.isAccepted()
+    assert window._kernel_manager.shutdown_calls == 0
+
+
 def test_main_window_open_recent_menu_tracks_unique_folders(tmp_path, monkeypatch):
     _app()
     workspace_a = tmp_path / "workspace_a"
@@ -164,7 +225,11 @@ def test_main_window_open_recent_menu_tracks_unique_folders(tmp_path, monkeypatc
     global_settings_path = tmp_path / "config" / "settings.json"
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -191,7 +256,11 @@ def test_main_window_can_clear_recent_folders(tmp_path, monkeypatch):
     global_settings_path = tmp_path / "config" / "settings.json"
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     manager = SettingsManager(global_settings_path=global_settings_path)
     manager.add_recent_folder(workspace)
@@ -220,7 +289,11 @@ def test_main_window_assigns_stable_dock_object_names(tmp_path, monkeypatch):
     global_settings_path = tmp_path / "config" / "settings.json"
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -238,7 +311,11 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
     global_settings_path = tmp_path / "config" / "settings.json"
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -251,9 +328,11 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         assert file_actions[1].text() == "Open &Recent"
         assert file_actions[2].isSeparator()
         assert "Convert &FEMAP..." in action_texts
+        assert "Build &Field Plot..." in action_texts
         assert "&Settings" in action_texts
         assert "&Save" in action_texts
         assert action_texts.index("Convert &FEMAP...") < action_texts.index("&Save")
+        assert action_texts.index("Build &Field Plot...") < action_texts.index("&Save")
     finally:
         window.close()
 
@@ -265,7 +344,11 @@ def test_main_window_femap_converter_action_tracks_workspace_state(tmp_path, mon
     global_settings_path = tmp_path / "config" / "settings.json"
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -280,6 +363,83 @@ def test_main_window_femap_converter_action_tracks_workspace_state(tmp_path, mon
         window.close_workspace(restart_kernel=False)
 
         assert not window._open_femap_converter_action.isEnabled()
+    finally:
+        window.close()
+
+
+def test_main_window_field_plot_action_tracks_workspace_state(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert not window._open_field_plot_action.isEnabled()
+
+        window._set_workspace_path(str(workspace))
+
+        assert window._open_field_plot_action.isEnabled()
+
+        window.close_workspace(restart_kernel=False)
+
+        assert not window._open_field_plot_action.isEnabled()
+    finally:
+        window.close()
+
+
+def test_main_window_opens_field_plot_dialog(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    calls = {}
+
+    class _FakeFieldPlotDialog:
+        def __init__(self, settings_manager, browse_dir_getter=None, parent=None) -> None:
+            calls["settings_manager"] = settings_manager
+            calls["browse_dir"] = browse_dir_getter() if callable(browse_dir_getter) else None
+            calls["parent"] = parent
+
+        def show(self) -> None:
+            calls["show"] = True
+
+        def raise_(self) -> None:
+            calls["raise"] = True
+
+        def activateWindow(self) -> None:
+            calls["activate"] = True
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(main_window_module, "FieldPlotBuilderDialog", _FakeFieldPlotDialog)
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    window = main_window_module.PyEmsiMainWindow(settings_manager=manager)
+    try:
+        window._set_workspace_path(str(workspace))
+
+        window._open_field_plot_dialog()
+
+        assert calls["settings_manager"] is manager
+        assert calls["browse_dir"] == os.path.abspath(os.path.normpath(str(workspace)))
+        assert calls["parent"] is window
+        assert calls["show"] is True
+        assert calls["raise"] is True
+        assert calls["activate"] is True
     finally:
         window.close()
 
@@ -321,7 +481,11 @@ def test_main_window_launches_femap_converter_in_external_terminal(tmp_path, mon
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
     monkeypatch.setattr(main_window_module, "FemapConverterDialog", _AcceptedDialog)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
 
     manager = SettingsManager(global_settings_path=global_settings_path)
     manager.load_workspace(workspace)
@@ -351,7 +515,11 @@ def test_main_window_global_settings_action_tracks_file_availability(tmp_path, m
         return QWidget()
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
     monkeypatch.setattr(main_window_module.SplitContainer, "open_file", _capture_open_file)
 
     window = main_window_module.PyEmsiMainWindow(
@@ -389,7 +557,11 @@ def test_main_window_workspace_settings_action_tracks_workspace_state(tmp_path, 
         return QWidget()
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
     monkeypatch.setattr(main_window_module.SplitContainer, "open_file", _capture_open_file)
 
     window = main_window_module.PyEmsiMainWindow(
@@ -427,7 +599,11 @@ def test_main_window_workspace_settings_action_stays_disabled_without_local_file
         return QWidget()
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
     monkeypatch.setattr(main_window_module.SplitContainer, "open_file", _capture_open_file)
 
     window = main_window_module.PyEmsiMainWindow(
