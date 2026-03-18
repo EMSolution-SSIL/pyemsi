@@ -1,0 +1,12 @@
+{
+    "hooks": {
+        "PostToolUse": [
+            {
+                "type": "command",
+                "command": "python3 .github/hooks/scripts/ruff_format_hook.py",
+                "windows": "python .github/hooks/scripts/ruff_format_hook.py",
+                "timeout": 20
+            }
+        ]
+    }
+}

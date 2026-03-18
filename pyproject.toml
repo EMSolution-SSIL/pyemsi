@@ -82,6 +82,9 @@ version = {attr = "pyemsi.__version__"}
     "xterm-js/**/*",
 ]
 
+[tool.ruff]
+line-length = 120
+
 [tool.briefcase]
 project_name = "pyemsi"
 bundle = "com.emsolution"
