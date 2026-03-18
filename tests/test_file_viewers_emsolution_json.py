@@ -128,7 +128,7 @@ def test_create_viewer_falls_back_to_text_viewer_for_generic_json(tmp_path, monk
     assert viewer.loaded_path == str(path)
 
 
-def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypatch):
+def test_emsolution_output_viewer_plot_action_uses_current_file_path(monkeypatch):
     _app()
 
     class _Signal:
@@ -142,21 +142,15 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
         def __init__(self, language: str, parent=None):
             super().__init__(parent)
             self.language = language
-            self._text = '{"metaData": {"EMSolutionVersion": "2.0"}}'
             self.textChanged = _Signal()
             self.dirtyChanged = _Signal()
+            self.file_path = "C:/workspace/templates/motor-output.json"
 
         def setTheme(self, theme: str) -> None:
             self.theme = theme
 
         def setLanguage(self, language: str) -> None:
             self.set_language = language
-
-        def load_file(self, path: str) -> None:
-            self.file_path = path
-
-        def text(self) -> str:
-            return self._text
 
         @property
         def dirty(self) -> bool:
@@ -167,15 +161,9 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
 
     captured = {}
 
-    class StubOutput:
-        @classmethod
-        def from_dict(cls, payload):
-            captured["payload"] = payload
-            return {"parsed": True}
-
     class StubDialog:
-        def __init__(self, result, parent=None):
-            captured["result"] = result
+        def __init__(self, file_path, parent=None):
+            captured["file_path"] = file_path
             captured["parent"] = parent
 
         def setAttribute(self, attr, value):
@@ -191,14 +179,12 @@ def test_emsolution_output_viewer_plot_action_uses_current_editor_text(monkeypat
             captured["activated"] = True
 
     monkeypatch.setattr(_emsolution_output, "MonacoLspWidget", StubMonaco)
-    monkeypatch.setattr(_emsolution_output, "EMSolutionOutput", StubOutput)
-    monkeypatch.setattr(_emsolution_output, "EMSolutionPlotDialog", StubDialog)
+    monkeypatch.setattr(_emsolution_output, "EMSolutionOutputPlotBuilderDialog", StubDialog)
 
     viewer = _emsolution_output.EMSolutionOutputViewer()
     viewer._plot_action.trigger()
 
-    assert captured["payload"] == {"metaData": {"EMSolutionVersion": "2.0"}}
-    assert captured["result"] == {"parsed": True}
+    assert captured["file_path"] == "C:/workspace/templates/motor-output.json"
     assert captured["parent"] is viewer
     assert captured["shown"] is True
 
@@ -255,10 +241,10 @@ def test_emsolution_output_viewer_shows_error_for_invalid_json(monkeypatch):
     errors = []
 
     monkeypatch.setattr(_emsolution_output, "MonacoLspWidget", StubMonaco)
-    monkeypatch.setattr(_emsolution_output.QMessageBox, "critical", lambda *args: errors.append(args[1:]))
+    monkeypatch.setattr(_emsolution_output.QMessageBox, "warning", lambda *args: errors.append(args[1:]))
 
     viewer = _emsolution_output.EMSolutionOutputViewer()
     viewer._plot_action.trigger()
 
     assert errors
-    assert errors[0][0] == "Invalid JSON"
+    assert errors[0][0] == "Missing File Path"

@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import json
-
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QLabel, QMessageBox, QToolBar, QVBoxLayout, QWidget
 
 import pyemsi.resources.resources  # noqa: F401
-from pyemsi.io import EMSolutionOutput
+from pyemsi.gui.emsolution_output_plot_builder_dialog import EMSolutionOutputPlotBuilderDialog
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
-
-from ._emsolution_plot_dialog import EMSolutionPlotDialog
 
 
 class EMSolutionOutputViewer(QWidget):
@@ -65,19 +61,17 @@ class EMSolutionOutputViewer(QWidget):
         self.editor.save(path)
 
     def _open_plot_dialog(self) -> None:
-        try:
-            payload = json.loads(self.text())
-        except json.JSONDecodeError as exc:
-            QMessageBox.critical(self, "Invalid JSON", f"Could not parse the current editor content.\n\n{exc}")
+        file_path = self.file_path
+        if not file_path:
+            QMessageBox.warning(self, "Missing File Path", "Save this EMSolution output file before plotting it.")
             return
 
         try:
-            result = EMSolutionOutput.from_dict(payload)
+            dialog = EMSolutionOutputPlotBuilderDialog(file_path, parent=self)
         except Exception as exc:
             QMessageBox.critical(self, "Invalid EMSolution Output", str(exc))
             return
 
-        dialog = EMSolutionPlotDialog(result, parent=self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dialog.show()
         dialog.raise_()

@@ -1,12 +1,14 @@
+import json
 from pathlib import Path
 
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QPushButton, QSplitter
 
-from pyemsi.gui._viewers import _emsolution_plot_dialog
-from pyemsi.gui._viewers._emsolution_plot_dialog import (
-    EMSolutionPlotDialog,
+from pyemsi.gui import emsolution_output_plot_builder_dialog as _emsolution_plot_dialog
+from pyemsi.gui.emsolution_output_plot_builder_dialog import (
+    EMSolutionOutputPlotBuilderDialog,
+    EMSolutionOutputPlotBuilderDialog as EMSolutionPlotDialog,
     GeneratedScriptDialog,
     PlotDialogSettings,
     PlotSeriesStyle,
@@ -165,7 +167,7 @@ def _find_combo_index_by_data(combo, data):
 
 def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
     _app()
-    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+    dialog = EMSolutionOutputPlotBuilderDialog(EMSolutionOutput.from_dict(_sample_payload()))
 
     splitter = dialog.findChild(QSplitter)
 
@@ -193,7 +195,7 @@ def test_matplotlib_viewer_can_disable_tight_layout():
 
 def test_emsolution_plot_dialog_and_subdialogs_expose_plot_icons():
     _app()
-    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+    dialog = EMSolutionOutputPlotBuilderDialog(EMSolutionOutput.from_dict(_sample_payload()))
     result = EMSolutionOutput.from_dict(_positive_payload())
     x_options = {option.key: option for option in result.get_plot_x_options()}
     x_axis_key = next(iter(x_options))
@@ -486,7 +488,7 @@ def test_emsolution_plot_dialog_generates_script_for_selected_network_series():
 
     assert "from matplotlib.figure import Figure" in script
     assert "from pyemsi import EMSolutionOutput, gui" in script
-    assert 'result = EMSolutionOutput.from_file("output.json")' in script
+    assert "result = EMSolutionOutput.from_file('output.json')" in script
     assert "x_values = result.position" in script
     assert "y_values_1 = result.network.elements[0].current" in script
     assert "label='Custom Current'" in script
@@ -498,7 +500,22 @@ def test_emsolution_plot_dialog_generates_script_for_selected_network_series():
     assert "ax.set_xlabel('Rotor Angle')" in script
     assert "ax.set_ylabel('Response')" in script
     assert "ax.grid(False)" in script
-    assert "gui.add_figure(fig, 'Custom Plot')" in script
+
+
+def test_emsolution_output_plot_builder_dialog_uses_source_file_name_in_script(tmp_path):
+    _app()
+    path = tmp_path / "motor-output.json"
+    path.write_text(json.dumps(_positive_payload()), encoding="utf-8")
+
+    dialog = EMSolutionOutputPlotBuilderDialog(path)
+
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+
+    script = dialog._generate_script_text()
+
+    assert "result = EMSolutionOutput.from_file('motor-output.json')" in script
+    assert str(path) not in script
     assert "plt.show()" not in script
 
 

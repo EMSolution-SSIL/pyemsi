@@ -13,9 +13,10 @@ import tempfile
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence
-from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox
 
 import pyemsi.resources.resources  # noqa: F401
+from pyemsi.gui.emsolution_output_plot_builder_dialog import EMSolutionOutputPlotBuilderDialog
 from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
@@ -114,15 +115,20 @@ class PyEmsiMainWindow(QMainWindow):
 
         self._file_menu.addSeparator()
 
-        self._open_femap_converter_action = QAction("Convert &FEMAP...", self)
+        self._open_femap_converter_action = QAction("Convert &FEMAP", self)
         self._open_femap_converter_action.setIcon(QIcon(":/icons/VTK.svg"))
         self._open_femap_converter_action.triggered.connect(self._open_femap_converter_dialog)
         self._file_menu.addAction(self._open_femap_converter_action)
 
-        self._open_field_plot_action = QAction("Build &Field Plot...", self)
+        self._open_field_plot_action = QAction("&Field Plot", self)
         self._open_field_plot_action.setIcon(QIcon(":/icons/Graph.svg"))
         self._open_field_plot_action.triggered.connect(self._open_field_plot_dialog)
         self._file_menu.addAction(self._open_field_plot_action)
+
+        self._open_emsolution_output_plot_action = QAction("&Output Plot", self)
+        self._open_emsolution_output_plot_action.setIcon(QIcon(":/icons/Graph.svg"))
+        self._open_emsolution_output_plot_action.triggered.connect(self._open_emsolution_output_plot_dialog)
+        self._file_menu.addAction(self._open_emsolution_output_plot_action)
 
         self._file_menu.addSeparator()
 
@@ -349,6 +355,33 @@ class PyEmsiMainWindow(QMainWindow):
         dialog.raise_()
         dialog.activateWindow()
 
+    def _open_emsolution_output_plot_dialog(self) -> None:
+        """Open the EMSolution output plot builder for output.json in the current explorer directory."""
+        current_path = self.explorer.current_path
+        if not current_path or not os.path.isdir(current_path):
+            return
+
+        output_path = os.path.join(current_path, "output.json")
+        if not os.path.isfile(output_path):
+            QMessageBox.warning(
+                self,
+                "Missing EMSolution Output",
+                f"Could not find output.json in:\n\n{current_path}",
+            )
+            return
+
+        try:
+            dialog = EMSolutionOutputPlotBuilderDialog(output_path, parent=self)
+        except Exception as exc:
+            QMessageBox.critical(self, "Invalid EMSolution Output", str(exc))
+            return
+
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        self._emsolution_output_plot_dialog = dialog
+
     def _persist_femap_converter_settings(self, config: FemapConverterDialogConfig) -> None:
         """Persist the last-used FEMAP converter dialog settings."""
         setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
@@ -459,6 +492,7 @@ class PyEmsiMainWindow(QMainWindow):
             os.fspath(self._settings.workspace_path) if self._settings.workspace_path is not None else None
         )
         self._open_field_plot_action.setEnabled(bool(explorer_path and os.path.isdir(explorer_path)))
+        self._open_emsolution_output_plot_action.setEnabled(bool(explorer_path and os.path.isdir(explorer_path)))
         self._open_global_settings_action.setEnabled(global_settings_path.is_file())
         self._open_workspace_settings_action.setEnabled(
             local_settings_path is not None and local_settings_path.is_file()

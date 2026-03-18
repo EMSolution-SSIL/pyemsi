@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi import Plotter
-from pyemsi.gui._viewers._emsolution_plot_dialog import GeneratedScriptDialog
+from pyemsi.gui.emsolution_output_plot_builder_dialog import GeneratedScriptDialog
 from pyemsi.gui.femap_converter_dialog import _PathSelector
 from pyemsi.plotter.colormaps import CMAP_CHOICES, cmap_choice_to_name, cmap_name_to_choice
 from pyemsi.settings import SettingsManager

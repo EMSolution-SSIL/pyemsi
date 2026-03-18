@@ -329,10 +329,12 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         assert file_actions[2].isSeparator()
         assert "Convert &FEMAP..." in action_texts
         assert "Build &Field Plot..." in action_texts
+        assert "Build &EMSolution Output Plot" in action_texts
         assert "&Settings" in action_texts
         assert "&Save" in action_texts
         assert action_texts.index("Convert &FEMAP...") < action_texts.index("&Save")
         assert action_texts.index("Build &Field Plot...") < action_texts.index("&Save")
+        assert action_texts.index("Build &EMSolution Output Plot") < action_texts.index("&Save")
     finally:
         window.close()
 
@@ -397,6 +399,36 @@ def test_main_window_field_plot_action_tracks_workspace_state(tmp_path, monkeypa
         window.close()
 
 
+def test_main_window_emsolution_output_plot_action_tracks_workspace_state(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert not window._open_emsolution_output_plot_action.isEnabled()
+
+        window._set_workspace_path(str(workspace))
+
+        assert window._open_emsolution_output_plot_action.isEnabled()
+
+        window.close_workspace(restart_kernel=False)
+
+        assert not window._open_emsolution_output_plot_action.isEnabled()
+    finally:
+        window.close()
+
+
 def test_main_window_opens_field_plot_dialog(tmp_path, monkeypatch):
     _app()
     workspace = tmp_path / "workspace"
@@ -436,6 +468,90 @@ def test_main_window_opens_field_plot_dialog(tmp_path, monkeypatch):
 
         assert calls["settings_manager"] is manager
         assert calls["browse_dir"] == os.path.abspath(os.path.normpath(str(workspace)))
+        assert calls["parent"] is window
+        assert calls["show"] is True
+        assert calls["raise"] is True
+        assert calls["activate"] is True
+    finally:
+        window.close()
+
+
+def test_main_window_emsolution_output_plot_action_warns_on_missing_file(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    warnings = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "warning", lambda *args: warnings.append(args[1:]))
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._set_workspace_path(str(workspace))
+
+        window._open_emsolution_output_plot_dialog()
+
+        assert warnings
+        assert warnings[0][0] == "Missing EMSolution Output"
+    finally:
+        window.close()
+
+
+def test_main_window_opens_emsolution_output_plot_dialog(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output_path = workspace / "output.json"
+    output_path.write_text("{}", encoding="utf-8")
+    global_settings_path = tmp_path / "config" / "settings.json"
+    calls = {}
+
+    class _FakeEMSolutionOutputPlotBuilderDialog:
+        def __init__(self, source, parent=None) -> None:
+            calls["source"] = source
+            calls["parent"] = parent
+
+        def setAttribute(self, attr, value) -> None:
+            calls["attribute"] = (attr, value)
+
+        def show(self) -> None:
+            calls["show"] = True
+
+        def raise_(self) -> None:
+            calls["raise"] = True
+
+        def activateWindow(self) -> None:
+            calls["activate"] = True
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        "EMSolutionOutputPlotBuilderDialog",
+        _FakeEMSolutionOutputPlotBuilderDialog,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._set_workspace_path(str(workspace))
+
+        window._open_emsolution_output_plot_dialog()
+
+        assert calls["source"] == os.path.abspath(os.path.normpath(str(output_path)))
         assert calls["parent"] is window
         assert calls["show"] is True
         assert calls["raise"] is True
