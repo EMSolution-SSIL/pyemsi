@@ -165,6 +165,18 @@ def _find_combo_index_by_data(combo, data):
     raise AssertionError(f"Could not find combo data: {data!r}")
 
 
+def _set_indicator_mode(viewer: MatplotlibViewer, mode: str) -> None:
+    viewer._indicator_mode_combo.setCurrentIndex(_find_combo_index_by_data(viewer._indicator_mode_combo, mode))
+
+
+def _set_indicator_index_combo(viewer: MatplotlibViewer, index: int) -> None:
+    viewer._indicator_index_combo.setCurrentIndex(_find_combo_index_by_data(viewer._indicator_index_combo, index))
+
+
+def _indicator_artists_on_axis(viewer: MatplotlibViewer, axis) -> list:
+    return [artist for artist in viewer._indicator_artists if getattr(artist, "axes", None) is axis]
+
+
 def test_emsolution_plot_dialog_places_tree_left_and_preview_right():
     _app()
     dialog = EMSolutionOutputPlotBuilderDialog(EMSolutionOutput.from_dict(_sample_payload()))
@@ -191,6 +203,152 @@ def test_matplotlib_viewer_can_disable_tight_layout():
     viewer = MatplotlibViewer(Figure(), tight_layout=False)
 
     assert not _uses_tight_layout(viewer.figure)
+
+
+def test_matplotlib_viewer_exposes_indicator_toolbar_combos_with_vertical_line_default():
+    _app()
+
+    figure = Figure()
+    axis = figure.add_subplot(111)
+    axis.plot([0, 1, 2], [3, 4, 5])
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+
+    assert viewer._indicator_mode_combo.count() == 4
+    assert viewer._indicator_mode_combo.itemData(viewer._indicator_mode_combo.currentIndex()) == (
+        MatplotlibViewer.INDICATOR_MODE_VERTICAL_LINE
+    )
+    assert viewer._indicator_index_combo.count() == 3
+    assert viewer._indicator_index_combo.currentIndex() == -1
+    assert viewer._indicator_index_combo.itemText(0) == "0:0"
+    assert viewer._indicator_index_combo.itemText(1) == "1:1"
+
+
+def test_matplotlib_viewer_indicator_index_combo_tracks_slot_and_manual_selection():
+    _app()
+
+    figure = Figure()
+    axis = figure.add_subplot(111)
+    axis.plot([0, 1, 2], [1, 2, 3])
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+
+    viewer.set_indicator_index(2)
+
+    assert viewer._indicator_index_combo.currentData() == 2
+    assert viewer._indicator_index == 2
+    assert viewer._indicator_artists[0].get_xdata()[0] == 2
+
+    _set_indicator_index_combo(viewer, 1)
+
+    assert viewer._indicator_index == 1
+    assert viewer._indicator_index_combo.currentData() == 1
+    assert viewer._indicator_artists[0].get_xdata()[0] == 1
+
+
+def test_matplotlib_viewer_vertical_indicator_renders_per_eligible_subplot_without_duplicates():
+    _app()
+
+    figure = Figure()
+    axes = figure.subplots(2, 1, squeeze=False)
+    top_axis = axes[0][0]
+    bottom_axis = axes[1][0]
+    top_axis.plot([0, 1, 2], [1, 2, 3])
+    top_axis.plot([0, 1, 2], [3, 2, 1])
+    bottom_axis.plot([0, 1, 2], [2, 3, 4])
+
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+    viewer.set_indicator_index(1)
+
+    assert len(_indicator_artists_on_axis(viewer, top_axis)) == 1
+    assert len(_indicator_artists_on_axis(viewer, bottom_axis)) == 1
+    assert len(top_axis.lines) == 3
+    assert len(bottom_axis.lines) == 2
+
+    viewer.draw()
+
+    assert len(_indicator_artists_on_axis(viewer, top_axis)) == 1
+    assert len(_indicator_artists_on_axis(viewer, bottom_axis)) == 1
+    assert len(top_axis.lines) == 3
+    assert len(bottom_axis.lines) == 2
+
+
+def test_matplotlib_viewer_off_mode_hides_indicator_but_preserves_index():
+    _app()
+
+    figure = Figure()
+    axis = figure.add_subplot(111)
+    axis.plot([0, 1, 2], [4, 5, 6])
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+
+    viewer.set_indicator_index(2)
+    _set_indicator_mode(viewer, MatplotlibViewer.INDICATOR_MODE_OFF)
+
+    assert viewer._indicator_index == 2
+    assert len(viewer._indicator_artists) == 0
+    assert len(axis.lines) == 1
+
+    _set_indicator_mode(viewer, MatplotlibViewer.INDICATOR_MODE_VERTICAL_LINE)
+
+    assert len(viewer._indicator_artists) == 1
+    assert len(axis.lines) == 2
+
+
+def test_matplotlib_viewer_strict_axis_eligibility_ignores_invisible_lines():
+    _app()
+
+    figure = Figure()
+    axes = figure.subplots(2, 1, squeeze=False)
+    eligible_axis = axes[0][0]
+    ineligible_axis = axes[1][0]
+    eligible_axis.plot([0, 1, 2], [1, 2, 3])
+    hidden_short_line = eligible_axis.plot([0], [9])[0]
+    hidden_short_line.set_visible(False)
+    ineligible_axis.plot([0, 1, 2], [3, 4, 5])
+    ineligible_axis.plot([0], [8])
+
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+    viewer.set_indicator_index(2)
+
+    assert len(_indicator_artists_on_axis(viewer, eligible_axis)) == 1
+    assert len(_indicator_artists_on_axis(viewer, ineligible_axis)) == 0
+    assert len(viewer._indicator_artists) == 1
+
+
+def test_matplotlib_viewer_marker_modes_create_expected_indicator_artists():
+    _app()
+
+    figure = Figure()
+    axis = figure.add_subplot(111)
+    axis.plot([0, 1, 2], [1, 2, 3])
+    axis.plot([0, 1, 2], [3, 2, 1])
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+    viewer.set_indicator_index(1)
+
+    _set_indicator_mode(viewer, MatplotlibViewer.INDICATOR_MODE_MARKERS)
+
+    assert len(_indicator_artists_on_axis(viewer, axis)) == 2
+    assert len(axis.lines) == 4
+
+    _set_indicator_mode(viewer, MatplotlibViewer.INDICATOR_MODE_LINE_AND_MARKERS)
+
+    assert len(_indicator_artists_on_axis(viewer, axis)) == 3
+    assert len(axis.lines) == 5
+
+
+def test_matplotlib_viewer_ignores_negative_indicator_indices():
+    _app()
+
+    figure = Figure()
+    axis = figure.add_subplot(111)
+    axis.plot([0, 1, 2], [1, 2, 3])
+    viewer = MatplotlibViewer(figure, tight_layout=False)
+    viewer.set_indicator_index(1)
+    indicator_x = viewer._indicator_artists[0].get_xdata()[0]
+
+    viewer.set_indicator_index(-1)
+
+    assert viewer._indicator_index == 1
+    assert len(viewer._indicator_artists) == 1
+    assert viewer._indicator_artists[0].get_xdata()[0] == indicator_x
 
 
 def test_emsolution_plot_dialog_and_subdialogs_expose_plot_icons():
