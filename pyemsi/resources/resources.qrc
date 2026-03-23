@@ -8,6 +8,7 @@
     <file>icons/Cut.svg</file>
     <file>icons/Explorer.svg</file>
     <file>icons/ExternalTerminal.svg</file>
+    <file>icons/Field.svg</file>
     <file>icons/Find.svg</file>
     <file>icons/First.svg</file>
     <file>icons/FolderOpen.svg</file>
@@ -32,18 +33,19 @@
     <file>icons/QueryPoint.svg</file>
     <file>icons/Redo.svg</file>
     <file>icons/Replace.svg</file>
+    <file>icons/ResetCamera.svg</file>
+    <file>icons/Reverse.svg</file>
+    <file>icons/Run.svg</file>
     <file>icons/SampleArc.svg</file>
     <file>icons/SampleLine.svg</file>
     <file>icons/Save-as.svg</file>
     <file>icons/Save.svg</file>
     <file>icons/SaveAll.svg</file>
     <file>icons/SelectAll.svg</file>
-    <file>icons/ResetCamera.svg</file>
-    <file>icons/Reverse.svg</file>
-    <file>icons/Run.svg</file>
     <file>icons/Settings.svg</file>
     <file>icons/Stop.svg</file>
     <file>icons/Style.svg</file>
+    <file>icons/Telescope.svg</file>
     <file>icons/Undo.svg</file>
     <file>icons/VTK.svg</file>
     <file>icons/XMinus.svg</file>

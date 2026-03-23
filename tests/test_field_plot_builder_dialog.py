@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 from PySide6.QtWidgets import QApplication, QDialog
 
 import pyemsi.gui as gui
@@ -94,15 +95,19 @@ class _FakeAttributes:
 
 
 class _FakeBlock:
-    def __init__(self, point_arrays=None, cell_arrays=None):
+    def __init__(self, point_arrays=None, cell_arrays=None, length=None, bounds=None):
         self.point_data = _FakeAttributes(point_arrays or {})
         self.cell_data = _FakeAttributes(cell_arrays or {})
+        self.length = length
+        self.bounds = bounds
 
 
 class _FakeMultiBlock:
-    def __init__(self, blocks, names):
+    def __init__(self, blocks, names, length=None, bounds=None):
         self._blocks = blocks
         self._names = names
+        self.length = length
+        self.bounds = bounds
 
     def __iter__(self):
         return iter(self._blocks)
@@ -265,6 +270,215 @@ def test_field_plot_builder_dialog_analyse_closes_plotter_and_reports_errors(tmp
 
     assert calls == [("init", os.fspath(plot_path)), ("close", None)]
     assert criticals == ["bad mesh"]
+
+
+def test_field_plot_builder_dialog_analyse_updates_vector_factor_from_selected_vector(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_enabled_checkbox.setChecked(True)
+
+    class _FakePlotter:
+        def __init__(self, filepath) -> None:
+            self.mesh = _FakeBlock(
+                point_arrays={
+                    "Point Vector": np.array([[3.0, 4.0, 0.0], [0.0, 0.0, 0.0]]),
+                    "Point Scalar": np.array([2.0, 4.0]),
+                },
+                length=20.0,
+            )
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+
+    dialog._on_analyse()
+
+    assert dialog._vector_name_combo.currentData() == "Point Vector"
+    assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.4)
+
+
+def test_field_plot_builder_dialog_analyse_updates_vector_factor_for_uniform_scale(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_enabled_checkbox.setChecked(True)
+
+    class _FakePlotter:
+        def __init__(self, filepath) -> None:
+            self.mesh = _FakeBlock(
+                point_arrays={
+                    "Point Vector": np.array([[3.0, 4.0, 0.0]]),
+                    "Point Scalar": np.array([2.0, 4.0]),
+                },
+                length=20.0,
+            )
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+
+    dialog._on_analyse()
+    dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
+
+    dialog._on_analyse()
+
+    assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(2.0)
+
+
+def test_field_plot_builder_dialog_analyse_updates_vector_factor_for_explicit_scale_array(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_enabled_checkbox.setChecked(True)
+
+    class _FakePlotter:
+        def __init__(self, filepath) -> None:
+            self.mesh = _FakeBlock(
+                point_arrays={
+                    "Point Vector": np.array([[3.0, 4.0, 0.0]]),
+                    "Point Scalar": np.array([2.0, 4.0]),
+                },
+                length=20.0,
+            )
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+
+    dialog._on_analyse()
+    dialog._vector_scale_combo.setCurrentIndex(
+        dialog_module._combo_index_for_data(dialog._vector_scale_combo, "Point Scalar")
+    )
+
+    dialog._on_analyse()
+
+    assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.5)
+
+
+def test_field_plot_builder_dialog_analyse_leaves_factor_unchanged_when_vectors_disabled(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_factor_edit.setText("7.5")
+
+    class _FakePlotter:
+        def __init__(self, filepath) -> None:
+            self.mesh = _FakeBlock(
+                point_arrays={"Point Vector": np.array([[3.0, 4.0, 0.0]])},
+                length=20.0,
+            )
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+
+    dialog._on_analyse()
+
+    assert dialog._vector_factor_edit.text() == "7.5"
+
+
+def test_field_plot_builder_dialog_analyse_reports_zero_vector_scale_data(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+    criticals = []
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_enabled_checkbox.setChecked(True)
+
+    class _FakePlotter:
+        def __init__(self, filepath) -> None:
+            self.mesh = _FakeBlock(
+                point_arrays={"Point Vector": np.zeros((2, 3))},
+                length=20.0,
+            )
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+    monkeypatch.setattr(dialog_module.QMessageBox, "critical", lambda *args: criticals.append(args[2]))
+
+    dialog._on_analyse()
+
+    assert criticals == ["Maximum value for 'Point Vector' must be greater than 0."]
+
+
+def test_field_plot_builder_dialog_analyse_sweeps_all_time_values_for_factor(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_enabled_checkbox.setChecked(True)
+
+    class _FakeReader:
+        def __init__(self) -> None:
+            self.active_time_value = 1.0
+            self.read_calls: list[float] = []
+            self.meshes = {
+                0.0: _FakeBlock(point_arrays={"Point Vector": np.array([[2.0, 0.0, 0.0]])}, length=10.0),
+                1.0: _FakeBlock(point_arrays={"Point Vector": np.array([[6.0, 8.0, 0.0]])}, length=40.0),
+            }
+
+        def read(self):
+            self.read_calls.append(self.active_time_value)
+            return self.meshes[self.active_time_value]
+
+    class _FakePlotter:
+        instances = []
+
+        def __init__(self, filepath) -> None:
+            self.reader = _FakeReader()
+            self.time_values = [0.0, 1.0]
+            self.time_history: list[float] = []
+            self.__class__.instances.append(self)
+
+        @property
+        def active_time_value(self):
+            return self.reader.active_time_value
+
+        def set_active_time_value(self, time_value: float) -> None:
+            self.time_history.append(time_value)
+            self.reader.active_time_value = time_value
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+
+    dialog._on_analyse()
+
+    plotter = _FakePlotter.instances[0]
+    assert plotter.reader.read_calls == [0.0, 1.0]
+    assert plotter.time_history == [0.0, 1.0, 1.0]
+    assert plotter.active_time_value == 1.0
+    assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.4)
 
 
 def test_field_plot_builder_dialog_prefers_explicit_field_plot_path_over_femap_defaults(

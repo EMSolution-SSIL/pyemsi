@@ -121,7 +121,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._file_menu.addAction(self._open_femap_converter_action)
 
         self._open_field_plot_action = QAction("&Field Plot", self)
-        self._open_field_plot_action.setIcon(QIcon(":/icons/Graph.svg"))
+        self._open_field_plot_action.setIcon(QIcon(":/icons/Field.svg"))
         self._open_field_plot_action.triggered.connect(self._open_field_plot_dialog)
         self._file_menu.addAction(self._open_field_plot_action)
 

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import math
 import os
 
+import numpy as np
+import pyvista as pv
 from PySide6.QtCore import QLocale
 from PySide6.QtGui import QDoubleValidator, QIcon
 from PySide6.QtWidgets import (
@@ -89,6 +92,15 @@ def _vector_scale_options_from_names(names: list[str]) -> list[tuple[str, str | 
     ]
 
 
+@dataclass(slots=True)
+class _PlotAnalysisResult:
+    scalar_names: list[str]
+    vector_names: list[str]
+    scale_names: list[str]
+    mesh_length: float
+    array_maxima: dict[str, float]
+
+
 class FieldPlotBuilderDialog(QDialog):
     def __init__(
         self,
@@ -101,7 +113,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._browse_dir_getter = browse_dir_getter
 
         self.setWindowTitle("Field Plot")
-        self.setWindowIcon(QIcon(":/icons/Graph.svg"))
+        self.setWindowIcon(QIcon(":/icons/Field.svg"))
         self.resize(720, 560)
 
         defaults = self._load_defaults()
@@ -206,7 +218,7 @@ class FieldPlotBuilderDialog(QDialog):
         file_layout.addRow("Title:", self._title_edit)
 
         helper_label = QLabel(
-            "Click Analyse to inspect the selected file and refresh the available arrays. Until then, documented Plotter defaults are shown.",
+            "Click Analyse to inspect the selected file, refresh the available arrays, and auto-scale vectors to 10% of the mesh size. Until then, documented Plotter defaults are shown.",
             self,
         )
         helper_label.setWordWrap(True)
@@ -223,14 +235,15 @@ class FieldPlotBuilderDialog(QDialog):
         layout.addWidget(self._vector_section)
 
         button_row = QHBoxLayout()
+        self._analyse_button = QPushButton("Analyse", self)
+        self._analyse_button.setIcon(QIcon(":/icons/Telescope.svg"))
         self._script_button = QPushButton("Script...", self)
         self._script_button.setIcon(QIcon(":/icons/Code.svg"))
-        self._analyse_button = QPushButton("Analyse", self)
         self._plot_button = QPushButton("Plot", self)
-        self._plot_button.setIcon(QIcon(":/icons/Graph.svg"))
+        self._plot_button.setIcon(QIcon(":/icons/Field.svg"))
         self._cancel_button = QPushButton("Cancel", self)
-        button_row.addWidget(self._script_button)
         button_row.addWidget(self._analyse_button)
+        button_row.addWidget(self._script_button)
         button_row.addStretch()
         button_row.addWidget(self._plot_button)
         button_row.addWidget(self._cancel_button)
@@ -351,7 +364,106 @@ class FieldPlotBuilderDialog(QDialog):
                 vector_names.append(str(name))
         return scalar_names, vector_names
 
-    def _discover_plot_arrays(self) -> tuple[list[str], list[str], list[str]]:
+    def _array_max_value(self, array: object) -> float | None:
+        try:
+            values = np.asarray(array, dtype=float)
+        except (TypeError, ValueError):
+            return None
+
+        if values.size == 0:
+            return None
+
+        component_count = self._array_component_count(array)
+        if component_count == 3 and values.ndim >= 2:
+            magnitudes = np.linalg.norm(values, axis=1)
+        else:
+            magnitudes = np.abs(values).reshape(-1)
+
+        finite_magnitudes = magnitudes[np.isfinite(magnitudes)]
+        if finite_magnitudes.size == 0:
+            return None
+        return float(finite_magnitudes.max())
+
+    def _mesh_length(self, mesh: object) -> float:
+        length = getattr(mesh, "length", None)
+        if isinstance(length, (int, float)) and math.isfinite(length):
+            return float(length)
+
+        bounds = getattr(mesh, "bounds", None)
+        if bounds is not None and len(bounds) == 6:
+            try:
+                dx = float(bounds[1]) - float(bounds[0])
+                dy = float(bounds[3]) - float(bounds[2])
+                dz = float(bounds[5]) - float(bounds[4])
+            except (TypeError, ValueError):
+                dx = dy = dz = 0.0
+            return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        get_block_name = getattr(mesh, "get_block_name", None)
+        if callable(get_block_name):
+            block_lengths = [self._mesh_length(block) for block, _block_name in self._iter_mesh_blocks(mesh)]
+            finite_lengths = [length for length in block_lengths if math.isfinite(length) and length > 0.0]
+            if finite_lengths:
+                return max(finite_lengths)
+        return 0.0
+
+    def _read_plotter_mesh_snapshot(self, plotter: Plotter):
+        reader = getattr(plotter, "reader", None)
+        if reader is None:
+            return plotter.mesh
+
+        mesh = reader.read()
+        if isinstance(reader, pv.PVDReader):
+            return mesh[0]
+        return mesh
+
+    def _iter_plotter_mesh_snapshots(self, plotter: Plotter):
+        time_values = getattr(plotter, "time_values", None)
+        if time_values is None:
+            yield self._read_plotter_mesh_snapshot(plotter)
+            return
+
+        time_values_list = list(time_values)
+        if not time_values_list:
+            yield self._read_plotter_mesh_snapshot(plotter)
+            return
+
+        original_time_value = getattr(plotter, "active_time_value", None)
+        try:
+            for time_value in time_values_list:
+                plotter.set_active_time_value(float(time_value))
+                yield self._read_plotter_mesh_snapshot(plotter)
+        finally:
+            if original_time_value is not None:
+                plotter.set_active_time_value(float(original_time_value))
+
+    def _update_attribute_analysis(
+        self,
+        attributes: object,
+        scalar_names: list[str],
+        vector_names: list[str],
+        array_maxima: dict[str, float],
+    ) -> None:
+        for name in getattr(attributes, "keys", lambda: [])():
+            array_name = str(name)
+            if array_name in INTERNAL_FIELD_NAMES:
+                continue
+
+            array = attributes[name]
+            component_count = self._array_component_count(array)
+            if component_count == 1:
+                scalar_names.append(array_name)
+            elif component_count == 3:
+                vector_names.append(array_name)
+            else:
+                continue
+
+            max_value = self._array_max_value(array)
+            if max_value is None:
+                continue
+            array_maxima[array_name] = max(array_maxima.get(array_name, 0.0), max_value)
+
+    def _discover_plot_arrays(self) -> _PlotAnalysisResult:
         filepath = self._file_field.value()
         assert filepath is not None
         plotter = None
@@ -359,20 +471,48 @@ class FieldPlotBuilderDialog(QDialog):
             plotter = Plotter(filepath)
             scalar_names: list[str] = []
             vector_names: list[str] = []
-            for block, _block_name in self._iter_mesh_blocks(plotter.mesh):
-                point_scalar_names, point_vector_names = self._classify_attribute_names(block.point_data)
-                cell_scalar_names, cell_vector_names = self._classify_attribute_names(block.cell_data)
-                scalar_names.extend(point_scalar_names)
-                scalar_names.extend(cell_scalar_names)
-                vector_names.extend(point_vector_names)
-                vector_names.extend(cell_vector_names)
+            mesh_length = 0.0
+            array_maxima: dict[str, float] = {}
+            for mesh in self._iter_plotter_mesh_snapshots(plotter):
+                mesh_length = max(mesh_length, self._mesh_length(mesh))
+                for block, _block_name in self._iter_mesh_blocks(mesh):
+                    self._update_attribute_analysis(block.point_data, scalar_names, vector_names, array_maxima)
+                    self._update_attribute_analysis(block.cell_data, scalar_names, vector_names, array_maxima)
             scalar_names = _unique_names(scalar_names)
             vector_names = _unique_names(vector_names)
             scale_names = _unique_names([*scalar_names, *vector_names])
-            return scalar_names, vector_names, scale_names
+            return _PlotAnalysisResult(
+                scalar_names=scalar_names,
+                vector_names=vector_names,
+                scale_names=scale_names,
+                mesh_length=mesh_length,
+                array_maxima=array_maxima,
+            )
         finally:
             if plotter is not None:
                 plotter.close()
+
+    def _update_vector_factor_from_analysis(self, analysis: _PlotAnalysisResult) -> None:
+        if not self._vector_enabled_checkbox.isChecked():
+            return
+
+        mesh_length = analysis.mesh_length
+        if not math.isfinite(mesh_length) or mesh_length <= 0.0:
+            raise ValueError("Unable to determine the mesh size for vector auto-scaling.")
+
+        scale = self._vector_scale_combo.currentData()
+        if scale is False:
+            factor = 0.1 * mesh_length
+        else:
+            source_name = str(self._vector_name_combo.currentData()) if scale is None else str(scale)
+            source_max = analysis.array_maxima.get(source_name)
+            if source_max is None:
+                raise ValueError(f"Unable to determine a maximum value for '{source_name}'.")
+            if not math.isfinite(source_max) or source_max <= 0.0:
+                raise ValueError(f"Maximum value for '{source_name}' must be greater than 0.")
+            factor = 0.1 * mesh_length / source_max
+
+        self._vector_factor_edit.setText(_format_float_text(factor))
 
     def _apply_discovered_plot_arrays(
         self,
@@ -521,8 +661,9 @@ class FieldPlotBuilderDialog(QDialog):
             return
 
         try:
-            scalar_names, vector_names, scale_names = self._discover_plot_arrays()
-            self._apply_discovered_plot_arrays(scalar_names, vector_names, scale_names)
+            analysis = self._discover_plot_arrays()
+            self._apply_discovered_plot_arrays(analysis.scalar_names, analysis.vector_names, analysis.scale_names)
+            self._update_vector_factor_from_analysis(analysis)
         except Exception as exc:
             QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
             return
