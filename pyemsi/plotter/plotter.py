@@ -469,8 +469,7 @@ class Plotter:
             "Heat Density (W/m^3)",
             "Heat (W)",
         ],
-        mode: Literal["node", "element"] = "element",
-        cell2point: bool = True,
+        mode: Literal["node", "element"] = "node",
         **kwargs,
     ) -> "Plotter":
         """
@@ -486,10 +485,7 @@ class Plotter:
                 'Heat Density (W/m^3)', 'Heat (W)'},
             Name of the scalar field to visualize (must exist in mesh arrays).
         mode : {'node', 'element'}, optional
-            Whether the scalar field is defined on nodes or elements. Default is 'element'.
-        cell2point : bool, optional
-            If True and mode is 'element', convert cell data to point data for smoother visualization.
-            Default is True.
+            Whether the scalar field is defined on nodes or elements. Default is 'node'.
         **kwargs
             Additional keyword arguments passed to add_mesh() for scalar visualization.
             Common options include: show_edges, edge_color, edge_opacity, cmap, clim.
@@ -501,7 +497,6 @@ class Plotter:
         """
         self._scalar_props["name"] = name
         self._scalar_props["mode"] = mode
-        self._scalar_props["cell2point"] = cell2point
         for key, value in kwargs.items():
             self._scalar_props[key] = value
         self._scalar_props["show_edges"] = kwargs.get("show_edges", True)
@@ -518,20 +513,18 @@ class Plotter:
         if self._scalar_props is None:
             return  # No scalar properties set
         name = self._scalar_props.get("name")
-        mode = self._scalar_props.get("mode", "element")
-        cell2point = self._scalar_props.get("cell2point", True)
+        mode = self._scalar_props.get("mode", "node")
         for idx, block, block_name in self._iter_blocks():
-            block_to_plot = block.cell_data_to_point_data() if mode == "element" and cell2point else block
-            if name not in block_to_plot.array_names:
+            if name not in block.array_names:
                 continue
             actor_name = f"scalar_field_block_{block_name}" if block_name else "scalar_field"
             actor = self.plotter.add_mesh(
-                block_to_plot,
+                block,
                 scalars=name,
                 preference="cell" if mode == "element" else "point",
                 name=actor_name,
                 pickable=True,
-                **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode", "cell2point"]},
+                **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode"]},
             )
             # Apply visibility from stored state
             if block_name:

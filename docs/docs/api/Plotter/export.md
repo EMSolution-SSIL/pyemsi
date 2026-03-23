@@ -25,7 +25,7 @@ from pyemsi import Plotter
 
 p = Plotter("path/to/output.pvd")
 p.set_active_time_point(-1)
-p.set_scalar("B-Mag (T)", mode="element", cell2point=True)
+p.set_scalar("B-Mag (T)")
 p.export("bmag_plot.png", scale=4)
 ```
 

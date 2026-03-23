@@ -207,6 +207,6 @@ from pyemsi import Plotter
 
 # Visualize the results
 plotter = Plotter(".pyemsi/output.pvd")
-plotter.set_scalar("B-Mag (T)", mode="element", cell2point=True)
+plotter.set_scalar("B-Mag (T)")
 plotter.show()
 ```

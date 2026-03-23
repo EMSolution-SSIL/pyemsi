@@ -25,6 +25,6 @@ The dataset itself is loaded lazily (via the [`mesh`](/docs/api/Plotter/mesh.md)
 from pyemsi import Plotter
 
 Plotter().set_file("mesh.vtm").show()
-Plotter().set_file("output.pvd").set_scalar("B-Mag (T)", mode="element").show()
+Plotter().set_file("output.pvd").set_scalar("B-Mag (T)").show()
 ```
 

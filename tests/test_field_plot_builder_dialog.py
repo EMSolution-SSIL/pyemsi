@@ -122,7 +122,6 @@ def test_field_plot_builder_dialog_script_uses_widget_state_without_creating_plo
     assert "field_plot.set_scalar(" in script
     assert "name='B-Mag (T)'" in script
     assert "mode='element'" in script
-    assert "cell2point=True" in script
     assert "cmap='viridis'" in script
     assert "field_plot.set_vector(" in script
     assert "scale=False" in script

@@ -60,7 +60,7 @@ from pyemsi import Plotter
 p = Plotter("path/to/output.pvd")
 p.set_active_time_point(-1)          # last time step (silent no-op if not time-aware)
 p.plotter.view_xy()                  # any PyVista camera helper
-p.set_scalar("B-Mag (T)", mode="element", cell2point=True)
+p.set_scalar("B-Mag (T)")
 p.set_vector("B-Vec (T)", scale="B-Mag (T)", factor=5e-3, opacity=0.5)
 p.show()
 ```

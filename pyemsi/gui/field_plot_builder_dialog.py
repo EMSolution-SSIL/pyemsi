@@ -106,8 +106,6 @@ class FieldPlotBuilderDialog(QDialog):
         self._scalar_mode_combo.addItem("element", "element")
         self._scalar_mode_combo.addItem("node", "node")
         self._scalar_mode_combo.setCurrentIndex(_combo_index_for_data(self._scalar_mode_combo, defaults["scalar_mode"]))
-        self._scalar_cell2point_checkbox = QCheckBox(self)
-        self._scalar_cell2point_checkbox.setChecked(defaults["scalar_cell2point"])
         self._scalar_cmap_combo = QComboBox(self)
         for choice in CMAP_CHOICES:
             self._scalar_cmap_combo.addItem(choice, choice)
@@ -116,7 +114,6 @@ class FieldPlotBuilderDialog(QDialog):
         scalar_layout = QFormLayout(self._scalar_section)
         scalar_layout.addRow("Name:", self._scalar_name_combo)
         scalar_layout.addRow("Mode:", self._scalar_mode_combo)
-        scalar_layout.addRow("Cell to Point:", self._scalar_cell2point_checkbox)
         scalar_layout.addRow("Colormap:", self._scalar_cmap_combo)
 
         self._contour_enabled_checkbox = QCheckBox("Enable Contour", self)
@@ -249,12 +246,11 @@ class FieldPlotBuilderDialog(QDialog):
             "title": "Field Plot",
             "scalar_enabled": False,
             "scalar_name": SCALAR_NAMES[0],
-            "scalar_mode": "element",
-            "scalar_cell2point": True,
+            "scalar_mode": "node",
             "scalar_cmap": cmap_name_to_choice("viridis"),
             "contour_enabled": False,
             "contour_name": CONTOUR_NAMES[1],
-            "contour_n_contours": 10,
+            "contour_n_contours": 20,
             "contour_color": "red",
             "contour_line_width": 3,
             "vector_enabled": False,
@@ -308,7 +304,6 @@ class FieldPlotBuilderDialog(QDialog):
         return {
             "name": str(self._scalar_name_combo.currentData()),
             "mode": str(self._scalar_mode_combo.currentData()),
-            "cell2point": self._scalar_cell2point_checkbox.isChecked(),
             "cmap": cmap_choice_to_name(str(self._scalar_cmap_combo.currentData())),
         }
 
@@ -352,7 +347,7 @@ class FieldPlotBuilderDialog(QDialog):
             scalar_kwargs = self._scalar_kwargs()
             lines.append(
                 "field_plot.set_scalar("
-                f"name={scalar_kwargs['name']!r}, mode={scalar_kwargs['mode']!r}, cell2point={scalar_kwargs['cell2point']!r}, cmap={scalar_kwargs['cmap']!r}"
+                f"name={scalar_kwargs['name']!r}, mode={scalar_kwargs['mode']!r}, cmap={scalar_kwargs['cmap']!r}"
                 ")"
             )
         if self._contour_enabled_checkbox.isChecked():

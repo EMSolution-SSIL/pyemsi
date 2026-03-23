@@ -227,6 +227,7 @@ class FemapConverter:
 
             # Create a new UnstructuredGrid for this property
             subgrid = unstructured_grid.extract_cells(cell_indices)
+            subgrid = subgrid.cell_data_to_point_data(pass_cell_data=True)
 
             # Set block name
             subgrid_name = str(prop_id)
@@ -457,16 +458,6 @@ class FemapConverter:
     def _process_magnetic_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing magnetic field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["magnetic"])
-        node_1 = data_arrays["BMAG-node-1"]
-        node_2 = data_arrays["BMAG-node-2"]
-        node_3 = data_arrays["BMAG-node-3"]
-        node_vec = np.vstack((node_1, node_2, node_3)).T
-        mesh.point_data["B-Vec (T)"] = node_vec
-        node_4 = data_arrays["BMAG-node-4"]
-        mesh.point_data["B-Mag (T)"] = node_4
-        if "BMAG-node-5" in data_arrays:
-            node_5 = data_arrays["BMAG-node-5"]
-            mesh.point_data["Flux (A/m)"] = node_5
         element_1 = data_arrays["BMAG-elem-1"]
         element_2 = data_arrays["BMAG-elem-2"]
         element_3 = data_arrays["BMAG-elem-3"]
@@ -474,24 +465,14 @@ class FemapConverter:
         mesh.cell_data["B-Vec (T)"] = element_vec
         element_4 = data_arrays["BMAG-elem-4"]
         mesh.cell_data["B-Mag (T)"] = element_4
-        logger.debug(
-            "Added magnetic field data: point_data=%s, cell_data=%s",
-            list(mesh.point_data.keys()),
-            list(mesh.cell_data.keys()),
-        )
+        if "BMAG-node-5" in data_arrays:
+            node_5 = data_arrays["BMAG-node-5"]
+            mesh.point_data["Flux (A/m)"] = node_5
+        logger.debug("Added magnetic field data for step %d", step)
 
     def _process_current_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing current field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["current"])
-        node_1 = data_arrays["CURR-node-1"]
-        node_2 = data_arrays["CURR-node-2"]
-        node_3 = data_arrays["CURR-node-3"]
-        node_vec = np.vstack((node_1, node_2, node_3)).T
-        mesh.point_data["J-Vec (A/m^2)"] = node_vec
-        node_4 = data_arrays["CURR-node-4"]
-        mesh.point_data["J-Mag (A/m^2)"] = node_4
-        node_5 = data_arrays["CURR-node-5"]
-        mesh.point_data["Loss (W/m^3)"] = node_5
         element_1 = data_arrays["CURR-elem-1"]
         element_2 = data_arrays["CURR-elem-2"]
         element_3 = data_arrays["CURR-elem-3"]
@@ -544,10 +525,6 @@ class FemapConverter:
     def _process_heat_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing heat field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["heat"])
-        node_1 = data_arrays["HEAT-node-1"]
-        mesh.point_data["Heat Density (W/m^3)"] = node_1
-        node_2 = data_arrays["HEAT-node-2"]
-        mesh.point_data["Heat (W)"] = node_2
         element_1 = data_arrays["HEAT-elem-1"]
         mesh.cell_data["Heat Density (W/m^3)"] = element_1
         element_2 = data_arrays["HEAT-elem-2"]

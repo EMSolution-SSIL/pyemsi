@@ -22,6 +22,6 @@ If a file was loaded (via `filepath` or [`set_file()`](/docs/api/Plotter/set_fil
 ```python
 from pyemsi import Plotter
 
-Plotter("mesh.vtm").set_scalar("B-Mag (T)", mode="element", cell2point=True).show()
+Plotter("mesh.vtm").set_scalar("B-Mag (T)").show()
 ```
 

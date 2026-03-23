@@ -15,8 +15,7 @@ Configures scalar visualization for the loaded mesh. The scalar field is applied
     - `"F Lorents-Mag (N/m^3)"`
     - `"Heat Density (W/m^3)"`
     - `"Heat (W)"`
-- **`mode`** (`"node" | "element"`, default: `"element"`) — Whether `name` is point data (`"node"`) or cell data (`"element"`).
-- **`cell2point`** (`bool`, default: `True`) — If `mode="element"`, convert cell data to point data before plotting (smoother shading).
+- **`mode`** (`"node" | "element"`, default: `"node"`) — Whether `name` is point data (`"node"`) or cell data (`"element"`).
 - **`**kwargs`** — Forwarded to [`add_mesh()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.add_mesh) for the scalar mesh actor.
 :::
 
@@ -32,6 +31,6 @@ Useful `**kwargs` include `cmap`, `clim`, `show_edges`, `edge_color`, `edge_opac
 from pyemsi import Plotter
 
 Plotter("mesh.vtm").set_scalar("Flux (A/m)", mode="node", show_scalar_bar=False).show()
-Plotter("mesh.vtm").set_scalar("B-Mag (T)", mode="element", cell2point=True).show()
+Plotter("mesh.vtm").set_scalar("B-Mag (T)").show()
 ```
 
