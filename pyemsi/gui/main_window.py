@@ -11,9 +11,9 @@ import json
 import os
 import tempfile
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence
-from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QToolBar, QToolButton
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi.gui.emsolution_output_plot_builder_dialog import EMSolutionOutputPlotBuilderDialog
@@ -48,7 +48,9 @@ class PyEmsiMainWindow(QMainWindow):
         self.setCentralWidget(self._container)
 
         self.menuBar().setStyleSheet("QMenuBar { padding: 0px; } QMenuBar::item { padding: 2px 8px; }")
+        self._setup_file_actions()
         self._setup_menu_bar()
+        self._setup_file_toolbar()
         self._setup_edit_menu()
         self._setup_explorer()
 
@@ -100,68 +102,43 @@ class PyEmsiMainWindow(QMainWindow):
         """Return whether the window should start maximized."""
         return self._show_maximized_on_launch
 
-    def _setup_menu_bar(self) -> None:
-        """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
-        self._file_menu = self.menuBar().addMenu("&File")
-        open_action = QAction("Open &Folder...", self)
-        open_action.setShortcut(QKeySequence("Ctrl+O"))
-        open_action.setIcon(QIcon(":/icons/FolderOpen.svg"))
-        open_action.triggered.connect(self._open_folder)
-        self._file_menu.addAction(open_action)
+    def _setup_file_actions(self) -> None:
+        """Create reusable File-menu actions and submenus."""
+        self._open_folder_action = QAction(QIcon(":/icons/FolderOpen.svg"), "Open &Folder...", self)
+        self._open_folder_action.setShortcut(QKeySequence("Ctrl+O"))
+        self._open_folder_action.triggered.connect(self._open_folder)
 
-        self._recent_menu = self._file_menu.addMenu("Open &Recent")
-        self._recent_menu.setIcon(QIcon(":/icons/FolderOpen.svg"))
-        self._refresh_recent_folders_menu()
+        self._recent_menu = QMenu("Open &Recent", self)
+        self._recent_menu.setIcon(QIcon(":/icons/History.svg"))
 
-        self._file_menu.addSeparator()
-
-        self._open_femap_converter_action = QAction("Convert &FEMAP", self)
-        self._open_femap_converter_action.setIcon(QIcon(":/icons/VTK.svg"))
+        self._open_femap_converter_action = QAction(QIcon(":/icons/VTK.svg"), "Convert &FEMAP", self)
         self._open_femap_converter_action.triggered.connect(self._open_femap_converter_dialog)
-        self._file_menu.addAction(self._open_femap_converter_action)
 
-        self._open_field_plot_action = QAction("&Field Plot", self)
-        self._open_field_plot_action.setIcon(QIcon(":/icons/Field.svg"))
+        self._open_field_plot_action = QAction(QIcon(":/icons/Field.svg"), "&Field Plot", self)
         self._open_field_plot_action.triggered.connect(self._open_field_plot_dialog)
-        self._file_menu.addAction(self._open_field_plot_action)
 
-        self._open_emsolution_output_plot_action = QAction("&Output Plot", self)
-        self._open_emsolution_output_plot_action.setIcon(QIcon(":/icons/Graph.svg"))
+        self._open_emsolution_output_plot_action = QAction(QIcon(":/icons/Graph.svg"), "&Output Plot", self)
         self._open_emsolution_output_plot_action.triggered.connect(self._open_emsolution_output_plot_dialog)
-        self._file_menu.addAction(self._open_emsolution_output_plot_action)
 
-        self._file_menu.addSeparator()
+        self._save_action = QAction(QIcon(":/icons/Save.svg"), "&Save", self)
+        self._save_action.setShortcut(QKeySequence("Ctrl+S"))
+        self._save_action.triggered.connect(self._save_active_tab)
 
-        save_action = QAction("&Save", self)
-        save_action.setShortcut(QKeySequence("Ctrl+S"))
-        save_action.setIcon(QIcon(":/icons/Save.svg"))
-        save_action.triggered.connect(self._save_active_tab)
-        self._file_menu.addAction(save_action)
+        self._save_all_action = QAction(QIcon(":/icons/SaveAll.svg"), "Save A&ll", self)
+        self._save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        self._save_all_action.triggered.connect(self._save_all_tabs)
 
-        save_all_action = QAction("Save A&ll", self)
-        save_all_action.setShortcut(QKeySequence("Ctrl+Shift+S"))
-        save_all_action.setIcon(QIcon(":/icons/SaveAll.svg"))
-        save_all_action.triggered.connect(self._save_all_tabs)
-        self._file_menu.addAction(save_all_action)
+        self._close_tab_action = QAction("Close &Tab", self)
+        self._close_tab_action.setShortcut(QKeySequence("Ctrl+W"))
+        self._close_tab_action.triggered.connect(self._container.close_current_tab)
 
-        self._file_menu.addSeparator()
+        self._close_all_action = QAction("Close &All Tabs", self)
+        self._close_all_action.triggered.connect(self._container.close_all_tabs)
 
-        close_tab_action = QAction("Close &Tab", self)
-        close_tab_action.setShortcut(QKeySequence("Ctrl+W"))
-        close_tab_action.triggered.connect(self._container.close_current_tab)
-        self._file_menu.addAction(close_tab_action)
+        self._close_workspace_action = QAction("Close &Workspace", self)
+        self._close_workspace_action.triggered.connect(lambda: self.close_workspace(restart_kernel=True))
 
-        close_all_action = QAction("Close &All Tabs", self)
-        close_all_action.triggered.connect(self._container.close_all_tabs)
-        self._file_menu.addAction(close_all_action)
-
-        close_workspace_action = QAction("Close &Workspace", self)
-        close_workspace_action.triggered.connect(lambda: self.close_workspace(restart_kernel=True))
-        self._file_menu.addAction(close_workspace_action)
-
-        self._file_menu.addSeparator()
-
-        self._settings_menu = self._file_menu.addMenu("&Settings")
+        self._settings_menu = QMenu("&Settings", self)
         self._settings_menu.setIcon(QIcon(":/icons/Settings.svg"))
 
         self._open_global_settings_action = QAction("Open &Global Settings", self)
@@ -172,14 +149,91 @@ class PyEmsiMainWindow(QMainWindow):
         self._open_workspace_settings_action.triggered.connect(self._open_workspace_settings)
         self._settings_menu.addAction(self._open_workspace_settings_action)
 
+        self._exit_action = QAction("E&xit", self)
+        self._exit_action.setShortcut(QKeySequence("Alt+F4"))
+        self._exit_action.triggered.connect(self.close)
+
+    def _setup_menu_bar(self) -> None:
+        """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
+        self._file_menu = self.menuBar().addMenu("&File")
+        self._file_menu.addAction(self._open_folder_action)
+
+        self._file_menu.addMenu(self._recent_menu)
+        self._refresh_recent_folders_menu()
+
+        self._file_menu.addSeparator()
+
+        self._file_menu.addAction(self._open_femap_converter_action)
+
+        self._file_menu.addAction(self._open_field_plot_action)
+
+        self._file_menu.addAction(self._open_emsolution_output_plot_action)
+
+        self._file_menu.addSeparator()
+
+        self._file_menu.addAction(self._save_action)
+
+        self._file_menu.addAction(self._save_all_action)
+
+        self._file_menu.addSeparator()
+
+        self._file_menu.addAction(self._close_tab_action)
+
+        self._file_menu.addAction(self._close_all_action)
+
+        self._file_menu.addAction(self._close_workspace_action)
+
+        self._file_menu.addSeparator()
+
+        self._file_menu.addMenu(self._settings_menu)
+
         self._update_settings_actions()
 
         self._file_menu.addSeparator()
 
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut(QKeySequence("Alt+F4"))
-        exit_action.triggered.connect(self.close)
-        self._file_menu.addAction(exit_action)
+        self._file_menu.addAction(self._exit_action)
+
+    def _setup_file_toolbar(self) -> None:
+        """Add an always-visible toolbar for workspace file actions."""
+        self._file_toolbar = QToolBar("File Actions", self)
+        self._file_toolbar.setObjectName("file_toolbar")
+        self._file_toolbar.setMovable(False)
+        self._file_toolbar.setFloatable(False)
+        self._file_toolbar.setIconSize(QSize(16, 16))
+        self._file_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+
+        self._file_toolbar.addAction(self._open_folder_action)
+        self._open_recent_tool_button = self._create_toolbar_menu_button(
+            self._recent_menu,
+            "Open recent folders",
+            "open_recent_tool_button",
+        )
+        self._file_toolbar.addWidget(self._open_recent_tool_button)
+        self._file_toolbar.addSeparator()
+        self._file_toolbar.addAction(self._open_femap_converter_action)
+        self._file_toolbar.addAction(self._open_field_plot_action)
+        self._file_toolbar.addAction(self._open_emsolution_output_plot_action)
+        self._file_toolbar.addSeparator()
+        self._settings_tool_button = self._create_toolbar_menu_button(
+            self._settings_menu,
+            "Open settings menu",
+            "settings_tool_button",
+        )
+        self._file_toolbar.addWidget(self._settings_tool_button)
+
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._file_toolbar)
+
+    def _create_toolbar_menu_button(self, menu: QMenu, tooltip: str, object_name: str) -> QToolButton:
+        """Create a toolbar button that opens *menu* as a dropdown."""
+        button = QToolButton(self)
+        button.setObjectName(object_name)
+        button.setAutoRaise(True)
+        button.setIcon(menu.icon())
+        button.setText(menu.title().replace("&", ""))
+        button.setToolTip(tooltip)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        button.setMenu(menu)
+        return button
 
     def _refresh_recent_folders_menu(self) -> None:
         """Rebuild the Open Recent submenu from global settings."""

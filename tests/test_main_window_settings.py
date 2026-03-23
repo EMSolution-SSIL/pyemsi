@@ -2,7 +2,7 @@ import json
 import os
 
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QToolButton, QWidget
 
 from pyemsi.gui import main_window as main_window_module
 from pyemsi.gui.femap_converter_dialog import FemapConverterDialogConfig
@@ -327,14 +327,78 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         assert file_actions[0].text() == "Open &Folder..."
         assert file_actions[1].text() == "Open &Recent"
         assert file_actions[2].isSeparator()
-        assert "Convert &FEMAP..." in action_texts
-        assert "Build &Field Plot..." in action_texts
-        assert "Build &EMSolution Output Plot" in action_texts
+        assert "Convert &FEMAP" in action_texts
+        assert "&Field Plot" in action_texts
+        assert "&Output Plot" in action_texts
         assert "&Settings" in action_texts
         assert "&Save" in action_texts
-        assert action_texts.index("Convert &FEMAP...") < action_texts.index("&Save")
-        assert action_texts.index("Build &Field Plot...") < action_texts.index("&Save")
-        assert action_texts.index("Build &EMSolution Output Plot") < action_texts.index("&Save")
+        assert action_texts.index("Convert &FEMAP") < action_texts.index("&Save")
+        assert action_texts.index("&Field Plot") < action_texts.index("&Save")
+        assert action_texts.index("&Output Plot") < action_texts.index("&Save")
+    finally:
+        window.close()
+
+
+def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        toolbar = window._file_toolbar
+        action_order = []
+
+        assert toolbar.objectName() == "file_toolbar"
+        assert window.toolBarArea(toolbar) == main_window_module.Qt.ToolBarArea.TopToolBarArea
+        assert toolbar.toolButtonStyle() == main_window_module.Qt.ToolButtonStyle.ToolButtonIconOnly
+
+        for action in toolbar.actions():
+            if action.isSeparator():
+                action_order.append("separator")
+                continue
+
+            widget = toolbar.widgetForAction(action)
+            if widget is window._open_recent_tool_button:
+                action_order.append("open_recent")
+                continue
+            if widget is window._settings_tool_button:
+                action_order.append("settings")
+                continue
+
+            if action is window._open_folder_action:
+                action_order.append("open_folder")
+            elif action is window._open_femap_converter_action:
+                action_order.append("convert_femap")
+            elif action is window._open_field_plot_action:
+                action_order.append("field_plot")
+            elif action is window._open_emsolution_output_plot_action:
+                action_order.append("output_plot")
+
+        assert action_order == [
+            "open_folder",
+            "open_recent",
+            "separator",
+            "convert_femap",
+            "field_plot",
+            "output_plot",
+            "separator",
+            "settings",
+        ]
+        assert window._open_recent_tool_button.objectName() == "open_recent_tool_button"
+        assert window._open_recent_tool_button.menu() is window._recent_menu
+        assert window._open_recent_tool_button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+        assert window._settings_tool_button.objectName() == "settings_tool_button"
+        assert window._settings_tool_button.menu() is window._settings_menu
+        assert window._settings_tool_button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
     finally:
         window.close()
 
