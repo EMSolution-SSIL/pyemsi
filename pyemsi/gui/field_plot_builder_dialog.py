@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import math
 import os
 
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QLocale
+from PySide6.QtGui import QDoubleValidator, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -63,11 +65,28 @@ VECTOR_SCALE_OPTIONS: tuple[tuple[str, str | bool | None], ...] = (
 
 GLYPH_TYPE_OPTIONS: tuple[str, ...] = ("arrow", "cone", "sphere")
 COLOR_MODE_OPTIONS: tuple[str, ...] = ("scale", "scalar", "vector")
+INTERNAL_FIELD_NAMES: frozenset[str] = frozenset({"vtkOriginalCellIds", "vtkOriginalPointIds"})
 
 
 def _combo_index_for_data(combo: QComboBox, data) -> int:
     index = combo.findData(data)
     return max(index, 0)
+
+
+def _format_float_text(value: float) -> str:
+    return format(value, ".15g")
+
+
+def _unique_names(names: list[str]) -> list[str]:
+    return list(dict.fromkeys(name for name in names if name))
+
+
+def _vector_scale_options_from_names(names: list[str]) -> list[tuple[str, str | bool | None]]:
+    return [
+        ("Auto", None),
+        ("Uniform", False),
+        *[(name, name) for name in names],
+    ]
 
 
 class FieldPlotBuilderDialog(QDialog):
@@ -99,9 +118,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._scalar_enabled_checkbox = QCheckBox("Enable Scalar", self)
         self._scalar_enabled_checkbox.setChecked(defaults["scalar_enabled"])
         self._scalar_name_combo = QComboBox(self)
-        for name in SCALAR_NAMES:
-            self._scalar_name_combo.addItem(name, name)
-        self._scalar_name_combo.setCurrentIndex(_combo_index_for_data(self._scalar_name_combo, defaults["scalar_name"]))
+        self._populate_named_combo(self._scalar_name_combo, list(SCALAR_NAMES), defaults["scalar_name"])
         self._scalar_mode_combo = QComboBox(self)
         self._scalar_mode_combo.addItem("element", "element")
         self._scalar_mode_combo.addItem("node", "node")
@@ -119,11 +136,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._contour_enabled_checkbox = QCheckBox("Enable Contour", self)
         self._contour_enabled_checkbox.setChecked(defaults["contour_enabled"])
         self._contour_name_combo = QComboBox(self)
-        for name in CONTOUR_NAMES:
-            self._contour_name_combo.addItem(name, name)
-        self._contour_name_combo.setCurrentIndex(
-            _combo_index_for_data(self._contour_name_combo, defaults["contour_name"])
-        )
+        self._populate_named_combo(self._contour_name_combo, list(CONTOUR_NAMES), defaults["contour_name"])
         self._contour_n_contours_spin = QSpinBox(self)
         self._contour_n_contours_spin.setRange(1, 999)
         self._contour_n_contours_spin.setValue(defaults["contour_n_contours"])
@@ -141,25 +154,24 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_enabled_checkbox = QCheckBox("Enable Vector", self)
         self._vector_enabled_checkbox.setChecked(defaults["vector_enabled"])
         self._vector_name_combo = QComboBox(self)
-        for name in VECTOR_NAMES:
-            self._vector_name_combo.addItem(name, name)
-        self._vector_name_combo.setCurrentIndex(_combo_index_for_data(self._vector_name_combo, defaults["vector_name"]))
+        self._populate_named_combo(self._vector_name_combo, list(VECTOR_NAMES), defaults["vector_name"])
         self._vector_scale_combo = QComboBox(self)
-        for label, data in VECTOR_SCALE_OPTIONS:
-            self._vector_scale_combo.addItem(label, data)
-        self._vector_scale_combo.setCurrentIndex(
-            _combo_index_for_data(self._vector_scale_combo, defaults["vector_scale"])
-        )
+        self._populate_scale_combo(list(VECTOR_SCALE_OPTIONS), defaults["vector_scale"])
         self._vector_glyph_type_combo = QComboBox(self)
         for glyph_type in GLYPH_TYPE_OPTIONS:
             self._vector_glyph_type_combo.addItem(glyph_type, glyph_type)
         self._vector_glyph_type_combo.setCurrentIndex(
             _combo_index_for_data(self._vector_glyph_type_combo, defaults["vector_glyph_type"])
         )
-        self._vector_factor_spin = QDoubleSpinBox(self)
-        self._vector_factor_spin.setRange(0.001, 1_000_000.0)
-        self._vector_factor_spin.setDecimals(6)
-        self._vector_factor_spin.setValue(defaults["vector_factor"])
+        vector_factor_validator = QDoubleValidator(self)
+        vector_factor_validator.setNotation(QDoubleValidator.Notation.ScientificNotation)
+        vector_factor_validator.setBottom(0.0)
+        vector_factor_validator.setTop(1e300)
+        vector_factor_validator.setDecimals(1000)
+        vector_factor_validator.setLocale(QLocale.c())
+        self._vector_factor_edit = QLineEdit(_format_float_text(float(defaults["vector_factor"])), self)
+        self._vector_factor_edit.setValidator(vector_factor_validator)
+        self._vector_factor_edit.setPlaceholderText("1.0")
         self._vector_use_tolerance_checkbox = QCheckBox(self)
         self._vector_use_tolerance_checkbox.setChecked(defaults["vector_tolerance"] is not None)
         self._vector_tolerance_spin = QDoubleSpinBox(self)
@@ -185,7 +197,7 @@ class FieldPlotBuilderDialog(QDialog):
         vector_layout.addRow("Name:", self._vector_name_combo)
         vector_layout.addRow("Scale:", self._vector_scale_combo)
         vector_layout.addRow("Glyph Type:", self._vector_glyph_type_combo)
-        vector_layout.addRow("Factor:", self._vector_factor_spin)
+        vector_layout.addRow("Factor:", self._vector_factor_edit)
         vector_layout.addRow("Tolerance:", tolerance_widget)
         vector_layout.addRow("Color Mode:", self._vector_color_mode_combo)
 
@@ -194,7 +206,7 @@ class FieldPlotBuilderDialog(QDialog):
         file_layout.addRow("Title:", self._title_edit)
 
         helper_label = QLabel(
-            "Array choices are based on the documented Plotter API and are not inspected from the selected file.",
+            "Click Analyse to inspect the selected file and refresh the available arrays. Until then, documented Plotter defaults are shown.",
             self,
         )
         helper_label.setWordWrap(True)
@@ -213,10 +225,12 @@ class FieldPlotBuilderDialog(QDialog):
         button_row = QHBoxLayout()
         self._script_button = QPushButton("Script...", self)
         self._script_button.setIcon(QIcon(":/icons/Code.svg"))
+        self._analyse_button = QPushButton("Analyse", self)
         self._plot_button = QPushButton("Plot", self)
         self._plot_button.setIcon(QIcon(":/icons/Graph.svg"))
         self._cancel_button = QPushButton("Cancel", self)
         button_row.addWidget(self._script_button)
+        button_row.addWidget(self._analyse_button)
         button_row.addStretch()
         button_row.addWidget(self._plot_button)
         button_row.addWidget(self._cancel_button)
@@ -227,6 +241,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_enabled_checkbox.toggled.connect(self._vector_section.setEnabled)
         self._vector_use_tolerance_checkbox.toggled.connect(self._vector_tolerance_spin.setEnabled)
         self._script_button.clicked.connect(self._open_script_dialog)
+        self._analyse_button.clicked.connect(self._on_analyse)
         self._plot_button.clicked.connect(self._on_plot)
         self._cancel_button.clicked.connect(self.reject)
         self._plot_button.setDefault(True)
@@ -282,6 +297,109 @@ class FieldPlotBuilderDialog(QDialog):
     def _current_title(self) -> str:
         return self._title_edit.text().strip() or "Field Plot"
 
+    def _populate_named_combo(self, combo: QComboBox, names: list[str], current_data: object) -> None:
+        combo.clear()
+        for name in names:
+            combo.addItem(name, name)
+        combo.setCurrentIndex(_combo_index_for_data(combo, current_data))
+
+    def _populate_scale_combo(
+        self,
+        options: list[tuple[str, str | bool | None]],
+        current_data: object,
+    ) -> None:
+        self._vector_scale_combo.clear()
+        for label, data in options:
+            self._vector_scale_combo.addItem(label, data)
+        self._vector_scale_combo.setCurrentIndex(_combo_index_for_data(self._vector_scale_combo, current_data))
+
+    def _iter_mesh_blocks(self, mesh: object):
+        get_block_name = getattr(mesh, "get_block_name", None)
+        if callable(get_block_name):
+            for idx, block in enumerate(mesh):
+                if block is None:
+                    continue
+                block_name = get_block_name(idx)
+                yield block, block_name if block_name else str(idx)
+            return
+        yield mesh, None
+
+    def _array_component_count(self, array: object) -> int | None:
+        ndim = getattr(array, "ndim", None)
+        shape = getattr(array, "shape", None)
+        if ndim is None or shape is None:
+            return None
+        if ndim == 1:
+            return 1
+        if ndim >= 2 and len(shape) >= 2:
+            try:
+                return int(shape[1])
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    def _classify_attribute_names(self, attributes: object) -> tuple[list[str], list[str]]:
+        scalar_names: list[str] = []
+        vector_names: list[str] = []
+        for name in getattr(attributes, "keys", lambda: [])():
+            if str(name) in INTERNAL_FIELD_NAMES:
+                continue
+            component_count = self._array_component_count(attributes[name])
+            if component_count == 1:
+                scalar_names.append(str(name))
+            elif component_count == 3:
+                vector_names.append(str(name))
+        return scalar_names, vector_names
+
+    def _discover_plot_arrays(self) -> tuple[list[str], list[str], list[str]]:
+        filepath = self._file_field.value()
+        assert filepath is not None
+        plotter = None
+        try:
+            plotter = Plotter(filepath)
+            scalar_names: list[str] = []
+            vector_names: list[str] = []
+            for block, _block_name in self._iter_mesh_blocks(plotter.mesh):
+                point_scalar_names, point_vector_names = self._classify_attribute_names(block.point_data)
+                cell_scalar_names, cell_vector_names = self._classify_attribute_names(block.cell_data)
+                scalar_names.extend(point_scalar_names)
+                scalar_names.extend(cell_scalar_names)
+                vector_names.extend(point_vector_names)
+                vector_names.extend(cell_vector_names)
+            scalar_names = _unique_names(scalar_names)
+            vector_names = _unique_names(vector_names)
+            scale_names = _unique_names([*scalar_names, *vector_names])
+            return scalar_names, vector_names, scale_names
+        finally:
+            if plotter is not None:
+                plotter.close()
+
+    def _apply_discovered_plot_arrays(
+        self,
+        scalar_names: list[str],
+        vector_names: list[str],
+        scale_names: list[str],
+    ) -> None:
+        self._populate_named_combo(
+            self._scalar_name_combo,
+            scalar_names or list(SCALAR_NAMES),
+            self._scalar_name_combo.currentData(),
+        )
+        self._populate_named_combo(
+            self._contour_name_combo,
+            scalar_names or list(CONTOUR_NAMES),
+            self._contour_name_combo.currentData(),
+        )
+        self._populate_named_combo(
+            self._vector_name_combo,
+            vector_names or list(VECTOR_NAMES),
+            self._vector_name_combo.currentData(),
+        )
+        self._populate_scale_combo(
+            _vector_scale_options_from_names(scale_names or list(VECTOR_NAMES)),
+            self._vector_scale_combo.currentData(),
+        )
+
     def _has_enabled_stage(self) -> bool:
         return any(
             checkbox.isChecked()
@@ -298,6 +416,17 @@ class FieldPlotBuilderDialog(QDialog):
             return "Field file is required."
         if not self._has_enabled_stage():
             return "Select at least one plotting stage."
+        if self._vector_enabled_checkbox.isChecked():
+            try:
+                self._vector_factor()
+            except ValueError as exc:
+                return str(exc)
+        return None
+
+    def _validate_for_analysis(self) -> str | None:
+        filepath = self._file_field.value()
+        if not filepath:
+            return "Field file is required."
         return None
 
     def _scalar_kwargs(self) -> dict[str, object]:
@@ -320,12 +449,26 @@ class FieldPlotBuilderDialog(QDialog):
             return None
         return float(self._vector_tolerance_spin.value())
 
+    def _vector_factor(self) -> float:
+        text = self._vector_factor_edit.text().strip()
+        if not text:
+            raise ValueError("Vector factor is required.")
+        try:
+            value = float(text)
+        except ValueError as exc:
+            raise ValueError("Vector factor must be a valid number.") from exc
+        if not math.isfinite(value):
+            raise ValueError("Vector factor must be finite.")
+        if value <= 0.0:
+            raise ValueError("Vector factor must be greater than 0.")
+        return value
+
     def _vector_kwargs(self) -> dict[str, object]:
         return {
             "name": str(self._vector_name_combo.currentData()),
             "scale": self._vector_scale_combo.currentData(),
             "glyph_type": str(self._vector_glyph_type_combo.currentData()),
-            "factor": float(self._vector_factor_spin.value()),
+            "factor": self._vector_factor(),
             "tolerance": self._vector_tolerance(),
             "color_mode": str(self._vector_color_mode_combo.currentData()),
         }
@@ -370,6 +513,19 @@ class FieldPlotBuilderDialog(QDialog):
     def _open_script_dialog(self) -> None:
         dialog = GeneratedScriptDialog(self._generate_script_text(), parent=self)
         dialog.exec()
+
+    def _on_analyse(self) -> None:
+        error_message = self._validate_for_analysis()
+        if error_message is not None:
+            QMessageBox.warning(self, "Invalid Field Plot", error_message)
+            return
+
+        try:
+            scalar_names, vector_names, scale_names = self._discover_plot_arrays()
+            self._apply_discovered_plot_arrays(scalar_names, vector_names, scale_names)
+        except Exception as exc:
+            QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
+            return
 
     def _on_plot(self) -> None:
         error_message = self._validate_for_plot()
