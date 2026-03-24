@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QLabel, QMessageBox, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QMessageBox, QToolBar, QVBoxLayout, QWidget
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi.gui.emsolution_output_plot_builder_dialog import EMSolutionOutputPlotBuilderDialog

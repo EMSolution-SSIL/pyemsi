@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from matplotlib.artist import Artist
-from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QComboBox, QLabel, QVBoxLayout, QWidget
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -44,6 +43,7 @@ class MatplotlibViewer(QWidget):
         self._indicator_mode = self.INDICATOR_MODE_VERTICAL_LINE
         self._indicator_index: int | None = None
         self._indicator_artists: list[Artist] = []
+        self._legend_label_backup: dict = {}
         self._indicator_mode_label = QLabel("Indicator:", self)
         self._indicator_mode_combo = QComboBox(self)
         self._indicator_index_label = QLabel("Index:", self)
@@ -66,7 +66,7 @@ class MatplotlibViewer(QWidget):
         self._indicator_mode_combo.addItem("Vertical line", self.INDICATOR_MODE_VERTICAL_LINE)
         self._indicator_mode_combo.addItem("Markers", self.INDICATOR_MODE_MARKERS)
         self._indicator_mode_combo.addItem("Line + markers", self.INDICATOR_MODE_LINE_AND_MARKERS)
-        self._indicator_mode_combo.setCurrentIndex(1)
+        self._indicator_mode_combo.setCurrentIndex(0)
         self._indicator_mode_combo.currentIndexChanged.connect(self._on_indicator_mode_changed)
         self._toolbar.addSeparator()
         self._toolbar.addWidget(self._indicator_mode_label)
@@ -87,7 +87,15 @@ class MatplotlibViewer(QWidget):
             return
         self._figure.set_tight_layout(True)
 
+    def _restore_legend_labels(self) -> None:
+        for axis, (loc, line_labels) in self._legend_label_backup.items():
+            for line, original_label in line_labels:
+                line.set_label(original_label)
+            axis.legend(loc=loc)
+        self._legend_label_backup.clear()
+
     def _clear_indicator_artists(self) -> None:
+        self._restore_legend_labels()
         for artist in self._indicator_artists:
             try:
                 artist.remove()
@@ -173,6 +181,14 @@ class MatplotlibViewer(QWidget):
                 self.INDICATOR_MODE_MARKERS,
                 self.INDICATOR_MODE_LINE_AND_MARKERS,
             ):
+                if axis.get_legend() is not None:
+                    loc = axis.get_legend()._loc
+                    line_labels = [(line, line.get_label()) for line in lines]
+                    self._legend_label_backup[axis] = (loc, line_labels)
+                    for line in lines:
+                        y_value = line.get_ydata()[self._indicator_index]
+                        line.set_label(f"{line.get_label()} ({y_value:g})")
+                    axis.legend(loc=loc)
                 for line in lines:
                     marker_line = axis.plot(
                         [line.get_xdata()[self._indicator_index]],
@@ -182,10 +198,10 @@ class MatplotlibViewer(QWidget):
                         color=line.get_color(),
                         markersize=6,
                         zorder=11,
+                        label="_nolegend_",
                     )[0]
                     self._indicator_artists.append(marker_line)
 
-    @Slot(int)
     def set_indicator_index(self, index: int) -> None:
         """Update the selected sample index for the indicator."""
         if index < 0:
