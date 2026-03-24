@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+import shutil
 from typing import Any
 
 from matplotlib import style as mpl_style
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -33,6 +35,7 @@ from PySide6.QtWidgets import (
 from matplotlib.figure import Figure
 
 import pyemsi.resources.resources  # noqa: F401
+import scienceplots  # noqa: F401
 from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput, PlotAxisOption, PlotSeriesDescriptor
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
@@ -55,7 +58,7 @@ class PlotDialogSettings:
     share_x: bool = True
     x_label: str = ""
     y_label: str = ""
-    style_preset: str = ""
+    style_preset: str | list[str] = ""
     legend_mode: str = "upper right"
     grid_mode: str = "both"
     x_log_scale: bool = False
@@ -68,7 +71,7 @@ class PlotSubplotState:
     y_label: str = ""
 
 
-PLOT_STYLE_PRESETS: tuple[tuple[str, str], ...] = (
+PLOT_STYLE_PRESETS: tuple[tuple[str, str | list[str]], ...] = (
     ("Default", ""),
     ("Solarize_Light2", "Solarize_Light2"),
     ("bmh", "bmh"),
@@ -96,6 +99,30 @@ PLOT_STYLE_PRESETS: tuple[tuple[str, str], ...] = (
     ("seaborn-v0_8-white", "seaborn-v0_8-white"),
     ("seaborn-v0_8-whitegrid", "seaborn-v0_8-whitegrid"),
     ("tableau-colorblind10", "tableau-colorblind10"),
+    # SciencePlots - Basic
+    ("Science (no-latex)", ["science", "no-latex"]),
+    ("Science (LaTeX)", ["science"]),
+    ("Science + Grid (no-latex)", ["science", "no-latex", "grid"]),
+    ("Science + Grid (LaTeX)", ["science", "grid"]),
+    ("Science + Scatter (no-latex)", ["science", "no-latex", "scatter"]),
+    ("Science + Notebook (no-latex)", ["science", "no-latex", "notebook"]),
+    # SciencePlots - Journals
+    ("Science + IEEE (no-latex)", ["science", "no-latex", "ieee"]),
+    ("Science + IEEE (LaTeX)", ["science", "ieee"]),
+    ("Science + Nature (no-latex)", ["science", "no-latex", "nature"]),
+    ("Science + Nature (LaTeX)", ["science", "nature"]),
+    # SciencePlots - Color cycles
+    ("Science + Bright (no-latex)", ["science", "no-latex", "bright"]),
+    ("Science + Vibrant (no-latex)", ["science", "no-latex", "vibrant"]),
+    ("Science + Muted (no-latex)", ["science", "no-latex", "muted"]),
+    ("Science + High-Contrast (no-latex)", ["science", "no-latex", "high-contrast"]),
+    ("Science + Light (no-latex)", ["science", "no-latex", "light"]),
+    ("Science + High-Vis (no-latex)", ["science", "no-latex", "high-vis"]),
+    ("Science + Retro (no-latex)", ["science", "no-latex", "retro"]),
+    ("Science + Std-Colors (no-latex)", ["science", "no-latex", "std-colors"]),
+) + tuple(
+    (f"Science + Discrete Rainbow {n} (no-latex)", ["science", "no-latex", f"discrete-rainbow-{n}"])
+    for n in range(1, 24)
 )
 
 LEGEND_MODE_PRESETS: tuple[tuple[str, str], ...] = (
@@ -117,7 +144,7 @@ GRID_MODE_PRESETS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _matplotlib_style_context(style_preset: str):
+def _matplotlib_style_context(style_preset: str | list[str]):
     if not style_preset:
         return nullcontext()
     return mpl_style.context(style_preset)
@@ -125,6 +152,22 @@ def _matplotlib_style_context(style_preset: str):
 
 def _indent_lines(lines: list[str], prefix: str) -> list[str]:
     return [f"{prefix}{line}" if line else "" for line in lines]
+
+
+_LATEX_AVAILABLE: bool | None = None
+
+
+def _check_latex_available() -> bool:
+    global _LATEX_AVAILABLE
+    if _LATEX_AVAILABLE is None:
+        _LATEX_AVAILABLE = shutil.which("latex") is not None
+    return _LATEX_AVAILABLE
+
+
+def _style_preset_requires_latex(preset: str | list[str]) -> bool:
+    if isinstance(preset, list):
+        return "no-latex" not in preset
+    return False
 
 
 class GeneratedScriptDialog(QDialog):
@@ -317,7 +360,7 @@ class PlotSettingsDialog(QDialog):
             share_x=self._share_x_checkbox.isChecked(),
             x_label=self._x_label_edit.text().strip(),
             y_label=self._y_label_edit.text().strip(),
-            style_preset=str(self._style_preset_combo.currentData()),
+            style_preset=self._style_preset_combo.currentData() or "",
             legend_mode=str(self._legend_mode_combo.currentData()),
             grid_mode=str(self._grid_mode_combo.currentData()),
             x_log_scale=self._x_log_scale_checkbox.isChecked(),
@@ -481,6 +524,7 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
         self._warning_label = QLabel(self)
         self._warning_label.setWordWrap(True)
         self._warning_label.setStyleSheet("color: #a94442;")
+        self._warning_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._warning_label.hide()
 
         self._preview = MatplotlibViewer(parent=self)
@@ -883,6 +927,8 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
         ]
         if self._plot_settings.style_preset:
             imports.insert(1, "from matplotlib import style as mpl_style")
+        if isinstance(self._plot_settings.style_preset, list):
+            imports.insert(1, "import scienceplots")
 
         lines = [
             *imports,
@@ -1171,10 +1217,35 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
         self._set_warning_message(self._log_scale_warning_message(warning_invalid_y_series, invalid_x))
 
     def _redraw_plot(self) -> None:
+        if _style_preset_requires_latex(self._plot_settings.style_preset) and not _check_latex_available():
+            self._preview.figure.clear()
+            ax = self._preview.figure.add_subplot(111)
+            ax.text(
+                0.5,
+                0.5,
+                "This style requires LaTeX, which is not installed.\n"
+                "Please choose a '(no-latex)' variant from Plot Settings.",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
+            self._preview.draw()
+            self._set_warning_message(
+                "The selected style requires LaTeX, but LaTeX could not be found. "
+                "Choose a '(no-latex)' variant or install a LaTeX distribution (e.g. MiKTeX)."
+            )
+            return
         self._draw_onto(self._preview.figure)
         self._preview.draw()
 
     def _on_plot(self) -> None:
+        if _style_preset_requires_latex(self._plot_settings.style_preset) and not _check_latex_available():
+            self._set_warning_message(
+                "The selected style requires LaTeX, but LaTeX could not be found. "
+                "Choose a '(no-latex)' variant or install a LaTeX distribution (e.g. MiKTeX)."
+            )
+            return
+
         import pyemsi.gui as gui
 
         figure = Figure()

@@ -7,3 +7,4 @@ markdown>=3.4.0
 qtconsole
 python-lsp-server[websockets]
 basedpyright>=1.31.4
+scienceplots

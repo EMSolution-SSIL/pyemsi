@@ -32,6 +32,7 @@ dependencies = [
     "markdown>=3.4.0",
     "python-lsp-server[websockets]",
     "basedpyright>=1.31.4",
+    "scienceplots",
 ]
 
 [project.optional-dependencies]
