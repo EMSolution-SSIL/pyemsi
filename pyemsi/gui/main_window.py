@@ -425,7 +425,7 @@ class PyEmsiMainWindow(QMainWindow):
             return
 
         try:
-            dialog = EMSolutionOutputPlotBuilderDialog(output_path, parent=self)
+            dialog = EMSolutionOutputPlotBuilderDialog(output_path, settings_manager=self._settings, parent=self)
         except Exception as exc:
             QMessageBox.critical(self, "Invalid EMSolution Output", str(exc))
             return

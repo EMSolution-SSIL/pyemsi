@@ -35,6 +35,18 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "output_dir": ".pyemsi",
             "output_name": "output",
         },
+        "emsolution_plot": {
+            "grid_mode": "both",
+            "legend_mode": "upper right",
+            "share_x": True,
+            "show_title": True,
+            "style_preset": "",
+            "title": "",
+            "x_label": "",
+            "x_log_scale": False,
+            "y_label": "",
+            "y_log_scale": False,
+        },
         "field_plot": {
             "filepath": None,
         },
@@ -107,6 +119,18 @@ def _normalize_recent_folders(value: Any) -> list[str]:
     return normalized
 
 
+def _normalize_style_preset(value: Any) -> str | list[str]:
+    if value is None or value == "":
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("expected a list of style name strings")
+        return [item.strip() for item in value if item.strip()]
+    raise ValueError("expected a style preset string or list of strings")
+
+
 def _normalize_dock_visibility(value: Any) -> dict[str, bool]:
     default_keys = DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"].keys()
     if not isinstance(value, dict):
@@ -141,6 +165,16 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "tools.femap_converter.mesh": SettingDefinition("post_geom", SCOPE_BOTH, _normalize_text),
     "tools.femap_converter.output_dir": SettingDefinition(".pyemsi", SCOPE_BOTH, _normalize_text),
     "tools.femap_converter.output_name": SettingDefinition("output", SCOPE_BOTH, _normalize_text),
+    "tools.emsolution_plot.grid_mode": SettingDefinition("both", SCOPE_BOTH, _normalize_text),
+    "tools.emsolution_plot.legend_mode": SettingDefinition("upper right", SCOPE_BOTH, _normalize_text),
+    "tools.emsolution_plot.share_x": SettingDefinition(True, SCOPE_BOTH, _normalize_bool),
+    "tools.emsolution_plot.show_title": SettingDefinition(True, SCOPE_BOTH, _normalize_bool),
+    "tools.emsolution_plot.style_preset": SettingDefinition("", SCOPE_BOTH, _normalize_style_preset),
+    "tools.emsolution_plot.title": SettingDefinition("", SCOPE_BOTH, _normalize_optional_text),
+    "tools.emsolution_plot.x_label": SettingDefinition("", SCOPE_BOTH, _normalize_optional_text),
+    "tools.emsolution_plot.x_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
+    "tools.emsolution_plot.y_label": SettingDefinition("", SCOPE_BOTH, _normalize_optional_text),
+    "tools.emsolution_plot.y_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
     "tools.field_plot.filepath": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
     "workbench.window.dock_visibility": SettingDefinition(
@@ -154,6 +188,7 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
 _CONTAINER_PATHS = {
     "app",
     "tools",
+    "tools.emsolution_plot",
     "tools.femap_converter",
     "tools.field_plot",
     "workbench",

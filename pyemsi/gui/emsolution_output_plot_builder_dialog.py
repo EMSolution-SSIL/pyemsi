@@ -38,6 +38,7 @@ import pyemsi.resources.resources  # noqa: F401
 import scienceplots  # noqa: F401
 from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput, PlotAxisOption, PlotSeriesDescriptor
+from pyemsi.settings.manager import SettingsManager
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
 
@@ -479,7 +480,12 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
     SETTINGS_COLUMN = 1
     ADD_SUBPLOT_DATA = "__add_subplot__"
 
-    def __init__(self, source: EMSolutionOutput | str | Path, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        source: EMSolutionOutput | str | Path,
+        settings_manager: SettingsManager | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         if isinstance(source, EMSolutionOutput):
             result = source
@@ -489,6 +495,7 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
             result = EMSolutionOutput.from_file(source_path)
             self._source_file_name = source_path.name
 
+        self._settings = settings_manager
         self._result = result
         self._x_options = {option.key: option for option in result.get_plot_x_options()}
         self._series_descriptors = list(result.get_plot_series())
@@ -497,7 +504,7 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
         self._subplots: list[PlotSubplotState] = [PlotSubplotState()]
         self._active_subplot_index = 0
         default_x_axis_key = next(iter(self._x_options))
-        self._plot_settings = PlotDialogSettings(x_axis_key=default_x_axis_key)
+        self._plot_settings = self._load_plot_settings(default_x_axis_key)
 
         self.setWindowTitle("EMSolution Plot")
         self.setWindowIcon(QIcon(":/icons/Graph.svg"))
@@ -1238,6 +1245,41 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
         self._draw_onto(self._preview.figure)
         self._preview.draw()
 
+    def _load_plot_settings(self, default_x_axis_key: str) -> PlotDialogSettings:
+        if self._settings is None:
+            return PlotDialogSettings(x_axis_key=default_x_axis_key)
+        g = self._settings.get_effective
+        return PlotDialogSettings(
+            x_axis_key=default_x_axis_key,
+            title=g("tools.emsolution_plot.title") or "",
+            show_title=bool(g("tools.emsolution_plot.show_title")),
+            share_x=bool(g("tools.emsolution_plot.share_x")),
+            x_label=g("tools.emsolution_plot.x_label") or "",
+            y_label=g("tools.emsolution_plot.y_label") or "",
+            style_preset=g("tools.emsolution_plot.style_preset") or "",
+            legend_mode=g("tools.emsolution_plot.legend_mode") or "upper right",
+            grid_mode=g("tools.emsolution_plot.grid_mode") or "both",
+            x_log_scale=bool(g("tools.emsolution_plot.x_log_scale")),
+            y_log_scale=bool(g("tools.emsolution_plot.y_log_scale")),
+        )
+
+    def _save_plot_settings(self) -> None:
+        if self._settings is None:
+            return
+        setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
+        s = self._plot_settings
+        setter("tools.emsolution_plot.title", s.title or None)
+        setter("tools.emsolution_plot.show_title", s.show_title)
+        setter("tools.emsolution_plot.share_x", s.share_x)
+        setter("tools.emsolution_plot.x_label", s.x_label or None)
+        setter("tools.emsolution_plot.y_label", s.y_label or None)
+        setter("tools.emsolution_plot.style_preset", s.style_preset)
+        setter("tools.emsolution_plot.legend_mode", s.legend_mode)
+        setter("tools.emsolution_plot.grid_mode", s.grid_mode)
+        setter("tools.emsolution_plot.x_log_scale", s.x_log_scale)
+        setter("tools.emsolution_plot.y_log_scale", s.y_log_scale)
+        self._settings.save()
+
     def _on_plot(self) -> None:
         if _style_preset_requires_latex(self._plot_settings.style_preset) and not _check_latex_available():
             self._set_warning_message(
@@ -1245,6 +1287,8 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
                 "Choose a '(no-latex)' variant or install a LaTeX distribution (e.g. MiKTeX)."
             )
             return
+
+        self._save_plot_settings()
 
         import pyemsi.gui as gui
 
