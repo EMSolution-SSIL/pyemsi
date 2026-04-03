@@ -199,7 +199,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._file_toolbar.setObjectName("file_toolbar")
         self._file_toolbar.setMovable(False)
         self._file_toolbar.setFloatable(False)
-        self._file_toolbar.setIconSize(QSize(16, 16))
+        self._file_toolbar.setIconSize(QSize(20, 20))
         self._file_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
         self._file_toolbar.addAction(self._open_folder_action)

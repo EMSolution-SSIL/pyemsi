@@ -105,3 +105,71 @@ def test_emsolution_output_plot_series_preserve_tree_paths_and_units():
     assert force_y.tree_path == ("Force Nodal", "Property #12", "Force Y")
     assert force_y.axis_label == "Force Y (N)"
     assert force_y.values.tolist() == [2.0, 2.1, 2.2]
+
+
+def test_emsolution_output_repr_is_tree_shaped():
+    result = EMSolutionOutput.from_dict(_sample_payload())
+    r = repr(result)
+
+    assert r.startswith("EMSolutionOutput")
+    assert "├──" in r or "└──" in r
+    assert "ndarray[3]" in r
+    # raw arrays must not appear
+    assert "[0.0, 1.0, 2.0]" not in r
+
+
+def test_emsolution_output_repr_contains_leaf_identifiers():
+    result = EMSolutionOutput.from_dict(_sample_payload())
+    r = repr(result)
+
+    assert "Source #1" in r
+    assert "Power Source #2" in r or "power_sources" in r
+    assert "Coil #7" in r
+    assert "Property #12" in r
+
+
+def test_emsolution_output_repr_contains_units_and_condition():
+    result = EMSolutionOutput.from_dict(_sample_payload())
+    r = repr(result)
+
+    assert "A/V/Wb" in r  # circuit/network units
+    assert "N/Nm" in r  # force_nodal units
+    assert "TRANSIENT" in r
+    assert "SLIDE_MOTION" in r
+    assert "deg" in r  # position unit
+    assert "CW" in r  # motion direction
+
+
+def test_circuit_element_repr_summarises_arrays():
+    result = EMSolutionOutput.from_dict(_sample_payload())
+    el = result.circuit.sources[0]
+    r = repr(el)
+
+    assert "Source #1" in r
+    assert "ndarray[3]" in r
+    assert "current=" in r
+    assert "voltage=" in r
+    assert "flux=" in r
+    assert "[1.0, 2.0, 3.0]" not in r  # no raw list values
+
+
+def test_network_element_repr_summarises_arrays():
+    result = EMSolutionOutput.from_dict(_sample_payload())
+    el = result.network.elements[0]
+    r = repr(el)
+
+    assert "Coil #7" in r
+    assert "ndarray[3]" in r
+    assert "[0.4, 0.5, 0.6]" not in r  # no raw list values
+
+
+def test_force_nodal_entry_repr_summarises_arrays():
+    result = EMSolutionOutput.from_dict(_sample_payload())
+    en = result.force_nodal.entries[0]
+    r = repr(en)
+
+    assert "Property #12" in r
+    assert "Fx=" in r
+    assert "Mz=" in r
+    assert "ndarray[3]" in r
+    assert "[1.0, 1.1, 1.2]" not in r  # no raw list values

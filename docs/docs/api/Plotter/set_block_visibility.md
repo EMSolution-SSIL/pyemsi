@@ -15,17 +15,18 @@ Updates the visibility state in the internal dictionary and applies it to all ac
 ### Example
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("mesh.vtm")
-p.set_scalar("B-Mag (T)")
-p.show()
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+plt.set_scalar("B-Mag (T)")
+plt.render()
 
-# Hide a specific block
-p.set_block_visibility("air", False)
+# Hide block '4' from the transient example
+plt.set_block_visibility("4", False)
 
 # Show it again
-p.set_block_visibility("air", True)
+plt.set_block_visibility("4", True)
 ```
 
 ### See Also

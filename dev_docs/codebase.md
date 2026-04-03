@@ -1,6 +1,6 @@
 # pyemsi Codebase Guide
 
-**Version:** 0.1.2  
+**Version:** 0.1.3
 **Python:** ≥ 3.9  
 **License:** GPL-3.0-or-later
 

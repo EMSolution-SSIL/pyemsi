@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">
+  <Collection>
+    <DataSet timestep="0.0" group="" part="0" file="ipm_motor/STEP1 Time 0.00000e+00.vtm"/>
+    <DataSet timestep="0.00083333" group="" part="0" file="ipm_motor/STEP2 Time 8.33330e-04.vtm"/>
+    <DataSet timestep="0.00166666" group="" part="0" file="ipm_motor/STEP3 Time 1.66666e-03.vtm"/>
+    <DataSet timestep="0.00249999" group="" part="0" file="ipm_motor/STEP4 Time 2.49999e-03.vtm"/>
+    <DataSet timestep="0.00333332" group="" part="0" file="ipm_motor/STEP5 Time 3.33332e-03.vtm"/>
+    <DataSet timestep="0.00416665" group="" part="0" file="ipm_motor/STEP6 Time 4.16665e-03.vtm"/>
+    <DataSet timestep="0.00499998" group="" part="0" file="ipm_motor/STEP7 Time 4.99998e-03.vtm"/>
+    <DataSet timestep="0.00583331" group="" part="0" file="ipm_motor/STEP8 Time 5.83331e-03.vtm"/>
+    <DataSet timestep="0.00666664" group="" part="0" file="ipm_motor/STEP9 Time 6.66664e-03.vtm"/>
+    <DataSet timestep="0.00749997" group="" part="0" file="ipm_motor/STEP10 Time 7.49997e-03.vtm"/>
+  </Collection>
+</VTKFile>

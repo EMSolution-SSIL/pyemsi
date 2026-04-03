@@ -14,22 +14,23 @@ Updates the visibility state for multiple blocks at once, then renders the scene
 ### Example
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("mesh.vtm")
-p.set_scalar("B-Mag (T)")
-p.show()
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+plt.set_scalar("B-Mag (T)")
+plt.render()
 
-# Hide multiple blocks at once
-p.set_blocks_visibility({
-    "air": False,
-    "boundary": False,
+# Hide blocks '3' and '4' from the transient example
+plt.set_blocks_visibility({
+    "3": False,
+    "4": False,
 })
 
 # Restore visibility
-p.set_blocks_visibility({
-    "air": True,
-    "boundary": True,
+plt.set_blocks_visibility({
+    "3": True,
+    "4": True,
 })
 ```
 
@@ -38,14 +39,15 @@ p.set_blocks_visibility({
 This method works in notebook mode as well, making it useful for interactive visibility control in Jupyter:
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("mesh.vtm", notebook=True)
-p.set_scalar("B-Mag (T)")
-p.show()
+file_path = examples.transient_path()
+plt = Plotter(file_path, notebook=True)
+plt.set_scalar("B-Mag (T)")
+plt.show()
 
 # Toggle visibility in notebook
-p.set_blocks_visibility({"air": False})
+plt.set_blocks_visibility({"4": False})
 ```
 
 ### See Also

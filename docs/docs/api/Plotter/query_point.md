@@ -43,52 +43,42 @@ Returns a dictionary with array names as keys. Both static and temporal datasets
 
 ## Examples
 
-### Static single-block mesh
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("mesh.vtu")
-data = p.query_point(42)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+data = plt.query_point(point_id=360, block_name="1")
 
-# Scalar: time is [0] for static
-print(data["Temperature"]["value"][0])  # e.g., 300.5
-
-# Vector: x_value, y_value, z_value
-print(data["Velocity"]["x_value"][0])  # e.g., 1.0
+fig, ax = pyplot.subplots()
+ax.plot(data["B-Mag (T)"]["time"], data["B-Mag (T)"]["value"], marker="o")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("B-Mag (T)")
+ax.set_title("B-Mag (T) at Point ID 360 in Block 1")
+fig.tight_layout()
+fig.savefig("docs/static/demos/query_point.png")
 ```
+![Query Point](/demos/query_point.png)
 
-### Temporal MultiBlock mesh
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.pvd")
-data = p.query_point(100, block_name="coil")
-
-# Scalar: dict with "time" and "value" lists
-times = data["B-Mag (T)"]["time"]
-values = data["B-Mag (T)"]["value"]
-
-# Vector: dict with "time", "x_value", "y_value", "z_value" lists
-times = data["B-Vec (T)"]["time"]
-x_vals = data["B-Vec (T)"]["x_value"]
-y_vals = data["B-Vec (T)"]["y_value"]
-z_vals = data["B-Vec (T)"]["z_value"]
-```
-
-### Query specific time value
+### Query a single time value
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("output.pvd")
-# Query at t=0.005 seconds only
-data = p.query_point(100, block_name="coil", time_value=0.005)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Result has single-element lists
-print(data["B-Mag (T)"]["time"])   # [0.005]
-print(data["B-Mag (T)"]["value"])  # [1.234]
+# Use time_point_value() to look up the time value for a given index
+t = plt.time_point_value(4)   # 0.05  (5th time step, zero-based)
+
+# Query only at that time value instead of sweeping all time steps
+data = plt.query_point(point_id=360, block_name="1", time_value=t)
+
+print(data["B-Mag (T)"]["time"])   # [0.05]
+print(data["B-Mag (T)"]["value"])  # [0.01703610084950924]
 ```
 
 ## See Also

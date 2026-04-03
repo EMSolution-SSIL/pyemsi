@@ -35,45 +35,59 @@ Returns a list of dictionaries, one per point ID. Each dictionary has the same s
 
 ## Examples
 
-### Query multiple points from same block
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("output.pvd")
-results = p.query_points([10, 20, 30], block_names="coil")
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+data = plt.query_points(point_ids=[0, 108, 360, 159, 239], block_names=["1", "1", "1", "3", "3"])
 
-for i, data in enumerate(results):
-    print(f"Point {[10, 20, 30][i]}: {data['B-Mag (T)']['value']}")
+fig, axes = pyplot.subplots(2, 1, figsize=(8, 10))
+
+# Block 1
+axes[0].plot(data[0]["B-Mag (T)"]["time"], data[0]["B-Mag (T)"]["value"], marker="o", label="Point ID 0")
+axes[0].plot(data[1]["B-Mag (T)"]["time"], data[1]["B-Mag (T)"]["value"], marker="o", label="Point ID 108")
+axes[0].plot(data[2]["B-Mag (T)"]["time"], data[2]["B-Mag (T)"]["value"], marker="o", label="Point ID 360")
+axes[0].set_xlabel("Time (s)")
+axes[0].set_ylabel("B-Mag (T)")
+axes[0].set_title("B-Mag (T) at Points in Block 1")
+axes[0].legend()
+
+# Block 3
+axes[1].plot(data[3]["B-Mag (T)"]["time"], data[3]["B-Mag (T)"]["value"], marker="o", label="Point ID 159")
+axes[1].plot(data[4]["B-Mag (T)"]["time"], data[4]["B-Mag (T)"]["value"], marker="o", label="Point ID 239")
+axes[1].set_xlabel("Time (s)")
+axes[1].set_ylabel("B-Mag (T)")
+axes[1].set_title("B-Mag (T) at Points in Block 3")
+axes[1].legend()
+
+fig.tight_layout()
+fig.savefig("docs/static/demos/query_points.png")
 ```
+![Query Points](/demos/query_points.png)
 
-### Query points from different blocks
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.pvd")
-results = p.query_points(
-    point_ids=[10, 20, 30],
-    block_names=["coil", "core", "air"]
-)
-
-for data in results:
-    print(data.keys())
-```
-
-### Query specific time value
+### Query a single time value
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("output.pvd")
-results = p.query_points([100, 200], block_names="coil", time_value=0.005)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+
+# Use time_point_value() to look up the time value for a given index
+t = plt.time_point_value(4)   # 0.05  (5th time step, zero-based)
+
+# Query only at that time value instead of sweeping all time steps
+results = plt.query_points(point_ids=[0, 108, 360], block_names="1", time_value=t)
 
 # Each result has single-element time/value lists
-for data in results:
-    print(data["B-Mag (T)"]["time"])   # [0.005]
-    print(data["B-Mag (T)"]["value"])  # [...]
+print(results[0]["B-Mag (T)"]["time"])   # [0.05]
+print(results[0]["B-Mag (T)"]["value"])  # [0.10820599645376205]
+print(results[1]["B-Mag (T)"]["value"])  # [0.09952189773321152]
+print(results[2]["B-Mag (T)"]["value"])  # [0.01703610084950924]
 ```
 
 ## See Also

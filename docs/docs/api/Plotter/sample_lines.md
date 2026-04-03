@@ -44,100 +44,86 @@ Returns a list of results (one per line), where each result is a list of diction
 
 ## Examples
 
-### Compare profiles along multiple lines
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
-
-p = Plotter("mesh.vtu")
-
-# Define three parallel lines
-lines = [
-    ([0, 0, 0], [10, 0, 0]),  # y=0
-    ([0, 1, 0], [10, 1, 0]),  # y=1
-    ([0, 2, 0], [10, 2, 0]),  # y=2
-]
-
-data = p.sample_lines(lines, resolution=50)
-
-# Plot temperature profiles for all three lines
-for i, line_data in enumerate(data):
-    # For static dataset, use first (only) time step
-    temps = line_data[0]["Temperature"]["value"]
-    distances = line_data[0]["Temperature"]["distance"]
-    plt.plot(distances, temps, label=f"y={i}")
-
-plt.xlabel("Distance along line")
-plt.ylabel("Temperature")
-plt.legend()
-plt.show()
-```
-
-### Different resolutions per line
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("mesh.vtu")
-
-lines = [
-    ([0, 0, 0], [10, 0, 0]),
-    ([0, 0, 0], [0, 10, 0]),
-]
-
-# First line with 100 points, second with 50
-data = p.sample_lines(lines, resolution=[100, 50])
-
-print(f"First line has {len(data[0][0]['Temperature']['value'])} points")   # 101
-print(f"Second line has {len(data[1][0]['Temperature']['value'])} points")  # 51
-```
-
-### Temporal dataset with progress tracking
-
-```python
-from pyemsi import Plotter
-
-def progress(current, total):
-    print(f"Sampling line {current+1}/{total}")
-    return True
-
-p = Plotter("output.pvd")
-
-# Radial lines from origin
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 import numpy as np
-angles = np.linspace(0, 2*np.pi, 8, endpoint=False)
-lines = [([0, 0, 0], [5*np.cos(a), 5*np.sin(a), 0]) for a in angles]
 
-data = p.sample_lines(lines, resolution=25, progress_callback=progress)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Access data: data[line_idx][time_idx][array_name]
-first_line_time0 = data[0][0]  # Line 0, time 0
-b_mag_along_line = first_line_time0["B-Mag (T)"]["value"]
-distances = first_line_time0["B-Mag (T)"]["distance"]
+data = plt.sample_lines(
+    lines=[
+        ((0.0, 0.0, 0.0), (0.0, 0.0, 0.25)),
+        ((0.02, 0.02, 0.0), (0.02, 0.02, 0.25)),
+    ],
+    resolution=100,
+)
+
+fig, axes = pyplot.subplots(1, len(data), figsize=(14, 6), subplot_kw={"projection": "3d"})
+axes = np.atleast_1d(axes)
+
+for idx, line_data in enumerate(data):
+    time_values = [time_data["time"] for time_data in line_data]
+    distances = line_data[0]["B-Mag (T)"]["distance"]
+    value_grid = np.array([time_data["B-Mag (T)"]["value"] for time_data in line_data])
+    time_grid, distance_grid = np.meshgrid(time_values, distances, indexing="ij")
+
+    axes[idx].plot_surface(time_grid, distance_grid, value_grid, cmap="viridis")
+    axes[idx].set_xlabel("Time (s)")
+    axes[idx].set_ylabel("Distance Along Line (m)")
+    axes[idx].set_zlabel("B-Mag (T)")
+    axes[idx].set_title(f"Line {idx + 1}")
+
+fig.suptitle("B-Mag (T) Along Sampled Lines")
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_lines.png")
 ```
+![Sample Lines](/demos/sample_lines.png)
 
-### Grid of horizontal and vertical lines
+### Plot three time slices
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
+import numpy as np
 
-p = Plotter("mesh.vtu")
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Create grid of lines
-lines = []
-# Horizontal lines
-for y in range(0, 11, 2):
-    lines.append(([0, y, 0], [10, y, 0]))
-# Vertical lines
-for x in range(0, 11, 2):
-    lines.append(([x, 0, 0], [x, 10, 0]))
+data = plt.sample_lines(
+    lines=[
+        ((0.0, 0.0, 0.0), (0.0, 0.0, 0.25)),
+        ((0.02, 0.02, 0.0), (0.02, 0.02, 0.25)),
+    ],
+    resolution=100,
+)
 
-data = p.sample_lines(lines, resolution=50)
+fig, axes = pyplot.subplots(1, len(data), figsize=(14, 5))
+axes = np.atleast_1d(axes)
 
-print(f"Total lines: {len(data)}")  # 11
-print(f"Points per line: {len(data[0][0]['Temperature']['value'])}")  # 51
+for idx, line_data in enumerate(data):
+    time_indices = sorted({0, len(line_data) // 2, len(line_data) - 1})
+
+    for time_idx in time_indices:
+        axes[idx].plot(
+            line_data[time_idx]["B-Mag (T)"]["distance"],
+            line_data[time_idx]["B-Mag (T)"]["value"],
+            label=f"t = {line_data[time_idx]['time']:.3f} s",
+        )
+
+    axes[idx].set_xlabel("Distance Along Line (m)")
+    axes[idx].set_ylabel("B-Mag (T)")
+    axes[idx].set_title(f"Line {idx + 1}")
+    axes[idx].legend()
+
+fig.suptitle("B-Mag (T) Along Sampled Lines at Three Time Points")
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_lines_time_slices.png")
 ```
+![Sample Lines Time Slices](/demos/sample_lines_time_slices.png)
 
 ## See Also
 

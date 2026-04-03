@@ -18,14 +18,16 @@ The visibility state is tracked internally and persists across render cycles. De
 ### Example
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("mesh.vtm")
-p.show()
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Check visibility of a specific block
-is_visible = p.get_block_visibility("coil")
-print(f"Coil visible: {is_visible}")
+# The transient example has blocks '1', '3', and '4'
+print(plt.get_block_visibility("4"))  # True
+
+plt.set_block_visibility("4", False)
+print(plt.get_block_visibility("4"))  # False
 ```
 
 ### See Also

@@ -45,63 +45,48 @@ Returns a list of dictionaries (one per point) with array names as keys. Each di
 
 ## Examples
 
-### Static mesh with point cloud
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("mesh.vtu")
-points = [
-    [1.0, 2.0, 3.0],
-    [4.0, 5.0, 6.0],
-    [7.0, 8.0, 9.0]
-]
-data = p.sample_points(points)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Access data for first point
-print(data[0]["Temperature"]["value"][0])
-print(data[0]["coordinates"]["x"])  # 1.0
+data = plt.sample_points([(0.02, 0.02, 0.05), (0.02, 0.02, 0.02), (0.02, 0.02, 0.07)])
 
-# Access data for second point
-print(data[1]["Temperature"]["value"][0])
-print(data[1]["coordinates"]["x"])  # 4.0
+fig, ax = pyplot.subplots()
+ax.plot(data[0]["B-Mag (T)"]["time"], data[0]["B-Mag (T)"]["value"], marker="o", label="Point (0.02, 0.02, 0.05)")
+ax.plot(data[1]["B-Mag (T)"]["time"], data[1]["B-Mag (T)"]["value"], marker="o", label="Point (0.02, 0.02, 0.02)")
+ax.plot(data[2]["B-Mag (T)"]["time"], data[2]["B-Mag (T)"]["value"], marker="o", label="Point (0.02, 0.02, 0.07)")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("B-Mag (T)")
+ax.set_title("B-Mag (T) at Sampled Points")
+ax.legend()
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_points.png")
 ```
+![Sample Points](/demos/sample_points.png)
 
-### Temporal dataset with progress callback
-
-```python
-from pyemsi import Plotter
-
-def progress(current, total):
-    print(f"Progress: {current}/{total}")
-    return True  # Continue (return False to cancel)
-
-p = Plotter("output.pvd")
-points = [[x, 0, 0] for x in range(10)]
-data = p.sample_points(points, progress_callback=progress)
-
-# Plot time series for first point
-import matplotlib.pyplot as plt
-times = data[0]["B-Mag (T)"]["time"]
-values = data[0]["B-Mag (T)"]["value"]
-plt.plot(times, values)
-plt.show()
-```
-
-### Sampling specific time value
+### Query a single time value
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("output.pvd")
-points = [[x, y, 0] for x in range(5) for y in range(5)]
-# Sample at t=0.05 only
-data = p.sample_points(points, time_value=0.05)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Extract spatial distribution at t=0.05
-temps = [pt["Temperature"]["value"][0] for pt in data]
-x_coords = [pt["coordinates"]["x"] for pt in data]
-y_coords = [pt["coordinates"]["y"] for pt in data]
+# Use time_point_value() to look up the time value for a given index
+t = plt.time_point_value(4)   # 0.05  (5th time step, zero-based)
+
+# Sample only at that time value instead of sweeping all time steps
+data = plt.sample_points([(0.02, 0.02, 0.05), (0.02, 0.02, 0.02), (0.02, 0.02, 0.07)], time_value=t)
+
+print(data[0]["B-Mag (T)"]["time"])   # [0.05]
+print(data[0]["B-Mag (T)"]["value"])  # [0.08909410238265991]
+print(data[1]["B-Mag (T)"]["value"])  # [0.10839000344276428]
+print(data[2]["B-Mag (T)"]["value"])  # [0.06968670338392258]
 ```
 
 ## See Also

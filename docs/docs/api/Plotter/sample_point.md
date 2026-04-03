@@ -53,61 +53,43 @@ Returns a dictionary with array names as keys. Both static and temporal datasets
 
 ## Examples
 
-### Static single-block mesh
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("mesh.vtu")
-data = p.sample_point([1.0, 2.0, 3.0])
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Scalar: time is [0] for static
-print(data["Temperature"]["value"][0])  # e.g., 300.5
+data = plt.sample_point((0.02, 0.02, 0.05))
 
-# Coordinates
-print(data["coordinates"]["x"])  # 1.0
+fig, ax = pyplot.subplots()
+ax.plot(data["B-Mag (T)"]["time"], data["B-Mag (T)"]["value"], marker="o")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("B-Mag (T)")
+ax.set_title("B-Mag (T) at Point (0.02, 0.02, 0.05)")
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_point.png")
 ```
+![Sample Point](/demos/sample_point.png)
 
-### Temporal MultiBlock mesh
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.pvd")
-data = p.sample_point([5.0, 10.0, 0.0])
-
-# Scalar: dict with "time" and "value" lists
-times = data["B-Mag (T)"]["time"]
-values = data["B-Mag (T)"]["value"]
-
-# Vector: dict with "time", "x_value", "y_value", "z_value" lists
-times = data["B-Vec (T)"]["time"]
-x_vals = data["B-Vec (T)"]["x_value"]
-y_vals = data["B-Vec (T)"]["y_value"]
-z_vals = data["B-Vec (T)"]["z_value"]
-```
-
-### Query specific time value
+### Query a single time value
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("output.pvd")
-# Sample at t=0.05 only
-data = p.sample_point([1.0, 2.0, 3.0], time_value=0.05)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+
+# Use time_point_value() to look up the time value for a given index
+t = plt.time_point_value(4)   # 0.05  (5th time step, zero-based)
+
+# Sample only at that time value instead of sweeping all time steps
+data = plt.sample_point((0.02, 0.02, 0.05), time_value=t)
 
 print(data["B-Mag (T)"]["time"])   # [0.05]
-print(data["B-Mag (T)"]["value"])  # [value at t=0.05]
-```
-
-### Sample from specific block
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.vtm")
-# Sample only from the "coil" block
-data = p.sample_point([1.0, 2.0, 3.0], block_name="coil")
+print(data["B-Mag (T)"]["value"])  # [0.08909410238265991]
 ```
 
 ## See Also

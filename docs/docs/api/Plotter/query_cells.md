@@ -35,45 +35,59 @@ Returns a list of dictionaries, one per cell ID. Each dictionary has the same st
 
 ## Examples
 
-### Query multiple cells from same block
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("output.pvd")
-results = p.query_cells([10, 20, 30], block_names="coil")
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+data = plt.query_cells(cell_ids=[0, 75, 225, 63, 198], block_names=["1", "1", "1", "3", "3"])
 
-for i, data in enumerate(results):
-    print(f"Cell {[10, 20, 30][i]}: {data['Loss (W/m^3)']['value']}")
+fig, axes = pyplot.subplots(2, 1, figsize=(8, 10))
+
+# Block 1
+axes[0].plot(data[0]["B-Mag (T)"]["time"], data[0]["B-Mag (T)"]["value"], marker="o", label="Cell ID 0")
+axes[0].plot(data[1]["B-Mag (T)"]["time"], data[1]["B-Mag (T)"]["value"], marker="o", label="Cell ID 75")
+axes[0].plot(data[2]["B-Mag (T)"]["time"], data[2]["B-Mag (T)"]["value"], marker="o", label="Cell ID 225")
+axes[0].set_xlabel("Time (s)")
+axes[0].set_ylabel("B-Mag (T)")
+axes[0].set_title("B-Mag (T) at Cells in Block 1")
+axes[0].legend()
+
+# Block 3
+axes[1].plot(data[3]["B-Mag (T)"]["time"], data[3]["B-Mag (T)"]["value"], marker="o", label="Cell ID 63")
+axes[1].plot(data[4]["B-Mag (T)"]["time"], data[4]["B-Mag (T)"]["value"], marker="o", label="Cell ID 198")
+axes[1].set_xlabel("Time (s)")
+axes[1].set_ylabel("B-Mag (T)")
+axes[1].set_title("B-Mag (T) at Cells in Block 3")
+axes[1].legend()
+
+fig.tight_layout()
+fig.savefig("docs/static/demos/query_cells.png")
 ```
+![Query Cells](/demos/query_cells.png)
 
-### Query cells from different blocks
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.pvd")
-results = p.query_cells(
-    cell_ids=[10, 20, 30],
-    block_names=["coil", "core", "air"]
-)
-
-for data in results:
-    print(data.keys())
-```
-
-### Query specific time value
+### Query a single time value
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("output.pvd")
-results = p.query_cells([100, 200], block_names="coil", time_value=0.005)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+
+# Use time_point_value() to look up the time value for a given index
+t = plt.time_point_value(4)   # 0.05  (5th time step, zero-based)
+
+# Query only at that time value instead of sweeping all time steps
+results = plt.query_cells(cell_ids=[0, 75, 225], block_names="1", time_value=t)
 
 # Each result has single-element time/value lists
-for data in results:
-    print(data["Loss (W/m^3)"]["time"])   # [0.005]
-    print(data["Loss (W/m^3)"]["value"])  # [...]
+print(results[0]["B-Mag (T)"]["time"])   # [0.05]
+print(results[0]["B-Mag (T)"]["value"])  # [0.10771600157022476]
+print(results[1]["B-Mag (T)"]["value"])  # [0.09627089649438858]
+print(results[2]["B-Mag (T)"]["value"])  # [0.026306699961423874]
 ```
 
 ## See Also

@@ -60,136 +60,100 @@ For static datasets, returns a single-element list with time 0.0.
 
 ## Examples
 
-### Plot arc profile for static mesh
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 import numpy as np
 
-p = Plotter("mesh.vtu")
+file_path = examples.ipm_motor_path()
+plt = Plotter(file_path)
 
-# Quarter circle arc in XY plane
-data = p.sample_arc(
-    pointa=[1, 0, 0],
-    pointb=[0, 1, 0],
-    center=[0, 0, 0],
-    resolution=50
-)
+data = plt.sample_arc(pointa=(0.080575, 0, 0), pointb=(0.0569751, 0.0569751, 0), center=(0, 0, 0), resolution=100)
 
-# Extract magnetic field along arc (static dataset has 1 time step)
-b_mag = data[0]["B-Mag (T)"]["value"]
-arc_distances = data[0]["B-Mag (T)"]["distance"]
-time_val = data[0]["time"]
+time_values = [time_data["time"] for time_data in data]
+distances = data[0]["B-Mag (T)"]["distance"]
+value_grid = np.array([time_data["B-Mag (T)"]["value"] for time_data in data])
+time_grid, distance_grid = np.meshgrid(time_values, distances, indexing="ij")
 
-plt.plot(arc_distances, b_mag)
-plt.xlabel("Arc length")
-plt.ylabel("B-Mag (T)")
-plt.title(f"Profile at t={time_val}")
-plt.show()
+fig, ax = pyplot.subplots(subplot_kw={"projection": "3d"})
+ax.plot_surface(time_grid, distance_grid, value_grid, cmap="viridis")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Distance Along Arc (m)")
+ax.set_zlabel("B-Mag (T)")
+ax.set_title("B-Mag (T) Along Sampled Arc")
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_arc.png")
 ```
+![Sample Arc](/demos/sample_arc.png)
 
-### Temporal dataset arc sampling
+### Plot three time slices
 
 ```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("output.pvd")
+file_path = examples.ipm_motor_path()
+plt = Plotter(file_path)
 
-# Circular arc around coil
-data = p.sample_arc(
-    pointa=[5, 0, 0],
-    pointb=[0, 5, 0],
-    center=[0, 0, 0],
-    resolution=100
-)
+data = plt.sample_arc(pointa=(0.080575, 0, 0), pointb=(0.0569751, 0.0569751, 0), center=(0, 0, 0), resolution=100)
+time_indices = sorted({0, len(data) // 2, len(data) - 1})
 
-# Plot time evolution at arc midpoint (point 50 of 101)
-midpoint_idx = 50
-b_values = [time_data["B-Mag (T)"]["value"][midpoint_idx] for time_data in data]
-times = [time_data["time"] for time_data in data]
-
-plt.plot(times, b_values)
-plt.xlabel("Time (s)")
-plt.ylabel("B-Mag (T) at midpoint")
-plt.show()
+fig, ax = pyplot.subplots()
+for idx in time_indices:
+    ax.plot(
+        data[idx]["B-Mag (T)"]["distance"],
+        data[idx]["B-Mag (T)"]["value"],
+        label=f"t = {data[idx]['time']:.3f} s",
+    )
+ax.set_xlabel("Distance Along Arc (m)")
+ax.set_ylabel("B-Mag (T)")
+ax.set_title("B-Mag (T) Along Sampled Arc at Three Time Points")
+ax.legend()
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_arc_time_slices.png")
 ```
+![Sample Arc Time Slices](/demos/sample_arc_time_slices.png)
 
-### Using negative arc direction
+### Plot tangential and normal B-Vec components
 
 ```python
-from pyemsi import Plotter
-
-p = Plotter("mesh.vtu")
-
-# Positive arc (short path, 90 degrees)
-data_pos = p.sample_arc(
-    pointa=[1, 0, 0],
-    pointb=[0, 1, 0],
-    center=[0, 0, 0],
-    resolution=50,
-    negative=False
-)
-
-# Negative arc (long path, 270 degrees)
-data_neg = p.sample_arc(
-    pointa=[1, 0, 0],
-    pointb=[0, 1, 0],
-    center=[0, 0, 0],
-    resolution=150,
-    negative=True
-)
-
-print(f"Positive arc points: {len(data_pos[0]['Temperature']['value'])}")  # 51
-print(f"Negative arc points: {len(data_neg[0]['Temperature']['value'])}")  # 151
-```
-
-### Sample from specific block
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.vtm")
-
-# Sample only from the "stator" block along an arc
-data = p.sample_arc(
-    pointa=[10, 0, 0],
-    pointb=[0, 10, 0],
-    center=[0, 0, 0],
-    block_name="stator",
-    resolution=100
-)
-```
-
-### Create polar plot
-
-```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 import numpy as np
 
-p = Plotter("mesh.vtu")
+file_path = examples.ipm_motor_path()
+plt = Plotter(file_path)
 
-# Full circle arc (360 degrees)
-data = p.sample_arc(
-    pointa=[5, 0, 0],
-    pointb=[5, 0, 0],  # Same as start for full circle
-    center=[0, 0, 0],
-    resolution=360
-)
+data = plt.sample_arc(pointa=(0.080575, 0, 0), pointb=(0.0569751, 0.0569751, 0), center=(0, 0, 0), resolution=100)
+time_indices = sorted({0, len(data) // 2, len(data) - 1})
 
-# Extract values and angles (static dataset)
-b_mag = data[0]["B-Mag (T)"]["value"]
-angles = np.linspace(0, 2*np.pi, len(b_mag))
-time_val = data[0]["time"]
+fig, axes = pyplot.subplots(1, 2, figsize=(12, 4))
+component_map = [
+    ("tangential", "Tangential B-Vec (T)"),
+    ("normal", "Normal B-Vec (T)"),
+]
 
-# Create polar plot
-fig, ax = plt.subplots(subplot_kw=dict(projection='polar'))
-ax.plot(angles, b_mag)
-ax.set_title(f"B-Mag around coil (t={time_val})")
-plt.show()
+for ax, (component_key, ylabel) in zip(np.atleast_1d(axes), component_map):
+    for idx in time_indices:
+        ax.plot(
+            data[idx]["B-Vec (T)"]["distance"],
+            data[idx]["B-Vec (T)"][component_key],
+            label=f"t = {data[idx]['time']:.3f} s",
+        )
+
+    ax.set_xlabel("Distance Along Arc (m)")
+    ax.set_ylabel(ylabel)
+    ax.legend()
+
+axes[0].set_title("Tangential Component")
+axes[1].set_title("Normal Component")
+fig.suptitle("B-Vec (T) Components Along Sampled Arc at Three Time Points")
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_arc_bvec_components_time_slices.png")
 ```
+![Sample Arc B-Vec Components Time Slices](/demos/sample_arc_bvec_components_time_slices.png)
 
 ## See Also
 

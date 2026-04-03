@@ -2,9 +2,12 @@
 title: set_vector()
 sidebar_position: 5
 ---
-Adds vector glyphs (arrows/cones/spheres) for a 3-component vector array.
 
-Glyphs are generated per-block for [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.multiblock) datasets and are added during [`show()`](/docs/api/Plotter/show.md) / [`export()`](/docs/api/Plotter/export.md).
+Configures vector glyphs (arrows/cones/spheres) for a 3-component vector array.
+
+`set_vector()` is part of the [visualization pipeline](./index.md#visualization-pipeline). Like the other pipeline methods, calling it only stores the configuration — glyphs are not computed or added to the scene until [`show()`](./show.md) or [`export()`](./export.md) triggers a rebuild.
+
+Glyphs are generated per-block for [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.multiblock) datasets.
 
 :::tip[Parameters]
 - **`name`** (`Literal[...]`) — Vector array name (must exist and be 3-component).
@@ -38,9 +41,26 @@ Glyphs are generated per-block for [`pyvista.MultiBlock`](https://docs.pyvista.o
 ### Examples
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-Plotter("mesh.vtu").set_vector("B-Vec (T)", scale="B-Mag (T)", factor=5e-3, opacity=0.5).show()
-Plotter("mesh.vtu").set_vector("Velocity", glyph_type="cone", tolerance=0.1).show()
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+plt.set_vector("B-Vec (T)", scale="B-Mag (T)", factor=5e-1, show_scalar_bar=False)
+plt.set_feature_edges(color="red", line_width=3)
+plt.set_block_visibility("4", False)
+plt.show()
 ```
 
+<iframe
+  src="/pyemsi/demos/set_vector.html"
+  style={{aspectRatio: "1.5"}}
+/>
+
+### See also
+
+- [`set_scalar()`](./set_scalar.md) — configure scalar field coloring
+- [`set_contour()`](./set_contour.md) — add contour lines
+- [`set_feature_edges()`](./set_feature_edges.md) — configure edge overlay
+- [`set_block_visibility()`](./set_block_visibility.md) — hide/show individual mesh blocks
+- [`show()`](./show.md) — trigger rendering and apply the full pipeline
+- [`export()`](./export.md) — render and save a screenshot

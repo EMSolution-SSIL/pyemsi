@@ -35,6 +35,13 @@ def _make_ax(ax: Axes | None) -> tuple[Figure, Axes]:
         return plt.subplots()
 
 
+def _arr_summary(arr: np.ndarray) -> str:
+    n = len(arr)
+    if n == 0:
+        return "ndarray[0]"
+    return f"ndarray[{n}]({float(arr.min()):.6g}..{float(arr.max()):.6g})"
+
+
 # ── Simple containers ──────────────────────────────────────────────────────
 
 
@@ -64,6 +71,16 @@ class CircuitElement:
     voltage: np.ndarray
     flux: np.ndarray | None
     _time: np.ndarray | None = field(default=None, repr=False, compare=False, init=False)
+
+    def __repr__(self) -> str:
+        parts = [
+            f"Source #{self.serial_num}",
+            f"current={_arr_summary(self.current)}",
+            f"voltage={_arr_summary(self.voltage)}",
+        ]
+        if self.flux is not None:
+            parts.append(f"flux={_arr_summary(self.flux)}")
+        return "  ".join(parts)
 
     def plot_current(self, ax=None, x=None, **kw) -> tuple[Figure, Axes]:
         fig, ax = _make_ax(ax)
@@ -106,6 +123,16 @@ class NetworkElement:
     voltage: np.ndarray
     flux: np.ndarray | None
     _time: np.ndarray | None = field(default=None, repr=False, compare=False, init=False)
+
+    def __repr__(self) -> str:
+        parts = [
+            f"{self.element_name} #{self.element_num}",
+            f"current={_arr_summary(self.current)}",
+            f"voltage={_arr_summary(self.voltage)}",
+        ]
+        if self.flux is not None:
+            parts.append(f"flux={_arr_summary(self.flux)}")
+        return "  ".join(parts)
 
     def plot_current(self, ax=None, x=None, **kw) -> tuple[Figure, Axes]:
         fig, ax = _make_ax(ax)
@@ -151,6 +178,17 @@ class ForceNodalEntry:
     force_my: np.ndarray
     force_mz: np.ndarray
     _time: np.ndarray | None = field(default=None, repr=False, compare=False, init=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"Property #{self.property_num}"
+            f"  Fx={_arr_summary(self.force_x)}"
+            f"  Fy={_arr_summary(self.force_y)}"
+            f"  Fz={_arr_summary(self.force_z)}"
+            f"  Mx={_arr_summary(self.force_mx)}"
+            f"  My={_arr_summary(self.force_my)}"
+            f"  Mz={_arr_summary(self.force_mz)}"
+        )
 
 
 @dataclass
@@ -324,6 +362,80 @@ class EMSolutionOutput:
                 en._time = result.time
 
         return result
+
+    def __repr__(self) -> str:
+        def _a(prefix: str, connector: str, items: list, indent: str) -> list[str]:
+            lines = [f"{connector}{prefix} ({len(items)})"]
+            for i, item in enumerate(items):
+                leaf_conn = "└── " if i == len(items) - 1 else "├── "
+                lines.append(f"{indent}{leaf_conn}{item!r}")
+            return lines
+
+        lines: list[str] = ["EMSolutionOutput"]
+        # Determine which top-level sections exist so we can pick ├── vs └──
+        sections = ["meta", "condition", "time"]
+        if self.position is not None:
+            sections.append("position")
+        if self.circuit is not None:
+            sections.append("circuit")
+        if self.network is not None:
+            sections.append("network")
+        if self.force_nodal is not None:
+            sections.append("force_nodal")
+
+        def _conn(name: str) -> str:
+            return "└── " if name == sections[-1] else "├── "
+
+        def _cont(name: str) -> str:
+            return "    " if name == sections[-1] else "│   "
+
+        # meta
+        lines.append(f"{_conn('meta')}meta: v{self.meta.version}, created={self.meta.creation_date}")
+        # condition
+        cond = self.condition
+        lines.append(
+            f"{_conn('condition')}condition: "
+            f"{cond.analysis_type} / {cond.nonlinear} / {cond.motion_type} / {cond.circuit_type}"
+        )
+        # time
+        time_label = f"time: {_arr_summary(self.time)} {self.time_unit}"
+        lines.append(f"{_conn('time')}{time_label}")
+        # position
+        if self.position is not None:
+            pos_label = f"position: {_arr_summary(self.position)}"
+            if self.position_unit:
+                pos_label += f" {self.position_unit}"
+            if self.motion_direction:
+                pos_label += f" [{self.motion_direction}]"
+            lines.append(f"{_conn('position')}{pos_label}")
+        # circuit
+        if self.circuit is not None:
+            cu, vu, fu = self.circuit.units
+            conn = _conn("circuit")
+            cont = _cont("circuit")
+            lines.append(f"{conn}circuit [{cu}/{vu}/{fu}]")
+            # sources
+            src_conn = "├── " if self.circuit.power_sources else "└── "
+            src_cont = "│   " if self.circuit.power_sources else "    "
+            lines.extend(_a("sources", f"{cont}{src_conn}", self.circuit.sources, f"{cont}{src_cont}"))
+            if self.circuit.power_sources:
+                lines.extend(_a("power_sources", f"{cont}└── ", self.circuit.power_sources, f"{cont}    "))
+        # network
+        if self.network is not None:
+            cu, vu, fu = self.network.units
+            conn = _conn("network")
+            cont = _cont("network")
+            lines.append(f"{conn}network [{cu}/{vu}/{fu}]")
+            lines.extend(_a("elements", f"{cont}└── ", self.network.elements, f"{cont}    "))
+        # force_nodal
+        if self.force_nodal is not None:
+            fu, mu = self.force_nodal.units
+            conn = _conn("force_nodal")
+            cont = _cont("force_nodal")
+            lines.append(f"{conn}force_nodal [{fu}/{mu}]")
+            lines.extend(_a("entries", f"{cont}└── ", self.force_nodal.entries, f"{cont}    "))
+
+        return "\n".join(lines)
 
     @classmethod
     def from_file(cls, path: str | Path) -> "EMSolutionOutput":

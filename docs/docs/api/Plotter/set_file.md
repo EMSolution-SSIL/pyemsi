@@ -4,6 +4,8 @@ sidebar_position: 1
 ---
 Loads a mesh file by creating a PyVista reader via [`pyvista.get_reader(...)`](https://docs.pyvista.org/api/readers/_autosummary/pyvista.get_reader) and storing it on [`Plotter.reader`](/docs/api/Plotter/reader.md).
 
+Calling `set_file(filepath)` after construction is equivalent to passing the same file path to [`Plotter`](./index.md) during initialization, for example `Plotter().set_file("mesh.vtm")`, `Plotter(filepath="mesh.vtm")`, and `Plotter("mesh.vtm")` all configure the same reader lazily.
+
 The dataset itself is loaded lazily (via the [`mesh`](/docs/api/Plotter/mesh.md) property or when [`show()`](/docs/api/Plotter/mesh.md) / [`export()`](/docs/api/Plotter/export.md) rebuild the scene).
 
 :::tip[Parameters]
@@ -25,6 +27,7 @@ The dataset itself is loaded lazily (via the [`mesh`](/docs/api/Plotter/mesh.md)
 from pyemsi import Plotter
 
 Plotter().set_file("mesh.vtm").show()
+Plotter(filepath="mesh.vtm").show()
 Plotter().set_file("output.pvd").set_scalar("B-Mag (T)").show()
 ```
 

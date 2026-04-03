@@ -80,7 +80,7 @@ python -m build --wheel
 
 Output:
 
-- Wheel file in `dist/` (for example: `dist/pyemsi-0.1.2-cp313-cp313-win_amd64.whl`)
+- Wheel file in `dist/` (for example: `dist/pyemsi-0.1.3-cp313-cp313-win_amd64.whl`)
 
 Optional check:
 

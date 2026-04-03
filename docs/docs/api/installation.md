@@ -42,10 +42,14 @@ pip install -e .
 ```python
 from pyemsi import examples, Plotter
 
-file_path = examples.transient_path()
+file_path = examples.transient_path() # Or path to .pvd file
 
-plt = Plotter(filepath=file_path)
-plt.set_scalar("B-Mag (T)", "node")
+plt = Plotter(file_path)
+plt.set_scalar("B-Mag (T)")
 plt.show()
 ```
 
+<iframe
+  src="/pyemsi/demos/installation.html"
+  style={{aspectRatio: "1.5"}}
+/>

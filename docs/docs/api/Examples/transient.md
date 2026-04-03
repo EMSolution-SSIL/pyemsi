@@ -1,13 +1,7 @@
 ---
-sidebar_position: 4
-title: Examples
+sidebar_position: 1
+title: Transient
 ---
-
-# `pyemsi.examples`
-
-The `pyemsi.examples` module provides built-in sample datasets for quick testing, tutorials, and demonstrations. These bundled files allow you to explore `pyemsi` functionality without needing your own data files.
-
-## Available Datasets
 
 ### Transient Dataset
 
@@ -54,7 +48,7 @@ from pyemsi import examples, Plotter
 
 # Load the example transient dataset
 file_path = examples.transient_path()
-plt = Plotter(filepath=file_path)
+plt = Plotter(file_path)
 
 # Set a scalar field for visualization
 plt.set_scalar("B-Mag (T)", "node")
@@ -69,7 +63,7 @@ plt.show()
 from pyemsi import examples, Plotter
 
 file_path = examples.transient_path()
-plt = Plotter(filepath=file_path)
+plt = Plotter(file_path)
 
 # Check available time values
 print(plt.time_values)  # [0.01, 0.02, ..., 0.1]
@@ -77,7 +71,7 @@ print(plt.time_values)  # [0.01, 0.02, ..., 0.1]
 # Set a specific time step
 plt.set_active_time_value(0.05)
 
-plt.set_scalar("B-Mag (T)", "node")
+plt.set_scalar("B-Mag (T)")
 plt.show()
 ```
 
@@ -89,8 +83,8 @@ from pyemsi import examples, Plotter
 file_path = examples.transient_path()
 
 # Use notebook mode for inline visualization
-plt = Plotter(filepath=file_path, notebook=True, backend="html")
-plt.set_scalar("B-Mag (T)", "node")
+plt = Plotter(file_path, notebook=True, backend="html")
+plt.set_scalar("B-Mag (T)")
 plt.show()
 ```
 

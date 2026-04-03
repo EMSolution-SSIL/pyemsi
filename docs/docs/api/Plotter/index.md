@@ -67,13 +67,13 @@ p.show()
 
 ## Visualization pipeline
 
-If a file was loaded (via `filepath` or [`set_file()`](./set_file.md)), [`show()`](./show.md) and [`export()`](./export.md) will (re)build the visualization in this order:
+If a file was loaded (via `filepath` or [`set_file()`](./set_file.md)), [`show()`](./show.md) and [`export()`](./export.md) will (re)build the visualization from the configured components:
 
-1. Scalar field ([`set_scalar()`](./set_scalar.md))
-2. Contours ([`set_contour()`](./set_contour.md))
-3. Vector glyphs ([`set_vector()`](./set_vector.md))
-4. Feature edges ([`set_feature_edges()`](./set_feature_edges.md), enabled by default)
-5. Camera reset
+- Scalar field ([`set_scalar()`](./set_scalar.md))
+- Contours ([`set_contour()`](./set_contour.md))
+- Vector glyphs ([`set_vector()`](./set_vector.md))
+- Feature edges ([`set_feature_edges()`](./set_feature_edges.md), enabled by default)
+- Camera reset
 
 If no file was loaded, you can still use the underlying `plotter` directly and add any PyVista meshes/actors.
 

@@ -58,81 +58,61 @@ For static datasets, returns a single-element list with time 0.0.
 
 ## Examples
 
-### Plot line profile for static mesh
+### Sweep all time steps
 
 ```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
-
-p = Plotter("mesh.vtu")
-data = p.sample_line([0, 0, 0], [10, 0, 0], resolution=100)
-
-# Extract temperature profile along line (static dataset has 1 time step)
-temps = data[0]["Temperature"]["value"]
-distances = data[0]["Temperature"]["distance"]
-
-plt.plot(distances, temps)
-plt.xlabel("Distance along line")
-plt.ylabel("Temperature")
-plt.show()
-```
-
-### Temporal dataset line sampling
-
-```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 import numpy as np
 
-p = Plotter("output.pvd")
-data = p.sample_line([0, 0, 0], [10, 0, 0], resolution=50)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Plot time evolution at line midpoint (point 25 of 51)
-midpoint_idx = 25
-b_values = [time_data["B-Mag (T)"]["value"][midpoint_idx] for time_data in data]
+data = plt.sample_line(pointa=(0.02, 0.02, 0.0), pointb=(0.02, 0.02, 0.25), resolution=100)
 
-plt.plot(range(len(data)), b_values)
-plt.xlabel("Time step")
-plt.ylabel("B-Mag (T) at midpoint")
-plt.show()
+time_values = [time_data["time"] for time_data in data]
+distances = data[0]["B-Mag (T)"]["distance"]
+value_grid = np.array([time_data["B-Mag (T)"]["value"] for time_data in data])
+time_grid, distance_grid = np.meshgrid(time_values, distances, indexing="ij")
+
+fig, ax = pyplot.subplots(subplot_kw={"projection": "3d"})
+ax.plot_surface(time_grid, distance_grid, value_grid, cmap="viridis")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Distance Along Line (m)")
+ax.set_zlabel("B-Mag (T)")
+ax.set_title("B-Mag (T) Along Sampled Line")
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_line.png")
 ```
+![Sample Line](/demos/sample_line.png)
 
-### Create 2D plot (position vs time)
+### Plot three time slices
 
 ```python
-from pyemsi import Plotter
-import matplotlib.pyplot as plt
-import numpy as np
+from pyemsi import Plotter, examples
+from matplotlib import pyplot
 
-p = Plotter("output.pvd")
-data = p.sample_line([0, 0, 0], [10, 0, 0], resolution=50)
+file_path = examples.transient_path()
+plt = Plotter(file_path)
 
-# Build 2D array: rows = position, cols = time
-n_points = len(data[0]["Temperature"]["value"])
-n_times = len(data)
-temp_2d = np.zeros((n_points, n_times))
+data = plt.sample_line(pointa=(0.02, 0.02, 0.0), pointb=(0.02, 0.02, 0.25), resolution=100)
+time_indices = sorted({0, len(data) // 2, len(data) - 1})
 
-for t_idx, time_data in enumerate(data):
-    temp_2d[:, t_idx] = time_data["Temperature"]["value"]
-
-distances = data[0]["Temperature"]["distance"]
-
-plt.pcolormesh(range(n_times), distances, temp_2d, shading='auto')
-plt.xlabel("Time step")
-plt.ylabel("Distance along line")
-plt.colorbar(label="Temperature")
-plt.show()
+fig, ax = pyplot.subplots()
+for idx in time_indices:
+    ax.plot(
+        data[idx]["B-Mag (T)"]["distance"],
+        data[idx]["B-Mag (T)"]["value"],
+        label=f"t = {data[idx]['time']:.3f} s",
+    )
+ax.set_xlabel("Distance Along Line (m)")
+ax.set_ylabel("B-Mag (T)")
+ax.set_title("B-Mag (T) Along Sampled Line at Three Time Points")
+ax.legend()
+fig.tight_layout()
+fig.savefig("docs/static/demos/sample_line_time_slices.png")
 ```
-
-### Sample from specific block
-
-```python
-from pyemsi import Plotter
-
-p = Plotter("output.vtm")
-# Sample only from the "coil" block
-data = p.sample_line([0, 0, 0], [10, 0, 0], block_name="coil", resolution=100)
-```
+![Sample Line Time Slices](/demos/sample_line_time_slices.png)
 
 ## See Also
 

@@ -2,9 +2,12 @@
 title: set_contour()
 sidebar_position: 4
 ---
-Adds contour lines/surfaces derived from a scalar field.
 
-For [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.multiblock) datasets, [`Plotter`](/docs/api/Plotter/index.md) computes a global min/max across blocks and generates shared contour levels so contours are consistent across the full model.
+Configures contour lines/surfaces derived from a scalar field.
+
+`set_contour()` is part of the [visualization pipeline](./index.md#visualization-pipeline). Like the other pipeline methods, calling it only stores the configuration — contours are not computed or added to the scene until [`show()`](./show.md) or [`export()`](./export.md) triggers a rebuild.
+
+For [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.multiblock) datasets, [`Plotter`](/docs/api/Plotter/index.md) computes a global min/max across all blocks and generates shared contour levels, so contours are consistent across the full model.
 
 :::tip[Parameters]
 - **`name`** (`Literal[...]`, default: `"Flux (A/m)"`) — Name of the scalar field to visualize (must exist in mesh arrays).
@@ -29,7 +32,24 @@ For [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvist
 ### Example
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-Plotter("mesh.vtm").set_contour("Flux (A/m)", n_contours=20).show()
+file_path = examples.ipm_motor_path()
+plt = Plotter(file_path)
+plt.set_scalar("B-Mag (T)").set_contour("Flux (A/m)", n_contours=20)
+plt.plotter.view_xy()
+plt.show()
 ```
+
+<iframe
+  src="/pyemsi/demos/ipm_motor.html"
+  style={{aspectRatio: "1.5"}}
+/>
+
+### See also
+
+- [`set_scalar()`](./set_scalar.md) — configure the scalar field that contours are derived from
+- [`set_vector()`](./set_vector.md) — overlay vector glyphs
+- [`set_feature_edges()`](./set_feature_edges.md) — configure edge overlay
+- [`show()`](./show.md) — trigger rendering and apply the full pipeline
+- [`export()`](./export.md) — render and save a screenshot

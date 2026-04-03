@@ -14,9 +14,11 @@ For [`MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvista.MultiB
 ### Example
 
 ```python
-from pyemsi import Plotter
+from pyemsi import Plotter, examples
 
-p = Plotter("mesh.vtm")
-block_names = p.get_block_names()
-print(block_names)  # e.g., ["coil", "core", "air"]
+file_path = examples.transient_path()
+plt = Plotter(file_path)
+
+block_names = plt.get_block_names()
+print(block_names)  # ['1', '3', '4']
 ```

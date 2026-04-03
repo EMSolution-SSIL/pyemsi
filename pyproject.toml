@@ -63,6 +63,8 @@ version = {attr = "pyemsi.__version__"}
 [tool.setuptools.package-data]
 "pyemsi.examples" = [
     "*.pvd",
+    "ipm_motor/*.vtm",
+    "ipm_motor/*/*.vtu",
     "transient/*.vtm",
     "transient/*/*.vtu",
 ]
@@ -89,7 +91,7 @@ line-length = 120
 [tool.briefcase]
 project_name = "pyemsi"
 bundle = "com.emsolution"
-version = "0.1.2"
+version = "0.1.3"
 
 [tool.briefcase.app.pyemsi_gui]
 formal_name = "pyemsi"

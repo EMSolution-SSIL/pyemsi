@@ -20,8 +20,16 @@ If a file was loaded (via `filepath` or [`set_file()`](/docs/api/Plotter/set_fil
 ### Example
 
 ```python
-from pyemsi import Plotter
+from pyemsi import examples, Plotter
 
-Plotter("mesh.vtm").set_scalar("B-Mag (T)").show()
+file_path = examples.transient_path() # Or path to .pvd file
+
+plt = Plotter(file_path)
+plt.set_scalar("B-Mag (T)")
+plt.show()
 ```
 
+<iframe
+  src="/pyemsi/demos/installation.html"
+  style={{aspectRatio: "1.5"}}
+/>

@@ -5,7 +5,7 @@ title: FemapConverter
 
 `FemapConverter` converts EMSolution's FEMAP Neutral files to VTK MultiBlock UnstructuredGrid format for visualization in ParaView or with PyVista.
 
-### Conversion Pipeline
+## Conversion Pipeline
 
 The converter executes a four-stage pipeline:
 
@@ -14,7 +14,7 @@ The converter executes a four-stage pipeline:
 3. **Initialize PVD** — Creates a PVD collection file that references all time steps
 4. **Time Stepping** — Generates individual VTM files for each time step with all field data
 
-### Initialization
+## Initialization
 
 ```python
 from pyemsi import FemapConverter
@@ -50,7 +50,7 @@ converter = FemapConverter(
 - **`displacement`** (`str | Path`, default: `"disp"`) — Path to displacement data file, or `None` to skip
 :::
 
-### Running the Conversion
+## Running the Conversion
 
 Call the `run()` method to execute the complete conversion pipeline:
 
@@ -64,17 +64,17 @@ The `run()` method:
 - Executes all four pipeline stages automatically
 - Uses parallel processing for data file parsing and time step generation
 
-### Output Structure
+## Output Structure
 
 The converter generates the following files:
 
-#### PVD Collection File
+### PVD Collection File
 
 Location: `{output_dir}/{output_name}.pvd`
 
 An XML collection file that references all time steps. Open this file in ParaView to view animations and time-series data.
 
-#### VTM Multiblock Files
+### VTM Multiblock Files
 
 Location: `{output_dir}/{output_name}/`
 
@@ -82,7 +82,7 @@ Individual VTM (VTK MultiBlock) files for each time step, containing:
 - Mesh geometry organized by PropertyID (material/component)
 - All physics field data for that time step
 
-#### PVD → VTM → VTU hierarchy (time series + data tree)
+### PVD → VTM → VTU hierarchy (time series + data tree)
 
 `*.pvd` is a lightweight **time-series index** (a VTK “Collection” XML file). It does not contain mesh geometry; instead it lists time steps and the file to load for each time.
 
@@ -130,7 +130,7 @@ In `pyemsi`, each time step points to a `*.vtm` file, and each `*.vtm` file (VTK
 
 In this project, the multiblock `name` corresponds to the **PropertyID** used to split the mesh into blocks. In ParaView, those names show up in the *MultiBlock Inspector*, and in PyVista they show up as multiblock keys.
 
-#### ParaView + PyVista support
+### ParaView + PyVista support
 
 - **ParaView**: open `{output_name}.pvd` to get the full time series (animation timeline driven by the `timestep=` values). Each time step loads the corresponding `*.vtm`, and the multiblock tree exposes each PropertyID block (each backed by a `*.vtu`).
 - **PyVista**: read the time series with `pyvista.get_reader()` (returns a `PVDReader` for `.pvd`). Example:
@@ -148,7 +148,7 @@ print(multiblock.keys())
 multiblock.plot()
 ```
 
-#### Field Data
+## Field Data
 
 The converter adds the following field data to meshes based on configured data files:
 
@@ -175,7 +175,12 @@ The converter adds the following field data to meshes based on configured data f
 - Point data: `Heat Density (W/m^3)`, `Heat (W)`
 - Cell data: `Heat Density (W/m^3)`, `Heat (W)`
 
-### Usage Example
+## Usage Example
+
+Download sample FEMAP files to test the converter:
+
+📥 [FEMAP_FILES.zip](/FEMAP_FILES.zip) — Contains example FEMAP neutral mesh and data files for quick testing and integration workflows.
+
 
 ```python
 from pyemsi import FemapConverter
@@ -184,20 +189,19 @@ from pyemsi import FemapConverter
 converter = FemapConverter(r"\path\to\femap\files")
 converter.run()
 
-# Skip current density processing
-converter = FemapConverter(
-    r"\path\to\femap\files",
-    output_name="my_simulation",
-    current=None
-)
-converter.run()
+# # Skip current density processing
+# converter = FemapConverter(
+#     r"\path\to\femap\files",
+#     output_name="my_simulation",
+#     current=None
+# )
+# converter.run()
 
-# Force 2D mode for planar meshes
-converter = FemapConverter(
-    r"\path\to\femap\files",
-    force_2d=True
-)
-converter.run()
+# # Force 2D mode for planar meshes in cascade mode
+# FemapConverter(
+#     r"\path\to\femap\files",
+#     force_2d=True
+# ).run()
 ```
 
 The output can be visualized with the `Plotter` class or opened directly in ParaView:
@@ -210,3 +214,8 @@ plotter = Plotter(".pyemsi/output.pvd")
 plotter.set_scalar("B-Mag (T)")
 plotter.show()
 ```
+
+<iframe
+  src="/pyemsi/demos/installation.html"
+  style={{aspectRatio: "1.5"}}
+/>
