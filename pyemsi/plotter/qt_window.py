@@ -386,7 +386,7 @@ class QtPlotterWindow:
         self._query_toolbar.addAction(sample_arcs_action)
 
         # Add toolbar to main window
-        self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._query_toolbar)
+        self._window.addToolBar(Qt.ToolBarArea.LeftToolBarArea, self._query_toolbar)
 
     def _create_display_toolbar(self) -> None:
         """
