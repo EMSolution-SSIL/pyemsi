@@ -444,7 +444,7 @@ class Plotter:
 
         For MultiBlock datasets, creates separate actors for each block's feature edges.
         For single datasets, creates a single feature edges actor.
-        Automatically resets the camera to frame the mesh after plotting.
+            Preserves the current camera when refreshing the scene.
         Applies visibility settings from _block_visibility to each actor.
         """
         for idx, block, block_name in self._iter_blocks():
@@ -452,7 +452,13 @@ class Plotter:
             if edges.n_points == 0:
                 continue
             actor_name = f"feature_edges_block_{block_name}" if block_name else "feature_edges"
-            actor = self.plotter.add_mesh(edges, name=actor_name, pickable=False, **self._feature_edges_props)
+            actor = self.plotter.add_mesh(
+                edges,
+                name=actor_name,
+                pickable=False,
+                reset_camera=False,
+                **self._feature_edges_props,
+            )
             # Apply visibility from stored state
             if block_name:
                 actor.SetVisibility(self.get_block_visibility(block_name))
@@ -524,6 +530,7 @@ class Plotter:
                 preference="cell" if mode == "element" else "point",
                 name=actor_name,
                 pickable=True,
+                reset_camera=False,
                 **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode"]},
             )
             # Apply visibility from stored state
@@ -627,7 +634,12 @@ class Plotter:
                 continue
             actor_name = f"contour_block_{block_name}" if block_name else "contour"
             actor = self.plotter.add_mesh(
-                contours, name=actor_name, color=color, line_width=line_width, **contour_kwargs
+                contours,
+                name=actor_name,
+                color=color,
+                line_width=line_width,
+                reset_camera=False,
+                **contour_kwargs,
             )
             # Apply visibility from stored state
             if block_name:
@@ -793,7 +805,7 @@ class Plotter:
                 continue
 
             actor_name = f"vector_field_block_{block_name}" if block_name else "vector_field"
-            actor = self.plotter.add_mesh(glyphs, name=actor_name, **vector_kwargs)
+            actor = self.plotter.add_mesh(glyphs, name=actor_name, reset_camera=False, **vector_kwargs)
             # Apply visibility from stored state
             if block_name:
                 actor.SetVisibility(self.get_block_visibility(block_name))
