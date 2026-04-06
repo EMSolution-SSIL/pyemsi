@@ -13,6 +13,9 @@ class EMSolutionInputViewer(QWidget):
 
     textChanged = Signal(str)
     dirtyChanged = Signal(bool)
+    syncStateChanged = Signal(str)
+    externalChangeChanged = Signal(bool)
+    fileMissingChanged = Signal(bool)
 
     #: Emitted when the user clicks the Run button; carries the file path.
     run_external_requested = Signal(str)
@@ -49,8 +52,14 @@ class EMSolutionInputViewer(QWidget):
         layout.addWidget(toolbar)
         layout.addWidget(self.editor, 1)
 
-        self.editor.textChanged.connect(self.textChanged)
-        self.editor.dirtyChanged.connect(self.dirtyChanged)
+        self.editor.textChanged.connect(self.textChanged.emit)
+        self.editor.dirtyChanged.connect(self.dirtyChanged.emit)
+        if hasattr(self.editor, "syncStateChanged"):
+            self.editor.syncStateChanged.connect(self.syncStateChanged.emit)
+        if hasattr(self.editor, "externalChangeChanged"):
+            self.editor.externalChangeChanged.connect(self.externalChangeChanged.emit)
+        if hasattr(self.editor, "fileMissingChanged"):
+            self.editor.fileMissingChanged.connect(self.fileMissingChanged.emit)
 
     def load_file(self, path: str) -> None:
         self.editor.load_file(path)
@@ -66,8 +75,24 @@ class EMSolutionInputViewer(QWidget):
     def dirty(self) -> bool:
         return self.editor.dirty
 
+    @property
+    def sync_state(self) -> str:
+        return self.editor.sync_state
+
+    @property
+    def has_external_change(self) -> bool:
+        return self.editor.has_external_change
+
+    @property
+    def file_missing(self) -> bool:
+        return self.editor.file_missing
+
     def save(self, path: str | None = None) -> None:
         self.editor.save(path)
+
+    def reload_from_disk(self) -> None:
+        if self.editor.file_path:
+            self.editor.load_file(self.editor.file_path)
 
     def set_external_running(self, running: bool) -> None:
         """Toggle toolbar state: disable Run while a process is active."""

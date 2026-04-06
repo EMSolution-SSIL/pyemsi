@@ -25,6 +25,12 @@ class PythonViewer(QWidget):
     run_external_requested = Signal(str)
     #: Emitted when the user clicks Stop External.
     stop_external_requested = Signal()
+    #: Emitted when the file-sync state changes.
+    syncStateChanged = Signal(str)
+    #: Emitted when the external-change flag changes.
+    externalChangeChanged = Signal(bool)
+    #: Emitted when the backing file becomes missing or available.
+    fileMissingChanged = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -75,8 +81,14 @@ class PythonViewer(QWidget):
         layout.addWidget(self.editor, 1)
 
         # -- forward signals --
-        self.editor.textChanged.connect(self.textChanged)
-        self.editor.dirtyChanged.connect(self.dirtyChanged)
+        self.editor.textChanged.connect(self.textChanged.emit)
+        self.editor.dirtyChanged.connect(self.dirtyChanged.emit)
+        if hasattr(self.editor, "syncStateChanged"):
+            self.editor.syncStateChanged.connect(self.syncStateChanged.emit)
+        if hasattr(self.editor, "externalChangeChanged"):
+            self.editor.externalChangeChanged.connect(self.externalChangeChanged.emit)
+        if hasattr(self.editor, "fileMissingChanged"):
+            self.editor.fileMissingChanged.connect(self.fileMissingChanged.emit)
 
     # ------------------------------------------------------------------
     # Public API — mirrors MonacoLspWidget interface expected by SplitContainer
@@ -96,8 +108,24 @@ class PythonViewer(QWidget):
     def dirty(self) -> bool:
         return self.editor.dirty
 
+    @property
+    def sync_state(self) -> str:
+        return self.editor.sync_state
+
+    @property
+    def has_external_change(self) -> bool:
+        return self.editor.has_external_change
+
+    @property
+    def file_missing(self) -> bool:
+        return self.editor.file_missing
+
     def save(self, path: str | None = None) -> None:
         self.editor.save(path)
+
+    def reload_from_disk(self) -> None:
+        if self.editor.file_path:
+            self.editor.load_file(self.editor.file_path)
 
     def set_external_running(self, running: bool) -> None:
         """Toggle toolbar state: disable Run External while a process is active."""

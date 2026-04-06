@@ -11,7 +11,9 @@ from urllib.parse import unquote
 from qtpy.QtCore import Signal, QUrl
 from qtpy.QtWebEngineWidgets import QWebEngineView
 from qtpy.QtWebChannel import QWebChannel
+from qtpy.QtWidgets import QFileDialog, QMessageBox
 
+from ..file_sync import DocumentSyncState, FileSyncController
 from ._bridge import EditorBridge, MonacoPage
 from ._completion import build_completion_item_metadata_js
 from ._config import (
@@ -2209,6 +2211,9 @@ class MonacoLspWidget(QWebEngineView):
     initialized = Signal()
     textChanged = Signal(str)
     dirtyChanged = Signal(bool)
+    syncStateChanged = Signal(str)
+    externalChangeChanged = Signal(bool)
+    fileMissingChanged = Signal(bool)
 
     def __init__(
         self,
@@ -2228,6 +2233,7 @@ class MonacoLspWidget(QWebEngineView):
         )
         self._python_analysis_paths: list[str] = []
         self._read_only = False
+        self._file_sync = FileSyncController(self)
         if language == "python":
             self._python_analysis_paths = [str(_find_project_root(Path.cwd()))]
 
@@ -2279,6 +2285,10 @@ class MonacoLspWidget(QWebEngineView):
         self._bridge.valueChanged.connect(self._on_value_changed)
         self._bridge.setLanguage(language)
         self._bridge.send_to_js("language", language)
+
+        self._file_sync.stateChanged.connect(self._on_sync_state_changed)
+        self._file_sync.missingChanged.connect(self._on_missing_changed)
+        self._file_sync.reloadRequested.connect(self._on_reload_requested)
 
     def _resolve_python_server_command(self) -> tuple[list[str], str]:
         basedpyright_executable = resolve_basedpyright_executable(python_executable=sys.executable)
@@ -2340,7 +2350,22 @@ class MonacoLspWidget(QWebEngineView):
         new_dirty = self._bridge.value != self._initial_text
         if new_dirty != self._dirty:
             self._dirty = new_dirty
+            self._file_sync.set_dirty(new_dirty)
             self.dirtyChanged.emit(self._dirty)
+
+    def _on_sync_state_changed(self, state: str) -> None:
+        self.syncStateChanged.emit(state)
+        self.externalChangeChanged.emit(
+            state in {DocumentSyncState.EXTERNALLY_MODIFIED.value, DocumentSyncState.CONFLICT.value}
+        )
+
+    def _on_missing_changed(self, missing: bool) -> None:
+        self.fileMissingChanged.emit(missing)
+
+    def _on_reload_requested(self, path: str) -> None:
+        if self._dirty:
+            return
+        self.load_file(path)
 
     @property
     def dirty(self) -> bool:
@@ -2348,6 +2373,7 @@ class MonacoLspWidget(QWebEngineView):
 
     def _mark_clean(self) -> None:
         self._initial_text = self._bridge.value
+        self._file_sync.set_dirty(False)
         if self._dirty:
             self._dirty = False
             self.dirtyChanged.emit(False)
@@ -2362,9 +2388,11 @@ class MonacoLspWidget(QWebEngineView):
             text = f.read(self._MAX_BYTES)
         self._initial_text = text
         self.setText(text)
+        self.textChanged.emit(text)
         self._update_python_analysis_paths(resolved_path)
         self._bridge.send_to_js("fileUri", Path(resolved_path).as_uri())
         self._dirty = False
+        self._file_sync.monitor_file(resolved_path)
 
     def _update_python_analysis_paths(self, path: str) -> None:
         if self._language != "python":
@@ -2381,14 +2409,67 @@ class MonacoLspWidget(QWebEngineView):
         target = path or self._file_path
         if target is None:
             raise ValueError("No file path specified for save")
-        with open(target, "w", encoding="utf-8") as f:
+        resolved_target = str(Path(target).resolve())
+        resolved_target = self._prompt_conflicted_save(resolved_target)
+        if resolved_target is None:
+            return
+        with open(resolved_target, "w", encoding="utf-8") as f:
             f.write(self.text())
-        self._file_path = target
+        self._file_path = resolved_target
+        self._bridge.send_to_js("fileUri", Path(resolved_target).as_uri())
         self._mark_clean()
+        self._file_sync.mark_saved(resolved_target)
+
+    def _prompt_conflicted_save(self, target: str) -> str | None:
+        if not self.has_external_change or self._file_path is None:
+            return target
+        if target != self._file_path:
+            return target
+
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle("File Changed On Disk")
+        dialog.setText("This file changed on disk after you started editing it.")
+        dialog.setInformativeText(
+            "Choose Overwrite to replace the on-disk file, or Save As to keep your edits in a new file."
+        )
+        overwrite_button = dialog.addButton("Overwrite", QMessageBox.ButtonRole.AcceptRole)
+        save_as_button = dialog.addButton("Save As...", QMessageBox.ButtonRole.ActionRole)
+        cancel_button = dialog.addButton(QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        dialog.exec()
+
+        clicked = dialog.clickedButton()
+        if clicked is overwrite_button:
+            return target
+        if clicked is save_as_button:
+            selected_path, _selected_filter = QFileDialog.getSaveFileName(
+                self,
+                "Save As",
+                target,
+                "All Files (*)",
+            )
+            if selected_path:
+                return str(Path(selected_path).resolve())
+        if clicked is cancel_button:
+            return None
+        return None
 
     @property
     def file_path(self) -> str | None:
         return self._file_path
+
+    @property
+    def sync_state(self) -> str:
+        return self._file_sync.state.value
+
+    @property
+    def has_external_change(self) -> bool:
+        return self._file_sync.has_external_change
+
+    @property
+    def file_missing(self) -> bool:
+        return self._file_sync.missing
 
     # -- public API --------------------------------------------------------
 
