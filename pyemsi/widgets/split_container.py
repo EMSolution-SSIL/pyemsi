@@ -95,7 +95,7 @@ class _TabPanel(QTabWidget):
     def _close_tab(self, index: int) -> bool:
         widget = self.widget(index)
         if widget is not None and self._is_dirty(widget):
-            title = self.tabText(index).rstrip(" *")
+            title = self.tabText(index).split(" [missing]", 1)[0].rstrip(" *!")
             ans = QMessageBox.question(
                 self,
                 "Unsaved Changes",
@@ -390,17 +390,15 @@ class SplitContainer(QWidget):
         base_name = os.path.basename(norm_path)
         self.add_tab(viewer, base_name)
 
-        # Track dirty state for Monaco editors
         if hasattr(viewer, "dirtyChanged"):
-            panel = self._left  # add_tab always targets _left
-            viewer.dirtyChanged.connect(
-                lambda dirty, w=viewer, bn=base_name, p=panel: self._update_dirty_title(p, w, bn, dirty)
-            )
+            viewer.dirtyChanged.connect(lambda _dirty, w=viewer, bn=base_name: self._refresh_tab_title(w, bn))
+        if hasattr(viewer, "syncStateChanged"):
+            viewer.syncStateChanged.connect(lambda _state, w=viewer, bn=base_name: self._refresh_tab_title(w, bn))
 
         # Wire up MarkdownViewer preview support
         if isinstance(viewer, MarkdownViewer):
             viewer.preview_requested.connect(self.open_preview)
-            viewer.editor.textChanged.connect(lambda text, p=norm_path: self._update_preview(p, text))
+            viewer.textChanged.connect(lambda text, p=norm_path: self._update_preview(p, text))
 
         return viewer
 
@@ -445,12 +443,33 @@ class SplitContainer(QWidget):
                     return w
         return None
 
-    @staticmethod
-    def _update_dirty_title(panel: _TabPanel, widget: QWidget, base_name: str, dirty: bool) -> None:
+    def _find_panel_for_widget(self, widget: QWidget) -> _TabPanel | None:
+        for panel in (self._left, self._right):
+            if panel.indexOf(widget) != -1:
+                return panel
+        return None
+
+    def _refresh_tab_title(self, widget: QWidget, base_name: str) -> None:
+        panel = self._find_panel_for_widget(widget)
+        if panel is None:
+            return
         idx = panel.indexOf(widget)
         if idx == -1:
             return
-        panel.setTabText(idx, f"{base_name} *" if dirty else base_name)
+        panel.setTabText(idx, self._format_tab_title(base_name, widget))
+
+    @staticmethod
+    def _format_tab_title(base_name: str, widget: QWidget) -> str:
+        markers: list[str] = []
+        if getattr(widget, "dirty", False):
+            markers.append("*")
+        if getattr(widget, "has_external_change", False):
+            markers.append("!")
+        if getattr(widget, "file_missing", False):
+            markers.append("[missing]")
+        if not markers:
+            return base_name
+        return f"{base_name} {' '.join(markers)}"
 
     # ------------------------------------------------------------------
     # private helpers
