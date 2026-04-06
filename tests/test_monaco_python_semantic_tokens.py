@@ -1,5 +1,6 @@
 """Tests for Monaco Python semantic-highlighting rollout controls."""
 
+from pyemsi.widgets.monaco_lsp._widget import _HTML
 from pyemsi.widgets.monaco_lsp._config import (
     LSP_DEBUG_ENV,
     PY_SEMANTIC_FEATURE_ENV,
@@ -94,3 +95,9 @@ def test_semantic_theme_enabled_scoped_to_python_viewer():
 
 def test_semantic_theme_enabled_defaults_on_when_requested():
     assert semantic_theme_enabled("python", semantic_requested=True, env={})
+
+
+def test_embedded_monaco_html_includes_signature_help_preferred_top_hook():
+    assert "function applySignatureHelpPreferredTopLayout()" in _HTML
+    assert "function scheduleSignatureHelpLayout()" in _HTML
+    assert ".parameter-hints-widget.pyemsi-prefer-top" in _HTML

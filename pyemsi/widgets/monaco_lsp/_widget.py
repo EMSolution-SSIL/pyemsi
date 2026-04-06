@@ -480,6 +480,9 @@ _HTML = r"""<!DOCTYPE html>
         font-size: 11px;
         line-height: 1.2;
     }
+    .monaco-editor .parameter-hints-widget.pyemsi-prefer-top {
+        z-index: 41;
+    }
     #container {
         width: 100%;
         flex: 1 1 auto;
@@ -1403,6 +1406,8 @@ _HTML = r"""<!DOCTYPE html>
     var _activeDocumentUri = '';
     var _breadcrumbTrail = [];
     var _openBreadcrumbMenuState = null;
+    var _signatureHelpLayoutFrame = 0;
+    var _signatureHelpObserver = null;
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const breadcrumbMenuEl = document.getElementById('breadcrumb-menu');
 
@@ -1410,6 +1415,121 @@ _HTML = r"""<!DOCTYPE html>
         if (!(PY_SEMANTIC_FEATURE && LSP_LANGUAGE === 'python')) return themeName;
         if (themeName === 'vs') return 'pyemsi-vs';
         return themeName;
+    }
+
+    function getEditorDomNode() {
+        return editor ? editor.getDomNode() : null;
+    }
+
+    function isWidgetVisible(element) {
+        if (!element || !element.isConnected) {
+            return false;
+        }
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') {
+            return false;
+        }
+        return element.getClientRects().length > 0;
+    }
+
+    function getParameterHintsWidget() {
+        const editorNode = getEditorDomNode();
+        return editorNode ? editorNode.querySelector('.parameter-hints-widget') : null;
+    }
+
+    function getSuggestWidget() {
+        const editorNode = getEditorDomNode();
+        return editorNode ? editorNode.querySelector('.suggest-widget') : null;
+    }
+
+    function clearSignatureHelpPreferredTopLayout(widget) {
+        if (!widget) {
+            return;
+        }
+        widget.classList.remove('pyemsi-prefer-top');
+        if (widget.dataset.pyemsiPreferredTop === 'true') {
+            widget.style.removeProperty('top');
+            delete widget.dataset.pyemsiPreferredTop;
+        }
+    }
+
+    function applySignatureHelpPreferredTopLayout() {
+        const widget = getParameterHintsWidget();
+        if (!editor || !widget || !isWidgetVisible(widget)) {
+            clearSignatureHelpPreferredTopLayout(widget);
+            return;
+        }
+
+        const editorNode = getEditorDomNode();
+        const position = editor.getPosition();
+        const cursorBox = position ? editor.getScrolledVisiblePosition(position) : null;
+        if (!editorNode || !cursorBox) {
+            clearSignatureHelpPreferredTopLayout(widget);
+            return;
+        }
+
+        const editorRect = editorNode.getBoundingClientRect();
+        const widgetRect = widget.getBoundingClientRect();
+        if (!editorRect.height || !widgetRect.height) {
+            clearSignatureHelpPreferredTopLayout(widget);
+            return;
+        }
+
+        const suggestWidget = getSuggestWidget();
+        const suggestRect = isWidgetVisible(suggestWidget) ? suggestWidget.getBoundingClientRect() : null;
+        const lineHeight = typeof editor.getOption === 'function' && monaco.editor && monaco.editor.EditorOption
+            ? editor.getOption(monaco.editor.EditorOption.lineHeight)
+            : 20;
+        const gap = 8;
+        const cursorTop = cursorBox.top;
+        const cursorBottom = cursorBox.top + Math.max(cursorBox.height || lineHeight, lineHeight);
+        let preferredTop = cursorTop - widgetRect.height - gap;
+        if (suggestRect) {
+            preferredTop = Math.min(preferredTop, suggestRect.top - editorRect.top - widgetRect.height - gap);
+        }
+
+        const fallbackTop = suggestRect
+            ? Math.max(cursorBottom + gap, suggestRect.bottom - editorRect.top + gap)
+            : cursorBottom + gap;
+        const maxTop = Math.max(0, editorRect.height - widgetRect.height - gap);
+        const topToUse = preferredTop >= 0
+            ? Math.min(preferredTop, maxTop)
+            : Math.min(fallbackTop, maxTop);
+        const nextTop = `${Math.round(topToUse)}px`;
+        const alreadyApplied = widget.dataset.pyemsiPreferredTop === 'true';
+
+        widget.classList.toggle('pyemsi-prefer-top', preferredTop >= 0);
+        if (!alreadyApplied || widget.style.top !== nextTop) {
+            widget.style.top = nextTop;
+        }
+        widget.dataset.pyemsiPreferredTop = 'true';
+    }
+
+    function scheduleSignatureHelpLayout() {
+        if (_signatureHelpLayoutFrame) {
+            window.cancelAnimationFrame(_signatureHelpLayoutFrame);
+        }
+        _signatureHelpLayoutFrame = window.requestAnimationFrame(() => {
+            _signatureHelpLayoutFrame = 0;
+            applySignatureHelpPreferredTopLayout();
+        });
+    }
+
+    function observeSignatureHelpWidget() {
+        const editorNode = getEditorDomNode();
+        if (!editorNode || _signatureHelpObserver) {
+            return;
+        }
+
+        _signatureHelpObserver = new MutationObserver(() => {
+            scheduleSignatureHelpLayout();
+        });
+        _signatureHelpObserver.observe(editorNode, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['class', 'style'],
+        });
     }
 
     function defineSemanticTheme() {
@@ -2045,6 +2165,7 @@ __LSP_COMPLETION_ITEM_METADATA__
             sendToPython('value', text);
             if (lspClient && lspClient._initialized) lspClient.changeDocument(text);
             scheduleDocumentSymbolRefresh(220);
+            scheduleSignatureHelpLayout();
         });
 
         editor.onDidChangeModelLanguage((event) => {
@@ -2053,7 +2174,18 @@ __LSP_COMPLETION_ITEM_METADATA__
 
         editor.onDidChangeCursorPosition(() => {
             updateBreadcrumbsForActivePosition();
+            scheduleSignatureHelpLayout();
         });
+
+        editor.onDidScrollChange(() => {
+            scheduleSignatureHelpLayout();
+        });
+
+        editor.onDidLayoutChange(() => {
+            scheduleSignatureHelpLayout();
+        });
+
+        observeSignatureHelpWidget();
 
         // Start LSP client only if a server is configured for this language
         if (LSP_PORT > 0) {
@@ -2103,6 +2235,7 @@ __LSP_COMPLETION_ITEM_METADATA__
 
         registerDocumentSymbolProvider(editor.getModel().getLanguageId());
         scheduleDocumentSymbolRefresh(0);
+        scheduleSignatureHelpLayout();
 
         _editorReady = true;
         _finishInit();
@@ -2125,6 +2258,10 @@ __LSP_COMPLETION_ITEM_METADATA__
         if (event.key !== 'Escape' || !_openBreadcrumbMenuState) return;
         event.preventDefault();
         closeBreadcrumbMenu();
+    });
+
+    window.addEventListener('resize', () => {
+        scheduleSignatureHelpLayout();
     });
 
     function sendToPython(name, value) {
