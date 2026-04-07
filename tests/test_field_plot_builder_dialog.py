@@ -41,6 +41,49 @@ def test_field_plot_builder_dialog_defaults_to_disabled_stages(tmp_path):
     assert dialog._scalar_kwargs()["cmap"] == "viridis"
 
 
+def test_field_plot_builder_dialog_defaults_to_collapsed_compact_sections(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+
+    assert dialog._sections_scroll_area.widget() is not None
+    assert not dialog._scalar_panel.is_expanded()
+    assert not dialog._contour_panel.is_expanded()
+    assert not dialog._vector_panel.is_expanded()
+    assert not dialog._feature_edges_panel.is_expanded()
+    assert dialog._scalar_panel.summary_text() == "Disabled"
+    assert dialog._contour_panel.summary_text() == "Disabled"
+    assert dialog._vector_panel.summary_text() == "Disabled"
+
+
+def test_field_plot_builder_dialog_enabling_stage_expands_section_and_updates_summary(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+
+    dialog._scalar_enabled_checkbox.setChecked(True)
+
+    assert dialog._scalar_panel.is_expanded()
+    assert dialog._scalar_panel.summary_text() == " | ".join(
+        (
+            str(dialog._scalar_name_combo.currentData()),
+            str(dialog._scalar_mode_combo.currentData()),
+            dialog._scalar_cmap_combo.currentText(),
+        )
+    )
+
+    dialog._scalar_mode_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._scalar_mode_combo, "element"))
+
+    assert "element" in dialog._scalar_panel.summary_text()
+
+    dialog._scalar_enabled_checkbox.setChecked(False)
+
+    assert not dialog._scalar_panel.is_expanded()
+    assert dialog._scalar_panel.summary_text() == "Disabled"
+
+
 def test_field_plot_builder_dialog_plot_requires_existing_file_and_stage(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
@@ -583,6 +626,9 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
         def set_vector(self, **kwargs) -> None:
             calls.append(("set_vector", kwargs))
 
+        def set_feature_edges(self, **kwargs) -> None:
+            calls.append(("set_feature_edges", kwargs))
+
         def close(self) -> None:
             calls.append(("close", None))
 
@@ -602,6 +648,8 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
     assert calls[2][0] == "set_contour"
     assert calls[3][0] == "set_vector"
     assert calls[3][1]["factor"] == 1e-30
+    assert calls[4][0] == "set_feature_edges"
+    assert calls[4][1] == {"color": "white", "line_width": 1, "opacity": 1.0}
     assert added["title"] == "Field Plot"
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert manager.get_local("tools.field_plot.filepath") == os.path.abspath(os.path.normpath(os.fspath(plot_path)))
