@@ -1000,21 +1000,16 @@ class Plotter:
                 glyphs,
                 name=actor_name,
                 reset_camera=False,
-                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True},
+                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True, "title": name},
                 **vector_kwargs,
             )
             # Apply visibility from stored state
             if block_name:
                 actor.SetVisibility(self.get_block_visibility(block_name))
 
-            # Register glyph scalar bar source so the range dialog can resolve it.
-            # PyVista names the glyph scalar bar after the active scalars in the
-            # glyphs mesh (typically "GlyphScale").  Map it back to the original
-            # vector array in the source mesh.
-            glyph_scalars_name = glyphs.active_scalars_name
-            if glyph_scalars_name:
-                association: Literal["point", "cell"] = "point" if name in block.point_data else "cell"
-                self._register_scalar_bar_source(glyph_scalars_name, str(name), association)
+            # Register scalar bar source so the range dialog can resolve it.
+            association: Literal["point", "cell"] = "point" if name in block.point_data else "cell"
+            self._register_scalar_bar_source(str(name), str(name), association)
 
     def show(self):
         """
