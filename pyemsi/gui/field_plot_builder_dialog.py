@@ -7,20 +7,25 @@ import os
 
 import numpy as np
 import pyvista as pv
-from PySide6.QtCore import QLocale
-from PySide6.QtGui import QDoubleValidator, QIcon
+from PySide6.QtCore import QLocale, Qt, Signal
+from PySide6.QtGui import QColor, QDoubleValidator, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFrame,
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -69,6 +74,131 @@ VECTOR_SCALE_OPTIONS: tuple[tuple[str, str | bool | None], ...] = (
 GLYPH_TYPE_OPTIONS: tuple[str, ...] = ("arrow", "cone", "sphere")
 COLOR_MODE_OPTIONS: tuple[str, ...] = ("scale", "scalar", "vector")
 INTERNAL_FIELD_NAMES: frozenset[str] = frozenset({"vtkOriginalCellIds", "vtkOriginalPointIds"})
+
+
+class _ColorSelector(QWidget):
+    """Color input with a swatch button that opens QColorDialog."""
+
+    valueChanged = Signal(str)
+
+    _SWATCH_SIZE = 20
+
+    def __init__(self, initial: str = "white", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._line_edit = QLineEdit(initial, self)
+        self._swatch_button = QPushButton(self)
+        self._swatch_button.setFixedSize(self._SWATCH_SIZE + 8, self._SWATCH_SIZE + 4)
+        self._swatch_button.setToolTip("Pick color…")
+        self._swatch_button.clicked.connect(self._pick_color)
+        self._line_edit.textChanged.connect(self._refresh_swatch)
+        self._line_edit.textChanged.connect(self.valueChanged.emit)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._line_edit, 1)
+        layout.addWidget(self._swatch_button)
+        self._refresh_swatch()
+
+    def value(self) -> str:
+        return self._line_edit.text().strip()
+
+    def set_value(self, color: str) -> None:
+        self._line_edit.setText(color)
+
+    def _refresh_swatch(self, _text: str | None = None) -> None:
+        color = QColor(self._line_edit.text().strip())
+        if not color.isValid():
+            color = QColor("white")
+        pixmap = QPixmap(self._SWATCH_SIZE, self._SWATCH_SIZE)
+        pixmap.fill(color)
+        self._swatch_button.setIcon(QIcon(pixmap))
+
+    def _pick_color(self) -> None:
+        current = QColor(self._line_edit.text().strip())
+        if not current.isValid():
+            current = QColor("white")
+        chosen = QColorDialog.getColor(current, self, "Select Color")
+        if chosen.isValid():
+            self._line_edit.setText(chosen.name())
+
+
+class _CollapsibleSection(QWidget):
+    """Simple expandable section used to keep long forms compact."""
+
+    def __init__(
+        self,
+        title: str,
+        parent: QWidget | None = None,
+        header_widget: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._content_widget: QWidget | None = None
+
+        self._toggle_button = QToolButton(self)
+        self._toggle_button.setText(title)
+        self._toggle_button.setCheckable(True)
+        self._toggle_button.setChecked(False)
+        self._toggle_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._toggle_button.setArrowType(Qt.ArrowType.RightArrow)
+        self._toggle_button.setStyleSheet(
+            "QToolButton { border: none; font-weight: 600; padding: 4px 0; text-align: left; }"
+        )
+        self._toggle_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._toggle_button.toggled.connect(self.set_expanded)
+
+        self._summary_label = QLabel(self)
+        self._summary_label.setStyleSheet("color: palette(mid);")
+        self._summary_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._summary_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(8)
+        if header_widget is not None:
+            header_layout.addWidget(header_widget)
+        header_layout.addWidget(self._toggle_button, 1)
+        header_layout.addWidget(self._summary_label, 1)
+
+        self._header_line = QFrame(self)
+        self._header_line.setFrameShape(QFrame.Shape.HLine)
+        self._header_line.setFrameShadow(QFrame.Shadow.Sunken)
+
+        self._content_container = QWidget(self)
+        self._content_layout = QVBoxLayout(self._content_container)
+        self._content_layout.setContentsMargins(24, 0, 0, 0)
+        self._content_layout.setSpacing(0)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addLayout(header_layout)
+        layout.addWidget(self._header_line)
+        layout.addWidget(self._content_container)
+
+        self.set_expanded(False)
+
+    def set_content_widget(self, widget: QWidget) -> None:
+        self._content_widget = widget
+        self._content_layout.addWidget(widget)
+
+    def set_summary(self, text: str) -> None:
+        self._summary_label.setText(text)
+
+    def summary_text(self) -> str:
+        return self._summary_label.text()
+
+    def is_expanded(self) -> bool:
+        return self._toggle_button.isChecked()
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._toggle_button.blockSignals(True)
+        self._toggle_button.setChecked(expanded)
+        self._toggle_button.blockSignals(False)
+        self._toggle_button.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+        self._content_container.setVisible(expanded)
+
+    def set_content_enabled(self, enabled: bool) -> None:
+        self._content_container.setEnabled(enabled)
 
 
 def _combo_index_for_data(combo: QComboBox, data) -> int:
@@ -152,7 +282,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._contour_n_contours_spin = QSpinBox(self)
         self._contour_n_contours_spin.setRange(1, 999)
         self._contour_n_contours_spin.setValue(defaults["contour_n_contours"])
-        self._contour_color_edit = QLineEdit(defaults["contour_color"], self)
+        self._contour_color_edit = _ColorSelector(defaults["contour_color"], self)
         self._contour_line_width_spin = QSpinBox(self)
         self._contour_line_width_spin.setRange(1, 100)
         self._contour_line_width_spin.setValue(defaults["contour_line_width"])
@@ -224,15 +354,50 @@ class FieldPlotBuilderDialog(QDialog):
         helper_label.setWordWrap(True)
         helper_label.setStyleSheet("color: palette(mid);")
 
+        self._scalar_panel = _CollapsibleSection("Scalar", self, header_widget=self._scalar_enabled_checkbox)
+        self._scalar_panel.set_content_widget(self._scalar_section)
+        self._contour_panel = _CollapsibleSection("Contour", self, header_widget=self._contour_enabled_checkbox)
+        self._contour_panel.set_content_widget(self._contour_section)
+        self._vector_panel = _CollapsibleSection("Vector", self, header_widget=self._vector_enabled_checkbox)
+        self._vector_panel.set_content_widget(self._vector_section)
+
         layout = QVBoxLayout(self)
         layout.addLayout(file_layout)
         layout.addWidget(helper_label)
-        layout.addWidget(self._scalar_enabled_checkbox)
-        layout.addWidget(self._scalar_section)
-        layout.addWidget(self._contour_enabled_checkbox)
-        layout.addWidget(self._contour_section)
-        layout.addWidget(self._vector_enabled_checkbox)
-        layout.addWidget(self._vector_section)
+
+        self._feature_edges_color_edit = _ColorSelector(defaults["feature_edges_color"], self)
+        self._feature_edges_line_width_spin = QSpinBox(self)
+        self._feature_edges_line_width_spin.setRange(1, 100)
+        self._feature_edges_line_width_spin.setValue(defaults["feature_edges_line_width"])
+        self._feature_edges_opacity_spin = QDoubleSpinBox(self)
+        self._feature_edges_opacity_spin.setRange(0.0, 1.0)
+        self._feature_edges_opacity_spin.setDecimals(2)
+        self._feature_edges_opacity_spin.setSingleStep(0.05)
+        self._feature_edges_opacity_spin.setValue(defaults["feature_edges_opacity"])
+        self._feature_edges_section = QWidget(self)
+        feature_edges_layout = QFormLayout(self._feature_edges_section)
+        feature_edges_layout.addRow("Color:", self._feature_edges_color_edit)
+        feature_edges_layout.addRow("Line Width:", self._feature_edges_line_width_spin)
+        feature_edges_layout.addRow("Opacity:", self._feature_edges_opacity_spin)
+        self._feature_edges_panel = _CollapsibleSection("Feature Edges", self)
+        self._feature_edges_panel.set_content_widget(self._feature_edges_section)
+
+        self._sections_scroll_area = QScrollArea(self)
+        self._sections_scroll_area.setWidgetResizable(True)
+        self._sections_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self._sections_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._sections_scroll_area.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        sections_container = QWidget(self._sections_scroll_area)
+        sections_layout = QVBoxLayout(sections_container)
+        sections_layout.setContentsMargins(0, 0, 0, 0)
+        sections_layout.setSpacing(10)
+        sections_layout.addWidget(self._scalar_panel)
+        sections_layout.addWidget(self._contour_panel)
+        sections_layout.addWidget(self._vector_panel)
+        sections_layout.addWidget(self._feature_edges_panel)
+        sections_layout.addStretch(1)
+        self._sections_scroll_area.setWidget(sections_container)
+        layout.addWidget(self._sections_scroll_area, 1)
 
         button_row = QHBoxLayout()
         self._analyse_button = QPushButton("Analyse", self)
@@ -249,10 +414,23 @@ class FieldPlotBuilderDialog(QDialog):
         button_row.addWidget(self._cancel_button)
         layout.addLayout(button_row)
 
-        self._scalar_enabled_checkbox.toggled.connect(self._scalar_section.setEnabled)
-        self._contour_enabled_checkbox.toggled.connect(self._contour_section.setEnabled)
-        self._vector_enabled_checkbox.toggled.connect(self._vector_section.setEnabled)
+        self._scalar_enabled_checkbox.toggled.connect(self._on_scalar_enabled_toggled)
+        self._contour_enabled_checkbox.toggled.connect(self._on_contour_enabled_toggled)
+        self._vector_enabled_checkbox.toggled.connect(self._on_vector_enabled_toggled)
         self._vector_use_tolerance_checkbox.toggled.connect(self._vector_tolerance_spin.setEnabled)
+        self._scalar_name_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
+        self._scalar_mode_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
+        self._scalar_cmap_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
+        self._contour_name_combo.currentTextChanged.connect(self._update_contour_panel_summary)
+        self._contour_n_contours_spin.valueChanged.connect(self._update_contour_panel_summary)
+        self._contour_color_edit.valueChanged.connect(self._update_contour_panel_summary)
+        self._vector_name_combo.currentTextChanged.connect(self._update_vector_panel_summary)
+        self._vector_scale_combo.currentTextChanged.connect(self._update_vector_panel_summary)
+        self._vector_glyph_type_combo.currentTextChanged.connect(self._update_vector_panel_summary)
+        self._vector_factor_edit.textChanged.connect(self._update_vector_panel_summary)
+        self._feature_edges_color_edit.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._feature_edges_line_width_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._feature_edges_opacity_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._script_button.clicked.connect(self._open_script_dialog)
         self._analyse_button.clicked.connect(self._on_analyse)
         self._plot_button.clicked.connect(self._on_plot)
@@ -260,9 +438,14 @@ class FieldPlotBuilderDialog(QDialog):
         self._plot_button.setDefault(True)
         self._plot_button.setFocus()
 
-        self._scalar_section.setEnabled(self._scalar_enabled_checkbox.isChecked())
-        self._contour_section.setEnabled(self._contour_enabled_checkbox.isChecked())
-        self._vector_section.setEnabled(self._vector_enabled_checkbox.isChecked())
+        self._on_scalar_enabled_toggled(self._scalar_enabled_checkbox.isChecked())
+        self._on_contour_enabled_toggled(self._contour_enabled_checkbox.isChecked())
+        self._on_vector_enabled_toggled(self._vector_enabled_checkbox.isChecked())
+        self._feature_edges_panel.set_expanded(False)
+        self._update_scalar_panel_summary()
+        self._update_contour_panel_summary()
+        self._update_vector_panel_summary()
+        self._update_feature_edges_panel_summary()
         self._vector_tolerance_spin.setEnabled(self._vector_use_tolerance_checkbox.isChecked())
 
     def _load_defaults(self) -> dict[str, object]:
@@ -288,6 +471,9 @@ class FieldPlotBuilderDialog(QDialog):
             "vector_factor": 1.0,
             "vector_tolerance": None,
             "vector_color_mode": "scale",
+            "feature_edges_color": "white",
+            "feature_edges_line_width": 1,
+            "feature_edges_opacity": 1.0,
         }
 
     def _default_field_file_path(self) -> str:
@@ -325,6 +511,73 @@ class FieldPlotBuilderDialog(QDialog):
         for label, data in options:
             self._vector_scale_combo.addItem(label, data)
         self._vector_scale_combo.setCurrentIndex(_combo_index_for_data(self._vector_scale_combo, current_data))
+
+    def _set_stage_panel_state(self, panel: _CollapsibleSection, enabled: bool) -> None:
+        panel.set_content_enabled(enabled)
+        panel.set_expanded(enabled)
+
+    def _on_scalar_enabled_toggled(self, checked: bool) -> None:
+        self._set_stage_panel_state(self._scalar_panel, checked)
+        self._update_scalar_panel_summary()
+
+    def _on_contour_enabled_toggled(self, checked: bool) -> None:
+        self._set_stage_panel_state(self._contour_panel, checked)
+        self._update_contour_panel_summary()
+
+    def _on_vector_enabled_toggled(self, checked: bool) -> None:
+        self._set_stage_panel_state(self._vector_panel, checked)
+        self._update_vector_panel_summary()
+
+    def _update_scalar_panel_summary(self) -> None:
+        if not self._scalar_enabled_checkbox.isChecked():
+            self._scalar_panel.set_summary("Disabled")
+            return
+        self._scalar_panel.set_summary(
+            " | ".join(
+                (
+                    str(self._scalar_name_combo.currentData()),
+                    str(self._scalar_mode_combo.currentData()),
+                    self._scalar_cmap_combo.currentText(),
+                )
+            )
+        )
+
+    def _update_contour_panel_summary(self) -> None:
+        if not self._contour_enabled_checkbox.isChecked():
+            self._contour_panel.set_summary("Disabled")
+            return
+        self._contour_panel.set_summary(
+            f"{self._contour_name_combo.currentData()} | {self._contour_n_contours_spin.value()} contours | {self._contour_color_edit.value() or 'red'}"
+        )
+
+    def _vector_scale_summary(self) -> str:
+        scale = self._vector_scale_combo.currentData()
+        if scale is None:
+            return "Auto"
+        if scale is False:
+            return "Uniform"
+        return str(scale)
+
+    def _update_vector_panel_summary(self) -> None:
+        if not self._vector_enabled_checkbox.isChecked():
+            self._vector_panel.set_summary("Disabled")
+            return
+        factor = self._vector_factor_edit.text().strip() or "1.0"
+        self._vector_panel.set_summary(
+            " | ".join(
+                (
+                    str(self._vector_name_combo.currentData()),
+                    self._vector_scale_summary(),
+                    str(self._vector_glyph_type_combo.currentData()),
+                    f"x {factor}",
+                )
+            )
+        )
+
+    def _update_feature_edges_panel_summary(self) -> None:
+        self._feature_edges_panel.set_summary(
+            f"{self._feature_edges_color_edit.value() or 'white'} | {self._feature_edges_line_width_spin.value()} px | {self._feature_edges_opacity_spin.value():.2f}"
+        )
 
     def _iter_mesh_blocks(self, mesh: object):
         get_block_name = getattr(mesh, "get_block_name", None)
@@ -580,7 +833,7 @@ class FieldPlotBuilderDialog(QDialog):
         return {
             "name": str(self._contour_name_combo.currentData()),
             "n_contours": int(self._contour_n_contours_spin.value()),
-            "color": self._contour_color_edit.text().strip() or "red",
+            "color": self._contour_color_edit.value() or "red",
             "line_width": int(self._contour_line_width_spin.value()),
         }
 
@@ -611,6 +864,13 @@ class FieldPlotBuilderDialog(QDialog):
             "factor": self._vector_factor(),
             "tolerance": self._vector_tolerance(),
             "color_mode": str(self._vector_color_mode_combo.currentData()),
+        }
+
+    def _feature_edges_kwargs(self) -> dict[str, object]:
+        return {
+            "color": self._feature_edges_color_edit.value() or "white",
+            "line_width": int(self._feature_edges_line_width_spin.value()),
+            "opacity": float(self._feature_edges_opacity_spin.value()),
         }
 
     def _persist_settings(self) -> None:
@@ -647,6 +907,12 @@ class FieldPlotBuilderDialog(QDialog):
                 f"name={vector_kwargs['name']!r}, scale={vector_kwargs['scale']!r}, glyph_type={vector_kwargs['glyph_type']!r}, factor={vector_kwargs['factor']!r}, tolerance={vector_kwargs['tolerance']!r}, color_mode={vector_kwargs['color_mode']!r}"
                 ")"
             )
+        fe_kwargs = self._feature_edges_kwargs()
+        lines.append(
+            "field_plot.set_feature_edges("
+            f"color={fe_kwargs['color']!r}, line_width={fe_kwargs['line_width']!r}, opacity={fe_kwargs['opacity']!r}"
+            ")"
+        )
         lines.extend(["", f"gui.add_field(field_plot, {self._current_title()!r})"])
         return "\n".join(lines)
 
@@ -685,6 +951,7 @@ class FieldPlotBuilderDialog(QDialog):
                 plotter.set_contour(**self._contour_kwargs())
             if self._vector_enabled_checkbox.isChecked():
                 plotter.set_vector(**self._vector_kwargs())
+            plotter.set_feature_edges(**self._feature_edges_kwargs())
 
             self._persist_settings()
 
