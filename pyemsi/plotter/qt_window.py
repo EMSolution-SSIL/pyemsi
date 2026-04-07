@@ -22,6 +22,7 @@ from vtkmodules.vtkRenderingCore import vtkCellPicker
 import pyemsi.resources.resources  # noqa: F401
 from .display_settings_dialog import DisplaySettingsDialog
 from .block_visibility_dialog import BlockVisibilityDialog
+from .scalar_bar_range_dialog import ScalarBarRangeDialog
 from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
 from .cell_query_dialog import CellQueryDialog
 from .point_query_dialog import PointQueryDialog
@@ -448,8 +449,7 @@ class QtPlotterWindow:
         self._display_toolbar.addSeparator()
 
         # Block visibility action
-        # TODO: Replace text with QIcon(":/icons/Blocks.svg") when icon is available
-        self._block_visibility_action = QAction("Blocks", self._window)
+        self._block_visibility_action = QAction(QIcon(":/icons/Blocks.svg"), "Blocks", self._window)
         self._block_visibility_action.setToolTip("Control individual block visibility")
         self._block_visibility_action.triggered.connect(self._open_block_visibility_dialog)
         # Enable only if parent plotter has multi-block mesh
@@ -462,10 +462,15 @@ class QtPlotterWindow:
         self._display_toolbar.addAction(self._block_visibility_action)
 
         # Scalar bar action
-        scalar_bar_action = QAction("Scalar Bars", self._window)
+        scalar_bar_action = QAction(QIcon(":/icons/EditScalarBar.svg"), "Scalar Bars", self._window)
         scalar_bar_action.setToolTip("Control scalar bars")
         scalar_bar_action.triggered.connect(self._open_scalar_bar_settings_dialog)
         self._display_toolbar.addAction(scalar_bar_action)
+
+        scalar_bar_range_action = QAction(QIcon(":/icons/EditScalarRange.svg"), "Scalar Bar Range", self._window)
+        scalar_bar_range_action.setToolTip("Set scalar bar ranges")
+        scalar_bar_range_action.triggered.connect(self._open_scalar_bar_range_dialog)
+        self._display_toolbar.addAction(scalar_bar_range_action)
 
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._display_toolbar)
@@ -539,14 +544,22 @@ class QtPlotterWindow:
         display_settings_dialog.activateWindow()
 
     def _open_scalar_bar_settings_dialog(self) -> None:
-        """Open the scalar bar settings dialog."""
+        """Open scalar bar settings dialog (non-blocking)."""
         scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
         scalar_bar_settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
-        # Show and bring to front
         scalar_bar_settings_dialog.show()
         scalar_bar_settings_dialog.raise_()
         scalar_bar_settings_dialog.activateWindow()
+
+    def _open_scalar_bar_range_dialog(self) -> None:
+        """Open scalar bar range dialog (non-blocking)."""
+        scalar_bar_range_dialog = ScalarBarRangeDialog(plotter=self.plotter, plotter_window=self)
+        scalar_bar_range_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+
+        scalar_bar_range_dialog.show()
+        scalar_bar_range_dialog.raise_()
+        scalar_bar_range_dialog.activateWindow()
 
     def _open_block_visibility_dialog(self) -> None:
         """Open block visibility dialog (non-blocking)."""
@@ -562,17 +575,6 @@ class QtPlotterWindow:
         block_visibility_dialog.show()
         block_visibility_dialog.raise_()
         block_visibility_dialog.activateWindow()
-
-    def _open_scalar_bar_settings_dialog(self) -> None:
-        """Open scalar bar settings dialog (non-blocking)."""
-        # Create dialog if it doesn't exist or was closed
-        scalar_bar_settings_dialog = ScalarBarSettingsDialog(plotter=self.plotter, plotter_window=self)
-        scalar_bar_settings_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-
-        # Show and raise dialog (non-blocking)
-        scalar_bar_settings_dialog.show()
-        scalar_bar_settings_dialog.raise_()
-        scalar_bar_settings_dialog.activateWindow()
 
     def _open_cell_query_dialog(self) -> None:
         """Open cell query dialog (non-blocking)."""

@@ -61,7 +61,7 @@ class ScalarBarSettingsDialog(QDialog):
 
         # Configure dialog
         self.setWindowTitle("Scalar Bar Settings")
-        self.setWindowIcon(QIcon(":/icons/Settings.svg"))
+        self.setWindowIcon(QIcon(":/icons/EditScalarBar.svg"))
         self.setModal(False)  # Non-blocking dialog
         self.resize(400, 600)
 
