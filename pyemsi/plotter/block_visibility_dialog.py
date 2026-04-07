@@ -58,7 +58,7 @@ class BlockVisibilityDialog(QDialog):
 
         # Configure dialog
         self.setWindowTitle("Block Visibility")
-        self.setWindowIcon(QIcon(":/icons/Settings.svg"))
+        self.setWindowIcon(QIcon(":/icons/Blocks.svg"))
         self.setModal(False)  # Non-blocking dialog
         self.resize(400, 500)
 

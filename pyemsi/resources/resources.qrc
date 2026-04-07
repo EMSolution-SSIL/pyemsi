@@ -1,11 +1,14 @@
 <RCC>
   <qresource>
     <file>icons/Back.svg</file>
+    <file>icons/Blocks.svg</file>
     <file>icons/Bold.svg</file>
     <file>icons/Code.svg</file>
     <file>icons/Comment.svg</file>
     <file>icons/Copy.svg</file>
     <file>icons/Cut.svg</file>
+    <file>icons/EditScalarBar.svg</file>
+    <file>icons/EditScalarRange.svg</file>
     <file>icons/Explorer.svg</file>
     <file>icons/ExternalTerminal.svg</file>
     <file>icons/Field.svg</file>
@@ -42,6 +45,7 @@
     <file>icons/Save-as.svg</file>
     <file>icons/Save.svg</file>
     <file>icons/SaveAll.svg</file>
+    <file>icons/ScalarBar.svg</file>
     <file>icons/SelectAll.svg</file>
     <file>icons/Settings.svg</file>
     <file>icons/Stop.svg</file>

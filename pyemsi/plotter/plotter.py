@@ -83,6 +83,7 @@ class Plotter:
     _vector_props: dict[str, object]
     _contour_props: dict[str, object]
     _block_visibility: dict[str, bool]
+    _scalar_bar_sources: dict[str, dict[str, str]]
 
     def __init__(
         self,
@@ -127,6 +128,7 @@ class Plotter:
         self._vector_props = {}
         self._contour_props = {}
         self._block_visibility = {}
+        self._scalar_bar_sources = {}
         if filepath is not None:
             self.set_file(filepath)
         # Initialize based on mode
@@ -307,6 +309,167 @@ class Plotter:
             if skip_empty and block.n_points == 0:
                 return
             yield 0, block, None
+
+    def _iter_visible_blocks(self, skip_empty: bool = True):
+        """Yield blocks that are currently visible in the scene."""
+        for idx, block, block_name in self._iter_blocks(skip_empty=skip_empty):
+            if block_name is not None and not self.get_block_visibility(block_name):
+                continue
+            yield idx, block, block_name
+
+    def _register_scalar_bar_source(
+        self,
+        scalar_bar_name: str,
+        array_name: str,
+        association: Literal["point", "cell"],
+    ) -> None:
+        """Track how a rendered scalar bar maps back to mesh data."""
+        self._scalar_bar_sources[scalar_bar_name] = {
+            "array_name": array_name,
+            "association": association,
+        }
+
+    def _range_from_array(self, values: np.ndarray) -> tuple[float, float] | None:
+        """Return a finite scalar range for scalar or vector-like arrays."""
+        array = np.asarray(values)
+        if array.size == 0:
+            return None
+
+        if array.ndim > 1 and array.shape[-1] > 1:
+            array = np.linalg.norm(array, axis=-1)
+
+        flat_array = np.asarray(array).reshape(-1)
+        finite_values = flat_array[np.isfinite(flat_array)]
+        if finite_values.size == 0:
+            return None
+
+        return float(np.min(finite_values)), float(np.max(finite_values))
+
+    def _infer_scalar_bar_source(self, scalar_bar_name: str) -> dict[str, str] | None:
+        """Infer a scalar-bar source when it was not explicitly registered."""
+        association: Literal["point", "cell"] | None = None
+
+        if self._scalar_props.get("name") == scalar_bar_name:
+            association = "cell" if self._scalar_props.get("mode") == "element" else "point"
+        elif self._contour_props.get("name") == scalar_bar_name:
+            for _, block, _ in self._iter_visible_blocks(skip_empty=False):
+                if scalar_bar_name in block.point_data:
+                    association = "point"
+                    break
+                if scalar_bar_name in block.cell_data:
+                    association = "cell"
+                    break
+        elif self._vector_props.get("name") == scalar_bar_name:
+            for _, block, _ in self._iter_visible_blocks(skip_empty=False):
+                if scalar_bar_name in block.point_data:
+                    association = "point"
+                    break
+                if scalar_bar_name in block.cell_data:
+                    association = "cell"
+                    break
+
+        if association is None:
+            point_found = False
+            cell_found = False
+            for _, block, _ in self._iter_visible_blocks(skip_empty=False):
+                point_found = point_found or scalar_bar_name in block.point_data
+                cell_found = cell_found or scalar_bar_name in block.cell_data
+
+            if point_found and not cell_found:
+                association = "point"
+            elif cell_found and not point_found:
+                association = "cell"
+
+        if association is None:
+            return None
+
+        source = {"array_name": scalar_bar_name, "association": association}
+        self._scalar_bar_sources[scalar_bar_name] = source
+        return source
+
+    def _resolve_scalar_bar_source(self, scalar_bar_name: str) -> dict[str, str]:
+        """Resolve the mesh-backed source for a rendered scalar bar."""
+        source = self._scalar_bar_sources.get(scalar_bar_name)
+        if source is not None:
+            return source
+
+        source = self._infer_scalar_bar_source(scalar_bar_name)
+        if source is None:
+            raise ValueError(f"Could not resolve a data source for scalar bar '{scalar_bar_name}'.")
+        return source
+
+    def _current_scalar_range(self, array_name: str, association: Literal["point", "cell"]) -> tuple[float, float]:
+        """Compute the current visible data range for a mesh-backed scalar array."""
+        global_min: float | None = None
+        global_max: float | None = None
+
+        for _, block, _ in self._iter_visible_blocks(skip_empty=False):
+            data = block.point_data if association == "point" else block.cell_data
+            if array_name not in data:
+                continue
+
+            block_range = self._range_from_array(data[array_name])
+            if block_range is None:
+                continue
+
+            block_min, block_max = block_range
+            global_min = block_min if global_min is None else min(global_min, block_min)
+            global_max = block_max if global_max is None else max(global_max, block_max)
+
+        if global_min is None or global_max is None:
+            raise ValueError(f"No visible data found for scalar bar '{array_name}'.")
+
+        return global_min, global_max
+
+    def get_scalar_bar_ranges(self) -> dict[str, tuple[float, float]]:
+        """Return current scalar-bar ranges from the live plotter state."""
+        ranges: dict[str, tuple[float, float]] = {}
+        for scalar_bar_name, scalar_bar_actor in self.plotter.scalar_bars.items():
+            ranges[scalar_bar_name] = tuple(float(value) for value in scalar_bar_actor.GetLookupTable().GetRange())
+        return ranges
+
+    def compute_scalar_bar_data_range(self, scalar_bar_name: str) -> tuple[float, float]:
+        """Compute the visible min/max for a scalar bar across all time steps."""
+        source = self._resolve_scalar_bar_source(scalar_bar_name)
+        array_name = source["array_name"]
+        association = source["association"]
+
+        time_reader = self._time_reader()
+        original_time_value = self.active_time_value
+        global_min: float | None = None
+        global_max: float | None = None
+
+        try:
+            if time_reader is None or time_reader.number_time_points <= 0:
+                return self._current_scalar_range(array_name, association)
+
+            for time_point in range(time_reader.number_time_points):
+                self.set_active_time_point(time_point)
+                self._mesh = None
+                current_min, current_max = self._current_scalar_range(array_name, association)
+                global_min = current_min if global_min is None else min(global_min, current_min)
+                global_max = current_max if global_max is None else max(global_max, current_max)
+        finally:
+            if time_reader is not None and original_time_value is not None:
+                time_reader.set_active_time_value(original_time_value)
+            self._mesh = None
+
+        if global_min is None or global_max is None:
+            raise ValueError(f"No visible data found for scalar bar '{scalar_bar_name}'.")
+
+        return global_min, global_max
+
+    def apply_scalar_bar_range(self, scalar_bar_name: str, minimum: float, maximum: float) -> None:
+        """Apply a manual scalar-bar range update to the plotter and actor."""
+        if minimum > maximum:
+            raise ValueError("Scalar bar minimum cannot be greater than maximum.")
+        if scalar_bar_name not in self.plotter.scalar_bars:
+            raise ValueError(f"Scalar bar '{scalar_bar_name}' is not available.")
+
+        self.plotter.update_scalar_bar_range([minimum, maximum], name=scalar_bar_name)
+        scalar_bar_actor = self.plotter.scalar_bars[scalar_bar_name]
+        scalar_bar_actor.GetLookupTable().SetRange(minimum, maximum)
+        self.plotter.render()
 
     def get_block_names(self) -> list[str]:
         """Return list of block names from the mesh.
@@ -520,10 +683,21 @@ class Plotter:
             return  # No scalar properties set
         name = self._scalar_props.get("name")
         mode = self._scalar_props.get("mode", "node")
+        association: Literal["point", "cell"] = "cell" if mode == "element" else "point"
+
+        # Preserve existing scalar bar range across re-renders (e.g. time step changes).
+        # On first render no scalar bar exists yet, so clim stays None (auto-compute).
+        existing_clim = None
+        if name in self.plotter.scalar_bars:
+            existing_clim = list(self.plotter.scalar_bars[name].GetLookupTable().GetRange())
+
         for idx, block, block_name in self._iter_blocks():
             if name not in block.array_names:
                 continue
             actor_name = f"scalar_field_block_{block_name}" if block_name else "scalar_field"
+            mesh_kwargs = {k: v for k, v in self._scalar_props.items() if k not in ["name", "mode"]}
+            if existing_clim is not None:
+                mesh_kwargs["clim"] = existing_clim
             actor = self.plotter.add_mesh(
                 block,
                 scalars=name,
@@ -531,11 +705,13 @@ class Plotter:
                 name=actor_name,
                 pickable=True,
                 reset_camera=False,
-                **{k: v for k, v in self._scalar_props.items() if k not in ["name", "mode"]},
+                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True},
+                **mesh_kwargs,
             )
             # Apply visibility from stored state
             if block_name:
                 actor.SetVisibility(self.get_block_visibility(block_name))
+            self._register_scalar_bar_source(str(name), str(name), association)
 
     def set_contour(
         self,
@@ -639,11 +815,14 @@ class Plotter:
                 color=color,
                 line_width=line_width,
                 reset_camera=False,
+                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True},
                 **contour_kwargs,
             )
             # Apply visibility from stored state
             if block_name:
                 actor.SetVisibility(self.get_block_visibility(block_name))
+            association: Literal["point", "cell"] = "point" if name in block.point_data else "cell"
+            self._register_scalar_bar_source(str(name), str(name), association)
 
     def set_vector(
         self,
@@ -765,6 +944,18 @@ class Plotter:
             if k not in ["name", "scale", "glyph_type", "factor", "tolerance", "color_mode"]
         }
 
+        # Preserve existing vector actor scalar range across re-renders.
+        # On first render no actors exist, so clim stays absent (auto-compute).
+        if "color" not in vector_kwargs:
+            for actor_key in list(self.plotter.renderer.actors.keys()):
+                if actor_key.startswith("vector_field"):
+                    try:
+                        sr = self.plotter.renderer.actors[actor_key].mapper.scalar_range
+                        vector_kwargs["clim"] = list(sr)
+                        break
+                    except (AttributeError, TypeError):
+                        pass
+
         for idx, block, block_name in self._iter_blocks():
             # Validate vector array exists
             if name not in block.array_names:
@@ -805,10 +996,20 @@ class Plotter:
                 continue
 
             actor_name = f"vector_field_block_{block_name}" if block_name else "vector_field"
-            actor = self.plotter.add_mesh(glyphs, name=actor_name, reset_camera=False, **vector_kwargs)
+            actor = self.plotter.add_mesh(
+                glyphs,
+                name=actor_name,
+                reset_camera=False,
+                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True, "title": name},
+                **vector_kwargs,
+            )
             # Apply visibility from stored state
             if block_name:
                 actor.SetVisibility(self.get_block_visibility(block_name))
+
+            # Register scalar bar source so the range dialog can resolve it.
+            association: Literal["point", "cell"] = "point" if name in block.point_data else "cell"
+            self._register_scalar_bar_source(str(name), str(name), association)
 
     def show(self):
         """
@@ -835,6 +1036,7 @@ class Plotter:
 
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
+            self._scalar_bar_sources = {}
             self._plot_scalar_field()
             self._plot_contours()
             self._plot_vector_field()
@@ -886,6 +1088,7 @@ class Plotter:
 
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
+            self._scalar_bar_sources = {}
             self._plot_scalar_field()
             self._plot_contours()
             self._plot_vector_field()
@@ -915,6 +1118,7 @@ class Plotter:
         if self.reader is not None:
             self.plotter.suppress_rendering = True
             self._mesh = None  # Reset mesh to ensure fresh load
+            self._scalar_bar_sources = {}
             self._plot_scalar_field()
             self._plot_contours()
             self._plot_vector_field()
