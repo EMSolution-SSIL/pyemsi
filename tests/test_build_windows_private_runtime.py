@@ -21,54 +21,16 @@ def _load_builder_module():
 builder = _load_builder_module()
 
 
-def test_read_runtime_dependencies_merges_project_and_runtime_extras():
-    pyproject_data = {
-        "project": {"dependencies": ["numpy>=1.21.0", "PySide6>=6.5.0"]},
-        "tool": {
-            "pyemsi": {
-                "windows-private-runtime": {
-                    "extra_dependencies": ["PySide6>=6.5.0", "pywinpty", "PySide6>=6.5.0"],
-                }
-            }
-        },
-    }
+def test_unique_strings_deduplicates_and_preserves_order():
+    result = builder._unique_strings(["numpy>=1.21.0", "PySide6>=6.5.0", "PySide6>=6.5.0", "pywinpty"])
 
-    dependencies = builder.read_runtime_dependencies(pyproject_data)
-
-    assert dependencies == ("numpy>=1.21.0", "PySide6>=6.5.0", "pywinpty")
+    assert result == ("numpy>=1.21.0", "PySide6>=6.5.0", "pywinpty")
 
 
-def test_read_runtime_dependencies_keeps_project_only_packages():
-    pyproject_data = {
-        "project": {"dependencies": ["scienceplots", "numpy>=1.21.0"]},
-        "tool": {
-            "pyemsi": {
-                "windows-private-runtime": {
-                    "extra_dependencies": ["numpy>=1.21.0", "pywinpty"],
-                }
-            }
-        },
-    }
+def test_unique_strings_skips_non_strings_and_blanks():
+    result = builder._unique_strings(["numpy", 42, "", None, "  pyvista  "])
 
-    dependencies = builder.read_runtime_dependencies(pyproject_data)
-
-    assert dependencies == ("scienceplots", "numpy>=1.21.0", "pywinpty")
-
-
-def test_read_app_module_prefers_runtime_tool_config():
-    pyproject_data = {
-        "tool": {
-            "pyemsi": {
-                "windows-private-runtime": {
-                    "app_module": "pyemsi.gui",
-                }
-            }
-        }
-    }
-
-    app_module = builder.read_app_module(pyproject_data, default="fallback.module")
-
-    assert app_module == "pyemsi.gui"
+    assert result == ("numpy", "pyvista")
 
 
 def test_load_build_config_uses_runtime_tool_app_module(tmp_path):
@@ -112,11 +74,21 @@ def test_render_launcher_bat_targets_private_runtime_module():
     assert '"%BASE_DIR%runtime\\python.exe" -m pyemsi.gui %*' in launcher
 
 
+def test_render_launcher_bat_script_mode():
+    launcher = builder.render_launcher_bat(script_mode=True)
+
+    assert "set SCRIPT=%~1" in launcher
+    assert '"%BASE_DIR%runtime\\python.exe" "%SCRIPT%" %*' in launcher
+    assert "-m" not in launcher
+
+
 def test_build_layout_uses_scoped_output_directories(tmp_path):
     layout = builder.build_layout(tmp_path)
 
     assert layout.build_dir == tmp_path / "build" / "windows-private-runtime"
     assert layout.cache_dir == layout.build_dir / "cache"
-    assert layout.dist_dir == tmp_path / "dist" / "pyemsi-windows-portable"
+    assert layout.dist_dir == tmp_path / "dist" / "pyemsi"
     assert layout.runtime_dir == layout.dist_dir / "runtime"
     assert layout.app_dir == layout.dist_dir / "app"
+    assert layout.launcher_exe == layout.dist_dir / "pyemsi.exe"
+    assert layout.script_launcher_exe == layout.dist_dir / "run_script.exe"

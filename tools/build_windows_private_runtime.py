@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
+import textwrap
 import tomllib
 import urllib.request
 import zipfile
@@ -12,10 +14,76 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 DEFAULT_PYTHON_VERSION = "3.11.9"
-DEFAULT_DIST_NAME = "pyemsi-windows-portable"
+DEFAULT_DIST_NAME = "pyemsi"
 DEFAULT_APP_MODULE = "pyemsi.gui"
-WINDOWS_RUNTIME_TOOL_PATH = ("tool", "pyemsi", "windows-private-runtime")
+_RUNTIME_TOOL_KEY = ("tool", "pyemsi", "windows-private-runtime")
 GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
+
+_REQUIRED_ARTIFACTS = [
+    ("pyemsi/core/femap_parser*.pyd", "Run `python setup.py build_ext --inplace` before packaging."),
+    ("pyemsi/resources/resources.py", "Regenerate the Qt resource module before packaging."),
+    ("pyemsi/gui/__main__.py", "Missing GUI launcher module."),
+]
+
+_SMOKE_TEST_SCRIPT = textwrap.dedent("""\
+    import os, shutil, sys, pyemsi, PySide6, scienceplots
+    scripts_dir = os.path.join(os.path.dirname(sys.executable), "Scripts")
+    os.environ["PATH"] = os.pathsep.join([
+        os.path.dirname(sys.executable), scripts_dir,
+        os.environ.get("PATH", ""),
+    ])
+    assert shutil.which("basedpyright-langserver")
+    assert shutil.which("pylsp")
+    print(sys.executable)
+    print(pyemsi.__version__)
+    print(scienceplots.__file__)
+""")
+
+
+LAUNCHER_C_SOURCE = Path(__file__).resolve().parent / "launcher.c"
+LAUNCHER_ICO = Path(__file__).resolve().parents[1] / "pyemsi" / "resources" / "icons" / "Icon.ico"
+
+
+def _render_rc(*, version_str: str, ico_path: Path | None) -> str:
+    """Generate a Win32 .rc resource script with VERSIONINFO and icon."""
+    parts = (version_str + ".0.0.0").split(".")[:4]
+    ver_csv = ",".join(parts[:4])
+    lines = [
+        "#include <winver.h>",
+        "",
+    ]
+    if ico_path and ico_path.is_file():
+        lines.append(f'1 ICON "{ico_path.as_posix()}"')
+        lines.append("")
+    lines += [
+        "VS_VERSION_INFO VERSIONINFO",
+        f" FILEVERSION {ver_csv}",
+        f" PRODUCTVERSION {ver_csv}",
+        " FILEFLAGSMASK VS_FFI_FILEFLAGSMASK",
+        " FILEFLAGS 0x0",
+        " FILEOS VOS_NT_WINDOWS32",
+        " FILETYPE VFT_APP",
+        " FILESUBTYPE 0x0",
+        "BEGIN",
+        '  BLOCK "StringFileInfo"',
+        "  BEGIN",
+        '    BLOCK "040904B0"',
+        "    BEGIN",
+        '      VALUE "FileDescription", "pyemsi - EMSolution Visualization"',
+        f'      VALUE "FileVersion", "{version_str}"',
+        '      VALUE "ProductName", "pyemsi"',
+        f'      VALUE "ProductVersion", "{version_str}"',
+        '      VALUE "LegalCopyright", "Copyright \\251 SSIL"',
+        '      VALUE "OriginalFilename", "pyemsi.exe"',
+        "    END",
+        "  END",
+        '  BLOCK "VarFileInfo"',
+        "  BEGIN",
+        '    VALUE "Translation", 0x0409, 0x04B0',
+        "  END",
+        "END",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 @dataclass(frozen=True)
@@ -28,6 +96,8 @@ class BuildLayout:
     app_dir: Path
     launcher_bat: Path
     script_launcher_bat: Path
+    launcher_exe: Path
+    script_launcher_exe: Path
 
 
 @dataclass(frozen=True)
@@ -65,8 +135,10 @@ def build_layout(repo_root: Path, *, dist_name: str = DEFAULT_DIST_NAME) -> Buil
         dist_dir=dist_dir,
         runtime_dir=runtime_dir,
         app_dir=app_dir,
-        launcher_bat=dist_dir / "run_pyemsi.bat",
+        launcher_bat=dist_dir / "pyemsi.bat",
         script_launcher_bat=dist_dir / "run_script.bat",
+        launcher_exe=dist_dir / "pyemsi.exe",
+        script_launcher_exe=dist_dir / "run_script.exe",
     )
 
 
@@ -75,39 +147,19 @@ def load_pyproject(pyproject_path: Path) -> dict[str, Any]:
         return tomllib.load(handle)
 
 
-def _get_nested_mapping(data: Mapping[str, Any], path: tuple[str, ...]) -> Mapping[str, Any]:
-    current: Mapping[str, Any] | Any = data
-    for key in path:
+def _get_nested(data: Mapping[str, Any], *keys: str) -> Any:
+    current: Any = data
+    for key in keys:
         if not isinstance(current, Mapping):
             return {}
         current = current.get(key, {})
-    return current if isinstance(current, Mapping) else {}
+    return current
 
 
-def read_app_name(pyproject_data: Mapping[str, Any]) -> str:
-    project_name = pyproject_data.get("project", {}).get("name")
-    if isinstance(project_name, str) and project_name.strip():
-        return project_name.strip()
-
-    return "pyemsi"
-
-
-def read_app_module(pyproject_data: Mapping[str, Any], *, default: str = DEFAULT_APP_MODULE) -> str:
-    runtime_config = _get_nested_mapping(pyproject_data, WINDOWS_RUNTIME_TOOL_PATH)
-    app_module = runtime_config.get("app_module")
-    if isinstance(app_module, str) and app_module.strip():
-        return app_module.strip()
-    return default
-
-
-def read_runtime_dependencies(pyproject_data: Mapping[str, Any]) -> tuple[str, ...]:
-    runtime_config = _get_nested_mapping(pyproject_data, WINDOWS_RUNTIME_TOOL_PATH)
-    extra_dependencies = runtime_config.get("extra_dependencies", [])
-    project_dependencies = pyproject_data.get("project", {}).get("dependencies", [])
-
+def _unique_strings(items: Iterable[Any]) -> tuple[str, ...]:
     ordered: list[str] = []
     seen: set[str] = set()
-    for item in [*project_dependencies, *extra_dependencies]:
+    for item in items:
         if not isinstance(item, str):
             continue
         normalized = item.strip()
@@ -126,16 +178,35 @@ def load_build_config(
     dist_name: str = DEFAULT_DIST_NAME,
     app_module: str | None = None,
 ) -> BuildConfig:
-    project_path = pyproject_path or repo_root / "pyproject.toml"
-    pyproject_data = load_pyproject(project_path)
+    pyproject_data = load_pyproject(pyproject_path or repo_root / "pyproject.toml")
+    runtime_config = _get_nested(pyproject_data, *_RUNTIME_TOOL_KEY)
+    runtime_config = runtime_config if isinstance(runtime_config, Mapping) else {}
+
+    project_name = _get_nested(pyproject_data, "project", "name")
+    app_name = project_name.strip() if isinstance(project_name, str) and project_name.strip() else "pyemsi"
+
+    if app_module is None:
+        configured_module = runtime_config.get("app_module")
+        app_module = (
+            configured_module.strip()
+            if isinstance(configured_module, str) and configured_module.strip()
+            else DEFAULT_APP_MODULE
+        )
+
+    project_deps = _get_nested(pyproject_data, "project", "dependencies")
+    extra_deps = runtime_config.get("extra_dependencies", [])
+    all_deps = [
+        *(project_deps if isinstance(project_deps, list) else []),
+        *(extra_deps if isinstance(extra_deps, list) else []),
+    ]
+
     python_tag = "".join(python_version.split(".")[:2])
-    resolved_app_module = app_module or read_app_module(pyproject_data)
     return BuildConfig(
-        app_name=read_app_name(pyproject_data),
+        app_name=app_name,
         python_version=python_version,
         python_tag=python_tag,
-        app_module=resolved_app_module,
-        dependencies=read_runtime_dependencies(pyproject_data),
+        app_module=app_module,
+        dependencies=_unique_strings(all_deps),
         layout=build_layout(repo_root, dist_name=dist_name),
     )
 
@@ -164,80 +235,50 @@ def render_pth_text(original_text: str, *, app_relative_path: str = r"..\app") -
     return "\n".join(output) + "\n"
 
 
-def render_launcher_bat(*, app_module: str, runtime_dir_name: str = "runtime", app_dir_name: str = "app") -> str:
-    lines = [
-        "@echo off",
-        "setlocal",
-        "set BASE_DIR=%~dp0",
+def render_launcher_bat(
+    *,
+    app_module: str | None = None,
+    script_mode: bool = False,
+    runtime_dir_name: str = "runtime",
+    app_dir_name: str = "app",
+) -> str:
+    lines = ["@echo off", "setlocal", "set BASE_DIR=%~dp0"]
+    if script_mode:
+        lines += [
+            'if "%~1"=="" (',
+            "  echo Usage: run_script.bat path\\to\\script.py [args...]",
+            "  exit /b 1",
+            ")",
+            "set SCRIPT=%~1",
+            "shift",
+        ]
+    lines += [
         f"set PYTHONHOME=%BASE_DIR%{runtime_dir_name}",
         f"set PYTHONPATH=%BASE_DIR%{app_dir_name}",
         f"set PATH=%BASE_DIR%{runtime_dir_name};%BASE_DIR%{runtime_dir_name}\\Scripts;%PATH%",
-        f'"%BASE_DIR%{runtime_dir_name}\\python.exe" -m {app_module} %*',
-        "",
     ]
-    return "\r\n".join(lines)
-
-
-def render_script_launcher_bat(*, runtime_dir_name: str = "runtime", app_dir_name: str = "app") -> str:
-    lines = [
-        "@echo off",
-        "setlocal",
-        "set BASE_DIR=%~dp0",
-        'if "%~1"=="" (',
-        "  echo Usage: run_script.bat path\\to\\script.py [args...]",
-        "  exit /b 1",
-        ")",
-        "set SCRIPT=%~1",
-        "shift",
-        f"set PYTHONHOME=%BASE_DIR%{runtime_dir_name}",
-        f"set PYTHONPATH=%BASE_DIR%{app_dir_name}",
-        f"set PATH=%BASE_DIR%{runtime_dir_name};%BASE_DIR%{runtime_dir_name}\\Scripts;%PATH%",
-        f'"%BASE_DIR%{runtime_dir_name}\\python.exe" "%SCRIPT%" %*',
-        "",
-    ]
+    if script_mode:
+        lines.append(f'"%BASE_DIR%{runtime_dir_name}\\python.exe" "%SCRIPT%" %*')
+    else:
+        lines.append(f'"%BASE_DIR%{runtime_dir_name}\\python.exe" -m {app_module} %*')
+    lines.append("")
     return "\r\n".join(lines)
 
 
 def ensure_runtime_source_artifacts(repo_root: Path) -> None:
-    extension_matches = list((repo_root / "pyemsi" / "core").glob("femap_parser*.pyd"))
-    if not extension_matches:
-        raise FileNotFoundError(
-            "Missing compiled femap_parser extension under pyemsi/core. "
-            "Run `python setup.py build_ext --inplace` before packaging."
-        )
-
-    resources_module = repo_root / "pyemsi" / "resources" / "resources.py"
-    if not resources_module.is_file():
-        raise FileNotFoundError(
-            "Missing compiled Qt resource module pyemsi/resources/resources.py. Regenerate it before packaging."
-        )
-
-    launcher_module = repo_root / "pyemsi" / "gui" / "__main__.py"
-    if not launcher_module.is_file():
-        raise FileNotFoundError("Missing pyemsi/gui/__main__.py launcher module.")
+    for pattern, message in _REQUIRED_ARTIFACTS:
+        if "*" in pattern:
+            if not list(repo_root.glob(pattern)):
+                raise FileNotFoundError(f"Missing {pattern}. {message}")
+        elif not (repo_root / pattern).is_file():
+            raise FileNotFoundError(f"Missing {pattern}. {message}")
 
 
 def reset_output_directories(layout: BuildLayout) -> None:
-    layout.dist_dir.mkdir(parents=True, exist_ok=True)
-    for path in (layout.runtime_dir, layout.app_dir):
-        if path.exists():
-            shutil.rmtree(path)
-    for path in (layout.launcher_bat, layout.script_launcher_bat):
-        if path.exists():
-            path.unlink()
-    layout.cache_dir.mkdir(parents=True, exist_ok=True)
-    layout.runtime_dir.mkdir(parents=True, exist_ok=True)
-    layout.app_dir.mkdir(parents=True, exist_ok=True)
-
-
-def download_file(url: str, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(url, destination)
-
-
-def extract_embed_runtime(zip_path: Path, destination: Path) -> None:
-    with zipfile.ZipFile(zip_path) as archive:
-        archive.extractall(destination)
+    if layout.dist_dir.exists():
+        shutil.rmtree(layout.dist_dir)
+    for path in (layout.dist_dir, layout.runtime_dir, layout.app_dir, layout.cache_dir):
+        path.mkdir(parents=True, exist_ok=True)
 
 
 def patch_pth_file(pth_path: Path) -> None:
@@ -259,7 +300,8 @@ def run_checked(command: Iterable[str], *, cwd: Path | None = None) -> None:
 def install_runtime_dependencies(config: BuildConfig) -> None:
     get_pip_path = config.layout.cache_dir / "get-pip.py"
     if not get_pip_path.exists():
-        download_file(GET_PIP_URL, get_pip_path)
+        get_pip_path.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(GET_PIP_URL, get_pip_path)
 
     python_exe = config.layout.runtime_dir / "python.exe"
     run_checked([str(python_exe), str(get_pip_path), "--no-warn-script-location"])
@@ -268,30 +310,160 @@ def install_runtime_dependencies(config: BuildConfig) -> None:
         run_checked([str(python_exe), "-m", "pip", "install", *config.dependencies])
 
 
+# ── Native .exe launcher compilation ─────────────────────────────────────
+
+
+def _find_vcvarsall() -> Path | None:
+    """Locate vcvarsall.bat via vswhere (ships with VS 2017+)."""
+    program_files = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    vswhere = Path(program_files) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    if not vswhere.is_file():
+        return None
+    try:
+        result = subprocess.run(
+            [
+                str(vswhere),
+                "-latest",
+                "-property",
+                "installationPath",
+                "-requires",
+                "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        vcvarsall = Path(result.stdout.strip()) / "VC" / "Auxiliary" / "Build" / "vcvarsall.bat"
+        return vcvarsall if vcvarsall.is_file() else None
+    except Exception:
+        return None
+
+
+def _compile_native_launcher(
+    source: Path,
+    output_exe: Path,
+    *,
+    defines: list[str] | None = None,
+    gui: bool = False,
+    rc_file: Path | None = None,
+) -> bool:
+    """Compile *source* to *output_exe* with MSVC.  Returns True on success."""
+
+    def _try_compile(*, use_vcvarsall: Path | None = None) -> bool:
+        """Run the compilation.  If *use_vcvarsall* is given, prefix with it."""
+        # --- resource compiler -------------------------------------------
+        res_file: Path | None = None
+        if rc_file and rc_file.is_file():
+            res_file = rc_file.with_suffix(".res")
+            rc_args = ["rc", "/nologo", f"/fo{res_file}", str(rc_file)]
+            if use_vcvarsall:
+                rc_cmd = f'"{use_vcvarsall}" amd64 && {subprocess.list2cmdline(rc_args)}'
+                r = subprocess.run(
+                    rc_cmd, shell=True, capture_output=True, text=True, timeout=60, cwd=str(output_exe.parent)
+                )
+            else:
+                r = subprocess.run(rc_args, capture_output=True, text=True, timeout=60, cwd=str(output_exe.parent))
+            if r.returncode != 0:
+                res_file = None  # skip linking the resource
+
+        # --- C compiler --------------------------------------------------
+        cl_args = ["cl", "/nologo", "/O2", "/W3"]
+        for d in defines or []:
+            cl_args.append(f"/D{d}")
+        cl_args.append(str(source))
+        if res_file and res_file.is_file():
+            cl_args.append(str(res_file))
+        cl_args.append(f"/Fe:{output_exe}")
+        link_flags = []
+        if gui:
+            link_flags += ["/SUBSYSTEM:WINDOWS", "/ENTRY:wmainCRTStartup"]
+        if link_flags:
+            cl_args += ["/link"] + link_flags
+
+        if use_vcvarsall:
+            cl_cmd = subprocess.list2cmdline(cl_args)
+            shell_cmd = f'"{use_vcvarsall}" amd64 && {cl_cmd}'
+            r = subprocess.run(
+                shell_cmd, shell=True, capture_output=True, text=True, timeout=60, cwd=str(output_exe.parent)
+            )
+        else:
+            r = subprocess.run(cl_args, capture_output=True, text=True, timeout=60, cwd=str(output_exe.parent))
+        return r.returncode == 0 and output_exe.is_file()
+
+    # Try cl.exe directly (works inside a Developer Command Prompt).
+    if shutil.which("cl"):
+        try:
+            if _try_compile():
+                return True
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+    # Fall back: locate vcvarsall, set up MSVC env, then compile.
+    vcvarsall = _find_vcvarsall()
+    if vcvarsall is None:
+        return False
+    try:
+        return _try_compile(use_vcvarsall=vcvarsall)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def _cleanup_compiler_artifacts(directory: Path) -> None:
+    """Remove .obj and .res files left behind by cl.exe / rc.exe."""
+    for pattern in ("launcher*.obj", "*.res", "*.rc"):
+        for f in directory.glob(pattern):
+            f.unlink(missing_ok=True)
+
+
+def compile_native_launchers(config: BuildConfig) -> bool:
+    """Compile both .exe launchers.  Returns True if both succeeded."""
+    if not LAUNCHER_C_SOURCE.is_file():
+        print(f"Launcher C source not found: {LAUNCHER_C_SOURCE}", file=sys.stderr)
+        return False
+
+    version_str = "0.1.3"
+    rc_path = config.layout.dist_dir / "launcher.rc"
+    rc_path.write_text(
+        _render_rc(version_str=version_str, ico_path=LAUNCHER_ICO),
+        encoding="utf-8",
+    )
+
+    app_ok = _compile_native_launcher(
+        LAUNCHER_C_SOURCE,
+        config.layout.launcher_exe,
+        defines=[f'APP_MODULE="{config.app_module}"', "NO_CONSOLE"],
+        gui=True,
+        rc_file=rc_path,
+    )
+    script_ok = _compile_native_launcher(
+        LAUNCHER_C_SOURCE,
+        config.layout.script_launcher_exe,
+        defines=["SCRIPT_MODE"],
+        gui=False,
+    )
+    _cleanup_compiler_artifacts(config.layout.dist_dir)
+    return app_ok and script_ok
+
+
 def write_launchers(config: BuildConfig) -> None:
-    config.layout.launcher_bat.write_text(render_launcher_bat(app_module=config.app_module), encoding="ascii")
-    config.layout.script_launcher_bat.write_text(render_script_launcher_bat(), encoding="ascii")
+    exe_ok = compile_native_launchers(config)
+    if exe_ok:
+        print("Compiled native .exe launchers.")
+    else:
+        print("MSVC not available — falling back to .bat launchers.", file=sys.stderr)
+        config.layout.launcher_bat.write_text(
+            render_launcher_bat(app_module=config.app_module),
+            encoding="ascii",
+        )
+        config.layout.script_launcher_bat.write_text(
+            render_launcher_bat(script_mode=True),
+            encoding="ascii",
+        )
 
 
 def smoke_test(config: BuildConfig) -> None:
     python_exe = config.layout.runtime_dir / "python.exe"
-    run_checked(
-        [
-            str(python_exe),
-            "-c",
-            (
-                "import os, shutil, sys, pyemsi, PySide6, scienceplots;"
-                "scripts_dir=os.path.join(os.path.dirname(sys.executable), 'Scripts');"
-                "os.environ['PATH']=os.pathsep.join([os.path.dirname(sys.executable), scripts_dir, os.environ.get('PATH', '')]);"
-                "assert shutil.which('basedpyright-langserver');"
-                "assert shutil.which('pylsp');"
-                "print(sys.executable);"
-                "print(pyemsi.__version__);"
-                "print(scienceplots.__file__)"
-            ),
-        ],
-        cwd=config.layout.dist_dir,
-    )
+    run_checked([str(python_exe), "-c", _SMOKE_TEST_SCRIPT], cwd=config.layout.dist_dir)
 
 
 def build_private_runtime(
@@ -305,9 +477,11 @@ def build_private_runtime(
 
     embed_zip_path = config.layout.cache_dir / config.embed_zip_name
     if not embed_zip_path.exists():
-        download_file(config.embed_url, embed_zip_path)
+        embed_zip_path.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(config.embed_url, embed_zip_path)
 
-    extract_embed_runtime(embed_zip_path, config.layout.runtime_dir)
+    with zipfile.ZipFile(embed_zip_path) as archive:
+        archive.extractall(config.layout.runtime_dir)
     if not config.pth_file.is_file():
         raise FileNotFoundError(f"Embedded runtime ._pth file not found: {config.pth_file}")
     patch_pth_file(config.pth_file)
@@ -354,7 +528,8 @@ def main() -> int:
         run_smoke_test=not args.skip_smoke_test,
     )
     print(f"Build completed: {config.layout.dist_dir}")
-    print(f"Launcher: {config.layout.launcher_bat}")
+    launcher = config.layout.launcher_exe if config.layout.launcher_exe.is_file() else config.layout.launcher_bat
+    print(f"Launcher: {launcher}")
     return 0
 
 
