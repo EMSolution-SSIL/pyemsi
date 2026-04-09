@@ -39,6 +39,7 @@ _app = None
 def launch(
     title: str = "pyemsi",
     size: tuple[int, int] | None = None,
+    workspace_path: str | None = None,
 ) -> None:
     """
     Create and show the pyemsi main window, then start the Qt event loop.
@@ -51,6 +52,8 @@ def launch(
         Window title.
     size : tuple of int
         Window size as (width, height).
+    workspace_path : str, optional
+        Folder to open as the initial workspace.
     """
     global _window, _app
 
@@ -64,6 +67,11 @@ def launch(
 
     _window = PyEmsiMainWindow()
     _window.setWindowTitle(title)
+
+    if workspace_path is not None:
+        import os
+
+        _window._set_workspace_path(os.path.abspath(workspace_path))
 
     import pyemsi.gui as gui_module
 
