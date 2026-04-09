@@ -55,7 +55,7 @@ include-package-data = true
 zip-safe = false
 
 [tool.setuptools.packages.find]
-include = ["pyemsi*", "pyemsi_gui*"]
+include = ["pyemsi*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "pyemsi.__version__"}
@@ -88,35 +88,9 @@ version = {attr = "pyemsi.__version__"}
 [tool.ruff]
 line-length = 120
 
-[tool.briefcase]
-project_name = "pyemsi"
-bundle = "com.emsolution"
-version = "0.1.3"
-
-[tool.briefcase.app.pyemsi_gui]
-formal_name = "pyemsi"
-description = "EMSolution Visualization Toolkit"
-console_app = false
-icon = "pyemsi/resources/icons/Icon"
-installer_icon = "pyemsi/resources/icons/Icon"
-sources = [
-    "pyemsi",
-    "pyemsi_gui",
-]
-requires = [
-    "vtk>=9.0.0",
-    "numpy>=1.21.0",
-    "pyvista>=0.43.0",
-    "pyvistaqt>=0.11.0",
-    "PySide6>=6.5.0",
-    "matplotlib>=3.5.0",
-    "qtconsole>=5.4.0",
-    "ipykernel>=6.0.0",
-    "markdown>=3.4.0",
-    "python-lsp-server[websockets]",
-    "basedpyright>=1.31.4",
-    "pywinpty",
-]
+[tool.pyemsi.windows-private-runtime]
+app_module = "pyemsi.gui"
+extra_dependencies = ["pywinpty"]
 
 # cibuildwheel configuration
 [tool.cibuildwheel]

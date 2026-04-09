@@ -3,7 +3,7 @@
 This repository produces two primary distributables:
 
 - The `pyemsi` API wheel (`.whl`) via the standard Python build flow.
-- The `pyemsi_gui` desktop installer via Briefcase.
+- A Windows portable `pyemsi` GUI runtime staged under `dist/`.
 
 ## Build The `pyemsi` Wheel
 
@@ -24,54 +24,41 @@ Optional reinstall check:
 python -m pip install --force-reinstall dist/*.whl
 ```
 
-## Build The `pyemsi_gui` Installer
+## Build The Windows Portable GUI Runtime
 
-The Briefcase configuration lives in `pyproject.toml` under `[tool.briefcase.app.pyemsi_gui]`.
+The portable Windows builder lives at [tools/build_windows_private_runtime.py](./tools/build_windows_private_runtime.py). It assembles an embeddable Python runtime under `dist/pyemsi-windows-portable/`, stages the local `pyemsi` and `pyemsi_gui` source trees into `app/`, installs GUI dependencies into `runtime/`, and generates launcher batch files.
 
-1. Install Briefcase in the Python 3.11 environment:
-
-   ```bash
-   .venv311\Scripts\python.exe -m pip install --upgrade briefcase
-   ```
-
-2. Create or refresh the Windows app bundle:
+1. Rebuild the compiled extension in place before packaging:
 
    ```bash
-   .venv311\Scripts\python.exe -m briefcase create windows app --no-input
+   .venv311\Scripts\python.exe setup.py build_ext --inplace
    ```
 
-   If the template already exists, run:
+2. Run the Windows private-runtime builder:
 
    ```bash
-   .venv311\Scripts\python.exe -m briefcase update windows app -r --no-input
+   .venv311\Scripts\python.exe .\tools\build_windows_private_runtime.py
    ```
 
-3. Build the app:
+Optional flags:
 
-   ```bash
-   .venv311\Scripts\python.exe -m briefcase build windows app --no-input
-   ```
-
-4. Package the MSI installer:
-
-   ```bash
-   .venv311\Scripts\python.exe -m briefcase package windows -p msi --no-input
-   ```
+```bash
+.venv311\Scripts\python.exe .\tools\build_windows_private_runtime.py --skip-dependency-install --skip-smoke-test
+```
 
 Output:
 
-- Built app files are created under `build/pyemsi_gui/windows/app/`.
-- The MSI installer is written to `dist/` once WiX installation completes.
+- The embeddable Python cache is stored under `build/windows-private-runtime/cache/`.
+- The portable app is written to `dist/pyemsi-windows-portable/`.
+- The main launcher is `dist/pyemsi-windows-portable/run_pyemsi.bat`.
+- The helper script launcher is `dist/pyemsi-windows-portable/run_script.bat`.
 
 ## Windows Packaging Notes
 
-- The first MSI packaging run may prompt for WiX toolset installation.
-- If `briefcase create` fails because the app already exists, use `briefcase update windows app -r --no-input` and continue.
-- You can run the app without packaging it:
-
-```bash
-.venv311\Scripts\python.exe -m briefcase run windows app
-```
+- This flow currently targets Windows only because it relies on the official embeddable CPython distribution.
+- The builder expects `pyemsi/core/femap_parser*.pyd` and `pyemsi/resources/resources.py` to already exist in the repo tree.
+- The portable build preserves a real `runtime/python.exe` so packaged subprocess flows that depend on `sys.executable` continue to work.
+- This produces a portable folder, not an installer. Installer and shell-integration work can be added later as a separate step.
 
 ## Related Guides
 
