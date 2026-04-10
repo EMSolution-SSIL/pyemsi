@@ -11,7 +11,7 @@ import json
 import os
 import tempfile
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QToolBar, QToolButton
 
@@ -629,27 +629,29 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _apply_window_settings(self) -> None:
         """Apply persisted global window preferences."""
-        dock_visibility = self._settings.get_effective("workbench.window.dock_visibility") or {}
-        self._explorer_dock.setVisible(dock_visibility.get("explorer", True))
-        self._ipython_dock.setVisible(dock_visibility.get("ipython", False))
-        self._external_terminal_dock.setVisible(dock_visibility.get("external_terminal", False))
-        if dock_visibility.get("ipython", False):
-            self._ipython_dock.raise_()
+        geometry = self._settings.get_global("workbench.window.geometry")
+        state = self._settings.get_global("workbench.window.state")
 
-        maximized = self._settings.get_global("workbench.window.maximized")
-        if maximized is not None:
-            self._show_maximized_on_launch = bool(maximized)
+        if geometry is not None:
+            self.restoreGeometry(QByteArray.fromBase64(geometry.encode("ascii")))
+            self._show_maximized_on_launch = False
+
+        if state is not None:
+            self.restoreState(QByteArray.fromBase64(state.encode("ascii")))
+        else:
+            self._explorer_dock.setVisible(True)
+            self._ipython_dock.setVisible(True)
+            self._external_terminal_dock.setVisible(True)
 
     def _persist_workspace_state(self) -> None:
         """Persist global window preferences and workspace-local explorer state."""
-        self._settings.set_global("workbench.window.maximized", self.isMaximized())
         self._settings.set_global(
-            "workbench.window.dock_visibility",
-            {
-                "explorer": self._explorer_dock.isVisible(),
-                "ipython": self._ipython_dock.isVisible(),
-                "external_terminal": self._external_terminal_dock.isVisible(),
-            },
+            "workbench.window.geometry",
+            self.saveGeometry().toBase64().data().decode("ascii"),
+        )
+        self._settings.set_global(
+            "workbench.window.state",
+            self.saveState().toBase64().data().decode("ascii"),
         )
 
         current_workspace = self.explorer.current_path
