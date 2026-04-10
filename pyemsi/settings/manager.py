@@ -56,19 +56,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "root_path": None,
         },
         "window": {
-            "dock_visibility": {
-                "explorer": True,
-                "external_terminal": False,
-                "ipython": False,
-            },
-            "maximized": False,
+            "geometry": None,
+            "state": None,
         },
     },
 }
-
-
-def _copy_default(value: Any) -> Any:
-    return copy.deepcopy(value)
 
 
 def _normalize_optional_path(value: Any) -> str | None:
@@ -131,17 +123,13 @@ def _normalize_style_preset(value: Any) -> str | list[str]:
     raise ValueError("expected a style preset string or list of strings")
 
 
-def _normalize_dock_visibility(value: Any) -> dict[str, bool]:
-    default_keys = DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"].keys()
-    if not isinstance(value, dict):
-        raise ValueError("expected an object")
-    normalized: dict[str, bool] = {}
-    for key, item in value.items():
-        if key not in default_keys:
-            normalized[key] = item
-            continue
-        normalized[key] = _normalize_bool(item)
-    return normalized
+def _normalize_optional_base64(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("expected a base64 string or null")
+    stripped = value.strip()
+    return stripped or None
 
 
 @dataclass(frozen=True)
@@ -177,12 +165,8 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "tools.emsolution_plot.y_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
     "tools.field_plot.filepath": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
     "workbench.explorer.root_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_path),
-    "workbench.window.dock_visibility": SettingDefinition(
-        _copy_default(DEFAULT_SETTINGS["workbench"]["window"]["dock_visibility"]),
-        SCOPE_GLOBAL,
-        _normalize_dock_visibility,
-    ),
-    "workbench.window.maximized": SettingDefinition(False, SCOPE_GLOBAL, _normalize_bool),
+    "workbench.window.geometry": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_base64),
+    "workbench.window.state": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_base64),
 }
 
 _CONTAINER_PATHS = {

@@ -12,8 +12,8 @@ def test_settings_manager_merges_defaults_global_and_local(tmp_path):
     global_settings_path = tmp_path / "config" / "settings.json"
 
     manager = SettingsManager(global_settings_path=global_settings_path)
-    manager.set_global("workbench.window.dock_visibility", {"ipython": True})
-    manager.set_global("workbench.window.maximized", True)
+    manager.set_global("workbench.window.geometry", "Zm9v")
+    manager.set_global("workbench.window.state", "YmFy")
     manager.load_workspace(workspace)
     manager.set_local("workbench.explorer.root_path", str(nested_workspace))
     manager.save()
@@ -21,12 +21,8 @@ def test_settings_manager_merges_defaults_global_and_local(tmp_path):
     reloaded = SettingsManager(global_settings_path=global_settings_path)
     reloaded.load_workspace(workspace)
 
-    assert reloaded.get_effective("workbench.window.dock_visibility") == {
-        "explorer": True,
-        "external_terminal": False,
-        "ipython": True,
-    }
-    assert reloaded.get_effective("workbench.window.maximized") is True
+    assert reloaded.get_effective("workbench.window.geometry") == "Zm9v"
+    assert reloaded.get_effective("workbench.window.state") == "YmFy"
     assert reloaded.get_local("workbench.explorer.root_path") == os.path.abspath(
         os.path.normpath(str(nested_workspace))
     )
@@ -52,7 +48,7 @@ def test_settings_manager_ignores_invalid_global_window_values(tmp_path):
                 "schemaVersion": 1,
                 "workbench": {
                     "window": {
-                        "dock_visibility": {"ipython": "yes"},
+                        "geometry": 12345,
                     }
                 },
             }
@@ -62,12 +58,8 @@ def test_settings_manager_ignores_invalid_global_window_values(tmp_path):
 
     manager = SettingsManager(global_settings_path=global_settings_path)
 
-    assert manager.get_effective("workbench.window.dock_visibility") == {
-        "explorer": True,
-        "external_terminal": False,
-        "ipython": False,
-    }
-    assert any("ignored invalid value for workbench.window.dock_visibility" in warning for warning in manager.warnings)
+    assert manager.get_effective("workbench.window.geometry") is None
+    assert any("ignored invalid value for workbench.window.geometry" in warning for warning in manager.warnings)
 
 
 def test_settings_manager_recent_folders_are_unique_and_limited_to_ten(tmp_path):
@@ -132,6 +124,8 @@ def test_settings_manager_drops_removed_legacy_settings_on_load_and_save(tmp_pat
                 "workbench": {
                     "layout": {"splitter_sizes": [320, 1080]},
                     "window": {
+                        "dock_visibility": {"explorer": True, "ipython": False},
+                        "maximized": False,
                         "geometry": "Zm9v",
                         "state": "YmFy",
                         "state_version": 1,
@@ -149,8 +143,8 @@ def test_settings_manager_drops_removed_legacy_settings_on_load_and_save(tmp_pat
                 "workbench": {
                     "layout": {"splitter_sizes": [100, 200]},
                     "window": {
-                        "geometry": "Zm9v",
-                        "state": "YmFy",
+                        "dock_visibility": {"explorer": True},
+                        "maximized": True,
                         "state_version": 1,
                     },
                 },
@@ -168,12 +162,14 @@ def test_settings_manager_drops_removed_legacy_settings_on_load_and_save(tmp_pat
 
     assert "last_workspace_path" not in global_payload.get("app", {})
     assert "layout" not in global_payload.get("workbench", {})
-    assert "geometry" not in global_payload.get("workbench", {}).get("window", {})
-    assert "state" not in global_payload.get("workbench", {}).get("window", {})
+    assert "dock_visibility" not in global_payload.get("workbench", {}).get("window", {})
+    assert "maximized" not in global_payload.get("workbench", {}).get("window", {})
     assert "state_version" not in global_payload.get("workbench", {}).get("window", {})
+    assert global_payload.get("workbench", {}).get("window", {}).get("geometry") == "Zm9v"
+    assert global_payload.get("workbench", {}).get("window", {}).get("state") == "YmFy"
     assert "layout" not in local_payload.get("workbench", {})
-    assert "geometry" not in local_payload.get("workbench", {}).get("window", {})
-    assert "state" not in local_payload.get("workbench", {}).get("window", {})
+    assert "dock_visibility" not in local_payload.get("workbench", {}).get("window", {})
+    assert "maximized" not in local_payload.get("workbench", {}).get("window", {})
     assert "state_version" not in local_payload.get("workbench", {}).get("window", {})
 
 

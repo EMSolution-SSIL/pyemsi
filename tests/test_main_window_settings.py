@@ -103,8 +103,7 @@ def test_main_window_does_not_restore_workspace_from_global_settings(tmp_path, m
 
     manager = SettingsManager(global_settings_path=global_settings_path)
     manager.add_recent_folder(workspace)
-    manager.set_global("workbench.window.dock_visibility", {"ipython": True})
-    manager.set_global("workbench.window.maximized", False)
+    manager.set_global("workbench.window.geometry", "Zm9v")
     manager.save()
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
@@ -120,7 +119,6 @@ def test_main_window_does_not_restore_workspace_from_global_settings(tmp_path, m
     try:
         assert window.explorer.current_path is None
         assert window.windowTitle() == "pyemsi"
-        assert not window._ipython_dock.isHidden()
         assert window.should_show_maximized_on_launch() is False
     finally:
         window.close()
@@ -153,13 +151,12 @@ def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch)
     local_payload = json.loads((workspace / ".pyemsi" / "workspace.json").read_text(encoding="utf-8"))
 
     assert reloaded.get_local("workbench.explorer.root_path") == os.path.abspath(os.path.normpath(str(workspace)))
-    assert reloaded.get_global("workbench.window.dock_visibility")["ipython"] is True
-    assert reloaded.get_global("workbench.window.maximized") is False
+    assert reloaded.get_global("workbench.window.geometry") is not None
+    assert reloaded.get_global("workbench.window.state") is not None
     assert "layout" not in local_payload.get("workbench", {})
     assert "window" not in local_payload.get("workbench", {})
-    assert "geometry" not in global_payload.get("workbench", {}).get("window", {})
-    assert "state" not in global_payload.get("workbench", {}).get("window", {})
-    assert "state_version" not in global_payload.get("workbench", {}).get("window", {})
+    assert "dock_visibility" not in global_payload.get("workbench", {}).get("window", {})
+    assert "maximized" not in global_payload.get("workbench", {}).get("window", {})
     assert window._kernel_manager.shutdown_calls == 1
 
 
