@@ -1,0 +1,11 @@
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="32px" height="32px" id="svg3757" viewBox="0 0 32 32">
+  <defs id="defs3759">
+    <filter id="filter2416"></filter>
+  </defs>
+  <g id="layer1" style="display: inline;" transform="matrix(1.345248, 0, 0, 1.321789, -5.445962, -5.076685)">
+    <path style="fill-opacity: 1; fill-rule: evenodd; stroke: rgb(111, 111, 88); stroke-width: 1px; stroke-linecap: butt; stroke-linejoin: miter; stroke-opacity: 1; fill: rgb(255, 194, 0);" d="M 11.875,5.96875 C 11.875,5.9687499 8.53125,10.71875 8.53125,10.71875 L 10.375,10.71875 L 10.4375,21 L 13.3125,21 L 13.3125,10.71875 L 15.15625,10.71875 L 11.875,5.96875 z" id="path20859"></path>
+    <path style="fill-opacity: 1; fill-rule: evenodd; stroke: rgb(111, 111, 88); stroke-width: 1px; stroke-linecap: butt; stroke-linejoin: miter; stroke-opacity: 1; fill: rgb(102, 204, 51);" d="M 13.59375,19.162719 L 10.75,19.256469 L 7.5,22.818969 L 6.125,21.568969 L 5.3125,27.287719 C 5.3124999,27.287719 11,26.037719 11,26.037719 L 9.65625,24.787719 L 13.5625,20.475219 L 13.59375,19.162719 z" id="path24809"></path>
+    <path style="fill-opacity: 1; fill-rule: evenodd; stroke: rgb(111, 111, 88); stroke-width: 1px; stroke-linecap: butt; stroke-linejoin: miter; stroke-opacity: 1; fill: rgb(255, 100, 61);" d="M 21.53125,16.5 L 21.53125,18.34375 L 13.40625,18.375 L 13.40625,21.28125 L 21.53125,21.28125 L 21.53125,23.125 L 26.3125,19.84375 C 26.312499,19.84375 21.53125,16.5 21.53125,16.5 z" id="path24787"></path>
+  </g>
+  <text style="fill: rgb(51, 51, 51); font-family: Arial, sans-serif; font-size: 21px; font-style: italic; font-weight: 700; white-space: pre;" x="16.257" y="13.496">o</text>
+</svg>

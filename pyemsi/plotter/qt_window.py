@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from pyemsi.plotter.plotter import Plotter
 
 from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar, QComboBox
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtCore import QSize, Qt, QTimer
 from pyvistaqt import QtInteractor
 import pyvista as pv
@@ -70,8 +70,13 @@ class QtPlotterWindow:
     _camera_toolbar: "QToolBar"
     _display_toolbar: "QToolBar"
     _query_toolbar: "QToolBar"
+    _animation_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
     parent_plotter: "Plotter | None"
+    _animation_transport_group: QActionGroup | None
+    _reverse_action: QAction | None
+    _pause_action: QAction | None
+    _play_action: QAction | None
     _point_pick_mode_enabled: bool
     _point_pick_mode_move_observer: int | None
     _point_pick_mode_click_observer: int | None
@@ -125,6 +130,10 @@ class QtPlotterWindow:
         # Action references for toggle behavior
         self._check_point_action: QAction | None = None
         self._check_cell_action: QAction | None = None
+        self._animation_transport_group = None
+        self._reverse_action = None
+        self._pause_action = None
+        self._play_action = None
         self._is_closing = False
 
         # One-shot point-picking mode state
@@ -278,22 +287,33 @@ class QtPlotterWindow:
         self._animation_toolbar.addAction(back_action)
 
         # Reverse action
-        reverse_action = QAction(QIcon(":/icons/Reverse.svg"), "Reverse Animation", self._window)
-        reverse_action.setToolTip("Reverse animation")
-        reverse_action.triggered.connect(self.reverse)
-        self._animation_toolbar.addAction(reverse_action)
+        self._animation_transport_group = QActionGroup(self._window)
+        self._animation_transport_group.setExclusive(True)
+
+        self._reverse_action = QAction(QIcon(":/icons/Reverse.svg"), "Reverse Animation", self._window)
+        self._reverse_action.setToolTip("Reverse animation")
+        self._reverse_action.setCheckable(True)
+        self._reverse_action.triggered.connect(self.reverse)
+        self._animation_transport_group.addAction(self._reverse_action)
+        self._animation_toolbar.addAction(self._reverse_action)
 
         # Pause action
-        pause_action = QAction(QIcon(":/icons/Pause.svg"), "Pause Animation", self._window)
-        pause_action.setToolTip("Pause animation")
-        pause_action.triggered.connect(self.pause)
-        self._animation_toolbar.addAction(pause_action)
+        self._pause_action = QAction(QIcon(":/icons/Pause.svg"), "Pause Animation", self._window)
+        self._pause_action.setToolTip("Pause animation")
+        self._pause_action.setCheckable(True)
+        self._pause_action.triggered.connect(self.pause)
+        self._animation_transport_group.addAction(self._pause_action)
+        self._animation_toolbar.addAction(self._pause_action)
 
         # Play action
-        play_action = QAction(QIcon(":/icons/Play.svg"), "Play Animation", self._window)
-        play_action.setToolTip("Play animation")
-        play_action.triggered.connect(self.play)
-        self._animation_toolbar.addAction(play_action)
+        self._play_action = QAction(QIcon(":/icons/Play.svg"), "Play Animation", self._window)
+        self._play_action.setToolTip("Play animation")
+        self._play_action.setCheckable(True)
+        self._play_action.triggered.connect(self.play)
+        self._animation_transport_group.addAction(self._play_action)
+        self._animation_toolbar.addAction(self._play_action)
+
+        self._sync_animation_transport_actions()
 
         # Forward action
         forward_action = QAction(QIcon(":/icons/Forward.svg"), "Forward Animation", self._window)
@@ -409,7 +429,7 @@ class QtPlotterWindow:
         self._display_toolbar.addSeparator()
 
         # Axes toggle action
-        self._axes_action = QAction("Axes", self._window)
+        self._axes_action = QAction(QIcon(":/icons/Axes.svg"), "Axes", self._window)
         self._axes_action.setToolTip("Toggle axes orientation widget")
         self._axes_action.setCheckable(True)
         self._axes_action.setChecked(self.plotter.renderer.axes_enabled)
@@ -417,7 +437,7 @@ class QtPlotterWindow:
         self._display_toolbar.addAction(self._axes_action)
 
         # Axes at origin action
-        self._axes_at_origin_action = QAction("Axes at Origin", self._window)
+        self._axes_at_origin_action = QAction(QIcon(":/icons/CenterAxes.svg"), "Axes at Origin", self._window)
         self._axes_at_origin_action.setToolTip("Add axes orientation widget at origin")
         self._axes_at_origin_action.setCheckable(True)
         self._axes_at_origin_action.setChecked(
@@ -427,7 +447,7 @@ class QtPlotterWindow:
         self._display_toolbar.addAction(self._axes_at_origin_action)
 
         # Grid toggle action
-        self._grid_action = QAction("Grid", self._window)
+        self._grid_action = QAction(QIcon(":/icons/Grid.svg"), "Grid", self._window)
         self._grid_action.setToolTip("Toggle grid and labeled axes")
         self._grid_action.setCheckable(True)
         self._grid_action.setChecked(
@@ -437,7 +457,9 @@ class QtPlotterWindow:
         self._display_toolbar.addAction(self._grid_action)
 
         # Camera orientation widget toggle action
-        self._camera_orientation_action = QAction("Camera Orientation", self._window)
+        self._camera_orientation_action = QAction(
+            QIcon(":/icons/CameraOrientation.svg"), "Camera Orientation", self._window
+        )
         self._camera_orientation_action.setToolTip("Toggle camera orientation widget")
         self._camera_orientation_action.setCheckable(True)
         self._camera_orientation_action.setChecked(
@@ -490,11 +512,20 @@ class QtPlotterWindow:
         if self.parent_plotter is None:
             return
 
+        num_time_points = self.parent_plotter.number_time_points
+        if num_time_points is None or num_time_points <= 0:
+            return
+
         if relative:
             current_time_point = self.parent_plotter.active_time_point or 0
             new_time_point = current_time_point + time_point
+            new_time_point = max(0, min(new_time_point, num_time_points - 1))
         else:
             new_time_point = time_point
+            if new_time_point < 0:
+                new_time_point = max(num_time_points + new_time_point, 0)
+            else:
+                new_time_point = min(new_time_point, num_time_points - 1)
 
         self.parent_plotter.set_active_time_point(new_time_point)
         self.parent_plotter.render()
@@ -1263,18 +1294,33 @@ class QtPlotterWindow:
         self.plotter.reset_camera()
         self.app.exec()
 
+    def _sync_animation_transport_actions(self) -> None:
+        """Keep animation transport actions aligned with playback state."""
+        actions = [self._reverse_action, self._pause_action, self._play_action]
+        if any(action is None for action in actions):
+            return
+
+        target_action = self._pause_action
+        if self._is_playing:
+            target_action = self._play_action if self._animation_direction >= 0 else self._reverse_action
+
+        target_action.setChecked(True)
+
     def play(self) -> None:
         """
         Start playing animation in forward direction.
         """
         if self.parent_plotter is None:
+            self._sync_animation_transport_actions()
             return
         if self.parent_plotter.number_time_points is None or self.parent_plotter.number_time_points <= 1:
+            self._sync_animation_transport_actions()
             return
 
         self._animation_direction = 1
         self._is_playing = True
         self._animation_timer.start()
+        self._sync_animation_transport_actions()
 
     def pause(self) -> None:
         """
@@ -1282,19 +1328,23 @@ class QtPlotterWindow:
         """
         self._is_playing = False
         self._animation_timer.stop()
+        self._sync_animation_transport_actions()
 
     def reverse(self) -> None:
         """
         Start playing animation in reverse direction.
         """
         if self.parent_plotter is None:
+            self._sync_animation_transport_actions()
             return
         if self.parent_plotter.number_time_points is None or self.parent_plotter.number_time_points <= 1:
+            self._sync_animation_transport_actions()
             return
 
         self._animation_direction = -1
         self._is_playing = True
         self._animation_timer.start()
+        self._sync_animation_transport_actions()
 
     def _animation_step(self) -> None:
         """

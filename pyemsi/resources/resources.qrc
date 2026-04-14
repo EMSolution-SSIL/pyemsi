@@ -1,8 +1,11 @@
 <RCC>
   <qresource>
+    <file>icons/Axes.svg</file>
     <file>icons/Back.svg</file>
     <file>icons/Blocks.svg</file>
     <file>icons/Bold.svg</file>
+    <file>icons/CameraOrientation.svg</file>
+    <file>icons/CenterAxes.svg</file>
     <file>icons/Code.svg</file>
     <file>icons/Comment.svg</file>
     <file>icons/Copy.svg</file>
@@ -18,6 +21,7 @@
     <file>icons/Forward.svg</file>
     <file>icons/Gear.svg</file>
     <file>icons/Graph.svg</file>
+    <file>icons/Grid.svg</file>
     <file>icons/History.svg</file>
     <file>icons/Icon.svg</file>
     <file>icons/Image.svg</file>
