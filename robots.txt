@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://emsolution-ssil.github.io/pyemsi/sitemap.xml

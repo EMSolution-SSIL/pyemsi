@@ -4,8 +4,8 @@
   <ShortName>pyemsi</ShortName>
   <Description>Search pyemsi</Description>
   <InputEncoding>UTF-8</InputEncoding>
-  <Image width="16" height="16" type="image/x-icon">https://EMSolution-SSIL.github.io/pyemsi/img/favicon.ico</Image>
-  <Url type="text/html" method="get" template="https://EMSolution-SSIL.github.io/pyemsi/search?q={searchTerms}"/>
-  <Url type="application/opensearchdescription+xml" rel="self" template="https://EMSolution-SSIL.github.io/pyemsi/opensearch.xml" />
-  <moz:SearchForm>https://EMSolution-SSIL.github.io/pyemsi/</moz:SearchForm>
+  <Image width="16" height="16" type="image/x-icon">https://emsolution-ssil.github.io/pyemsi/img/favicon.ico</Image>
+  <Url type="text/html" method="get" template="https://emsolution-ssil.github.io/pyemsi/search?q={searchTerms}"/>
+  <Url type="application/opensearchdescription+xml" rel="self" template="https://emsolution-ssil.github.io/pyemsi/opensearch.xml" />
+  <moz:SearchForm>https://emsolution-ssil.github.io/pyemsi/</moz:SearchForm>
 </OpenSearchDescription>
