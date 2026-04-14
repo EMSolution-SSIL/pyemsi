@@ -9,6 +9,15 @@ const config: Config = {
   title: 'pyemsi',
   tagline: 'EMSolution Visualization Tool',
   favicon: 'img/favicon.ico',
+  headTags: [
+    {
+      tagName: 'meta',
+      attributes: {
+        name: 'algolia-site-verification',
+        content: 'BE345405B2C1594A',
+      },
+    },
+  ],
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -16,10 +25,11 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://EMSolution-SSIL.github.io',
+  url: 'https://emsolution-ssil.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/pyemsi/',
+  trailingSlash: true,
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -54,11 +64,16 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
+            'https://github.com/EMSolution-SSIL/pyemsi',
           // Useful options to enforce blogging best practices
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
           onUntruncatedBlogPosts: 'warn',
+        },
+        sitemap: {
+          changefreq: 'weekly',
+          priority: 0.5,
+          ignorePatterns: ['/pyemsi/search', '/pyemsi/search/'],
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -82,6 +97,12 @@ const config: Config = {
       items: [
         {
           type: 'docSidebar',
+          sidebarId: 'docsSidebar',
+          position: 'left',
+          label: 'Docs',
+        },
+        {
+          type: 'docSidebar',
           sidebarId: 'apiSidebar',
           position: 'left',
           label: 'API',
@@ -100,6 +121,22 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+    },
+    algolia: {
+      appId: 'N6Z41B5B0L',
+      apiKey: '1df324664b4b9ea009527905fa26117d',
+      indexName: 'prod_pyemsi',
+      contextualSearch: false,
+      externalUrlRegex: 'external\\.com|domain\\.com',
+      searchParameters: {},
+      searchPagePath: 'search',
+      insights: false,
+      // askAi: 'c65d8196-fe0f-40c0-9e73-e892c2aa15e0',
+      askAi: '27258ef9-e281-496a-918f-466d089a3488',
+      // askAi: {
+      //   assistantId: '27258ef9-e281-496a-918f-466d089a3488',
+      //   agentStudio: true,
+      // },
     },
   } satisfies Preset.ThemeConfig,
 };

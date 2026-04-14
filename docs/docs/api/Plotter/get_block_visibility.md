@@ -32,6 +32,6 @@ print(plt.get_block_visibility("4"))  # False
 
 ### See Also
 
-- [`set_block_visibility()`](./set_block_visibility) — Set visibility for a single block.
-- [`set_blocks_visibility()`](./set_blocks_visibility) — Set visibility for multiple blocks in batch.
-- [`get_block_names()`](./get_block_names) — Get list of block names.
+- [`set_block_visibility()`](../set_block_visibility) — Set visibility for a single block.
+- [`set_blocks_visibility()`](../set_blocks_visibility) — Set visibility for multiple blocks in batch.
+- [`get_block_names()`](../get_block_names) — Get list of block names.
