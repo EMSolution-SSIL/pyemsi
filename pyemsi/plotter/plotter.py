@@ -671,6 +671,7 @@ class Plotter:
         self._scalar_props["show_edges"] = kwargs.get("show_edges", True)
         self._scalar_props["edge_color"] = kwargs.get("edge_color", "white")
         self._scalar_props["edge_opacity"] = kwargs.get("edge_opacity", 0.25)
+        self._scalar_props["cmap"] = kwargs.get("cmap", "jet")
         return self
 
     def _plot_scalar_field(self) -> None:

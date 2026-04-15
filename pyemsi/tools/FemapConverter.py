@@ -1,4 +1,5 @@
 # TODO: cythonize femapconverter
+import json
 import logging
 import re
 import shutil
@@ -61,7 +62,7 @@ class FemapConverter:
 
     The conversion pipeline consists of four stages:
     1. Builds a mesh from the FEMAP neutral file
-    2. Parses all configured data files (displacement, magnetic, current, force, etc.)
+    2. Parses all configured data files (displacement, magnetic, current, electric, force, etc.)
     3. Initializes a PVD file referencing each time step
     4. Performs time stepping to write individual VTM files for each time step
 
@@ -73,11 +74,13 @@ class FemapConverter:
         input_dir: str | Path,
         output_dir: str | Path = "./.pyemsi",
         output_name: str = "output",
+        input_control_file: str | Path | None = None,
         force_2d: bool = False,
         ascii_mode: bool = False,
         mesh: str | Path = "post_geom",
         magnetic: str | Path | None = "magnetic",
         current: str | Path | None = "current",
+        electric: str | Path | None = "electric",
         force: str | Path | None = "force",
         force_J_B: str | Path | None = "force_J_B",
         heat: str | Path | None = "heat",
@@ -96,6 +99,8 @@ class FemapConverter:
         self.output_dir = Path(output_dir)
         self.output_name = output_name
         self.ascii_mode = ascii_mode
+        self.input_control_file: Path | None = None
+        self.input_control = None
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
@@ -108,6 +113,19 @@ class FemapConverter:
         if self.output_folder.exists():
             logger.debug("Removing existing output folder: %s", self.output_folder)
             shutil.rmtree(self.output_folder)
+
+        # Add input control
+        if input_control_file is not None:
+            resolved_input_control_file = (
+                Path(input_control_file) if Path(input_control_file).is_file() else self.input_dir / input_control_file
+            )
+            if resolved_input_control_file.exists():
+                self.input_control_file = resolved_input_control_file
+                with resolved_input_control_file.open(encoding="utf-8") as handle:
+                    loaded_input_control = json.load(handle)
+                if not isinstance(loaded_input_control, dict):
+                    raise ValueError("input_control_file must contain a JSON object")
+                self.input_control = loaded_input_control
 
         # Add displacement
         self.displacement_file = None
@@ -128,6 +146,12 @@ class FemapConverter:
             current_file = Path(current) if Path(current).is_file() else self.input_dir / current
             if current_file.exists():
                 self.current_file = current_file
+        # Add electric
+        self.electric_file = None
+        if electric is not None:
+            electric_file = Path(electric) if Path(electric).is_file() else self.input_dir / electric
+            if electric_file.exists():
+                self.electric_file = electric_file
         # Add force
         self.force_file = None
         if force is not None:
@@ -329,6 +353,7 @@ class FemapConverter:
             "displacement": self.displacement_file,
             "magnetic": self.magnetic_file,
             "current": self.current_file,
+            "electric": self.electric_file,
             "force": self.force_file,
             "force_J_B": self.force_J_B_file,
             "heat": self.heat_file,
@@ -437,6 +462,8 @@ class FemapConverter:
             self._process_magnetic_field(step, mesh_copy)
         if "current" in self.vectors:
             self._process_current_field(step, mesh_copy)
+        if "electric" in self.vectors:
+            self._process_electric_field(step, mesh_copy)
         if "force" in self.vectors:
             self._process_force_field(step, mesh_copy)
         if "force_J_B" in self.vectors:
@@ -484,6 +511,57 @@ class FemapConverter:
         element_5 = data_arrays["CURR-elem-5"]
         mesh.cell_data["Loss (W/m^3)"] = element_5
         logger.debug("Added current field data for step %d", step)
+
+    def _get_electric_output_names(self) -> tuple[str, str, str]:
+        input_control = getattr(self, "input_control", None)
+        if input_control is None:
+            logger.warning("Input control data is missing; assuming STATIC=3 and CURRENT=1 for electric output naming.")
+            static_mode = 3
+            current_mode = 1
+        else:
+            try:
+                static_mode = input_control["2_Analysis_Type"]["STATIC"]
+                current_mode = input_control["10_3_Post_Files"]["CURRENT"]
+            except (KeyError, TypeError):
+                logger.warning(
+                    "Input control data is missing electric output settings; assuming STATIC=3 and CURRENT=1."
+                )
+                static_mode = 3
+                current_mode = 1
+
+        if static_mode == 2 and current_mode == 1:
+            return "D-Vec (C/m^2)", "D-Mag (C/m^2)", "Electric Energy Density (J/m^3)"
+        if static_mode == 2 and current_mode == 2:
+            return "E-Vec (V/m)", "E-Mag (V/m)", "Electric Energy Density (J/m^3)"
+        if static_mode == 3 and current_mode == 1:
+            return "J-e-Vec (A/m^2)", "J-e-Mag (A/m^2)", "Joule Loss (W/m^3)"
+
+        logger.warning(
+            "Unsupported electric output mode STATIC=%s CURRENT=%s; assuming STATIC=3 and CURRENT=1.",
+            static_mode,
+            current_mode,
+        )
+        return "J-e-Vec (A/m^2)", "J-e-Mag (A/m^2)", "Joule Loss (W/m^3)"
+
+    def _process_electric_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing electric field for step %d", step)
+        data_arrays = self.get_data_array(step, self.vectors["electric"])
+        vector_name, magnitude_name, scalar_name = self._get_electric_output_names()
+
+        node_1 = data_arrays["ELEC-node-1"]
+        node_2 = data_arrays["ELEC-node-2"]
+        node_3 = data_arrays["ELEC-node-3"]
+        mesh.point_data[vector_name] = np.vstack((node_1, node_2, node_3)).T
+        mesh.point_data[magnitude_name] = data_arrays["ELEC-node-4"]
+        mesh.point_data["Potential (V)"] = data_arrays["ELEC-node-5"]
+
+        element_1 = data_arrays["ELEC-elem-1"]
+        element_2 = data_arrays["ELEC-elem-2"]
+        element_3 = data_arrays["ELEC-elem-3"]
+        mesh.cell_data[vector_name] = np.vstack((element_1, element_2, element_3)).T
+        mesh.cell_data[magnitude_name] = data_arrays["ELEC-elem-4"]
+        mesh.cell_data[scalar_name] = data_arrays["ELEC-elem-5"]
+        logger.debug("Added electric field data for step %d", step)
 
     def _process_force_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing force field for step %d", step)
