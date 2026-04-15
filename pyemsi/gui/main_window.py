@@ -62,6 +62,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._kernel_manager = None
         self._active_external_terminals: dict = {}
         self._temp_converter_configs: set[str] = set()
+        self._field_plot_dialog: FieldPlotBuilderDialog | None = None
 
         self._setup_ipython_terminal()
 
@@ -400,11 +401,14 @@ class PyEmsiMainWindow(QMainWindow):
         if not current_path or not os.path.isdir(current_path):
             return
 
-        dialog = FieldPlotBuilderDialog(
-            self._settings,
-            browse_dir_getter=lambda: self.explorer.current_path,
-            parent=self,
-        )
+        dialog = self._field_plot_dialog
+        if dialog is None:
+            dialog = FieldPlotBuilderDialog(
+                self._settings,
+                browse_dir_getter=lambda: self.explorer.current_path,
+                parent=self,
+            )
+            self._field_plot_dialog = dialog
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()

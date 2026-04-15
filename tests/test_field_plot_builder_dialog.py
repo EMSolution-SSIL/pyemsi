@@ -38,7 +38,14 @@ def test_field_plot_builder_dialog_defaults_to_disabled_stages(tmp_path):
     assert not dialog._scalar_enabled_checkbox.isChecked()
     assert not dialog._contour_enabled_checkbox.isChecked()
     assert not dialog._vector_enabled_checkbox.isChecked()
-    assert dialog._scalar_kwargs()["cmap"] == "viridis"
+    assert dialog._scalar_name_combo.count() == 0
+    assert dialog._contour_name_combo.count() == 0
+    assert dialog._vector_name_combo.count() == 0
+    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
+        None,
+        False,
+    ]
+    assert dialog._scalar_kwargs()["cmap"] == "jet"
 
 
 def test_field_plot_builder_dialog_defaults_to_collapsed_compact_sections(tmp_path):
@@ -68,7 +75,7 @@ def test_field_plot_builder_dialog_enabling_stage_expands_section_and_updates_su
     assert dialog._scalar_panel.is_expanded()
     assert dialog._scalar_panel.summary_text() == " | ".join(
         (
-            str(dialog._scalar_name_combo.currentData()),
+            "Select array",
             str(dialog._scalar_mode_combo.currentData()),
             dialog._scalar_cmap_combo.currentText(),
         )
@@ -112,6 +119,7 @@ def test_field_plot_builder_dialog_plot_requires_valid_positive_vector_factor(tm
     monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
 
     dialog._file_field.set_value(os.fspath(workspace / "output.pvd"))
+    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
     dialog._vector_enabled_checkbox.setChecked(True)
     dialog._vector_factor_edit.setText("0")
 
@@ -159,7 +167,7 @@ class _FakeMultiBlock:
         return self._names[index]
 
 
-def test_field_plot_builder_dialog_analyse_requires_field_file(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_discover_requires_field_file(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -169,12 +177,12 @@ def test_field_plot_builder_dialog_analyse_requires_field_file(tmp_path, monkeyp
 
     dialog._file_field.set_value(None)
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
 
     assert warnings == ["Field file is required."]
 
 
-def test_field_plot_builder_dialog_analyse_repopulates_combos_from_mesh_arrays(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_discover_repopulates_combos_from_mesh_arrays(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -214,18 +222,9 @@ def test_field_plot_builder_dialog_analyse_repopulates_combos_from_mesh_arrays(t
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._scalar_name_combo.setCurrentIndex(
-        dialog_module._combo_index_for_data(dialog._scalar_name_combo, "B-Mag (T)")
-    )
-    dialog._contour_name_combo.setCurrentIndex(
-        dialog_module._combo_index_for_data(dialog._contour_name_combo, "Flux (A/m)")
-    )
-    dialog._vector_name_combo.setCurrentIndex(
-        dialog_module._combo_index_for_data(dialog._vector_name_combo, "Point Vector")
-    )
     dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
 
     assert calls == [("init", os.fspath(plot_path)), ("close", None)]
     assert [dialog._scalar_name_combo.itemData(index) for index in range(dialog._scalar_name_combo.count())] == [
@@ -255,7 +254,7 @@ def test_field_plot_builder_dialog_analyse_repopulates_combos_from_mesh_arrays(t
     assert dialog._vector_scale_combo.currentData() is False
 
 
-def test_field_plot_builder_dialog_analyse_falls_back_to_defaults_when_mesh_has_no_usable_arrays(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_discover_leaves_combos_empty_when_mesh_has_no_usable_arrays(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -272,20 +271,18 @@ def test_field_plot_builder_dialog_analyse_falls_back_to_defaults_when_mesh_has_
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
 
-    assert [dialog._scalar_name_combo.itemData(index) for index in range(dialog._scalar_name_combo.count())] == list(
-        dialog_module.SCALAR_NAMES
-    )
-    assert [dialog._vector_name_combo.itemData(index) for index in range(dialog._vector_name_combo.count())] == list(
-        dialog_module.VECTOR_NAMES
-    )
+    assert dialog._scalar_name_combo.count() == 0
+    assert dialog._contour_name_combo.count() == 0
+    assert dialog._vector_name_combo.count() == 0
     assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
-        option[1] for option in dialog_module.VECTOR_SCALE_OPTIONS
+        None,
+        False,
     ]
 
 
-def test_field_plot_builder_dialog_analyse_closes_plotter_and_reports_errors(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_discover_closes_plotter_and_reports_errors(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -309,13 +306,13 @@ def test_field_plot_builder_dialog_analyse_closes_plotter_and_reports_errors(tmp
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
     monkeypatch.setattr(dialog_module.QMessageBox, "critical", lambda *args: criticals.append(args[2]))
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
 
     assert calls == [("init", os.fspath(plot_path)), ("close", None)]
     assert criticals == ["bad mesh"]
 
 
-def test_field_plot_builder_dialog_analyse_updates_vector_factor_from_selected_vector(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_updates_from_selected_vector(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -340,13 +337,14 @@ def test_field_plot_builder_dialog_analyse_updates_vector_factor_from_selected_v
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
+    dialog._on_suggest_vector_factor()
 
     assert dialog._vector_name_combo.currentData() == "Point Vector"
     assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.4)
 
 
-def test_field_plot_builder_dialog_analyse_updates_vector_factor_for_uniform_scale(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_updates_for_uniform_scale(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -371,15 +369,15 @@ def test_field_plot_builder_dialog_analyse_updates_vector_factor_for_uniform_sca
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
     dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
 
-    dialog._on_analyse()
+    dialog._on_suggest_vector_factor()
 
     assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(2.0)
 
 
-def test_field_plot_builder_dialog_analyse_updates_vector_factor_for_explicit_scale_array(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_updates_for_explicit_scale_array(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -404,17 +402,17 @@ def test_field_plot_builder_dialog_analyse_updates_vector_factor_for_explicit_sc
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._on_analyse()
+    dialog._on_discover_arrays()
     dialog._vector_scale_combo.setCurrentIndex(
         dialog_module._combo_index_for_data(dialog._vector_scale_combo, "Point Scalar")
     )
 
-    dialog._on_analyse()
+    dialog._on_suggest_vector_factor()
 
     assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.5)
 
 
-def test_field_plot_builder_dialog_analyse_leaves_factor_unchanged_when_vectors_disabled(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_leaves_value_unchanged_when_vectors_disabled(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -436,12 +434,12 @@ def test_field_plot_builder_dialog_analyse_leaves_factor_unchanged_when_vectors_
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._on_analyse()
+    dialog._on_suggest_vector_factor()
 
     assert dialog._vector_factor_edit.text() == "7.5"
 
 
-def test_field_plot_builder_dialog_analyse_reports_zero_vector_scale_data(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_reports_zero_vector_scale_data(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -465,12 +463,12 @@ def test_field_plot_builder_dialog_analyse_reports_zero_vector_scale_data(tmp_pa
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
     monkeypatch.setattr(dialog_module.QMessageBox, "critical", lambda *args: criticals.append(args[2]))
 
-    dialog._on_analyse()
+    dialog._on_suggest_vector_factor()
 
     assert criticals == ["Maximum value for 'Point Vector' must be greater than 0."]
 
 
-def test_field_plot_builder_dialog_analyse_sweeps_all_time_values_for_factor(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_sweeps_all_time_values(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -515,13 +513,31 @@ def test_field_plot_builder_dialog_analyse_sweeps_all_time_values_for_factor(tmp
 
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
 
-    dialog._on_analyse()
+    dialog._on_suggest_vector_factor()
 
     plotter = _FakePlotter.instances[0]
     assert plotter.reader.read_calls == [0.0, 1.0]
     assert plotter.time_history == [0.0, 1.0, 1.0]
     assert plotter.active_time_value == 1.0
     assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.4)
+
+
+def test_field_plot_builder_dialog_changing_path_clears_discovered_arrays(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+
+    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
+
+    dialog._file_field.set_value(os.fspath(workspace / "other_output.pvd"))
+
+    assert dialog._scalar_name_combo.count() == 0
+    assert dialog._contour_name_combo.count() == 0
+    assert dialog._vector_name_combo.count() == 0
+    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
+        None,
+        False,
+    ]
 
 
 def test_field_plot_builder_dialog_prefers_explicit_field_plot_path_over_femap_defaults(
@@ -560,6 +576,7 @@ def test_field_plot_builder_dialog_script_uses_widget_state_without_creating_plo
 
     dialog._file_field.set_value(os.fspath(plot_path))
     dialog._title_edit.setText("Rotor Field")
+    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
     dialog._scalar_enabled_checkbox.setChecked(True)
     dialog._scalar_mode_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._scalar_mode_combo, "element"))
     dialog._vector_enabled_checkbox.setChecked(True)
@@ -586,12 +603,30 @@ def test_field_plot_builder_dialog_script_uses_widget_state_without_creating_plo
     assert "from pyemsi import gui, Plotter" in script
     assert f"field_plot = Plotter({os.fspath(plot_path)!r})" in script
     assert "field_plot.set_scalar(" in script
-    assert "name='B-Mag (T)'" in script
+    assert "name='Point Scalar'" in script
     assert "mode='element'" in script
-    assert "cmap='viridis'" in script
+    assert "cmap='jet'" in script
     assert "field_plot.set_vector(" in script
+    assert "name='Point Vector'" in script
     assert "scale=False" in script
     assert "gui.add_field(field_plot, 'Rotor Field')" in script
+
+
+def test_field_plot_builder_dialog_script_requires_discovered_array_selection(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+    warnings = []
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._scalar_enabled_checkbox.setChecked(True)
+    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+
+    dialog._open_script_dialog()
+
+    assert warnings == ["Discover arrays and select a scalar field before plotting."]
 
 
 def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tmp_path, monkeypatch):
@@ -603,6 +638,7 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
 
     dialog._file_field.set_value(os.fspath(plot_path))
     dialog._title_edit.setText("Field Plot")
+    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
     dialog._scalar_enabled_checkbox.setChecked(True)
     dialog._contour_enabled_checkbox.setChecked(True)
     dialog._vector_enabled_checkbox.setChecked(True)
@@ -644,9 +680,12 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
 
     assert calls[0] == ("init", os.fspath(plot_path))
     assert calls[1][0] == "set_scalar"
-    assert calls[1][1]["cmap"] == "viridis"
+    assert calls[1][1]["cmap"] == "jet"
+    assert calls[1][1]["name"] == "Point Scalar"
     assert calls[2][0] == "set_contour"
+    assert calls[2][1]["name"] == "Point Scalar"
     assert calls[3][0] == "set_vector"
+    assert calls[3][1]["name"] == "Point Vector"
     assert calls[3][1]["factor"] == 1e-30
     assert calls[4][0] == "set_feature_edges"
     assert calls[4][1] == {"color": "white", "line_width": 1, "opacity": 1.0}
@@ -656,6 +695,23 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
     assert manager.get_local("tools.field_plot.title") is None
     assert manager.get_local("tools.field_plot.scalar_enabled") is None
     assert manager.get_local("tools.field_plot.vector_tolerance") is None
+
+
+def test_field_plot_builder_dialog_plot_requires_discovered_array_selection(tmp_path, monkeypatch):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    plot_path = workspace / "output.pvd"
+    plot_path.write_text("dummy", encoding="utf-8")
+    warnings = []
+
+    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog._vector_enabled_checkbox.setChecked(True)
+    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+
+    dialog._on_plot()
+
+    assert warnings == ["Discover arrays and select a vector field before plotting."]
 
 
 def test_field_plot_builder_dialog_vector_scale_preserves_uniform_option(tmp_path):

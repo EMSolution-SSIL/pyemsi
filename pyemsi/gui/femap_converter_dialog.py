@@ -91,6 +91,7 @@ class _PathSelector(QWidget):
         self._select_directory = select_directory
         self._browse_dir_getter = browse_dir_getter
         self._optional = optional
+        self._trailing_widgets: list[QWidget] = []
 
         self._enabled_checkbox = QCheckBox(self) if optional else None
         if self._enabled_checkbox is not None:
@@ -100,13 +101,13 @@ class _PathSelector(QWidget):
         self._browse_button = QPushButton("Browse...", self)
         self._browse_button.clicked.connect(self._browse)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
         if self._enabled_checkbox is not None:
-            layout.addWidget(self._enabled_checkbox)
+            self._layout.addWidget(self._enabled_checkbox)
             self._enabled_checkbox.toggled.connect(self._apply_enabled_state)
-        layout.addWidget(self._line_edit, 1)
-        layout.addWidget(self._browse_button)
+        self._layout.addWidget(self._line_edit, 1)
+        self._layout.addWidget(self._browse_button)
 
         self._apply_enabled_state(self.is_active())
 
@@ -130,9 +131,16 @@ class _PathSelector(QWidget):
     def line_edit(self) -> QLineEdit:
         return self._line_edit
 
+    def add_trailing_widget(self, widget: QWidget) -> None:
+        self._trailing_widgets.append(widget)
+        self._layout.addWidget(widget)
+        widget.setEnabled(self.is_active())
+
     def _apply_enabled_state(self, checked: bool) -> None:
         self._line_edit.setEnabled(checked)
         self._browse_button.setEnabled(checked)
+        for widget in self._trailing_widgets:
+            widget.setEnabled(checked)
 
     def _browse(self) -> None:
         initial_dir = self._initial_directory()
