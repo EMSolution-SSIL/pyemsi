@@ -78,6 +78,7 @@ def test_femap_converter_dialog_builds_config_with_optional_channels_disabled(tm
     dialog = FemapConverterDialog(manager)
     try:
         dialog._input_dir_field.set_value(str(input_dir))
+        dialog._apply_discovered_optional_paths()
         dialog._displacement_field.set_value("disp")
         dialog._magnetic_field.set_value(None)
         dialog._current_field.set_value(None)
@@ -118,6 +119,7 @@ def test_femap_converter_dialog_allows_current_and_electric_together(tmp_path):
     dialog = FemapConverterDialog(manager)
     try:
         dialog._input_dir_field.set_value(str(input_dir))
+        dialog._apply_discovered_optional_paths()
         dialog._magnetic_field.set_value(None)
         dialog._displacement_field.set_value(None)
         dialog._current_field.set_value("current")
