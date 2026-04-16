@@ -5,7 +5,7 @@ sidebar_position: 23
 
 Sets visibility for multiple blocks in batch.
 
-Updates the visibility state for multiple blocks at once, then renders the scene. More efficient than calling [`set_block_visibility()`](./set_block_visibility) repeatedly. Works in both desktop and notebook modes.
+Updates the visibility state for multiple blocks at once, then renders the scene. More efficient than calling [`set_block_visibility()`](../set_block_visibility) repeatedly. Works in both desktop and notebook modes.
 
 :::tip[Parameters]
 - **`visibility`** (`dict[str, bool]`) — Dictionary mapping block names to visibility states. `True` to show the block, `False` to hide it.
@@ -52,6 +52,6 @@ plt.set_blocks_visibility({"4": False})
 
 ### See Also
 
-- [`get_block_visibility()`](./get_block_visibility) — Check visibility of a block.
-- [`set_block_visibility()`](./set_block_visibility) — Set visibility for a single block.
-- [`get_block_names()`](./get_block_names) — Get list of block names.
+- [`get_block_visibility()`](../get_block_visibility) — Check visibility of a block.
+- [`set_block_visibility()`](../set_block_visibility) — Set visibility for a single block.
+- [`get_block_names()`](../get_block_names) — Get list of block names.

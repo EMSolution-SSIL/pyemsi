@@ -16,9 +16,33 @@ class _FakePlotter:
     def __init__(self, notebook: bool = False) -> None:
         from PySide6.QtWidgets import QWidget
 
+        class _FakeInnerPlotter:
+            def __init__(inner_self) -> None:
+                inner_self.reset_camera_calls = 0
+                inner_self.show_axes_calls = 0
+
+            def reset_camera(inner_self) -> None:
+                inner_self.reset_camera_calls += 1
+
+            def show_axes(inner_self) -> None:
+                inner_self.show_axes_calls += 1
+
+        class _FakeWindow:
+            def __init__(window_self) -> None:
+                window_self.create_display_toolbar_calls = 0
+
+            def _create_display_toolbar(window_self) -> None:
+                window_self.create_display_toolbar_calls += 1
+
         self.notebook = notebook
         self.widget = QWidget()
+        self.plotter = _FakeInnerPlotter()
+        self._window = _FakeWindow()
         self.close_calls = 0
+        self.render_calls = 0
+
+    def render(self) -> None:
+        self.render_calls += 1
 
     def close(self) -> None:
         self.close_calls += 1

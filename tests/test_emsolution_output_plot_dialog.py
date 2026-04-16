@@ -205,7 +205,7 @@ def test_matplotlib_viewer_can_disable_tight_layout():
     assert not _uses_tight_layout(viewer.figure)
 
 
-def test_matplotlib_viewer_exposes_indicator_toolbar_combos_with_vertical_line_default():
+def test_matplotlib_viewer_exposes_indicator_toolbar_combos_with_off_default():
     _app()
 
     figure = Figure()
@@ -215,12 +215,12 @@ def test_matplotlib_viewer_exposes_indicator_toolbar_combos_with_vertical_line_d
 
     assert viewer._indicator_mode_combo.count() == 4
     assert viewer._indicator_mode_combo.itemData(viewer._indicator_mode_combo.currentIndex()) == (
-        MatplotlibViewer.INDICATOR_MODE_VERTICAL_LINE
+        MatplotlibViewer.INDICATOR_MODE_OFF
     )
     assert viewer._indicator_index_combo.count() == 3
     assert viewer._indicator_index_combo.currentIndex() == -1
-    assert viewer._indicator_index_combo.itemText(0) == "0:0"
-    assert viewer._indicator_index_combo.itemText(1) == "1:1"
+    assert viewer._indicator_index_combo.itemText(0) == "0   : 0"
+    assert viewer._indicator_index_combo.itemText(1) == "1   : 1"
 
 
 def test_matplotlib_viewer_indicator_index_combo_tracks_slot_and_manual_selection():
@@ -279,7 +279,11 @@ def test_matplotlib_viewer_off_mode_hides_indicator_but_preserves_index():
     axis.plot([0, 1, 2], [4, 5, 6])
     viewer = MatplotlibViewer(figure, tight_layout=False)
 
+    _set_indicator_mode(viewer, MatplotlibViewer.INDICATOR_MODE_VERTICAL_LINE)
     viewer.set_indicator_index(2)
+
+    assert len(viewer._indicator_artists) == 1
+
     _set_indicator_mode(viewer, MatplotlibViewer.INDICATOR_MODE_OFF)
 
     assert viewer._indicator_index == 2

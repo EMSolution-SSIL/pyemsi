@@ -37,40 +37,6 @@ from pyemsi.gui.femap_converter_dialog import _PathSelector
 from pyemsi.plotter.colormaps import CMAP_CHOICES, cmap_choice_to_name, cmap_name_to_choice
 from pyemsi.settings import SettingsManager
 
-SCALAR_NAMES: tuple[str, ...] = (
-    "B-Mag (T)",
-    "Flux (A/m)",
-    "J-Mag (A/m^2)",
-    "Loss (W/m^3)",
-    "F Nodal-Mag (N/m^3)",
-    "F Lorents-Mag (N/m^3)",
-    "Heat Density (W/m^3)",
-    "Heat (W)",
-)
-
-CONTOUR_NAMES: tuple[str, ...] = SCALAR_NAMES
-
-VECTOR_NAMES: tuple[str, ...] = (
-    "B-Mag (T)",
-    "B-Vec (T)",
-    "Flux (A/m)",
-    "J-Mag (A/m^2)",
-    "J-Vec (A/m^2)",
-    "Loss (W/m^3)",
-    "F Nodal-Mag (N/m^3)",
-    "F Nodal-Vec (N/m^3)",
-    "F Lorents-Mag (N/m^3)",
-    "F Lorents-Vec (N/m^3)",
-    "Heat Density (W/m^3)",
-    "Heat (W)",
-)
-
-VECTOR_SCALE_OPTIONS: tuple[tuple[str, str | bool | None], ...] = (
-    ("Auto", None),
-    ("Uniform", False),
-    *tuple((name, name) for name in VECTOR_NAMES),
-)
-
 GLYPH_TYPE_OPTIONS: tuple[str, ...] = ("arrow", "cone", "sphere")
 COLOR_MODE_OPTIONS: tuple[str, ...] = ("scale", "scalar", "vector")
 INTERNAL_FIELD_NAMES: frozenset[str] = frozenset({"vtkOriginalCellIds", "vtkOriginalPointIds"})
@@ -241,6 +207,7 @@ class FieldPlotBuilderDialog(QDialog):
         super().__init__(parent)
         self._settings = settings_manager
         self._browse_dir_getter = browse_dir_getter
+        self._analysis: _PlotAnalysisResult | None = None
 
         self.setWindowTitle("Field Plot")
         self.setWindowIcon(QIcon(":/icons/Field.svg"))
@@ -254,13 +221,18 @@ class FieldPlotBuilderDialog(QDialog):
             browse_dir_getter=self._browse_dir_getter,
             parent=self,
         )
+        self._discover_button = QPushButton(self)
+        self._discover_button.setText("Discover")
+        self._discover_button.setIcon(QIcon(":/icons/Telescope.svg"))
+        self._discover_button.setToolTip("Discover arrays from the selected field file")
+        self._file_field.add_trailing_widget(self._discover_button)
         self._title_edit = QLineEdit(defaults["title"], self)
         self._title_edit.setPlaceholderText("Field Plot")
 
         self._scalar_enabled_checkbox = QCheckBox("Enable Scalar", self)
         self._scalar_enabled_checkbox.setChecked(defaults["scalar_enabled"])
         self._scalar_name_combo = QComboBox(self)
-        self._populate_named_combo(self._scalar_name_combo, list(SCALAR_NAMES), defaults["scalar_name"])
+        self._populate_named_combo(self._scalar_name_combo, [], defaults["scalar_name"])
         self._scalar_mode_combo = QComboBox(self)
         self._scalar_mode_combo.addItem("element", "element")
         self._scalar_mode_combo.addItem("node", "node")
@@ -278,7 +250,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._contour_enabled_checkbox = QCheckBox("Enable Contour", self)
         self._contour_enabled_checkbox.setChecked(defaults["contour_enabled"])
         self._contour_name_combo = QComboBox(self)
-        self._populate_named_combo(self._contour_name_combo, list(CONTOUR_NAMES), defaults["contour_name"])
+        self._populate_named_combo(self._contour_name_combo, [], defaults["contour_name"])
         self._contour_n_contours_spin = QSpinBox(self)
         self._contour_n_contours_spin.setRange(1, 999)
         self._contour_n_contours_spin.setValue(defaults["contour_n_contours"])
@@ -296,9 +268,9 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_enabled_checkbox = QCheckBox("Enable Vector", self)
         self._vector_enabled_checkbox.setChecked(defaults["vector_enabled"])
         self._vector_name_combo = QComboBox(self)
-        self._populate_named_combo(self._vector_name_combo, list(VECTOR_NAMES), defaults["vector_name"])
+        self._populate_named_combo(self._vector_name_combo, [], defaults["vector_name"])
         self._vector_scale_combo = QComboBox(self)
-        self._populate_scale_combo(list(VECTOR_SCALE_OPTIONS), defaults["vector_scale"])
+        self._populate_scale_combo(_vector_scale_options_from_names([]), defaults["vector_scale"])
         self._vector_glyph_type_combo = QComboBox(self)
         for glyph_type in GLYPH_TYPE_OPTIONS:
             self._vector_glyph_type_combo.addItem(glyph_type, glyph_type)
@@ -314,6 +286,16 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_factor_edit = QLineEdit(_format_float_text(float(defaults["vector_factor"])), self)
         self._vector_factor_edit.setValidator(vector_factor_validator)
         self._vector_factor_edit.setPlaceholderText("1.0")
+        self._suggest_factor_button = QPushButton(self)
+        self._suggest_factor_button.setText("Suggest")
+        self._suggest_factor_button.setIcon(QIcon(":/icons/Telescope.svg"))
+        self._suggest_factor_button.setToolTip("Suggest a vector factor from the discovered field data")
+        factor_widget = QWidget(self)
+        factor_layout = QHBoxLayout(factor_widget)
+        factor_layout.setContentsMargins(0, 0, 0, 0)
+        factor_layout.setSpacing(6)
+        factor_layout.addWidget(self._vector_factor_edit, 1)
+        factor_layout.addWidget(self._suggest_factor_button)
         self._vector_use_tolerance_checkbox = QCheckBox(self)
         self._vector_use_tolerance_checkbox.setChecked(defaults["vector_tolerance"] is not None)
         self._vector_tolerance_spin = QDoubleSpinBox(self)
@@ -339,7 +321,7 @@ class FieldPlotBuilderDialog(QDialog):
         vector_layout.addRow("Name:", self._vector_name_combo)
         vector_layout.addRow("Scale:", self._vector_scale_combo)
         vector_layout.addRow("Glyph Type:", self._vector_glyph_type_combo)
-        vector_layout.addRow("Factor:", self._vector_factor_edit)
+        vector_layout.addRow("Factor:", factor_widget)
         vector_layout.addRow("Tolerance:", tolerance_widget)
         vector_layout.addRow("Color Mode:", self._vector_color_mode_combo)
 
@@ -348,7 +330,7 @@ class FieldPlotBuilderDialog(QDialog):
         file_layout.addRow("Title:", self._title_edit)
 
         helper_label = QLabel(
-            "Click Analyse to inspect the selected file, refresh the available arrays, and auto-scale vectors to 10% of the mesh size. Until then, documented Plotter defaults are shown.",
+            "Use the telescope beside Field File to discover the available arrays, then use the telescope beside Factor to suggest a vector scale based on 10% of the mesh size. Plot and Script require discovered array selections for enabled stages.",
             self,
         )
         helper_label.setWordWrap(True)
@@ -400,14 +382,11 @@ class FieldPlotBuilderDialog(QDialog):
         layout.addWidget(self._sections_scroll_area, 1)
 
         button_row = QHBoxLayout()
-        self._analyse_button = QPushButton("Analyse", self)
-        self._analyse_button.setIcon(QIcon(":/icons/Telescope.svg"))
         self._script_button = QPushButton("Script...", self)
         self._script_button.setIcon(QIcon(":/icons/Code.svg"))
         self._plot_button = QPushButton("Plot", self)
         self._plot_button.setIcon(QIcon(":/icons/Field.svg"))
         self._cancel_button = QPushButton("Cancel", self)
-        button_row.addWidget(self._analyse_button)
         button_row.addWidget(self._script_button)
         button_row.addStretch()
         button_row.addWidget(self._plot_button)
@@ -431,8 +410,10 @@ class FieldPlotBuilderDialog(QDialog):
         self._feature_edges_color_edit.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_line_width_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_opacity_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._file_field.line_edit().textChanged.connect(self._on_field_path_changed)
+        self._discover_button.clicked.connect(self._on_discover_arrays)
+        self._suggest_factor_button.clicked.connect(self._on_suggest_vector_factor)
         self._script_button.clicked.connect(self._open_script_dialog)
-        self._analyse_button.clicked.connect(self._on_analyse)
         self._plot_button.clicked.connect(self._on_plot)
         self._cancel_button.clicked.connect(self.reject)
         self._plot_button.setDefault(True)
@@ -456,16 +437,16 @@ class FieldPlotBuilderDialog(QDialog):
             "field_file_path": field_file_path or "",
             "title": "Field Plot",
             "scalar_enabled": False,
-            "scalar_name": SCALAR_NAMES[0],
+            "scalar_name": None,
             "scalar_mode": "node",
-            "scalar_cmap": cmap_name_to_choice("viridis"),
+            "scalar_cmap": cmap_name_to_choice("jet"),
             "contour_enabled": False,
-            "contour_name": CONTOUR_NAMES[1],
+            "contour_name": None,
             "contour_n_contours": 20,
             "contour_color": "red",
             "contour_line_width": 3,
             "vector_enabled": False,
-            "vector_name": VECTOR_NAMES[1],
+            "vector_name": None,
             "vector_scale": None,
             "vector_glyph_type": "arrow",
             "vector_factor": 1.0,
@@ -516,6 +497,22 @@ class FieldPlotBuilderDialog(QDialog):
         panel.set_content_enabled(enabled)
         panel.set_expanded(enabled)
 
+    def _clear_discovered_plot_arrays(self) -> None:
+        self._populate_named_combo(self._scalar_name_combo, [], None)
+        self._populate_named_combo(self._contour_name_combo, [], None)
+        self._populate_named_combo(self._vector_name_combo, [], None)
+        self._populate_scale_combo(_vector_scale_options_from_names([]), None)
+
+    def _invalidate_analysis(self) -> None:
+        self._analysis = None
+        self._clear_discovered_plot_arrays()
+
+    def _on_field_path_changed(self, _text: str) -> None:
+        self._invalidate_analysis()
+        self._update_scalar_panel_summary()
+        self._update_contour_panel_summary()
+        self._update_vector_panel_summary()
+
     def _on_scalar_enabled_toggled(self, checked: bool) -> None:
         self._set_stage_panel_state(self._scalar_panel, checked)
         self._update_scalar_panel_summary()
@@ -532,10 +529,11 @@ class FieldPlotBuilderDialog(QDialog):
         if not self._scalar_enabled_checkbox.isChecked():
             self._scalar_panel.set_summary("Disabled")
             return
+        scalar_name = self._selected_name(self._scalar_name_combo, fallback="Select array")
         self._scalar_panel.set_summary(
             " | ".join(
                 (
-                    str(self._scalar_name_combo.currentData()),
+                    scalar_name,
                     str(self._scalar_mode_combo.currentData()),
                     self._scalar_cmap_combo.currentText(),
                 )
@@ -547,7 +545,7 @@ class FieldPlotBuilderDialog(QDialog):
             self._contour_panel.set_summary("Disabled")
             return
         self._contour_panel.set_summary(
-            f"{self._contour_name_combo.currentData()} | {self._contour_n_contours_spin.value()} contours | {self._contour_color_edit.value() or 'red'}"
+            f"{self._selected_name(self._contour_name_combo, fallback='Select array')} | {self._contour_n_contours_spin.value()} contours | {self._contour_color_edit.value() or 'red'}"
         )
 
     def _vector_scale_summary(self) -> str:
@@ -566,13 +564,19 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_panel.set_summary(
             " | ".join(
                 (
-                    str(self._vector_name_combo.currentData()),
+                    self._selected_name(self._vector_name_combo, fallback="Select array"),
                     self._vector_scale_summary(),
                     str(self._vector_glyph_type_combo.currentData()),
                     f"x {factor}",
                 )
             )
         )
+
+    def _selected_name(self, combo: QComboBox, *, fallback: str = "") -> str:
+        data = combo.currentData()
+        if data is None:
+            return fallback
+        return str(data)
 
     def _update_feature_edges_panel_summary(self) -> None:
         self._feature_edges_panel.set_summary(
@@ -749,6 +753,10 @@ class FieldPlotBuilderDialog(QDialog):
         if not self._vector_enabled_checkbox.isChecked():
             return
 
+        vector_name = self._vector_name_combo.currentData()
+        if vector_name is None:
+            raise ValueError("Discover arrays and select a vector field before suggesting a factor.")
+
         mesh_length = analysis.mesh_length
         if not math.isfinite(mesh_length) or mesh_length <= 0.0:
             raise ValueError("Unable to determine the mesh size for vector auto-scaling.")
@@ -757,7 +765,7 @@ class FieldPlotBuilderDialog(QDialog):
         if scale is False:
             factor = 0.1 * mesh_length
         else:
-            source_name = str(self._vector_name_combo.currentData()) if scale is None else str(scale)
+            source_name = str(vector_name) if scale is None else str(scale)
             source_max = analysis.array_maxima.get(source_name)
             if source_max is None:
                 raise ValueError(f"Unable to determine a maximum value for '{source_name}'.")
@@ -773,25 +781,32 @@ class FieldPlotBuilderDialog(QDialog):
         vector_names: list[str],
         scale_names: list[str],
     ) -> None:
+        current_scalar = self._scalar_name_combo.currentData()
+        current_contour = self._contour_name_combo.currentData()
+        current_vector = self._vector_name_combo.currentData()
+        current_scale = self._vector_scale_combo.currentData()
         self._populate_named_combo(
             self._scalar_name_combo,
-            scalar_names or list(SCALAR_NAMES),
-            self._scalar_name_combo.currentData(),
+            scalar_names,
+            current_scalar,
         )
         self._populate_named_combo(
             self._contour_name_combo,
-            scalar_names or list(CONTOUR_NAMES),
-            self._contour_name_combo.currentData(),
+            scalar_names,
+            current_contour,
         )
         self._populate_named_combo(
             self._vector_name_combo,
-            vector_names or list(VECTOR_NAMES),
-            self._vector_name_combo.currentData(),
+            vector_names,
+            current_vector,
         )
         self._populate_scale_combo(
-            _vector_scale_options_from_names(scale_names or list(VECTOR_NAMES)),
-            self._vector_scale_combo.currentData(),
+            _vector_scale_options_from_names(scale_names),
+            current_scale,
         )
+        self._update_scalar_panel_summary()
+        self._update_contour_panel_summary()
+        self._update_vector_panel_summary()
 
     def _has_enabled_stage(self) -> bool:
         return any(
@@ -809,11 +824,23 @@ class FieldPlotBuilderDialog(QDialog):
             return "Field file is required."
         if not self._has_enabled_stage():
             return "Select at least one plotting stage."
+        selection_error = self._validate_stage_selections()
+        if selection_error is not None:
+            return selection_error
         if self._vector_enabled_checkbox.isChecked():
             try:
                 self._vector_factor()
             except ValueError as exc:
                 return str(exc)
+        return None
+
+    def _validate_stage_selections(self) -> str | None:
+        if self._scalar_enabled_checkbox.isChecked() and self._scalar_name_combo.currentData() is None:
+            return "Discover arrays and select a scalar field before plotting."
+        if self._contour_enabled_checkbox.isChecked() and self._contour_name_combo.currentData() is None:
+            return "Discover arrays and select a contour field before plotting."
+        if self._vector_enabled_checkbox.isChecked() and self._vector_name_combo.currentData() is None:
+            return "Discover arrays and select a vector field before plotting."
         return None
 
     def _validate_for_analysis(self) -> str | None:
@@ -824,14 +851,14 @@ class FieldPlotBuilderDialog(QDialog):
 
     def _scalar_kwargs(self) -> dict[str, object]:
         return {
-            "name": str(self._scalar_name_combo.currentData()),
+            "name": self._selected_name(self._scalar_name_combo),
             "mode": str(self._scalar_mode_combo.currentData()),
             "cmap": cmap_choice_to_name(str(self._scalar_cmap_combo.currentData())),
         }
 
     def _contour_kwargs(self) -> dict[str, object]:
         return {
-            "name": str(self._contour_name_combo.currentData()),
+            "name": self._selected_name(self._contour_name_combo),
             "n_contours": int(self._contour_n_contours_spin.value()),
             "color": self._contour_color_edit.value() or "red",
             "line_width": int(self._contour_line_width_spin.value()),
@@ -858,7 +885,7 @@ class FieldPlotBuilderDialog(QDialog):
 
     def _vector_kwargs(self) -> dict[str, object]:
         return {
-            "name": str(self._vector_name_combo.currentData()),
+            "name": self._selected_name(self._vector_name_combo),
             "scale": self._vector_scale_combo.currentData(),
             "glyph_type": str(self._vector_glyph_type_combo.currentData()),
             "factor": self._vector_factor(),
@@ -916,19 +943,45 @@ class FieldPlotBuilderDialog(QDialog):
         lines.extend(["", f"gui.add_field(field_plot, {self._current_title()!r})"])
         return "\n".join(lines)
 
+    def _discover_and_apply_arrays(self) -> _PlotAnalysisResult:
+        analysis = self._discover_plot_arrays()
+        self._analysis = analysis
+        self._apply_discovered_plot_arrays(analysis.scalar_names, analysis.vector_names, analysis.scale_names)
+        return analysis
+
+    def _ensure_analysis(self) -> _PlotAnalysisResult:
+        if self._analysis is not None:
+            return self._analysis
+        return self._discover_and_apply_arrays()
+
     def _open_script_dialog(self) -> None:
+        error_message = self._validate_stage_selections()
+        if error_message is not None:
+            QMessageBox.warning(self, "Invalid Field Plot", error_message)
+            return
         dialog = GeneratedScriptDialog(self._generate_script_text(), parent=self)
         dialog.exec()
 
-    def _on_analyse(self) -> None:
+    def _on_discover_arrays(self) -> None:
         error_message = self._validate_for_analysis()
         if error_message is not None:
             QMessageBox.warning(self, "Invalid Field Plot", error_message)
             return
 
         try:
-            analysis = self._discover_plot_arrays()
-            self._apply_discovered_plot_arrays(analysis.scalar_names, analysis.vector_names, analysis.scale_names)
+            self._discover_and_apply_arrays()
+        except Exception as exc:
+            QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
+            return
+
+    def _on_suggest_vector_factor(self) -> None:
+        error_message = self._validate_for_analysis()
+        if error_message is not None:
+            QMessageBox.warning(self, "Invalid Field Plot", error_message)
+            return
+
+        try:
+            analysis = self._ensure_analysis()
             self._update_vector_factor_from_analysis(analysis)
         except Exception as exc:
             QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))

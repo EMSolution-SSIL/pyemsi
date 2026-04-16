@@ -1,6 +1,7 @@
 ---
 name: grill-me
 description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
+tools:vscode/askQuestions, execute, read, agent, search, web, browser
 ---
 
 You are a design-review and plan-clarification skill.
@@ -69,6 +70,7 @@ Use the discovered code to sharpen your questions. Ask only what cannot be deter
 - When helpful, give structured options such as A/B/C plus "Other".
 - Call out unresolved dependencies explicitly, for example: "We cannot choose X until Y is decided."
 - Do not pad the conversation with reassurance or generic commentary.
+- use #tool:vscode/askQuestions to ask the user questions.
 
 ## Completion criteria
 

@@ -28,11 +28,13 @@ class FemapConverterDialogConfig:
     input_dir: str
     output_dir: str
     output_name: str
+    input_control_file: str | None
     force_2d: bool
     ascii_mode: bool
     mesh: str
     magnetic: str | None
     current: str | None
+    electric: str | None
     force: str | None
     force_J_B: str | None
     heat: str | None
@@ -43,10 +45,12 @@ class FemapConverterDialogConfig:
             "ascii_mode": self.ascii_mode,
             "current": self.current,
             "displacement": self.displacement,
+            "electric": self.electric,
             "force": self.force,
             "force_2d": self.force_2d,
             "force_J_B": self.force_J_B,
             "heat": self.heat,
+            "input_control_file": self.input_control_file,
             "input_dir": self.input_dir,
             "magnetic": self.magnetic,
             "mesh": self.mesh,
@@ -59,10 +63,12 @@ class FemapConverterDialogConfig:
             "tools.femap_converter.ascii_mode": self.ascii_mode,
             "tools.femap_converter.current": self.current,
             "tools.femap_converter.displacement": self.displacement,
+            "tools.femap_converter.electric": self.electric,
             "tools.femap_converter.force": self.force,
             "tools.femap_converter.force_2d": self.force_2d,
             "tools.femap_converter.force_J_B": self.force_J_B,
             "tools.femap_converter.heat": self.heat,
+            "tools.femap_converter.input_control_file": self.input_control_file,
             "tools.femap_converter.input_dir": self.input_dir,
             "tools.femap_converter.magnetic": self.magnetic,
             "tools.femap_converter.mesh": self.mesh,
@@ -85,6 +91,7 @@ class _PathSelector(QWidget):
         self._select_directory = select_directory
         self._browse_dir_getter = browse_dir_getter
         self._optional = optional
+        self._trailing_widgets: list[QWidget] = []
 
         self._enabled_checkbox = QCheckBox(self) if optional else None
         if self._enabled_checkbox is not None:
@@ -94,13 +101,13 @@ class _PathSelector(QWidget):
         self._browse_button = QPushButton("Browse...", self)
         self._browse_button.clicked.connect(self._browse)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
         if self._enabled_checkbox is not None:
-            layout.addWidget(self._enabled_checkbox)
+            self._layout.addWidget(self._enabled_checkbox)
             self._enabled_checkbox.toggled.connect(self._apply_enabled_state)
-        layout.addWidget(self._line_edit, 1)
-        layout.addWidget(self._browse_button)
+        self._layout.addWidget(self._line_edit, 1)
+        self._layout.addWidget(self._browse_button)
 
         self._apply_enabled_state(self.is_active())
 
@@ -124,9 +131,16 @@ class _PathSelector(QWidget):
     def line_edit(self) -> QLineEdit:
         return self._line_edit
 
+    def add_trailing_widget(self, widget: QWidget) -> None:
+        self._trailing_widgets.append(widget)
+        self._layout.addWidget(widget)
+        widget.setEnabled(self.is_active())
+
     def _apply_enabled_state(self, checked: bool) -> None:
         self._line_edit.setEnabled(checked)
         self._browse_button.setEnabled(checked)
+        for widget in self._trailing_widgets:
+            widget.setEnabled(checked)
 
     def _browse(self) -> None:
         initial_dir = self._initial_directory()
@@ -178,6 +192,7 @@ class FemapConverterDialog(QDialog):
         self._input_dir_field = _PathSelector(defaults["input_dir"], select_directory=True, parent=self)
         self._output_dir_field = _PathSelector(defaults["output_dir"], select_directory=True, parent=self)
         self._output_name_edit = QLineEdit(defaults["output_name"], self)
+        self._input_control_file_field = self._build_optional_file_field(defaults["input_control_file"])
         self._mesh_field = _PathSelector(
             defaults["mesh"],
             select_directory=False,
@@ -193,6 +208,7 @@ class FemapConverterDialog(QDialog):
         self._displacement_field = self._build_optional_file_field(defaults["displacement"])
         self._magnetic_field = self._build_optional_file_field(defaults["magnetic"])
         self._current_field = self._build_optional_file_field(defaults["current"])
+        self._electric_field = self._build_optional_file_field(defaults["electric"])
         self._force_field = self._build_optional_file_field(defaults["force"])
         self._force_j_b_field = self._build_optional_file_field(defaults["force_J_B"])
         self._heat_field = self._build_optional_file_field(defaults["heat"])
@@ -207,12 +223,14 @@ class FemapConverterDialog(QDialog):
         form_layout.addRow("Input Directory:", self._input_dir_field)
         form_layout.addRow("Output Directory:", self._output_dir_field)
         form_layout.addRow("Output Name:", self._output_name_edit)
+        form_layout.addRow("Input Control:", self._input_control_file_field)
         form_layout.addRow("Mesh File:", self._mesh_field)
         form_layout.addRow("Force 2D:", self._force_2d_checkbox)
         form_layout.addRow("ASCII Mode:", self._ascii_mode_checkbox)
         form_layout.addRow("Displacement:", self._displacement_field)
         form_layout.addRow("Magnetic:", self._magnetic_field)
         form_layout.addRow("Current:", self._current_field)
+        form_layout.addRow("Electric:", self._electric_field)
         form_layout.addRow("Force:", self._force_field)
         form_layout.addRow("Force J x B:", self._force_j_b_field)
         form_layout.addRow("Heat:", self._heat_field)
@@ -258,9 +276,11 @@ class FemapConverterDialog(QDialog):
             return
 
         optional_fields = (
+            self._input_control_file_field,
             self._displacement_field,
             self._magnetic_field,
             self._current_field,
+            self._electric_field,
             self._force_field,
             self._force_j_b_field,
             self._heat_field,
@@ -282,10 +302,13 @@ class FemapConverterDialog(QDialog):
             "ascii_mode": bool(self._settings.get_effective("tools.femap_converter.ascii_mode") or False),
             "current": self._settings.get_effective("tools.femap_converter.current") or "current",
             "displacement": self._settings.get_effective("tools.femap_converter.displacement") or "disp",
+            "electric": self._settings.get_effective("tools.femap_converter.electric") or "electric",
             "force": self._settings.get_effective("tools.femap_converter.force") or "force",
             "force_2d": bool(self._settings.get_effective("tools.femap_converter.force_2d") or False),
             "force_J_B": self._settings.get_effective("tools.femap_converter.force_J_B") or "force_J_B",
             "heat": self._settings.get_effective("tools.femap_converter.heat") or "heat",
+            "input_control_file": self._settings.get_effective("tools.femap_converter.input_control_file")
+            or "input_control.json",
             "input_dir": input_dir or "",
             "magnetic": self._settings.get_effective("tools.femap_converter.magnetic") or "magnetic",
             "mesh": self._settings.get_effective("tools.femap_converter.mesh") or "post_geom",
@@ -324,6 +347,9 @@ class FemapConverterDialog(QDialog):
             )
             return None
 
+        input_control_file = self._validated_optional_path("Input Control", self._input_control_file_field, input_dir)
+        if input_control_file is False:
+            return None
         displacement = self._validated_optional_path("Displacement", self._displacement_field, input_dir)
         if displacement is False:
             return None
@@ -332,6 +358,9 @@ class FemapConverterDialog(QDialog):
             return None
         current = self._validated_optional_path("Current", self._current_field, input_dir)
         if current is False:
+            return None
+        electric = self._validated_optional_path("Electric", self._electric_field, input_dir)
+        if electric is False:
             return None
         force = self._validated_optional_path("Force", self._force_field, input_dir)
         if force is False:
@@ -351,11 +380,13 @@ class FemapConverterDialog(QDialog):
             input_dir=input_dir,
             output_dir=output_dir,
             output_name=output_name,
+            input_control_file=input_control_file,
             force_2d=self._force_2d_checkbox.isChecked(),
             ascii_mode=self._ascii_mode_checkbox.isChecked(),
             mesh=mesh,
             magnetic=magnetic,
             current=current,
+            electric=electric,
             force=force,
             force_J_B=force_j_b,
             heat=heat,

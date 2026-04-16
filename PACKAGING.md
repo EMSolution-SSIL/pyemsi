@@ -25,6 +25,82 @@ Optional reinstall check:
 python -m pip install --force-reinstall dist/*.whl
 ```
 
+If you want a source distribution alongside the wheel for publishing, build both artifacts instead:
+
+```bash
+python -m pip install --upgrade pip build
+python -m build
+```
+
+Output:
+
+- Wheel and source distribution files are written to `dist/`.
+
+## Build Distributions With GitHub Actions
+
+The repository also includes a manual GitHub Actions workflow at [.github/workflows/build.yml](./.github/workflows/build.yml). It builds:
+
+- Linux wheels
+- Windows wheels
+- A source distribution (`sdist`)
+
+To run it from the GitHub web UI:
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Build Wheels** in the left sidebar.
+4. Click **Run workflow**.
+5. Confirm the branch you want to build from.
+6. Click **Run workflow** again.
+7. Wait for the workflow to finish.
+8. Open the completed workflow run.
+9. Download the `all-dist` artifact.
+
+Notes:
+
+- The workflow is configured with `workflow_dispatch`, so it only runs when started manually.
+- The combined `all-dist` artifact contains the wheels and the source distribution merged into one download.
+- GitHub downloads artifacts as a `.zip`; extract it locally before uploading.
+
+## Upload Distributions To PyPI
+
+PyPI uploads can be done from artifacts built locally or downloaded from GitHub Actions.
+
+1. Create a release on [pypi.org](https://pypi.org/) if this is the first time publishing the project.
+2. Generate a PyPI API token from **Account settings** -> **API tokens**.
+3. In a shell, set the token as `TWINE_PASSWORD` and use `__token__` as the username.
+4. Upload the files in `dist/` with `twine`.
+
+Install the upload tool:
+
+```bash
+python -m pip install --upgrade twine
+```
+
+Upload to the real PyPI index:
+
+```bash
+set TWINE_USERNAME=__token__
+set TWINE_PASSWORD=pypi-...
+python -m twine upload dist/*
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:TWINE_USERNAME = "__token__"
+$env:TWINE_PASSWORD = "pypi-..."
+python -m twine upload dist/*
+```
+
+Recommended checks before uploading:
+
+```bash
+python -m twine check dist/*
+```
+
+After upload, verify the release on PyPI by opening the project page and confirming the new version and files are present.
+
 ## Build The Windows Portable GUI Runtime
 
 The portable Windows builder lives at [tools/build_windows_private_runtime.py](./tools/build_windows_private_runtime.py). It assembles an embeddable Python runtime under `dist/pyemsi-windows-portable/`, stages the local `pyemsi` source tree into `app/`, installs GUI dependencies into `runtime/`, and generates native `.exe` launchers (or `.bat` fallbacks when MSVC is not available).

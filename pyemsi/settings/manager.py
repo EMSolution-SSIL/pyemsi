@@ -144,10 +144,14 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "tools.femap_converter.ascii_mode": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
     "tools.femap_converter.current": SettingDefinition("current", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.displacement": SettingDefinition("disp", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.electric": SettingDefinition("electric", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.force": SettingDefinition("force", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.force_2d": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
     "tools.femap_converter.force_J_B": SettingDefinition("force_J_B", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.heat": SettingDefinition("heat", SCOPE_BOTH, _normalize_optional_text),
+    "tools.femap_converter.input_control_file": SettingDefinition(
+        "input_control.json", SCOPE_BOTH, _normalize_optional_path
+    ),
     "tools.femap_converter.input_dir": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
     "tools.femap_converter.magnetic": SettingDefinition("magnetic", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.mesh": SettingDefinition("post_geom", SCOPE_BOTH, _normalize_text),

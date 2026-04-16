@@ -576,8 +576,9 @@ def test_main_window_opens_emsolution_output_plot_dialog(tmp_path, monkeypatch):
     calls = {}
 
     class _FakeEMSolutionOutputPlotBuilderDialog:
-        def __init__(self, source, parent=None) -> None:
+        def __init__(self, source, settings_manager=None, parent=None) -> None:
             calls["source"] = source
+            calls["settings_manager"] = settings_manager
             calls["parent"] = parent
 
         def setAttribute(self, attr, value) -> None:
@@ -613,6 +614,7 @@ def test_main_window_opens_emsolution_output_plot_dialog(tmp_path, monkeypatch):
         window._open_emsolution_output_plot_dialog()
 
         assert calls["source"] == os.path.abspath(os.path.normpath(str(output_path)))
+        assert calls["settings_manager"] is window.settings_manager
         assert calls["parent"] is window
         assert calls["show"] is True
         assert calls["raise"] is True
@@ -633,11 +635,13 @@ def test_main_window_launches_femap_converter_in_external_terminal(tmp_path, mon
         input_dir=os.path.abspath(os.path.normpath(str(input_dir))),
         output_dir=".pyemsi",
         output_name="transient",
+        input_control_file=None,
         force_2d=True,
         ascii_mode=False,
         mesh="post_geom",
         magnetic=None,
         current=None,
+        electric=None,
         force=None,
         force_J_B=None,
         heat=None,
