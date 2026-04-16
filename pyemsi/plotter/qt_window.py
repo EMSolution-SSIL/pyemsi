@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
     from pyemsi.plotter.plotter import Plotter
 
-from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar, QComboBox
-from PySide6.QtGui import QAction, QActionGroup, QIcon
+from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar, QComboBox, QMessageBox
+from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPixmap
 from PySide6.QtCore import QSize, Qt, QTimer
 from pyvistaqt import QtInteractor
 import pyvista as pv
@@ -69,6 +69,7 @@ class QtPlotterWindow:
     _vlayout: "QVBoxLayout"
     _camera_toolbar: "QToolBar"
     _display_toolbar: "QToolBar"
+    _screenshot_action: QAction | None
     _query_toolbar: "QToolBar"
     _animation_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
@@ -426,6 +427,11 @@ class QtPlotterWindow:
         settings_action.triggered.connect(self._open_display_settings)
         self._display_toolbar.addAction(settings_action)
 
+        self._screenshot_action = QAction(QIcon(":/icons/Screenshot.svg"), "Screenshot to Clipboard", self._window)
+        self._screenshot_action.setToolTip("Copy the current rendered viewport to the clipboard")
+        self._screenshot_action.triggered.connect(self._copy_screenshot_to_clipboard)
+        self._display_toolbar.addAction(self._screenshot_action)
+
         self._display_toolbar.addSeparator()
 
         # Axes toggle action
@@ -496,6 +502,37 @@ class QtPlotterWindow:
 
         # Add toolbar to main window
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._display_toolbar)
+
+    def _copy_screenshot_to_clipboard(self) -> None:
+        if not self.plotter.isVisible() or self.plotter.width() <= 0 or self.plotter.height() <= 0:
+            QMessageBox.critical(self._window, "Screenshot Error", "The rendered viewport is not ready to capture.")
+            return
+
+        self.plotter.render()
+        image = self.plotter.screenshot(return_img=True)
+        pixmap = self._pixmap_from_screenshot_image(image)
+        if pixmap is None or pixmap.isNull():
+            QMessageBox.critical(self._window, "Screenshot Error", "Could not capture the current rendered viewport.")
+            return
+
+        self.app.clipboard().setPixmap(pixmap)
+
+    def _pixmap_from_screenshot_image(self, image: np.ndarray | None) -> QPixmap | None:
+        if image is None or image.size == 0 or image.ndim != 3:
+            return None
+
+        contiguous_image = np.ascontiguousarray(image)
+        height, width, channels = contiguous_image.shape
+        if channels == 3:
+            image_format = QImage.Format.Format_RGB888
+        elif channels == 4:
+            image_format = QImage.Format.Format_RGBA8888
+        else:
+            return None
+
+        bytes_per_line = width * channels
+        qt_image = QImage(contiguous_image.data, width, height, bytes_per_line, image_format).copy()
+        return QPixmap.fromImage(qt_image)
 
     def set_time_point(self, time_point: int, relative: bool = False) -> None:
         """

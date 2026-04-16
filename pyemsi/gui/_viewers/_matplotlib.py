@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from matplotlib.artist import Artist
-from PySide6.QtWidgets import QComboBox, QLabel, QVBoxLayout, QWidget
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+
+import pyemsi.resources.resources  # noqa: F401
 
 
 class MatplotlibViewer(QWidget):
@@ -48,6 +51,8 @@ class MatplotlibViewer(QWidget):
         self._indicator_mode_combo = QComboBox(self)
         self._indicator_index_label = QLabel("Index:", self)
         self._indicator_index_combo = QComboBox(self)
+        self._copy_screenshot_action = QAction(QIcon(":/icons/Screenshot.svg"), "Screenshot to Clipboard", self)
+        self._configure_screenshot_action()
         self._configure_indicator_mode_combo()
         self._configure_indicator_index_combo()
         self._refresh_indicator_index_combo()
@@ -79,6 +84,36 @@ class MatplotlibViewer(QWidget):
         self._indicator_index_combo.currentIndexChanged.connect(self._on_indicator_index_changed)
         self._toolbar.addWidget(self._indicator_index_label)
         self._toolbar.addWidget(self._indicator_index_combo)
+
+    def _configure_screenshot_action(self) -> None:
+        self._copy_screenshot_action.setToolTip("Copy the current figure canvas to the clipboard")
+        self._copy_screenshot_action.triggered.connect(self._copy_screenshot_to_clipboard)
+        insert_before = self._toolbar.actions()[-1] if getattr(self._toolbar, "coordinates", False) else None
+        if insert_before is None:
+            self._toolbar.addSeparator()
+            self._toolbar.addAction(self._copy_screenshot_action)
+            return
+
+        self._toolbar.insertSeparator(insert_before)
+        self._toolbar.insertAction(insert_before, self._copy_screenshot_action)
+
+    def _copy_screenshot_to_clipboard(self) -> None:
+        if not self._canvas.isVisible() or self._canvas.width() <= 0 or self._canvas.height() <= 0:
+            QMessageBox.critical(self, "Screenshot Error", "The figure canvas is not ready to capture.")
+            return
+
+        self._canvas.draw()
+        pixmap = self._canvas.grab()
+        if pixmap.isNull():
+            QMessageBox.critical(self, "Screenshot Error", "Could not capture the current figure canvas.")
+            return
+
+        app = QApplication.instance()
+        if app is None:
+            QMessageBox.critical(self, "Screenshot Error", "The application clipboard is not available.")
+            return
+
+        app.clipboard().setPixmap(pixmap)
 
     def _enable_tight_layout(self) -> None:
         """Prefer automatic tight layout across supported matplotlib versions."""
