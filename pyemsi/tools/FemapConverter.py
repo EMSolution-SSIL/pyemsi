@@ -476,7 +476,9 @@ class FemapConverter:
     def _process_displacement_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing displacement field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["displacement"])
-        node_1 = data_arrays["DISP-node-1"]
+        if (node_1 := data_arrays.get("DISP-node-1")) is None:
+            logger.debug("No displacement node data for step %d", step)
+            return
         node_2 = data_arrays["DISP-node-2"]
         node_3 = data_arrays["DISP-node-3"]
         node_vec = np.vstack((node_1, node_2, node_3)).T
@@ -486,22 +488,23 @@ class FemapConverter:
     def _process_magnetic_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing magnetic field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["magnetic"])
-        element_1 = data_arrays["BMAG-elem-1"]
-        element_2 = data_arrays["BMAG-elem-2"]
-        element_3 = data_arrays["BMAG-elem-3"]
-        element_vec = np.vstack((element_1, element_2, element_3)).T
-        mesh.cell_data["B-Vec (T)"] = element_vec
-        element_4 = data_arrays["BMAG-elem-4"]
-        mesh.cell_data["B-Mag (T)"] = element_4
-        if "BMAG-node-5" in data_arrays:
-            node_5 = data_arrays["BMAG-node-5"]
+        if (element_1 := data_arrays.get("BMAG-elem-1")) is not None:
+            element_2 = data_arrays["BMAG-elem-2"]
+            element_3 = data_arrays["BMAG-elem-3"]
+            element_vec = np.vstack((element_1, element_2, element_3)).T
+            mesh.cell_data["B-Vec (T)"] = element_vec
+            element_4 = data_arrays["BMAG-elem-4"]
+            mesh.cell_data["B-Mag (T)"] = element_4
+        if (node_5 := data_arrays.get("BMAG-node-5")) is not None:
             mesh.point_data["Flux (A/m)"] = node_5
         logger.debug("Added magnetic field data for step %d", step)
 
     def _process_current_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing current field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["current"])
-        element_1 = data_arrays["CURR-elem-1"]
+        if (element_1 := data_arrays.get("CURR-elem-1")) is None:
+            logger.debug("No current element data for step %d", step)
+            return
         element_2 = data_arrays["CURR-elem-2"]
         element_3 = data_arrays["CURR-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
@@ -548,14 +551,16 @@ class FemapConverter:
         data_arrays = self.get_data_array(step, self.vectors["electric"])
         vector_name, magnitude_name, scalar_name = self._get_electric_output_names()
 
-        node_1 = data_arrays["ELEC-node-1"]
-        node_2 = data_arrays["ELEC-node-2"]
-        node_3 = data_arrays["ELEC-node-3"]
-        mesh.point_data[vector_name] = np.vstack((node_1, node_2, node_3)).T
-        mesh.point_data[magnitude_name] = data_arrays["ELEC-node-4"]
-        mesh.point_data["Potential (V)"] = data_arrays["ELEC-node-5"]
+        if (node_1 := data_arrays.get("ELEC-node-1")) is not None:
+            node_2 = data_arrays["ELEC-node-2"]
+            node_3 = data_arrays["ELEC-node-3"]
+            mesh.point_data[vector_name] = np.vstack((node_1, node_2, node_3)).T
+            mesh.point_data[magnitude_name] = data_arrays["ELEC-node-4"]
+            mesh.point_data["Potential (V)"] = data_arrays["ELEC-node-5"]
 
-        element_1 = data_arrays["ELEC-elem-1"]
+        if (element_1 := data_arrays.get("ELEC-elem-1")) is None:
+            logger.debug("No electric element data for step %d", step)
+            return
         element_2 = data_arrays["ELEC-elem-2"]
         element_3 = data_arrays["ELEC-elem-3"]
         mesh.cell_data[vector_name] = np.vstack((element_1, element_2, element_3)).T
@@ -566,14 +571,16 @@ class FemapConverter:
     def _process_force_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing force field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["force"])
-        node_1 = data_arrays["NFOR-node-1"]
-        node_2 = data_arrays["NFOR-node-2"]
-        node_3 = data_arrays["NFOR-node-3"]
-        node_vec = np.vstack((node_1, node_2, node_3)).T
-        mesh.point_data["F Nodal-Vec (N/m^3)"] = node_vec
-        node_4 = data_arrays["NFOR-node-4"]
-        mesh.point_data["F Nodal-Mag (N/m^3)"] = node_4
-        element_1 = data_arrays["NFOR-elem-1"]
+        if (node_1 := data_arrays.get("NFOR-node-1")) is not None:
+            node_2 = data_arrays["NFOR-node-2"]
+            node_3 = data_arrays["NFOR-node-3"]
+            node_vec = np.vstack((node_1, node_2, node_3)).T
+            mesh.point_data["F Nodal-Vec (N/m^3)"] = node_vec
+            node_4 = data_arrays["NFOR-node-4"]
+            mesh.point_data["F Nodal-Mag (N/m^3)"] = node_4
+        if (element_1 := data_arrays.get("NFOR-elem-1")) is None:
+            logger.debug("No nodal force element data for step %d", step)
+            return
         element_2 = data_arrays["NFOR-elem-2"]
         element_3 = data_arrays["NFOR-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
@@ -585,14 +592,16 @@ class FemapConverter:
     def _process_force_J_B_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing Lorentz force field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["force_J_B"])
-        node_1 = data_arrays["LFOR-node-1"]
-        node_2 = data_arrays["LFOR-node-2"]
-        node_3 = data_arrays["LFOR-node-3"]
-        node_vec = np.vstack((node_1, node_2, node_3)).T
-        mesh.point_data["F Lorents-Vec (N/m^3)"] = node_vec
-        node_4 = data_arrays["LFOR-node-4"]
-        mesh.point_data["F Lorents-Mag (N/m^3)"] = node_4
-        element_1 = data_arrays["LFOR-elem-1"]
+        if (node_1 := data_arrays.get("LFOR-node-1")) is not None:
+            node_2 = data_arrays["LFOR-node-2"]
+            node_3 = data_arrays["LFOR-node-3"]
+            node_vec = np.vstack((node_1, node_2, node_3)).T
+            mesh.point_data["F Lorents-Vec (N/m^3)"] = node_vec
+            node_4 = data_arrays["LFOR-node-4"]
+            mesh.point_data["F Lorents-Mag (N/m^3)"] = node_4
+        if (element_1 := data_arrays.get("LFOR-elem-1")) is None:
+            logger.debug("No Lorentz force element data for step %d", step)
+            return
         element_2 = data_arrays["LFOR-elem-2"]
         element_3 = data_arrays["LFOR-elem-3"]
         element_vec = np.vstack((element_1, element_2, element_3)).T
@@ -604,7 +613,9 @@ class FemapConverter:
     def _process_heat_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing heat field for step %d", step)
         data_arrays = self.get_data_array(step, self.vectors["heat"])
-        element_1 = data_arrays["HEAT-elem-1"]
+        if (element_1 := data_arrays.get("HEAT-elem-1")) is None:
+            logger.debug("No heat element data for step %d", step)
+            return
         mesh.cell_data["Heat Density (W/m^3)"] = element_1
         element_2 = data_arrays["HEAT-elem-2"]
         mesh.cell_data["Heat (W)"] = element_2
