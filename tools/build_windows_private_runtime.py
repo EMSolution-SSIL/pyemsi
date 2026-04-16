@@ -421,7 +421,7 @@ def compile_native_launchers(config: BuildConfig) -> bool:
         print(f"Launcher C source not found: {LAUNCHER_C_SOURCE}", file=sys.stderr)
         return False
 
-    version_str = "0.1.3"
+    version_str = "0.2.0"
     rc_path = config.layout.dist_dir / "launcher.rc"
     rc_path.write_text(
         _render_rc(version_str=version_str, ico_path=LAUNCHER_ICO),
