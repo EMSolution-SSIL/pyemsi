@@ -1,4 +1,4 @@
-pyvista[jupyter,colormaps]
+pyvista[full]
 PySide6
 pyvistaqt
 Cython>=3.0.0

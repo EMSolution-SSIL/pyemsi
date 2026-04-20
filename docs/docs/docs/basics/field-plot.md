@@ -7,7 +7,7 @@ After the FEMAP conversion is complete, the converted VTK result files can be vi
 
 This workflow is intended for viewing the field data generated from the converted `.pvd` output, typically the file created by the FEMAP converter such as `.pyemsi/output.pvd`.
 
-See [Convert FEMAP Files](/docs/docs/tutorial-basics/FemapConverter) for the conversion step that produces the VTK output used here.
+See [Convert FEMAP Files](/docs/basics/FemapConverter.md) for the conversion step that produces the VTK output used here.
 
 <img src="/pyemsi/img/field-plot-dialog.png" alt="femap-converter-dialog" width="700" />
 
@@ -124,4 +124,4 @@ When you click `Plot`, pyemsi creates a `Plotter` instance, applies the selected
 
 This allows you to inspect converted FEMAP results interactively after each conversion run.
 
-For the underlying plotting API, see [Plotter](/docs/api/Plotter).
+For the underlying plotting API, see [Plotter](/docs/plotter/index.md).
