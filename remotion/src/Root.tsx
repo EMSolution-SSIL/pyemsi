@@ -10,6 +10,10 @@ import { introductionSlideJapaneseContent } from "./introduction-slide/introduct
 import { WelcomeSlide } from "./welcome-slide/WelcomeSlide";
 import { welcomeSlideEnglishContent } from "./welcome-slide/welcomeSlideEN";
 import { welcomeSlideJapaneseContent } from "./welcome-slide/welcomeSlideJP";
+import { WorkflowSlide } from "./workflow-slide/WorkflowSlide";
+import { getWorkflowSlideDurationInFrames } from "./workflow-slide/types";
+import { workflowSlideEnglishContent } from "./workflow-slide/workflowSlideEN";
+import { workflowSlideJapaneseContent } from "./workflow-slide/workflowSlideJP";
 
 const FPS = 30;
 const HD_WIDTH = 1600;
@@ -82,6 +86,31 @@ export const RemotionRoot: React.FC = () => {
           width={HD_WIDTH}
           height={HD_HEIGHT}
           defaultProps={{ content: installationSlideJapaneseContent }}
+        />
+      </Folder>
+
+      <Folder name="Workflow-Slide">
+        <Composition
+          id="WorkflowSlide-English"
+          component={WorkflowSlide}
+          durationInFrames={getWorkflowSlideDurationInFrames(
+            workflowSlideEnglishContent,
+          )}
+          fps={FPS}
+          width={HD_WIDTH}
+          height={HD_HEIGHT}
+          defaultProps={{ content: workflowSlideEnglishContent }}
+        />
+        <Composition
+          id="WorkflowSlide-Japanese"
+          component={WorkflowSlide}
+          durationInFrames={getWorkflowSlideDurationInFrames(
+            workflowSlideJapaneseContent,
+          )}
+          fps={FPS}
+          width={HD_WIDTH}
+          height={HD_HEIGHT}
+          defaultProps={{ content: workflowSlideJapaneseContent }}
         />
       </Folder>
     </>
