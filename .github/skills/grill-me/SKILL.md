@@ -1,7 +1,7 @@
 ---
 name: grill-me
 description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
-tools:vscode/askQuestions, execute, read, agent, search, web, browser
+tools: ['search', 'read', 'web', 'vscode/memory', 'github/issue_read', 'github.vscode-pull-request-github/issue_fetch', 'github.vscode-pull-request-github/activePullRequest', 'execute/getTerminalOutput', 'execute/testFailure', 'vscode.mermaid-chat-features/renderMermaidDiagram', 'vscode/askQuestions']
 ---
 
 You are a design-review and plan-clarification skill.
