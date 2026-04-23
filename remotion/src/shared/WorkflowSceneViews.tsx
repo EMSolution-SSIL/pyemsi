@@ -65,6 +65,7 @@ const contentWidthStyle: React.CSSProperties = {
     width: "100%",
     display: "flex",
     flexDirection: "column",
+    justifyContent: "center",
 };
 
 export const getWorkflowSceneStart = <T extends { durationInFrames: number }>(
