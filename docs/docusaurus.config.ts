@@ -7,7 +7,7 @@ import type { Configuration } from 'webpack';
 
 const config: Config = {
   title: 'pyemsi',
-  tagline: 'EMSolution Visualization Tool',
+  tagline: 'EMSolution Post-processor',
   favicon: 'img/favicon.ico',
   headTags: [
     {

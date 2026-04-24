@@ -20,12 +20,37 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
+            to="/docs/docs/installation">
+            Docs
+          </Link>
+          <Link
+            className="button button--outline button--secondary button--lg"
             to="/docs/api/installation">
-            Quick Start - 5min ⏱️
+            API
           </Link>
         </div>
       </div>
     </header>
+  );
+}
+
+function HomepageVideos() {
+  return (
+    <section className={styles.videoSection}>
+      <div className="container">
+        <div className={styles.videoEmbed}>
+          <div className={styles.videoFrame}>
+            <iframe
+              src="https://www.youtube.com/embed/FYmjsGyMiI0"
+              title="pyemsi overview video in English"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -37,6 +62,7 @@ export default function Home(): ReactNode {
       description="Description will go into a meta tag in <head />">
       <HomepageHeader />
       <main>
+        <HomepageVideos />
         <HomepageFeatures />
       </main>
     </Layout>
