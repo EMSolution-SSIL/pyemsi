@@ -5,30 +5,34 @@ Provides QtPlotterWindow class that encapsulates Qt application and window
 management for interactive 3D visualization using pyvistaqt.QtInteractor.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    import pyvista as pv
     from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout
     from pyvistaqt import QtInteractor
+    from vtkmodules.vtkRenderingCore import vtkCellPicker
+
     from pyemsi.plotter.plotter import Plotter
 
-from PySide6.QtWidgets import QApplication, QFrame, QMainWindow, QVBoxLayout, QToolBar, QComboBox, QMessageBox
-from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPixmap
-from PySide6.QtCore import QSize, Qt, QTimer
-from pyvistaqt import QtInteractor
-import pyvista as pv
 import numpy as np
-from vtkmodules.vtkRenderingCore import vtkCellPicker
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QComboBox, QFrame, QMainWindow, QMessageBox, QToolBar, QVBoxLayout
+
 import pyemsi.resources.resources  # noqa: F401
-from .display_settings_dialog import DisplaySettingsDialog
+
 from .block_visibility_dialog import BlockVisibilityDialog
+from .cell_query_dialog import CellQueryDialog
+from .display_settings_dialog import DisplaySettingsDialog
+from .pick_result_history_dialog import PickResultHistoryDialog
+from .point_query_dialog import PointQueryDialog
+from .sample_arcs_dialog import SampleArcsDialog
+from .sample_lines_dialog import SampleLinesDialog
 from .scalar_bar_range_dialog import ScalarBarRangeDialog
 from .scalar_bar_settings_dialog import ScalarBarSettingsDialog
-from .cell_query_dialog import CellQueryDialog
-from .point_query_dialog import PointQueryDialog
-from .pick_result_history_dialog import PickResultHistoryDialog
-from .sample_lines_dialog import SampleLinesDialog
-from .sample_arcs_dialog import SampleArcsDialog
 
 
 class QtPlotterWindow:
@@ -118,6 +122,8 @@ class QtPlotterWindow:
         **qt_interactor_kwargs
             Additional keyword arguments passed to QtInteractor (e.g., off_screen).
         """
+        from pyvistaqt import QtInteractor
+
         # Store reference to parent plotter
         self.parent_plotter = parent_plotter
 
@@ -417,6 +423,8 @@ class QtPlotterWindow:
         Adds a movable toolbar with checkable toggle buttons for axes, bounding box,
         grid display, and a settings button for future configuration dialog.
         """
+        import pyvista as pv
+
         self._display_toolbar = QToolBar("Display Controls")
         self._display_toolbar.setMovable(True)
         self._display_toolbar.setIconSize(QSize(24, 24))
@@ -631,6 +639,8 @@ class QtPlotterWindow:
 
     def _open_block_visibility_dialog(self) -> None:
         """Open block visibility dialog (non-blocking)."""
+        import pyvista as pv
+
         # Only open if parent plotter has multi-block mesh
         if self.parent_plotter is None or not isinstance(self.parent_plotter.mesh, pv.MultiBlock):
             return
@@ -882,6 +892,9 @@ class QtPlotterWindow:
         On a valid left click, the point payload is returned through ``on_picked``.
         The mode remains active until explicitly disabled.
         """
+        import pyvista as pv
+        from vtkmodules.vtkRenderingCore import vtkCellPicker
+
         if not callable(on_picked):
             raise TypeError("on_picked must be callable.")
 
@@ -1081,6 +1094,9 @@ class QtPlotterWindow:
         RuntimeError
             If plotter interactor is not available.
         """
+        import pyvista as pv
+        from vtkmodules.vtkRenderingCore import vtkCellPicker
+
         if not callable(on_picked):
             raise TypeError("on_picked must be callable.")
 

@@ -1,52 +1,23 @@
 # TODO: cythonize femapconverter
+from __future__ import annotations
+
 import json
 import logging
 import re
 import shutil
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pyvista as pv
 
 import numpy as np
-import pyvista as pv
-from vtk import (
-    VTK_HEXAHEDRON,
-    VTK_LINE,
-    VTK_QUAD,
-    VTK_QUADRATIC_HEXAHEDRON,
-    VTK_QUADRATIC_QUAD,
-    VTK_QUADRATIC_TETRA,
-    VTK_QUADRATIC_TRIANGLE,
-    VTK_QUADRATIC_WEDGE,
-    VTK_TETRA,
-    VTK_TRIANGLE,
-    VTK_VERTEX,
-    VTK_WEDGE,
-    vtkPoints,
-    vtkUnstructuredGrid,
-    vtkXMLMultiBlockDataWriter,
-)
 
 from pyemsi.core.femap_parser import FEMAPParser
 
 # Module-level logger
 logger = logging.getLogger(__name__)
-
-# FEMAP topology to VTK cell type mapping
-# Format: femap_topology_id -> (vtk_cell_type, num_nodes)
-FEMAP_TO_VTK = {
-    9: (VTK_VERTEX, 1),  # Point -> VTK_VERTEX
-    0: (VTK_LINE, 2),  # Line2 -> VTK_LINE
-    2: (VTK_TRIANGLE, 3),  # Tri3 -> VTK_TRIANGLE
-    3: (VTK_QUADRATIC_TRIANGLE, 6),  # Tri6 -> VTK_QUADRATIC_TRIANGLE
-    4: (VTK_QUAD, 4),  # Quad4 -> VTK_QUAD
-    5: (VTK_QUADRATIC_QUAD, 8),  # Quad8 -> VTK_QUADRATIC_QUAD
-    6: (VTK_TETRA, 4),  # Tetra4 -> VTK_TETRA
-    10: (VTK_QUADRATIC_TETRA, 10),  # Tetra10 -> VTK_QUADRATIC_TETRA
-    7: (VTK_WEDGE, 6),  # Wedge6 -> VTK_WEDGE
-    11: (VTK_QUADRATIC_WEDGE, 15),  # Wedge15 -> VTK_QUADRATIC_WEDGE
-    8: (VTK_HEXAHEDRON, 8),  # Brick8 -> VTK_HEXAHEDRON
-    12: (VTK_QUADRATIC_HEXAHEDRON, 20),  # Brick20 -> VTK_QUADRATIC_HEXAHEDRON
-}
 
 FORCE_2D_TOPOLOGY = {
     8: 4,  # Brick8 -> Quad4
@@ -54,6 +25,38 @@ FORCE_2D_TOPOLOGY = {
     7: 2,  # Wedge6 -> Tri3
     11: 3,  # Wedge15 -> Tri6
 }
+
+
+def _get_femap_to_vtk() -> dict[int, tuple[int, int]]:
+    from vtk import (
+        VTK_HEXAHEDRON,
+        VTK_LINE,
+        VTK_QUAD,
+        VTK_QUADRATIC_HEXAHEDRON,
+        VTK_QUADRATIC_QUAD,
+        VTK_QUADRATIC_TETRA,
+        VTK_QUADRATIC_TRIANGLE,
+        VTK_QUADRATIC_WEDGE,
+        VTK_TETRA,
+        VTK_TRIANGLE,
+        VTK_VERTEX,
+        VTK_WEDGE,
+    )
+
+    return {
+        9: (VTK_VERTEX, 1),  # Point -> VTK_VERTEX
+        0: (VTK_LINE, 2),  # Line2 -> VTK_LINE
+        2: (VTK_TRIANGLE, 3),  # Tri3 -> VTK_TRIANGLE
+        3: (VTK_QUADRATIC_TRIANGLE, 6),  # Tri6 -> VTK_QUADRATIC_TRIANGLE
+        4: (VTK_QUAD, 4),  # Quad4 -> VTK_QUAD
+        5: (VTK_QUADRATIC_QUAD, 8),  # Quad8 -> VTK_QUADRATIC_QUAD
+        6: (VTK_TETRA, 4),  # Tetra4 -> VTK_TETRA
+        10: (VTK_QUADRATIC_TETRA, 10),  # Tetra10 -> VTK_QUADRATIC_TETRA
+        7: (VTK_WEDGE, 6),  # Wedge6 -> VTK_WEDGE
+        11: (VTK_QUADRATIC_WEDGE, 15),  # Wedge15 -> VTK_QUADRATIC_WEDGE
+        8: (VTK_HEXAHEDRON, 8),  # Brick8 -> VTK_HEXAHEDRON
+        12: (VTK_QUADRATIC_HEXAHEDRON, 20),  # Brick20 -> VTK_QUADRATIC_HEXAHEDRON
+    }
 
 
 class FemapConverter:
@@ -229,6 +232,9 @@ class FemapConverter:
         logger.info("Created PVD file: %s with %d time steps", self.pvd_file, len(self.sets))
 
     def _write_vtm_file(self, mesh: pv.MultiBlock | pv.UnstructuredGrid, path: str | Path) -> None:
+        import pyvista as pv
+        from vtk import vtkXMLMultiBlockDataWriter
+
         if isinstance(mesh, pv.UnstructuredGrid):
             mesh = self._vtu_to_vtm(mesh)
         writer = vtkXMLMultiBlockDataWriter()
@@ -242,6 +248,8 @@ class FemapConverter:
     def _vtu_to_vtm(self, unstructured_grid: pv.UnstructuredGrid) -> pv.MultiBlock:
         # Create a new MultiBlock dataset based on the PropertyID cell data
         # Create a MultiBlock dataset and add the subgrid
+        import pyvista as pv
+
         logger.debug("Converting UnstructuredGrid to MultiBlock by PropertyID")
         mb = pv.MultiBlock()
         for prop_id in self.unique_props:
@@ -262,6 +270,11 @@ class FemapConverter:
         return mb
 
     def _build_mesh(self, mesh_file: str | Path, force_2d: bool = False) -> None:
+        import pyvista as pv
+        from vtk import vtkPoints, vtkUnstructuredGrid
+
+        femap_to_vtk = _get_femap_to_vtk()
+
         logger.info("Building mesh from: %s", mesh_file)
         parser = FEMAPParser(str(mesh_file))
         nodes = parser.get_nodes(force_2d)
@@ -294,10 +307,10 @@ class FemapConverter:
                 except KeyError as exc:
                     raise ValueError(f"Cannot force 2D for element topology {topo}") from exc
 
-            if topo not in FEMAP_TO_VTK:
+            if topo not in femap_to_vtk:
                 continue
 
-            vtk_type, num_nodes_required = FEMAP_TO_VTK[topo]
+            vtk_type, num_nodes_required = femap_to_vtk[topo]
             elem_nodes = elem["nodes"][:num_nodes_required]
 
             if len(elem_nodes) < num_nodes_required:

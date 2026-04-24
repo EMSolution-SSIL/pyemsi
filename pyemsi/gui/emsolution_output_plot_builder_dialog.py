@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import shutil
 from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-import shutil
 from typing import Any
 
+import scienceplots  # noqa: F401
 from matplotlib import style as mpl_style
+from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
@@ -32,10 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from matplotlib.figure import Figure
-
 import pyemsi.resources.resources  # noqa: F401
-import scienceplots  # noqa: F401
 from pyemsi.gui._viewers._matplotlib import MatplotlibViewer
 from pyemsi.io import EMSolutionOutput, PlotAxisOption, PlotSeriesDescriptor
 from pyemsi.settings.manager import SettingsManager

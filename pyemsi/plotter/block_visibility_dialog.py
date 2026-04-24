@@ -1,11 +1,12 @@
 """Block visibility dialog for controlling individual block visibility in multi-block meshes."""
 
+from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
+    import pyvista as pv
 
-import pyvista as pv
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 

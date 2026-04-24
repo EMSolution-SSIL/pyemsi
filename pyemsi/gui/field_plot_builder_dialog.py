@@ -6,7 +6,6 @@ import math
 import os
 
 import numpy as np
-import pyvista as pv
 from PySide6.QtCore import QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QDoubleValidator, QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -665,6 +664,8 @@ class FieldPlotBuilderDialog(QDialog):
         return 0.0
 
     def _read_plotter_mesh_snapshot(self, plotter: Plotter):
+        import pyvista as pv
+
         reader = getattr(plotter, "reader", None)
         if reader is None:
             return plotter.mesh

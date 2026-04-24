@@ -8,3 +8,4 @@ qtconsole
 python-lsp-server[websockets]
 basedpyright>=1.31.4
 scienceplots
+gmsh

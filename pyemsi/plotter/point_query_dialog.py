@@ -10,36 +10,46 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QDialog, QSplitter, QTableWidget, QTabWidget, QVBoxLayout, QHBoxLayout
-    from PySide6.QtWidgets import QPushButton, QLabel, QWidget, QMessageBox
-    from pyvistaqt import QtInteractor
-    from pyemsi.plotter.qt_window import QtPlotterWindow
     import pyvista as pv
+    from PySide6.QtWidgets import (
+        QDialog,
+        QHBoxLayout,
+        QLabel,
+        QMessageBox,
+        QPushButton,
+        QSplitter,
+        QTableWidget,
+        QTabWidget,
+        QVBoxLayout,
+        QWidget,
+    )
+    from pyvistaqt import QtInteractor
 
-from PySide6.QtWidgets import (
-    QDialog,
-    QSplitter,
-    QTableWidget,
-    QTabWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QLabel,
-    QWidget,
-    QMessageBox,
-    QTableWidgetItem,
-    QHeaderView,
-    QAbstractItemView,
-    QProgressDialog,
-    QApplication,
-)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-import pyvista as pv
+    from pyemsi.plotter.qt_window import QtPlotterWindow
+
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QProgressDialog,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class PointQueryDialog(QDialog):

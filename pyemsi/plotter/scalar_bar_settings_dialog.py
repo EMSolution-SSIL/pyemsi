@@ -3,15 +3,16 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import pyvista as pv
     from pyvistaqt import QtInteractor
     from vtk import vtkScalarBarActor
 
-import pyvista as pv
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 
-from .color_utils import to_hex
 from pyemsi.widgets.property_tree_widget import PropertyTreeWidget
+
+from .color_utils import to_hex
 
 
 class ScalarBarSettingsDialog(QDialog):
@@ -283,6 +284,8 @@ class ScalarBarSettingsDialog(QDialog):
 
     def _apply_settings(self) -> None:
         """Apply settings from the property tree to the plotter."""
+        import pyvista as pv
+
         # Get all values from tree
         all_values = self.tree.get_all_values()
 
@@ -344,6 +347,8 @@ class ScalarBarSettingsDialog(QDialog):
 
     def _restore_initial_settings(self) -> None:
         """Restore initial settings to scalar bars in the plotter."""
+        import pyvista as pv
+
         scalar_bar: vtkScalarBarActor
         for scalar_bar_key, scalar_bar in self.plotter.scalar_bars.items():
             settings = self.initial_scalar_bars_settings[scalar_bar_key]

@@ -10,10 +10,10 @@ Main functionality:
 import logging
 from typing import Optional
 
-from .tools.FemapConverter import FemapConverter
-from .plotter import Plotter
 from . import examples
 from .io import EMSolutionOutput
+from .plotter import Plotter
+from .tools.FemapConverter import FemapConverter
 
 __version__ = "0.2.0"
 

@@ -7,27 +7,19 @@ with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from collections.abc import Sequence
-
-import pyvista as pv
 import numpy as np
 
-# TYPE_CHECKING imports (for type checkers only, not runtime)
 if TYPE_CHECKING:
+    import pyvista as pv
     from pyvistaqt import QtInteractor
+
     from pyemsi.plotter.qt_window import QtPlotterWindow
 
-# Qt imports are optional (only needed for desktop mode)
-try:
-    from pyvistaqt import QtInteractor
-    from pyemsi.plotter.qt_window import QtPlotterWindow
-
-    HAS_QT = True
-except ImportError:
-    HAS_QT = False
+from pyemsi.plotter.qt_window import QtPlotterWindow
 
 
 class Plotter:
@@ -142,9 +134,6 @@ class Plotter:
         **kwargs,
     ) -> None:
         """Initialize Qt-based desktop mode."""
-        if not HAS_QT:
-            raise ImportError("Qt dependencies not available. Install with: pip install PySide6 pyvistaqt")
-
         # Create QtPlotterWindow with stored properties
         self._window = QtPlotterWindow(
             title=self._qt_props.get("title", "pyemsi Plotter"),
@@ -159,6 +148,8 @@ class Plotter:
 
     def _init_notebook_mode(self, **kwargs) -> None:
         """Initialize PyVista native notebook mode."""
+        import pyvista as pv
+
         pv.set_jupyter_backend(self._backend)
         self.plotter = pv.Plotter(**kwargs)
         self._window = None
@@ -202,6 +193,8 @@ class Plotter:
         ValueError
             If the file format is not supported or the file cannot be read.
         """
+        import pyvista as pv
+
         filepath = Path(filepath)
 
         if not filepath.exists():
@@ -216,6 +209,8 @@ class Plotter:
 
     def _time_reader(self):
         """Return the underlying TimeReader when available, else None."""
+        import pyvista as pv
+
         time_reader_type = getattr(pv, "TimeReader", None)
         if time_reader_type is None:
             return None
@@ -271,6 +266,8 @@ class Plotter:
     @property
     def mesh(self) -> pv.DataSet | pv.MultiBlock | None:
         """Get the current mesh."""
+        import pyvista as pv
+
         if self._mesh is None:
             if self.reader is None:
                 raise ValueError("No reader available. Call set_file() first.")
@@ -292,6 +289,8 @@ class Plotter:
 
     def _iter_blocks(self, skip_empty: bool = True):
         """Yield (index, block, name) for single or MultiBlock meshes."""
+        import pyvista as pv
+
         if isinstance(self.mesh, pv.MultiBlock):
             for idx, block in enumerate(self.mesh):
                 if block is None:
@@ -482,6 +481,8 @@ class Plotter:
         list[str]
             List of block name strings.
         """
+        import pyvista as pv
+
         block_names = []
         if isinstance(self.mesh, pv.MultiBlock):
             for idx, block, name in self._iter_blocks(skip_empty=False):
@@ -919,6 +920,8 @@ class Plotter:
         Creates oriented glyphs (arrows, cones, or spheres) at each point/cell
         in the mesh, with optional scaling and density control.
         """
+        import pyvista as pv
+
         if self._vector_props is None:
             return  # No vector properties set
 
@@ -1154,6 +1157,8 @@ class Plotter:
         For MultiBlock meshes, finds the block matching the given name.
         For single meshes, returns the mesh if block_name is None.
         """
+        import pyvista as pv
+
         if self.reader is None:
             raise ValueError("No reader available. Call set_file() first.")
 
@@ -1651,6 +1656,8 @@ class Plotter:
             - results: list of dicts (one per probe point) with sampled data
             - last_sampled: the last sampled PolyData (for advanced users)
         """
+        import pyvista as pv
+
         # Sample from entire mesh
         target = self.mesh
 
@@ -1938,6 +1945,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_point.md
         """
+        import pyvista as pv
+
         if len(point) != 3:
             raise ValueError(f"point must have 3 components, got {len(point)}.")
 
@@ -1997,6 +2006,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_points.md
         """
+        import pyvista as pv
+
         # Validate all points have 3 components
         for i, point in enumerate(points):
             if len(point) != 3:
@@ -2061,6 +2072,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_line.md
         """
+        import pyvista as pv
+
         if resolution < 1:
             raise ValueError(f"resolution must be >= 1, got {resolution}.")
 
@@ -2127,6 +2140,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_lines.md
         """
+        import pyvista as pv
+
         # Normalize resolution to list
         if isinstance(resolution, int):
             resolution_list = [resolution] * len(lines)
@@ -2214,6 +2229,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_arc.md
         """
+        import pyvista as pv
+
         if resolution < 1:
             raise ValueError(f"resolution must be >= 1, got {resolution}.")
 
@@ -2285,6 +2302,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_arcs.md
         """
+        import pyvista as pv
+
         # Normalize resolution to list
         if isinstance(resolution, int):
             resolution_list = [resolution] * len(arcs)
@@ -2382,6 +2401,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_arc_from_normal.md
         """
+        import pyvista as pv
+
         if resolution < 1:
             raise ValueError(f"resolution must be >= 1, got {resolution}.")
 
@@ -2447,6 +2468,8 @@ class Plotter:
 
         See full documentation at docs/api/Plotter/sample_arcs_from_normal.md
         """
+        import pyvista as pv
+
         # Normalize resolution to list
         if isinstance(resolution, int):
             resolution_list = [resolution] * len(arcs)

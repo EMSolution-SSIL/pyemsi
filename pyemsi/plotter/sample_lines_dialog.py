@@ -10,38 +10,37 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pyvistaqt import QtInteractor
-    from pyemsi.plotter.qt_window import QtPlotterWindow
     import pyvista as pv
+    from pyvistaqt import QtInteractor
 
+    from pyemsi.plotter.qt_window import QtPlotterWindow
+
+import numpy as np
+from matplotlib.backends.backend_qtagg import FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QProgressDialog,
     QPushButton,
-    QApplication,
-    QSplitter,
     QSpinBox,
+    QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QAbstractItemView,
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QLineEdit,
 )
-from PySide6.QtCore import Qt
-import numpy as np
-import pyvista as pv
-from matplotlib.backends.backend_qtagg import FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib.figure import Figure
-
 
 # ---------------------------------------------------------------------------
 # Helper: parse a "x, y, z" string into a float tuple
@@ -441,6 +440,8 @@ class SampleLinesDialog(QDialog):
         row_number: int | None = None,
     ) -> None:
         """Add a 3D line actor and label for the given line entry."""
+        import pyvista as pv
+
         actor_name = f"sample_line_viz_{line_idx}"
         label_name = f"sample_line_label_{line_idx}"
         try:
@@ -1316,6 +1317,8 @@ class SampleLinesDialog(QDialog):
 
     def _restore_visualizations(self) -> None:
         """Re-draw 3D actors for all current lines (called after dialog reopen)."""
+        import pyvista as pv
+
         if not self._lines:
             return
 
