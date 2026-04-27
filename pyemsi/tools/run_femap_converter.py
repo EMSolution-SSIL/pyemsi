@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-import argparse
-import json
-import logging
 import os
 import sys
-
-import pyemsi
-from pyemsi.tools.FemapConverter import FemapConverter
 
 
 def _ensure_repo_root_on_sys_path() -> None:
@@ -17,6 +11,13 @@ def _ensure_repo_root_on_sys_path() -> None:
 
 
 _ensure_repo_root_on_sys_path()
+
+import argparse
+import json
+import logging
+
+import pyemsi
+from pyemsi.tools.FemapConverter import FemapConverter
 
 
 def _load_config(config_path: str) -> dict:
