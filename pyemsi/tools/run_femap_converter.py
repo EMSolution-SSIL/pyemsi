@@ -12,12 +12,12 @@ def _ensure_repo_root_on_sys_path() -> None:
 
 _ensure_repo_root_on_sys_path()
 
-import argparse
-import json
-import logging
+import argparse  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
 
-import pyemsi
-from pyemsi.tools.FemapConverter import FemapConverter
+import pyemsi  # noqa: E402
+from pyemsi.tools.FemapConverter import FemapConverter  # noqa: E402
 
 
 def _load_config(config_path: str) -> dict:
