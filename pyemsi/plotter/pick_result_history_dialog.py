@@ -10,12 +10,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit
-    from PySide6.QtGui import QFont, QCloseEvent
+    from PySide6.QtGui import QCloseEvent, QFont
+    from PySide6.QtWidgets import QDialog, QHBoxLayout, QPlainTextEdit, QPushButton, QVBoxLayout
+
     from pyemsi.plotter.qt_window import QtPlotterWindow
 
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QPlainTextEdit, QPushButton, QVBoxLayout
 
 
 class PickResultHistoryDialog(QDialog):

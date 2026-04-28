@@ -3,9 +3,9 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import pyvista as pv
     from pyvistaqt import QtInteractor
 
-import pyvista as pv
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (

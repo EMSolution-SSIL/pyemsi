@@ -33,6 +33,7 @@ dependencies = [
     "python-lsp-server[websockets]",
     "basedpyright>=1.31.4",
     "scienceplots",
+    "gmsh",
 ]
 
 [project.optional-dependencies]

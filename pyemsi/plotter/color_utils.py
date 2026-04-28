@@ -110,14 +110,11 @@ def parse_color(color: ColorType) -> Tuple[float, float, float, float]:
     Raises:
         ValueError: If color format is not recognized
     """
-    # Handle PyVista Color objects
-    try:
-        import pyvista as pv
+    import pyvista as pv
 
-        if isinstance(color, pv.Color):
-            return color_from_pyvista(color)
-    except ImportError:
-        pass
+    # Handle PyVista Color objects
+    if isinstance(color, pv.Color):
+        return color_from_pyvista(color)
 
     # Handle string (hex or named color)
     if isinstance(color, str):
@@ -226,31 +223,19 @@ def convert_color(
         return (r, g, b, a)
 
     elif output_format == "pyvista":
-        try:
-            import pyvista as pv
+        import pyvista as pv
 
-            return pv.Color((r, g, b), opacity=a)
-        except ImportError:
-            raise ImportError("PyVista is required for 'pyvista' output format")
+        return pv.Color((r, g, b), opacity=a)
 
     elif output_format == "matplotlib":
         # Matplotlib uses normalized RGBA
         return (r, g, b, a)
 
     elif output_format == "qcolor":
-        try:
-            from PySide6.QtGui import QColor
+        from PySide6.QtGui import QColor
 
-            rgb_255 = denormalize_rgb((r, g, b))
-            return QColor(rgb_255[0], rgb_255[1], rgb_255[2], int(round(a * 255)))
-        except ImportError:
-            try:
-                from PyQt6.QtGui import QColor
-
-                rgb_255 = denormalize_rgb((r, g, b))
-                return QColor(rgb_255[0], rgb_255[1], rgb_255[2], int(round(a * 255)))
-            except ImportError:
-                raise ImportError("PySide6 or PyQt6 is required for 'qcolor' output format")
+        rgb_255 = denormalize_rgb((r, g, b))
+        return QColor(rgb_255[0], rgb_255[1], rgb_255[2], int(round(a * 255)))
 
     else:
         raise ValueError(f"Unsupported output format: {output_format}")
@@ -265,18 +250,15 @@ def color_from_pyvista(pv_color) -> Tuple[float, float, float, float]:
     Returns:
         Normalized RGBA tuple
     """
-    try:
-        import pyvista as pv
+    import pyvista as pv
 
-        if not isinstance(pv_color, pv.Color):
-            raise ValueError("Input must be a pyvista.Color object")
+    if not isinstance(pv_color, pv.Color):
+        raise ValueError("Input must be a pyvista.Color object")
 
-        # PyVista Color has float_rgb property and opacity
-        rgb = pv_color.float_rgb
-        opacity = pv_color.opacity if hasattr(pv_color, "opacity") else 1.0
-        return (*rgb, opacity)
-    except ImportError:
-        raise ImportError("PyVista is required to parse PyVista Color objects")
+    # PyVista Color has float_rgb property and opacity
+    rgb = pv_color.float_rgb
+    opacity = pv_color.opacity if hasattr(pv_color, "opacity") else 1.0
+    return (*rgb, opacity)
 
 
 def color_from_qcolor(qcolor) -> Tuple[float, float, float, float]:
@@ -288,17 +270,9 @@ def color_from_qcolor(qcolor) -> Tuple[float, float, float, float]:
     Returns:
         Normalized RGBA tuple
     """
-    try:
-        from PySide6.QtGui import QColor
+    from PySide6.QtGui import QColor
 
-        qcolor_class = QColor
-    except ImportError:
-        try:
-            from PyQt6.QtGui import QColor
-
-            qcolor_class = QColor
-        except ImportError:
-            raise ImportError("PySide6 or PyQt6 is required to parse QColor objects")
+    qcolor_class = QColor
 
     if not isinstance(qcolor, qcolor_class):
         raise ValueError("Input must be a QColor object")

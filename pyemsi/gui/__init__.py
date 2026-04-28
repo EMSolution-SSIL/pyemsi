@@ -36,6 +36,56 @@ _window: PyEmsiMainWindow | None = None
 _app = None
 
 
+def _create_splash(app):
+    """
+    Create and show a splash screen using the on-disk Icon.svg.
+
+    The SVG is loaded directly from disk rather than via the compiled Qt
+    resource file, because ``pyemsi.resources.resources`` is imported by
+    ``main_window`` and must not be pulled in before the splash is visible.
+
+    Parameters
+    ----------
+    app : QApplication
+        The active QApplication instance (needed for processEvents).
+
+    Returns
+    -------
+    QSplashScreen or None
+        The visible splash widget, or *None* if creation fails for any reason
+        (e.g. missing QtSvg module or icon file not found).
+    """
+    try:
+        import os
+
+        from PySide6.QtCore import QSize, Qt
+        from PySide6.QtGui import QPainter, QPixmap
+        from PySide6.QtSvg import QSvgRenderer
+        from PySide6.QtWidgets import QSplashScreen
+
+        icon_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "resources", "icons", "Icon.svg"))
+        renderer = QSvgRenderer(icon_path)
+        if not renderer.isValid():
+            return None
+        size = QSize(300, 300)
+        pixmap = QPixmap(size)
+        pixmap.fill(Qt.GlobalColor.white)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        splash = QSplashScreen(pixmap)
+        splash.show()
+        app.processEvents()
+        return splash
+    except Exception:
+        return None
+
+
+def _exec_app(app) -> None:
+    """Run the Qt event loop. Extracted so tests can monkeypatch this."""
+    app.exec()
+
+
 def launch(
     title: str = "pyemsi",
     size: tuple[int, int] | None = None,
@@ -59,11 +109,13 @@ def launch(
 
     from PySide6.QtWidgets import QApplication
 
-    from pyemsi.gui.main_window import PyEmsiMainWindow
-
     _app = QApplication.instance()
     if _app is None:
         _app = QApplication([])
+
+    splash = _create_splash(_app)
+
+    from pyemsi.gui.main_window import PyEmsiMainWindow
 
     _window = PyEmsiMainWindow()
     _window.setWindowTitle(title)
@@ -92,7 +144,11 @@ def launch(
     else:
         _window.resize(*size)
         _window.show()
-    _app.exec()
+
+    if splash is not None:
+        splash.finish(_window)
+
+    _exec_app(_app)
 
 
 def __getattr__(name: str):

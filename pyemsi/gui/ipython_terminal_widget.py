@@ -7,10 +7,11 @@ allowing live interaction with the running application.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from qtconsole.rich_jupyter_widget import RichJupyterWidget
-from qtconsole.inprocess import QtInProcessKernelManager
+if TYPE_CHECKING:
+    from qtconsole.rich_jupyter_widget import RichJupyterWidget
+    from qtconsole.inprocess import QtInProcessKernelManager
 
 
 def create_ipython_terminal(
@@ -29,6 +30,9 @@ def create_ipython_terminal(
     tuple[RichJupyterWidget, QtInProcessKernelManager]
         The terminal widget and the kernel manager (for later shutdown).
     """
+    from qtconsole.rich_jupyter_widget import RichJupyterWidget
+    from qtconsole.inprocess import QtInProcessKernelManager
+
     kernel_manager = QtInProcessKernelManager()
     kernel_manager.start_kernel()
 

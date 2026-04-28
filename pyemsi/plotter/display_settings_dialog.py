@@ -1,11 +1,12 @@
 """Display settings dialog for PyVista plotter configuration."""
 
+from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyvistaqt import QtInteractor
+    import pyvista as pv
 
-import pyvista as pv
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 
@@ -13,16 +14,25 @@ from .colormaps import CMAP_CHOICES, cmap_name_to_choice
 from .color_utils import to_hex
 from pyemsi.widgets.property_tree_widget import PropertyTreeWidget
 
-GRID_VISIBILITY_DICT = {
-    pv.CubeAxesActor.VTK_GRID_LINES_CLOSEST: "all",
-    pv.CubeAxesActor.VTK_GRID_LINES_FURTHEST: "back",
-    pv.CubeAxesActor.VTK_GRID_LINES_ALL: "front",
-}
-TICK_LOCATION_DICT = {
-    pv.CubeAxesActor.VTK_TICKS_INSIDE: "inside",
-    pv.CubeAxesActor.VTK_TICKS_OUTSIDE: "outside",
-    pv.CubeAxesActor.VTK_TICKS_BOTH: "both",
-}
+
+def _grid_visibility_dict() -> dict[int, str]:
+    import pyvista as pv
+
+    return {
+        pv.CubeAxesActor.VTK_GRID_LINES_CLOSEST: "all",
+        pv.CubeAxesActor.VTK_GRID_LINES_FURTHEST: "back",
+        pv.CubeAxesActor.VTK_GRID_LINES_ALL: "front",
+    }
+
+
+def _tick_location_dict() -> dict[int, str]:
+    import pyvista as pv
+
+    return {
+        pv.CubeAxesActor.VTK_TICKS_INSIDE: "inside",
+        pv.CubeAxesActor.VTK_TICKS_OUTSIDE: "outside",
+        pv.CubeAxesActor.VTK_TICKS_BOTH: "both",
+    }
 
 
 class DisplaySettingsDialog(QDialog):
@@ -116,6 +126,8 @@ class DisplaySettingsDialog(QDialog):
         }
 
     def initialize_actors_settings(self):
+        import pyvista as pv
+
         real_actors = [
             actor
             for actor in self.plotter.renderer.actors.values()
@@ -179,6 +191,8 @@ class DisplaySettingsDialog(QDialog):
                 self.initial_actors_settings["opacity"] = "mixed"
 
     def initialize_axes_settings(self):
+        import pyvista as pv
+
         if self.plotter_window._axes_action.isChecked():
             self.initial_axes_settings = {
                 "enabled": True,
@@ -209,6 +223,9 @@ class DisplaySettingsDialog(QDialog):
             }
 
     def initialize_grid_settings(self):
+        grid_visibility_dict = _grid_visibility_dict()
+        tick_location_dict = _tick_location_dict()
+
         if any(x.__class__.__name__ == "CubeAxesActor" for x in self.plotter.renderer.actors.values()):
             self.initial_grid_settings = {
                 "enabled": True,
@@ -224,8 +241,8 @@ class DisplaySettingsDialog(QDialog):
                 "n_xlabels": self.plotter.renderer.cube_axes_actor.n_xlabels,
                 "n_ylabels": self.plotter.renderer.cube_axes_actor.n_ylabels,
                 "n_zlabels": self.plotter.renderer.cube_axes_actor.n_zlabels,
-                "grid": GRID_VISIBILITY_DICT.get(self.plotter.renderer.cube_axes_actor.GetGridLineLocation()),
-                "ticks": TICK_LOCATION_DICT.get(self.plotter.renderer.cube_axes_actor.GetTickLocation()),
+                "grid": grid_visibility_dict.get(self.plotter.renderer.cube_axes_actor.GetGridLineLocation()),
+                "ticks": tick_location_dict.get(self.plotter.renderer.cube_axes_actor.GetTickLocation()),
                 "minor_ticks": self.plotter.renderer.cube_axes_actor.x_axis_minor_tick_visibility,
             }
         else:
@@ -249,6 +266,8 @@ class DisplaySettingsDialog(QDialog):
             }
 
     def initialize_axes_at_origin_settings(self):
+        import pyvista as pv
+
         if self.plotter_window._axes_at_origin_action.isChecked():
             actor = self.plotter_window.get_actor_by_name("AxesAtOriginActor")
             self.initial_axes_at_origin_settings = {
@@ -566,6 +585,9 @@ class DisplaySettingsDialog(QDialog):
         Creates a checkable group with properties for axis visibility, labels, titles,
         grid lines, tick locations, and other grid display options.
         """
+        grid_visibility_choices = list(_grid_visibility_dict().values())
+        tick_location_choices = list(_tick_location_dict().values())
+
         group = self.tree.add_checkable_group(
             name="Grid",
             checked=self.initial_grid_settings["enabled"],
@@ -654,14 +676,14 @@ class DisplaySettingsDialog(QDialog):
             value=self.initial_grid_settings["grid"],
             editor_type="enum",
             parent=group,
-            choices=list(GRID_VISIBILITY_DICT.values()),
+            choices=grid_visibility_choices,
         )
         self.tree.add_property(
             name="Tick Location",
             value=self.initial_grid_settings["ticks"],
             editor_type="enum",
             parent=group,
-            choices=list(TICK_LOCATION_DICT.values()),
+            choices=tick_location_choices,
         )
         self.tree.add_property(
             name="Minor Ticks",
@@ -755,6 +777,7 @@ class DisplaySettingsDialog(QDialog):
         -----
         This method is called by both Ok and Apply buttons.
         """
+        import pyvista as pv
 
         # Apply plotter settings
         self.plotter.renderer.background_color = pv.Color(plotter_settings["background_color"]).float_rgb

@@ -17,15 +17,15 @@ from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu, QMes
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi.gui.emsolution_output_plot_builder_dialog import EMSolutionOutputPlotBuilderDialog
-from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
-from pyemsi.widgets.explorer_widget import ExplorerWidget
-from pyemsi.widgets.split_container import SplitContainer
 from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
 from pyemsi.gui.femap_converter_dialog import (
     FemapConverterDialog,
     FemapConverterDialogConfig,
 )
+from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
 from pyemsi.settings import SettingsManager
+from pyemsi.widgets.explorer_widget import ExplorerWidget
+from pyemsi.widgets.split_container import SplitContainer
 
 
 class PyEmsiMainWindow(QMainWindow):
@@ -574,7 +574,7 @@ class PyEmsiMainWindow(QMainWindow):
         """Open *path* in a viewer tab, or focus the existing tab if already open."""
         viewer = self._container.open_file(path)
 
-        from pyemsi.gui.file_viewers import PythonViewer, EMSolutionInputViewer
+        from pyemsi.gui.file_viewers import EMSolutionInputViewer, PythonViewer
 
         if isinstance(viewer, PythonViewer):
             # Connect only once – guard via a dynamic attribute.

@@ -18,13 +18,13 @@ from ._viewers._constants import (
 )
 from ._viewers._emsolution_input_viewer import EMSolutionInputViewer
 from ._viewers._emsolution_output_viewer import EMSolutionOutputViewer
-from ._viewers._field_viewer import FieldViewer
 from ._viewers._factory import create_viewer
+from ._viewers._field_viewer import FieldViewer
 from ._viewers._image import ImageViewer
 from ._viewers._markdown import MarkdownPreviewViewer, MarkdownViewer
+from ._viewers._matplotlib import MatplotlibViewer
 from ._viewers._python import PythonViewer
 from ._viewers._unsupported import UnsupportedViewer
-from ._viewers._matplotlib import MatplotlibViewer
 
 try:
     _HAS_MATPLOTLIB = True
