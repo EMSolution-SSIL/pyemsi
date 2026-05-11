@@ -199,3 +199,29 @@ def test_settings_manager_persists_femap_converter_values_in_local_scope(tmp_pat
     assert reloaded.get_local("tools.femap_converter.displacement") is None
     assert reloaded.get_local("tools.femap_converter.electric") == "electric"
     assert reloaded.get_local("tools.femap_converter.force_2d") is True
+
+
+def test_settings_manager_persists_atlas_to_femap_values_in_local_scope(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+    manager.set_local("tools.atlas_to_femap.input_dir", str(workspace))
+    manager.set_local("tools.atlas_to_femap.overwrite", False)
+    manager.set_local("tools.atlas_to_femap.mesh", "post_geom.atl")
+    manager.set_local("tools.atlas_to_femap.mesh_output", os.path.join("exports", "post_geom_custom.neu"))
+    manager.set_local("tools.atlas_to_femap.electric", "electric.atl")
+    manager.set_local("tools.atlas_to_femap.electric_output", "electric_custom.neu")
+    manager.save()
+
+    reloaded = SettingsManager(global_settings_path=global_settings_path)
+    reloaded.load_workspace(workspace)
+
+    assert reloaded.get_local("tools.atlas_to_femap.input_dir") == os.path.abspath(os.path.normpath(str(workspace)))
+    assert reloaded.get_local("tools.atlas_to_femap.overwrite") is False
+    assert reloaded.get_local("tools.atlas_to_femap.mesh") == "post_geom.atl"
+    assert reloaded.get_local("tools.atlas_to_femap.mesh_output") == os.path.join("exports", "post_geom_custom.neu")
+    assert reloaded.get_local("tools.atlas_to_femap.electric") == "electric.atl"
+    assert reloaded.get_local("tools.atlas_to_femap.electric_output") == "electric_custom.neu"

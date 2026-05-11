@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QToolButton, Q
 
 from pyemsi.gui import main_window as main_window_module
 from pyemsi.gui.femap_converter_dialog import FemapConverterDialogConfig
+from pyemsi.gui.source_to_femap_dialog import SourceToFemapDialogConfig
 from pyemsi.settings import SettingsManager
 
 
@@ -324,6 +325,7 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         assert file_actions[0].text() == "Open &Folder..."
         assert file_actions[1].text() == "Open &Recent"
         assert file_actions[2].isSeparator()
+        assert "&Converters" not in action_texts
         assert "Convert &FEMAP" in action_texts
         assert "&Field Plot" in action_texts
         assert "&Output Plot" in action_texts
@@ -332,6 +334,10 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         assert action_texts.index("Convert &FEMAP") < action_texts.index("&Save")
         assert action_texts.index("&Field Plot") < action_texts.index("&Save")
         assert action_texts.index("&Output Plot") < action_texts.index("&Save")
+
+        menu_titles = [action.text() for action in window.menuBar().actions()]
+        assert "&Converters" in menu_titles
+        assert menu_titles[-1] == "&Converters"
     finally:
         window.close()
 
@@ -396,6 +402,39 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
         assert window._settings_tool_button.objectName() == "settings_tool_button"
         assert window._settings_tool_button.menu() is window._settings_menu
         assert window._settings_tool_button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+    finally:
+        window.close()
+
+
+def test_main_window_source_to_femap_actions_track_workspace_state(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert not window._open_atlas_to_femap_action.isEnabled()
+        assert not window._open_unv_to_femap_action.isEnabled()
+
+        window._set_workspace_path(str(workspace))
+
+        assert window._open_atlas_to_femap_action.isEnabled()
+        assert window._open_unv_to_femap_action.isEnabled()
+
+        window.close_workspace(restart_kernel=False)
+
+        assert not window._open_atlas_to_femap_action.isEnabled()
+        assert not window._open_unv_to_femap_action.isEnabled()
     finally:
         window.close()
 
@@ -681,6 +720,75 @@ def test_main_window_launches_femap_converter_in_external_terminal(tmp_path, mon
         assert launch_call["args"][0].endswith("run_femap_converter.py")
         assert launch_call["args"][1:] and launch_call["args"][1] == "--config"
         assert manager.get_local("tools.femap_converter.output_name") == "transient"
+        assert len(window._temp_converter_configs) == 1
+    finally:
+        window.close()
+
+
+def test_main_window_launches_source_to_femap_converter_in_external_terminal(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    input_dir = workspace / "model"
+    input_dir.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    config = SourceToFemapDialogConfig(
+        source_format="atlas",
+        input_dir=os.path.abspath(os.path.normpath(str(input_dir))),
+        overwrite=False,
+        mesh="post_geom.atl",
+        mesh_output="exports\\post_geom_custom.neu",
+        displacement=None,
+        displacement_output=None,
+        magnetic=None,
+        magnetic_output=None,
+        current=None,
+        current_output=None,
+        electric="electric.atl",
+        electric_output="electric_custom.neu",
+        force=None,
+        force_output=None,
+        force_J_B=None,
+        force_J_B_output=None,
+        heat=None,
+        heat_output=None,
+    )
+
+    class _AcceptedDialog:
+        DialogCode = QDialog.DialogCode
+
+        def __init__(self, source_format, settings_manager, parent=None) -> None:
+            self._config = config
+
+        def exec(self) -> int:
+            return QDialog.DialogCode.Accepted
+
+        def config(self):
+            return self._config
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "SourceToFemapDialog", _AcceptedDialog)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+    window = main_window_module.PyEmsiMainWindow(settings_manager=manager)
+    try:
+        window._open_atlas_to_femap_dialog()
+
+        assert len(window._external_terminal_dock.calls) == 1
+        launch_call = window._external_terminal_dock.calls[0]
+        assert launch_call["title"] == "Atlas -> FEMAP - post_geom.atl"
+        assert launch_call["cwd"] == os.path.abspath(os.path.normpath(str(input_dir)))
+        assert launch_call["args"][0].endswith("run_source_to_femap.py")
+        assert launch_call["args"][1:] and launch_call["args"][1] == "--config"
+        assert manager.get_local("tools.atlas_to_femap.mesh") == "post_geom.atl"
+        assert manager.get_local("tools.atlas_to_femap.mesh_output") == "exports\\post_geom_custom.neu"
         assert len(window._temp_converter_configs) == 1
     finally:
         window.close()
