@@ -122,7 +122,7 @@ class Plotter:
     _window: "QtPlotterWindow | None"
     _qt_props: dict[str, object]
     _qt_interactor_kwargs: dict[str, object]
-    _feature_edges_props: dict[str, object]
+    _feature_edges_props: dict[str, object] | None
     _scalar_props: dict[str, object]
     _vector_props: dict[str, object]
     _contour_props: dict[str, object]
@@ -690,6 +690,8 @@ class Plotter:
             Preserves the current camera when refreshing the scene.
         Applies visibility settings from _block_visibility to each actor.
         """
+        if self._feature_edges_props is None:
+            return
         remove_small_loops = bool(self._feature_edges_props.get("remove_small_loops", False))
         max_loop_edges = int(self._feature_edges_props.get("max_loop_edges", 10))
         feature_angle = float(self._feature_edges_props.get("feature_angle", 30.0))

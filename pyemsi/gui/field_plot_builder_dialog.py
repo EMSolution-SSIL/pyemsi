@@ -346,6 +346,8 @@ class FieldPlotBuilderDialog(QDialog):
         layout.addLayout(file_layout)
         layout.addWidget(helper_label)
 
+        self._feature_edges_enabled_checkbox = QCheckBox("Enable Feature Edges", self)
+        self._feature_edges_enabled_checkbox.setChecked(defaults["feature_edges_enabled"])
         self._feature_edges_color_edit = _ColorSelector(defaults["feature_edges_color"], self)
         self._feature_edges_line_width_spin = QSpinBox(self)
         self._feature_edges_line_width_spin.setRange(1, 100)
@@ -355,12 +357,29 @@ class FieldPlotBuilderDialog(QDialog):
         self._feature_edges_opacity_spin.setDecimals(2)
         self._feature_edges_opacity_spin.setSingleStep(0.05)
         self._feature_edges_opacity_spin.setValue(defaults["feature_edges_opacity"])
+        self._feature_edges_remove_small_loops_checkbox = QCheckBox(self)
+        self._feature_edges_remove_small_loops_checkbox.setChecked(defaults["feature_edges_remove_small_loops"])
+        self._feature_edges_max_loop_edges_spin = QSpinBox(self)
+        self._feature_edges_max_loop_edges_spin.setRange(3, 9999)
+        self._feature_edges_max_loop_edges_spin.setValue(defaults["feature_edges_max_loop_edges"])
+        self._feature_edges_feature_angle_spin = QDoubleSpinBox(self)
+        self._feature_edges_feature_angle_spin.setRange(0.0, 180.0)
+        self._feature_edges_feature_angle_spin.setDecimals(1)
+        self._feature_edges_feature_angle_spin.setSingleStep(1.0)
+        self._feature_edges_feature_angle_spin.setValue(float(defaults["feature_edges_feature_angle"]))
         self._feature_edges_section = QWidget(self)
         feature_edges_layout = QFormLayout(self._feature_edges_section)
         feature_edges_layout.addRow("Color:", self._feature_edges_color_edit)
         feature_edges_layout.addRow("Line Width:", self._feature_edges_line_width_spin)
         feature_edges_layout.addRow("Opacity:", self._feature_edges_opacity_spin)
-        self._feature_edges_panel = _CollapsibleSection("Feature Edges", self)
+        feature_edges_layout.addRow("Remove Small Loops:", self._feature_edges_remove_small_loops_checkbox)
+        feature_edges_layout.addRow("Max Loop Edges:", self._feature_edges_max_loop_edges_spin)
+        feature_edges_layout.addRow("Feature Angle:", self._feature_edges_feature_angle_spin)
+        self._feature_edges_panel = _CollapsibleSection(
+            "Feature Edges",
+            self,
+            header_widget=self._feature_edges_enabled_checkbox,
+        )
         self._feature_edges_panel.set_content_widget(self._feature_edges_section)
 
         self._sections_scroll_area = QScrollArea(self)
@@ -395,7 +414,9 @@ class FieldPlotBuilderDialog(QDialog):
         self._scalar_enabled_checkbox.toggled.connect(self._on_scalar_enabled_toggled)
         self._contour_enabled_checkbox.toggled.connect(self._on_contour_enabled_toggled)
         self._vector_enabled_checkbox.toggled.connect(self._on_vector_enabled_toggled)
+        self._feature_edges_enabled_checkbox.toggled.connect(self._on_feature_edges_enabled_toggled)
         self._vector_use_tolerance_checkbox.toggled.connect(self._vector_tolerance_spin.setEnabled)
+        self._feature_edges_remove_small_loops_checkbox.toggled.connect(self._feature_edges_max_loop_edges_spin.setEnabled)
         self._scalar_name_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
         self._scalar_mode_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
         self._scalar_cmap_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
@@ -409,6 +430,9 @@ class FieldPlotBuilderDialog(QDialog):
         self._feature_edges_color_edit.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_line_width_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_opacity_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._feature_edges_remove_small_loops_checkbox.toggled.connect(self._update_feature_edges_panel_summary)
+        self._feature_edges_max_loop_edges_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._feature_edges_feature_angle_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._file_field.line_edit().textChanged.connect(self._on_field_path_changed)
         self._discover_button.clicked.connect(self._on_discover_arrays)
         self._suggest_factor_button.clicked.connect(self._on_suggest_vector_factor)
@@ -421,12 +445,13 @@ class FieldPlotBuilderDialog(QDialog):
         self._on_scalar_enabled_toggled(self._scalar_enabled_checkbox.isChecked())
         self._on_contour_enabled_toggled(self._contour_enabled_checkbox.isChecked())
         self._on_vector_enabled_toggled(self._vector_enabled_checkbox.isChecked())
-        self._feature_edges_panel.set_expanded(False)
+        self._on_feature_edges_enabled_toggled(self._feature_edges_enabled_checkbox.isChecked())
         self._update_scalar_panel_summary()
         self._update_contour_panel_summary()
         self._update_vector_panel_summary()
         self._update_feature_edges_panel_summary()
         self._vector_tolerance_spin.setEnabled(self._vector_use_tolerance_checkbox.isChecked())
+        self._feature_edges_max_loop_edges_spin.setEnabled(self._feature_edges_remove_small_loops_checkbox.isChecked())
 
     def _load_defaults(self) -> dict[str, object]:
         field_file_path = self._settings.get_effective("tools.field_plot.filepath")
@@ -451,9 +476,13 @@ class FieldPlotBuilderDialog(QDialog):
             "vector_factor": 1.0,
             "vector_tolerance": None,
             "vector_color_mode": "scale",
+            "feature_edges_enabled": True,
             "feature_edges_color": "white",
             "feature_edges_line_width": 1,
             "feature_edges_opacity": 1.0,
+            "feature_edges_remove_small_loops": True,
+            "feature_edges_max_loop_edges": 10,
+            "feature_edges_feature_angle": 30.0,
         }
 
     def _default_field_file_path(self) -> str:
@@ -524,6 +553,10 @@ class FieldPlotBuilderDialog(QDialog):
         self._set_stage_panel_state(self._vector_panel, checked)
         self._update_vector_panel_summary()
 
+    def _on_feature_edges_enabled_toggled(self, checked: bool) -> None:
+        self._set_stage_panel_state(self._feature_edges_panel, checked)
+        self._update_feature_edges_panel_summary()
+
     def _update_scalar_panel_summary(self) -> None:
         if not self._scalar_enabled_checkbox.isChecked():
             self._scalar_panel.set_summary("Disabled")
@@ -578,8 +611,24 @@ class FieldPlotBuilderDialog(QDialog):
         return str(data)
 
     def _update_feature_edges_panel_summary(self) -> None:
+        if not self._feature_edges_enabled_checkbox.isChecked():
+            self._feature_edges_panel.set_summary("Disabled")
+            return
+        loop_text = (
+            f"loops<={self._feature_edges_max_loop_edges_spin.value()}"
+            if self._feature_edges_remove_small_loops_checkbox.isChecked()
+            else "loops off"
+        )
         self._feature_edges_panel.set_summary(
-            f"{self._feature_edges_color_edit.value() or 'white'} | {self._feature_edges_line_width_spin.value()} px | {self._feature_edges_opacity_spin.value():.2f}"
+            " | ".join(
+                (
+                    self._feature_edges_color_edit.value() or "white",
+                    f"{self._feature_edges_line_width_spin.value()} px",
+                    f"{self._feature_edges_opacity_spin.value():.2f}",
+                    loop_text,
+                    f"angle {self._feature_edges_feature_angle_spin.value():.1f}",
+                )
+            )
         )
 
     def _iter_mesh_blocks(self, mesh: object):
@@ -899,6 +948,9 @@ class FieldPlotBuilderDialog(QDialog):
             "color": self._feature_edges_color_edit.value() or "white",
             "line_width": int(self._feature_edges_line_width_spin.value()),
             "opacity": float(self._feature_edges_opacity_spin.value()),
+            "remove_small_loops": self._feature_edges_remove_small_loops_checkbox.isChecked(),
+            "max_loop_edges": int(self._feature_edges_max_loop_edges_spin.value()),
+            "feature_angle": float(self._feature_edges_feature_angle_spin.value()),
         }
 
     def _persist_settings(self) -> None:
@@ -938,9 +990,11 @@ class FieldPlotBuilderDialog(QDialog):
         fe_kwargs = self._feature_edges_kwargs()
         lines.append(
             "field_plot.set_feature_edges("
-            f"color={fe_kwargs['color']!r}, line_width={fe_kwargs['line_width']!r}, opacity={fe_kwargs['opacity']!r}"
+            f"color={fe_kwargs['color']!r}, line_width={fe_kwargs['line_width']!r}, opacity={fe_kwargs['opacity']!r}, remove_small_loops={fe_kwargs['remove_small_loops']!r}, max_loop_edges={fe_kwargs['max_loop_edges']!r}, feature_angle={fe_kwargs['feature_angle']!r}"
             ")"
         )
+        if not self._feature_edges_enabled_checkbox.isChecked():
+            lines.append("field_plot._feature_edges_props = None")
         lines.extend(["", f"gui.add_field(field_plot, {self._current_title()!r})"])
         return "\n".join(lines)
 
@@ -1005,7 +1059,10 @@ class FieldPlotBuilderDialog(QDialog):
                 plotter.set_contour(**self._contour_kwargs())
             if self._vector_enabled_checkbox.isChecked():
                 plotter.set_vector(**self._vector_kwargs())
-            plotter.set_feature_edges(**self._feature_edges_kwargs())
+            if self._feature_edges_enabled_checkbox.isChecked():
+                plotter.set_feature_edges(**self._feature_edges_kwargs())
+            else:
+                plotter._feature_edges_props = None
 
             self._persist_settings()
 
