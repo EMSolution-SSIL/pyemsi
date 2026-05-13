@@ -131,6 +131,9 @@ class _PathSelector(QWidget):
     def line_edit(self) -> QLineEdit:
         return self._line_edit
 
+    def enabled_checkbox(self) -> QCheckBox | None:
+        return self._enabled_checkbox
+
     def add_trailing_widget(self, widget: QWidget) -> None:
         self._trailing_widgets.append(widget)
         self._layout.addWidget(widget)

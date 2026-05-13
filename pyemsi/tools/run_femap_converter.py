@@ -19,6 +19,8 @@ import logging  # noqa: E402
 import pyemsi  # noqa: E402
 from pyemsi.tools.FemapConverter import FemapConverter  # noqa: E402
 
+LOGGER = logging.getLogger("pyemsi.tools.run_femap_converter")
+
 
 def _load_config(config_path: str) -> dict:
     with open(config_path, encoding="utf-8") as handle:
@@ -77,14 +79,14 @@ def main() -> None:
         displacement=_normalize_optional_text(payload.get("displacement")),
     )
 
-    logging.getLogger(__name__).info("Running FemapConverter for %s", input_dir)
+    LOGGER.info("Running FemapConverter for %s", input_dir)
     converter.run()
-    logging.getLogger(__name__).info("FemapConverter run completed")
+    LOGGER.info("FemapConverter run completed")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        logging.getLogger(__name__).exception("FemapConverter run failed")
+        LOGGER.exception("FemapConverter run failed")
         raise

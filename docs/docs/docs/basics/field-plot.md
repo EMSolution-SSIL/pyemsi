@@ -67,6 +67,9 @@ It includes:
 - `Name`: the scalar field to display
 - `Mode`: whether the values are shown from node data or element data
 - `Colormap`: the colormap used to color the field
+- `Show Edges`: toggles edge rendering on top of the scalar surface
+- `Edge Color`: edge color used when `Show Edges` is enabled
+- `Edge Opacity`: edge opacity used when `Show Edges` is enabled
 
 ### Contour
 
@@ -100,9 +103,12 @@ The `Feature Edges` section controls the mesh-edge overlay.
 
 It includes:
 
-- edge color
-- line width
-- opacity
+- `Color`: feature-edge color
+- `Line Width`: feature-edge thickness
+- `Opacity`: feature-edge opacity
+- `Remove Small Loops`: removes short closed edge loops from the extracted result
+- `Edge Count Threshold`: the maximum loop size (in edge count) removed when `Remove Small Loops` is enabled
+- `Feature Angle`: angle threshold passed to PyVista edge extraction; see [PyVista `extract_feature_edges` docs](https://docs.pyvista.org/api/core/_autosummary/pyvista.datasetfilters.extract_feature_edges)
 
 This helps make geometry boundaries easier to read in the final field view.
 

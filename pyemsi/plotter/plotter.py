@@ -7,6 +7,7 @@ with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -16,10 +17,61 @@ import numpy as np
 if TYPE_CHECKING:
     import pyvista as pv
     from pyvistaqt import QtInteractor
-
     from pyemsi.plotter.qt_window import QtPlotterWindow
 
 from pyemsi.plotter.qt_window import QtPlotterWindow
+
+
+def _remove_small_closed_loops(edges: "pv.PolyData", max_loop_edges: int) -> tuple["pv.PolyData", list[list[int]]]:
+    """Remove cycles up to ``max_loop_edges`` from a 2-point line-cell PolyData."""
+    import pyvista as pv
+    import networkx as nx
+
+    if max_loop_edges < 3:
+        return pv.PolyData(edges.points.copy(), lines=edges.lines.copy()), []
+
+    if edges.lines.size == 0:
+        return pv.PolyData(edges.points.copy(), lines=edges.lines.copy()), []
+
+    if edges.lines.size % 3 != 0:
+        raise ValueError("Expected line cells in [2, p0, p1, ...] layout.")
+
+    line_cells = edges.lines.reshape((-1, 3))
+    if not np.all(line_cells[:, 0] == 2):
+        raise ValueError("Only 2-point line cells are supported for small-loop removal.")
+
+    segments = line_cells[:, 1:3].astype(np.int64)
+
+    graph = nx.Graph()
+    graph.add_edges_from((int(a), int(b)) for a, b in segments if int(a) != int(b))
+
+    edges_to_remove: set[tuple[int, int]] = set()
+    removed_cycles: list[list[int]] = []
+
+    for cycle in nx.simple_cycles(graph, length_bound=max_loop_edges):
+        if len(cycle) < 3:
+            continue
+        removed_cycles.append([int(node) for node in cycle])
+        cycle_nodes = cycle + [cycle[0]]
+        for a, b in zip(cycle_nodes[:-1], cycle_nodes[1:]):
+            edge_key = tuple(sorted((int(a), int(b))))
+            edges_to_remove.add(edge_key)
+
+    keep_mask = np.ones(len(segments), dtype=bool)
+    for i, (a, b) in enumerate(segments):
+        if tuple(sorted((int(a), int(b)))) in edges_to_remove:
+            keep_mask[i] = False
+
+    kept_segments = segments[keep_mask]
+    if len(kept_segments) == 0:
+        new_lines = np.empty(0, dtype=np.int64)
+    else:
+        new_line_cells = np.empty((len(kept_segments), 3), dtype=np.int64)
+        new_line_cells[:, 0] = 2
+        new_line_cells[:, 1:3] = kept_segments
+        new_lines = new_line_cells.ravel()
+
+    return pv.PolyData(edges.points.copy(), lines=new_lines), removed_cycles
 
 
 class Plotter:
@@ -70,7 +122,7 @@ class Plotter:
     _window: "QtPlotterWindow | None"
     _qt_props: dict[str, object]
     _qt_interactor_kwargs: dict[str, object]
-    _feature_edges_props: dict[str, object]
+    _feature_edges_props: dict[str, object] | None
     _scalar_props: dict[str, object]
     _vector_props: dict[str, object]
     _contour_props: dict[str, object]
@@ -115,7 +167,14 @@ class Plotter:
         self.reader = None
         self._qt_props = {"title": title, "window_size": window_size, "position": position}
         self._qt_interactor_kwargs = kwargs
-        self._feature_edges_props = {"color": "white", "line_width": 1, "opacity": 1.0}
+        self._feature_edges_props = {
+            "color": "white",
+            "line_width": 1,
+            "opacity": 1.0,
+            "remove_small_loops": True,
+            "max_loop_edges": 10,
+            "feature_angle": 30,
+        }
         self._scalar_props = {}
         self._vector_props = {}
         self._contour_props = {}
@@ -571,7 +630,16 @@ class Plotter:
         # Render to update display
         self.plotter.render()
 
-    def set_feature_edges(self, color: str = "white", line_width: int = 1, opacity: float = 1.0, **kwargs) -> "Plotter":
+    def set_feature_edges(
+        self,
+        color: str = "white",
+        line_width: int = 1,
+        opacity: float = 1.0,
+        feature_angle: float = 30.0,
+        remove_small_loops: bool = True,
+        max_loop_edges: int = 10,
+        **kwargs,
+    ) -> "Plotter":
         """
         Set properties for feature edges visualization.
 
@@ -586,6 +654,14 @@ class Plotter:
             Width of the feature edges lines. Default is 1.
         opacity : float, optional
             Opacity of the feature edges (0.0 to 1.0). Default is 1.0.
+        feature_angle : float, optional
+            Feature angle forwarded to ``extract_feature_edges()``. Default is 30.0.
+        remove_small_loops : bool, optional
+            If True, remove closed loops with edge-count less than or equal to ``max_loop_edges``.
+            Default is False.
+        max_loop_edges : int, optional
+            Maximum number of edges in loops removed when ``remove_small_loops`` is enabled.
+            Default is 10.
         **kwargs
             Additional keyword arguments passed to add_mesh() for feature edges.
 
@@ -598,6 +674,9 @@ class Plotter:
             "color": color,
             "line_width": line_width,
             "opacity": opacity,
+            "feature_angle": feature_angle,
+            "remove_small_loops": remove_small_loops,
+            "max_loop_edges": max_loop_edges,
             **kwargs,
         }
         return self
@@ -611,17 +690,38 @@ class Plotter:
             Preserves the current camera when refreshing the scene.
         Applies visibility settings from _block_visibility to each actor.
         """
+        if self._feature_edges_props is None:
+            return
+        remove_small_loops = bool(self._feature_edges_props.get("remove_small_loops", False))
+        max_loop_edges = int(self._feature_edges_props.get("max_loop_edges", 10))
+        feature_angle = float(self._feature_edges_props.get("feature_angle", 30.0))
+        mesh_kwargs = {
+            key: value
+            for key, value in self._feature_edges_props.items()
+            if key not in {"feature_angle", "remove_small_loops", "max_loop_edges"}
+        }
         for idx, block, block_name in self._iter_blocks():
-            edges = block.extract_feature_edges()
+            edges = block.extract_feature_edges(
+                feature_angle=feature_angle,
+                boundary_edges=False,
+                feature_edges=True,
+                manifold_edges=False,
+                non_manifold_edges=False,
+            )
             if edges.n_points == 0:
                 continue
+            if remove_small_loops:
+                try:
+                    edges, _ = _remove_small_closed_loops(edges, max_loop_edges=max_loop_edges)
+                except ValueError as exc:
+                    warnings.warn(f"Feature-edge small-loop removal skipped: {exc}", stacklevel=2)
             actor_name = f"feature_edges_block_{block_name}" if block_name else "feature_edges"
             actor = self.plotter.add_mesh(
                 edges,
                 name=actor_name,
                 pickable=False,
                 reset_camera=False,
-                **self._feature_edges_props,
+                **mesh_kwargs,
             )
             # Apply visibility from stored state
             if block_name:

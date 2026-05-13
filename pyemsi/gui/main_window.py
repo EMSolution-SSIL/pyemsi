@@ -23,6 +23,7 @@ from pyemsi.gui.femap_converter_dialog import (
     FemapConverterDialogConfig,
 )
 from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
+from pyemsi.gui.source_to_femap_dialog import SourceToFemapDialog, SourceToFemapDialogConfig
 from pyemsi.settings import SettingsManager
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
@@ -49,6 +50,7 @@ class PyEmsiMainWindow(QMainWindow):
 
         self.menuBar().setStyleSheet("QMenuBar { padding: 0px; } QMenuBar::item { padding: 2px 8px; }")
         self._setup_file_actions()
+        self._setup_converters_menu()
         self._setup_menu_bar()
         self._setup_file_toolbar()
         self._setup_edit_menu()
@@ -76,6 +78,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._external_terminal_dock.hide()
 
         self._setup_view_menu()
+        self.menuBar().addMenu(self._converters_menu)
         self._apply_window_settings()
         self._refresh_recent_folders_menu()
 
@@ -153,6 +156,20 @@ class PyEmsiMainWindow(QMainWindow):
         self._exit_action = QAction("E&xit", self)
         self._exit_action.setShortcut(QKeySequence("Alt+F4"))
         self._exit_action.triggered.connect(self.close)
+
+    def _setup_converters_menu(self) -> None:
+        """Create the top-level Converters menu and its actions."""
+        self._converters_menu = QMenu("&Converters", self)
+
+        self._open_atlas_to_femap_action = QAction("Atlas -> FEMAP", self)
+        self._open_atlas_to_femap_action.triggered.connect(self._open_atlas_to_femap_dialog)
+        self._open_atlas_to_femap_action.setEnabled(self._settings.workspace_path is not None)
+        self._converters_menu.addAction(self._open_atlas_to_femap_action)
+
+        self._open_unv_to_femap_action = QAction("I-DEAS -> FEMAP", self)
+        self._open_unv_to_femap_action.triggered.connect(self._open_unv_to_femap_dialog)
+        self._open_unv_to_femap_action.setEnabled(self._settings.workspace_path is not None)
+        self._converters_menu.addAction(self._open_unv_to_femap_action)
 
     def _setup_menu_bar(self) -> None:
         """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
@@ -395,6 +412,27 @@ class PyEmsiMainWindow(QMainWindow):
         self._persist_femap_converter_settings(config)
         self._run_femap_converter(config)
 
+    def _open_atlas_to_femap_dialog(self) -> None:
+        """Open the Atlas-to-FEMAP conversion dialog and launch the conversion if accepted."""
+        self._open_source_to_femap_dialog("atlas")
+
+    def _open_unv_to_femap_dialog(self) -> None:
+        """Open the I-DEAS-to-FEMAP conversion dialog and launch the conversion if accepted."""
+        self._open_source_to_femap_dialog("unv")
+
+    def _open_source_to_femap_dialog(self, source_format: str) -> None:
+        """Open a source-to-FEMAP conversion dialog and launch the conversion if accepted."""
+        dialog = SourceToFemapDialog(source_format, self._settings, parent=self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        config = dialog.config()
+        if config is None:
+            return
+
+        self._persist_source_to_femap_settings(config)
+        self._run_source_to_femap(config)
+
     def _open_field_plot_dialog(self) -> None:
         """Open the field plot builder dialog."""
         current_path = self.explorer.current_path
@@ -447,11 +485,18 @@ class PyEmsiMainWindow(QMainWindow):
             setter(key, value)
         self._settings.save()
 
+    def _persist_source_to_femap_settings(self, config: SourceToFemapDialogConfig) -> None:
+        """Persist the last-used Atlas/UNV-to-FEMAP dialog settings."""
+        setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
+        for key, value in config.to_settings().items():
+            setter(key, value)
+        self._settings.save()
+
     def _run_femap_converter(self, config: FemapConverterDialogConfig) -> None:
         """Launch the FEMAP converter in an external terminal tab."""
         import sys
 
-        config_path = self._write_femap_converter_config(config)
+        config_path = self._write_converter_config(config, prefix="pyemsi_femap_converter_")
         run_converter_script = os.path.join(os.path.dirname(__file__), os.pardir, "tools", "run_femap_converter.py")
 
         self._external_terminal_dock.show()
@@ -464,13 +509,33 @@ class PyEmsiMainWindow(QMainWindow):
         )
         xterm.processFinished.connect(lambda _code, path=config_path: self._cleanup_temp_converter_config(path))
 
-    def _write_femap_converter_config(self, config: FemapConverterDialogConfig) -> str:
+    def _run_source_to_femap(self, config: SourceToFemapDialogConfig) -> None:
+        """Launch the Atlas/UNV-to-FEMAP converter in an external terminal tab."""
+        import sys
+
+        config_path = self._write_converter_config(config, prefix="pyemsi_source_to_femap_")
+        run_converter_script = os.path.join(os.path.dirname(__file__), os.pardir, "tools", "run_source_to_femap.py")
+        title_prefix = "Atlas" if config.source_format == "atlas" else "I-DEAS"
+
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
+        xterm = self._external_terminal_dock.add_terminal(
+            title=f"{title_prefix} -> FEMAP - {os.path.basename(config.mesh)}",
+            cmd=sys.executable,
+            args=[run_converter_script, "--config", config_path],
+            cwd=config.input_dir,
+        )
+        xterm.processFinished.connect(lambda _code, path=config_path: self._cleanup_temp_converter_config(path))
+
+    def _write_converter_config(
+        self, config: FemapConverterDialogConfig | SourceToFemapDialogConfig, prefix: str
+    ) -> str:
         """Serialize a converter launch payload to a temporary JSON file."""
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
             delete=False,
-            prefix="pyemsi_femap_converter_",
+            prefix=prefix,
             suffix=".json",
         ) as handle:
             json.dump(config.to_payload(), handle, indent=2, sort_keys=True)
@@ -513,6 +578,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._settings.load_workspace(None)
         self._update_settings_actions()
         self.setWindowTitle("pyemsi")
+        self._field_plot_dialog = None
         return True
 
     def _reset_ipython_kernel(self) -> None:
@@ -544,7 +610,10 @@ class PyEmsiMainWindow(QMainWindow):
         """Refresh settings-menu action state for the current workspace context."""
         global_settings_path = self._settings.global_settings_path
         local_settings_path = self._settings.local_settings_path
-        self._open_femap_converter_action.setEnabled(self._settings.workspace_path is not None)
+        workspace_available = self._settings.workspace_path is not None
+        self._open_atlas_to_femap_action.setEnabled(workspace_available)
+        self._open_unv_to_femap_action.setEnabled(workspace_available)
+        self._open_femap_converter_action.setEnabled(workspace_available)
         explorer_widget = getattr(self, "_explorer_widget", None)
         explorer_path = getattr(explorer_widget, "current_path", None) or (
             os.fspath(self._settings.workspace_path) if self._settings.workspace_path is not None else None
