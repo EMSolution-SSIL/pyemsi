@@ -578,6 +578,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._settings.load_workspace(None)
         self._update_settings_actions()
         self.setWindowTitle("pyemsi")
+        self._field_plot_dialog = None
         return True
 
     def _reset_ipython_kernel(self) -> None:
