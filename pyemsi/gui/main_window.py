@@ -7,12 +7,14 @@ a bottom dock hosting an embedded IPython terminal.
 
 from __future__ import annotations
 
+from importlib import metadata
 import json
 import os
 import tempfile
+from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSize, Qt
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtCore import QByteArray, QSize, Qt, QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QToolBar, QToolButton
 
 import pyemsi.resources.resources  # noqa: F401
@@ -27,6 +29,17 @@ from pyemsi.gui.source_to_femap_dialog import SourceToFemapDialog, SourceToFemap
 from pyemsi.settings import SettingsManager
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
+
+
+_DOCUMENTATION_URL = "https://emsolution-ssil.github.io/pyemsi/"
+_RELEASES_URL = "https://github.com/EMSolution-SSIL/pyemsi/releases"
+_ISSUES_URL = "https://github.com/EMSolution-SSIL/pyemsi/issues"
+_ABOUT_TEXT = """Science Solutions International Lab, Inc. (SSIL)
+2-21-7 Naka-cho, Meguro-ku, Tokyo, Japan
+Tel: 03-3711-8908, Fax: 03-3711-8910
+Web: https://www.ssil.co.jp
+Email: em_solution@ssil.co.jp
+Copyright (c) 2026 SSIL All rights reserved."""
 
 
 class PyEmsiMainWindow(QMainWindow):
@@ -51,6 +64,7 @@ class PyEmsiMainWindow(QMainWindow):
         self.menuBar().setStyleSheet("QMenuBar { padding: 0px; } QMenuBar::item { padding: 2px 8px; }")
         self._setup_file_actions()
         self._setup_converters_menu()
+        self._setup_help_menu()
         self._setup_menu_bar()
         self._setup_file_toolbar()
         self._setup_edit_menu()
@@ -79,6 +93,7 @@ class PyEmsiMainWindow(QMainWindow):
 
         self._setup_view_menu()
         self.menuBar().addMenu(self._converters_menu)
+        self.menuBar().addMenu(self._help_menu)
         self._apply_window_settings()
         self._refresh_recent_folders_menu()
 
@@ -161,6 +176,10 @@ class PyEmsiMainWindow(QMainWindow):
         """Create the top-level Converters menu and its actions."""
         self._converters_menu = QMenu("&Converters", self)
 
+        self._converters_menu.addAction(self._open_femap_converter_action)
+
+        self._converters_menu.addSeparator()
+
         self._open_atlas_to_femap_action = QAction("Atlas -> FEMAP", self)
         self._open_atlas_to_femap_action.triggered.connect(self._open_atlas_to_femap_dialog)
         self._open_atlas_to_femap_action.setEnabled(self._settings.workspace_path is not None)
@@ -171,6 +190,34 @@ class PyEmsiMainWindow(QMainWindow):
         self._open_unv_to_femap_action.setEnabled(self._settings.workspace_path is not None)
         self._converters_menu.addAction(self._open_unv_to_femap_action)
 
+    def _setup_help_menu(self) -> None:
+        """Create the top-level Help menu and its actions."""
+        self._help_menu = QMenu("&Help", self)
+
+        self._open_documentation_action = QAction("&Documentation", self)
+        self._open_documentation_action.triggered.connect(lambda: self._open_url(_DOCUMENTATION_URL))
+        self._help_menu.addAction(self._open_documentation_action)
+
+        self._open_releases_action = QAction("Latest &Releases", self)
+        self._open_releases_action.triggered.connect(lambda: self._open_url(_RELEASES_URL))
+        self._help_menu.addAction(self._open_releases_action)
+
+        self._report_issue_action = QAction("Report &Issue", self)
+        self._report_issue_action.triggered.connect(lambda: self._open_url(_ISSUES_URL))
+        self._help_menu.addAction(self._report_issue_action)
+
+        self._help_menu.addSeparator()
+
+        self._open_license_action = QAction("&License", self)
+        self._open_license_action.triggered.connect(self._open_license)
+        self._help_menu.addAction(self._open_license_action)
+
+        self._help_menu.addSeparator()
+
+        self._open_about_action = QAction("&About", self)
+        self._open_about_action.triggered.connect(self._show_about_dialog)
+        self._help_menu.addAction(self._open_about_action)
+
     def _setup_menu_bar(self) -> None:
         """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
         self._file_menu = self.menuBar().addMenu("&File")
@@ -180,8 +227,6 @@ class PyEmsiMainWindow(QMainWindow):
         self._refresh_recent_folders_menu()
 
         self._file_menu.addSeparator()
-
-        self._file_menu.addAction(self._open_femap_converter_action)
 
         self._file_menu.addAction(self._open_field_plot_action)
 
@@ -638,6 +683,49 @@ class PyEmsiMainWindow(QMainWindow):
         if path is None or not path.is_file():
             return
         self._container.open_file(os.fspath(path))
+
+    def _open_url(self, url: str) -> None:
+        """Open *url* in the user's default external browser."""
+        QDesktopServices.openUrl(QUrl(url))
+
+    def _resolve_license_path(self) -> Path | None:
+        """Return the best available local LICENSE path for this install."""
+        repo_license = Path(__file__).resolve().parents[2] / "LICENSE"
+        if repo_license.is_file():
+            return repo_license
+
+        try:
+            distribution = metadata.distribution("pyemsi")
+        except metadata.PackageNotFoundError:
+            return None
+
+        for relative_path in (Path("LICENSE"), Path("licenses") / "LICENSE"):
+            candidate = Path(distribution.locate_file(relative_path))
+            if candidate.is_file():
+                return candidate
+
+        for package_path in distribution.files or ():
+            normalized = str(package_path).replace("\\", "/")
+            if normalized == "LICENSE" or normalized.endswith("/LICENSE"):
+                candidate = Path(distribution.locate_file(package_path))
+                if candidate.is_file():
+                    return candidate
+
+        return None
+
+    def _open_license(self) -> None:
+        """Open the bundled project license in a text editor tab."""
+        license_path = self._resolve_license_path()
+        if license_path is None:
+            QMessageBox.warning(self, "License Not Found", "Could not locate the LICENSE file.")
+            return
+        self._container.open_file(os.fspath(license_path), category="text")
+
+    def _show_about_dialog(self) -> None:
+        """Show application version and company information."""
+        import pyemsi
+
+        QMessageBox.about(self, "About pyemsi", f"pyemsi\nVersion: {pyemsi.__version__}\n\n{_ABOUT_TEXT}")
 
     def _on_file_activated(self, path: str) -> None:
         """Open *path* in a viewer tab, or focus the existing tab if already open."""

@@ -1,6 +1,7 @@
 import json
 import os
 
+import pyemsi
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QToolButton, QWidget
 
@@ -321,23 +322,138 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
     try:
         file_actions = window._file_menu.actions()
         action_texts = [action.text() for action in file_actions if not action.isSeparator()]
+        converters_actions = window._converters_menu.actions()
+        help_actions = window._help_menu.actions()
 
         assert file_actions[0].text() == "Open &Folder..."
         assert file_actions[1].text() == "Open &Recent"
         assert file_actions[2].isSeparator()
         assert "&Converters" not in action_texts
-        assert "Convert &FEMAP" in action_texts
+        assert "Convert &FEMAP" not in action_texts
         assert "&Field Plot" in action_texts
         assert "&Output Plot" in action_texts
         assert "&Settings" in action_texts
         assert "&Save" in action_texts
-        assert action_texts.index("Convert &FEMAP") < action_texts.index("&Save")
         assert action_texts.index("&Field Plot") < action_texts.index("&Save")
         assert action_texts.index("&Output Plot") < action_texts.index("&Save")
 
+        assert converters_actions[0] is window._open_femap_converter_action
+        assert converters_actions[1].isSeparator()
+        assert converters_actions[2] is window._open_atlas_to_femap_action
+        assert converters_actions[3] is window._open_unv_to_femap_action
+
+        assert help_actions[0] is window._open_documentation_action
+        assert help_actions[1] is window._open_releases_action
+        assert help_actions[2] is window._report_issue_action
+        assert help_actions[3].isSeparator()
+        assert help_actions[4] is window._open_license_action
+        assert help_actions[5].isSeparator()
+        assert help_actions[6] is window._open_about_action
+
         menu_titles = [action.text() for action in window.menuBar().actions()]
         assert "&Converters" in menu_titles
-        assert menu_titles[-1] == "&Converters"
+        assert "&Help" in menu_titles
+        assert menu_titles[-2] == "&Converters"
+        assert menu_titles[-1] == "&Help"
+    finally:
+        window.close()
+
+
+def test_main_window_help_actions_open_expected_urls(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    opened_urls = []
+    monkeypatch.setattr(
+        main_window_module.QDesktopServices,
+        "openUrl",
+        lambda url: opened_urls.append(url.toString()) or True,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._open_documentation_action.trigger()
+        window._open_releases_action.trigger()
+        window._report_issue_action.trigger()
+
+        assert opened_urls == [
+            "https://emsolution-ssil.github.io/pyemsi/",
+            "https://github.com/EMSolution-SSIL/pyemsi/releases",
+            "https://github.com/EMSolution-SSIL/pyemsi/issues",
+        ]
+    finally:
+        window.close()
+
+
+def test_main_window_help_license_action_opens_license_as_text(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    license_path = tmp_path / "LICENSE"
+    license_path.write_text("GPL", encoding="utf-8")
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        opened = []
+        monkeypatch.setattr(window, "_resolve_license_path", lambda: license_path)
+        window._container.open_file = lambda path, category=None: opened.append((path, category))
+
+        window._open_license_action.trigger()
+
+        assert opened == [(os.fspath(license_path), "text")]
+    finally:
+        window.close()
+
+
+def test_main_window_help_about_action_shows_version_and_company_info(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    about_calls = []
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "about",
+        lambda parent, title, text: about_calls.append((parent, title, text)),
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._open_about_action.trigger()
+
+        assert len(about_calls) == 1
+        parent, title, text = about_calls[0]
+        assert parent is window
+        assert title == "About pyemsi"
+        assert f"Version: {pyemsi.__version__}" in text
+        assert "Science Solutions International Lab, Inc. (SSIL)" in text
+        assert "Email: em_solution@ssil.co.jp" in text
+        assert "Copyright (c) 2026 SSIL All rights reserved." in text
     finally:
         window.close()
 
