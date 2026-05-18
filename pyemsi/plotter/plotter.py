@@ -703,7 +703,7 @@ class Plotter:
         for idx, block, block_name in self._iter_blocks():
             edges = block.extract_feature_edges(
                 feature_angle=feature_angle,
-                boundary_edges=False,
+                boundary_edges=True,
                 feature_edges=True,
                 manifold_edges=False,
                 non_manifold_edges=False,
