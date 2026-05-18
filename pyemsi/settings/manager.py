@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import json
 import os
 import tempfile
@@ -19,6 +20,10 @@ SCOPE_BOTH = "both"
 DEFAULT_SETTINGS: dict[str, Any] = {
     "app": {
         "recent_folders": [],
+        "updates": {
+            "check_automatically": True,
+            "last_check_utc": None,
+        },
     },
     "tools": {
         "atlas_to_femap": {
@@ -172,6 +177,22 @@ def _normalize_optional_base64(value: Any) -> str | None:
     return stripped or None
 
 
+def _normalize_optional_utc_timestamp(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("expected an ISO-8601 UTC timestamp or null")
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("expected a timezone-aware timestamp")
+    return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 @dataclass(frozen=True)
 class SettingDefinition:
     default: Any
@@ -181,6 +202,8 @@ class SettingDefinition:
 
 SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "app.recent_folders": SettingDefinition([], SCOPE_GLOBAL, _normalize_recent_folders),
+    "app.updates.check_automatically": SettingDefinition(True, SCOPE_GLOBAL, _normalize_bool),
+    "app.updates.last_check_utc": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_utc_timestamp),
     "tools.atlas_to_femap.current": SettingDefinition("current", SCOPE_BOTH, _normalize_optional_text),
     "tools.atlas_to_femap.current_output": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_text),
     "tools.atlas_to_femap.displacement": SettingDefinition("displacement", SCOPE_BOTH, _normalize_optional_text),
@@ -251,6 +274,7 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
 
 _CONTAINER_PATHS = {
     "app",
+    "app.updates",
     "tools",
     "tools.atlas_to_femap",
     "tools.emsolution_plot",

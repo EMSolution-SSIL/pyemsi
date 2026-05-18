@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QToolButton, Q
 from pyemsi.gui import main_window as main_window_module
 from pyemsi.gui.femap_converter_dialog import FemapConverterDialogConfig
 from pyemsi.gui.source_to_femap_dialog import SourceToFemapDialogConfig
+from pyemsi.gui.update_checker import UpdateInfo
 from pyemsi.settings import SettingsManager
 
 
@@ -82,6 +83,18 @@ class _DummyIPythonWidget(QWidget):
 
     def reset(self, clear=False) -> None:
         self.reset_calls.append(clear)
+
+
+class _DummyUpdateChecker:
+    def __init__(self, settings_manager, parent=None) -> None:
+        self.settings_manager = settings_manager
+        self.parent = parent
+        self.check_finished = _DummySignal()
+        self.calls = []
+
+    def check_for_updates(self, manual=False) -> bool:
+        self.calls.append(manual)
+        return True
 
 
 def _app():
@@ -343,12 +356,13 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         assert converters_actions[3] is window._open_unv_to_femap_action
 
         assert help_actions[0] is window._open_documentation_action
-        assert help_actions[1] is window._open_releases_action
-        assert help_actions[2] is window._report_issue_action
-        assert help_actions[3].isSeparator()
-        assert help_actions[4] is window._open_license_action
-        assert help_actions[5].isSeparator()
-        assert help_actions[6] is window._open_about_action
+        assert help_actions[1] is window._check_for_updates_action
+        assert help_actions[2] is window._open_releases_action
+        assert help_actions[3] is window._report_issue_action
+        assert help_actions[4].isSeparator()
+        assert help_actions[5] is window._open_license_action
+        assert help_actions[6].isSeparator()
+        assert help_actions[7] is window._open_about_action
 
         menu_titles = [action.text() for action in window.menuBar().actions()]
         assert "&Converters" in menu_titles
@@ -390,6 +404,176 @@ def test_main_window_help_actions_open_expected_urls(tmp_path, monkeypatch):
             "https://github.com/EMSolution-SSIL/pyemsi/releases",
             "https://github.com/EMSolution-SSIL/pyemsi/issues",
         ]
+    finally:
+        window.close()
+
+
+def test_main_window_schedules_startup_update_check_once(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    timer_calls = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(
+        main_window_module.QTimer,
+        "singleShot",
+        lambda interval, callback: timer_calls.append((interval, callback)),
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert len(timer_calls) == 1
+        assert timer_calls[0][0] == 0
+
+        timer_calls[0][1]()
+
+        assert window._update_checker.calls == [False]
+    finally:
+        window.close()
+
+
+def test_main_window_manual_update_action_uses_checker(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._check_for_updates_action.trigger()
+
+        assert window._update_checker.calls == [True]
+    finally:
+        window.close()
+
+
+def test_main_window_manual_update_check_shows_latest_message(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    info_calls = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "information",
+        lambda parent, title, text: info_calls.append((parent, title, text)),
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._update_checker.check_finished.emit(
+            UpdateInfo(available=False, current_version="0.3.0", latest_version="0.3.0"),
+            True,
+        )
+
+        assert info_calls == [(window, "No Updates Available", "You are using the latest version.")]
+    finally:
+        window.close()
+
+
+def test_main_window_manual_update_check_shows_error_message(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    warning_calls = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "warning",
+        lambda parent, title, text: warning_calls.append((parent, title, text)),
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._update_checker.check_finished.emit(
+            UpdateInfo(available=False, current_version="0.3.0", error="network failure"),
+            True,
+        )
+
+        assert warning_calls == [(window, "Update Check Failed", "Could not check for updates. Please try again later.")]
+    finally:
+        window.close()
+
+
+def test_main_window_update_available_path_opens_release_url(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    dialog_calls = []
+    opened_urls = []
+
+    class _AcceptedUpdateDialog:
+        DialogCode = QDialog.DialogCode
+
+        def __init__(self, update_info, parent=None) -> None:
+            dialog_calls.append((update_info, parent))
+
+        def exec(self) -> int:
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(main_window_module, "UpdateAvailableDialog", _AcceptedUpdateDialog)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(
+        main_window_module.QDesktopServices,
+        "openUrl",
+        lambda url: opened_urls.append(url.toString()) or True,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        info = UpdateInfo(
+            available=True,
+            current_version="0.3.0",
+            latest_version="0.3.1",
+            release_url="https://github.com/EMSolution-SSIL/pyemsi/releases/tag/0.3.1",
+        )
+        window._update_checker.check_finished.emit(info, True)
+
+        assert dialog_calls == [(info, window)]
+        assert opened_urls == ["https://github.com/EMSolution-SSIL/pyemsi/releases/tag/0.3.1"]
     finally:
         window.close()
 
@@ -931,19 +1115,11 @@ def test_main_window_global_settings_action_tracks_file_availability(tmp_path, m
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
     )
     try:
-        assert not window._open_global_settings_action.isEnabled()
-
-        window._open_global_settings_action.trigger()
-
-        assert opened_paths == []
-
-        global_settings_path.parent.mkdir(parents=True)
-        global_settings_path.write_text('{"schemaVersion": 1}\n', encoding="utf-8")
-
-        window._update_settings_actions()
-        window._open_global_settings_action.trigger()
-
         assert window._open_global_settings_action.isEnabled()
+        assert global_settings_path.is_file()
+
+        window._open_global_settings_action.trigger()
+
         assert opened_paths == [os.path.abspath(os.path.normpath(str(global_settings_path)))]
     finally:
         window.close()

@@ -107,6 +107,52 @@ def test_settings_manager_recent_folders_filters_missing_directories(tmp_path):
     assert manager.get_global("app.recent_folders") == [os.path.abspath(os.path.normpath(str(existing_folder)))]
 
 
+def test_settings_manager_exposes_update_defaults(tmp_path):
+    manager = SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
+
+    assert manager.get_effective("app.updates.check_automatically") is True
+    assert manager.get_effective("app.updates.last_check_utc") is None
+
+
+def test_settings_manager_persists_global_update_settings(tmp_path):
+    global_settings_path = tmp_path / "config" / "settings.json"
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.set_global("app.updates.check_automatically", False)
+    manager.set_global("app.updates.last_check_utc", "2026-05-18T09:30:45+09:00")
+    manager.save()
+
+    reloaded = SettingsManager(global_settings_path=global_settings_path)
+
+    assert reloaded.get_global("app.updates.check_automatically") is False
+    assert reloaded.get_global("app.updates.last_check_utc") == "2026-05-18T00:30:45Z"
+
+
+def test_settings_manager_ignores_invalid_update_settings(tmp_path):
+    global_settings_path = tmp_path / "config" / "settings.json"
+    global_settings_path.parent.mkdir(parents=True)
+    global_settings_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "app": {
+                    "updates": {
+                        "check_automatically": "yes",
+                        "last_check_utc": "not-a-timestamp",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+
+    assert manager.get_effective("app.updates.check_automatically") is True
+    assert manager.get_effective("app.updates.last_check_utc") is None
+    assert any("ignored invalid value for app.updates.check_automatically" in warning for warning in manager.warnings)
+    assert any("ignored invalid value for app.updates.last_check_utc" in warning for warning in manager.warnings)
+
+
 def test_settings_manager_drops_removed_legacy_settings_on_load_and_save(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

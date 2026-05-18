@@ -13,7 +13,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSize, Qt, QUrl
+from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QToolBar, QToolButton
 
@@ -26,6 +26,8 @@ from pyemsi.gui.femap_converter_dialog import (
 )
 from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
 from pyemsi.gui.source_to_femap_dialog import SourceToFemapDialog, SourceToFemapDialogConfig
+from pyemsi.gui.update_checker import UpdateChecker, UpdateInfo
+from pyemsi.gui.update_dialog import UpdateAvailableDialog
 from pyemsi.settings import SettingsManager
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
@@ -79,6 +81,9 @@ class PyEmsiMainWindow(QMainWindow):
         self._active_external_terminals: dict = {}
         self._temp_converter_configs: set[str] = set()
         self._field_plot_dialog: FieldPlotBuilderDialog | None = None
+        self._update_checker = UpdateChecker(self._settings, parent=self)
+        self._update_checker.check_finished.connect(self._on_update_check_finished)
+        self._update_settings_actions()
 
         self._setup_ipython_terminal()
 
@@ -96,6 +101,7 @@ class PyEmsiMainWindow(QMainWindow):
         self.menuBar().addMenu(self._help_menu)
         self._apply_window_settings()
         self._refresh_recent_folders_menu()
+        self._schedule_startup_update_check()
 
     @property
     def container(self) -> SplitContainer:
@@ -197,6 +203,10 @@ class PyEmsiMainWindow(QMainWindow):
         self._open_documentation_action = QAction("&Documentation", self)
         self._open_documentation_action.triggered.connect(lambda: self._open_url(_DOCUMENTATION_URL))
         self._help_menu.addAction(self._open_documentation_action)
+
+        self._check_for_updates_action = QAction("Check for &Updates", self)
+        self._check_for_updates_action.triggered.connect(self._check_for_updates_manually)
+        self._help_menu.addAction(self._check_for_updates_action)
 
         self._open_releases_action = QAction("Latest &Releases", self)
         self._open_releases_action.triggered.connect(lambda: self._open_url(_RELEASES_URL))
@@ -687,6 +697,43 @@ class PyEmsiMainWindow(QMainWindow):
     def _open_url(self, url: str) -> None:
         """Open *url* in the user's default external browser."""
         QDesktopServices.openUrl(QUrl(url))
+
+    def _schedule_startup_update_check(self) -> None:
+        """Queue the automatic update check after the event loop starts."""
+        QTimer.singleShot(0, self._start_automatic_update_check)
+
+    def _start_automatic_update_check(self) -> None:
+        """Run the background update check if global policy says it is due."""
+        self._update_checker.check_for_updates(manual=False)
+
+    def _check_for_updates_manually(self) -> None:
+        """Run a user-requested update check immediately."""
+        self._update_checker.check_for_updates(manual=True)
+
+    def _on_update_check_finished(self, info: UpdateInfo, manual: bool) -> None:
+        """Handle automatic and manual update-check results."""
+        if info.available:
+            self._show_update_dialog(info)
+            return
+
+        if not manual:
+            return
+
+        if info.error:
+            QMessageBox.warning(self, "Update Check Failed", "Could not check for updates. Please try again later.")
+            return
+
+        QMessageBox.information(self, "No Updates Available", "You are using the latest version.")
+
+    def _show_update_dialog(self, info: UpdateInfo) -> None:
+        """Show the update-available dialog and open the release page on acceptance."""
+        dialog = UpdateAvailableDialog(info, parent=self)
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            self._open_release_url(info.release_url)
+
+    def _open_release_url(self, url: str | None) -> None:
+        """Open the specific release page, or fall back to the releases index."""
+        self._open_url(url or _RELEASES_URL)
 
     def _resolve_license_path(self) -> Path | None:
         """Return the best available local LICENSE path for this install."""
