@@ -36,6 +36,7 @@ dependencies = [
     "basedpyright>=1.31.4",
     "scienceplots",
     "gmsh",
+    "ems-file-format-converter",
 ]
 
 [project.optional-dependencies]
