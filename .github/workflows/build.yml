@@ -8,40 +8,10 @@ on:
         required: false
         default: false
         type: boolean
-      release_version:
-        description: "Optional version override (x.y.z). Required when publishing."
-        required: false
-        type: string
 
 jobs:
-  validate_release:
-    name: Validate release inputs
-    runs-on: ubuntu-latest
-    outputs:
-      release_version: ${{ steps.validate.outputs.release_version }}
-    steps:
-      - name: Validate version input
-        id: validate
-        shell: bash
-        run: |
-          version="${{ inputs.release_version }}"
-          publish="${{ inputs.publish_to_pypi }}"
-
-          if [[ "$publish" == "true" && -z "$version" ]]; then
-            echo "release_version is required when publish_to_pypi=true" >&2
-            exit 1
-          fi
-
-          if [[ -n "$version" && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "release_version must match x.y.z (for example 1.2.3)." >&2
-            exit 1
-          fi
-
-          echo "release_version=$version" >> "$GITHUB_OUTPUT"
-
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
-    needs: validate_release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -55,22 +25,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Apply version override
-        if: ${{ needs.validate_release.outputs.release_version != '' }}
-        shell: pwsh
-        run: |
-          $path = "pyemsi/__init__.py"
-          $version = "${{ needs.validate_release.outputs.release_version }}"
-          $content = Get-Content -Raw -Path $path
-          $updated = $content -replace '__version__\s*=\s*"[^"]+"', "__version__ = `"$version`""
-
-          if ($updated -eq $content) {
-            throw "Could not find __version__ assignment in $path"
-          }
-
-          Set-Content -Path $path -Value $updated
-          Write-Host "Using package version $version"
 
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==2.21.3
@@ -86,7 +40,6 @@ jobs:
 
   build_sdist:
     name: Build source distribution
-    needs: validate_release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,22 +48,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Apply version override
-        if: ${{ needs.validate_release.outputs.release_version != '' }}
-        shell: pwsh
-        run: |
-          $path = "pyemsi/__init__.py"
-          $version = "${{ needs.validate_release.outputs.release_version }}"
-          $content = Get-Content -Raw -Path $path
-          $updated = $content -replace '__version__\s*=\s*"[^"]+"', "__version__ = `"$version`""
-
-          if ($updated -eq $content) {
-            throw "Could not find __version__ assignment in $path"
-          }
-
-          Set-Content -Path $path -Value $updated
-          Write-Host "Using package version $version"
 
       - name: Install build dependencies
         run: python -m pip install build cython numpy
@@ -143,7 +80,7 @@ jobs:
 
   publish_pypi:
     name: Publish to PyPI
-    needs: [validate_release, merge_artifacts]
+    needs: [merge_artifacts]
     if: ${{ inputs.publish_to_pypi }}
     runs-on: ubuntu-latest
     environment:
