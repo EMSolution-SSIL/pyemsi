@@ -94,13 +94,20 @@ jobs:
       - name: Install NSIS
         shell: pwsh
         run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+          $makensis = Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
             choco install nsis -y --no-progress
           }
-          makensis /VERSION
+          if (-not (Test-Path $makensis)) {
+            throw "makensis.exe not found at expected path: $makensis"
+          }
+          "MAKENSIS_EXE=$makensis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $makensis /VERSION
 
       - name: Build NSIS installer
-        run: makensis /DAPP_VERSION=${{ needs.build_windows_portable.outputs.package_version }} installer\pyemsi.nsi
+        shell: pwsh
+        run: |
+          & "$env:MAKENSIS_EXE" "/DAPP_VERSION=${{ needs.build_windows_portable.outputs.package_version }}" "installer\pyemsi.nsi"
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
