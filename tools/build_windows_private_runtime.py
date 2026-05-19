@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -46,8 +47,9 @@ LAUNCHER_ICO = Path(__file__).resolve().parents[1] / "pyemsi" / "resources" / "i
 
 def _render_rc(*, version_str: str, ico_path: Path | None) -> str:
     """Generate a Win32 .rc resource script with VERSIONINFO and icon."""
-    parts = (version_str + ".0.0.0").split(".")[:4]
-    ver_csv = ",".join(parts[:4])
+    numeric_parts = re.findall(r"\d+", version_str)
+    parts = (numeric_parts + ["0", "0", "0", "0"])[:4]
+    ver_csv = ",".join(parts)
     lines = [
         "#include <winver.h>",
         "",
@@ -103,6 +105,7 @@ class BuildLayout:
 @dataclass(frozen=True)
 class BuildConfig:
     app_name: str
+    app_version: str
     python_version: str
     python_tag: str
     app_module: str
@@ -145,6 +148,15 @@ def build_layout(repo_root: Path, *, dist_name: str = DEFAULT_DIST_NAME) -> Buil
 def load_pyproject(pyproject_path: Path) -> dict[str, Any]:
     with pyproject_path.open("rb") as handle:
         return tomllib.load(handle)
+
+
+def load_package_version(repo_root: Path) -> str:
+    init_path = repo_root / "pyemsi" / "__init__.py"
+    init_text = init_path.read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', init_text, re.MULTILINE)
+    if match is None:
+        raise RuntimeError(f"Could not find __version__ in {init_path}")
+    return match.group(1).strip()
 
 
 def _get_nested(data: Mapping[str, Any], *keys: str) -> Any:
@@ -203,6 +215,7 @@ def load_build_config(
     python_tag = "".join(python_version.split(".")[:2])
     return BuildConfig(
         app_name=app_name,
+        app_version=load_package_version(repo_root),
         python_version=python_version,
         python_tag=python_tag,
         app_module=app_module,
@@ -421,7 +434,7 @@ def compile_native_launchers(config: BuildConfig) -> bool:
         print(f"Launcher C source not found: {LAUNCHER_C_SOURCE}", file=sys.stderr)
         return False
 
-    version_str = "0.3.0"
+    version_str = config.app_version
     rc_path = config.layout.dist_dir / "launcher.rc"
     rc_path.write_text(
         _render_rc(version_str=version_str, ico_path=LAUNCHER_ICO),
@@ -522,6 +535,7 @@ def main() -> int:
         dist_name=args.dist_name,
         app_module=args.app_module,
     )
+    print(f"Using app version: {config.app_version}")
     build_private_runtime(
         config,
         install_dependencies_flag=not args.skip_dependency_install,

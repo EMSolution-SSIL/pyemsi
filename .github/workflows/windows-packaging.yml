@@ -1,0 +1,109 @@
+name: Windows Packaging
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_installer:
+        description: "Build NSIS installer from portable runtime"
+        required: false
+        default: true
+        type: boolean
+      skip_dependency_install:
+        description: "Skip installing runtime dependencies in portable build"
+        required: false
+        default: false
+        type: boolean
+      skip_smoke_test:
+        description: "Skip portable runtime smoke test"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build_windows_portable:
+    name: Build Windows portable runtime
+    runs-on: windows-latest
+    outputs:
+      package_version: ${{ steps.version.outputs.package_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Read package version
+        id: version
+        shell: python
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          text = Path("pyemsi/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
+          if match is None:
+              raise RuntimeError("Could not determine package version from pyemsi/__init__.py")
+
+          version = match.group(1).strip()
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"package_version={version}\n")
+          print(f"package_version={version}")
+
+      - name: Install build prerequisites
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cython numpy
+
+      - name: Build extension in place
+        run: python setup.py build_ext --inplace
+
+      - name: Build portable runtime
+        shell: pwsh
+        run: |
+          $args = @(".\tools\build_windows_private_runtime.py")
+          if ("${{ inputs.skip_dependency_install }}" -eq "true") {
+            $args += "--skip-dependency-install"
+          }
+          if ("${{ inputs.skip_smoke_test }}" -eq "true") {
+            $args += "--skip-smoke-test"
+          }
+          python @args
+
+      - name: Upload portable runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable-${{ steps.version.outputs.package_version }}
+          path: dist/pyemsi/
+
+  build_windows_installer:
+    name: Build Windows NSIS installer
+    needs: build_windows_portable
+    if: ${{ inputs.build_installer }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download portable runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-portable-${{ needs.build_windows_portable.outputs.package_version }}
+          path: dist/pyemsi/
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          makensis /VERSION
+
+      - name: Build NSIS installer
+        run: makensis /DAPP_VERSION=${{ needs.build_windows_portable.outputs.package_version }} installer\pyemsi.nsi
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ needs.build_windows_portable.outputs.package_version }}
+          path: dist/pyemsi-*-setup.exe

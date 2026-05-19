@@ -103,7 +103,7 @@ After upload, verify the release on PyPI by opening the project page and confirm
 
 ## Build The Windows Portable GUI Runtime
 
-The portable Windows builder lives at [tools/build_windows_private_runtime.py](./tools/build_windows_private_runtime.py). It assembles an embeddable Python runtime under `dist/pyemsi-windows-portable/`, stages the local `pyemsi` source tree into `app/`, installs GUI dependencies into `runtime/`, and generates native `.exe` launchers (or `.bat` fallbacks when MSVC is not available).
+The portable Windows builder lives at [tools/build_windows_private_runtime.py](./tools/build_windows_private_runtime.py). It assembles an embeddable Python runtime under `dist/pyemsi/`, stages the local `pyemsi` source tree into `app/`, installs GUI dependencies into `runtime/`, and generates native `.exe` launchers (or `.bat` fallbacks when MSVC is not available).
 
 1. Rebuild the compiled extension in place before packaging:
 
@@ -126,9 +126,9 @@ Optional flags:
 Output:
 
 - The embeddable Python cache is stored under `build/windows-private-runtime/cache/`.
-- The portable app is written to `dist/pyemsi-windows-portable/`.
-- The main launcher is `dist/pyemsi-windows-portable/run_pyemsi.exe` (uses `pythonw.exe`, no console window).
-- The helper script launcher is `dist/pyemsi-windows-portable/run_script.exe`.
+- The portable app is written to `dist/pyemsi/`.
+- The main launcher is `dist/pyemsi/pyemsi.exe` (GUI mode, no console window).
+- The helper script launcher is `dist/pyemsi/run_script.exe`.
 - If MSVC is not found, `.bat` launchers are generated instead.
 
 ## Windows Packaging Notes
@@ -148,10 +148,18 @@ Prerequisites:
 - [NSIS 3.x](https://nsis.sourceforge.io/) installed and `makensis` on `PATH`.
 - A completed portable runtime build under `dist/pyemsi/` (see above).
 
-From the repository root:
+From the repository root (`cmd.exe`):
 
-```bash
-makensis installer\pyemsi.nsi
+```cmd
+for /f %%v in ('python -c "import pathlib,re; print(re.search(r'^__version__\\s*=\\s*\"([^\"]+)\"', pathlib.Path(r'pyemsi/__init__.py').read_text(encoding='utf-8'), re.M).group(1))"') do set APPVER=%%v
+makensis /DAPP_VERSION=%APPVER% installer\pyemsi.nsi
+```
+
+PowerShell equivalent:
+
+```powershell
+$version = (Select-String -Path pyemsi\__init__.py -Pattern '^__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+makensis /DAPP_VERSION=$version installer\pyemsi.nsi
 ```
 
 Output:
