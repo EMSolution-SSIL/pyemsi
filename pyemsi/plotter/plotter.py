@@ -8,7 +8,7 @@ with Qt interactivity using pyvistaqt.QtInteractor and PySide6 backend.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -402,6 +402,26 @@ class Plotter:
             return None
 
         return float(np.min(finite_values)), float(np.max(finite_values))
+
+    def _compose_add_mesh_kwargs(
+        self,
+        user_kwargs: Mapping[str, object] | None,
+        internal_kwargs: Mapping[str, object] | None = None,
+        scalar_bar_defaults: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        """Merge add_mesh kwargs while keeping internal rendering keys authoritative."""
+        merged = {k: v for k, v in (user_kwargs or {}).items() if v is not None}
+        internal = {k: v for k, v in (internal_kwargs or {}).items() if v is not None}
+
+        if scalar_bar_defaults is not None or "scalar_bar_args" in merged:
+            merged_scalar_bar_args = {
+                **dict(scalar_bar_defaults or {}),
+                **dict(merged.get("scalar_bar_args") or {}),
+            }
+            merged["scalar_bar_args"] = merged_scalar_bar_args
+
+        merged.update(internal)
+        return merged
 
     def _infer_scalar_bar_source(self, scalar_bar_name: str) -> dict[str, str] | None:
         """Infer a scalar-bar source when it was not explicitly registered."""
@@ -797,17 +817,22 @@ class Plotter:
             if name not in block.array_names:
                 continue
             actor_name = f"scalar_field_block_{block_name}" if block_name else "scalar_field"
-            mesh_kwargs = {k: v for k, v in self._scalar_props.items() if k not in ["name", "mode"]}
+            user_kwargs = {k: v for k, v in self._scalar_props.items() if k not in ["name", "mode"]}
             if existing_clim is not None:
-                mesh_kwargs["clim"] = existing_clim
+                user_kwargs["clim"] = existing_clim
+            mesh_kwargs = self._compose_add_mesh_kwargs(
+                user_kwargs=user_kwargs,
+                internal_kwargs={
+                    "scalars": name,
+                    "preference": "cell" if mode == "element" else "point",
+                    "name": actor_name,
+                    "pickable": True,
+                    "reset_camera": False,
+                },
+                scalar_bar_defaults={"fill": True, "background_color": "white", "vertical": True},
+            )
             actor = self.plotter.add_mesh(
                 block,
-                scalars=name,
-                preference="cell" if mode == "element" else "point",
-                name=actor_name,
-                pickable=True,
-                reset_camera=False,
-                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True},
                 **mesh_kwargs,
             )
             # Apply visibility from stored state
@@ -911,14 +936,19 @@ class Plotter:
             if contours.n_points == 0:
                 continue
             actor_name = f"contour_block_{block_name}" if block_name else "contour"
+            mesh_kwargs = self._compose_add_mesh_kwargs(
+                user_kwargs=contour_kwargs,
+                internal_kwargs={
+                    "name": actor_name,
+                    "color": color,
+                    "line_width": line_width,
+                    "reset_camera": False,
+                },
+                scalar_bar_defaults={"fill": True, "background_color": "white", "vertical": True},
+            )
             actor = self.plotter.add_mesh(
                 contours,
-                name=actor_name,
-                color=color,
-                line_width=line_width,
-                reset_camera=False,
-                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True},
-                **contour_kwargs,
+                **mesh_kwargs,
             )
             # Apply visibility from stored state
             if block_name:
@@ -1050,7 +1080,7 @@ class Plotter:
 
         # Preserve existing vector actor scalar range across re-renders.
         # On first render no actors exist, so clim stays absent (auto-compute).
-        if "color" not in vector_kwargs:
+        if "color" not in vector_kwargs and "clim" not in vector_kwargs:
             for actor_key in list(self.plotter.renderer.actors.keys()):
                 if actor_key.startswith("vector_field"):
                     try:
@@ -1100,12 +1130,17 @@ class Plotter:
                 continue
 
             actor_name = f"vector_field_block_{block_name}" if block_name else "vector_field"
+            mesh_kwargs = self._compose_add_mesh_kwargs(
+                user_kwargs=vector_kwargs,
+                internal_kwargs={
+                    "name": actor_name,
+                    "reset_camera": False,
+                },
+                scalar_bar_defaults={"fill": True, "background_color": "white", "vertical": True, "title": name},
+            )
             actor = self.plotter.add_mesh(
                 glyphs,
-                name=actor_name,
-                reset_camera=False,
-                scalar_bar_args={"fill": True, "background_color": "white", "vertical": True, "title": name},
-                **vector_kwargs,
+                **mesh_kwargs,
             )
             # Apply visibility from stored state
             if block_name:
