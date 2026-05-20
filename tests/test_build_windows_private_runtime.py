@@ -35,6 +35,10 @@ def test_unique_strings_skips_non_strings_and_blanks():
 
 def test_load_build_config_uses_runtime_tool_app_module(tmp_path):
     pyproject_path = tmp_path / "pyproject.toml"
+    package_dir = tmp_path / "pyemsi"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text('__version__ = "9.8.7"\n', encoding="utf-8")
+
     pyproject_path.write_text(
         """
 [project]
@@ -52,6 +56,7 @@ extra_dependencies = ["pywinpty"]
     config = builder.load_build_config(tmp_path, pyproject_path=pyproject_path)
 
     assert config.app_module == "pyemsi.gui"
+    assert config.app_version == "9.8.7"
     assert config.dependencies == ("numpy>=1.21.0", "pywinpty")
 
 

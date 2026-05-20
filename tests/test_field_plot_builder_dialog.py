@@ -38,6 +38,7 @@ def test_field_plot_builder_dialog_defaults_to_disabled_stages(tmp_path):
     assert not dialog._scalar_enabled_checkbox.isChecked()
     assert not dialog._contour_enabled_checkbox.isChecked()
     assert not dialog._vector_enabled_checkbox.isChecked()
+    assert dialog._feature_edges_enabled_checkbox.isChecked()
     assert dialog._scalar_name_combo.count() == 0
     assert dialog._contour_name_combo.count() == 0
     assert dialog._vector_name_combo.count() == 0
@@ -58,10 +59,11 @@ def test_field_plot_builder_dialog_defaults_to_collapsed_compact_sections(tmp_pa
     assert not dialog._scalar_panel.is_expanded()
     assert not dialog._contour_panel.is_expanded()
     assert not dialog._vector_panel.is_expanded()
-    assert not dialog._feature_edges_panel.is_expanded()
+    assert dialog._feature_edges_panel.is_expanded()
     assert dialog._scalar_panel.summary_text() == "Disabled"
     assert dialog._contour_panel.summary_text() == "Disabled"
     assert dialog._vector_panel.summary_text() == "Disabled"
+    assert dialog._feature_edges_panel.summary_text() == "white | 1 px | 1.00 | loops>=10 | angle 30.0"
 
 
 def test_field_plot_builder_dialog_enabling_stage_expands_section_and_updates_summary(tmp_path):
@@ -78,6 +80,7 @@ def test_field_plot_builder_dialog_enabling_stage_expands_section_and_updates_su
             "Select array",
             str(dialog._scalar_mode_combo.currentData()),
             dialog._scalar_cmap_combo.currentText(),
+            "edges white @ 0.25",
         )
     )
 
@@ -688,7 +691,14 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
     assert calls[3][1]["name"] == "Point Vector"
     assert calls[3][1]["factor"] == 1e-30
     assert calls[4][0] == "set_feature_edges"
-    assert calls[4][1] == {"color": "white", "line_width": 1, "opacity": 1.0}
+    assert calls[4][1] == {
+        "color": "white",
+        "line_width": 1,
+        "opacity": 1.0,
+        "remove_small_loops": True,
+        "max_loop_edges": 10,
+        "feature_angle": 30.0,
+    }
     assert added["title"] == "Field Plot"
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert manager.get_local("tools.field_plot.filepath") == os.path.abspath(os.path.normpath(os.fspath(plot_path)))

@@ -1,8 +1,23 @@
 """Tests for clim preservation across re-renders (time step changes)."""
 
+import sys
+import types
+
 import numpy as np
 import pyvista as pv
 import pytest
+
+# Test bootstrap: allow importing pyemsi on interpreters without the compiled
+# femap_parser extension available.
+if "pyemsi.core.femap_parser" not in sys.modules:
+    _stub = types.ModuleType("pyemsi.core.femap_parser")
+
+    class _DummyFemapType:  # pragma: no cover - bootstrap only
+        pass
+
+    _stub.FEMAPParser = _DummyFemapType
+    _stub.FEMAPBlock = _DummyFemapType
+    sys.modules["pyemsi.core.femap_parser"] = _stub
 
 from pyemsi.plotter.plotter import Plotter
 
@@ -59,6 +74,13 @@ def _scalar_bar_range(plotter, name):
     """Read the scalar bar lookup-table range for *name*."""
     bar = plotter.plotter.scalar_bars[name]
     return tuple(round(v, 6) for v in bar.GetLookupTable().GetRange())
+
+
+def _has_scalar_bar_title(plotter, title):
+    """Return True when a scalar bar with *title* is present."""
+    if title in plotter.plotter.scalar_bars:
+        return True
+    return any(bar.GetTitle() == title for bar in plotter.plotter.scalar_bars.values())
 
 
 # ---------------------------------------------------------------------------
@@ -243,4 +265,132 @@ def test_vector_field_preserves_clim_on_rerender():
     actor2 = p.plotter.renderer.actors.get("vector_field")
     second_range = tuple(actor2.mapper.scalar_range)
     assert second_range == pytest.approx(first_range, abs=0.01)
+    p.plotter.close()
+
+
+def test_compose_add_mesh_kwargs_merges_scalar_bar_args_and_locks_internal_keys():
+    """Merge helper should combine nested scalar_bar_args and keep internal keys authoritative."""
+    p = _make_plotter_with_offscreen()
+    merged = p._compose_add_mesh_kwargs(
+        user_kwargs={
+            "opacity": 0.5,
+            "pickable": False,
+            "clim": None,
+            "scalar_bar_args": {"title": "B (mT)"},
+        },
+        internal_kwargs={"pickable": True, "reset_camera": False},
+        scalar_bar_defaults={"fill": True, "background_color": "white", "vertical": True},
+    )
+
+    assert merged["opacity"] == pytest.approx(0.5)
+    assert merged["pickable"] is True
+    assert merged["reset_camera"] is False
+    assert "clim" not in merged
+    assert merged["scalar_bar_args"] == {
+        "fill": True,
+        "background_color": "white",
+        "vertical": True,
+        "title": "B (mT)",
+    }
+    p.plotter.close()
+
+
+def test_scalar_field_accepts_scalar_bar_args_without_duplicate_kwarg_error():
+    """User scalar_bar_args should merge with defaults instead of colliding."""
+    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+    mesh["foo"] = np.linspace(10.0, 20.0, mesh.n_points)
+
+    p = _make_plotter_with_offscreen()
+    p._mesh = mesh
+    p._scalar_props = {
+        "name": "foo",
+        "mode": "node",
+        "show_edges": False,
+        "pickable": False,
+        "scalar_bar_args": {"title": "B (mT)"},
+    }
+
+    p._plot_scalar_field()
+
+    actor = p.plotter.renderer.actors["scalar_field"]
+    assert actor.GetPickable() == 1  # Internal pickable=True stays locked.
+    assert _has_scalar_bar_title(p, "B (mT)")
+    p.plotter.close()
+
+
+def test_contour_accepts_scalar_bar_args_without_duplicate_kwarg_error():
+    """Contour rendering should not fail when user passes scalar_bar_args/reset_camera kwargs."""
+    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+    mesh["foo"] = np.linspace(0.0, 1.0, mesh.n_points)
+
+    p = _make_plotter_with_offscreen()
+    p._mesh = mesh
+    p._contour_props = {
+        "name": "foo",
+        "n_contours": 5,
+        "color": None,
+        "line_width": 2,
+        "reset_camera": True,
+        "scalar_bar_args": {"title": "Contour Foo"},
+    }
+
+    p._plot_contours()
+
+    assert "contour" in p.plotter.renderer.actors
+    assert _has_scalar_bar_title(p, "Contour Foo")
+    p.plotter.close()
+
+
+def test_vector_accepts_scalar_bar_args_without_duplicate_kwarg_error():
+    """Vector rendering should not fail when user passes scalar_bar_args/reset_camera kwargs."""
+    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+    vecs = np.column_stack([np.linspace(0, 1, mesh.n_points), np.zeros(mesh.n_points), np.zeros(mesh.n_points)])
+    mesh["vec"] = vecs
+
+    p = _make_plotter_with_offscreen()
+    p._mesh = mesh
+    p._vector_props = {
+        "name": "vec",
+        "scale": "vec",
+        "glyph_type": "arrow",
+        "factor": 1.0,
+        "tolerance": 0.1,
+        "color_mode": "scale",
+        "reset_camera": True,
+        "scalar_bar_args": {"title": "Vec title"},
+    }
+
+    p._plot_vector_field()
+
+    assert "vector_field" in p.plotter.renderer.actors
+    assert _has_scalar_bar_title(p, "Vec title")
+    p.plotter.close()
+
+
+def test_vector_user_clim_is_not_overwritten_by_auto_preserved_clim():
+    """When user provides clim, auto-clim preservation should not overwrite it."""
+    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+    vecs = np.column_stack([np.linspace(0, 1, mesh.n_points), np.zeros(mesh.n_points), np.zeros(mesh.n_points)])
+    mesh["vec"] = vecs
+
+    p = _make_plotter_with_offscreen()
+    p._mesh = mesh
+
+    glyphs = mesh.glyph(orient="vec", scale="vec", factor=1.0, geom=pv.Arrow(), tolerance=0.1)
+    p.plotter.add_mesh(glyphs, name="vector_field", reset_camera=False, clim=[100.0, 200.0])
+
+    p._vector_props = {
+        "name": "vec",
+        "scale": "vec",
+        "glyph_type": "arrow",
+        "factor": 1.0,
+        "tolerance": 0.1,
+        "color_mode": "scale",
+        "clim": [3.0, 4.0],
+    }
+
+    p._plot_vector_field()
+
+    actor = p.plotter.renderer.actors["vector_field"]
+    assert tuple(actor.mapper.scalar_range) == pytest.approx((3.0, 4.0), abs=0.01)
     p.plotter.close()

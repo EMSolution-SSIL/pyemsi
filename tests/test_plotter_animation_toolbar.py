@@ -1,4 +1,19 @@
+import sys
+import types
+
 from PySide6.QtWidgets import QApplication, QWidget
+
+# Test bootstrap: allow importing pyemsi on interpreters without the compiled
+# femap_parser extension available.
+if "pyemsi.core.femap_parser" not in sys.modules:
+    _stub = types.ModuleType("pyemsi.core.femap_parser")
+
+    class _DummyFemapType:  # pragma: no cover - bootstrap only
+        pass
+
+    _stub.FEMAPParser = _DummyFemapType
+    _stub.FEMAPBlock = _DummyFemapType
+    sys.modules["pyemsi.core.femap_parser"] = _stub
 
 from pyemsi.plotter import qt_window as qt_window_module
 
@@ -68,7 +83,9 @@ class _FakeParentPlotter:
 
 def _make_window(monkeypatch, number_time_points=3, active_time_point=0):
     _app()
-    monkeypatch.setattr(qt_window_module, "QtInteractor", _FakeQtInteractor)
+    fake_pyvistaqt = types.ModuleType("pyvistaqt")
+    fake_pyvistaqt.QtInteractor = _FakeQtInteractor
+    monkeypatch.setitem(sys.modules, "pyvistaqt", fake_pyvistaqt)
     parent_plotter = _FakeParentPlotter(
         number_time_points=number_time_points,
         active_time_point=active_time_point,

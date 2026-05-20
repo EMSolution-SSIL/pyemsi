@@ -100,8 +100,10 @@ class _FakeEdgeBlock:
     def __init__(self, edge_poly: pv.PolyData) -> None:
         self._edge_poly = edge_poly
         self.n_points = 4
+        self.last_extract_kwargs: dict[str, object] | None = None
 
-    def extract_feature_edges(self) -> pv.PolyData:
+    def extract_feature_edges(self, **kwargs) -> pv.PolyData:
+        self.last_extract_kwargs = kwargs
         return self._edge_poly
 
 
@@ -144,5 +146,12 @@ def test_plot_feature_edges_invalid_line_cells_warns_and_falls_back() -> None:
     with pytest.warns(UserWarning, match="small-loop removal skipped"):
         p._plot_feature_edges()
 
+    assert mesh.last_extract_kwargs == {
+        "feature_angle": 30.0,
+        "boundary_edges": True,
+        "feature_edges": True,
+        "manifold_edges": False,
+        "non_manifold_edges": False,
+    }
     assert "feature_edges" in p.plotter.renderer.actors
     p.plotter.close()
