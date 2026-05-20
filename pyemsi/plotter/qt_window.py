@@ -7,6 +7,8 @@ management for interactive 3D visualization using pyvistaqt.QtInteractor.
 
 from __future__ import annotations
 
+import os
+import re
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -20,7 +22,16 @@ if TYPE_CHECKING:
 import numpy as np
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPixmap
-from PySide6.QtWidgets import QApplication, QComboBox, QFrame, QMainWindow, QMessageBox, QToolBar, QVBoxLayout
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QMainWindow,
+    QMessageBox,
+    QToolBar,
+    QVBoxLayout,
+)
 
 import pyemsi.resources.resources  # noqa: F401
 
@@ -74,6 +85,7 @@ class QtPlotterWindow:
     _camera_toolbar: "QToolBar"
     _display_toolbar: "QToolBar"
     _screenshot_action: QAction | None
+    _save_screenshot_action: QAction | None
     _query_toolbar: "QToolBar"
     _animation_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
@@ -440,6 +452,11 @@ class QtPlotterWindow:
         self._screenshot_action.triggered.connect(self._copy_screenshot_to_clipboard)
         self._display_toolbar.addAction(self._screenshot_action)
 
+        self._save_screenshot_action = QAction(QIcon(":/icons/Save.svg"), "Save Screenshot", self._window)
+        self._save_screenshot_action.setToolTip("Save the current rendered viewport to a PNG file")
+        self._save_screenshot_action.triggered.connect(self._save_screenshot_to_file)
+        self._display_toolbar.addAction(self._save_screenshot_action)
+
         self._display_toolbar.addSeparator()
 
         # Axes toggle action
@@ -512,6 +529,38 @@ class QtPlotterWindow:
         self._window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._display_toolbar)
 
     def _copy_screenshot_to_clipboard(self) -> None:
+        pixmap = self._capture_screenshot_pixmap()
+        if pixmap is None:
+            return
+        self.app.clipboard().setPixmap(pixmap)
+
+    def _save_screenshot_to_file(self) -> None:
+        pixmap = self._capture_screenshot_pixmap()
+        if pixmap is None:
+            return
+
+        default_path = self._default_screenshot_save_path()
+        selected_path = self._prompt_screenshot_save_path(default_path)
+        if not selected_path:
+            return
+
+        output_path = selected_path
+        if os.path.splitext(output_path)[1] == "":
+            output_path = f"{output_path}.png"
+
+        if not pixmap.save(output_path):
+            QMessageBox.critical(self._window, "Screenshot Error", "Could not save screenshot to file.")
+
+    def _prompt_screenshot_save_path(self, default_path: str) -> str | None:
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self._window,
+            "Save Screenshot",
+            default_path,
+            "PNG Files (*.png)",
+        )
+        return selected_path or None
+
+    def _capture_screenshot_pixmap(self) -> QPixmap | None:
         if not self.plotter.isVisible() or self.plotter.width() <= 0 or self.plotter.height() <= 0:
             QMessageBox.critical(self._window, "Screenshot Error", "The rendered viewport is not ready to capture.")
             return
@@ -523,7 +572,64 @@ class QtPlotterWindow:
             QMessageBox.critical(self._window, "Screenshot Error", "Could not capture the current rendered viewport.")
             return
 
-        self.app.clipboard().setPixmap(pixmap)
+        return pixmap
+
+    def _main_window(self):
+        window = self._window
+        while window is not None:
+            if hasattr(window, "explorer"):
+                return window
+            window = window.parentWidget()
+
+        try:
+            import pyemsi.gui as gui
+        except Exception:
+            return None
+        return getattr(gui, "_window", None)
+
+    def _default_screenshot_save_path(self) -> str:
+        window = self._main_window()
+        explorer = getattr(window, "explorer", None)
+        current_path = getattr(explorer, "current_path", None)
+        filename = self._default_screenshot_filename()
+        if current_path and os.path.isdir(current_path):
+            return os.path.join(current_path, filename)
+        return os.path.join(os.getcwd(), filename)
+
+    def _default_screenshot_filename(self) -> str:
+        raw_title = self._current_tab_title() or self._window.windowTitle() or "screenshot"
+        title = raw_title.strip()
+        if title.lower().endswith(".png"):
+            title = title[:-4].rstrip()
+        if not title:
+            title = "screenshot"
+
+        sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", title).rstrip(" .")
+        if not sanitized:
+            sanitized = "screenshot"
+        return f"{sanitized}.png"
+
+    def _current_tab_title(self) -> str | None:
+        viewer = self._window.parentWidget()
+        if viewer is None:
+            return None
+
+        parent = viewer.parentWidget()
+        while parent is not None:
+            index_of = getattr(parent, "indexOf", None)
+            tab_text = getattr(parent, "tabText", None)
+            if callable(index_of) and callable(tab_text):
+                try:
+                    index = index_of(viewer)
+                except Exception:
+                    index = -1
+                if index >= 0:
+                    try:
+                        return str(tab_text(index))
+                    except Exception:
+                        return None
+            parent = parent.parentWidget()
+        return None
 
     def _pixmap_from_screenshot_image(self, image: np.ndarray | None) -> QPixmap | None:
         if image is None or image.size == 0 or image.ndim != 3:

@@ -1,6 +1,8 @@
+import os
 import sys
 import types
 
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 # Test bootstrap: allow importing pyemsi on interpreters without the compiled
@@ -71,6 +73,7 @@ class _FakeParentPlotter:
         self.active_time_point = active_time_point
         self.time_values = [float(index) for index in range(number_time_points)]
         self.render_calls = 0
+        self.mesh = None
 
     def set_active_time_point(self, time_point):
         if not 0 <= time_point < self.number_time_points:
@@ -195,5 +198,165 @@ def test_back_step_clamps_at_first_frame_and_last_action_uses_last_frame(monkeyp
 
         assert parent_plotter.active_time_point == 2
         assert parent_plotter.render_calls == 2
+    finally:
+        window.close()
+
+
+def test_display_toolbar_includes_save_screenshot_action(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+
+    try:
+        window._create_display_toolbar()
+
+        assert window._save_screenshot_action is not None
+        assert window._save_screenshot_action.text() == "Save Screenshot"
+        assert window._save_screenshot_action.toolTip() == "Save the current rendered viewport to a PNG file"
+    finally:
+        window.close()
+
+
+def test_save_screenshot_uses_explorer_path_as_default(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+    captured = {}
+    explorer_dir = os.getcwd()
+
+    class _Explorer:
+        current_path = explorer_dir
+
+    class _Window:
+        explorer = _Explorer()
+
+    class _FakePixmap:
+        def save(self, _path):
+            return True
+
+    try:
+        monkeypatch.setattr(window, "_main_window", lambda: _Window())
+        monkeypatch.setattr(window, "_capture_screenshot_pixmap", lambda: _FakePixmap())
+        monkeypatch.setattr(
+            window,
+            "_prompt_screenshot_save_path",
+            lambda default_path: captured.setdefault("path", default_path) and None,
+        )
+
+        window._save_screenshot_to_file()
+
+        assert captured["path"] == os.path.join(explorer_dir, "PyVista Plotter.png")
+    finally:
+        window.close()
+
+
+def test_save_screenshot_falls_back_to_cwd_default_path(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+    captured = {}
+
+    class _FakePixmap:
+        def save(self, _path):
+            return True
+
+    try:
+        monkeypatch.setattr(window, "_main_window", lambda: None)
+        monkeypatch.setattr(window, "_capture_screenshot_pixmap", lambda: _FakePixmap())
+        monkeypatch.setattr(
+            window,
+            "_prompt_screenshot_save_path",
+            lambda default_path: captured.setdefault("path", default_path) and None,
+        )
+
+        window._save_screenshot_to_file()
+
+        assert captured["path"] == os.path.join(os.getcwd(), "PyVista Plotter.png")
+    finally:
+        window.close()
+
+
+def test_save_screenshot_auto_appends_png_extension(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+    temp_dir = os.path.join(os.getcwd(), "_test_screenshot_save")
+    os.makedirs(temp_dir, exist_ok=True)
+    target_no_ext = os.path.join(temp_dir, "capture")
+    saved_file = os.path.join(temp_dir, "capture.png")
+
+    try:
+        monkeypatch.setattr(window, "_capture_screenshot_pixmap", lambda: QPixmap(8, 8))
+        monkeypatch.setattr(window, "_prompt_screenshot_save_path", lambda _default_path: str(target_no_ext))
+
+        window._save_screenshot_to_file()
+
+        assert os.path.isfile(saved_file)
+    finally:
+        window.close()
+        if os.path.isfile(saved_file):
+            os.remove(saved_file)
+        if os.path.isdir(temp_dir):
+            os.rmdir(temp_dir)
+
+
+def test_save_screenshot_capture_failure_shows_error(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+    errors = []
+
+    try:
+        monkeypatch.setattr(
+            qt_window_module.QMessageBox,
+            "critical",
+            lambda parent, title, message: errors.append((parent, title, message)),
+        )
+
+        window._save_screenshot_to_file()
+
+        assert len(errors) == 1
+        assert errors[0][1] == "Screenshot Error"
+        assert errors[0][2] == "The rendered viewport is not ready to capture."
+    finally:
+        window.close()
+
+
+def test_save_screenshot_save_failure_shows_error(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+    errors = []
+
+    class _FailingPixmap:
+        def save(self, _path):
+            return False
+
+    try:
+        monkeypatch.setattr(window, "_capture_screenshot_pixmap", lambda: _FailingPixmap())
+        monkeypatch.setattr(
+            window,
+            "_prompt_screenshot_save_path",
+            lambda _default_path: os.path.join(os.getcwd(), "will_fail.png"),
+        )
+        monkeypatch.setattr(
+            qt_window_module.QMessageBox,
+            "critical",
+            lambda parent, title, message: errors.append((parent, title, message)),
+        )
+
+        window._save_screenshot_to_file()
+
+        assert len(errors) == 1
+        assert errors[0][1] == "Screenshot Error"
+        assert errors[0][2] == "Could not save screenshot to file."
+    finally:
+        window.close()
+
+
+def test_default_screenshot_filename_uses_tab_title(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+
+    try:
+        monkeypatch.setattr(window, "_current_tab_title", lambda: "Rotor Angle Plot")
+        assert window._default_screenshot_filename() == "Rotor Angle Plot.png"
+    finally:
+        window.close()
+
+
+def test_default_screenshot_filename_sanitizes_invalid_characters(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+
+    try:
+        monkeypatch.setattr(window, "_current_tab_title", lambda: 'Plot: A/B*Test?')
+        assert window._default_screenshot_filename() == "Plot_ A_B_Test_.png"
     finally:
         window.close()
