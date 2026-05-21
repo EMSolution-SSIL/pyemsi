@@ -6,9 +6,107 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize, QUrl, Signal
 from PySide6.QtGui import QAction, QFont, QIcon
-from PySide6.QtWidgets import QFrame, QTextBrowser, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QTextBrowser,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+
+class _LinkInsertDialog(QDialog):
+    """Dialog that collects hyperlink label and URL for Markdown insertion."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Insert Link")
+
+        self._label_edit = QLineEdit(self)
+        self._label_edit.setPlaceholderText("Leave empty to use selected text")
+        self._url_edit = QLineEdit(self)
+        self._url_edit.setPlaceholderText("https://example.com")
+
+        form = QFormLayout()
+        form.addRow("Label:", self._label_edit)
+        form.addRow("URL:", self._url_edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def link_label(self) -> str:
+        return self._label_edit.text()
+
+    def link_url(self) -> str:
+        return self._url_edit.text()
+
+
+class _ImageInsertDialog(QDialog):
+    """Dialog that collects alt text and path for Markdown image insertion."""
+
+    def __init__(self, start_dir: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Insert Image")
+        self._picked_via_dialog = False
+        self._start_dir = start_dir
+
+        self._alt_edit = QLineEdit(self)
+        self._alt_edit.setPlaceholderText("Image description")
+        self._path_edit = QLineEdit(self)
+        self._path_edit.setPlaceholderText("images/example.png")
+        self._browse_button = QPushButton("Browse…", self)
+        self._browse_button.clicked.connect(self._browse)
+
+        path_row = QHBoxLayout()
+        path_row.setContentsMargins(0, 0, 0, 0)
+        path_row.addWidget(self._path_edit, 1)
+        path_row.addWidget(self._browse_button)
+
+        form = QFormLayout()
+        form.addRow("Alt text:", self._alt_edit)
+        form.addRow("Path:", path_row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def _browse(self) -> None:
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Select Image",
+            self._start_dir,
+            "Images (*.png *.jpg *.jpeg *.gif *.bmp *.svg *.webp);;All Files (*)",
+        )
+        if selected_path:
+            self._picked_via_dialog = True
+            self._path_edit.setText(selected_path)
+
+    def alt_text(self) -> str:
+        return self._alt_edit.text()
+
+    def image_path(self) -> str:
+        return self._path_edit.text()
+
+    def selected_via_picker(self) -> bool:
+        return self._picked_via_dialog
+
 
 # ---------------------------------------------------------------------------
 # MarkdownViewer
@@ -72,8 +170,8 @@ class MarkdownViewer(QWidget):
         _bold_act.triggered.connect(lambda: self.editor.wrapSelection("**", "**"))
         _italic_act.triggered.connect(lambda: self.editor.wrapSelection("*", "*"))
         _code_act.triggered.connect(lambda: self.editor.wrapSelection("`", "`"))
-        _link_act.triggered.connect(lambda: self.editor.wrapSelection("[", "](url)"))
-        _image_act.triggered.connect(lambda: self.editor.wrapSelection("![", "](url)"))
+        _link_act.triggered.connect(self._on_insert_link_clicked)
+        _image_act.triggered.connect(self._on_insert_image_clicked)
         _prev_act.triggered.connect(self._on_preview_clicked)
 
         # -- layout --
@@ -138,6 +236,58 @@ class MarkdownViewer(QWidget):
         path = self.editor.file_path
         if path:
             self.preview_requested.emit(path)
+
+    def _on_insert_link_clicked(self) -> None:
+        dialog = _LinkInsertDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        url = dialog.link_url().strip()
+        if not url:
+            return
+
+        label = dialog.link_label().strip()
+        if label:
+            self.editor.insertAtCursor(f"[{label}]({url})")
+            return
+        self.editor.wrapSelection("[", f"]({url})")
+
+    def _on_insert_image_clicked(self) -> None:
+        dialog = _ImageInsertDialog(start_dir=self._image_dialog_start_directory(), parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        path = dialog.image_path().strip()
+        if not path:
+            return
+
+        alt = dialog.alt_text().strip()
+        md_path = self._resolve_markdown_image_path(path, from_picker=dialog.selected_via_picker())
+        self.editor.insertAtCursor(f"![{alt}]({md_path})")
+
+    def _image_dialog_start_directory(self) -> str:
+        file_path = self.editor.file_path
+        if file_path:
+            return str(Path(file_path).resolve().parent)
+        return os.getcwd()
+
+    def _resolve_markdown_image_path(self, raw_path: str, from_picker: bool) -> str:
+        file_path = self.editor.file_path
+        should_relativize = from_picker or Path(raw_path).is_absolute()
+        if not file_path or not should_relativize:
+            return raw_path.replace("\\", "/")
+
+        markdown_dir = Path(file_path).resolve().parent
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            candidate = (markdown_dir / candidate).resolve()
+
+        try:
+            relative_path = os.path.relpath(str(candidate), str(markdown_dir))
+            return relative_path.replace("\\", "/")
+        except ValueError:
+            # Different Windows drives cannot be relativized.
+            return str(candidate).replace("\\", "/")
 
 
 # ---------------------------------------------------------------------------
