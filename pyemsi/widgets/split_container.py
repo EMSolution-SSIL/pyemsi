@@ -198,6 +198,7 @@ class SplitContainer(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._workspace_root: str | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -253,6 +254,10 @@ class SplitContainer(QWidget):
         """Add *widget* as a new tab in the left (primary) panel."""
         self._left.addTab(widget, title)
         self._left.setCurrentWidget(widget)
+
+    def set_workspace_root(self, path: str | None) -> None:
+        """Set the workspace root used by markdown preview URL resolution."""
+        self._workspace_root = _resolve_open_path(path) if path else None
 
     def close_current_tab(self) -> None:
         """Close the active tab in whichever panel currently has keyboard focus.
@@ -411,16 +416,24 @@ class SplitContainer(QWidget):
 
         existing = self._find_tab_by_path(preview_key)
         if existing is not None:
+            if hasattr(existing, "set_context"):
+                existing.set_context(source_file_path=norm_path, workspace_root=self._workspace_root)
             self.focus_widget(existing)
             return
 
         preview = MarkdownPreviewViewer(parent=self._left)
         preview.setProperty("file_path", preview_key)
+        if hasattr(preview, "set_context"):
+            preview.set_context(source_file_path=norm_path, workspace_root=self._workspace_root)
 
         # Seed preview with current editor content if the editor is open
         editor_widget = self._find_tab_by_path(norm_path)
         if editor_widget is not None and hasattr(editor_widget, "text"):
-            preview.set_markdown(editor_widget.text())
+            preview.set_markdown(
+                editor_widget.text(),
+                source_file_path=norm_path,
+                workspace_root=self._workspace_root,
+            )
         else:
             preview.load_file(norm_path)
 
@@ -432,7 +445,11 @@ class SplitContainer(QWidget):
         preview_key = path + "::preview"
         preview = self._find_tab_by_path(preview_key)
         if preview is not None and hasattr(preview, "set_markdown"):
-            preview.set_markdown(text)
+            preview.set_markdown(
+                text,
+                source_file_path=path,
+                workspace_root=self._workspace_root,
+            )
 
     def _find_tab_by_path(self, norm_path: str) -> QWidget | None:
         """Return the tab widget showing *norm_path*, or ``None``."""

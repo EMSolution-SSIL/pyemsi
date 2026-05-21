@@ -630,6 +630,7 @@ class PyEmsiMainWindow(QMainWindow):
             self._reset_ipython_kernel()
 
         self._explorer_widget.clear()
+        self._container.set_workspace_root(None)
         self._settings.load_workspace(None)
         self._update_settings_actions()
         self.setWindowTitle("pyemsi")
@@ -657,6 +658,7 @@ class PyEmsiMainWindow(QMainWindow):
 
         explorer_root = self._settings.get_local("workbench.explorer.root_path") or normalized_path
         self._explorer_widget.set_directory(explorer_root)
+        self._container.set_workspace_root(explorer_root)
         self._settings.set_local("workbench.explorer.root_path", explorer_root)
 
         self.setWindowTitle(f"pyemsi — {normalized_path}")

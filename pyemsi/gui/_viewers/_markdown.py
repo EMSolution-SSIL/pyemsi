@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Signal
+import os
+import re
+from pathlib import Path
+
+from PySide6.QtCore import QSize, QUrl, Signal
 from PySide6.QtGui import QAction, QFont, QIcon
 from PySide6.QtWidgets import QFrame, QTextBrowser, QToolBar, QVBoxLayout, QWidget
 
@@ -152,6 +156,8 @@ class MarkdownPreviewViewer(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
+        self._source_file_path: str | None = None
+        self._workspace_root: str | None = None
         self._browser = QTextBrowser(self)
         self._browser.setOpenExternalLinks(True)
         self._browser.setReadOnly(True)
@@ -161,18 +167,77 @@ class MarkdownPreviewViewer(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._browser)
 
+    @property
+    def source_file_path(self) -> str | None:
+        return self._source_file_path
+
+    @property
+    def workspace_root(self) -> str | None:
+        return self._workspace_root
+
+    def set_context(self, source_file_path: str | None = None, workspace_root: str | None = None) -> None:
+        if source_file_path is not None:
+            self._source_file_path = os.path.abspath(os.path.normpath(source_file_path))
+        if workspace_root is not None:
+            self._workspace_root = os.path.abspath(os.path.normpath(workspace_root))
+
     def load_file(self, path: str) -> None:
+        self.set_context(source_file_path=path)
         try:
             with open(path, encoding="utf-8") as fh:
-                self.set_markdown(fh.read())
+                self.set_markdown(fh.read(), source_file_path=path)
         except OSError:
             self._browser.setPlainText(f"Cannot read file:\n{path}")
 
-    def set_markdown(self, text: str) -> None:
+    def set_markdown(
+        self,
+        text: str,
+        source_file_path: str | None = None,
+        workspace_root: str | None = None,
+    ) -> None:
+        self.set_context(source_file_path=source_file_path, workspace_root=workspace_root)
         try:
             import markdown as _md
 
             html = _md.markdown(text, extensions=["tables", "fenced_code"])
         except ImportError:
             html = f"<pre>{text}</pre>"
+        html = self._rewrite_root_relative_urls(html)
+        html = self._apply_preview_styles(html)
+        self._browser.document().setBaseUrl(self._resolve_base_url())
         self._browser.setHtml(html)
+
+    def _resolve_base_url(self) -> QUrl:
+        if self._source_file_path:
+            source_dir = str(Path(self._source_file_path).parent)
+            return QUrl.fromLocalFile(os.path.join(source_dir, ""))
+        if self._workspace_root:
+            return QUrl.fromLocalFile(os.path.join(self._workspace_root, ""))
+        return QUrl()
+
+    def _rewrite_root_relative_urls(self, html: str) -> str:
+        if not self._workspace_root:
+            return html
+
+        pattern = re.compile(r'(?P<prefix>\b(?:src|href)\s*=\s*)(?P<quote>["\'])(?P<url>.*?)(?P=quote)', re.IGNORECASE)
+        workspace_root = Path(self._workspace_root)
+
+        def _replace(match: re.Match[str]) -> str:
+            url = match.group("url")
+            if not url.startswith("/") or url.startswith("//") or url.startswith("/#"):
+                return match.group(0)
+
+            target = workspace_root / url.lstrip("/")
+            file_url = QUrl.fromLocalFile(os.path.abspath(os.path.normpath(str(target)))).toString()
+            return f"{match.group('prefix')}{match.group('quote')}{file_url}{match.group('quote')}"
+
+        return pattern.sub(_replace, html)
+
+    @staticmethod
+    def _apply_preview_styles(html: str) -> str:
+        style = (
+            "<style>"
+            "img { max-width: 100%; height: auto; }"
+            "</style>"
+        )
+        return f"{style}{html}"
