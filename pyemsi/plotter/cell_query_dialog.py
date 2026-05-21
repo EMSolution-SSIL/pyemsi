@@ -261,6 +261,7 @@ class CellQueryDialog(QDialog):
                 line_width=5,
                 render_lines_as_tubes=True,
                 pickable=False,
+                reset_camera=False,
                 name=f"cell_viz_mesh_{cell_id}_{actor_suffix}",
             )
 
@@ -281,6 +282,7 @@ class CellQueryDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
+                reset_camera=False,
                 name=f"cell_viz_label_{cell_id}_{actor_suffix}",
             )
 
@@ -354,6 +356,7 @@ class CellQueryDialog(QDialog):
                 line_width=5,
                 render_lines_as_tubes=True,
                 pickable=False,
+                reset_camera=False,
                 name=f"cell_viz_mesh_{cell_id}_{actor_suffix}",
             )
 
@@ -371,6 +374,7 @@ class CellQueryDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
+                reset_camera=False,
                 name=f"cell_viz_label_{cell_id}_{actor_suffix}",
             )
 

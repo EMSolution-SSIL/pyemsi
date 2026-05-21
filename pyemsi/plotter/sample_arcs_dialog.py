@@ -502,6 +502,7 @@ class SampleArcsDialog(QDialog):
                 color="cyan",
                 line_width=3,
                 pickable=False,
+                reset_camera=False,
                 name=actor_name,
             )
             self._arc_actor_names[arc_idx] = actor_name
@@ -524,6 +525,7 @@ class SampleArcsDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
+                reset_camera=False,
                 name=label_name,
             )
 
@@ -1407,6 +1409,7 @@ class SampleArcsDialog(QDialog):
                         fill_shape=True,
                         shape_color="black",
                         shape_opacity=0.7,
+                        reset_camera=False,
                         name=label_name,
                     )
                 except Exception:

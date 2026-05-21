@@ -272,6 +272,7 @@ class PointQueryDialog(QDialog):
                 point_size=18,
                 render_points_as_spheres=True,
                 pickable=False,
+                reset_camera=False,
                 name=f"point_viz_mesh_{point_id}_{actor_suffix}",
             )
 
@@ -292,6 +293,7 @@ class PointQueryDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
+                reset_camera=False,
                 name=f"point_viz_label_{point_id}_{actor_suffix}",
             )
 
@@ -364,6 +366,7 @@ class PointQueryDialog(QDialog):
                 point_size=18,
                 render_points_as_spheres=True,
                 pickable=False,
+                reset_camera=False,
                 name=f"point_viz_mesh_{point_id}_{actor_suffix}",
             )
 
@@ -381,6 +384,7 @@ class PointQueryDialog(QDialog):
                 fill_shape=True,
                 shape_color="black",
                 shape_opacity=0.7,
+                reset_camera=False,
                 name=f"point_viz_label_{point_id}_{actor_suffix}",
             )
 
