@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 import pyemsi.resources.resources  # noqa: F401
 
 from .block_visibility_dialog import BlockVisibilityDialog
+from .camera_position_dialog import CameraPositionDialog
 from .cell_query_dialog import CellQueryDialog
 from .display_settings_dialog import DisplaySettingsDialog
 from .pick_result_history_dialog import PickResultHistoryDialog
@@ -141,6 +142,7 @@ class QtPlotterWindow:
 
         # Dialog references to maintain state
         self._cell_query_dialog: CellQueryDialog | None = None
+        self._camera_position_dialog: CameraPositionDialog | None = None
         self._point_query_dialog: PointQueryDialog | None = None
         self._pick_result_history_dialog: PickResultHistoryDialog | None = None
         self._sample_lines_dialog: SampleLinesDialog | None = None
@@ -240,6 +242,11 @@ class QtPlotterWindow:
         iso_action.setToolTip("Isometric view")
         iso_action.triggered.connect(self.plotter.view_isometric)
         self._camera_toolbar.addAction(iso_action)
+
+        camera_position_action = QAction(QIcon(":/icons/CameraPosition.svg"), "Camera Position", self._window)
+        camera_position_action.setToolTip("Open camera position dialog")
+        camera_position_action.triggered.connect(self._open_camera_position_dialog)
+        self._camera_toolbar.addAction(camera_position_action)
 
         self._camera_toolbar.addSeparator()
 
@@ -494,7 +501,7 @@ class QtPlotterWindow:
         self._camera_orientation_action.setToolTip("Toggle camera orientation widget")
         self._camera_orientation_action.setCheckable(True)
         self._camera_orientation_action.setChecked(
-            any(x.__class__.__name__ == "vtkCameraOrientationWidget" for x in self.plotter.camera_widgets)
+            any(x.__class__.__name__ == "vtkCameraOrientationWidget" for x in self.plotter.widgets.camera_widgets)
         )
         self._camera_orientation_action.triggered.connect(self._toggle_camera_orientation)
         self._display_toolbar.addAction(self._camera_orientation_action)
@@ -742,6 +749,22 @@ class QtPlotterWindow:
         scalar_bar_range_dialog.show()
         scalar_bar_range_dialog.raise_()
         scalar_bar_range_dialog.activateWindow()
+
+    def _open_camera_position_dialog(self) -> None:
+        """Open camera position dialog (non-blocking)."""
+        if self._camera_position_dialog is None or not self._camera_position_dialog.isVisible():
+            try:
+                if self._camera_position_dialog is not None:
+                    _ = self._camera_position_dialog.isVisible()
+            except RuntimeError:
+                self._camera_position_dialog = None
+
+            if self._camera_position_dialog is None:
+                self._camera_position_dialog = CameraPositionDialog(plotter=self.plotter, plotter_window=self)
+
+        self._camera_position_dialog.show()
+        self._camera_position_dialog.raise_()
+        self._camera_position_dialog.activateWindow()
 
     def _open_block_visibility_dialog(self) -> None:
         """Open block visibility dialog (non-blocking)."""
@@ -1582,6 +1605,8 @@ class QtPlotterWindow:
         # Close pick result history dialog if open
         if hasattr(self, "_pick_result_history_dialog") and self._pick_result_history_dialog is not None:
             self._pick_result_history_dialog.close()
+        if hasattr(self, "_camera_position_dialog") and self._camera_position_dialog is not None:
+            self._camera_position_dialog.close()
 
         # Stop animation timer if running
         if self._animation_timer and self._animation_timer.isActive():

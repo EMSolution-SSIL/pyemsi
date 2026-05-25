@@ -27,7 +27,8 @@ class FieldViewer(QWidget):
 
         self._plotter_widget.setParent(self)
         self._plotter.render()
-        self._plotter.plotter.reset_camera()
+        if self.plotter.plotter.camera_position == [(1.0, 1.0, 1.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]:
+            self._plotter.plotter.reset_camera()
         self._plotter.plotter.show_axes()
         self._plotter._window._create_display_toolbar()
 

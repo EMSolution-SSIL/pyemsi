@@ -33,6 +33,7 @@ class _FakeQtInteractor(QWidget):
         self.off_screen = off_screen
         self.renderer = type("Renderer", (), {"axes_enabled": False, "actors": {}})()
         self.camera_widgets = []
+        self.widgets = type("Widgets", (), {"camera_widgets": self.camera_widgets})()
         self.iren = None
         self._closed = False
 
@@ -211,6 +212,21 @@ def test_display_toolbar_includes_save_screenshot_action(monkeypatch):
         assert window._save_screenshot_action is not None
         assert window._save_screenshot_action.text() == "Save Screenshot"
         assert window._save_screenshot_action.toolTip() == "Save the current rendered viewport to a PNG file"
+    finally:
+        window.close()
+
+
+def test_camera_toolbar_includes_camera_position_action(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+
+    try:
+        matching_actions = [
+            action for action in window._camera_toolbar.actions() if action.text() == "Camera Position"
+        ]
+
+        assert len(matching_actions) == 1
+        assert matching_actions[0].toolTip() == "Open camera position dialog"
+        assert not matching_actions[0].icon().isNull()
     finally:
         window.close()
 
