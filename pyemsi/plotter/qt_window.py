@@ -38,6 +38,7 @@ import pyemsi.resources.resources  # noqa: F401
 from .block_visibility_dialog import BlockVisibilityDialog
 from .camera_position_dialog import CameraPositionDialog
 from .cell_query_dialog import CellQueryDialog
+from .clip_dialog import ClipDialog
 from .display_settings_dialog import DisplaySettingsDialog
 from .pick_result_history_dialog import PickResultHistoryDialog
 from .point_query_dialog import PointQueryDialog
@@ -147,6 +148,7 @@ class QtPlotterWindow:
         self._pick_result_history_dialog: PickResultHistoryDialog | None = None
         self._sample_lines_dialog: SampleLinesDialog | None = None
         self._sample_arcs_dialog: SampleArcsDialog | None = None
+        self._clip_dialog: ClipDialog | None = None
 
         # Action references for toggle behavior
         self._check_point_action: QAction | None = None
@@ -508,6 +510,12 @@ class QtPlotterWindow:
 
         self._display_toolbar.addSeparator()
 
+        # Clip action
+        clip_action = QAction(QIcon(":/icons/Clip.svg"), "Clip", self._window)
+        clip_action.setToolTip("Clip the mesh with an interactive plane")
+        clip_action.triggered.connect(self._open_clip_dialog)
+        self._display_toolbar.addAction(clip_action)
+
         # Block visibility action
         self._block_visibility_action = QAction(QIcon(":/icons/Blocks.svg"), "Blocks", self._window)
         self._block_visibility_action.setToolTip("Control individual block visibility")
@@ -687,7 +695,18 @@ class QtPlotterWindow:
 
         self.parent_plotter.set_active_time_point(new_time_point)
         self.parent_plotter.render()
+        self._reapply_clip_after_scene_rebuild()
         self._update_time_combobox()
+
+    def _reapply_clip_after_scene_rebuild(self) -> None:
+        """Let the GUI clip dialog reapply its actor clip after a scene rebuild."""
+        if self._clip_dialog is None:
+            return
+        try:
+            if self._clip_dialog.has_active_clip:
+                self._clip_dialog.reapply_after_scene_rebuild()
+        except RuntimeError:
+            self._clip_dialog = None
 
     def _toggle_axes(self, input: bool) -> None:
         """Toggle axes orientation widget visibility."""
@@ -782,6 +801,39 @@ class QtPlotterWindow:
         block_visibility_dialog.show()
         block_visibility_dialog.raise_()
         block_visibility_dialog.activateWindow()
+
+    def _open_clip_dialog(self) -> None:
+        """Open clip dialog and show the interactive clip plane."""
+        self.disable_point_picking_mode(render=False)
+        self.disable_cell_picking_mode(render=False)
+
+        if self.parent_plotter is None or self.parent_plotter.reader is None:
+            QMessageBox.warning(self._window, "Clip", "No mesh is available to clip.")
+            return
+
+        try:
+            if self._clip_dialog is not None and self._clip_dialog.isVisible():
+                self._clip_dialog.raise_()
+                self._clip_dialog.activateWindow()
+                return
+            if self._clip_dialog is not None:
+                self._clip_dialog.open_for_editing()
+            else:
+                self._clip_dialog = ClipDialog(plotter=self.plotter, plotter_window=self)
+        except RuntimeError:
+            self._clip_dialog = None
+            try:
+                self._clip_dialog = ClipDialog(plotter=self.plotter, plotter_window=self)
+            except (RuntimeError, ValueError) as exc:
+                QMessageBox.warning(self._window, "Clip", str(exc))
+                return
+        except ValueError as exc:
+            QMessageBox.warning(self._window, "Clip", str(exc))
+            return
+
+        self._clip_dialog.show()
+        self._clip_dialog.raise_()
+        self._clip_dialog.activateWindow()
 
     def _open_cell_query_dialog(self) -> None:
         """Open cell query dialog (non-blocking)."""
