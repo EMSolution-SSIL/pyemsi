@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -45,6 +47,7 @@ class ClipDialog(QDialog):
         self._active_clip_state: ClipState | None = None
         self._open_clip_state: ClipState | None = None
         self._updating_fields = False
+        self._updating_actor_list = False
         self._updating_plane_widget = False
         self._applying_clip = False
         self._finished = False
@@ -55,7 +58,7 @@ class ClipDialog(QDialog):
         self.setWindowFlags(
             self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint
         )
-        self.resize(430, 290)
+        self.resize(430, 430)
 
         self._create_ui()
         self.open_for_editing()
@@ -76,6 +79,8 @@ class ClipDialog(QDialog):
             bool(initial_state["crinkle"]),
             bool(initial_state["invert"]),
         )
+        self._refresh_actor_list(initial_state)
+        initial_state = self._current_state()
         self._replace_plane_widget(initial_state["normal"], initial_state["origin"])
         self._apply_clip_state(initial_state, render=True)
 
@@ -85,6 +90,8 @@ class ClipDialog(QDialog):
             return
         state = self._copy_state(self._active_clip_state)
         self._clip_actor_datasets.clear()
+        self._refresh_actor_list(state)
+        state = self._current_state()
         self._apply_clip_state(state, render=True)
 
     def _create_ui(self) -> None:
@@ -104,6 +111,9 @@ class ClipDialog(QDialog):
 
         self._origin_spins = self._create_vector_group("Origin")
         main_layout.addWidget(self._origin_spins["group"])
+
+        self._actor_group = self._create_actor_group()
+        main_layout.addWidget(self._actor_group)
 
         self.button_box = QDialogButtonBox()
         self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
@@ -140,6 +150,34 @@ class ClipDialog(QDialog):
         form_layout.addRow(row)
         return {"group": group, **spins}
 
+    def _create_actor_group(self) -> QGroupBox:
+        group = QGroupBox("Actors", self)
+        layout = QVBoxLayout(group)
+
+        button_row = QWidget(group)
+        button_layout = QHBoxLayout(button_row)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(6)
+
+        self.select_all_button = QPushButton("Select All", button_row)
+        self.select_none_button = QPushButton("Select None", button_row)
+        self.invert_selection_button = QPushButton("Invert Selection", button_row)
+
+        self.select_all_button.clicked.connect(self._on_select_all_actors)
+        self.select_none_button.clicked.connect(self._on_select_no_actors)
+        self.invert_selection_button.clicked.connect(self._on_invert_actor_selection)
+
+        button_layout.addWidget(self.select_all_button)
+        button_layout.addWidget(self.select_none_button)
+        button_layout.addWidget(self.invert_selection_button)
+        layout.addWidget(button_row)
+
+        self._actor_list = QListWidget(group)
+        self._actor_list.itemChanged.connect(self._on_actor_selection_changed)
+        layout.addWidget(self._actor_list)
+
+        return group
+
     def _vector_values(self, spins: dict[str, object]) -> tuple[float, float, float]:
         return (
             float(spins["x"].value()),
@@ -153,6 +191,8 @@ class ClipDialog(QDialog):
             "origin": self._vector_values(self._origin_spins),
             "crinkle": self._crinkle_checkbox.isChecked(),
             "invert": self._invert_checkbox.isChecked(),
+            "actor_names": self._selected_actor_names(),
+            "available_actor_names": self._current_actor_names(),
         }
 
     def _default_clip_state(self) -> ClipState:
@@ -167,6 +207,8 @@ class ClipDialog(QDialog):
             "origin": origin,
             "crinkle": False,
             "invert": True,
+            "actor_names": self._current_actor_names(),
+            "available_actor_names": self._current_actor_names(),
         }
 
     def _copy_state(self, state: ClipState | None) -> ClipState | None:
@@ -177,6 +219,8 @@ class ClipDialog(QDialog):
             "origin": tuple(state["origin"]),
             "crinkle": bool(state["crinkle"]),
             "invert": bool(state["invert"]),
+            "actor_names": tuple(state.get("actor_names", ())),
+            "available_actor_names": tuple(state.get("available_actor_names", state.get("actor_names", ()))),
         }
 
     def _set_fields(self, normal, origin, crinkle: bool, invert: bool) -> None:
@@ -228,6 +272,38 @@ class ClipDialog(QDialog):
                 continue
             yield str(actor_name), actor, mapper, dataset
 
+    def _current_actor_names(self) -> tuple[str, ...]:
+        return tuple(actor_name for actor_name, _actor, _mapper, _dataset in self._iter_clip_actors())
+
+    def _selected_actor_names(self) -> tuple[str, ...]:
+        selected: list[str] = []
+        for row in range(self._actor_list.count()):
+            item = self._actor_list.item(row)
+            if item.checkState() == Qt.CheckState.Checked:
+                selected.append(item.text())
+        return tuple(selected)
+
+    def _refresh_actor_list(self, state: ClipState | None) -> None:
+        current_names = self._current_actor_names()
+        if state is None:
+            selected_names = set(current_names)
+            known_names = set()
+        else:
+            selected_names = set(state.get("actor_names", current_names))
+            known_names = set(state.get("available_actor_names", state.get("actor_names", ())))
+
+        self._updating_actor_list = True
+        try:
+            self._actor_list.clear()
+            for actor_name in current_names:
+                item = QListWidgetItem(actor_name)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                checked = actor_name in selected_names or actor_name not in known_names
+                item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+                self._actor_list.addItem(item)
+        finally:
+            self._updating_actor_list = False
+
     def _cache_actor_datasets(self) -> None:
         current_names = set()
         for actor_name, _actor, _mapper, dataset in self._iter_clip_actors():
@@ -261,8 +337,11 @@ class ClipDialog(QDialog):
             origin = state["origin"]
             crinkle = bool(state["crinkle"])
             invert = bool(state["invert"])
+            selected_actor_names = set(state.get("actor_names", ()))
 
             for actor_name, _actor, mapper, dataset in self._iter_clip_actors():
+                if actor_name not in selected_actor_names:
+                    continue
                 source = self._clip_actor_datasets.get(actor_name, dataset)
                 clipped = source.clip(normal=normal, origin=origin, invert=invert, crinkle=crinkle)
                 mapper.SetInputDataObject(clipped)
@@ -292,6 +371,41 @@ class ClipDialog(QDialog):
         self._replace_plane_widget(state["normal"], state["origin"])
         self._apply_clip_state(state, render=True)
 
+    def _on_actor_selection_changed(self, _item) -> None:
+        if self._finished or self._updating_actor_list:
+            return
+        self._apply_clip_state(self._current_state(), render=True)
+
+    def _on_select_all_actors(self) -> None:
+        self._set_all_actor_checks(Qt.CheckState.Checked)
+
+    def _on_select_no_actors(self) -> None:
+        self._set_all_actor_checks(Qt.CheckState.Unchecked)
+
+    def _on_invert_actor_selection(self) -> None:
+        self._updating_actor_list = True
+        try:
+            for row in range(self._actor_list.count()):
+                item = self._actor_list.item(row)
+                new_state = (
+                    Qt.CheckState.Unchecked
+                    if item.checkState() == Qt.CheckState.Checked
+                    else Qt.CheckState.Checked
+                )
+                item.setCheckState(new_state)
+        finally:
+            self._updating_actor_list = False
+        self._apply_clip_state(self._current_state(), render=True)
+
+    def _set_all_actor_checks(self, check_state: Qt.CheckState) -> None:
+        self._updating_actor_list = True
+        try:
+            for row in range(self._actor_list.count()):
+                self._actor_list.item(row).setCheckState(check_state)
+        finally:
+            self._updating_actor_list = False
+        self._apply_clip_state(self._current_state(), render=True)
+
     def _on_ok(self) -> None:
         self._finished = True
         self._clear_plane_widget()
@@ -308,9 +422,14 @@ class ClipDialog(QDialog):
             self._active_clip_state = None
             self._restore_actor_datasets(render=True)
             self._clip_actor_datasets.clear()
+            self._refresh_actor_list(self._default_clip_state())
             self._sync_remove_button()
             return
-        self._apply_clip_state(self._open_clip_state, render=True)
+        self._refresh_actor_list(self._open_clip_state)
+        restored_state = self._copy_state(self._open_clip_state)
+        restored_state["actor_names"] = self._selected_actor_names()
+        restored_state["available_actor_names"] = self._current_actor_names()
+        self._apply_clip_state(restored_state, render=True)
 
     def _on_remove_clips(self) -> None:
         self._active_clip_state = None
@@ -319,6 +438,7 @@ class ClipDialog(QDialog):
         self._clip_actor_datasets.clear()
         self._clear_plane_widget()
         default_state = self._default_clip_state()
+        self._refresh_actor_list(default_state)
         self._set_fields(
             default_state["normal"],
             default_state["origin"],
