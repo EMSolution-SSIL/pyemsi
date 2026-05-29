@@ -45,8 +45,9 @@ class ClipDialog(QDialog):
         self._active_clip_state: ClipState | None = None
         self._open_clip_state: ClipState | None = None
         self._updating_fields = False
+        self._updating_plane_widget = False
+        self._applying_clip = False
         self._finished = False
-        self._removed_without_apply = False
 
         self.setWindowTitle("Clip")
         self.setWindowIcon(QIcon(":/icons/Clip.svg"))
@@ -67,7 +68,6 @@ class ClipDialog(QDialog):
     def open_for_editing(self) -> None:
         """Prepare the dialog and plane widget for a new edit session."""
         self._finished = False
-        self._removed_without_apply = False
         self._open_clip_state = self._copy_state(self._active_clip_state)
         initial_state = self._copy_state(self._active_clip_state) or self._default_clip_state()
         self._set_fields(
@@ -77,7 +77,7 @@ class ClipDialog(QDialog):
             bool(initial_state["invert"]),
         )
         self._replace_plane_widget(initial_state["normal"], initial_state["origin"])
-        self._sync_remove_button()
+        self._apply_clip_state(initial_state, render=True)
 
     def reapply_after_scene_rebuild(self) -> None:
         """Re-cache rebuilt actor sources and reapply the active GUI clip."""
@@ -92,9 +92,11 @@ class ClipDialog(QDialog):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         self._crinkle_checkbox = QCheckBox("Crinkle")
+        self._crinkle_checkbox.toggled.connect(self._on_clip_control_changed)
         main_layout.addWidget(self._crinkle_checkbox)
 
         self._invert_checkbox = QCheckBox("Invert")
+        self._invert_checkbox.toggled.connect(self._on_clip_control_changed)
         main_layout.addWidget(self._invert_checkbox)
 
         self._normal_spins = self._create_vector_group("Normal")
@@ -104,13 +106,11 @@ class ClipDialog(QDialog):
         main_layout.addWidget(self._origin_spins["group"])
 
         self.button_box = QDialogButtonBox()
-        self.apply_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Apply)
         self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
         self.cancel_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
         self.remove_button = QPushButton("Remove Clips")
         self.button_box.addButton(self.remove_button, QDialogButtonBox.ButtonRole.DestructiveRole)
 
-        self.apply_button.clicked.connect(self._on_apply)
         self.ok_button.clicked.connect(self._on_ok)
         self.cancel_button.clicked.connect(self._on_cancel)
         self.remove_button.clicked.connect(self._on_remove_clips)
@@ -133,6 +133,7 @@ class ClipDialog(QDialog):
             spin.setRange(-1e100, 1e100)
             spin.setSingleStep(0.1)
             spin.setKeyboardTracking(False)
+            spin.valueChanged.connect(self._on_clip_control_changed)
             spins[axis] = spin
             row_layout.addWidget(spin, 1)
 
@@ -190,19 +191,23 @@ class ClipDialog(QDialog):
             self._updating_fields = False
 
     def _replace_plane_widget(self, normal, origin) -> None:
-        self._clear_plane_widget()
-        self.plotter.add_plane_widget(
-            self._on_plane_changed,
-            normal=normal,
-            origin=origin,
-            bounds=self.parent_plotter.mesh.bounds,
-            color="cyan",
-            outline_translation=True,
-            origin_translation=True,
-            normal_rotation=True,
-            interaction_event="always",
-            test_callback=False,
-        )
+        self._updating_plane_widget = True
+        try:
+            self._clear_plane_widget()
+            self.plotter.add_plane_widget(
+                self._on_plane_changed,
+                normal=normal,
+                origin=origin,
+                bounds=self.parent_plotter.mesh.bounds,
+                color="cyan",
+                outline_translation=True,
+                origin_translation=True,
+                normal_rotation=True,
+                interaction_event="always",
+                test_callback=False,
+            )
+        finally:
+            self._updating_plane_widget = False
 
     def _clear_plane_widget(self) -> None:
         try:
@@ -244,43 +249,50 @@ class ClipDialog(QDialog):
             self.plotter.render()
 
     def _apply_clip_state(self, state: ClipState, render: bool) -> None:
-        self._restore_actor_datasets(render=False)
-        self._cache_actor_datasets()
+        if self._applying_clip:
+            return
 
-        normal = state["normal"]
-        origin = state["origin"]
-        crinkle = bool(state["crinkle"])
-        invert = bool(state["invert"])
+        self._applying_clip = True
+        try:
+            self._restore_actor_datasets(render=False)
+            self._cache_actor_datasets()
 
-        for actor_name, _actor, mapper, dataset in self._iter_clip_actors():
-            source = self._clip_actor_datasets.get(actor_name, dataset)
-            clipped = source.clip(normal=normal, origin=origin, invert=invert, crinkle=crinkle)
-            mapper.SetInputDataObject(clipped)
-            mapper.Modified()
+            normal = state["normal"]
+            origin = state["origin"]
+            crinkle = bool(state["crinkle"])
+            invert = bool(state["invert"])
 
-        self._active_clip_state = self._copy_state(state)
-        self._removed_without_apply = False
-        self._sync_remove_button()
-        if render:
-            self.plotter.render()
+            for actor_name, _actor, mapper, dataset in self._iter_clip_actors():
+                source = self._clip_actor_datasets.get(actor_name, dataset)
+                clipped = source.clip(normal=normal, origin=origin, invert=invert, crinkle=crinkle)
+                mapper.SetInputDataObject(clipped)
+                mapper.Modified()
+
+            self._active_clip_state = self._copy_state(state)
+            self._sync_remove_button()
+            if render:
+                self.plotter.render()
+        finally:
+            self._applying_clip = False
 
     def _sync_remove_button(self) -> None:
         self.remove_button.setEnabled(self._active_clip_state is not None or bool(self._clip_actor_datasets))
 
     def _on_plane_changed(self, normal, origin) -> None:
-        if self._finished or self._updating_fields:
+        if self._finished or self._updating_fields or self._updating_plane_widget:
             return
         self._set_fields(normal, origin, self._crinkle_checkbox.isChecked(), self._invert_checkbox.isChecked())
+        state = self._current_state()
+        self._apply_clip_state(state, render=True)
 
-    def _on_apply(self) -> None:
+    def _on_clip_control_changed(self, *_args) -> None:
+        if self._finished or self._updating_fields:
+            return
         state = self._current_state()
         self._replace_plane_widget(state["normal"], state["origin"])
         self._apply_clip_state(state, render=True)
 
     def _on_ok(self) -> None:
-        if not self._removed_without_apply:
-            state = self._current_state()
-            self._apply_clip_state(state, render=True)
         self._finished = True
         self._clear_plane_widget()
         self.accept()
@@ -303,7 +315,6 @@ class ClipDialog(QDialog):
     def _on_remove_clips(self) -> None:
         self._active_clip_state = None
         self._open_clip_state = None
-        self._removed_without_apply = True
         self._restore_actor_datasets(render=True)
         self._clip_actor_datasets.clear()
         self._clear_plane_widget()
