@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -58,7 +58,7 @@ class ClipDialog(QDialog):
         self.setWindowFlags(
             self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint
         )
-        self.resize(430, 430)
+        self.resize(520, 430)
 
         self._create_ui()
         self.open_for_editing()
@@ -97,20 +97,10 @@ class ClipDialog(QDialog):
     def _create_ui(self) -> None:
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(8)
 
-        self._crinkle_checkbox = QCheckBox("Crinkle")
-        self._crinkle_checkbox.toggled.connect(self._on_clip_control_changed)
-        main_layout.addWidget(self._crinkle_checkbox)
-
-        self._invert_checkbox = QCheckBox("Invert")
-        self._invert_checkbox.toggled.connect(self._on_clip_control_changed)
-        main_layout.addWidget(self._invert_checkbox)
-
-        self._normal_spins = self._create_vector_group("Normal")
-        main_layout.addWidget(self._normal_spins["group"])
-
-        self._origin_spins = self._create_vector_group("Origin")
-        main_layout.addWidget(self._origin_spins["group"])
+        main_layout.addWidget(self._create_options_row())
+        main_layout.addWidget(self._create_plane_group())
 
         self._actor_group = self._create_actor_group()
         main_layout.addWidget(self._actor_group)
@@ -126,42 +116,79 @@ class ClipDialog(QDialog):
         self.remove_button.clicked.connect(self._on_remove_clips)
         main_layout.addWidget(self.button_box)
 
-    def _create_vector_group(self, title: str) -> dict[str, object]:
-        group = QGroupBox(title, self)
-        form_layout = QFormLayout(group)
+    def _create_options_row(self) -> QWidget:
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
-        row = QWidget(group)
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(6)
+        self._crinkle_checkbox = QCheckBox("Crinkle")
+        self._crinkle_checkbox.toggled.connect(self._on_clip_control_changed)
+
+        self._invert_checkbox = QCheckBox("Invert")
+        self._invert_checkbox.toggled.connect(self._on_clip_control_changed)
+
+        layout.addWidget(QLabel("Options", row))
+        layout.addWidget(self._crinkle_checkbox)
+        layout.addWidget(self._invert_checkbox)
+        layout.addStretch(1)
+        return row
+
+    def _create_plane_group(self) -> QGroupBox:
+        group = QGroupBox("Plane", self)
+        grid = QGridLayout(group)
+        grid.setContentsMargins(8, 8, 8, 8)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(6)
+
+        for col, axis in enumerate(("X", "Y", "Z"), start=1):
+            label = QLabel(axis, group)
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            grid.addWidget(label, 0, col)
+
+        self._normal_spins = self._create_vector_spin_row(grid, 1, "Normal", group)
+        self._origin_spins = self._create_vector_spin_row(grid, 2, "Origin", group)
+
+        return group
+
+    def _create_vector_spin_row(
+        self,
+        grid: QGridLayout,
+        row: int,
+        title: str,
+        parent: QWidget,
+    ) -> dict[str, QDoubleSpinBox]:
+        label = QLabel(title, parent)
+        grid.addWidget(label, row, 0)
 
         spins: dict[str, QDoubleSpinBox] = {}
-        for axis in ("x", "y", "z"):
-            row_layout.addWidget(QLabel(axis.upper(), row))
-            spin = QDoubleSpinBox(row)
+        for col, axis in enumerate(("x", "y", "z"), start=1):
+            spin = QDoubleSpinBox(parent)
             spin.setDecimals(12)
             spin.setRange(-1e100, 1e100)
             spin.setSingleStep(0.1)
             spin.setKeyboardTracking(False)
             spin.valueChanged.connect(self._on_clip_control_changed)
             spins[axis] = spin
-            row_layout.addWidget(spin, 1)
+            grid.addWidget(spin, row, col)
 
-        form_layout.addRow(row)
-        return {"group": group, **spins}
+        return spins
 
     def _create_actor_group(self) -> QGroupBox:
-        group = QGroupBox("Actors", self)
+        group = QGroupBox("Clip Actors", self)
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
         button_row = QWidget(group)
         button_layout = QHBoxLayout(button_row)
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(6)
 
-        self.select_all_button = QPushButton("Select All", button_row)
-        self.select_none_button = QPushButton("Select None", button_row)
-        self.invert_selection_button = QPushButton("Invert Selection", button_row)
+        self.select_all_button = QPushButton("All", button_row)
+        self.select_none_button = QPushButton("None", button_row)
+        self.invert_selection_button = QPushButton("Invert", button_row)
+        self._actor_count_label = QLabel("0 / 0 selected", button_row)
 
         self.select_all_button.clicked.connect(self._on_select_all_actors)
         self.select_none_button.clicked.connect(self._on_select_no_actors)
@@ -170,9 +197,13 @@ class ClipDialog(QDialog):
         button_layout.addWidget(self.select_all_button)
         button_layout.addWidget(self.select_none_button)
         button_layout.addWidget(self.invert_selection_button)
+        button_layout.addStretch(1)
+        button_layout.addWidget(self._actor_count_label)
         layout.addWidget(button_row)
 
         self._actor_list = QListWidget(group)
+        self._actor_list.setMinimumHeight(120)
+        self._actor_list.setMaximumHeight(170)
         self._actor_list.itemChanged.connect(self._on_actor_selection_changed)
         layout.addWidget(self._actor_list)
 
@@ -303,6 +334,7 @@ class ClipDialog(QDialog):
                 self._actor_list.addItem(item)
         finally:
             self._updating_actor_list = False
+        self._update_actor_count_label()
 
     def _cache_actor_datasets(self) -> None:
         current_names = set()
@@ -357,6 +389,11 @@ class ClipDialog(QDialog):
     def _sync_remove_button(self) -> None:
         self.remove_button.setEnabled(self._active_clip_state is not None or bool(self._clip_actor_datasets))
 
+    def _update_actor_count_label(self) -> None:
+        total = self._actor_list.count()
+        selected = len(self._selected_actor_names())
+        self._actor_count_label.setText(f"{selected} / {total} selected")
+
     def _on_plane_changed(self, normal, origin) -> None:
         if self._finished or self._updating_fields or self._updating_plane_widget:
             return
@@ -374,6 +411,7 @@ class ClipDialog(QDialog):
     def _on_actor_selection_changed(self, _item) -> None:
         if self._finished or self._updating_actor_list:
             return
+        self._update_actor_count_label()
         self._apply_clip_state(self._current_state(), render=True)
 
     def _on_select_all_actors(self) -> None:
@@ -395,6 +433,7 @@ class ClipDialog(QDialog):
                 item.setCheckState(new_state)
         finally:
             self._updating_actor_list = False
+        self._update_actor_count_label()
         self._apply_clip_state(self._current_state(), render=True)
 
     def _set_all_actor_checks(self, check_state: Qt.CheckState) -> None:
@@ -404,6 +443,7 @@ class ClipDialog(QDialog):
                 self._actor_list.item(row).setCheckState(check_state)
         finally:
             self._updating_actor_list = False
+        self._update_actor_count_label()
         self._apply_clip_state(self._current_state(), render=True)
 
     def _on_ok(self) -> None:
