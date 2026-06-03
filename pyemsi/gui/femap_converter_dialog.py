@@ -25,6 +25,7 @@ from pyemsi.settings import SettingsManager
 
 @dataclass(frozen=True)
 class FemapConverterDialogConfig:
+    workspace_path: str | None
     input_dir: str
     output_dir: str
     output_name: str
@@ -56,6 +57,7 @@ class FemapConverterDialogConfig:
             "mesh": self.mesh,
             "output_dir": self.output_dir,
             "output_name": self.output_name,
+            "workspace_path": self.workspace_path,
         }
 
     def to_settings(self) -> dict[str, str | bool | None]:
@@ -380,6 +382,7 @@ class FemapConverterDialog(QDialog):
             return None
 
         return FemapConverterDialogConfig(
+            workspace_path=os.fspath(self._settings.workspace_path) if self._settings.workspace_path is not None else None,
             input_dir=input_dir,
             output_dir=output_dir,
             output_name=output_name,

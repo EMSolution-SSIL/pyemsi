@@ -80,7 +80,6 @@ class PyEmsiMainWindow(QMainWindow):
         self._kernel_manager = None
         self._active_external_terminals: dict = {}
         self._temp_converter_configs: set[str] = set()
-        self._field_plot_dialog: FieldPlotBuilderDialog | None = None
         self._update_checker = UpdateChecker(self._settings, parent=self)
         self._update_checker.check_finished.connect(self._on_update_check_finished)
         self._update_settings_actions()
@@ -494,14 +493,12 @@ class PyEmsiMainWindow(QMainWindow):
         if not current_path or not os.path.isdir(current_path):
             return
 
-        dialog = self._field_plot_dialog
-        if dialog is None:
-            dialog = FieldPlotBuilderDialog(
-                self._settings,
-                browse_dir_getter=lambda: self.explorer.current_path,
-                parent=self,
-            )
-            self._field_plot_dialog = dialog
+        dialog = FieldPlotBuilderDialog(
+            self._settings,
+            browse_dir_getter=lambda: self.explorer.current_path,
+            parent=self,
+        )
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()
@@ -634,7 +631,6 @@ class PyEmsiMainWindow(QMainWindow):
         self._settings.load_workspace(None)
         self._update_settings_actions()
         self.setWindowTitle("pyemsi")
-        self._field_plot_dialog = None
         return True
 
     def _reset_ipython_kernel(self) -> None:

@@ -1,8 +1,11 @@
 # TODO: cythonize femapconverter
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import logging
+import math
+import os
 import re
 import shutil
 import threading
@@ -15,9 +18,12 @@ if TYPE_CHECKING:
 import numpy as np
 
 from pyemsi.core.femap_parser import FEMAPParser
+from pyemsi.settings import SettingsManager
 
 # Module-level logger
 logger = logging.getLogger(__name__)
+
+INTERNAL_FIELD_NAMES: frozenset[str] = frozenset({"vtkOriginalCellIds", "vtkOriginalPointIds"})
 
 FORCE_2D_TOPOLOGY = {
     8: 4,  # Brick8 -> Quad4
@@ -75,6 +81,7 @@ class FemapConverter:
     def __init__(
         self,
         input_dir: str | Path,
+        workspace_path: str | Path | None = None,
         output_dir: str | Path = "./.pyemsi",
         output_name: str = "output",
         input_control_file: str | Path | None = None,
@@ -98,6 +105,9 @@ class FemapConverter:
             ascii_mode,
         )
         self.elements_map = {}
+        self.workspace_path = (
+            Path(os.path.abspath(os.path.normpath(os.fspath(workspace_path)))) if workspace_path is not None else None
+        )
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.output_name = output_name
@@ -107,6 +117,13 @@ class FemapConverter:
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
+        self._field_plot_metadata_lock = threading.Lock()
+        self._field_plot_mesh_length = 0.0
+        self._field_plot_scalar_names: list[str] = []
+        self._field_plot_vector_names: list[str] = []
+        self._field_plot_scalar_name_set: set[str] = set()
+        self._field_plot_vector_name_set: set[str] = set()
+        self._field_plot_ranges: dict[str, dict[str, float]] = {}
 
         # Clean up existing output files
         pvd_file = self.output_dir / f"{self.output_name}.pvd"
@@ -199,7 +216,164 @@ class FemapConverter:
         self.parse_data_files()
         self.init_pvd()
         self.time_stepping()
+        self._persist_field_plot_cache()
         logger.info("FemapConverter pipeline complete")
+
+    @staticmethod
+    def _utc_now_timestamp() -> str:
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+    def _iter_mesh_blocks(self, mesh: object):
+        get_block_name = getattr(mesh, "get_block_name", None)
+        if callable(get_block_name):
+            for idx, block in enumerate(mesh):
+                if block is None:
+                    continue
+                block_name = get_block_name(idx)
+                yield block, block_name if block_name else str(idx)
+            return
+        yield mesh, None
+
+    @staticmethod
+    def _array_component_count(array: object) -> int | None:
+        ndim = getattr(array, "ndim", None)
+        shape = getattr(array, "shape", None)
+        if ndim is None or shape is None:
+            return None
+        if ndim == 1:
+            return 1
+        if ndim >= 2 and len(shape) >= 2:
+            try:
+                return int(shape[1])
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    def _mesh_length(self, mesh: object) -> float:
+        length = getattr(mesh, "length", None)
+        if isinstance(length, (int, float)) and math.isfinite(length):
+            return float(length)
+
+        bounds = getattr(mesh, "bounds", None)
+        if bounds is not None and len(bounds) == 6:
+            try:
+                dx = float(bounds[1]) - float(bounds[0])
+                dy = float(bounds[3]) - float(bounds[2])
+                dz = float(bounds[5]) - float(bounds[4])
+            except (TypeError, ValueError):
+                dx = dy = dz = 0.0
+            return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        get_block_name = getattr(mesh, "get_block_name", None)
+        if callable(get_block_name):
+            block_lengths = [self._mesh_length(block) for block, _block_name in self._iter_mesh_blocks(mesh)]
+            finite_lengths = [value for value in block_lengths if math.isfinite(value) and value > 0.0]
+            if finite_lengths:
+                return max(finite_lengths)
+        return 0.0
+
+    def _finite_array_values(self, array: object, component_count: int) -> np.ndarray:
+        try:
+            values = np.asarray(array, dtype=float)
+        except (TypeError, ValueError):
+            return np.asarray([], dtype=float)
+
+        if values.size == 0:
+            return np.asarray([], dtype=float)
+
+        if component_count == 3 and values.ndim >= 2:
+            reduced = np.linalg.norm(values, axis=1)
+        else:
+            reduced = values.reshape(-1)
+
+        return reduced[np.isfinite(reduced)]
+
+    @staticmethod
+    def _merge_range(ranges: dict[str, dict[str, float]], name: str, minimum: float, maximum: float) -> None:
+        existing = ranges.get(name)
+        if existing is None:
+            ranges[name] = {"min": minimum, "max": maximum}
+            return
+        existing["min"] = min(existing["min"], minimum)
+        existing["max"] = max(existing["max"], maximum)
+
+    def _update_field_plot_metadata_from_attributes(
+        self,
+        attributes: object,
+        scalar_names: list[str],
+        vector_names: list[str],
+        ranges: dict[str, dict[str, float]],
+    ) -> None:
+        for name in getattr(attributes, "keys", lambda: [])():
+            array_name = str(name)
+            if array_name in INTERNAL_FIELD_NAMES:
+                continue
+
+            array = attributes[name]
+            component_count = self._array_component_count(array)
+            if component_count == 1:
+                scalar_names.append(array_name)
+            elif component_count == 3:
+                vector_names.append(array_name)
+            else:
+                continue
+
+            finite_values = self._finite_array_values(array, component_count)
+            if finite_values.size == 0:
+                continue
+            self._merge_range(ranges, array_name, float(finite_values.min()), float(finite_values.max()))
+
+    def _update_field_plot_metadata_from_mesh(self, mesh: object) -> None:
+        scalar_names: list[str] = []
+        vector_names: list[str] = []
+        ranges: dict[str, dict[str, float]] = {}
+        mesh_length = self._mesh_length(mesh)
+
+        for block, _block_name in self._iter_mesh_blocks(mesh):
+            self._update_field_plot_metadata_from_attributes(block.point_data, scalar_names, vector_names, ranges)
+            self._update_field_plot_metadata_from_attributes(block.cell_data, scalar_names, vector_names, ranges)
+
+        with self._field_plot_metadata_lock:
+            self._field_plot_mesh_length = max(self._field_plot_mesh_length, mesh_length)
+            for name in scalar_names:
+                if name in self._field_plot_scalar_name_set:
+                    continue
+                self._field_plot_scalar_name_set.add(name)
+                self._field_plot_scalar_names.append(name)
+            for name in vector_names:
+                if name in self._field_plot_vector_name_set:
+                    continue
+                self._field_plot_vector_name_set.add(name)
+                self._field_plot_vector_names.append(name)
+            for name, bounds in ranges.items():
+                self._merge_range(self._field_plot_ranges, name, bounds["min"], bounds["max"])
+
+    def _persist_field_plot_cache(self) -> None:
+        if self.workspace_path is None:
+            logger.info("Skipping field-plot cache persistence because no workspace path was provided")
+            return
+
+        manager = SettingsManager()
+        manager.load_workspace(self.workspace_path)
+        relative_path = os.path.normpath(os.path.relpath(self.pvd_file, self.workspace_path))
+        absolute_pvd_path = os.path.abspath(os.path.normpath(os.fspath(self.pvd_file)))
+        cache_entry = {
+            "relative_path": relative_path,
+            "updated_at_utc": self._utc_now_timestamp(),
+            "mesh_length": float(self._field_plot_mesh_length),
+            "scalar_names": list(self._field_plot_scalar_names),
+            "vector_names": list(self._field_plot_vector_names),
+            "ranges": dict(self._field_plot_ranges),
+        }
+
+        cached_entries = manager.get_local("tools.field_plot.cached_pvds") or []
+        updated_entries = [entry for entry in cached_entries if entry.get("relative_path") != relative_path]
+        updated_entries.append(cache_entry)
+
+        manager.set_local("tools.field_plot.cached_pvds", updated_entries)
+        manager.set_local("tools.field_plot.selected_relative_path", relative_path)
+        manager.set_local("tools.field_plot.filepath", absolute_pvd_path)
+        manager.save()
 
     def init_pvd(self) -> None:
         """
@@ -374,13 +548,26 @@ class FemapConverter:
         active_files = {k: v for k, v in file_map.items() if v is not None}
         logger.info("Parsing %d data files in parallel: %s", len(active_files), list(active_files.keys()))
         threads = []
+        exceptions: list[Exception] = []
+        exceptions_lock = threading.Lock()
+
+        def _parse_worker(name: str, file_path: Path) -> None:
+            try:
+                self.parse_data_file(name, file_path)
+            except Exception as exc:  # pragma: no cover - exercised via caller assertions
+                logger.exception("Failed to parse %s data file: %s", name, file_path)
+                with exceptions_lock:
+                    exceptions.append(exc)
+
         for name, file_path in file_map.items():
             if file_path is not None:
-                thread = threading.Thread(target=self.parse_data_file, args=(name, file_path))
+                thread = threading.Thread(target=_parse_worker, args=(name, file_path))
                 thread.start()
                 threads.append(thread)
         for thread in threads:
             thread.join()
+        if exceptions:
+            raise exceptions[0]
         logger.debug("All data files parsed successfully")
 
     def get_data_array(self, step: int, vectors: list[dict]) -> dict[str, np.ndarray]:
@@ -453,15 +640,28 @@ class FemapConverter:
         """Convert every FEMAP output set into a VTK multiblock file."""
         logger.info("Starting time stepping for %d output sets", len(self.sets))
         threads = []
+        exceptions: list[Exception] = []
+        exceptions_lock = threading.Lock()
+
+        def _time_step_worker(step: int, vtm_path: Path) -> None:
+            try:
+                self._process_time_step(step, vtm_path)
+            except Exception as exc:  # pragma: no cover - exercised via caller assertions
+                logger.exception("Failed to process time step %d", step)
+                with exceptions_lock:
+                    exceptions.append(exc)
+
         for step, ts in self.sets.items():
             logger.info("Processing time step %d - %s", step, ts["title"])
             safe_title = re.sub(r'[<>:"/\\|?*!]', "", ts["title"])
             vtm_path = self.output_dir / self.output_name / f"{safe_title}.vtm"
-            thread = threading.Thread(target=self._process_time_step, args=(step, vtm_path))
+            thread = threading.Thread(target=_time_step_worker, args=(step, vtm_path))
             thread.start()
             threads.append(thread)
         for thread in threads:
             thread.join()
+        if exceptions:
+            raise exceptions[0]
         logger.info("Time stepping complete: %d VTM files written", len(self.sets))
 
     def _process_time_step(self, step: int, vtm_path: str | Path) -> None:
@@ -483,6 +683,7 @@ class FemapConverter:
             self._process_force_J_B_field(step, mesh_copy)
         if "heat" in self.vectors:
             self._process_heat_field(step, mesh_copy)
+        self._update_field_plot_metadata_from_mesh(mesh_copy)
         self._write_vtm_file(mesh_copy, vtm_path)
         logger.debug("Written time step %d to %s", step, vtm_path)
 

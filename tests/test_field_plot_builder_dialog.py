@@ -1,6 +1,5 @@
 import os
 
-import numpy as np
 from PySide6.QtWidgets import QApplication, QDialog
 
 import pyemsi.gui as gui
@@ -25,16 +24,30 @@ def _make_manager(tmp_path):
     return manager, workspace
 
 
-def test_field_plot_builder_dialog_defaults_to_disabled_stages(tmp_path):
+def _cached_entry(relative_path: str, *, updated_at_utc: str = "2026-06-02T00:00:00Z") -> dict[str, object]:
+    return {
+        "relative_path": os.path.normpath(relative_path),
+        "updated_at_utc": updated_at_utc,
+        "mesh_length": 20.0,
+        "scalar_names": ["Point Scalar"],
+        "vector_names": ["Point Vector"],
+        "ranges": {
+            "Point Scalar": {"min": -2.0, "max": 4.0},
+            "Point Vector": {"min": 0.0, "max": 5.0},
+        },
+    }
+
+
+def test_field_plot_builder_dialog_defaults_to_disabled_stages_and_empty_cache(tmp_path):
     _app()
     manager, workspace = _make_manager(tmp_path)
-    expected_plot_path = os.path.abspath(os.path.normpath(os.fspath(workspace / ".pyemsi" / "output.pvd")))
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
 
     assert dialog.windowTitle() == "Field Plot"
     assert dialog._title_edit.text() == "Field Plot"
-    assert dialog._file_field.value() == expected_plot_path
+    assert dialog._file_combo.count() == 0
+    assert not dialog._file_combo.isEnabled()
     assert not dialog._scalar_enabled_checkbox.isChecked()
     assert not dialog._contour_enabled_checkbox.isChecked()
     assert not dialog._vector_enabled_checkbox.isChecked()
@@ -46,55 +59,90 @@ def test_field_plot_builder_dialog_defaults_to_disabled_stages(tmp_path):
         None,
         False,
     ]
-    assert dialog._scalar_kwargs()["cmap"] == "jet"
 
 
-def test_field_plot_builder_dialog_defaults_to_collapsed_compact_sections(tmp_path):
+def test_field_plot_builder_dialog_populates_from_cached_workspace_metadata(tmp_path):
     _app()
     manager, workspace = _make_manager(tmp_path)
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
+    plot_path.write_text("dummy", encoding="utf-8")
+    relative_path = os.path.join(".pyemsi", "output.pvd")
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(relative_path)])
+    manager.set_local("tools.field_plot.selected_relative_path", relative_path)
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
 
-    assert dialog._sections_scroll_area.widget() is not None
-    assert not dialog._scalar_panel.is_expanded()
-    assert not dialog._contour_panel.is_expanded()
-    assert not dialog._vector_panel.is_expanded()
-    assert dialog._feature_edges_panel.is_expanded()
-    assert dialog._scalar_panel.summary_text() == "Disabled"
-    assert dialog._contour_panel.summary_text() == "Disabled"
-    assert dialog._vector_panel.summary_text() == "Disabled"
-    assert dialog._feature_edges_panel.summary_text() == "white | 1 px | 1.00 | loops>=10 | angle 30.0"
+    assert dialog._file_combo.count() == 1
+    assert dialog._file_combo.currentData() == os.path.normpath(relative_path)
+    assert dialog._selected_field_path() == os.path.abspath(os.path.normpath(os.fspath(plot_path)))
+    assert [dialog._scalar_name_combo.itemData(index) for index in range(dialog._scalar_name_combo.count())] == [
+        "Point Scalar"
+    ]
+    assert [dialog._vector_name_combo.itemData(index) for index in range(dialog._vector_name_combo.count())] == [
+        "Point Vector"
+    ]
+    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
+        None,
+        False,
+        "Point Scalar",
+        "Point Vector",
+    ]
 
 
-def test_field_plot_builder_dialog_enabling_stage_expands_section_and_updates_summary(tmp_path):
+def test_field_plot_builder_dialog_prunes_stale_cache_and_falls_back_to_latest_valid_entry(tmp_path):
     _app()
     manager, workspace = _make_manager(tmp_path)
-
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-
-    dialog._scalar_enabled_checkbox.setChecked(True)
-
-    assert dialog._scalar_panel.is_expanded()
-    assert dialog._scalar_panel.summary_text() == " | ".join(
-        (
-            "Select array",
-            str(dialog._scalar_mode_combo.currentData()),
-            dialog._scalar_cmap_combo.currentText(),
-            "edges white @ 0.25",
-        )
+    valid_path = workspace / ".pyemsi" / "fresh.pvd"
+    valid_path.parent.mkdir(parents=True)
+    valid_path.write_text("dummy", encoding="utf-8")
+    stale_relative_path = os.path.join(".pyemsi", "stale.pvd")
+    valid_relative_path = os.path.join(".pyemsi", "fresh.pvd")
+    manager.set_local(
+        "tools.field_plot.cached_pvds",
+        [
+            _cached_entry(stale_relative_path, updated_at_utc="2026-06-01T00:00:00Z"),
+            _cached_entry(valid_relative_path, updated_at_utc="2026-06-02T00:00:00Z"),
+        ],
     )
+    manager.set_local("tools.field_plot.selected_relative_path", stale_relative_path)
+    manager.save()
 
-    dialog._scalar_mode_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._scalar_mode_combo, "element"))
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
 
-    assert "element" in dialog._scalar_panel.summary_text()
+    assert dialog._file_combo.count() == 1
+    assert dialog._file_combo.currentData() == os.path.normpath(valid_relative_path)
+    assert manager.get_local("tools.field_plot.cached_pvds") == [
+        _cached_entry(valid_relative_path, updated_at_utc="2026-06-02T00:00:00Z")
+    ]
+    assert manager.get_local("tools.field_plot.selected_relative_path") == os.path.normpath(valid_relative_path)
+    assert manager.get_local("tools.field_plot.filepath") == os.path.abspath(os.path.normpath(os.fspath(valid_path)))
 
-    dialog._scalar_enabled_checkbox.setChecked(False)
 
-    assert not dialog._scalar_panel.is_expanded()
-    assert dialog._scalar_panel.summary_text() == "Disabled"
+def test_field_plot_builder_dialog_reload_sees_cache_written_by_external_process(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
+    plot_path.write_text("dummy", encoding="utf-8")
+
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    assert dialog._file_combo.count() == 0
+
+    external_manager = SettingsManager(global_settings_path=manager.global_settings_path)
+    external_manager.load_workspace(workspace)
+    external_manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    external_manager.set_local("tools.field_plot.selected_relative_path", os.path.join(".pyemsi", "output.pvd"))
+    external_manager.save()
+
+    dialog._reload_cached_fields()
+
+    assert dialog._file_combo.count() == 1
+    assert dialog._file_combo.currentData() == os.path.normpath(os.path.join(".pyemsi", "output.pvd"))
+    assert dialog._selected_field_path() == os.path.abspath(os.path.normpath(os.fspath(plot_path)))
 
 
-def test_field_plot_builder_dialog_plot_requires_existing_file_and_stage(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_plot_requires_cached_field_then_stage(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
@@ -102,277 +150,54 @@ def test_field_plot_builder_dialog_plot_requires_existing_file_and_stage(tmp_pat
 
     monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
 
-    dialog._file_field.set_value(None)
     dialog._on_plot()
-    dialog._file_field.set_value(os.fspath(workspace / "missing.pvd"))
+
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
+    plot_path.write_text("dummy", encoding="utf-8")
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    dialog._reload_cached_fields()
     dialog._on_plot()
 
     assert warnings == [
-        "Field file is required.",
+        "Run FEMAP conversion first to create a cached field file.",
         "Select at least one plotting stage.",
     ]
 
 
-def test_field_plot_builder_dialog_plot_requires_valid_positive_vector_factor(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_uses_cached_metadata_without_reading_plotter(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    warnings = []
-
-    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
-
-    dialog._file_field.set_value(os.fspath(workspace / "output.pvd"))
-    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
-    dialog._vector_enabled_checkbox.setChecked(True)
-    dialog._vector_factor_edit.setText("0")
-
-    dialog._on_plot()
-
-    assert warnings == ["Vector factor must be greater than 0."]
-
-
-class _FakeArray:
-    def __init__(self, shape):
-        self.shape = shape
-        self.ndim = len(shape)
-
-
-class _FakeAttributes:
-    def __init__(self, arrays):
-        self._arrays = arrays
-
-    def keys(self):
-        return list(self._arrays)
-
-    def __getitem__(self, name):
-        return self._arrays[name]
-
-
-class _FakeBlock:
-    def __init__(self, point_arrays=None, cell_arrays=None, length=None, bounds=None):
-        self.point_data = _FakeAttributes(point_arrays or {})
-        self.cell_data = _FakeAttributes(cell_arrays or {})
-        self.length = length
-        self.bounds = bounds
-
-
-class _FakeMultiBlock:
-    def __init__(self, blocks, names, length=None, bounds=None):
-        self._blocks = blocks
-        self._names = names
-        self.length = length
-        self.bounds = bounds
-
-    def __iter__(self):
-        return iter(self._blocks)
-
-    def get_block_name(self, index):
-        return self._names[index]
-
-
-def test_field_plot_builder_dialog_discover_requires_field_file(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    warnings = []
-
-    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
-
-    dialog._file_field.set_value(None)
-
-    dialog._on_discover_arrays()
-
-    assert warnings == ["Field file is required."]
-
-
-def test_field_plot_builder_dialog_discover_repopulates_combos_from_mesh_arrays(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
-    dialog._file_field.set_value(os.fspath(plot_path))
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
 
-    calls = []
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            calls.append(("init", filepath))
-            self.mesh = _FakeMultiBlock(
-                [
-                    _FakeBlock(
-                        point_arrays={
-                            "Point Scalar": _FakeArray((10,)),
-                            "Point Vector": _FakeArray((10, 3)),
-                            "Tensor": _FakeArray((10, 6)),
-                            "vtkOriginalPointIds": _FakeArray((10,)),
-                        },
-                        cell_arrays={
-                            "Cell Scalar": _FakeArray((5,)),
-                            "vtkOriginalCellIds": _FakeArray((5,)),
-                        },
-                    ),
-                    _FakeBlock(
-                        point_arrays={"Extra Vector": _FakeArray((12, 3))},
-                        cell_arrays={"Extra Scalar": _FakeArray((6, 1))},
-                    ),
-                ],
-                ["main", "secondary"],
-            )
-
-        def close(self) -> None:
-            calls.append(("close", None))
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
-
-    dialog._on_discover_arrays()
-
-    assert calls == [("init", os.fspath(plot_path)), ("close", None)]
-    assert [dialog._scalar_name_combo.itemData(index) for index in range(dialog._scalar_name_combo.count())] == [
-        "Point Scalar",
-        "Cell Scalar",
-        "Extra Scalar",
-    ]
-    assert [dialog._contour_name_combo.itemData(index) for index in range(dialog._contour_name_combo.count())] == [
-        "Point Scalar",
-        "Cell Scalar",
-        "Extra Scalar",
-    ]
-    assert [dialog._vector_name_combo.itemData(index) for index in range(dialog._vector_name_combo.count())] == [
-        "Point Vector",
-        "Extra Vector",
-    ]
-    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
-        None,
-        False,
-        "Point Scalar",
-        "Cell Scalar",
-        "Extra Scalar",
-        "Point Vector",
-        "Extra Vector",
-    ]
-    assert dialog._vector_name_combo.currentData() == "Point Vector"
-    assert dialog._vector_scale_combo.currentData() is False
-
-
-def test_field_plot_builder_dialog_discover_leaves_combos_empty_when_mesh_has_no_usable_arrays(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-    dialog._file_field.set_value(os.fspath(plot_path))
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            self.mesh = _FakeBlock(point_arrays={"Tensor": _FakeArray((8, 9))}, cell_arrays={})
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._on_discover_arrays()
-
-    assert dialog._scalar_name_combo.count() == 0
-    assert dialog._contour_name_combo.count() == 0
-    assert dialog._vector_name_combo.count() == 0
-    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
-        None,
-        False,
-    ]
-
-
-def test_field_plot_builder_dialog_discover_closes_plotter_and_reports_errors(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-    dialog._file_field.set_value(os.fspath(plot_path))
-    criticals = []
-    calls = []
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            calls.append(("init", filepath))
-
-        @property
-        def mesh(self):
-            raise RuntimeError("bad mesh")
-
-        def close(self) -> None:
-            calls.append(("close", None))
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-    monkeypatch.setattr(dialog_module.QMessageBox, "critical", lambda *args: criticals.append(args[2]))
-
-    dialog._on_discover_arrays()
-
-    assert calls == [("init", os.fspath(plot_path)), ("close", None)]
-    assert criticals == ["bad mesh"]
-
-
-def test_field_plot_builder_dialog_suggest_factor_updates_from_selected_vector(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-
-    dialog._file_field.set_value(os.fspath(plot_path))
     dialog._vector_enabled_checkbox.setChecked(True)
 
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            self.mesh = _FakeBlock(
-                point_arrays={
-                    "Point Vector": np.array([[3.0, 4.0, 0.0], [0.0, 0.0, 0.0]]),
-                    "Point Scalar": np.array([2.0, 4.0]),
-                },
-                length=20.0,
-            )
+    class _UnexpectedPlotter:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AssertionError("Plotter should not be created for cached factor suggestions")
 
-        def close(self) -> None:
-            return None
+    monkeypatch.setattr(dialog_module, "Plotter", _UnexpectedPlotter)
 
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._on_discover_arrays()
     dialog._on_suggest_vector_factor()
 
     assert dialog._vector_name_combo.currentData() == "Point Vector"
     assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.4)
 
 
-def test_field_plot_builder_dialog_suggest_factor_updates_for_uniform_scale(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_suggest_factor_uses_uniform_scale_rule_from_cache(tmp_path):
     _app()
     manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
 
-    dialog._file_field.set_value(os.fspath(plot_path))
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._vector_enabled_checkbox.setChecked(True)
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            self.mesh = _FakeBlock(
-                point_arrays={
-                    "Point Vector": np.array([[3.0, 4.0, 0.0]]),
-                    "Point Scalar": np.array([2.0, 4.0]),
-                },
-                length=20.0,
-            )
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._on_discover_arrays()
     dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
 
     dialog._on_suggest_vector_factor()
@@ -380,210 +205,17 @@ def test_field_plot_builder_dialog_suggest_factor_updates_for_uniform_scale(tmp_
     assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(2.0)
 
 
-def test_field_plot_builder_dialog_suggest_factor_updates_for_explicit_scale_array(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_script_uses_cached_selection_without_creating_plotter(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
-
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._vector_enabled_checkbox.setChecked(True)
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            self.mesh = _FakeBlock(
-                point_arrays={
-                    "Point Vector": np.array([[3.0, 4.0, 0.0]]),
-                    "Point Scalar": np.array([2.0, 4.0]),
-                },
-                length=20.0,
-            )
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._on_discover_arrays()
-    dialog._vector_scale_combo.setCurrentIndex(
-        dialog_module._combo_index_for_data(dialog._vector_scale_combo, "Point Scalar")
-    )
-
-    dialog._on_suggest_vector_factor()
-
-    assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.5)
-
-
-def test_field_plot_builder_dialog_suggest_factor_leaves_value_unchanged_when_vectors_disabled(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._vector_factor_edit.setText("7.5")
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            self.mesh = _FakeBlock(
-                point_arrays={"Point Vector": np.array([[3.0, 4.0, 0.0]])},
-                length=20.0,
-            )
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._on_suggest_vector_factor()
-
-    assert dialog._vector_factor_edit.text() == "7.5"
-
-
-def test_field_plot_builder_dialog_suggest_factor_reports_zero_vector_scale_data(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-    criticals = []
-
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._vector_enabled_checkbox.setChecked(True)
-
-    class _FakePlotter:
-        def __init__(self, filepath) -> None:
-            self.mesh = _FakeBlock(
-                point_arrays={"Point Vector": np.zeros((2, 3))},
-                length=20.0,
-            )
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-    monkeypatch.setattr(dialog_module.QMessageBox, "critical", lambda *args: criticals.append(args[2]))
-
-    dialog._on_suggest_vector_factor()
-
-    assert criticals == ["Maximum value for 'Point Vector' must be greater than 0."]
-
-
-def test_field_plot_builder_dialog_suggest_factor_sweeps_all_time_values(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._vector_enabled_checkbox.setChecked(True)
-
-    class _FakeReader:
-        def __init__(self) -> None:
-            self.active_time_value = 1.0
-            self.read_calls: list[float] = []
-            self.meshes = {
-                0.0: _FakeBlock(point_arrays={"Point Vector": np.array([[2.0, 0.0, 0.0]])}, length=10.0),
-                1.0: _FakeBlock(point_arrays={"Point Vector": np.array([[6.0, 8.0, 0.0]])}, length=40.0),
-            }
-
-        def read(self):
-            self.read_calls.append(self.active_time_value)
-            return self.meshes[self.active_time_value]
-
-    class _FakePlotter:
-        instances = []
-
-        def __init__(self, filepath) -> None:
-            self.reader = _FakeReader()
-            self.time_values = [0.0, 1.0]
-            self.time_history: list[float] = []
-            self.__class__.instances.append(self)
-
-        @property
-        def active_time_value(self):
-            return self.reader.active_time_value
-
-        def set_active_time_value(self, time_value: float) -> None:
-            self.time_history.append(time_value)
-            self.reader.active_time_value = time_value
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-
-    dialog._on_suggest_vector_factor()
-
-    plotter = _FakePlotter.instances[0]
-    assert plotter.reader.read_calls == [0.0, 1.0]
-    assert plotter.time_history == [0.0, 1.0, 1.0]
-    assert plotter.active_time_value == 1.0
-    assert dialog._vector_factor_edit.text() == dialog_module._format_float_text(0.4)
-
-
-def test_field_plot_builder_dialog_changing_path_clears_discovered_arrays(tmp_path):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-
-    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
-
-    dialog._file_field.set_value(os.fspath(workspace / "other_output.pvd"))
-
-    assert dialog._scalar_name_combo.count() == 0
-    assert dialog._contour_name_combo.count() == 0
-    assert dialog._vector_name_combo.count() == 0
-    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
-        None,
-        False,
-    ]
-
-
-def test_field_plot_builder_dialog_prefers_explicit_field_plot_path_over_femap_defaults(
-    tmp_path,
-):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    explicit_path = workspace / "saved" / "field.pvd"
-    manager.set_local("tools.field_plot.filepath", os.fspath(explicit_path))
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-
-    assert dialog._file_field.value() == os.path.abspath(os.path.normpath(os.fspath(explicit_path)))
-
-
-def test_field_plot_builder_dialog_initializes_path_from_femap_converter_settings(
-    tmp_path,
-):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    manager.set_local("tools.femap_converter.output_dir", "exports")
-    manager.set_local("tools.femap_converter.output_name", "motor")
-
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-
-    expected_plot_path = os.path.abspath(os.path.normpath(os.fspath(workspace / "exports" / "motor.pvd")))
-    assert dialog._file_field.value() == expected_plot_path
-
-
-def test_field_plot_builder_dialog_script_uses_widget_state_without_creating_plotter(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-
-    dialog._file_field.set_value(os.fspath(plot_path))
     dialog._title_edit.setText("Rotor Field")
-    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
     dialog._scalar_enabled_checkbox.setChecked(True)
-    dialog._scalar_mode_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._scalar_mode_combo, "element"))
-    dialog._vector_enabled_checkbox.setChecked(True)
-    dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
 
     captured = {}
 
@@ -603,52 +235,23 @@ def test_field_plot_builder_dialog_script_uses_widget_state_without_creating_plo
     script = captured["script"]
     assert captured["parent"] is dialog
     assert captured["exec"] is True
-    assert "from pyemsi import gui, Plotter" in script
     assert f"field_plot = Plotter({os.fspath(plot_path)!r})" in script
     assert "field_plot.set_scalar(" in script
     assert "name='Point Scalar'" in script
-    assert "mode='element'" in script
-    assert "cmap='jet'" in script
-    assert "field_plot.set_vector(" in script
-    assert "name='Point Vector'" in script
-    assert "scale=False" in script
     assert "gui.add_field(field_plot, 'Rotor Field')" in script
 
 
-def test_field_plot_builder_dialog_script_requires_discovered_array_selection(tmp_path, monkeypatch):
+def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_cached_selection(tmp_path, monkeypatch):
     _app()
     manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
-    warnings = []
+    relative_path = os.path.join(".pyemsi", "output.pvd")
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(relative_path)])
 
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._scalar_enabled_checkbox.setChecked(True)
-    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
-
-    dialog._open_script_dialog()
-
-    assert warnings == ["Discover arrays and select a scalar field before plotting."]
-
-
-def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._title_edit.setText("Field Plot")
-    dialog._apply_discovered_plot_arrays(["Point Scalar"], ["Point Vector"], ["Point Scalar", "Point Vector"])
     dialog._scalar_enabled_checkbox.setChecked(True)
-    dialog._contour_enabled_checkbox.setChecked(True)
-    dialog._vector_enabled_checkbox.setChecked(True)
-    dialog._vector_factor_edit.setText("1e-30")
-    dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, None))
-    dialog._vector_use_tolerance_checkbox.setChecked(True)
-    dialog._vector_tolerance_spin.setValue(0.25)
 
     calls = []
 
@@ -659,12 +262,6 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
         def set_scalar(self, **kwargs) -> None:
             calls.append(("set_scalar", kwargs))
 
-        def set_contour(self, **kwargs) -> None:
-            calls.append(("set_contour", kwargs))
-
-        def set_vector(self, **kwargs) -> None:
-            calls.append(("set_vector", kwargs))
-
         def set_feature_edges(self, **kwargs) -> None:
             calls.append(("set_feature_edges", kwargs))
 
@@ -673,74 +270,15 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_settings(tm
 
     added = {}
     monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
-    monkeypatch.setattr(
-        gui,
-        "add_field",
-        lambda plotter, title: added.update({"plotter": plotter, "title": title}),
-    )
+    monkeypatch.setattr(gui, "add_field", lambda plotter, title: added.update({"plotter": plotter, "title": title}))
 
     dialog._on_plot()
 
-    assert calls[0] == ("init", os.fspath(plot_path))
+    assert calls[0] == ("init", os.path.abspath(os.path.normpath(os.fspath(plot_path))))
     assert calls[1][0] == "set_scalar"
-    assert calls[1][1]["cmap"] == "jet"
     assert calls[1][1]["name"] == "Point Scalar"
-    assert calls[2][0] == "set_contour"
-    assert calls[2][1]["name"] == "Point Scalar"
-    assert calls[3][0] == "set_vector"
-    assert calls[3][1]["name"] == "Point Vector"
-    assert calls[3][1]["factor"] == 1e-30
-    assert calls[4][0] == "set_feature_edges"
-    assert calls[4][1] == {
-        "color": "white",
-        "line_width": 1,
-        "opacity": 1.0,
-        "remove_small_loops": True,
-        "max_loop_edges": 10,
-        "feature_angle": 30.0,
-    }
+    assert calls[2][0] == "set_feature_edges"
     assert added["title"] == "Field Plot"
     assert dialog.result() == QDialog.DialogCode.Accepted
+    assert manager.get_local("tools.field_plot.selected_relative_path") == os.path.normpath(relative_path)
     assert manager.get_local("tools.field_plot.filepath") == os.path.abspath(os.path.normpath(os.fspath(plot_path)))
-    assert manager.get_local("tools.field_plot.title") is None
-    assert manager.get_local("tools.field_plot.scalar_enabled") is None
-    assert manager.get_local("tools.field_plot.vector_tolerance") is None
-
-
-def test_field_plot_builder_dialog_plot_requires_discovered_array_selection(tmp_path, monkeypatch):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-    plot_path = workspace / "output.pvd"
-    plot_path.write_text("dummy", encoding="utf-8")
-    warnings = []
-
-    dialog._file_field.set_value(os.fspath(plot_path))
-    dialog._vector_enabled_checkbox.setChecked(True)
-    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
-
-    dialog._on_plot()
-
-    assert warnings == ["Discover arrays and select a vector field before plotting."]
-
-
-def test_field_plot_builder_dialog_vector_scale_preserves_uniform_option(tmp_path):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-
-    dialog._vector_scale_combo.setCurrentIndex(dialog_module._combo_index_for_data(dialog._vector_scale_combo, False))
-
-    assert dialog._vector_kwargs()["scale"] is False
-
-
-def test_field_plot_builder_dialog_scalar_colormap_selection_uses_display_settings_choices(tmp_path):
-    _app()
-    manager, workspace = _make_manager(tmp_path)
-    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
-
-    dialog._scalar_cmap_combo.setCurrentIndex(
-        dialog_module._combo_index_for_data(dialog._scalar_cmap_combo, "turbo : miscellaneous")
-    )
-
-    assert dialog._scalar_kwargs()["cmap"] == "turbo"

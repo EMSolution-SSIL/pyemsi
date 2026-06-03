@@ -247,6 +247,90 @@ def test_settings_manager_persists_femap_converter_values_in_local_scope(tmp_pat
     assert reloaded.get_local("tools.femap_converter.force_2d") is True
 
 
+def test_settings_manager_persists_field_plot_cached_pvds_in_local_scope(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+    manager.set_local(
+        "tools.field_plot.cached_pvds",
+        [
+            {
+                "relative_path": os.path.join(".pyemsi", "motor.pvd"),
+                "updated_at_utc": "2026-06-02T00:30:45+09:00",
+                "mesh_length": 12.5,
+                "scalar_names": ["B-Mag (T)", "Loss (W/m^3)"],
+                "vector_names": ["B-Vec (T)"],
+                "ranges": {
+                    "B-Mag (T)": {"min": -2.0, "max": 5.0},
+                    "B-Vec (T)": {"min": 0.0, "max": 8.0},
+                },
+            }
+        ],
+    )
+    manager.set_local("tools.field_plot.selected_relative_path", os.path.join(".pyemsi", "motor.pvd"))
+    manager.save()
+
+    reloaded = SettingsManager(global_settings_path=global_settings_path)
+    reloaded.load_workspace(workspace)
+
+    cached = reloaded.get_local("tools.field_plot.cached_pvds")
+    assert cached == [
+        {
+            "relative_path": os.path.normpath(os.path.join(".pyemsi", "motor.pvd")),
+            "updated_at_utc": "2026-06-01T15:30:45Z",
+            "mesh_length": 12.5,
+            "scalar_names": ["B-Mag (T)", "Loss (W/m^3)"],
+            "vector_names": ["B-Vec (T)"],
+            "ranges": {
+                "B-Mag (T)": {"min": -2.0, "max": 5.0},
+                "B-Vec (T)": {"min": 0.0, "max": 8.0},
+            },
+        }
+    ]
+    assert reloaded.get_local("tools.field_plot.selected_relative_path") == os.path.normpath(
+        os.path.join(".pyemsi", "motor.pvd")
+    )
+
+
+def test_settings_manager_ignores_invalid_field_plot_cached_pvds(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    global_settings_path = tmp_path / "config" / "settings.json"
+    local_settings_path = workspace / ".pyemsi" / "workspace.json"
+    local_settings_path.parent.mkdir(parents=True)
+    local_settings_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "tools": {
+                    "field_plot": {
+                        "cached_pvds": [
+                            {
+                                "relative_path": ".pyemsi/output.pvd",
+                                "updated_at_utc": "bad timestamp",
+                                "mesh_length": "big",
+                                "scalar_names": ["A"],
+                                "vector_names": ["B"],
+                                "ranges": {"A": {"min": 1.0, "max": 0.0}},
+                            }
+                        ]
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+
+    assert manager.get_local("tools.field_plot.cached_pvds") == []
+    assert any("ignored invalid value for tools.field_plot.cached_pvds" in warning for warning in manager.warnings)
+
+
 def test_settings_manager_persists_atlas_to_femap_values_in_local_scope(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

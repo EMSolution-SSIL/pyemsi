@@ -834,22 +834,29 @@ def test_main_window_opens_field_plot_dialog(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     global_settings_path = tmp_path / "config" / "settings.json"
-    calls = {}
+    calls = []
 
     class _FakeFieldPlotDialog:
         def __init__(self, settings_manager, browse_dir_getter=None, parent=None) -> None:
-            calls["settings_manager"] = settings_manager
-            calls["browse_dir"] = browse_dir_getter() if callable(browse_dir_getter) else None
-            calls["parent"] = parent
+            calls.append(
+                {
+                    "settings_manager": settings_manager,
+                    "browse_dir": browse_dir_getter() if callable(browse_dir_getter) else None,
+                    "parent": parent,
+                }
+            )
 
         def show(self) -> None:
-            calls["show"] = True
+            calls[-1]["show"] = True
 
         def raise_(self) -> None:
-            calls["raise"] = True
+            calls[-1]["raise"] = True
 
         def activateWindow(self) -> None:
-            calls["activate"] = True
+            calls[-1]["activate"] = True
+
+        def setAttribute(self, attribute, value) -> None:
+            calls[-1]["set_attribute"] = (attribute, value)
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
     monkeypatch.setattr(
@@ -865,13 +872,17 @@ def test_main_window_opens_field_plot_dialog(tmp_path, monkeypatch):
         window._set_workspace_path(str(workspace))
 
         window._open_field_plot_dialog()
+        window._open_field_plot_dialog()
 
-        assert calls["settings_manager"] is manager
-        assert calls["browse_dir"] == os.path.abspath(os.path.normpath(str(workspace)))
-        assert calls["parent"] is window
-        assert calls["show"] is True
-        assert calls["raise"] is True
-        assert calls["activate"] is True
+        assert len(calls) == 2
+        for call in calls:
+            assert call["settings_manager"] is manager
+            assert call["browse_dir"] == os.path.abspath(os.path.normpath(str(workspace)))
+            assert call["parent"] is window
+            assert call["show"] is True
+            assert call["raise"] is True
+            assert call["activate"] is True
+            assert call["set_attribute"] == (main_window_module.Qt.WidgetAttribute.WA_DeleteOnClose, True)
     finally:
         window.close()
 
@@ -971,6 +982,7 @@ def test_main_window_launches_femap_converter_in_external_terminal(tmp_path, mon
     global_settings_path = tmp_path / "config" / "settings.json"
 
     config = FemapConverterDialogConfig(
+        workspace_path=os.path.abspath(os.path.normpath(str(workspace))),
         input_dir=os.path.abspath(os.path.normpath(str(input_dir))),
         output_dir=".pyemsi",
         output_name="transient",

@@ -92,6 +92,7 @@ def test_femap_converter_dialog_builds_config_with_optional_channels_disabled(tm
 
         config = dialog.config()
         assert config is not None
+        assert config.workspace_path is None
         assert config.input_dir == os.path.abspath(os.path.normpath(str(input_dir)))
         assert config.output_dir == ".pyemsi"
         assert config.mesh == "post_geom"
@@ -131,7 +132,31 @@ def test_femap_converter_dialog_allows_current_and_electric_together(tmp_path):
         config = dialog._build_config()
 
         assert config is not None
+        assert config.to_payload()["workspace_path"] is None
         assert config.current == "current"
         assert config.electric == "electric"
+    finally:
+        dialog.close()
+
+
+def test_femap_converter_dialog_payload_includes_workspace_path(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "post_geom").write_text("mesh", encoding="utf-8")
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.load_workspace(workspace)
+
+    dialog = FemapConverterDialog(manager)
+    try:
+        monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
+        dialog._accept_if_valid()
+
+        config = dialog.config()
+        assert config is not None
+        assert config.workspace_path == os.path.abspath(os.path.normpath(str(workspace)))
+        assert config.to_payload()["workspace_path"] == os.path.abspath(os.path.normpath(str(workspace)))
     finally:
         dialog.close()

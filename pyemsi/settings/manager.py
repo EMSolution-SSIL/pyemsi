@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 import json
+import math
 import os
 import tempfile
 from dataclasses import dataclass
@@ -73,7 +74,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "y_log_scale": False,
         },
         "field_plot": {
+            "cached_pvds": [],
             "filepath": None,
+            "selected_relative_path": None,
         },
         "unv_to_femap": {
             "current": "current",
@@ -122,6 +125,15 @@ def _normalize_bool(value: Any) -> bool:
     raise ValueError("expected a boolean")
 
 
+def _normalize_finite_float(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("expected a finite number")
+    normalized = float(value)
+    if not math.isfinite(normalized):
+        raise ValueError("expected a finite number")
+    return normalized
+
+
 def _normalize_optional_text(value: Any) -> str | None:
     if value is None:
         return None
@@ -135,6 +147,20 @@ def _normalize_text(value: Any) -> str:
     if not isinstance(value, str):
         raise ValueError("expected a string")
     return value.strip()
+
+
+def _normalize_relative_text(value: Any) -> str:
+    normalized = _normalize_text(value)
+    if not normalized:
+        raise ValueError("expected a non-empty string")
+    return os.path.normpath(normalized)
+
+
+def _normalize_optional_relative_text(value: Any) -> str | None:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        return None
+    return os.path.normpath(normalized)
 
 
 def _normalize_recent_folders(value: Any) -> list[str]:
@@ -193,6 +219,90 @@ def _normalize_optional_utc_timestamp(value: Any) -> str | None:
     return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _normalize_string_list(value: Any) -> list[str]:
+    if value in (None, []):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("expected a list of strings")
+
+    normalized: list[str] = []
+    seen_values: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError("expected a list of strings")
+        stripped = item.strip()
+        if not stripped or stripped in seen_values:
+            continue
+        normalized.append(stripped)
+        seen_values.add(stripped)
+    return normalized
+
+
+def _normalize_field_plot_ranges(value: Any) -> dict[str, dict[str, float]]:
+    if value in (None, {}):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("expected a range mapping")
+
+    normalized: dict[str, dict[str, float]] = {}
+    for name, entry in value.items():
+        if not isinstance(name, str):
+            raise ValueError("expected string range keys")
+        array_name = name.strip()
+        if not array_name:
+            continue
+        if not isinstance(entry, dict):
+            raise ValueError("expected range objects")
+        minimum = _normalize_finite_float(entry.get("min"))
+        maximum = _normalize_finite_float(entry.get("max"))
+        if minimum > maximum:
+            raise ValueError("range min must not exceed max")
+        normalized[array_name] = {"min": minimum, "max": maximum}
+    return normalized
+
+
+def _normalize_field_plot_cache_entry(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("expected a cached field-plot entry object")
+
+    updated_at_utc = _normalize_optional_utc_timestamp(value.get("updated_at_utc"))
+    if updated_at_utc is None:
+        raise ValueError("updated_at_utc is required")
+
+    mesh_length = _normalize_finite_float(value.get("mesh_length"))
+    if mesh_length < 0.0:
+        raise ValueError("mesh_length must be non-negative")
+
+    return {
+        "relative_path": _normalize_relative_text(value.get("relative_path")),
+        "updated_at_utc": updated_at_utc,
+        "mesh_length": mesh_length,
+        "scalar_names": _normalize_string_list(value.get("scalar_names")),
+        "vector_names": _normalize_string_list(value.get("vector_names")),
+        "ranges": _normalize_field_plot_ranges(value.get("ranges")),
+    }
+
+
+def _normalize_field_plot_cached_pvds(value: Any) -> list[dict[str, Any]]:
+    if value in (None, []):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("expected a list of cached field-plot entries")
+
+    normalized: list[dict[str, Any]] = []
+    index_by_relative_path: dict[str, int] = {}
+    for item in value:
+        entry = _normalize_field_plot_cache_entry(item)
+        relative_path = entry["relative_path"]
+        existing_index = index_by_relative_path.get(relative_path)
+        if existing_index is None:
+            index_by_relative_path[relative_path] = len(normalized)
+            normalized.append(entry)
+            continue
+        normalized[existing_index] = entry
+    return normalized
+
+
 @dataclass(frozen=True)
 class SettingDefinition:
     default: Any
@@ -248,7 +358,9 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "tools.emsolution_plot.x_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
     "tools.emsolution_plot.y_label": SettingDefinition("", SCOPE_BOTH, _normalize_optional_text),
     "tools.emsolution_plot.y_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
+    "tools.field_plot.cached_pvds": SettingDefinition([], SCOPE_LOCAL, _normalize_field_plot_cached_pvds),
     "tools.field_plot.filepath": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
+    "tools.field_plot.selected_relative_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_relative_text),
     "tools.unv_to_femap.current": SettingDefinition("current", SCOPE_BOTH, _normalize_optional_text),
     "tools.unv_to_femap.current_output": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_text),
     "tools.unv_to_femap.displacement": SettingDefinition("displacement", SCOPE_BOTH, _normalize_optional_text),

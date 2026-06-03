@@ -63,6 +63,7 @@ def main() -> None:
     pyemsi.configure_logging(logging.INFO)
 
     converter = FemapConverter(
+        workspace_path=_normalize_optional_text(payload.get("workspace_path")),
         input_dir=input_dir,
         output_dir=_normalize_text(payload.get("output_dir"), ".pyemsi"),
         output_name=_normalize_text(payload.get("output_name"), "output"),

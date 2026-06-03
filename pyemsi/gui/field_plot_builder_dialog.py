@@ -5,11 +5,9 @@ from dataclasses import dataclass
 import math
 import os
 
-import numpy as np
 from PySide6.QtCore import QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QDoubleValidator, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -34,13 +32,11 @@ from PySide6.QtWidgets import (
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi import Plotter
 from pyemsi.gui.emsolution_output_plot_builder_dialog import GeneratedScriptDialog
-from pyemsi.gui.femap_converter_dialog import _PathSelector
 from pyemsi.plotter.colormaps import CMAP_CHOICES, cmap_choice_to_name, cmap_name_to_choice
 from pyemsi.settings import SettingsManager
 
 GLYPH_TYPE_OPTIONS: tuple[str, ...] = ("arrow", "cone", "sphere")
 COLOR_MODE_OPTIONS: tuple[str, ...] = ("scale", "scalar", "vector")
-INTERNAL_FIELD_NAMES: frozenset[str] = frozenset({"vtkOriginalCellIds", "vtkOriginalPointIds"})
 
 
 class _ColorSelector(QWidget):
@@ -195,12 +191,15 @@ def _vector_scale_options_from_names(names: list[str]) -> list[tuple[str, str | 
 
 
 @dataclass(slots=True)
-class _PlotAnalysisResult:
+class _CachedPlotMetadata:
+    relative_path: str
+    resolved_path: str
+    updated_at_utc: str
     scalar_names: list[str]
     vector_names: list[str]
     scale_names: list[str]
     mesh_length: float
-    array_maxima: dict[str, float]
+    array_ranges: dict[str, dict[str, float]]
 
 
 class FieldPlotBuilderDialog(QDialog):
@@ -235,25 +234,17 @@ class FieldPlotBuilderDialog(QDialog):
         super().__init__(parent)
         self._settings = settings_manager
         self._browse_dir_getter = browse_dir_getter
-        self._analysis: _PlotAnalysisResult | None = None
+        self._cached_fields: list[_CachedPlotMetadata] = []
 
         self.setWindowTitle("Field Plot")
         self.setWindowIcon(QIcon(":/icons/Field.svg"))
         self.resize(720, 560)
 
         defaults = self._load_defaults()
+        self._default_selected_relative_path = defaults["selected_relative_path"]
 
-        self._file_field = _PathSelector(
-            defaults["field_file_path"],
-            select_directory=False,
-            browse_dir_getter=self._browse_dir_getter,
-            parent=self,
-        )
-        self._discover_button = QPushButton(self)
-        self._discover_button.setText("Discover")
-        self._discover_button.setIcon(QIcon(":/icons/Telescope.svg"))
-        self._discover_button.setToolTip("Discover arrays from the selected field file")
-        self._file_field.add_trailing_widget(self._discover_button)
+        self._file_combo = QComboBox(self)
+        self._file_combo.setPlaceholderText("Run FEMAP conversion to populate cached field files")
         self._title_edit = QLineEdit(defaults["title"], self)
         self._title_edit.setPlaceholderText("Field Plot")
 
@@ -369,11 +360,11 @@ class FieldPlotBuilderDialog(QDialog):
         )
 
         file_layout = QFormLayout()
-        file_layout.addRow("Field File:", self._file_field)
+        file_layout.addRow("Field File:", self._file_combo)
         file_layout.addRow("Title:", self._title_edit)
 
         helper_label = QLabel(
-            "Use the telescope beside Field File to discover the available arrays, then use the telescope beside Factor to suggest a vector scale based on 10% of the mesh size. Plot and Script require discovered array selections for enabled stages.",
+            "Available field files and arrays come from cached FEMAP conversion metadata stored in this workspace. Run FEMAP conversion first if the field list is empty, then use Suggest to compute a vector scale from the cached full-run mesh size and array ranges.",
             self,
         )
         helper_label.setWordWrap(True)
@@ -490,8 +481,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._feature_edges_remove_small_loops_checkbox.toggled.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_max_loop_edges_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_feature_angle_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
-        self._file_field.line_edit().textChanged.connect(self._on_field_path_changed)
-        self._discover_button.clicked.connect(self._on_discover_arrays)
+        self._file_combo.currentIndexChanged.connect(self._on_field_selection_changed)
         self._suggest_factor_button.clicked.connect(self._on_suggest_vector_factor)
         self._script_button.clicked.connect(self._open_script_dialog)
         self._plot_button.clicked.connect(self._on_plot)
@@ -510,13 +500,11 @@ class FieldPlotBuilderDialog(QDialog):
         self._on_scalar_show_edges_toggled(self._scalar_show_edges_checkbox.isChecked())
         self._vector_tolerance_spin.setEnabled(self._vector_use_tolerance_checkbox.isChecked())
         self._feature_edges_max_loop_edges_spin.setEnabled(self._feature_edges_remove_small_loops_checkbox.isChecked())
+        self._reload_cached_fields()
 
     def _load_defaults(self) -> dict[str, object]:
-        field_file_path = self._settings.get_effective("tools.field_plot.filepath")
-        if field_file_path is None:
-            field_file_path = self._default_field_file_path()
         return {
-            "field_file_path": field_file_path or "",
+            "selected_relative_path": self._settings.get_effective("tools.field_plot.selected_relative_path"),
             "title": "Field Plot",
             "scalar_enabled": False,
             "scalar_name": None,
@@ -546,22 +534,9 @@ class FieldPlotBuilderDialog(QDialog):
             "feature_edges_feature_angle": 30.0,
         }
 
-    def _default_field_file_path(self) -> str:
-        base_dir = self._settings.get_effective("tools.femap_converter.input_dir")
-        if base_dir is None and self._settings.workspace_path is not None:
-            base_dir = os.fspath(self._settings.workspace_path)
-
-        output_dir = self._settings.get_effective("tools.femap_converter.output_dir") or ".pyemsi"
-        output_name = self._settings.get_effective("tools.femap_converter.output_name") or "output"
-
-        if not base_dir:
-            return ""
-
-        candidate = output_dir
-        if not os.path.isabs(candidate):
-            candidate = os.path.join(base_dir, candidate)
-        candidate = os.path.join(candidate, f"{output_name}.pvd")
-        return os.path.abspath(os.path.normpath(candidate))
+    def showEvent(self, event) -> None:
+        self._reload_cached_fields()
+        super().showEvent(event)
 
     def _current_title(self) -> str:
         return self._title_edit.text().strip() or "Field Plot"
@@ -586,18 +561,175 @@ class FieldPlotBuilderDialog(QDialog):
         panel.set_content_enabled(enabled)
         panel.set_expanded(enabled)
 
-    def _clear_discovered_plot_arrays(self) -> None:
+    def _clear_cached_plot_arrays(self) -> None:
         self._populate_named_combo(self._scalar_name_combo, [], None)
         self._populate_named_combo(self._contour_name_combo, [], None)
         self._populate_named_combo(self._vector_name_combo, [], None)
         self._populate_scale_combo(_vector_scale_options_from_names([]), None)
 
-    def _invalidate_analysis(self) -> None:
-        self._analysis = None
-        self._clear_discovered_plot_arrays()
+    def _workspace_root(self) -> str | None:
+        if self._settings.workspace_path is None:
+            return None
+        return os.path.abspath(os.path.normpath(os.fspath(self._settings.workspace_path)))
 
-    def _on_field_path_changed(self, _text: str) -> None:
-        self._invalidate_analysis()
+    def _resolve_cached_relative_path(self, relative_path: str) -> str | None:
+        workspace_root = self._workspace_root()
+        if not workspace_root:
+            return None
+        return os.path.abspath(os.path.normpath(os.path.join(workspace_root, relative_path)))
+
+    def _selected_relative_path(self) -> str | None:
+        data = self._file_combo.currentData()
+        if data is None:
+            return None
+        return str(data)
+
+    def _selected_field_path(self) -> str | None:
+        entry = self._current_cached_field()
+        if entry is None:
+            return None
+        return entry.resolved_path
+
+    def _current_cached_field(self) -> _CachedPlotMetadata | None:
+        relative_path = self._selected_relative_path()
+        if relative_path is None:
+            return None
+        for entry in self._cached_fields:
+            if entry.relative_path == relative_path:
+                return entry
+        return None
+
+    def _build_cached_plot_metadata(self, entry: dict[str, object]) -> _CachedPlotMetadata | None:
+        relative_path = entry.get("relative_path")
+        updated_at_utc = entry.get("updated_at_utc")
+        mesh_length = entry.get("mesh_length")
+        scalar_names = entry.get("scalar_names")
+        vector_names = entry.get("vector_names")
+        array_ranges = entry.get("ranges")
+        if not isinstance(relative_path, str) or not isinstance(updated_at_utc, str):
+            return None
+        if not isinstance(mesh_length, (int, float)):
+            return None
+        if not isinstance(scalar_names, list) or not isinstance(vector_names, list) or not isinstance(array_ranges, dict):
+            return None
+
+        resolved_path = self._resolve_cached_relative_path(relative_path)
+        if resolved_path is None or not os.path.isfile(resolved_path):
+            return None
+
+        scalar_name_values = [name for name in scalar_names if isinstance(name, str) and name]
+        vector_name_values = [name for name in vector_names if isinstance(name, str) and name]
+        normalized_ranges: dict[str, dict[str, float]] = {}
+        for name, bounds in array_ranges.items():
+            if not isinstance(name, str) or not isinstance(bounds, dict):
+                continue
+            minimum = bounds.get("min")
+            maximum = bounds.get("max")
+            if not isinstance(minimum, (int, float)) or not isinstance(maximum, (int, float)):
+                continue
+            normalized_ranges[name] = {"min": float(minimum), "max": float(maximum)}
+
+        return _CachedPlotMetadata(
+            relative_path=relative_path,
+            resolved_path=resolved_path,
+            updated_at_utc=updated_at_utc,
+            scalar_names=scalar_name_values,
+            vector_names=vector_name_values,
+            scale_names=_unique_names([*scalar_name_values, *vector_name_values]),
+            mesh_length=float(mesh_length),
+            array_ranges=normalized_ranges,
+        )
+
+    def _reload_cached_fields(self) -> None:
+        if self._settings.workspace_path is not None:
+            self._settings.load_workspace(self._settings.workspace_path)
+        else:
+            self._settings.load()
+        cached_entries = self._settings.get_local("tools.field_plot.cached_pvds") or []
+        valid_entries: list[_CachedPlotMetadata] = []
+        normalized_entries: list[dict[str, object]] = []
+        for entry in cached_entries:
+            if not isinstance(entry, dict):
+                continue
+            metadata = self._build_cached_plot_metadata(entry)
+            if metadata is None:
+                continue
+            valid_entries.append(metadata)
+            normalized_entries.append(
+                {
+                    "relative_path": metadata.relative_path,
+                    "updated_at_utc": metadata.updated_at_utc,
+                    "mesh_length": metadata.mesh_length,
+                    "scalar_names": list(metadata.scalar_names),
+                    "vector_names": list(metadata.vector_names),
+                    "ranges": dict(metadata.array_ranges),
+                }
+            )
+
+        valid_entries.sort(key=lambda item: (item.updated_at_utc, item.relative_path.lower()), reverse=True)
+        self._cached_fields = valid_entries
+
+        selected_relative_path = self._settings.get_local("tools.field_plot.selected_relative_path")
+        if selected_relative_path is None:
+            selected_relative_path = self._default_selected_relative_path
+        available_paths = {entry.relative_path for entry in valid_entries}
+        if selected_relative_path not in available_paths:
+            selected_relative_path = valid_entries[0].relative_path if valid_entries else None
+
+        self._file_combo.blockSignals(True)
+        self._file_combo.clear()
+        for entry in valid_entries:
+            self._file_combo.addItem(entry.relative_path, entry.relative_path)
+        if selected_relative_path is not None:
+            self._file_combo.setCurrentIndex(_combo_index_for_data(self._file_combo, selected_relative_path))
+        self._file_combo.setEnabled(bool(valid_entries))
+        self._file_combo.blockSignals(False)
+
+        needs_save = normalized_entries != cached_entries
+        if valid_entries:
+            current_filepath = self._settings.get_local("tools.field_plot.filepath")
+            selected_entry = self._current_cached_field()
+            if selected_entry is not None and current_filepath != selected_entry.resolved_path:
+                needs_save = True
+        else:
+            if self._settings.get_local("tools.field_plot.selected_relative_path") is not None:
+                needs_save = True
+            if self._settings.get_local("tools.field_plot.filepath") is not None:
+                needs_save = True
+
+        if needs_save and self._settings.workspace_path is not None:
+            self._settings.set_local("tools.field_plot.cached_pvds", normalized_entries)
+            self._settings.set_local("tools.field_plot.selected_relative_path", selected_relative_path)
+            self._settings.set_local(
+                "tools.field_plot.filepath",
+                self._current_cached_field().resolved_path if self._current_cached_field() is not None else None,
+            )
+            self._settings.save()
+
+        self._on_field_selection_changed()
+
+    def _apply_cached_plot_arrays(self, metadata: _CachedPlotMetadata | None) -> None:
+        current_scalar = self._scalar_name_combo.currentData()
+        current_contour = self._contour_name_combo.currentData()
+        current_vector = self._vector_name_combo.currentData()
+        current_scale = self._vector_scale_combo.currentData()
+        scalar_names = metadata.scalar_names if metadata is not None else []
+        vector_names = metadata.vector_names if metadata is not None else []
+        scale_names = metadata.scale_names if metadata is not None else []
+        self._populate_named_combo(self._scalar_name_combo, scalar_names, current_scalar)
+        self._populate_named_combo(self._contour_name_combo, scalar_names, current_contour)
+        self._populate_named_combo(self._vector_name_combo, vector_names, current_vector)
+        self._populate_scale_combo(_vector_scale_options_from_names(scale_names), current_scale)
+
+    def _on_field_selection_changed(self, _index: int | None = None) -> None:
+        metadata = self._current_cached_field()
+        if metadata is None:
+            self._clear_cached_plot_arrays()
+        else:
+            self._apply_cached_plot_arrays(metadata)
+        if self._settings.workspace_path is not None:
+            self._settings.set_local("tools.field_plot.selected_relative_path", self._selected_relative_path())
+            self._settings.set_local("tools.field_plot.filepath", self._selected_field_path())
         self._update_scalar_panel_summary()
         self._update_contour_panel_summary()
         self._update_vector_panel_summary()
@@ -701,186 +833,18 @@ class FieldPlotBuilderDialog(QDialog):
                     loop_text,
                     f"angle {self._feature_edges_feature_angle_spin.value():.1f}",
                 )
+                )
             )
-        )
 
-    def _iter_mesh_blocks(self, mesh: object):
-        get_block_name = getattr(mesh, "get_block_name", None)
-        if callable(get_block_name):
-            for idx, block in enumerate(mesh):
-                if block is None:
-                    continue
-                block_name = get_block_name(idx)
-                yield block, block_name if block_name else str(idx)
-            return
-        yield mesh, None
-
-    def _array_component_count(self, array: object) -> int | None:
-        ndim = getattr(array, "ndim", None)
-        shape = getattr(array, "shape", None)
-        if ndim is None or shape is None:
-            return None
-        if ndim == 1:
-            return 1
-        if ndim >= 2 and len(shape) >= 2:
-            try:
-                return int(shape[1])
-            except (TypeError, ValueError):
-                return None
-        return None
-
-    def _classify_attribute_names(self, attributes: object) -> tuple[list[str], list[str]]:
-        scalar_names: list[str] = []
-        vector_names: list[str] = []
-        for name in getattr(attributes, "keys", lambda: [])():
-            if str(name) in INTERNAL_FIELD_NAMES:
-                continue
-            component_count = self._array_component_count(attributes[name])
-            if component_count == 1:
-                scalar_names.append(str(name))
-            elif component_count == 3:
-                vector_names.append(str(name))
-        return scalar_names, vector_names
-
-    def _array_max_value(self, array: object) -> float | None:
-        try:
-            values = np.asarray(array, dtype=float)
-        except (TypeError, ValueError):
-            return None
-
-        if values.size == 0:
-            return None
-
-        component_count = self._array_component_count(array)
-        if component_count == 3 and values.ndim >= 2:
-            magnitudes = np.linalg.norm(values, axis=1)
-        else:
-            magnitudes = np.abs(values).reshape(-1)
-
-        finite_magnitudes = magnitudes[np.isfinite(magnitudes)]
-        if finite_magnitudes.size == 0:
-            return None
-        return float(finite_magnitudes.max())
-
-    def _mesh_length(self, mesh: object) -> float:
-        length = getattr(mesh, "length", None)
-        if isinstance(length, (int, float)) and math.isfinite(length):
-            return float(length)
-
-        bounds = getattr(mesh, "bounds", None)
-        if bounds is not None and len(bounds) == 6:
-            try:
-                dx = float(bounds[1]) - float(bounds[0])
-                dy = float(bounds[3]) - float(bounds[2])
-                dz = float(bounds[5]) - float(bounds[4])
-            except (TypeError, ValueError):
-                dx = dy = dz = 0.0
-            return math.sqrt(dx * dx + dy * dy + dz * dz)
-
-        get_block_name = getattr(mesh, "get_block_name", None)
-        if callable(get_block_name):
-            block_lengths = [self._mesh_length(block) for block, _block_name in self._iter_mesh_blocks(mesh)]
-            finite_lengths = [length for length in block_lengths if math.isfinite(length) and length > 0.0]
-            if finite_lengths:
-                return max(finite_lengths)
-        return 0.0
-
-    def _read_plotter_mesh_snapshot(self, plotter: Plotter):
-        import pyvista as pv
-
-        reader = getattr(plotter, "reader", None)
-        if reader is None:
-            return plotter.mesh
-
-        mesh = reader.read()
-        if isinstance(reader, pv.PVDReader):
-            return mesh[0]
-        return mesh
-
-    def _iter_plotter_mesh_snapshots(self, plotter: Plotter):
-        time_values = getattr(plotter, "time_values", None)
-        if time_values is None:
-            yield self._read_plotter_mesh_snapshot(plotter)
-            return
-
-        time_values_list = list(time_values)
-        if not time_values_list:
-            yield self._read_plotter_mesh_snapshot(plotter)
-            return
-
-        original_time_value = getattr(plotter, "active_time_value", None)
-        try:
-            for time_value in time_values_list:
-                plotter.set_active_time_value(float(time_value))
-                yield self._read_plotter_mesh_snapshot(plotter)
-        finally:
-            if original_time_value is not None:
-                plotter.set_active_time_value(float(original_time_value))
-
-    def _update_attribute_analysis(
-        self,
-        attributes: object,
-        scalar_names: list[str],
-        vector_names: list[str],
-        array_maxima: dict[str, float],
-    ) -> None:
-        for name in getattr(attributes, "keys", lambda: [])():
-            array_name = str(name)
-            if array_name in INTERNAL_FIELD_NAMES:
-                continue
-
-            array = attributes[name]
-            component_count = self._array_component_count(array)
-            if component_count == 1:
-                scalar_names.append(array_name)
-            elif component_count == 3:
-                vector_names.append(array_name)
-            else:
-                continue
-
-            max_value = self._array_max_value(array)
-            if max_value is None:
-                continue
-            array_maxima[array_name] = max(array_maxima.get(array_name, 0.0), max_value)
-
-    def _discover_plot_arrays(self) -> _PlotAnalysisResult:
-        filepath = self._file_field.value()
-        assert filepath is not None
-        plotter = None
-        try:
-            plotter = Plotter(filepath)
-            scalar_names: list[str] = []
-            vector_names: list[str] = []
-            mesh_length = 0.0
-            array_maxima: dict[str, float] = {}
-            for mesh in self._iter_plotter_mesh_snapshots(plotter):
-                mesh_length = max(mesh_length, self._mesh_length(mesh))
-                for block, _block_name in self._iter_mesh_blocks(mesh):
-                    self._update_attribute_analysis(block.point_data, scalar_names, vector_names, array_maxima)
-                    self._update_attribute_analysis(block.cell_data, scalar_names, vector_names, array_maxima)
-            scalar_names = _unique_names(scalar_names)
-            vector_names = _unique_names(vector_names)
-            scale_names = _unique_names([*scalar_names, *vector_names])
-            return _PlotAnalysisResult(
-                scalar_names=scalar_names,
-                vector_names=vector_names,
-                scale_names=scale_names,
-                mesh_length=mesh_length,
-                array_maxima=array_maxima,
-            )
-        finally:
-            if plotter is not None:
-                plotter.close()
-
-    def _update_vector_factor_from_analysis(self, analysis: _PlotAnalysisResult) -> None:
+    def _update_vector_factor_from_cache(self, metadata: _CachedPlotMetadata) -> None:
         if not self._vector_enabled_checkbox.isChecked():
             return
 
         vector_name = self._vector_name_combo.currentData()
         if vector_name is None:
-            raise ValueError("Discover arrays and select a vector field before suggesting a factor.")
+            raise ValueError("Select a cached field and choose a vector field before suggesting a factor.")
 
-        mesh_length = analysis.mesh_length
+        mesh_length = metadata.mesh_length
         if not math.isfinite(mesh_length) or mesh_length <= 0.0:
             raise ValueError("Unable to determine the mesh size for vector auto-scaling.")
 
@@ -889,47 +853,15 @@ class FieldPlotBuilderDialog(QDialog):
             factor = 0.1 * mesh_length
         else:
             source_name = str(vector_name) if scale is None else str(scale)
-            source_max = analysis.array_maxima.get(source_name)
-            if source_max is None:
-                raise ValueError(f"Unable to determine a maximum value for '{source_name}'.")
+            source_range = metadata.array_ranges.get(source_name)
+            if source_range is None:
+                raise ValueError(f"Unable to determine cached range data for '{source_name}'.")
+            source_max = source_range["max"]
             if not math.isfinite(source_max) or source_max <= 0.0:
                 raise ValueError(f"Maximum value for '{source_name}' must be greater than 0.")
             factor = 0.1 * mesh_length / source_max
 
         self._vector_factor_edit.setText(_format_float_text(factor))
-
-    def _apply_discovered_plot_arrays(
-        self,
-        scalar_names: list[str],
-        vector_names: list[str],
-        scale_names: list[str],
-    ) -> None:
-        current_scalar = self._scalar_name_combo.currentData()
-        current_contour = self._contour_name_combo.currentData()
-        current_vector = self._vector_name_combo.currentData()
-        current_scale = self._vector_scale_combo.currentData()
-        self._populate_named_combo(
-            self._scalar_name_combo,
-            scalar_names,
-            current_scalar,
-        )
-        self._populate_named_combo(
-            self._contour_name_combo,
-            scalar_names,
-            current_contour,
-        )
-        self._populate_named_combo(
-            self._vector_name_combo,
-            vector_names,
-            current_vector,
-        )
-        self._populate_scale_combo(
-            _vector_scale_options_from_names(scale_names),
-            current_scale,
-        )
-        self._update_scalar_panel_summary()
-        self._update_contour_panel_summary()
-        self._update_vector_panel_summary()
 
     def _has_enabled_stage(self) -> bool:
         return any(
@@ -941,10 +873,15 @@ class FieldPlotBuilderDialog(QDialog):
             )
         )
 
+    def _validate_cached_field_selection(self) -> str | None:
+        if self._selected_field_path() is None:
+            return "Run FEMAP conversion first to create a cached field file."
+        return None
+
     def _validate_for_plot(self) -> str | None:
-        filepath = self._file_field.value()
-        if not filepath:
-            return "Field file is required."
+        field_error = self._validate_cached_field_selection()
+        if field_error is not None:
+            return field_error
         if not self._has_enabled_stage():
             return "Select at least one plotting stage."
         selection_error = self._validate_stage_selections()
@@ -959,17 +896,11 @@ class FieldPlotBuilderDialog(QDialog):
 
     def _validate_stage_selections(self) -> str | None:
         if self._scalar_enabled_checkbox.isChecked() and self._scalar_name_combo.currentData() is None:
-            return "Discover arrays and select a scalar field before plotting."
+            return "Select a cached field and choose a scalar field before plotting."
         if self._contour_enabled_checkbox.isChecked() and self._contour_name_combo.currentData() is None:
-            return "Discover arrays and select a contour field before plotting."
+            return "Select a cached field and choose a contour field before plotting."
         if self._vector_enabled_checkbox.isChecked() and self._vector_name_combo.currentData() is None:
-            return "Discover arrays and select a vector field before plotting."
-        return None
-
-    def _validate_for_analysis(self) -> str | None:
-        filepath = self._file_field.value()
-        if not filepath:
-            return "Field file is required."
+            return "Select a cached field and choose a vector field before plotting."
         return None
 
     def _scalar_kwargs(self) -> dict[str, object]:
@@ -1032,11 +963,13 @@ class FieldPlotBuilderDialog(QDialog):
     def _persist_settings(self) -> None:
         setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
 
-        setter("tools.field_plot.filepath", self._file_field.value())
+        setter("tools.field_plot.filepath", self._selected_field_path())
+        if self._settings.workspace_path is not None:
+            self._settings.set_local("tools.field_plot.selected_relative_path", self._selected_relative_path())
         self._settings.save()
 
     def _generate_script_text(self) -> str:
-        filepath = self._file_field.value() or ""
+        filepath = self._selected_field_path() or ""
         lines = [
             "from pyemsi import gui, Plotter",
             "",
@@ -1075,23 +1008,11 @@ class FieldPlotBuilderDialog(QDialog):
         lines.extend(["", f"gui.add_field(field_plot, {self._current_title()!r})"])
         return "\n".join(lines)
 
-    def _discover_and_apply_arrays(self) -> _PlotAnalysisResult:
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        QApplication.processEvents()
-        try:
-            analysis = self._discover_plot_arrays()
-            self._analysis = analysis
-            self._apply_discovered_plot_arrays(analysis.scalar_names, analysis.vector_names, analysis.scale_names)
-            return analysis
-        finally:
-            QApplication.restoreOverrideCursor()
-
-    def _ensure_analysis(self) -> _PlotAnalysisResult:
-        if self._analysis is not None:
-            return self._analysis
-        return self._discover_and_apply_arrays()
-
     def _open_script_dialog(self) -> None:
+        error_message = self._validate_cached_field_selection()
+        if error_message is not None:
+            QMessageBox.warning(self, "Invalid Field Plot", error_message)
+            return
         error_message = self._validate_stage_selections()
         if error_message is not None:
             QMessageBox.warning(self, "Invalid Field Plot", error_message)
@@ -1099,27 +1020,17 @@ class FieldPlotBuilderDialog(QDialog):
         dialog = GeneratedScriptDialog(self._generate_script_text(), parent=self)
         dialog.exec()
 
-    def _on_discover_arrays(self) -> None:
-        error_message = self._validate_for_analysis()
-        if error_message is not None:
-            QMessageBox.warning(self, "Invalid Field Plot", error_message)
-            return
-
-        try:
-            self._discover_and_apply_arrays()
-        except Exception as exc:
-            QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
-            return
-
     def _on_suggest_vector_factor(self) -> None:
-        error_message = self._validate_for_analysis()
+        error_message = self._validate_cached_field_selection()
         if error_message is not None:
             QMessageBox.warning(self, "Invalid Field Plot", error_message)
             return
 
         try:
-            analysis = self._ensure_analysis()
-            self._update_vector_factor_from_analysis(analysis)
+            metadata = self._current_cached_field()
+            if metadata is None:
+                raise ValueError("Run FEMAP conversion first to create a cached field file.")
+            self._update_vector_factor_from_cache(metadata)
         except Exception as exc:
             QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
             return
@@ -1130,7 +1041,7 @@ class FieldPlotBuilderDialog(QDialog):
             QMessageBox.warning(self, "Invalid Field Plot", error_message)
             return
 
-        filepath = self._file_field.value()
+        filepath = self._selected_field_path()
         assert filepath is not None
         plotter = None
         try:
