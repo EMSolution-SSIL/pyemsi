@@ -7,15 +7,24 @@ Main functionality:
 - Qt-based interactive 3D visualization with Plotter
 """
 
+from importlib import import_module
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from . import examples
-from .io import EMSolutionOutput
-from .plotter import Plotter
-from .tools.FemapConverter import FemapConverter
+
+if TYPE_CHECKING:
+    from .io import EMSolutionOutput
+    from .plotter import Plotter
+    from .tools.FemapConverter import FemapConverter
 
 __version__ = "0.3.2"
+
+_LAZY_EXPORTS = {
+    "EMSolutionOutput": ("pyemsi.io", "EMSolutionOutput"),
+    "Plotter": ("pyemsi.plotter", "Plotter"),
+    "FemapConverter": ("pyemsi.tools.FemapConverter", "FemapConverter"),
+}
 
 __all__ = [
     "FemapConverter",
@@ -26,6 +35,23 @@ __all__ = [
     "is_gui_running",
     "EMSolutionOutput",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve selected heavy exports on first access."""
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module 'pyemsi' has no attribute {name!r}")
+
+    module_name, attr_name = target
+    value = getattr(import_module(module_name), attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Expose lazy exports to interactive tooling."""
+    return sorted(set(globals()) | set(__all__))
 
 
 def is_gui_running() -> bool:

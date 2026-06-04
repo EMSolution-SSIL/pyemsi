@@ -15,22 +15,35 @@ from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
-from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMenu, QMessageBox, QToolBar, QToolButton
+from PySide6.QtWidgets import (
+    QDockWidget,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QToolBar,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 import pyemsi.resources.resources  # noqa: F401
-from pyemsi.gui.emsolution_output_plot_builder_dialog import EMSolutionOutputPlotBuilderDialog
-from pyemsi.gui.external_terminal_dock import ExternalTerminalDock
 from pyemsi.gui.femap_converter_dialog import (
     FemapConverterDialog,
     FemapConverterDialogConfig,
 )
-from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
 from pyemsi.gui.source_to_femap_dialog import SourceToFemapDialog, SourceToFemapDialogConfig
 from pyemsi.gui.update_checker import UpdateChecker, UpdateInfo
 from pyemsi.gui.update_dialog import UpdateAvailableDialog
 from pyemsi.settings import SettingsManager
 from pyemsi.widgets.explorer_widget import ExplorerWidget
 from pyemsi.widgets.split_container import SplitContainer
+
+ExternalTerminalDock = None
+FieldPlotBuilderDialog = None
+EMSolutionOutputPlotBuilderDialog = None
 
 
 _DOCUMENTATION_URL = "https://emsolution-ssil.github.io/pyemsi/"
@@ -42,7 +55,6 @@ Tel: 03-3711-8908, Fax: 03-3711-8910
 Web: https://www.ssil.co.jp
 Email: em_solution@ssil.co.jp
 Copyright (c) 2026 SSIL All rights reserved."""
-
 
 class PyEmsiMainWindow(QMainWindow):
     """
@@ -78,17 +90,23 @@ class PyEmsiMainWindow(QMainWindow):
         self._ipython_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
         self._ipython_widget = None
         self._kernel_manager = None
+        self._extra_namespace: dict[str, object] = {}
+        self._set_ipython_placeholder()
         self._active_external_terminals: dict = {}
         self._temp_converter_configs: set[str] = set()
         self._update_checker = UpdateChecker(self._settings, parent=self)
         self._update_checker.check_finished.connect(self._on_update_check_finished)
         self._update_settings_actions()
 
-        self._setup_ipython_terminal()
-
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._ipython_dock)
 
-        self._external_terminal_dock = ExternalTerminalDock(self)
+        external_terminal_dock_class = ExternalTerminalDock
+        if external_terminal_dock_class is None:
+            from pyemsi.gui.external_terminal_dock import ExternalTerminalDock as external_terminal_dock_class
+
+            globals()["ExternalTerminalDock"] = external_terminal_dock_class
+
+        self._external_terminal_dock = external_terminal_dock_class(self)
         self._external_terminal_dock.setObjectName("external_terminal_dock")
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._external_terminal_dock)
         self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
@@ -412,6 +430,7 @@ class PyEmsiMainWindow(QMainWindow):
         ipython_action = self._ipython_dock.toggleViewAction()
         ipython_action.setIcon(QIcon(":/icons/IPythonTerminal.svg"))
         ipython_action.setShortcut(QKeySequence("Ctrl+I"))
+        ipython_action.triggered.connect(self._toggle_ipython_dock)
         view_menu.addAction(ipython_action)
 
         external_action = self._external_terminal_dock.toggleViewAction()
@@ -423,7 +442,7 @@ class PyEmsiMainWindow(QMainWindow):
 
         restart_kernel_action = QAction("Restart IPython &Kernel", self)
         restart_kernel_action.setIcon(QIcon(":/icons/IPythonTerminal.svg"))
-        restart_kernel_action.triggered.connect(self._reset_ipython_kernel)
+        restart_kernel_action.triggered.connect(lambda: self._reset_ipython_kernel(create_if_missing=True))
         view_menu.addAction(restart_kernel_action)
 
     def _setup_explorer(self) -> None:
@@ -493,7 +512,13 @@ class PyEmsiMainWindow(QMainWindow):
         if not current_path or not os.path.isdir(current_path):
             return
 
-        dialog = FieldPlotBuilderDialog(
+        dialog_class = FieldPlotBuilderDialog
+        if dialog_class is None:
+            from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog as dialog_class
+
+            globals()["FieldPlotBuilderDialog"] = dialog_class
+
+        dialog = dialog_class(
             self._settings,
             browse_dir_getter=lambda: self.explorer.current_path,
             parent=self,
@@ -519,7 +544,19 @@ class PyEmsiMainWindow(QMainWindow):
             return
 
         try:
-            dialog = EMSolutionOutputPlotBuilderDialog(output_path, settings_manager=self._settings, parent=self)
+            dialog_class = EMSolutionOutputPlotBuilderDialog
+            if dialog_class is None:
+                from pyemsi.gui.emsolution_output_plot_builder_dialog import (
+                    EMSolutionOutputPlotBuilderDialog as dialog_class,
+                )
+
+                globals()["EMSolutionOutputPlotBuilderDialog"] = dialog_class
+
+            dialog = dialog_class(
+                output_path,
+                settings_manager=self._settings,
+                parent=self,
+            )
         except Exception as exc:
             QMessageBox.critical(self, "Invalid EMSolution Output", str(exc))
             return
@@ -633,10 +670,14 @@ class PyEmsiMainWindow(QMainWindow):
         self.setWindowTitle("pyemsi")
         return True
 
-    def _reset_ipython_kernel(self) -> None:
+    def _reset_ipython_kernel(self, create_if_missing: bool = False) -> None:
         """Reset the in-process IPython shell to a clean state."""
         if self._kernel_manager is None:
-            return
+            if not create_if_missing:
+                return
+            self._ensure_ipython_terminal()
+            if self._kernel_manager is None:
+                return
         self._kernel_manager.kernel.shell.reset(new_session=True)
         self._kernel_manager.kernel.shell.push(self._build_namespace())
         if self._ipython_widget is not None:
@@ -820,18 +861,58 @@ class PyEmsiMainWindow(QMainWindow):
                 if self._is_saveable_viewer(widget):
                     widget.save()
 
-    def _setup_ipython_terminal(self):
+    def _build_namespace(self) -> dict[str, object]:
+        """Build the full namespace for IPython kernel creation/reset."""
+        import pyemsi
+
+        namespace = {"pyemsi": pyemsi}
+        namespace.update(self._extra_namespace)
+        return namespace
+
+    def _set_ipython_placeholder(self) -> None:
+        """Install the lightweight placeholder widget in the IPython dock."""
+        placeholder = QWidget(self._ipython_dock)
+        layout = QVBoxLayout(placeholder)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
+
+        message = QLabel("IPython terminal initializes on first use.", placeholder)
+        message.setWordWrap(True)
+        start_button = QPushButton("Start IPython Terminal", placeholder)
+        start_button.clicked.connect(self._start_ipython_terminal_from_placeholder)
+
+        layout.addWidget(message)
+        layout.addWidget(start_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addStretch(1)
+        self._ipython_dock.setWidget(placeholder)
+
+    def _start_ipython_terminal_from_placeholder(self) -> None:
+        """Initialize the embedded IPython terminal from the placeholder UI."""
+        self._ensure_ipython_terminal()
+        if self._ipython_widget is not None:
+            self._ipython_widget.setFocus()
+
+    def _toggle_ipython_dock(self, visible: bool) -> None:
+        """Handle explicit user toggles of the IPython dock."""
+        if visible:
+            self._ensure_ipython_terminal()
+            if self._ipython_widget is not None:
+                self._ipython_widget.setFocus()
+
+    def _setup_ipython_terminal(self) -> None:
         """Create the in-process IPython kernel and terminal widget."""
+        if self._kernel_manager is not None:
+            return
+
         from pyemsi.gui.ipython_terminal_widget import create_ipython_terminal
 
         self._ipython_widget, self._kernel_manager = create_ipython_terminal(namespace=self._build_namespace())
         self._ipython_dock.setWidget(self._ipython_widget)
 
-    def _build_namespace(self) -> dict:
-        """Build the initial namespace for the IPython kernel."""
-        import pyemsi
-
-        return {"pyemsi": pyemsi}
+    def _ensure_ipython_terminal(self) -> None:
+        """Ensure the embedded IPython kernel and widget exist."""
+        if self._kernel_manager is None:
+            self._setup_ipython_terminal()
 
     def _apply_window_settings(self) -> None:
         """Apply persisted global window preferences."""
@@ -871,9 +952,15 @@ class PyEmsiMainWindow(QMainWindow):
         """Execute a Python file in the embedded IPython terminal."""
         import os
 
+        self._ensure_ipython_terminal()
+        if self._kernel_manager is None or self._ipython_widget is None:
+            return
+
         cwd = self.explorer.current_path
         if cwd and os.path.isdir(cwd):
             self._kernel_manager.kernel.shell.run_cell(f"import os; os.chdir({cwd!r})", silent=True)
+        self._ipython_dock.show()
+        self._ipython_dock.raise_()
         self._ipython_widget.execute(f"%run {path}")
 
     def _stop_python_file_external(self) -> None:
@@ -952,6 +1039,7 @@ class PyEmsiMainWindow(QMainWindow):
 
     def push_to_namespace(self, **kwargs):
         """Push additional variables into the IPython kernel namespace."""
+        self._extra_namespace.update(kwargs)
         if self._kernel_manager is not None:
             self._kernel_manager.kernel.shell.push(kwargs)
 

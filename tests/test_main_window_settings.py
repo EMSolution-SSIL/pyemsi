@@ -51,8 +51,9 @@ class _DummyExternalTerminalDock(QDockWidget):
 
 
 class _DummyKernelManager:
-    def __init__(self) -> None:
+    def __init__(self, initial_namespace=None) -> None:
         self.shutdown_calls = 0
+        self.initial_namespace = dict(initial_namespace or {})
         self.pushed_namespaces = []
 
         class _DummyShell:
@@ -106,7 +107,7 @@ def _app():
 
 def _stub_ipython_terminal(self) -> None:
     self._ipython_widget = _DummyIPythonWidget(self._ipython_dock)
-    self._kernel_manager = _DummyKernelManager()
+    self._kernel_manager = _DummyKernelManager(self._build_namespace())
     self._ipython_dock.setWidget(self._ipython_widget)
 
 
@@ -157,7 +158,7 @@ def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch)
     window.show()
     window.resize(1200, 700)
     window._set_workspace_path(str(workspace))
-    window._ipython_dock.show()
+    window._ensure_ipython_terminal()
     window.closeEvent(QCloseEvent())
 
     reloaded = SettingsManager(global_settings_path=global_settings_path)
@@ -196,6 +197,7 @@ def test_main_window_close_event_closes_tabs_before_shutdown(tmp_path, monkeypat
         return True
 
     window._container.close_all_tabs = _close_all_tabs
+    window._ensure_ipython_terminal()
     window.closeEvent(QCloseEvent())
 
     assert close_calls == ["tabs"]
@@ -225,7 +227,69 @@ def test_main_window_close_event_aborts_when_tab_close_is_canceled(tmp_path, mon
     window.closeEvent(event)
 
     assert not event.isAccepted()
-    assert window._kernel_manager.shutdown_calls == 0
+    assert window._kernel_manager is None
+
+
+def test_main_window_defers_ipython_terminal_until_first_use(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert window._ipython_widget is None
+        assert window._kernel_manager is None
+
+        window.push_to_namespace(answer=42)
+
+        assert window._kernel_manager is None
+
+        window._ensure_ipython_terminal()
+
+        assert isinstance(window._ipython_widget, _DummyIPythonWidget)
+        assert isinstance(window._kernel_manager, _DummyKernelManager)
+        assert window._kernel_manager.initial_namespace["pyemsi"] is pyemsi
+        assert window._kernel_manager.initial_namespace["answer"] == 42
+        assert window._kernel_manager.pushed_namespaces == []
+    finally:
+        window.close()
+
+
+def test_main_window_view_action_initializes_ipython_terminal(tmp_path, monkeypatch):
+    _app()
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._ipython_dock.hide()
+        _app().processEvents()
+
+        assert window._kernel_manager is None
+
+        window._ipython_dock.toggleViewAction().trigger()
+        _app().processEvents()
+
+        assert isinstance(window._ipython_widget, _DummyIPythonWidget)
+        assert isinstance(window._kernel_manager, _DummyKernelManager)
+    finally:
+        window.close()
 
 
 def test_main_window_open_recent_menu_tracks_unique_folders(tmp_path, monkeypatch):
