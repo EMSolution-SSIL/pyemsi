@@ -1064,11 +1064,11 @@ class Plotter:
 
         # Create glyph geometry based on type
         if glyph_type == "arrow":
-            geom = pv.Arrow()
+            geom = pv.Arrow(tip_resolution=3, shaft_resolution=3)
         elif glyph_type == "cone":
-            geom = pv.Cone()
+            geom = pv.Cone(resolution=3)
         elif glyph_type == "sphere":
-            geom = pv.Sphere()
+            geom = pv.Sphere(theta_resolution=5, phi_resolution=5)
         else:
             raise ValueError(f"Unknown glyph_type: {glyph_type}")
 
