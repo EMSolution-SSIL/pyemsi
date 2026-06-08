@@ -18,6 +18,7 @@ class _FakePlotter:
 
         class _FakeInnerPlotter:
             def __init__(inner_self) -> None:
+                inner_self.camera_position = [(1.0, 1.0, 1.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
                 inner_self.reset_camera_calls = 0
                 inner_self.show_axes_calls = 0
 
@@ -56,10 +57,16 @@ def _app():
 
 
 def _uses_tight_layout(figure: Figure) -> bool:
+    if hasattr(figure, "get_tight_layout"):
+        tight_layout = figure.get_tight_layout()
+        if tight_layout is not None:
+            return bool(tight_layout)
+
     if hasattr(figure, "get_layout_engine"):
         engine = figure.get_layout_engine()
-        return engine is not None and engine.__class__.__name__ == "TightLayoutEngine"
-    return bool(figure.get_tight_layout())
+        return engine is not None and engine.__class__.__name__.endswith("TightLayoutEngine")
+
+    return False
 
 
 def test_split_container_add_figure_uses_tight_layout_by_default():
@@ -101,6 +108,10 @@ def test_split_container_add_field_embeds_plotter():
 
     assert isinstance(viewer, FieldViewer)
     assert viewer.plotter is plotter
+    assert plotter.render_calls == 1
+    assert plotter.plotter.reset_camera_calls == 1
+    assert plotter.plotter.show_axes_calls == 1
+    assert plotter._window.create_display_toolbar_calls == 1
     assert container.left_panel.tabText(container.left_panel.currentIndex()) == "Field Plot"
 
     container.left_panel._close_tab(container.left_panel.currentIndex())
@@ -123,6 +134,10 @@ def test_gui_add_field_forwards_plotter():
 
     assert isinstance(viewer, FieldViewer)
     assert viewer.plotter is plotter
+    assert plotter.render_calls == 1
+    assert plotter.plotter.reset_camera_calls == 1
+    assert plotter.plotter.show_axes_calls == 1
+    assert plotter._window.create_display_toolbar_calls == 1
 
 
 def test_field_viewer_rejects_notebook_plotter():

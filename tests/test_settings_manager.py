@@ -327,7 +327,8 @@ def test_settings_manager_ignores_invalid_field_plot_cached_pvds(tmp_path):
     manager = SettingsManager(global_settings_path=global_settings_path)
     manager.load_workspace(workspace)
 
-    assert manager.get_local("tools.field_plot.cached_pvds") == []
+    assert manager.get_local("tools.field_plot.cached_pvds") is None
+    assert manager.get_effective("tools.field_plot.cached_pvds") == []
     assert any("ignored invalid value for tools.field_plot.cached_pvds" in warning for warning in manager.warnings)
 
 

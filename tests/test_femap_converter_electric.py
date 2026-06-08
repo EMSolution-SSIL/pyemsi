@@ -190,6 +190,7 @@ def test_run_allows_current_and_electric_together():
     converter.parse_data_files = lambda: calls.append(("parse",))
     converter.init_pvd = lambda: calls.append(("pvd",))
     converter.time_stepping = lambda: calls.append(("time",))
+    converter._persist_field_plot_cache = lambda: calls.append(("persist",))
 
     converter.run()
 
@@ -198,6 +199,7 @@ def test_run_allows_current_and_electric_together():
         ("parse",),
         ("pvd",),
         ("time",),
+        ("persist",),
     ]
 
 

@@ -1,6 +1,10 @@
 import os
+import sys
+import types
 
 from PySide6.QtWidgets import QApplication, QDialog
+
+sys.modules.setdefault("scienceplots", types.ModuleType("scienceplots"))
 
 import pyemsi.gui as gui
 from pyemsi.gui import field_plot_builder_dialog as dialog_module
@@ -70,6 +74,7 @@ def test_field_plot_builder_dialog_populates_from_cached_workspace_metadata(tmp_
     relative_path = os.path.join(".pyemsi", "output.pvd")
     manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(relative_path)])
     manager.set_local("tools.field_plot.selected_relative_path", relative_path)
+    manager.save()
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
 
@@ -156,6 +161,7 @@ def test_field_plot_builder_dialog_plot_requires_cached_field_then_stage(tmp_pat
     plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
     manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    manager.save()
     dialog._reload_cached_fields()
     dialog._on_plot()
 
@@ -172,6 +178,7 @@ def test_field_plot_builder_dialog_suggest_factor_uses_cached_metadata_without_r
     plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
     manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    manager.save()
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._vector_enabled_checkbox.setChecked(True)
@@ -195,6 +202,7 @@ def test_field_plot_builder_dialog_suggest_factor_uses_uniform_scale_rule_from_c
     plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
     manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    manager.save()
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._vector_enabled_checkbox.setChecked(True)
@@ -212,6 +220,7 @@ def test_field_plot_builder_dialog_script_uses_cached_selection_without_creating
     plot_path.parent.mkdir(parents=True)
     plot_path.write_text("dummy", encoding="utf-8")
     manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    manager.save()
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._title_edit.setText("Rotor Field")
@@ -249,6 +258,7 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_cached_sele
     plot_path.write_text("dummy", encoding="utf-8")
     relative_path = os.path.join(".pyemsi", "output.pvd")
     manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(relative_path)])
+    manager.save()
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._scalar_enabled_checkbox.setChecked(True)
