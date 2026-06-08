@@ -38,7 +38,7 @@ _app = None
 
 def _create_splash(app):
     """
-    Create and show a splash screen using the on-disk Icon.svg.
+    Create and show a splash screen using the on-disk pyemsi_logo2.svg.
 
     The SVG is loaded directly from disk rather than via the compiled Qt
     resource file, because ``pyemsi.resources.resources`` is imported by
@@ -63,11 +63,13 @@ def _create_splash(app):
         from PySide6.QtSvg import QSvgRenderer
         from PySide6.QtWidgets import QSplashScreen
 
-        icon_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "resources", "icons", "Icon.svg"))
+        icon_path = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "resources", "icons", "pyemsi_logo2.svg")
+        )
         renderer = QSvgRenderer(icon_path)
         if not renderer.isValid():
             return None
-        size = QSize(300, 300)
+        size = QSize(326, 465)
         pixmap = QPixmap(size)
         pixmap.fill(Qt.GlobalColor.white)
         painter = QPainter(pixmap)

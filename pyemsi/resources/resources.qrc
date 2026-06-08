@@ -11,6 +11,7 @@
     <file>icons/Comment.svg</file>
     <file>icons/Clip.svg</file>
     <file>icons/Copy.svg</file>
+    <file>icons/Cursor.svg</file>
     <file>icons/Cut.svg</file>
     <file>icons/EditScalarBar.svg</file>
     <file>icons/EditScalarRange.svg</file>
@@ -39,6 +40,8 @@
     <file>icons/PickPoint.svg</file>
     <file>icons/Play.svg</file>
     <file>icons/Preview.svg</file>
+    <file>icons/pyemsi_logo1.svg</file>
+    <file>icons/pyemsi_logo2.svg</file>
     <file>icons/QueryCell.svg</file>
     <file>icons/QueryPoint.svg</file>
     <file>icons/Redo.svg</file>
