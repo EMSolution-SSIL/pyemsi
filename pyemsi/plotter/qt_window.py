@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QToolBar,
     QVBoxLayout,
@@ -96,6 +97,7 @@ class QtPlotterWindow:
     _reverse_action: QAction | None
     _pause_action: QAction | None
     _play_action: QAction | None
+    _cursor_pick_action: QAction | None
     _point_pick_mode_enabled: bool
     _point_pick_mode_move_observer: int | None
     _point_pick_mode_click_observer: int | None
@@ -157,6 +159,7 @@ class QtPlotterWindow:
         self._reverse_action = None
         self._pause_action = None
         self._play_action = None
+        self._cursor_pick_action = None
         self._is_closing = False
 
         # One-shot point-picking mode state
@@ -206,6 +209,8 @@ class QtPlotterWindow:
 
         # Create QtInteractor (the rendering widget that IS the plotter)
         self.plotter = QtInteractor(parent=self._frame, off_screen=False, **qt_interactor_kwargs)
+        self.plotter.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.plotter.customContextMenuRequested.connect(self._show_plotter_context_menu)
 
         # Build window hierarchy: window -> frame -> layout -> plotter
         self._vlayout.addWidget(self.plotter)
@@ -230,6 +235,14 @@ class QtPlotterWindow:
         self._camera_toolbar = QToolBar("Camera Controls")
         self._camera_toolbar.setMovable(True)
         self._camera_toolbar.setIconSize(QSize(24, 24))
+
+        self._cursor_pick_action = QAction(QIcon(":/icons/Cursor.svg"), "Cursor", self._window)
+        self._cursor_pick_action.setToolTip("Toggle block picking for the plotter context menu")
+        self._cursor_pick_action.setCheckable(True)
+        self._cursor_pick_action.toggled.connect(self._on_cursor_pick_toggled)
+        self._camera_toolbar.addAction(self._cursor_pick_action)
+
+        self._camera_toolbar.addSeparator()
 
         # Reset Camera action
         reset_action = QAction(QIcon(":/icons/ResetCamera.svg"), "Reset Camera", self._window)
@@ -802,6 +815,53 @@ class QtPlotterWindow:
         block_visibility_dialog.raise_()
         block_visibility_dialog.activateWindow()
 
+    def _show_plotter_context_menu(self, pos) -> None:
+        """Show plotter context menu with block visibility shortcuts."""
+        block_names = self.parent_plotter.get_block_names() if self.parent_plotter is not None else []
+        candidate = self._resolve_cell_pick_mode_candidate() if self._cell_pick_mode_enabled else None
+        block_name = candidate.get("block_name") if candidate is not None else None
+
+        menu = QMenu(self.plotter)
+        show_all_action = menu.addAction("Show All Blocks")
+        show_all_action.setEnabled(bool(block_names))
+        blocks_action = menu.addAction("Blocks...")
+        blocks_action.setEnabled(bool(block_names))
+        hide_action = None
+        if block_name is not None:
+            menu.addSeparator()
+            hide_action = menu.addAction(f'Hide "{block_name}"')
+
+        selected_action = menu.exec(self.plotter.mapToGlobal(pos))
+        if selected_action == show_all_action and block_names and self.parent_plotter is not None:
+            if self._cell_pick_mode_enabled:
+                self._set_cell_pick_mode_highlight(None, render=False)
+            self.parent_plotter.set_blocks_visibility({name: True for name in block_names})
+            if self._cell_pick_mode_enabled and self.parent_plotter.mesh is not None:
+                import pyvista as pv
+
+                mesh = self.parent_plotter.mesh
+                self._cell_pick_mode_visible_blocks.clear()
+                if isinstance(mesh, pv.MultiBlock):
+                    for idx, block in enumerate(mesh):
+                        if block is None or getattr(block, "n_cells", 0) <= 0:
+                            continue
+                        name = mesh.get_block_name(idx) or str(idx)
+                        if self.parent_plotter.get_block_visibility(name):
+                            self._cell_pick_mode_visible_blocks.append((name, block))
+                elif getattr(mesh, "n_cells", 0) > 0:
+                    self._cell_pick_mode_visible_blocks.append((None, mesh))
+        elif selected_action == blocks_action and block_names:
+            self._open_block_visibility_dialog()
+        elif selected_action == hide_action and block_name is not None and self.parent_plotter is not None:
+            self._cell_pick_mode_visible_blocks = [
+                (name, block) for name, block in self._cell_pick_mode_visible_blocks if name != block_name
+            ]
+            if (self._cell_pick_mode_active_cell is not None and self._cell_pick_mode_active_cell[0] == block_name) or (
+                self._cell_pick_mode_enabled and not self._cell_pick_mode_visible_blocks
+            ):
+                self._set_cell_pick_mode_highlight(None, render=False)
+            self.parent_plotter.set_block_visibility(block_name, False)
+
     def _open_clip_dialog(self) -> None:
         """Open clip dialog and show the interactive clip plane."""
         self.disable_point_picking_mode(render=False)
@@ -955,6 +1015,11 @@ class QtPlotterWindow:
             True if toggle is checked (enabling picking), False if unchecked (disabling).
         """
         if checked:
+            if self._cursor_pick_action is not None:
+                self._cursor_pick_action.blockSignals(True)
+                self._cursor_pick_action.setChecked(False)
+                self._cursor_pick_action.blockSignals(False)
+
             # Ensure cell action is unchecked (mutual exclusivity)
             if self._check_cell_action is not None:
                 self._check_cell_action.blockSignals(True)
@@ -1006,6 +1071,11 @@ class QtPlotterWindow:
             True if toggle is checked (enabling picking), False if unchecked (disabling).
         """
         if checked:
+            if self._cursor_pick_action is not None:
+                self._cursor_pick_action.blockSignals(True)
+                self._cursor_pick_action.setChecked(False)
+                self._cursor_pick_action.blockSignals(False)
+
             # Ensure point action is unchecked (mutual exclusivity)
             if self._check_point_action is not None:
                 self._check_point_action.blockSignals(True)
@@ -1046,6 +1116,33 @@ class QtPlotterWindow:
             # Close history dialog
             if self._pick_result_history_dialog is not None:
                 self._pick_result_history_dialog.close()
+
+    def _on_cursor_pick_toggled(self, checked: bool) -> None:
+        """Handle cursor-based cell picking for the plotter context menu."""
+        if checked:
+            if self._check_point_action is not None:
+                self._check_point_action.blockSignals(True)
+                self._check_point_action.setChecked(False)
+                self._check_point_action.blockSignals(False)
+            if self._check_cell_action is not None:
+                self._check_cell_action.blockSignals(True)
+                self._check_cell_action.setChecked(False)
+                self._check_cell_action.blockSignals(False)
+
+            self.disable_point_picking_mode(render=False)
+
+            try:
+                self.enable_cell_picking_mode(
+                    on_picked=lambda _result: None,
+                    picker_tolerance=0.025,
+                )
+            except (TypeError, ValueError, RuntimeError) as e:
+                self._cursor_pick_action.blockSignals(True)
+                self._cursor_pick_action.setChecked(False)
+                self._cursor_pick_action.blockSignals(False)
+                print(f"Failed to enable cursor picking mode: {e}")
+        else:
+            self.disable_cell_picking_mode(render=True)
 
     def _on_pick_history_dialog_closed(self) -> None:
         """
