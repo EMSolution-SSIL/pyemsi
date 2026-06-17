@@ -60,6 +60,11 @@ extra_dependencies = ["pywinpty"]
     assert config.dependencies == ("numpy>=1.21.0", "pywinpty")
 
 
+def test_smoke_test_checks_imageio_ffmpeg_backend():
+    assert "imageio_ffmpeg" in builder._SMOKE_TEST_SCRIPT
+    assert "imageio_ffmpeg.get_ffmpeg_exe()" in builder._SMOKE_TEST_SCRIPT
+
+
 def test_render_pth_text_enables_site_and_app_path_once():
     original = "python311.zip\n.\n# import site\n"
 

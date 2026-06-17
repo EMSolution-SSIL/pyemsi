@@ -935,6 +935,10 @@ class Plotter:
             contours = block.contour(isosurfaces=levels, scalars=name)
             if contours.n_points == 0:
                 continue
+            if contours.n_faces > 0:
+                contour_edges = contours.extract_feature_edges()
+                if contour_edges.n_points > 0:
+                    contours = contours.merge(contour_edges)
             actor_name = f"contour_block_{block_name}" if block_name else "contour"
             mesh_kwargs = self._compose_add_mesh_kwargs(
                 user_kwargs=contour_kwargs,

@@ -4,7 +4,7 @@ import types
 
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import QAction, QPixmap
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QToolButton, QWidget
 
 # Test bootstrap: allow importing pyemsi on interpreters without the compiled
 # femap_parser extension available.
@@ -37,6 +37,11 @@ class _FakeQtInteractor(QWidget):
         self.widgets = type("Widgets", (), {"camera_widgets": self.camera_widgets})()
         self.iren = None
         self._closed = False
+        self.render_calls = 0
+        self.open_movie_calls = []
+        self.open_gif_calls = []
+        self.write_frame_calls = []
+        self.mwriter = None
 
     def reset_camera(self):
         return None
@@ -57,6 +62,7 @@ class _FakeQtInteractor(QWidget):
         return negative
 
     def render(self):
+        self.render_calls += 1
         return None
 
     def add_mesh(self, *_args, **_kwargs):
@@ -65,8 +71,27 @@ class _FakeQtInteractor(QWidget):
     def remove_actor(self, *_args, **_kwargs):
         return None
 
+    def open_movie(self, filename, framerate=24, quality=5, **kwargs):
+        self.open_movie_calls.append((filename, framerate, quality, dict(kwargs)))
+        self.mwriter = _FakeMovieWriter()
+
+    def open_gif(self, filename, loop=0, fps=10, palettesize=256, subrectangles=False, **kwargs):
+        self.open_gif_calls.append((filename, loop, fps, palettesize, subrectangles, dict(kwargs)))
+        self.mwriter = _FakeMovieWriter()
+
+    def write_frame(self):
+        self.write_frame_calls.append(None)
+
     def close(self):
         self._closed = True
+
+
+class _FakeMovieWriter:
+    def __init__(self):
+        self.close_calls = 0
+
+    def close(self):
+        self.close_calls += 1
 
 
 class _FakeParentPlotter:
@@ -253,6 +278,33 @@ def test_display_toolbar_includes_save_screenshot_action(monkeypatch):
         assert window._save_screenshot_action is not None
         assert window._save_screenshot_action.text() == "Save Screenshot"
         assert window._save_screenshot_action.toolTip() == "Save the current rendered viewport to a PNG file"
+    finally:
+        window.close()
+
+
+def test_display_toolbar_includes_save_animation_actions_grouped_with_screenshot(monkeypatch):
+    window, _parent_plotter = _make_window(monkeypatch)
+
+    try:
+        window._create_display_toolbar()
+
+        assert window._save_video_action is not None
+        assert window._save_gif_action is not None
+        assert window._save_video_action.text() == "Save Video"
+        assert window._save_video_action.toolTip() == "Save all time steps to a video file"
+        assert window._save_gif_action.text() == "Save GIF"
+        assert window._save_gif_action.toolTip() == "Save all time steps to a GIF file"
+        assert window._export_menu.title() == "Export"
+        assert window._export_tool_button.toolTip() == "Export screenshots and animations"
+        assert window._export_tool_button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+        assert window._export_tool_button.menu() is window._export_menu
+
+        export_actions = window._export_menu.actions()
+        assert export_actions[0] is window._screenshot_action
+        assert export_actions[1] is window._save_screenshot_action
+        assert export_actions[2].isSeparator()
+        assert export_actions[3] is window._save_video_action
+        assert export_actions[4] is window._save_gif_action
     finally:
         window.close()
 
@@ -514,5 +566,183 @@ def test_default_screenshot_filename_sanitizes_invalid_characters(monkeypatch):
     try:
         monkeypatch.setattr(window, "_current_tab_title", lambda: 'Plot: A/B*Test?')
         assert window._default_screenshot_filename() == "Plot_ A_B_Test_.png"
+    finally:
+        window.close()
+
+
+def test_save_video_exports_all_timesteps_and_restores_original_time(monkeypatch):
+    window, parent_plotter = _make_window(monkeypatch, number_time_points=3, active_time_point=1)
+    frames = []
+    infos = []
+
+    try:
+        monkeypatch.setattr(
+            window,
+            "_prompt_movie_export_settings",
+            lambda _default_path: qt_window_module.MovieExportSettings(
+                filename=os.path.join(os.getcwd(), "capture"),
+                framerate=12,
+                quality=8,
+            ),
+        )
+        monkeypatch.setattr(
+            qt_window_module.QMessageBox,
+            "information",
+            lambda parent, title, message: infos.append((parent, title, message)),
+        )
+        monkeypatch.setattr(window.plotter, "write_frame", lambda: frames.append(parent_plotter.active_time_point))
+
+        window._save_timesteps_to_video()
+
+        assert window.plotter.open_movie_calls == [(os.path.join(os.getcwd(), "capture.mp4"), 12, 8, {})]
+        assert frames == [0, 1, 2]
+        assert parent_plotter.active_time_point == 1
+        assert window.plotter.mwriter.close_calls == 1
+        assert infos[0][1] == "Animation Export"
+    finally:
+        window.close()
+
+
+def test_export_processes_qt_events_before_each_frame_capture(monkeypatch):
+    window, parent_plotter = _make_window(monkeypatch, number_time_points=3, active_time_point=0)
+    events_since_time_change = 0
+    frame_event_counts = []
+
+    def _set_active_time_point(time_point):
+        nonlocal events_since_time_change
+        parent_plotter.active_time_point = time_point
+        events_since_time_change = 0
+
+    def _process_events():
+        nonlocal events_since_time_change
+        events_since_time_change += 1
+
+    try:
+        parent_plotter.set_active_time_point = _set_active_time_point
+        monkeypatch.setattr(window.app, "processEvents", _process_events)
+        monkeypatch.setattr(
+            window,
+            "_prompt_movie_export_settings",
+            lambda _default_path: qt_window_module.MovieExportSettings(
+                filename=os.path.join(os.getcwd(), "capture.mp4"),
+                framerate=12,
+                quality=8,
+            ),
+        )
+        monkeypatch.setattr(qt_window_module.QMessageBox, "information", lambda *_args: None)
+        monkeypatch.setattr(window.plotter, "write_frame", lambda: frame_event_counts.append(events_since_time_change))
+
+        window._save_timesteps_to_video()
+
+        assert frame_event_counts == [2, 2, 2]
+    finally:
+        window.close()
+
+
+def test_save_gif_passes_settings_to_open_gif(monkeypatch):
+    window, parent_plotter = _make_window(monkeypatch, number_time_points=2, active_time_point=0)
+    frames = []
+
+    try:
+        monkeypatch.setattr(
+            window,
+            "_prompt_gif_export_settings",
+            lambda _default_path: qt_window_module.GifExportSettings(
+                filename=os.path.join(os.getcwd(), "capture.gif"),
+                fps=8.5,
+                loop=2,
+                palettesize=64,
+                subrectangles=True,
+            ),
+        )
+        monkeypatch.setattr(qt_window_module.QMessageBox, "information", lambda *_args: None)
+        monkeypatch.setattr(window.plotter, "write_frame", lambda: frames.append(parent_plotter.active_time_point))
+
+        window._save_timesteps_to_gif()
+
+        assert window.plotter.open_gif_calls == [
+            (os.path.join(os.getcwd(), "capture.gif"), 2, 8.5, 64, True, {})
+        ]
+        assert frames == [0, 1]
+        assert parent_plotter.active_time_point == 0
+        assert window.plotter.mwriter.close_calls == 1
+    finally:
+        window.close()
+
+
+def test_save_video_restores_original_time_and_closes_writer_after_frame_error(monkeypatch):
+    window, parent_plotter = _make_window(monkeypatch, number_time_points=4, active_time_point=2)
+    frames = []
+    errors = []
+    infos = []
+
+    def _write_frame():
+        frames.append(parent_plotter.active_time_point)
+        if len(frames) == 2:
+            raise RuntimeError("frame failed")
+
+    try:
+        monkeypatch.setattr(
+            window,
+            "_prompt_movie_export_settings",
+            lambda _default_path: qt_window_module.MovieExportSettings(
+                filename=os.path.join(os.getcwd(), "capture.mp4"),
+                framerate=24,
+                quality=5,
+            ),
+        )
+        monkeypatch.setattr(window.plotter, "write_frame", _write_frame)
+        monkeypatch.setattr(
+            qt_window_module.QMessageBox,
+            "critical",
+            lambda parent, title, message: errors.append((parent, title, message)),
+        )
+        monkeypatch.setattr(
+            qt_window_module.QMessageBox,
+            "information",
+            lambda parent, title, message: infos.append((parent, title, message)),
+        )
+
+        window._save_timesteps_to_video()
+
+        assert frames == [0, 1]
+        assert parent_plotter.active_time_point == 2
+        assert window.plotter.mwriter.close_calls == 1
+        assert len(errors) == 1
+        assert errors[0][1] == "Animation Export Error"
+        assert "Could not save video" in errors[0][2]
+        assert infos == []
+    finally:
+        window.close()
+
+
+def test_save_video_requires_time_aware_dataset_before_prompt(monkeypatch):
+    window, parent_plotter = _make_window(monkeypatch)
+    parent_plotter.number_time_points = None
+    parent_plotter.time_values = None
+    errors = []
+
+    try:
+        monkeypatch.setattr(
+            window,
+            "_prompt_movie_export_settings",
+            lambda _default_path: (_ for _ in ()).throw(AssertionError("prompt should not open")),
+        )
+        monkeypatch.setattr(
+            qt_window_module.QMessageBox,
+            "critical",
+            lambda parent, title, message: errors.append((parent, title, message)),
+        )
+
+        window._save_timesteps_to_video()
+
+        assert errors == [
+            (
+                window._window,
+                "Animation Export Error",
+                "No time-aware dataset is available for animation export.",
+            )
+        ]
+        assert window.plotter.open_movie_calls == []
     finally:
         window.close()

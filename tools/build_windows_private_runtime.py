@@ -27,7 +27,7 @@ _REQUIRED_ARTIFACTS = [
 ]
 
 _SMOKE_TEST_SCRIPT = textwrap.dedent("""\
-    import os, shutil, sys, pyemsi, PySide6, scienceplots
+    import os, shutil, sys, imageio_ffmpeg, pyemsi, PySide6, scienceplots
     scripts_dir = os.path.join(os.path.dirname(sys.executable), "Scripts")
     os.environ["PATH"] = os.pathsep.join([
         os.path.dirname(sys.executable), scripts_dir,
@@ -37,6 +37,7 @@ _SMOKE_TEST_SCRIPT = textwrap.dedent("""\
     assert shutil.which("pylsp")
     print(sys.executable)
     print(pyemsi.__version__)
+    print(imageio_ffmpeg.get_ffmpeg_exe())
     print(scienceplots.__file__)
 """)
 

@@ -1,4 +1,5 @@
 pyvista[full]
+imageio[ffmpeg]
 PySide6
 pyvistaqt
 Cython>=3.0.0

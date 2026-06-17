@@ -25,17 +25,20 @@ from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QMainWindow,
     QMenu,
     QMessageBox,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
 )
 
 import pyemsi.resources.resources  # noqa: F401
 
+from .animation_export_dialog import GifExportDialog, GifExportSettings, MovieExportDialog, MovieExportSettings
 from .block_visibility_dialog import BlockVisibilityDialog
 from .camera_position_dialog import CameraPositionDialog
 from .cell_query_dialog import CellQueryDialog
@@ -89,6 +92,10 @@ class QtPlotterWindow:
     _display_toolbar: "QToolBar"
     _screenshot_action: QAction | None
     _save_screenshot_action: QAction | None
+    _save_video_action: QAction | None
+    _save_gif_action: QAction | None
+    _export_menu: "QMenu"
+    _export_tool_button: "QToolButton"
     _query_toolbar: "QToolBar"
     _animation_toolbar: "QToolBar"
     plotter: "QtInteractor | pv.Plotter"
@@ -469,15 +476,40 @@ class QtPlotterWindow:
         settings_action.triggered.connect(self._open_display_settings)
         self._display_toolbar.addAction(settings_action)
 
+        self._export_menu = QMenu("Export", self._window)
+        self._export_menu.setIcon(QIcon(":/icons/Save-as.svg"))
+
         self._screenshot_action = QAction(QIcon(":/icons/Screenshot.svg"), "Screenshot to Clipboard", self._window)
         self._screenshot_action.setToolTip("Copy the current rendered viewport to the clipboard")
         self._screenshot_action.triggered.connect(self._copy_screenshot_to_clipboard)
-        self._display_toolbar.addAction(self._screenshot_action)
+        self._export_menu.addAction(self._screenshot_action)
 
         self._save_screenshot_action = QAction(QIcon(":/icons/Save.svg"), "Save Screenshot", self._window)
         self._save_screenshot_action.setToolTip("Save the current rendered viewport to a PNG file")
         self._save_screenshot_action.triggered.connect(self._save_screenshot_to_file)
-        self._display_toolbar.addAction(self._save_screenshot_action)
+        self._export_menu.addAction(self._save_screenshot_action)
+
+        self._export_menu.addSeparator()
+
+        self._save_video_action = QAction(QIcon(":/icons/Save-as.svg"), "Save Video", self._window)
+        self._save_video_action.setToolTip("Save all time steps to a video file")
+        self._save_video_action.triggered.connect(self._save_timesteps_to_video)
+        self._export_menu.addAction(self._save_video_action)
+
+        self._save_gif_action = QAction(QIcon(":/icons/Image.svg"), "Save GIF", self._window)
+        self._save_gif_action.setToolTip("Save all time steps to a GIF file")
+        self._save_gif_action.triggered.connect(self._save_timesteps_to_gif)
+        self._export_menu.addAction(self._save_gif_action)
+
+        self._export_tool_button = QToolButton(self._window)
+        self._export_tool_button.setObjectName("plotter_export_tool_button")
+        self._export_tool_button.setAutoRaise(True)
+        self._export_tool_button.setIcon(self._export_menu.icon())
+        self._export_tool_button.setText(self._export_menu.title())
+        self._export_tool_button.setToolTip("Export screenshots and animations")
+        self._export_tool_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._export_tool_button.setMenu(self._export_menu)
+        self._display_toolbar.addWidget(self._export_tool_button)
 
         self._display_toolbar.addSeparator()
 
@@ -588,6 +620,121 @@ class QtPlotterWindow:
         )
         return selected_path or None
 
+    def _save_timesteps_to_video(self) -> None:
+        number_time_points = self._animation_export_time_count()
+        if number_time_points is None:
+            return
+
+        settings = self._prompt_movie_export_settings(self._default_animation_save_path(".mp4"))
+        if settings is None or not settings.filename:
+            return
+
+        output_path = self._ensure_file_extension(settings.filename, ".mp4")
+        try:
+            self._export_timesteps_to_writer(
+                number_time_points,
+                lambda: self.plotter.open_movie(
+                    output_path,
+                    framerate=settings.framerate,
+                    quality=settings.quality,
+                ),
+            )
+        except Exception as exc:
+            QMessageBox.critical(self._window, "Animation Export Error", f"Could not save video:\n{exc}")
+            return
+
+        QMessageBox.information(self._window, "Animation Export", f"Saved video to:\n{output_path}")
+
+    def _save_timesteps_to_gif(self) -> None:
+        number_time_points = self._animation_export_time_count()
+        if number_time_points is None:
+            return
+
+        settings = self._prompt_gif_export_settings(self._default_animation_save_path(".gif"))
+        if settings is None or not settings.filename:
+            return
+
+        output_path = self._ensure_file_extension(settings.filename, ".gif")
+        try:
+            self._export_timesteps_to_writer(
+                number_time_points,
+                lambda: self.plotter.open_gif(
+                    output_path,
+                    loop=settings.loop,
+                    fps=settings.fps,
+                    palettesize=settings.palettesize,
+                    subrectangles=settings.subrectangles,
+                ),
+            )
+        except Exception as exc:
+            QMessageBox.critical(self._window, "Animation Export Error", f"Could not save GIF:\n{exc}")
+            return
+
+        QMessageBox.information(self._window, "Animation Export", f"Saved GIF to:\n{output_path}")
+
+    def _prompt_movie_export_settings(self, default_path: str) -> MovieExportSettings | None:
+        dialog = MovieExportDialog(default_path, self._window)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.settings()
+
+    def _prompt_gif_export_settings(self, default_path: str) -> GifExportSettings | None:
+        dialog = GifExportDialog(default_path, self._window)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.settings()
+
+    def _animation_export_time_count(self) -> int | None:
+        if self.parent_plotter is None:
+            QMessageBox.critical(self._window, "Animation Export Error", "No plotter is available for export.")
+            return None
+
+        number_time_points = self.parent_plotter.number_time_points
+        time_values = self.parent_plotter.time_values
+        if number_time_points is None or number_time_points <= 0 or time_values is None or len(time_values) == 0:
+            QMessageBox.critical(
+                self._window,
+                "Animation Export Error",
+                "No time-aware dataset is available for animation export.",
+            )
+            return None
+
+        return number_time_points
+
+    def _export_timesteps_to_writer(self, number_time_points: int, open_writer: Callable[[], None]) -> None:
+        if self.parent_plotter is None:
+            raise RuntimeError("No plotter is available for export.")
+
+        self.pause()
+        original_time_point = self.parent_plotter.active_time_point
+        export_error: Exception | None = None
+        close_error: Exception | None = None
+
+        try:
+            open_writer()
+            for time_point in range(number_time_points):
+                self.set_time_point(time_point)
+                self.app.processEvents()
+                self.plotter.render()
+                self.app.processEvents()
+                self.plotter.write_frame()
+                self.app.processEvents()
+        except Exception as exc:
+            export_error = exc
+        finally:
+            try:
+                self.plotter.mwriter.close()
+            except Exception as exc:
+                close_error = exc
+
+            if original_time_point is not None:
+                self.set_time_point(original_time_point)
+
+        if export_error is not None:
+            raise export_error
+        if close_error is not None:
+            raise close_error
+
     def _capture_screenshot_pixmap(self) -> QPixmap | None:
         if not self.plotter.isVisible() or self.plotter.width() <= 0 or self.plotter.height() <= 0:
             QMessageBox.critical(self._window, "Screenshot Error", "The rendered viewport is not ready to capture.")
@@ -616,13 +763,28 @@ class QtPlotterWindow:
         return getattr(gui, "_window", None)
 
     def _default_screenshot_save_path(self) -> str:
+        return self._default_save_path(self._default_screenshot_filename())
+
+    def _default_save_path(self, filename: str) -> str:
         window = self._main_window()
         explorer = getattr(window, "explorer", None)
         current_path = getattr(explorer, "current_path", None)
-        filename = self._default_screenshot_filename()
         if current_path and os.path.isdir(current_path):
             return os.path.join(current_path, filename)
         return os.path.join(os.getcwd(), filename)
+
+    def _default_animation_save_path(self, extension: str) -> str:
+        return self._default_save_path(self._default_animation_filename(extension))
+
+    def _default_animation_filename(self, extension: str) -> str:
+        screenshot_name = self._default_screenshot_filename()
+        base_name, _ = os.path.splitext(screenshot_name)
+        return f"{base_name}{extension}"
+
+    def _ensure_file_extension(self, path: str, extension: str) -> str:
+        if os.path.splitext(path)[1] == "":
+            return f"{path}{extension}"
+        return path
 
     def _default_screenshot_filename(self) -> str:
         raw_title = self._current_tab_title() or self._window.windowTitle() or "screenshot"

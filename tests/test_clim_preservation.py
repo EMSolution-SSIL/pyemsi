@@ -341,6 +341,41 @@ def test_contour_accepts_scalar_bar_args_without_duplicate_kwarg_error():
     p.plotter.close()
 
 
+def test_contour_merges_feature_edges_when_surface_contours_have_faces():
+    """Surface contours should merge extracted contour edges into the same actor."""
+    mesh = pv.ImageData(dimensions=(5, 5, 5))
+    mesh["foo"] = mesh.points[:, 0] + mesh.points[:, 1] + mesh.points[:, 2]
+
+    expected_levels = np.linspace(float(mesh["foo"].min()), float(mesh["foo"].max()), num=3)
+    expected_contours = mesh.contour(isosurfaces=expected_levels, scalars="foo")
+    expected_edges = expected_contours.extract_feature_edges()
+    captured = {}
+
+    p = _make_plotter_with_offscreen()
+    p._mesh = mesh
+    p._contour_props = {
+        "name": "foo",
+        "n_contours": 3,
+        "color": "red",
+        "line_width": 2,
+    }
+    original_add_mesh = p.plotter.add_mesh
+
+    def _capturing_add_mesh(dataset, *args, **kwargs):
+        captured["dataset"] = dataset.copy(deep=True)
+        return original_add_mesh(dataset, *args, **kwargs)
+
+    p.plotter.add_mesh = _capturing_add_mesh
+
+    p._plot_contours()
+
+    rendered = captured["dataset"]
+    assert rendered.n_cells == expected_contours.n_cells + expected_edges.n_cells
+    assert rendered.n_lines == expected_edges.n_lines
+    assert rendered.n_faces_strict == expected_contours.n_faces_strict
+    p.plotter.close()
+
+
 def test_vector_accepts_scalar_bar_args_without_duplicate_kwarg_error():
     """Vector rendering should not fail when user passes scalar_bar_args/reset_camera kwargs."""
     mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
