@@ -2,8 +2,11 @@ import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import type { Configuration } from 'webpack';
+import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+
+const baseUrl = '/pyemsi/';
 
 const config: Config = {
   title: 'pyemsi',
@@ -28,7 +31,7 @@ const config: Config = {
   url: 'https://emsolution-ssil.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/pyemsi/',
+  baseUrl,
   trailingSlash: true,
 
   // GitHub pages deployment config.
@@ -82,6 +85,23 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    () => ({
+      name: 'input-control-file-editor-monaco',
+      configureWebpack(): Configuration {
+        return {
+          plugins: [
+            new MonacoWebpackPlugin({
+              languages: ['json'],
+              filename: 'assets/js/[name].[contenthash].worker.js',
+              publicPath: baseUrl,
+            }),
+          ],
+        };
+      },
+    }),
+  ],
+
   themeConfig: {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
@@ -106,6 +126,11 @@ const config: Config = {
           sidebarId: 'apiSidebar',
           position: 'left',
           label: 'API',
+        },
+        {
+          to: '/input-control-file-editor',
+          label: 'Input Control File Editor',
+          position: 'left',
         },
         {
           href: 'https://github.com/EMSolution-SSIL/pyemsi',

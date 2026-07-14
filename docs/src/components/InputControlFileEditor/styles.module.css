@@ -1,0 +1,407 @@
+.loading,
+.editorLoading {
+  display: grid;
+  min-height: 12rem;
+  place-items: center;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.shell {
+  position: relative;
+  width: 100%;
+  margin: 1.5rem 0;
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.65rem;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 0.45rem 1.4rem rgb(0 0 0 / 8%);
+}
+
+.dragging {
+  border-color: var(--ifm-color-primary);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.windowBar,
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.windowBar {
+  min-height: 3.25rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.identity {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ifm-color-emphasis-900);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.windowActions,
+.paneActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.select,
+.documentSelect {
+  max-width: 15rem;
+  height: 2rem;
+  padding: 0 1.9rem 0 0.55rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.3rem;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.tabs {
+  display: flex;
+  min-height: 2.45rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+  scrollbar-width: thin;
+}
+
+.tabGroup {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  border-right: 1px solid var(--ifm-color-emphasis-300);
+  border-top: 2px solid transparent;
+  background: var(--ifm-color-emphasis-200);
+}
+
+.activeTab {
+  border-top-color: var(--ifm-color-primary);
+  background: var(--ifm-background-color);
+}
+
+.tab,
+.closeTab,
+.smallButton,
+.breadcrumbButton,
+.menuItem {
+  appearance: none;
+  border: 0;
+  font: inherit;
+}
+
+.tab {
+  display: flex;
+  max-width: 15rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.25rem 0.45rem 0.7rem;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+}
+
+.tabName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dirtyMark {
+  color: var(--ifm-color-primary);
+  font-size: 0.65rem;
+}
+
+.closeTab {
+  width: 1.8rem;
+  background: transparent;
+  color: var(--ifm-color-emphasis-700);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.closeTab:hover,
+.closeTab:focus-visible,
+.smallButton:hover:not(:disabled),
+.smallButton:focus-visible,
+.breadcrumbButton:hover,
+.breadcrumbButton:focus-visible {
+  background: var(--ifm-color-emphasis-300);
+  outline: none;
+}
+
+.dropZone {
+  display: flex;
+  min-height: 31rem;
+  padding: 3rem 1.5rem;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.dropZone h2 {
+  margin: 0.7rem 0 0.35rem;
+}
+
+.dropZone p {
+  max-width: 34rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.dropIcon {
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.editorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: clamp(34rem, 70vh, 52rem);
+}
+
+.editorGrid.split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pane {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto auto minmax(24rem, 1fr) auto;
+  background: var(--ifm-background-color);
+}
+
+.pane + .pane {
+  border-left: 1px solid var(--ifm-color-emphasis-400);
+}
+
+.paneHeader {
+  min-height: 2.4rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.7rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.paneFilename {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smallButton {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.25rem;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.smallButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.breadcrumbs {
+  display: flex;
+  min-height: 2rem;
+  padding: 0.25rem 0.4rem;
+  align-items: center;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-color);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.breadcrumbButton {
+  max-width: 13rem;
+  padding: 0.16rem 0.35rem;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openBreadcrumb {
+  background: var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-primary-dark);
+}
+
+.separator {
+  color: var(--ifm-color-emphasis-600);
+  user-select: none;
+}
+
+.breadcrumbMenu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  max-width: min(24rem, calc(100vw - 1rem));
+  max-height: min(22rem, calc(100vh - 1rem));
+  padding: 0.25rem;
+  overflow: auto;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.45rem;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 0.6rem 1.8rem rgb(0 0 0 / 20%);
+  flex-direction: column;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+}
+
+.menuItem {
+  display: flex;
+  width: 100%;
+  padding: 0.38rem 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  text-align: left;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible,
+.currentMenuItem {
+  background: var(--ifm-color-emphasis-200);
+  outline: none;
+}
+
+.menuName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuMeta {
+  display: inline-flex;
+  max-width: 13rem;
+  align-items: center;
+  gap: 0.4rem;
+  overflow: hidden;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.currentBadge {
+  padding: 0.08rem 0.35rem;
+  border-radius: 999px;
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.monacoHost {
+  position: relative;
+  min-width: 0;
+  min-height: 24rem;
+}
+
+.validation,
+.globalStatus {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.72rem;
+}
+
+.validation {
+  min-height: 1.65rem;
+  padding: 0.28rem 0.6rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+  text-align: right;
+}
+
+.invalid {
+  color: var(--ifm-color-danger-dark);
+  font-weight: 600;
+}
+
+.globalStatus {
+  min-height: 2rem;
+  padding: 0.38rem 0.7rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.dropOverlay {
+  position: absolute;
+  z-index: 1100;
+  display: grid;
+  border: 3px dashed var(--ifm-color-primary);
+  background: color-mix(in srgb, var(--ifm-background-color) 88%, transparent);
+  color: var(--ifm-color-primary-dark);
+  font-size: 1.25rem;
+  font-weight: 700;
+  inset: 0;
+  place-items: center;
+  pointer-events: none;
+}
+
+@media (max-width: 996px) {
+  .windowBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .windowActions {
+    flex-wrap: wrap;
+  }
+
+  .editorGrid.split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pane + .pane {
+    border-top: 2px solid var(--ifm-color-emphasis-500);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .paneHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .paneActions {
+    flex-wrap: wrap;
+  }
+
+  .select,
+  .documentSelect {
+    max-width: 100%;
+  }
+}
