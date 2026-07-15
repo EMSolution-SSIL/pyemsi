@@ -41,8 +41,7 @@
   display: none;
 }
 
-.windowBar,
-.paneHeader {
+.windowBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -65,16 +64,14 @@
   white-space: nowrap;
 }
 
-.windowActions,
-.paneActions {
+.windowActions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 0.4rem;
 }
 
-.select,
-.documentSelect {
+.select {
   max-width: 15rem;
   height: 2rem;
   padding: 0 1.9rem 0 0.55rem;
@@ -111,7 +108,6 @@
 
 .tab,
 .closeTab,
-.smallButton,
 .breadcrumbButton,
 .menuItem {
   appearance: none;
@@ -151,8 +147,6 @@
 
 .closeTab:hover,
 .closeTab:focus-visible,
-.smallButton:hover:not(:disabled),
-.smallButton:focus-visible,
 .breadcrumbButton:hover,
 .breadcrumbButton:focus-visible {
   background: var(--ifm-color-emphasis-300);
@@ -198,43 +192,16 @@
 .pane {
   display: grid;
   min-width: 0;
-  grid-template-rows: auto auto minmax(24rem, 1fr) auto;
+  grid-template-rows: auto minmax(24rem, 1fr) auto;
   background: var(--ifm-background-color);
+}
+
+.focusedPane {
+  box-shadow: inset 0 2px 0 var(--ifm-color-primary);
 }
 
 .pane + .pane {
   border-left: 1px solid var(--ifm-color-emphasis-400);
-}
-
-.paneHeader {
-  min-height: 2.4rem;
-  padding: 0.35rem 0.5rem 0.35rem 0.7rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
-  background: var(--ifm-color-emphasis-100);
-}
-
-.paneFilename {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.smallButton {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-400);
-  border-radius: 0.25rem;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-  cursor: pointer;
-  font-size: 0.75rem;
-}
-
-.smallButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
 }
 
 .breadcrumbs {
@@ -407,17 +374,7 @@
 }
 
 @media (max-width: 576px) {
-  .paneHeader {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .paneActions {
-    flex-wrap: wrap;
-  }
-
-  .select,
-  .documentSelect {
+  .select {
     max-width: 100%;
   }
 }

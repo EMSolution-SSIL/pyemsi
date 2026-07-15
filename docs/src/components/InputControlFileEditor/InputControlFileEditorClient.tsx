@@ -74,14 +74,15 @@ interface EditorPaneProps {
   documentItem: OpenDocument;
   paneLabel: string;
   theme: 'light' | 'vs-dark';
+  isFocused: boolean;
   onChange: (id: string, value: string) => void;
   onErrors: (id: string, count: number) => void;
+  onEditorReady: (
+    id: string,
+    editor: monacoEditor.editor.IStandaloneCodeEditor,
+  ) => void;
   onFocus: (id: string) => void;
   onMonacoReady: (monaco: Monaco) => void;
-  onSave: (id: string) => void;
-  comparisonDocuments?: OpenDocument[];
-  onComparisonChange?: (id: string) => void;
-  onCloseComparison?: () => void;
 }
 
 let fallbackId = 0;
@@ -137,11 +138,17 @@ export default function InputControlFileEditorClient(): ReactNode {
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
+  const editorsRef = useRef(new Map<string, monacoEditor.editor.IStandaloneCodeEditor>());
   const originalTitleRef = useRef(document.title);
   const documentsRef = useRef<OpenDocument[]>([]);
 
   const primaryDocument = documents.find((item) => item.id === primaryId);
   const comparisonDocument = documents.find((item) => item.id === comparisonId);
+  const focusedVisibleDocument = documents.find((item) => (
+    item.id === focusedDocumentId
+    && (item.id === primaryId || item.id === comparisonId)
+  ));
+  const actionDocument = focusedVisibleDocument ?? primaryDocument;
   const pageTitle = editorWindowTitle(
     primaryDocument?.displayName,
     comparisonDocument?.displayName,
@@ -377,6 +384,25 @@ export default function InputControlFileEditorClient(): ReactNode {
     setFocusedDocumentId(id);
   }, [comparisonId, primaryId]);
 
+  const closeSplit = useCallback(() => {
+    setComparisonId(undefined);
+    setFocusedDocumentId(primaryId);
+  }, [primaryId]);
+
+  const registerEditor = useCallback((
+    id: string,
+    editor: monacoEditor.editor.IStandaloneCodeEditor,
+  ) => {
+    editorsRef.current.set(id, editor);
+  }, []);
+
+  const formatActionDocument = useCallback(() => {
+    if (!actionDocument) return;
+    const editor = editorsRef.current.get(actionDocument.id);
+    void editor?.getAction('editor.action.formatDocument')?.run();
+    editor?.focus();
+  }, [actionDocument]);
+
   const closeDocument = useCallback((id: string) => {
     const index = documents.findIndex((item) => item.id === id);
     const item = documents[index];
@@ -386,6 +412,7 @@ export default function InputControlFileEditorClient(): ReactNode {
     }
 
     monacoRef.current?.editor.getModel(monacoRef.current.Uri.parse(item.modelUri))?.dispose();
+    editorsRef.current.delete(id);
     const remaining = documents.filter((candidate) => candidate.id !== id);
     setDocuments(remaining);
     if (comparisonId === id) setComparisonId(undefined);
@@ -399,12 +426,6 @@ export default function InputControlFileEditorClient(): ReactNode {
     }
     setStatus(`Closed ${item.displayName}.`);
   }, [comparisonId, documents, focusedDocumentId, primaryId]);
-
-  const identity = primaryDocument
-    ? comparisonDocument
-      ? `${primaryDocument.displayName} ↔ ${comparisonDocument.displayName}`
-      : primaryDocument.displayName
-    : 'No input control file open';
 
   return (
     <section
@@ -426,10 +447,30 @@ export default function InputControlFileEditorClient(): ReactNode {
       />
 
       <div className={styles.windowBar}>
-        <div className={styles.identity} title={identity}>{identity}</div>
+        <div className={styles.identity}>Input Control File Editor</div>
         <div className={styles.windowActions}>
           <button className="button button--sm button--secondary" type="button" onClick={() => void openFiles()}>
             Open files
+          </button>
+          <button
+            className="button button--sm button--secondary"
+            type="button"
+            disabled={!actionDocument || actionDocument.errorCount > 0}
+            title={actionDocument?.errorCount
+              ? `Fix JSON problems in ${actionDocument.displayName} before formatting`
+              : `Format ${actionDocument?.displayName ?? 'the active file'}`}
+            onClick={formatActionDocument}>
+            Format
+          </button>
+          <button
+            className="button button--sm button--secondary"
+            type="button"
+            disabled={!actionDocument}
+            title={`Save ${actionDocument?.displayName ?? 'the active file'}`}
+            onClick={() => {
+              if (actionDocument) void saveDocument(actionDocument.id);
+            }}>
+            Save
           </button>
           {documents.length >= 2 && (
             <select
@@ -447,7 +488,7 @@ export default function InputControlFileEditorClient(): ReactNode {
             </select>
           )}
           {comparisonDocument && (
-            <button className="button button--sm button--secondary" type="button" onClick={() => setComparisonId(undefined)}>
+            <button className="button button--sm button--secondary" type="button" onClick={closeSplit}>
               Close split
             </button>
           )}
@@ -506,25 +547,24 @@ export default function InputControlFileEditorClient(): ReactNode {
             paneLabel="Primary editor"
             documentItem={primaryDocument}
             theme={colorMode === 'dark' ? 'vs-dark' : 'light'}
+            isFocused={actionDocument?.id === primaryDocument.id}
             onChange={updateText}
             onErrors={updateErrors}
+            onEditorReady={registerEditor}
             onFocus={setFocusedDocumentId}
             onMonacoReady={(monaco) => { monacoRef.current = monaco; }}
-            onSave={(id) => void saveDocument(id)}
           />
           {comparisonDocument && (
             <EditorPane
               paneLabel="Comparison editor"
               documentItem={comparisonDocument}
               theme={colorMode === 'dark' ? 'vs-dark' : 'light'}
+              isFocused={actionDocument?.id === comparisonDocument.id}
               onChange={updateText}
               onErrors={updateErrors}
+              onEditorReady={registerEditor}
               onFocus={setFocusedDocumentId}
               onMonacoReady={(monaco) => { monacoRef.current = monaco; }}
-              onSave={(id) => void saveDocument(id)}
-              comparisonDocuments={documents.filter((item) => item.id !== primaryId)}
-              onComparisonChange={setComparisonId}
-              onCloseComparison={() => setComparisonId(undefined)}
             />
           )}
         </div>
@@ -540,14 +580,12 @@ function EditorPane({
   documentItem,
   paneLabel,
   theme,
+  isFocused,
   onChange,
   onErrors,
+  onEditorReady,
   onFocus,
   onMonacoReady,
-  onSave,
-  comparisonDocuments,
-  onComparisonChange,
-  onCloseComparison,
 }: EditorPaneProps): ReactNode {
   const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | undefined>(undefined);
   const documentIdRef = useRef(documentItem.id);
@@ -563,13 +601,15 @@ function EditorPane({
 
   useEffect(() => {
     documentIdRef.current = documentItem.id;
+    if (editorRef.current) onEditorReady(documentItem.id, editorRef.current);
     const model = editorRef.current?.getModel();
     const position = editorRef.current?.getPosition();
     setCursorOffset(model && position ? model.getOffsetAt(position) : 0);
-  }, [documentItem.id]);
+  }, [documentItem.id, onEditorReady]);
 
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    onEditorReady(documentItem.id, editor);
     onMonacoReady(monaco);
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       validate: true,
@@ -587,11 +627,6 @@ function EditorPane({
     updateCursor();
   };
 
-  const formatDocument = () => {
-    void editorRef.current?.getAction('editor.action.formatDocument')?.run();
-    editorRef.current?.focus();
-  };
-
   const navigateToOffset = (offset: number) => {
     const editor = editorRef.current;
     const model = editor?.getModel();
@@ -602,43 +637,15 @@ function EditorPane({
     editor.focus();
   };
 
-  const dirty = documentItem.text !== documentItem.savedText;
   const validationText = documentItem.errorCount === 0
     ? 'Valid JSON'
     : `${documentItem.errorCount} JSON ${documentItem.errorCount === 1 ? 'problem' : 'problems'}`;
 
   return (
-    <section className={styles.pane} aria-label={paneLabel} onMouseDown={() => onFocus(documentItem.id)}>
-      <div className={styles.paneHeader}>
-        {comparisonDocuments && onComparisonChange ? (
-          <select
-            className={styles.documentSelect}
-            aria-label="Comparison document"
-            value={documentItem.id}
-            onChange={(event) => onComparisonChange(event.target.value)}>
-            {comparisonDocuments.map((item) => (
-              <option key={item.id} value={item.id}>{item.displayName}</option>
-            ))}
-          </select>
-        ) : (
-          <span className={styles.paneFilename} title={fileTooltip(documentItem)}>
-            {documentItem.displayName}{dirty ? ' ●' : ''}
-          </span>
-        )}
-        <div className={styles.paneActions}>
-          <button
-            type="button"
-            className={styles.smallButton}
-            disabled={documentItem.errorCount > 0}
-            title={documentItem.errorCount > 0 ? 'Fix JSON problems before formatting' : 'Format JSON'}
-            onClick={formatDocument}>Format</button>
-          <button type="button" className={styles.smallButton} onClick={() => onSave(documentItem.id)}>Save</button>
-          {onCloseComparison && (
-            <button type="button" className={styles.smallButton} onClick={onCloseComparison}>Close</button>
-          )}
-        </div>
-      </div>
-
+    <section
+      className={`${styles.pane} ${isFocused ? styles.focusedPane : ''}`}
+      aria-label={paneLabel}
+      onMouseDown={() => onFocus(documentItem.id)}>
       <Breadcrumbs
         filename={documentItem.displayName}
         roots={symbolTree.roots}

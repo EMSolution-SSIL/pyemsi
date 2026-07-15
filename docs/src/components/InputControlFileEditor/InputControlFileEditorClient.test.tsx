@@ -125,6 +125,15 @@ describe('InputControlFileEditorClient', () => {
     await userEvent.selectOptions(screen.getByLabelText('Split editor with'), screen.getByRole('option', {name: 'input.json (2)'}));
     expect(await screen.findByLabelText('Comparison editor')).toBeInTheDocument();
     expect(document.title).toBe('input.json ↔ input.json (2) — Input Control File Editor | pyemsi');
+    expect(screen.getAllByRole('button', {name: 'Format'})).toHaveLength(1);
+    expect(screen.getAllByRole('button', {name: 'Save'})).toHaveLength(1);
+
+    fireEvent.change(
+      within(screen.getByLabelText('Comparison editor')).getByRole('textbox', {name: /Monaco/}),
+      {target: {value: '{"value": 3}'}},
+    );
+    await userEvent.click(screen.getByRole('button', {name: 'Save'}));
+    expect(await screen.findByText('Downloaded input.json (2).')).toBeInTheDocument();
   });
 
   it('tracks dirty state, validates, downloads, and clears the modified marker', async () => {
