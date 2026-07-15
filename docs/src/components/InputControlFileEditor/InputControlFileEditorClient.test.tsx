@@ -53,6 +53,7 @@ vi.mock('@monaco-editor/react', () => ({
 
     return React.createElement('textarea', {
       'aria-label': `Monaco ${props.path}`,
+      'data-occurrences-highlight': props.options?.occurrencesHighlight,
       value: props.value,
       onFocus: () => undefined,
       onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -112,6 +113,39 @@ describe('InputControlFileEditorClient', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('shows a conventional drop target with a single prompt during dragging', () => {
+    const {container} = render(<InputControlFileEditorClient />);
+
+    expect(screen.queryByRole('heading', {name: 'Open input control files'})).not.toBeInTheDocument();
+    expect(screen.getByText('Drag and drop one or more JSON files here.')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Open Input Control Files'})).toBeInTheDocument();
+
+    fireEvent.dragEnter(container.querySelector('section')!);
+
+    expect(screen.queryByText('Drag and drop one or more JSON files here.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Open Input Control Files'})).not.toBeInTheDocument();
+    expect(screen.getAllByText('Drop JSON files to open them')).toHaveLength(1);
+  });
+
+  it('disables Monaco occurrence highlighting to avoid model-switch cancellation errors', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('first.json', '{}')]);
+
+    expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveAttribute(
+      'data-occurrences-highlight',
+      'off',
+    );
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    fireEvent.change(input, {target: {files: [jsonFile('second.json', '{}')]}});
+
+    expect(await screen.findByRole('tab', {name: 'second.json'})).toBeInTheDocument();
+    expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveAttribute(
+      'data-occurrences-highlight',
+      'off',
+    );
   });
 
   it('opens multiple files, disambiguates names, and creates a split title', async () => {

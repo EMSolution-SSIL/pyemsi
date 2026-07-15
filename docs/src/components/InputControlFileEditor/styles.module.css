@@ -158,18 +158,39 @@
   min-height: 31rem;
   padding: 3rem 1.5rem;
   align-items: center;
-  flex-direction: column;
   justify-content: center;
   text-align: center;
 }
 
-.dropZone h2 {
-  margin: 0.7rem 0 0.35rem;
+.dropTarget {
+  display: flex;
+  width: min(100%, 36rem);
+  padding: 2.25rem 2rem;
+  align-items: center;
+  border: 2px dashed var(--ifm-color-emphasis-500);
+  border-radius: 0.65rem;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--ifm-color-emphasis-100);
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 
-.dropZone p {
+.dropTarget p {
+  margin: 0.7rem 0 1.2rem;
   max-width: 34rem;
   color: var(--ifm-color-emphasis-700);
+}
+
+.activeDropTarget {
+  border-color: var(--ifm-color-primary);
+  background: color-mix(in srgb, var(--ifm-color-primary) 9%, var(--ifm-background-color));
+}
+
+.dropTarget .activeDropPrompt {
+  margin-bottom: 0;
+  color: var(--ifm-color-primary-dark);
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 
 .dropIcon {
@@ -416,8 +437,10 @@
   position: absolute;
   z-index: 1100;
   display: grid;
+  margin: 0.75rem;
   border: 3px dashed var(--ifm-color-primary);
-  background: color-mix(in srgb, var(--ifm-background-color) 88%, transparent);
+  border-radius: 0.65rem;
+  background: var(--ifm-background-color);
   color: var(--ifm-color-primary-dark);
   font-size: 1.25rem;
   font-weight: 700;

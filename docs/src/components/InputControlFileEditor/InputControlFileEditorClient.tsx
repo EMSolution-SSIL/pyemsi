@@ -810,13 +810,22 @@ export default function InputControlFileEditorClient(): ReactNode {
       )}
 
       {!primaryDocument ? (
-        <div className={styles.dropZone}>
-          <div className={styles.dropIcon} aria-hidden="true">{'{ }'}</div>
-          <h2>Open input control files</h2>
-          <p>Drag and drop one or more JSON files here, or choose them from your computer.</p>
-          <button className="button button--primary button--lg" type="button" onClick={() => void openFiles()}>
-            Open Input Control Files
-          </button>
+        <div
+          className={styles.dropZone}
+          aria-label="JSON file drop zone">
+          <div className={`${styles.dropTarget} ${isDragging ? styles.activeDropTarget : ''}`}>
+            <div className={styles.dropIcon} aria-hidden="true">{isDragging ? '↓' : '{ }'}</div>
+            {isDragging ? (
+              <p className={styles.activeDropPrompt}>Drop JSON files to open them</p>
+            ) : (
+              <>
+                <p>Drag and drop one or more JSON files here.</p>
+                <button className="button button--primary button--lg" type="button" onClick={() => void openFiles()}>
+                  Open Input Control Files
+                </button>
+              </>
+            )}
+          </div>
         </div>
       ) : (
         <div className={`${styles.editorGrid} ${comparisonDocument ? styles.split : ''}`}>
@@ -854,7 +863,9 @@ export default function InputControlFileEditorClient(): ReactNode {
       )}
 
       <div className={styles.globalStatus} role="status" aria-live="polite">{status}</div>
-      {isDragging && <div className={styles.dropOverlay}>Drop JSON files to open them</div>}
+      {isDragging && primaryDocument && (
+        <div className={styles.dropOverlay}>Drop JSON files to open them</div>
+      )}
     </section>
   );
 }
@@ -1021,6 +1032,9 @@ function EditorPane({
             folding: true,
             formatOnPaste: true,
             minimap: {enabled: false},
+            // Monaco 0.55.1 can surface its internal word-highlighter cancellation
+            // as an unhandled rejection when this editor switches file models.
+            occurrencesHighlight: 'off',
             scrollBeyondLastLine: false,
             stickyScroll: {enabled: true},
             tabSize: 2,
