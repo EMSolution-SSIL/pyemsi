@@ -29,6 +29,11 @@ import {
   parseStructuredFormat,
   serializeStructuredFormat,
 } from './structuredFormats';
+import NetworkEditorModal from './NetworkEditorModal';
+import {
+  findNetworkSections,
+  isNetworkDefinition,
+} from './networkModel';
 import styles from './styles.module.css';
 
 loader.config({monaco: monacoEditor});
@@ -219,6 +224,7 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [status, setStatus] = useState('No files are open.');
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [networkEditorDocumentId, setNetworkEditorDocumentId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
@@ -245,6 +251,11 @@ export default function InputControlFileEditorClient(): ReactNode {
     primaryDocument?.displayName,
     comparisonDocument?.displayName,
   );
+  const actionNetworkSections = actionDocument?.canonicalValue === undefined
+    ? []
+    : findNetworkSections(actionDocument.canonicalValue);
+  const actionHasMalformedNetwork = actionNetworkSections.some((item) => !isNetworkDefinition(item.network));
+  const networkEditorDocument = documents.find((item) => item.id === networkEditorDocumentId);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -520,6 +531,43 @@ export default function InputControlFileEditorClient(): ReactNode {
     }));
   }, []);
 
+  const updateCanonicalDocument = useCallback((id: string, canonicalValue: unknown) => {
+    setDocuments((current) => current.map((item) => {
+      if (item.id !== id) return item;
+      const revision = item.revision + 1;
+      const jsonText = serializeStructuredFormat(canonicalValue, 'json');
+      const formatDrafts: OpenDocument['formatDrafts'] = {};
+      for (const [formatName, existingDraft] of Object.entries(item.formatDrafts)) {
+        if (!existingDraft) continue;
+        const format = formatName as EditorFormat;
+        const text = serializeStructuredFormat(canonicalValue, format);
+        const parsed = parseStructuredFormat(text, format);
+        formatDrafts[format] = {
+          ...existingDraft,
+          text,
+          lastValidText: text,
+          sourceRevision: revision,
+          issues: parsed.issues,
+          roots: parsed.roots,
+        };
+      }
+      if (!formatDrafts.json) {
+        const parsed = parseStructuredFormat(jsonText, 'json');
+        formatDrafts.json = {
+          text: jsonText,
+          lastValidText: jsonText,
+          modelUri: `inmemory://input-control-files/${item.id}/${encodeURIComponent(item.name)}.json`,
+          sourceRevision: revision,
+          issues: parsed.issues,
+          roots: parsed.roots,
+        };
+      }
+      return {...item, text: jsonText, revision, canonicalValue, formatDrafts};
+    }));
+    setFocusedDocumentId(id);
+    setStatus('Applied NETWORK changes to the open document. Save the file to keep them.');
+  }, []);
+
   const selectDocumentFormat = useCallback((id: string, format: EditorFormat) => {
     const item = documents.find((candidate) => candidate.id === id);
     if (!item || item.activeFormat === format) return;
@@ -749,6 +797,22 @@ export default function InputControlFileEditorClient(): ReactNode {
             }}>
             Save
           </button>
+          {actionNetworkSections.length > 0 && (
+            <button
+              className="button button--sm button--secondary"
+              type="button"
+              disabled={actionHasInvalidAlternate || actionHasMalformedNetwork}
+              title={actionHasInvalidAlternate
+                ? `Fix or discard invalid ${actionFormatLabel} changes before editing NETWORK`
+                : actionHasMalformedNetwork
+                  ? 'NETWORK exists but is not an editable object'
+                  : `Edit ${actionNetworkSections.length > 1 ? `${actionNetworkSections.length} NETWORK entries` : 'NETWORK components'} in ${actionDocument?.displayName ?? 'the active file'}`}
+              onClick={() => {
+                if (actionDocument) setNetworkEditorDocumentId(actionDocument.id);
+              }}>
+              Edit NETWORK
+            </button>
+          )}
           {documents.length >= 2 && (
             <select
               className={styles.select}
@@ -866,6 +930,20 @@ export default function InputControlFileEditorClient(): ReactNode {
       {isDragging && primaryDocument && (
         <div className={styles.dropOverlay}>Drop JSON files to open them</div>
       )}
+      {networkEditorDocument?.canonicalValue !== undefined
+        && findNetworkSections(networkEditorDocument.canonicalValue).every((item) => isNetworkDefinition(item.network))
+        && (
+          <NetworkEditorModal
+            documentName={networkEditorDocument.displayName}
+            value={networkEditorDocument.canonicalValue}
+            portalTarget={document.fullscreenElement ?? document.body}
+            onClose={() => setNetworkEditorDocumentId(undefined)}
+            onApply={(nextValue) => {
+              updateCanonicalDocument(networkEditorDocument.id, nextValue);
+              setNetworkEditorDocumentId(undefined);
+            }}
+          />
+        )}
     </section>
   );
 }

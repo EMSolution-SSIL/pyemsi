@@ -75,6 +75,24 @@ function jsonFile(name: string, content: string, lastModified = 1): File {
   return file;
 }
 
+function emsolutionInput(networkData: unknown[] = [
+  {type: 'FEM', ID: 1, START: 1, END: 2, SERIES_ID: 1},
+  {type: 'CPS', ID: 2, START: 2, END: 9999, TIME_ID: 1},
+  {type: 'R', ID: 3, START: 9999, END: 1, RESISTANCE: 1_000_000},
+]): string {
+  return JSON.stringify({
+    metaData: {type: 'EMSolution_Input', version: '1.0'},
+    '0_Release_Number': {RLS_NO: 'r6.6'},
+    '1_Execution_Control': {},
+    '2_Analysis_Type': {STATIC: 0, AC: 0, TRANSIENT: 1},
+    '17_Field_Source': [
+      {PHICOIL: {SERIES_ID: 1, data: []}},
+      {NETWORK: {REGION_FACTOR: 8, REGION_PARALLEL: 1, data: networkData}},
+    ],
+    '18_Time_Function': [{TIME_ID: 1, OPTION: 2}],
+  });
+}
+
 async function chooseFiles(container: HTMLElement, files: File[]): Promise<void> {
   const input = container.querySelector<HTMLInputElement>('input[type="file"]');
   if (!input) throw new Error('File input was not rendered');
@@ -334,5 +352,172 @@ describe('InputControlFileEditorClient', () => {
     expect(within(comparison).getByRole('button', {name: 'TOML'})).toHaveAttribute('aria-pressed', 'true');
     expect((within(primary).getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value).toContain('value: 1');
     expect((within(comparison).getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value).toContain('value = 2');
+  });
+
+  it('shows the NETWORK action only for recognized EMSolution inputs', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('generic.json', '{"NETWORK": {"data": []}}')]);
+    expect(screen.queryByRole('button', {name: 'Edit NETWORK'})).not.toBeInTheDocument();
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    fireEvent.change(input, {target: {files: [jsonFile('transient.json', emsolutionInput())]}});
+    expect(await screen.findByRole('button', {name: 'Edit NETWORK'})).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    expect(within(dialog).getByText('FEM source')).toBeInTheDocument();
+    expect(within(dialog).getByText('Current source')).toBeInTheDocument();
+    expect(within(dialog).getByText('Resistor')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_9_NETWORK'));
+  });
+
+  it('applies staged NETWORK row edits through the canonical document', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('transient.json', emsolutionInput())]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit NETWORK row 3'}));
+    fireEvent.change(within(dialog).getByLabelText('Resistance'), {target: {value: '42.5'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Save row'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][1].NETWORK.data[2].RESISTANCE).toBe(42.5);
+    expect(screen.getByLabelText('Modified')).toBeInTheDocument();
+    expect(screen.getByText('Applied NETWORK changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+  });
+
+  it('discards staged NETWORK changes when the modal is cancelled', async () => {
+    const original = emsolutionInput();
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('transient.json', original)]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    fireEvent.change(within(dialog).getByLabelText('Region factor'), {target: {value: '4'}});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
+
+    expect(screen.queryByRole('dialog', {name: 'NETWORK editor'})).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue(original);
+    expect(screen.queryByLabelText('Modified')).not.toBeInTheDocument();
+  });
+
+  it('adds and derives counts for a TABLE dataset', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('transient.json', emsolutionInput())]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    await userEvent.selectOptions(within(dialog).getByLabelText('New NETWORK component type'), 'TABLE');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add component'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add dataset'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add I–V point'}));
+    fireEvent.change(within(dialog).getByLabelText('Table 1 current 1'), {target: {value: '2'}});
+    fireEvent.change(within(dialog).getByLabelText('Table 1 voltage 1'), {target: {value: '0.7'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Save row'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    const table = savedValue['17_Field_Source'][1].NETWORK.data[3];
+    expect(table).toMatchObject({type: 'TABLE', NUMBER: 1});
+    expect(table.data[0]).toMatchObject({NO_DATA: 1, CURRENT: [2], VOLTAGE: [0.7]});
+  });
+
+  it('preserves unknown NETWORK properties through raw editing', async () => {
+    const unknown = {type: 'FUTURE', ID: 77, vendor: {flag: true}};
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('future.json', emsolutionInput([unknown]))]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit NETWORK row 1'}));
+    const raw = within(dialog).getByLabelText('Raw NETWORK component JSON');
+    fireEvent.change(raw, {target: {value: JSON.stringify({...unknown, added: 'kept'})}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Save row'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][1].NETWORK.data[0]).toEqual({...unknown, added: 'kept'});
+  });
+
+  it('adds a SWITCH with paired timings and phase-aware fields', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('switch.json', emsolutionInput())]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    await userEvent.selectOptions(within(dialog).getByLabelText('New NETWORK component type'), 'SWITCH');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add component'}));
+    const editor = within(dialog).getByLabelText('SWITCH component editor');
+    for (const [label, value] of [
+      ['Start node', '1'], ['End node', '2'], ['On resistance', '0.01'],
+      ['Off resistance', '1000000'], ['Cycle', '0.02'], ['Time function', '1'],
+    ]) {
+      fireEvent.change(within(editor).getByLabelText(label), {target: {value}});
+    }
+    await userEvent.selectOptions(within(editor).getByLabelText('Time mode'), '1');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Add interval'}));
+    fireEvent.change(within(editor).getByLabelText('Switch on time 1'), {target: {value: '30'}});
+    fireEvent.change(within(editor).getByLabelText('Switch off time 1'), {target: {value: '180'}});
+    await userEvent.click(within(editor).getByRole('button', {name: 'Save row'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][1].NETWORK.data[3]).toMatchObject({
+      type: 'SWITCH', ID: 4, START: 1, END: 2, PHASE_OP: 1,
+      ON_TIME: [30], OFF_TIME: [180],
+    });
+  });
+
+  it('duplicates, reorders, and deletes NETWORK rows', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('actions.json', emsolutionInput())]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate NETWORK row 3'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Move NETWORK row 4 up'}));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Delete NETWORK row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    const data = savedValue['17_Field_Source'][1].NETWORK.data;
+    expect(data).toHaveLength(3);
+    expect(data.map((item: {ID: number}) => item.ID)).toEqual([2, 4, 3]);
+  });
+
+  it('targets the focused split document and restores focus after Escape', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [
+      jsonFile('generic.json', '{"value": 1}'),
+      jsonFile('network.json', emsolutionInput()),
+    ]);
+    await userEvent.selectOptions(
+      screen.getByLabelText('Split editor with'),
+      screen.getByRole('option', {name: 'network.json'}),
+    );
+    const networkButton = await screen.findByRole('button', {name: 'Edit NETWORK'});
+    await userEvent.click(networkButton);
+    expect(screen.getByRole('dialog', {name: 'NETWORK editor'})).toHaveTextContent('network.json');
+    fireEvent.keyDown(document, {key: 'Escape'});
+    expect(screen.queryByRole('dialog', {name: 'NETWORK editor'})).not.toBeInTheDocument();
+    expect(networkButton).toHaveFocus();
+  });
+
+  it('selects and updates one of multiple NETWORK occurrences', async () => {
+    const payload = JSON.parse(emsolutionInput());
+    payload['17_Field_Source'].push({NETWORK: {
+      REGION_FACTOR: 2,
+      REGION_PARALLEL: 1,
+      data: [{type: 'R', ID: 10, START: 1, END: 2, RESISTANCE: 5}],
+    }});
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('multiple.json', JSON.stringify(payload))]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
+    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    await userEvent.selectOptions(within(dialog).getByLabelText('NETWORK occurrence'), '1');
+    fireEvent.change(within(dialog).getByLabelText('Region factor'), {target: {value: '3'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][1].NETWORK.REGION_FACTOR).toBe(8);
+    expect(savedValue['17_Field_Source'][2].NETWORK.REGION_FACTOR).toBe(3);
   });
 });

@@ -449,6 +449,450 @@
   pointer-events: none;
 }
 
+.networkModalBackdrop {
+  position: fixed;
+  z-index: 2000;
+  display: grid;
+  padding: clamp(0.5rem, 2vw, 1.5rem);
+  background: rgb(0 0 0 / 58%);
+  inset: 0;
+  place-items: center;
+}
+
+.networkModal {
+  --network-modal-surface: #fff;
+  --network-modal-subtle: #f5f6f7;
+
+  display: grid;
+  width: min(96rem, 100%);
+  max-height: calc(100vh - clamp(1rem, 4vw, 3rem));
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.7rem;
+  background: var(--network-modal-surface);
+  box-shadow: 0 1rem 4rem rgb(0 0 0 / 35%);
+  color: var(--ifm-font-color-base);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  isolation: isolate;
+}
+
+:global(html[data-theme='dark']) .networkModal {
+  --network-modal-surface: #1b1b1d;
+  --network-modal-subtle: #242526;
+}
+
+.networkModalHeader,
+.networkModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--network-modal-subtle);
+}
+
+.networkModalHeader {
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.networkModalHeader h2,
+.networkIssues h3,
+.networkComponentEditor h3,
+.networkNestedEditor h4 {
+  margin: 0;
+}
+
+.networkModalSubtitle {
+  max-width: 50rem;
+  overflow: hidden;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.networkHeaderActions,
+.networkModalFooter > div,
+.networkEditorButtons,
+.networkAddGroup,
+.networkRowActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.networkHeaderActions a {
+  font-size: 0.8rem;
+}
+
+.networkIconButton {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.5rem;
+}
+
+.networkIconButton:hover,
+.networkIconButton:focus-visible {
+  background: var(--ifm-color-emphasis-300);
+  outline: 2px solid var(--ifm-color-primary);
+}
+
+.networkModalBody {
+  padding: 0.85rem;
+  overflow: auto;
+  background: var(--network-modal-surface);
+}
+
+.networkSettings {
+  display: grid;
+  margin-bottom: 0.75rem;
+  padding: 0.7rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.45rem;
+  grid-template-columns: repeat(3, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  background: var(--network-modal-subtle);
+}
+
+.networkSettings label,
+.networkField {
+  display: grid;
+  align-content: start;
+  gap: 0.22rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.networkSettings input,
+.networkSettings select,
+.networkToolbar input,
+.networkToolbar select,
+.networkField input,
+.networkField select,
+.networkComponentEditor textarea,
+.networkDataset input,
+.networkPointRow input {
+  min-width: 0;
+  height: 2.15rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.3rem;
+  background: var(--network-modal-surface);
+  color: var(--ifm-font-color-base);
+  font: inherit;
+}
+
+.networkSettings small,
+.networkField small,
+.networkTable small {
+  display: block;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.networkToolbar {
+  display: flex;
+  margin-bottom: 0.6rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.networkToolbar > input {
+  flex: 1 1 15rem;
+}
+
+.networkToolbar select {
+  max-width: 21rem;
+}
+
+.networkAddGroup {
+  margin-left: auto;
+}
+
+.networkWorkspace {
+  display: grid;
+  min-height: 19rem;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  background: var(--network-modal-surface);
+}
+
+.networkWorkspace:has(.networkComponentEditor) {
+  grid-template-columns: minmax(30rem, 1fr) minmax(19rem, 27rem);
+}
+
+.networkTableWrap {
+  overflow: auto;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.45rem;
+  background: var(--network-modal-surface);
+}
+
+.networkTable {
+  display: table;
+  width: 100%;
+  min-width: 100%;
+  margin: 0;
+  border: 0;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  background: var(--network-modal-surface);
+  table-layout: auto;
+}
+
+.networkTable tbody,
+.networkTable tr {
+  background: var(--network-modal-surface);
+}
+
+.networkTable th,
+.networkTable td {
+  padding: 0.48rem 0.55rem;
+  border: 0;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.networkTable td {
+  background: var(--network-modal-surface);
+}
+
+.networkTable th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--ifm-color-emphasis-200);
+  white-space: nowrap;
+}
+
+.networkTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.networkSelectedRow {
+  background: color-mix(in srgb, var(--ifm-color-primary) 8%, var(--network-modal-surface));
+}
+
+.networkSelectedRow td {
+  background: inherit;
+}
+
+.networkRowActions {
+  flex-wrap: wrap;
+}
+
+.networkRowActions button,
+.networkNestedEditor button,
+.networkDataset button {
+  padding: 0.18rem 0.36rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.25rem;
+  background: var(--network-modal-surface);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.networkRowActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.networkErrorBadge,
+.networkWarningBadge,
+.networkValidBadge,
+.networkTypeBadge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.networkErrorBadge {
+  background: color-mix(in srgb, var(--ifm-color-danger) 18%, transparent);
+  color: var(--ifm-color-danger-darkest);
+}
+
+.networkWarningBadge {
+  background: color-mix(in srgb, var(--ifm-color-warning) 24%, transparent);
+  color: var(--ifm-color-warning-darkest);
+}
+
+.networkValidBadge {
+  background: color-mix(in srgb, var(--ifm-color-success) 17%, transparent);
+  color: var(--ifm-color-success-darkest);
+}
+
+.networkTypeBadge {
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+}
+
+.networkEmpty {
+  padding: 2.5rem !important;
+  color: var(--ifm-color-emphasis-700);
+  text-align: center !important;
+}
+
+.networkComponentEditor {
+  position: sticky;
+  top: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.45rem;
+  background: var(--network-modal-subtle);
+}
+
+.networkComponentEditor > p {
+  margin: 0.45rem 0 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.75rem;
+}
+
+.networkComponentEditor textarea {
+  width: 100%;
+  height: auto;
+  min-height: 16rem;
+  font-family: var(--ifm-font-family-monospace);
+  resize: vertical;
+}
+
+.networkEditorHeading,
+.networkNestedHeading,
+.networkDatasetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.networkEditorHeading strong {
+  font-size: 0.72rem;
+}
+
+.networkField {
+  margin-bottom: 0.55rem;
+}
+
+.networkField > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.networkField em {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.networkNestedEditor {
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--ifm-color-emphasis-400);
+}
+
+.networkNestedEditor h4 {
+  font-size: 0.84rem;
+}
+
+.networkDataset {
+  margin-top: 0.65rem;
+  padding: 0.55rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.35rem;
+  background: var(--network-modal-surface);
+}
+
+.networkDatasetHeader label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.networkDatasetHeader input {
+  width: 5.5rem;
+}
+
+.networkPointHeader,
+.networkPointRow {
+  display: grid;
+  margin-top: 0.35rem;
+  align-items: center;
+  grid-template-columns: 1fr 1fr 1.6rem;
+  gap: 0.35rem;
+}
+
+.networkPointHeader {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.65rem;
+  font-weight: 650;
+}
+
+.networkPointRow button {
+  padding: 0;
+}
+
+.networkEditorButtons {
+  margin-top: 0.9rem;
+  justify-content: flex-end;
+}
+
+.networkIssues {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.4rem;
+  background: var(--network-modal-subtle);
+}
+
+.networkIssues h3 {
+  font-size: 0.86rem;
+}
+
+.networkIssues ul {
+  max-height: 9rem;
+  margin: 0.4rem 0 0;
+  overflow: auto;
+  font-size: 0.72rem;
+}
+
+.networkIssueError,
+.networkInlineError {
+  color: var(--ifm-color-danger-dark);
+}
+
+.networkIssueWarning {
+  color: var(--ifm-color-warning-darkest);
+}
+
+.networkInlineError {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.networkModalFooter {
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.75rem;
+}
+
 @media (max-width: 996px) {
   .windowBar {
     align-items: stretch;
@@ -467,6 +911,18 @@
     border-top: 2px solid var(--ifm-color-emphasis-500);
     border-left: 0;
   }
+
+  .networkWorkspace:has(.networkComponentEditor) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .networkComponentEditor {
+    position: static;
+  }
+
+  .networkSettings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 576px) {
@@ -482,5 +938,75 @@
   .formatSwitcher {
     border-right: 0;
     border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  }
+
+  .networkModalBackdrop {
+    padding: 0;
+  }
+
+  .networkModal {
+    width: 100%;
+    max-height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .networkModalHeader,
+  .networkModalFooter,
+  .networkToolbar,
+  .networkAddGroup {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .networkHeaderActions {
+    justify-content: space-between;
+  }
+
+  .networkSettings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .networkToolbar select {
+    max-width: none;
+  }
+
+  .networkAddGroup {
+    margin-left: 0;
+  }
+
+  .networkTable thead {
+    display: none;
+  }
+
+  .networkTable,
+  .networkTable tbody,
+  .networkTable tr,
+  .networkTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .networkTable tr {
+    padding: 0.35rem 0;
+    border-bottom: 2px solid var(--ifm-color-emphasis-400);
+  }
+
+  .networkTable td {
+    display: grid;
+    padding: 0.3rem 0.5rem;
+    border: 0;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .networkTable td::before {
+    color: var(--ifm-color-emphasis-700);
+    content: attr(data-label);
+    font-weight: 700;
+  }
+
+  .networkTable td.networkEmpty {
+    display: block;
   }
 }
