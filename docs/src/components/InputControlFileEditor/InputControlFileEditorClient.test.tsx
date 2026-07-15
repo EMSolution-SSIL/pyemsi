@@ -37,8 +37,14 @@ vi.mock('@monaco-editor/react', () => ({
         Uri: {parse: (value: string) => value},
         editor: {
           getModel: (value: string) => ({dispose: () => disposedModels.add(value)}),
+          setModelMarkers: vi.fn(),
         },
+        MarkerSeverity: {Error: 8},
         languages: {
+          getLanguages: vi.fn(() => [{id: 'json'}, {id: 'yaml'}]),
+          register: vi.fn(),
+          setLanguageConfiguration: vi.fn(),
+          setMonarchTokensProvider: vi.fn(),
           json: {jsonDefaults: {setDiagnosticsOptions: vi.fn()}},
         },
       };
@@ -143,7 +149,7 @@ describe('InputControlFileEditorClient', () => {
     const textarea = screen.getByRole('textbox', {name: /Monaco/});
     fireEvent.change(textarea, {target: {value: '{"value": }'}});
     expect(screen.getByLabelText('Modified')).toBeInTheDocument();
-    expect(screen.getByText('1 JSON problem')).toBeInTheDocument();
+    expect(await screen.findByText('1 JSON problem')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Format'})).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', {name: 'Save'}));
@@ -212,5 +218,87 @@ describe('InputControlFileEditorClient', () => {
     expect(document.exitFullscreen).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', {name: 'Fullscreen'})).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('menu', {name: '… entries'})).not.toBeInTheDocument();
+  });
+
+  it('edits YAML and saves the converted canonical JSON', async () => {
+    const writable = {write: vi.fn(async () => undefined), close: vi.fn(async () => undefined)};
+    const handle = {
+      kind: 'file',
+      name: 'picked.json',
+      getFile: vi.fn(async () => jsonFile('picked.json', '{"picked": true}')),
+      createWritable: vi.fn(async () => writable),
+    };
+    Object.defineProperty(window, 'showOpenFilePicker', {
+      value: vi.fn(async () => [handle]),
+      configurable: true,
+    });
+    render(<InputControlFileEditorClient />);
+
+    await userEvent.click(screen.getByRole('button', {name: 'Open Input Control Files'}));
+    const pane = await screen.findByLabelText('Primary editor');
+    await userEvent.click(within(pane).getByRole('button', {name: 'YAML'}));
+    const textarea = within(pane).getByRole('textbox', {name: /Monaco/});
+    await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toContain('picked: true'));
+
+    fireEvent.change(textarea, {target: {value: 'picked: false\nnested:\n  count: 2\n'}});
+    const saveButton = screen.getByRole('button', {name: 'Save'});
+    expect(saveButton).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('Modified')).toBeInTheDocument());
+    expect(within(pane).getByText('Valid YAML. Comments are not saved to JSON.')).toBeInTheDocument();
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    await userEvent.click(saveButton);
+
+    await waitFor(() => expect(writable.write).toHaveBeenCalledWith(
+      '{\n  "picked": false,\n  "nested": {\n    "count": 2\n  }\n}\n',
+    ));
+  });
+
+  it('blocks invalid YAML switching and saving until the draft is discarded', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('input.json', '{"value": 1}')]);
+    const pane = screen.getByLabelText('Primary editor');
+    await userEvent.click(within(pane).getByRole('button', {name: 'YAML'}));
+    const textarea = within(pane).getByRole('textbox', {name: /Monaco/});
+    fireEvent.change(textarea, {target: {value: 'value: [\n'}});
+
+    expect(await within(pane).findByText('1 YAML problem')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Save'})).toBeDisabled();
+    expect(within(pane).getByRole('button', {name: 'JSON'})).toBeDisabled();
+    expect(within(pane).getByRole('button', {name: 'TOML'})).toBeDisabled();
+
+    await userEvent.click(within(pane).getByRole('button', {name: 'Discard invalid changes'}));
+    expect(await within(pane).findByText('Valid YAML. Comments are not saved to JSON.')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Save'})).toBeEnabled();
+  });
+
+  it('disables TOML without losing incompatible JSON values', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('input.json', '{"solver": {"value": null}}')]);
+    const tomlButton = within(screen.getByLabelText('Primary editor')).getByRole('button', {name: 'TOML'});
+
+    expect(tomlButton).toBeDisabled();
+    expect(tomlButton).toHaveAttribute('title', expect.stringContaining('$.solver.value'));
+    expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue('{"solver": {"value": null}}');
+  });
+
+  it('keeps format selection independent across split panes', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [
+      jsonFile('primary.json', '{"value": 1}'),
+      jsonFile('comparison.json', '{"value": 2}'),
+    ]);
+    const primary = screen.getByLabelText('Primary editor');
+    await userEvent.click(within(primary).getByRole('button', {name: 'YAML'}));
+    await userEvent.selectOptions(
+      screen.getByLabelText('Split editor with'),
+      screen.getByRole('option', {name: 'comparison.json'}),
+    );
+    const comparison = await screen.findByLabelText('Comparison editor');
+    await userEvent.click(within(comparison).getByRole('button', {name: 'TOML'}));
+
+    expect(within(primary).getByRole('button', {name: 'YAML'})).toHaveAttribute('aria-pressed', 'true');
+    expect(within(comparison).getByRole('button', {name: 'TOML'})).toHaveAttribute('aria-pressed', 'true');
+    expect((within(primary).getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value).toContain('value: 1');
+    expect((within(comparison).getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value).toContain('value = 2');
   });
 });

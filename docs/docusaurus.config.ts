@@ -92,7 +92,7 @@ const config: Config = {
         return {
           plugins: [
             new MonacoWebpackPlugin({
-              languages: ['json'],
+              languages: ['json', 'yaml'],
               filename: 'assets/js/[name].[contenthash].worker.js',
               publicPath: baseUrl,
             }),

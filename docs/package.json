@@ -29,7 +29,10 @@
     "monaco-editor": "^0.55.1",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "smol-toml": "^1.7.0",
+    "toml-eslint-parser": "^1.0.3",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "^3.10.0",

@@ -4,26 +4,30 @@ import {
   parseTree,
 } from 'jsonc-parser';
 
-export interface JsonSymbol {
+export interface StructuredSymbol {
   id: string;
   name: string;
   detail: string;
   offset: number;
   length: number;
   selectionOffset: number;
-  children: JsonSymbol[];
+  children: StructuredSymbol[];
 }
 
-export interface JsonSymbolLevel {
-  symbol: JsonSymbol;
-  siblings: JsonSymbol[];
-  children: JsonSymbol[];
+export interface StructuredSymbolLevel {
+  symbol: StructuredSymbol;
+  siblings: StructuredSymbol[];
+  children: StructuredSymbol[];
 }
 
-export interface JsonSymbolTree {
-  roots: JsonSymbol[];
+export interface StructuredSymbolTree {
+  roots: StructuredSymbol[];
   errors: ParseError[];
 }
+
+export type JsonSymbol = StructuredSymbol;
+export type JsonSymbolLevel = StructuredSymbolLevel;
+export type JsonSymbolTree = StructuredSymbolTree;
 
 function primitiveDetail(node: JsonNode): string {
   if (node.type === 'object') {
@@ -41,7 +45,7 @@ function primitiveDetail(node: JsonNode): string {
   return String(node.value ?? node.type);
 }
 
-function symbolsForValue(node: JsonNode): JsonSymbol[] {
+function symbolsForValue(node: JsonNode): StructuredSymbol[] {
   if (node.type === 'object') {
     return (node.children ?? []).flatMap((property, index) => {
       const keyNode = property.children?.[0];
@@ -93,11 +97,11 @@ function containsOffset(symbol: JsonSymbol, offset: number): boolean {
   return offset >= symbol.offset && offset <= symbol.offset + symbol.length;
 }
 
-export function findJsonSymbolTrail(
-  roots: JsonSymbol[],
+export function findSymbolTrail(
+  roots: StructuredSymbol[],
   offset: number,
-): JsonSymbolLevel[] {
-  function find(symbols: JsonSymbol[]): JsonSymbolLevel[] {
+): StructuredSymbolLevel[] {
+  function find(symbols: StructuredSymbol[]): StructuredSymbolLevel[] {
     for (const symbol of symbols) {
       if (!containsOffset(symbol, offset)) {
         continue;
@@ -110,6 +114,8 @@ export function findJsonSymbolTrail(
 
   return find(roots);
 }
+
+export const findJsonSymbolTrail = findSymbolTrail;
 
 export function uniqueDisplayName(
   filename: string,

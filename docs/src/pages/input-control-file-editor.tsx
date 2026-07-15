@@ -5,7 +5,7 @@ import Layout from '@theme/Layout';
 import InputControlFileEditor from '@site/src/components/InputControlFileEditor';
 
 const description =
-  'Open, inspect, compare, edit, and save EMSolution input control JSON files in your browser.';
+  'Open, inspect, compare, and edit EMSolution input control files as JSON, YAML, or TOML in your browser.';
 
 export default function InputControlFileEditorPage(): ReactNode {
   return (
@@ -14,9 +14,11 @@ export default function InputControlFileEditorPage(): ReactNode {
         <InputControlFileEditor />
         <p>
           Open one or more EMSolution input control files to inspect and edit
-          them with the same Monaco editor used by Visual Studio Code. Use the
+          them with the same Monaco editor used by Visual Studio Code. Switch
+          each editor pane between JSON, YAML, and compatible TOML while using
           breadcrumbs to move through nested objects and arrays, or split the
-          editor to compare two files side by side.
+          editor to compare two files side by side. Files always save as JSON;
+          YAML and TOML comments are not included in the saved file.
         </p>
         <div className="alert alert--info" role="note">
           <strong>Your files stay private.</strong> Files are read and edited

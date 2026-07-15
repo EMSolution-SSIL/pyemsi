@@ -15,12 +15,20 @@ import React, {
 import {createPortal} from 'react-dom';
 
 import {
-  buildJsonSymbolTree,
   editorWindowTitle,
-  findJsonSymbolTrail,
-  type JsonSymbol,
+  findSymbolTrail,
+  type StructuredSymbol,
   uniqueDisplayName,
 } from './jsonSymbols';
+import {
+  type EditorFormat,
+  FORMAT_LABELS,
+  type ParsedFormat,
+  findTomlCompatibilityIssue,
+  formatStructuredText,
+  parseStructuredFormat,
+  serializeStructuredFormat,
+} from './structuredFormats';
 import styles from './styles.module.css';
 
 loader.config({monaco: monacoEditor});
@@ -64,25 +72,40 @@ interface OpenDocument {
   lastModified: number;
   text: string;
   savedText: string;
-  modelUri: string;
-  errorCount: number;
+  revision: number;
+  activeFormat: EditorFormat;
+  canonicalValue?: unknown;
+  formatDrafts: Partial<Record<EditorFormat, FormatDraft>>;
   handle?: FileHandleLike;
   relativePath?: string;
 }
 
+interface FormatDraft {
+  text: string;
+  lastValidText: string;
+  modelUri: string;
+  sourceRevision: number;
+  issues: ParsedFormat['issues'];
+  roots: StructuredSymbol[];
+}
+
 interface EditorPaneProps {
   documentItem: OpenDocument;
+  draft: FormatDraft;
   paneLabel: string;
   theme: 'light' | 'vs-dark';
   isFocused: boolean;
-  onChange: (id: string, value: string) => void;
-  onErrors: (id: string, count: number) => void;
+  onChange: (id: string, format: EditorFormat, value: string) => void;
+  onParsed: (id: string, format: EditorFormat, text: string, parsed: ParsedFormat) => void;
   onEditorReady: (
     id: string,
+    format: EditorFormat,
     editor: monacoEditor.editor.IStandaloneCodeEditor,
   ) => void;
   onFocus: (id: string) => void;
   onMonacoReady: (monaco: Monaco) => void;
+  onSelectFormat: (id: string, format: EditorFormat) => void;
+  onDiscardInvalid: (id: string) => void;
 }
 
 let fallbackId = 0;
@@ -126,6 +149,67 @@ function downloadText(filename: string, text: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function editorKey(id: string, format: EditorFormat): string {
+  return `${id}:${format}`;
+}
+
+function documentHasUncommittedDraft(documentItem: OpenDocument): boolean {
+  return Object.entries(documentItem.formatDrafts).some(([format, draft]) => (
+    format !== 'json'
+    && draft !== undefined
+    && draft.text !== draft.lastValidText
+  ));
+}
+
+function documentIsDirty(documentItem: OpenDocument): boolean {
+  return documentItem.text !== documentItem.savedText || documentHasUncommittedDraft(documentItem);
+}
+
+function configureTomlLanguage(monaco: Monaco): void {
+  if (monaco.languages.getLanguages().some(({id}) => id === 'toml')) return;
+  monaco.languages.register({id: 'toml', extensions: ['.toml'], aliases: ['TOML', 'toml']});
+  monaco.languages.setLanguageConfiguration('toml', {
+    comments: {lineComment: '#'},
+    brackets: [['[', ']'], ['{', '}']],
+    autoClosingPairs: [
+      {open: '[', close: ']'},
+      {open: '{', close: '}'},
+      {open: '"', close: '"'},
+      {open: "'", close: "'"},
+    ],
+  });
+  monaco.languages.setMonarchTokensProvider('toml', {
+    tokenizer: {
+      root: [
+        [/#.*$/, 'comment'],
+        [/^\s*\[\[.*\]\]\s*$/, 'type.identifier'],
+        [/^\s*\[.*\]\s*$/, 'type.identifier'],
+        [/"""/, {token: 'string.quote', next: '@multiBasic'}],
+        [/'{3}/, {token: 'string.quote', next: '@multiLiteral'}],
+        [/"([^"\\]|\\.)*"/, 'string'],
+        [/'[^']*'/, 'string'],
+        [/\b(true|false)\b/, 'keyword'],
+        [/\b(inf|nan)\b/, 'number.float'],
+        [/[+-]?(0x[0-9a-fA-F_]+|0o[0-7_]+|0b[01_]+|\d[\d_]*)(?![\w-])/, 'number'],
+        [/[+-]?\d[\d_]*(\.\d[\d_]*)?([eE][+-]?\d[\d_]*)?/, 'number.float'],
+        [/[A-Za-z0-9_-]+(?=\s*=)/, 'key'],
+        [/[=,.\[\]{}]/, 'delimiter'],
+      ],
+      multiBasic: [
+        [/[^\\"]+/, 'string'],
+        [/\\./, 'string.escape'],
+        [/"""/, {token: 'string.quote', next: '@pop'}],
+        [/"/, 'string'],
+      ],
+      multiLiteral: [
+        [/[^']+/, 'string'],
+        [/'{3}/, {token: 'string.quote', next: '@pop'}],
+        [/'/, 'string'],
+      ],
+    },
+  });
+}
+
 export default function InputControlFileEditorClient(): ReactNode {
   const {colorMode} = useColorMode();
   const [documents, setDocuments] = useState<OpenDocument[]>([]);
@@ -149,6 +233,14 @@ export default function InputControlFileEditorClient(): ReactNode {
     && (item.id === primaryId || item.id === comparisonId)
   ));
   const actionDocument = focusedVisibleDocument ?? primaryDocument;
+  const actionDraft = actionDocument?.formatDrafts[actionDocument.activeFormat];
+  const actionFormatLabel = actionDocument ? FORMAT_LABELS[actionDocument.activeFormat] : 'JSON';
+  const actionHasInvalidAlternate = Boolean(
+    actionDocument
+    && actionDocument.activeFormat !== 'json'
+    && actionDraft
+    && (actionDraft.issues.length > 0 || actionDraft.text !== actionDraft.lastValidText),
+  );
   const pageTitle = editorWindowTitle(
     primaryDocument?.displayName,
     comparisonDocument?.displayName,
@@ -161,7 +253,9 @@ export default function InputControlFileEditorClient(): ReactNode {
   useEffect(() => {
     return () => {
       for (const item of documentsRef.current) {
-        monacoRef.current?.editor.getModel(monacoRef.current.Uri.parse(item.modelUri))?.dispose();
+        for (const draft of Object.values(item.formatDrafts)) {
+          monacoRef.current?.editor.getModel(monacoRef.current.Uri.parse(draft.modelUri))?.dispose();
+        }
       }
     };
   }, []);
@@ -176,7 +270,7 @@ export default function InputControlFileEditorClient(): ReactNode {
     };
   }, []);
 
-  const hasDirtyDocuments = documents.some((item) => item.text !== item.savedText);
+  const hasDirtyDocuments = documents.some(documentIsDirty);
   useEffect(() => {
     if (!hasDirtyDocuments) return undefined;
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -227,6 +321,7 @@ export default function InputControlFileEditorClient(): ReactNode {
       try {
         const text = await file.text();
         const id = nextDocumentId();
+        const parsed = parseStructuredFormat(text, 'json');
         loaded.push({
           id,
           name: file.name,
@@ -234,8 +329,19 @@ export default function InputControlFileEditorClient(): ReactNode {
           lastModified: file.lastModified,
           text,
           savedText: text,
-          modelUri: `inmemory://input-control-files/${id}/${encodeURIComponent(file.name)}`,
-          errorCount: 0,
+          revision: 0,
+          activeFormat: 'json',
+          canonicalValue: parsed.issues.length === 0 ? parsed.value : undefined,
+          formatDrafts: {
+            json: {
+              text,
+              lastValidText: parsed.issues.length === 0 ? text : '',
+              modelUri: `inmemory://input-control-files/${id}/${encodeURIComponent(file.name)}.json`,
+              sourceRevision: 0,
+              issues: parsed.issues,
+              roots: parsed.roots,
+            },
+          },
           handle,
         });
       } catch {
@@ -326,19 +432,178 @@ export default function InputControlFileEditorClient(): ReactNode {
     await addCandidates(candidates);
   }, [addCandidates]);
 
-  const updateText = useCallback((id: string, value: string) => {
-    setDocuments((current) => current.map((item) => item.id === id ? {...item, text: value} : item));
+  const updateDraftText = useCallback((id: string, format: EditorFormat, value: string) => {
+    setDocuments((current) => current.map((item) => {
+      if (item.id !== id) return item;
+      const draft = item.formatDrafts[format];
+      if (!draft) return item;
+      return {
+        ...item,
+        text: format === 'json' ? value : item.text,
+        formatDrafts: {...item.formatDrafts, [format]: {...draft, text: value}},
+      };
+    }));
   }, []);
 
-  const updateErrors = useCallback((id: string, errorCount: number) => {
-    setDocuments((current) => current.map((item) => (
-      item.id === id && item.errorCount !== errorCount ? {...item, errorCount} : item
-    )));
+  const updateParsedDraft = useCallback((
+    id: string,
+    format: EditorFormat,
+    parsedText: string,
+    parsed: ParsedFormat,
+  ) => {
+    setDocuments((current) => current.map((item) => {
+      if (item.id !== id) return item;
+      const draft = item.formatDrafts[format];
+      if (!draft || draft.text !== parsedText) return item;
+      const parsedDraft = {...draft, issues: parsed.issues, roots: parsed.roots};
+      if (parsed.issues.length > 0 || parsed.value === undefined) {
+        return {
+          ...item,
+          canonicalValue: format === 'json' ? undefined : item.canonicalValue,
+          formatDrafts: {...item.formatDrafts, [format]: parsedDraft},
+        };
+      }
+
+      if (
+        format !== 'json'
+        && item.canonicalValue !== undefined
+        && JSON.stringify(parsed.value) === JSON.stringify(item.canonicalValue)
+      ) {
+        return {
+          ...item,
+          formatDrafts: {
+            ...item.formatDrafts,
+            [format]: {
+              ...parsedDraft,
+              lastValidText: parsedText,
+              sourceRevision: item.revision,
+            },
+          },
+        };
+      }
+
+      const revision = item.revision + 1;
+      if (format === 'json') {
+        return {
+          ...item,
+          revision,
+          canonicalValue: parsed.value,
+          formatDrafts: {
+            ...item.formatDrafts,
+            json: {...parsedDraft, lastValidText: parsedText, sourceRevision: revision},
+          },
+        };
+      }
+
+      const jsonText = serializeStructuredFormat(parsed.value, 'json');
+      const jsonParsed = parseStructuredFormat(jsonText, 'json');
+      const jsonDraft: FormatDraft = {
+        text: jsonText,
+        lastValidText: jsonText,
+        modelUri: item.formatDrafts.json?.modelUri
+          ?? `inmemory://input-control-files/${item.id}/${encodeURIComponent(item.name)}.json`,
+        sourceRevision: revision,
+        issues: jsonParsed.issues,
+        roots: jsonParsed.roots,
+      };
+      return {
+        ...item,
+        text: jsonText,
+        revision,
+        canonicalValue: parsed.value,
+        formatDrafts: {
+          ...item.formatDrafts,
+          json: jsonDraft,
+          [format]: {...parsedDraft, lastValidText: parsedText, sourceRevision: revision},
+        },
+      };
+    }));
+  }, []);
+
+  const selectDocumentFormat = useCallback((id: string, format: EditorFormat) => {
+    const item = documents.find((candidate) => candidate.id === id);
+    if (!item || item.activeFormat === format) return;
+    const currentDraft = item.formatDrafts[item.activeFormat];
+    if (item.activeFormat !== 'json' && currentDraft?.text !== currentDraft?.lastValidText) {
+      const parsed = currentDraft
+        ? parseStructuredFormat(currentDraft.text, item.activeFormat)
+        : undefined;
+      setStatus(parsed?.issues.length
+        ? `Fix or discard the invalid ${FORMAT_LABELS[item.activeFormat]} changes before switching formats.`
+        : `Wait for ${FORMAT_LABELS[item.activeFormat]} validation to finish before switching formats.`);
+      return;
+    }
+    if (item.canonicalValue === undefined) {
+      setStatus(`Fix JSON problems in ${item.displayName} before opening another representation.`);
+      return;
+    }
+    if (format === 'toml') {
+      const issue = findTomlCompatibilityIssue(item.canonicalValue);
+      if (issue) {
+        setStatus(`TOML is unavailable: ${issue.message}`);
+        return;
+      }
+    }
+
+    setDocuments((current) => current.map((candidate) => {
+      if (candidate.id !== id || candidate.canonicalValue === undefined) return candidate;
+      const existing = candidate.formatDrafts[format];
+      if (existing && existing.sourceRevision === candidate.revision) {
+        return {...candidate, activeFormat: format};
+      }
+      const text = serializeStructuredFormat(candidate.canonicalValue, format);
+      const parsed = parseStructuredFormat(text, format);
+      const draft: FormatDraft = {
+        text,
+        lastValidText: text,
+        modelUri: `inmemory://input-control-files/${candidate.id}/${encodeURIComponent(candidate.name)}.${format}`,
+        sourceRevision: candidate.revision,
+        issues: parsed.issues,
+        roots: parsed.roots,
+      };
+      return {
+        ...candidate,
+        activeFormat: format,
+        formatDrafts: {...candidate.formatDrafts, [format]: draft},
+      };
+    }));
+  }, [documents]);
+
+  const discardInvalidDraft = useCallback((id: string) => {
+    setDocuments((current) => current.map((item) => {
+      if (item.id !== id || item.activeFormat === 'json') return item;
+      const draft = item.formatDrafts[item.activeFormat];
+      if (!draft) return item;
+      const parsed = parseStructuredFormat(draft.lastValidText, item.activeFormat);
+      return {
+        ...item,
+        formatDrafts: {
+          ...item.formatDrafts,
+          [item.activeFormat]: {
+            ...draft,
+            text: draft.lastValidText,
+            issues: parsed.issues,
+            roots: parsed.roots,
+          },
+        },
+      };
+    }));
+    setStatus('Discarded the invalid alternate-format changes.');
   }, []);
 
   const saveDocument = useCallback(async (id: string) => {
     const item = documents.find((candidate) => candidate.id === id);
     if (!item) return;
+    const activeDraft = item.formatDrafts[item.activeFormat];
+    if (item.activeFormat !== 'json' && activeDraft?.text !== activeDraft?.lastValidText) {
+      const parsed = activeDraft
+        ? parseStructuredFormat(activeDraft.text, item.activeFormat)
+        : undefined;
+      setStatus(parsed?.issues.length
+        ? `Fix or discard the invalid ${FORMAT_LABELS[item.activeFormat]} changes before saving.`
+        : `Wait for ${FORMAT_LABELS[item.activeFormat]} validation to finish before saving.`);
+      return;
+    }
 
     let savedByDownload = false;
     if (item.handle) {
@@ -391,28 +656,38 @@ export default function InputControlFileEditorClient(): ReactNode {
 
   const registerEditor = useCallback((
     id: string,
+    format: EditorFormat,
     editor: monacoEditor.editor.IStandaloneCodeEditor,
   ) => {
-    editorsRef.current.set(id, editor);
+    editorsRef.current.set(editorKey(id, format), editor);
   }, []);
 
   const formatActionDocument = useCallback(() => {
     if (!actionDocument) return;
-    const editor = editorsRef.current.get(actionDocument.id);
-    void editor?.getAction('editor.action.formatDocument')?.run();
+    const format = actionDocument.activeFormat;
+    const draft = actionDocument.formatDrafts[format];
+    if (!draft || draft.issues.length > 0) return;
+    try {
+      updateDraftText(actionDocument.id, format, formatStructuredText(draft.text, format));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : `Could not format ${FORMAT_LABELS[format]}.`);
+    }
+    const editor = editorsRef.current.get(editorKey(actionDocument.id, format));
     editor?.focus();
-  }, [actionDocument]);
+  }, [actionDocument, updateDraftText]);
 
   const closeDocument = useCallback((id: string) => {
     const index = documents.findIndex((item) => item.id === id);
     const item = documents[index];
     if (!item) return;
-    if (item.text !== item.savedText && !window.confirm(`Close ${item.displayName} without saving?`)) {
+    if (documentIsDirty(item) && !window.confirm(`Close ${item.displayName} without saving?`)) {
       return;
     }
 
-    monacoRef.current?.editor.getModel(monacoRef.current.Uri.parse(item.modelUri))?.dispose();
-    editorsRef.current.delete(id);
+    for (const [format, draft] of Object.entries(item.formatDrafts)) {
+      monacoRef.current?.editor.getModel(monacoRef.current.Uri.parse(draft.modelUri))?.dispose();
+      editorsRef.current.delete(editorKey(id, format as EditorFormat));
+    }
     const remaining = documents.filter((candidate) => candidate.id !== id);
     setDocuments(remaining);
     if (comparisonId === id) setComparisonId(undefined);
@@ -455,18 +730,20 @@ export default function InputControlFileEditorClient(): ReactNode {
           <button
             className="button button--sm button--secondary"
             type="button"
-            disabled={!actionDocument || actionDocument.errorCount > 0}
-            title={actionDocument?.errorCount
-              ? `Fix JSON problems in ${actionDocument.displayName} before formatting`
-              : `Format ${actionDocument?.displayName ?? 'the active file'}`}
+            disabled={!actionDocument || !actionDraft || actionDraft.issues.length > 0}
+            title={actionDraft?.issues.length
+              ? `Fix ${actionFormatLabel} problems in ${actionDocument?.displayName ?? 'the active file'} before formatting`
+              : `Format ${actionDocument?.displayName ?? 'the active file'} as ${actionFormatLabel}`}
             onClick={formatActionDocument}>
             Format
           </button>
           <button
             className="button button--sm button--secondary"
             type="button"
-            disabled={!actionDocument}
-            title={`Save ${actionDocument?.displayName ?? 'the active file'}`}
+            disabled={!actionDocument || actionHasInvalidAlternate}
+            title={actionHasInvalidAlternate
+              ? `Fix or discard invalid ${actionFormatLabel} changes before saving`
+              : `Save ${actionDocument?.displayName ?? 'the active file'} as JSON`}
             onClick={() => {
               if (actionDocument) void saveDocument(actionDocument.id);
             }}>
@@ -506,7 +783,7 @@ export default function InputControlFileEditorClient(): ReactNode {
       {documents.length > 0 && (
         <div className={styles.tabs} role="tablist" aria-label="Open input control files">
           {documents.map((item) => {
-            const dirty = item.text !== item.savedText;
+            const dirty = documentIsDirty(item);
             return (
               <div
                 key={item.id}
@@ -546,24 +823,30 @@ export default function InputControlFileEditorClient(): ReactNode {
           <EditorPane
             paneLabel="Primary editor"
             documentItem={primaryDocument}
+            draft={primaryDocument.formatDrafts[primaryDocument.activeFormat]!}
             theme={colorMode === 'dark' ? 'vs-dark' : 'light'}
             isFocused={actionDocument?.id === primaryDocument.id}
-            onChange={updateText}
-            onErrors={updateErrors}
+            onChange={updateDraftText}
+            onParsed={updateParsedDraft}
             onEditorReady={registerEditor}
             onFocus={setFocusedDocumentId}
+            onSelectFormat={selectDocumentFormat}
+            onDiscardInvalid={discardInvalidDraft}
             onMonacoReady={(monaco) => { monacoRef.current = monaco; }}
           />
           {comparisonDocument && (
             <EditorPane
               paneLabel="Comparison editor"
               documentItem={comparisonDocument}
+              draft={comparisonDocument.formatDrafts[comparisonDocument.activeFormat]!}
               theme={colorMode === 'dark' ? 'vs-dark' : 'light'}
               isFocused={actionDocument?.id === comparisonDocument.id}
-              onChange={updateText}
-              onErrors={updateErrors}
+              onChange={updateDraftText}
+              onParsed={updateParsedDraft}
               onEditorReady={registerEditor}
               onFocus={setFocusedDocumentId}
+              onSelectFormat={selectDocumentFormat}
+              onDiscardInvalid={discardInvalidDraft}
               onMonacoReady={(monaco) => { monacoRef.current = monaco; }}
             />
           )}
@@ -578,38 +861,68 @@ export default function InputControlFileEditorClient(): ReactNode {
 
 function EditorPane({
   documentItem,
+  draft,
   paneLabel,
   theme,
   isFocused,
   onChange,
-  onErrors,
+  onParsed,
   onEditorReady,
   onFocus,
   onMonacoReady,
+  onSelectFormat,
+  onDiscardInvalid,
 }: EditorPaneProps): ReactNode {
   const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | undefined>(undefined);
+  const monacoInstanceRef = useRef<Monaco | undefined>(undefined);
   const documentIdRef = useRef(documentItem.id);
   const [cursorOffset, setCursorOffset] = useState(0);
-  const [symbolTree, setSymbolTree] = useState(() => buildJsonSymbolTree(documentItem.text));
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setSymbolTree(buildJsonSymbolTree(documentItem.text));
+      onParsed(
+        documentItem.id,
+        documentItem.activeFormat,
+        draft.text,
+        parseStructuredFormat(draft.text, documentItem.activeFormat),
+      );
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [documentItem.text]);
+  }, [documentItem.activeFormat, documentItem.id, draft.text, onParsed]);
 
   useEffect(() => {
     documentIdRef.current = documentItem.id;
-    if (editorRef.current) onEditorReady(documentItem.id, editorRef.current);
+    if (editorRef.current) onEditorReady(documentItem.id, documentItem.activeFormat, editorRef.current);
     const model = editorRef.current?.getModel();
     const position = editorRef.current?.getPosition();
     setCursorOffset(model && position ? model.getOffsetAt(position) : 0);
-  }, [documentItem.id, onEditorReady]);
+  }, [documentItem.activeFormat, documentItem.id, onEditorReady]);
+
+  useEffect(() => {
+    if (documentItem.activeFormat === 'json') return;
+    const editor = editorRef.current;
+    const monaco = monacoInstanceRef.current;
+    const model = editor?.getModel();
+    if (!monaco || !model) return;
+    monaco.editor.setModelMarkers(model, 'input-control-format', draft.issues.map((issue) => {
+      const start = model.getPositionAt(issue.offset);
+      const end = model.getPositionAt(issue.offset + issue.length);
+      return {
+        severity: monaco.MarkerSeverity.Error,
+        message: issue.message,
+        startLineNumber: start.lineNumber,
+        startColumn: start.column,
+        endLineNumber: end.lineNumber,
+        endColumn: Math.max(end.column, start.column + 1),
+      };
+    }));
+  }, [documentItem.activeFormat, draft.issues]);
 
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
-    onEditorReady(documentItem.id, editor);
+    monacoInstanceRef.current = monaco;
+    configureTomlLanguage(monaco);
+    onEditorReady(documentItem.id, documentItem.activeFormat, editor);
     onMonacoReady(monaco);
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       validate: true,
@@ -637,34 +950,71 @@ function EditorPane({
     editor.focus();
   };
 
-  const validationText = documentItem.errorCount === 0
-    ? 'Valid JSON'
-    : `${documentItem.errorCount} JSON ${documentItem.errorCount === 1 ? 'problem' : 'problems'}`;
+  const formatLabel = FORMAT_LABELS[documentItem.activeFormat];
+  const validationText = draft.issues.length === 0
+    ? `Valid ${formatLabel}`
+    : `${draft.issues.length} ${formatLabel} ${draft.issues.length === 1 ? 'problem' : 'problems'}`;
+  const tomlIssue = documentItem.canonicalValue === undefined
+    ? undefined
+    : findTomlCompatibilityIssue(documentItem.canonicalValue);
+  const blocksSwitching = documentItem.activeFormat !== 'json'
+    && (draft.issues.length > 0 || draft.text !== draft.lastValidText);
 
   return (
     <section
       className={`${styles.pane} ${isFocused ? styles.focusedPane : ''}`}
       aria-label={paneLabel}
       onMouseDown={() => onFocus(documentItem.id)}>
-      <Breadcrumbs
-        filename={documentItem.displayName}
-        roots={symbolTree.roots}
-        cursorOffset={cursorOffset}
-        onNavigate={navigateToOffset}
-      />
+      <div className={styles.paneNavigation}>
+        <div className={styles.formatSwitcher} role="group" aria-label={`${paneLabel} format`}>
+          {(['json', 'yaml', 'toml'] as const).map((format) => {
+            const unavailable = format !== 'json' && documentItem.canonicalValue === undefined;
+            const disabledByToml = format === 'toml' && Boolean(tomlIssue);
+            const disabled = format !== documentItem.activeFormat
+              && (blocksSwitching || unavailable || disabledByToml);
+            const reason = blocksSwitching
+              ? draft.issues.length > 0
+                ? `Fix or discard invalid ${formatLabel} changes first`
+                : `Wait for ${formatLabel} validation to finish`
+              : unavailable
+                ? 'Fix JSON problems before switching formats'
+                : disabledByToml
+                  ? tomlIssue?.message
+                  : `Edit as ${FORMAT_LABELS[format]}`;
+            return (
+              <button
+                key={format}
+                type="button"
+                className={`${styles.formatButton} ${format === documentItem.activeFormat ? styles.activeFormat : ''}`}
+                aria-pressed={format === documentItem.activeFormat}
+                disabled={disabled}
+                title={reason}
+                onClick={() => onSelectFormat(documentItem.id, format)}>
+                {FORMAT_LABELS[format]}
+              </button>
+            );
+          })}
+        </div>
+        <Breadcrumbs
+          filename={documentItem.displayName}
+          formatLabel={formatLabel}
+          roots={draft.roots}
+          cursorOffset={cursorOffset}
+          onNavigate={navigateToOffset}
+        />
+      </div>
 
       <div className={styles.monacoHost}>
         <Editor
-          path={documentItem.modelUri}
-          language="json"
-          value={documentItem.text}
+          path={draft.modelUri}
+          language={documentItem.activeFormat}
+          value={draft.text}
           theme={theme}
           keepCurrentModel
           saveViewState
           loading={<div className={styles.editorLoading}>Loading Monaco…</div>}
           onMount={onMount}
-          onChange={(value) => onChange(documentItem.id, value ?? '')}
-          onValidate={(markers) => onErrors(documentItem.id, markers.length)}
+          onChange={(value) => onChange(documentItem.id, documentItem.activeFormat, value ?? '')}
           options={{
             automaticLayout: true,
             bracketPairColorization: {enabled: true},
@@ -678,8 +1028,17 @@ function EditorPane({
           }}
         />
       </div>
-      <div className={`${styles.validation} ${documentItem.errorCount > 0 ? styles.invalid : ''}`} role="status">
-        {validationText}
+      <div className={`${styles.validation} ${draft.issues.length > 0 ? styles.invalid : ''}`} role="status">
+        <span>
+          {documentItem.activeFormat !== 'json' && draft.issues.length === 0
+            ? `${validationText}. Comments are not saved to JSON.`
+            : validationText}
+        </span>
+        {blocksSwitching && (
+          <button type="button" className={styles.discardButton} onClick={() => onDiscardInvalid(documentItem.id)}>
+            Discard invalid changes
+          </button>
+        )}
       </div>
     </section>
   );
@@ -687,7 +1046,8 @@ function EditorPane({
 
 interface BreadcrumbsProps {
   filename: string;
-  roots: JsonSymbol[];
+  formatLabel: string;
+  roots: StructuredSymbol[];
   cursorOffset: number;
   onNavigate: (offset: number) => void;
 }
@@ -697,13 +1057,13 @@ interface BreadcrumbEntry {
   name: string;
   detail?: string;
   targetOffset?: number;
-  menuItems: JsonSymbol[];
+  menuItems: StructuredSymbol[];
   currentId?: string;
   isChildMenu?: boolean;
 }
 
-function Breadcrumbs({filename, roots, cursorOffset, onNavigate}: BreadcrumbsProps): ReactNode {
-  const trail = useMemo(() => findJsonSymbolTrail(roots, cursorOffset), [cursorOffset, roots]);
+function Breadcrumbs({filename, formatLabel, roots, cursorOffset, onNavigate}: BreadcrumbsProps): ReactNode {
+  const trail = useMemo(() => findSymbolTrail(roots, cursorOffset), [cursorOffset, roots]);
   const entries = useMemo<BreadcrumbEntry[]>(() => {
     const result: BreadcrumbEntry[] = [{
       key: 'file',
@@ -813,7 +1173,7 @@ function Breadcrumbs({filename, roots, cursorOffset, onNavigate}: BreadcrumbsPro
     : document.body;
   return (
     <>
-      <div ref={breadcrumbRef} className={styles.breadcrumbs} aria-label="JSON breadcrumbs">
+      <div ref={breadcrumbRef} className={styles.breadcrumbs} aria-label={`${formatLabel} breadcrumbs`}>
         {entries.map((entry, index) => (
           <React.Fragment key={entry.key}>
             <button
