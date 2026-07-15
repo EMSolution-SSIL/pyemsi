@@ -1,4 +1,12 @@
-export type JsonRecord = Record<string, unknown>;
+import {
+  collectEmSolutionReferences,
+  deepClone,
+  isEmSolutionInput,
+  isPlainRecord,
+  type JsonRecord,
+} from './emSolutionModel';
+
+export {deepClone, isEmSolutionInput, isPlainRecord};
 
 export const NETWORK_COMPONENT_TYPES = [
   'FEM', 'R', 'L', 'M', 'C', 'CPS', 'VPS', 'D1', 'D2', 'EQ',
@@ -22,10 +30,7 @@ export interface NetworkSection {
   network: unknown;
 }
 
-export interface NetworkReferences {
-  seriesIds: number[];
-  timeIds: number[];
-}
+export type NetworkReferences = ReturnType<typeof collectEmSolutionReferences>;
 
 export type NetworkFieldKind = 'integer' | 'number' | 'series' | 'time' | 'inductor' | 'table' | 'element';
 
@@ -153,30 +158,12 @@ const CIRCUIT_ELEMENT_TYPES = new Set<NetworkComponentType>([
   'FEM', 'R', 'L', 'M', 'C', 'CPS', 'VPS', 'D1', 'D2', 'EQ', 'TAB', 'SWITCH', 'VR',
 ]);
 
-export function isPlainRecord(value: unknown): value is JsonRecord {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
 export function isNetworkDefinition(value: unknown): value is NetworkDefinition {
   return isPlainRecord(value);
 }
 
 export function isKnownNetworkType(value: string): value is NetworkComponentType {
   return (NETWORK_COMPONENT_TYPES as readonly string[]).includes(value);
-}
-
-export function deepClone<T>(value: T): T {
-  if (typeof structuredClone === 'function') return structuredClone(value);
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-export function isEmSolutionInput(value: unknown): boolean {
-  if (!isPlainRecord(value)) return false;
-  if (isPlainRecord(value.metaData) && value.metaData.type === 'EMSolution_Input') return true;
-  const signature = ['0_Release_Number', '1_Execution_Control', '2_Analysis_Type'];
-  return signature.filter((key) => Object.hasOwn(value, key)).length >= 2;
 }
 
 export function findNetworkSections(value: unknown): NetworkSection[] {
@@ -201,31 +188,8 @@ export function replaceNetworkSections(value: unknown, sections: NetworkSection[
   return result;
 }
 
-function sortedNumbers(values: Set<number>): number[] {
-  return [...values].sort((left, right) => left - right);
-}
-
 export function collectNetworkReferences(value: unknown): NetworkReferences {
-  const seriesIds = new Set<number>();
-  const timeIds = new Set<number>();
-  if (!isPlainRecord(value)) return {seriesIds: [], timeIds: []};
-  const sources = value['17_Field_Source'];
-  if (Array.isArray(sources)) {
-    for (const source of sources) {
-      if (!isPlainRecord(source)) continue;
-      for (const [key, definition] of Object.entries(source)) {
-        if (key === 'NETWORK' || !isPlainRecord(definition)) continue;
-        if (Number.isInteger(definition.SERIES_ID)) seriesIds.add(definition.SERIES_ID as number);
-      }
-    }
-  }
-  const functions = value['18_Time_Function'];
-  if (Array.isArray(functions)) {
-    for (const entry of functions) {
-      if (isPlainRecord(entry) && Number.isInteger(entry.TIME_ID)) timeIds.add(entry.TIME_ID as number);
-    }
-  }
-  return {seriesIds: sortedNumbers(seriesIds), timeIds: sortedNumbers(timeIds)};
+  return collectEmSolutionReferences(value);
 }
 
 export function networkComponents(network: NetworkDefinition): NetworkComponent[] {

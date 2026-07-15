@@ -93,6 +93,28 @@ function emsolutionInput(networkData: unknown[] = [
   });
 }
 
+function emsolutionCircuitInput(circuit: Record<string, unknown> = {
+  REGION_FACTOR: 8,
+  REGION_PARALLEL: 1,
+  SERIES_IDS: [1],
+  INDUCTANCE_MATRIX: {comment: 'keep', IN_IND: 0, MATRIX: [[0]]},
+  RESISTANCE_MATRIX: {format: 'keep', IN_RES: 0, MATRIX: [[5]]},
+  CONNECTION_MATRIX: {IN_CON: 0, MATRIX: [[1]]},
+  POWER_SUPPLIES: [{PS_ID: 1, TYPE: 1, TIME_ID: 1, INITIAL_CURRENT: 0, vendor: 'keep'}],
+}): string {
+  return JSON.stringify({
+    metaData: {type: 'EMSolution_Input', version: '1.0'},
+    '0_Release_Number': {RLS_NO: 'r6.6'},
+    '1_Execution_Control': {},
+    '2_Analysis_Type': {STATIC: 0, AC: 0, TRANSIENT: 1},
+    '17_Field_Source': [
+      {ELMCUR: {SERIES_ID: 1, data: []}},
+      {CIRCUIT: circuit},
+    ],
+    '18_Time_Function': [{TIME_ID: 1, OPTION: 2}],
+  });
+}
+
 async function chooseFiles(container: HTMLElement, files: File[]): Promise<void> {
   const input = container.querySelector<HTMLInputElement>('input[type="file"]');
   if (!input) throw new Error('File input was not rendered');
@@ -519,5 +541,112 @@ describe('InputControlFileEditorClient', () => {
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     expect(savedValue['17_Field_Source'][1].NETWORK.REGION_FACTOR).toBe(8);
     expect(savedValue['17_Field_Source'][2].NETWORK.REGION_FACTOR).toBe(3);
+  });
+
+  it('shows CIRCUIT only for recognized EMSolution field sources and links its documentation', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('generic.json', JSON.stringify({CIRCUIT: {SERIES_IDS: []}}))]);
+    expect(screen.queryByRole('button', {name: 'Edit CIRCUIT'})).not.toBeInTheDocument();
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    fireEvent.change(input, {target: {files: [jsonFile('circuit.json', emsolutionCircuitInput())]}});
+    const button = await screen.findByRole('button', {name: 'Edit CIRCUIT'});
+    await userEvent.click(button);
+    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
+    expect(within(dialog).getByText('Source series')).toBeInTheDocument();
+    expect(within(dialog).getByText('Power supplies')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_8_CIRCUIT'));
+  });
+
+  it('applies staged CIRCUIT settings, matrix, and power-supply edits', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('circuit.json', emsolutionCircuitInput())]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit CIRCUIT'}));
+    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
+    fireEvent.change(within(dialog).getByLabelText('CIRCUIT region factor'), {target: {value: '4'}});
+    fireEvent.change(within(dialog).getByLabelText('External inductance row 1 column 1'), {target: {value: '0.25'}});
+    fireEvent.change(within(dialog).getByLabelText('Power supply 1 initial current'), {target: {value: '3'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    const circuit = savedValue['17_Field_Source'][1].CIRCUIT;
+    expect(circuit.REGION_FACTOR).toBe(4);
+    expect(circuit.INDUCTANCE_MATRIX.MATRIX).toEqual([[0.25]]);
+    expect(circuit.POWER_SUPPLIES[0]).toMatchObject({INITIAL_CURRENT: 3, vendor: 'keep'});
+    expect(circuit.INDUCTANCE_MATRIX.comment).toBe('keep');
+    expect(screen.getByText('Applied CIRCUIT changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Modified')).toBeInTheDocument();
+  });
+
+  it('resizes CIRCUIT matrices when adding a series and blocks Apply until new cells are complete', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('circuit.json', emsolutionCircuitInput())]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit CIRCUIT'}));
+    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add series'}));
+    expect(within(dialog).getByRole('button', {name: 'Apply changes'})).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('Series ID 2'), {target: {value: '2'}});
+    for (const [label, value] of [
+      ['External inductance row 2 column 1', '0.1'],
+      ['External inductance row 2 column 2', '0.2'],
+      ['External resistance row 2 column 1', '0'],
+      ['External resistance row 2 column 2', '6'],
+      ['Connection row 2 column 1', '1'],
+    ]) fireEvent.change(within(dialog).getByLabelText(label), {target: {value}});
+    expect(within(dialog).getByRole('button', {name: 'Apply changes'})).toBeEnabled();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    const circuit = savedValue['17_Field_Source'][1].CIRCUIT;
+    expect(circuit.SERIES_IDS).toEqual([1, 2]);
+    expect(circuit.INDUCTANCE_MATRIX.MATRIX).toEqual([[0], [0.1, 0.2]]);
+    expect(circuit.CONNECTION_MATRIX.MATRIX).toEqual([[1], [1]]);
+  });
+
+  it('duplicates power supplies, supports occurrence selection, and discards cancelled CIRCUIT edits', async () => {
+    const payload = JSON.parse(emsolutionCircuitInput());
+    payload['17_Field_Source'].push({CIRCUIT: {
+      ...payload['17_Field_Source'][1].CIRCUIT,
+      REGION_FACTOR: 2,
+    }});
+    const original = JSON.stringify(payload);
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('multiple-circuit.json', original)]);
+    await userEvent.click(screen.getByRole('button', {name: 'Edit CIRCUIT'}));
+    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
+    await userEvent.selectOptions(within(dialog).getByLabelText('CIRCUIT occurrence'), '1');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate power supply row 1'}));
+    expect(within(dialog).getByLabelText('Power supply 2 ID')).toHaveValue(2);
+    expect(within(dialog).getByLabelText('Connection row 1 column 2')).toHaveValue(1);
+    fireEvent.change(within(dialog).getByLabelText('CIRCUIT region factor'), {target: {value: '3'}});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
+    expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue(original);
+    expect(screen.queryByLabelText('Modified')).not.toBeInTheDocument();
+  });
+
+  it('disables malformed CIRCUIT data and targets the focused split document', async () => {
+    const malformed = JSON.parse(emsolutionCircuitInput());
+    malformed['17_Field_Source'][1].CIRCUIT = [];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [
+      jsonFile('malformed.json', JSON.stringify(malformed)),
+      jsonFile('focused-circuit.json', emsolutionCircuitInput()),
+    ]);
+    const malformedButton = screen.getByRole('button', {name: 'Edit CIRCUIT'});
+    expect(malformedButton).toBeDisabled();
+    expect(malformedButton).toHaveAttribute('title', expect.stringContaining('not an editable object'));
+
+    await userEvent.selectOptions(
+      screen.getByLabelText('Split editor with'),
+      screen.getByRole('option', {name: 'focused-circuit.json'}),
+    );
+    const focusedButton = screen.getByRole('button', {name: 'Edit CIRCUIT'});
+    expect(focusedButton).toBeEnabled();
+    await userEvent.click(focusedButton);
+    expect(screen.getByRole('dialog', {name: 'CIRCUIT editor'})).toHaveTextContent('focused-circuit.json');
+    fireEvent.keyDown(document, {key: 'Escape'});
+    expect(screen.queryByRole('dialog', {name: 'CIRCUIT editor'})).not.toBeInTheDocument();
+    expect(focusedButton).toHaveFocus();
   });
 });

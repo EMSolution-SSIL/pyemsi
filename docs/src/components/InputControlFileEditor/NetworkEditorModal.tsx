@@ -1,6 +1,7 @@
 import React, {type ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 
+import EditorIcon from './EditorIcon';
 import {
   collectNetworkReferences,
   componentSummary,
@@ -286,8 +287,12 @@ export default function NetworkEditorModal({
             <div className={styles.networkModalSubtitle}>{documentName}</div>
           </div>
           <div className={styles.networkHeaderActions}>
-            <a href={DOCUMENTATION_URL} target="_blank" rel="noreferrer">Official documentation</a>
-            <button ref={closeButtonRef} type="button" className={styles.networkIconButton} aria-label="Close NETWORK editor" onClick={requestClose}>×</button>
+            <a href={DOCUMENTATION_URL} target="_blank" rel="noreferrer">
+              Official documentation <EditorIcon name="external" />
+            </a>
+            <button ref={closeButtonRef} type="button" className={styles.networkIconButton} aria-label="Close NETWORK editor" title="Close NETWORK editor" onClick={requestClose}>
+              <EditorIcon name="close" />
+            </button>
           </div>
         </header>
 
@@ -343,7 +348,9 @@ export default function NetworkEditorModal({
                   <option key={type} value={type}>{type} — {NETWORK_COMPONENT_SCHEMAS[type].label}</option>
                 ))}
               </select>
-              <button type="button" className="button button--primary button--sm" onClick={startAdd}>Add component</button>
+              <button type="button" className="button button--primary button--sm" onClick={startAdd}>
+                <EditorIcon name="add" /> Add component
+              </button>
             </div>
           </div>
 
@@ -371,11 +378,11 @@ export default function NetworkEditorModal({
                         </td>
                         <td data-label="Actions">
                           <div className={styles.networkRowActions}>
-                            <button type="button" aria-label={`Edit NETWORK row ${index + 1}`} onClick={() => openEditor(index)}>Edit</button>
-                            <button type="button" aria-label={`Duplicate NETWORK row ${index + 1}`} disabled={!component} onClick={() => duplicateRow(index)}>Duplicate</button>
-                            <button type="button" aria-label={`Move NETWORK row ${index + 1} up`} disabled={index === 0} onClick={() => moveRow(index, -1)}>↑</button>
-                            <button type="button" aria-label={`Move NETWORK row ${index + 1} down`} disabled={index === rows.length - 1} onClick={() => moveRow(index, 1)}>↓</button>
-                            <button type="button" aria-label={`Delete NETWORK row ${index + 1}`} onClick={() => deleteRow(index)}>Delete</button>
+                            <button type="button" aria-label={`Edit NETWORK row ${index + 1}`} title="Edit component" onClick={() => openEditor(index)}><EditorIcon name="edit" /></button>
+                            <button type="button" aria-label={`Duplicate NETWORK row ${index + 1}`} title="Duplicate component" disabled={!component} onClick={() => duplicateRow(index)}><EditorIcon name="copy" /></button>
+                            <button type="button" aria-label={`Move NETWORK row ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => moveRow(index, -1)}><EditorIcon name="up" /></button>
+                            <button type="button" aria-label={`Move NETWORK row ${index + 1} down`} title="Move down" disabled={index === rows.length - 1} onClick={() => moveRow(index, 1)}><EditorIcon name="down" /></button>
+                            <button type="button" className={styles.networkDangerButton} aria-label={`Delete NETWORK row ${index + 1}`} title="Delete component" onClick={() => deleteRow(index)}><EditorIcon name="delete" /></button>
                           </div>
                         </td>
                       </tr>
@@ -417,8 +424,8 @@ export default function NetworkEditorModal({
         <footer className={styles.networkModalFooter}>
           <span>{rows.length} component{rows.length === 1 ? '' : 's'} · {errorCount} error{errorCount === 1 ? '' : 's'} · {warningCount} warning{warningCount === 1 ? '' : 's'}</span>
           <div>
-            <button type="button" className="button button--secondary" onClick={requestClose}>Cancel</button>
-            <button type="button" className="button button--primary" disabled={errorCount > 0} title={errorCount > 0 ? 'Fix structural errors before applying' : 'Apply NETWORK changes to the open document'} onClick={apply}>Apply changes</button>
+            <button type="button" className="button button--secondary" onClick={requestClose}><EditorIcon name="cancel" /> Cancel</button>
+            <button type="button" className="button button--primary" disabled={errorCount > 0} title={errorCount > 0 ? 'Fix structural errors before applying' : 'Apply NETWORK changes to the open document'} onClick={apply}><EditorIcon name="apply" /> Apply changes</button>
           </div>
         </footer>
       </div>
@@ -557,7 +564,7 @@ function TableDatasets({draft, rows, onDraft}: {draft: NetworkComponent; rows: u
   };
   return (
     <section className={styles.networkNestedEditor}>
-      <div className={styles.networkNestedHeading}><h4>I–V datasets ({tables.length})</h4><button type="button" onClick={() => updateTables([...tables, {ID: nextTableId(rows), NO_DATA: 0, CURRENT: [], VOLTAGE: []}])}>Add dataset</button></div>
+      <div className={styles.networkNestedHeading}><h4>I–V datasets ({tables.length})</h4><button type="button" onClick={() => updateTables([...tables, {ID: nextTableId(rows), NO_DATA: 0, CURRENT: [], VOLTAGE: []}])}><EditorIcon name="add" /> Add dataset</button></div>
       {tables.map((tableValue, tableIndex) => {
         const table = isPlainRecord(tableValue) ? tableValue : {};
         const current = Array.isArray(table.CURRENT) ? table.CURRENT : [];
@@ -567,7 +574,7 @@ function TableDatasets({draft, rows, onDraft}: {draft: NetworkComponent; rows: u
           <div className={styles.networkDataset} key={tableIndex}>
             <div className={styles.networkDatasetHeader}>
               <label>Table ID <input aria-label={`Table ${tableIndex + 1} ID`} type="number" step="1" value={inputValue(table.ID)} onChange={(event) => updateTable(tableIndex, (item) => ({...item, ID: numberValue(event.target.value)}))} /></label>
-              <button type="button" onClick={() => updateTables(tables.filter((_, index) => index !== tableIndex))}>Remove dataset</button>
+              <button type="button" className={styles.networkDangerButton} aria-label={`Remove table dataset ${tableIndex + 1}`} onClick={() => updateTables(tables.filter((_, index) => index !== tableIndex))}><EditorIcon name="delete" /> Remove dataset</button>
             </div>
             <div className={styles.networkPointHeader}><span>Current (A)</span><span>Voltage (V)</span><span /></div>
             {Array.from({length: pointCount}, (_, pointIndex) => (
@@ -586,14 +593,14 @@ function TableDatasets({draft, rows, onDraft}: {draft: NetworkComponent; rows: u
                   const nextCurrent = Array.isArray(item.CURRENT) ? item.CURRENT.filter((_, index) => index !== pointIndex) : [];
                   const nextVoltage = Array.isArray(item.VOLTAGE) ? item.VOLTAGE.filter((_, index) => index !== pointIndex) : [];
                   return {...item, CURRENT: nextCurrent, VOLTAGE: nextVoltage, NO_DATA: nextCurrent.length};
-                })}>×</button>
+                })}><EditorIcon name="delete" /></button>
               </div>
             ))}
             <button type="button" onClick={() => updateTable(tableIndex, (item) => {
               const nextCurrent = [...(Array.isArray(item.CURRENT) ? item.CURRENT : []), ''];
               const nextVoltage = [...(Array.isArray(item.VOLTAGE) ? item.VOLTAGE : []), ''];
               return {...item, CURRENT: nextCurrent, VOLTAGE: nextVoltage, NO_DATA: nextCurrent.length};
-            })}>Add I–V point</button>
+            })}><EditorIcon name="add" /> Add I–V point</button>
           </div>
         );
       })}
@@ -609,7 +616,7 @@ function SwitchTimings({draft, onDraft}: {draft: NetworkComponent; onDraft: (dra
   const update = (nextOn: unknown[], nextOff: unknown[]) => onDraft({...draft, ON_TIME: nextOn, OFF_TIME: nextOff});
   return (
     <section className={styles.networkNestedEditor}>
-      <div className={styles.networkNestedHeading}><h4>Switch intervals ({unit})</h4><button type="button" onClick={() => update([...onTimes, ''], [...offTimes, ''])}>Add interval</button></div>
+      <div className={styles.networkNestedHeading}><h4>Switch intervals ({unit})</h4><button type="button" onClick={() => update([...onTimes, ''], [...offTimes, ''])}><EditorIcon name="add" /> Add interval</button></div>
       <div className={styles.networkPointHeader}><span>On time</span><span>Off time</span><span /></div>
       {Array.from({length: count}, (_, index) => (
         <div className={styles.networkPointRow} key={index}>
@@ -619,7 +626,7 @@ function SwitchTimings({draft, onDraft}: {draft: NetworkComponent; onDraft: (dra
           <input aria-label={`Switch off time ${index + 1}`} type="number" step="any" value={inputValue(offTimes[index])} onChange={(event) => {
             const next = [...offTimes]; next[index] = numberValue(event.target.value); update(onTimes, next);
           }} />
-          <button type="button" aria-label={`Remove switch interval ${index + 1}`} onClick={() => update(onTimes.filter((_, item) => item !== index), offTimes.filter((_, item) => item !== index))}>×</button>
+          <button type="button" className={styles.networkDangerButton} aria-label={`Remove switch interval ${index + 1}`} title="Remove interval" onClick={() => update(onTimes.filter((_, item) => item !== index), offTimes.filter((_, item) => item !== index))}><EditorIcon name="delete" /></button>
         </div>
       ))}
     </section>
@@ -629,8 +636,8 @@ function SwitchTimings({draft, onDraft}: {draft: NetworkComponent; onDraft: (dra
 function EditorButtons({onCancel, onSave}: {onCancel: () => void; onSave: () => void}): ReactNode {
   return (
     <div className={styles.networkEditorButtons}>
-      <button type="button" className="button button--secondary button--sm" onClick={onCancel}>Cancel row</button>
-      <button type="button" className="button button--primary button--sm" onClick={onSave}>Save row</button>
+      <button type="button" className="button button--secondary button--sm" onClick={onCancel}><EditorIcon name="cancel" /> Cancel row</button>
+      <button type="button" className="button button--primary button--sm" onClick={onSave}><EditorIcon name="save" /> Save row</button>
     </div>
   );
 }

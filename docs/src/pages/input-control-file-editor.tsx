@@ -19,9 +19,9 @@ export default function InputControlFileEditorPage(): ReactNode {
           breadcrumbs to move through nested objects and arrays, or split the
           editor to compare two files side by side. Files always save as JSON;
           YAML and TOML comments are not included in the saved file. Recognized
-          EMSolution input files with a NETWORK field source also provide a
-          guided component table for editing circuit settings, elements,
-          sources, nonlinear tables, and switch timings.
+          EMSolution input files with NETWORK or CIRCUIT field sources also
+          provide guided editors for component networks, source series, power
+          supplies, and external-circuit matrices.
         </p>
         <div className="alert alert--info" role="note">
           <strong>Your files stay private.</strong> Files are read and edited

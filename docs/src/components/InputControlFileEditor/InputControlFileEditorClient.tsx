@@ -14,6 +14,12 @@ import React, {
 } from 'react';
 import {createPortal} from 'react-dom';
 
+import EditorIcon from './EditorIcon';
+import CircuitEditorModal from './CircuitEditorModal';
+import {
+  findCircuitSections,
+  isCircuitDefinition,
+} from './circuitModel';
 import {
   editorWindowTitle,
   findSymbolTrail,
@@ -225,6 +231,7 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [networkEditorDocumentId, setNetworkEditorDocumentId] = useState<string>();
+  const [circuitEditorDocumentId, setCircuitEditorDocumentId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
@@ -255,7 +262,12 @@ export default function InputControlFileEditorClient(): ReactNode {
     ? []
     : findNetworkSections(actionDocument.canonicalValue);
   const actionHasMalformedNetwork = actionNetworkSections.some((item) => !isNetworkDefinition(item.network));
+  const actionCircuitSections = actionDocument?.canonicalValue === undefined
+    ? []
+    : findCircuitSections(actionDocument.canonicalValue);
+  const actionHasMalformedCircuit = actionCircuitSections.some((item) => !isCircuitDefinition(item.circuit));
   const networkEditorDocument = documents.find((item) => item.id === networkEditorDocumentId);
+  const circuitEditorDocument = documents.find((item) => item.id === circuitEditorDocumentId);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -531,7 +543,7 @@ export default function InputControlFileEditorClient(): ReactNode {
     }));
   }, []);
 
-  const updateCanonicalDocument = useCallback((id: string, canonicalValue: unknown) => {
+  const updateCanonicalDocument = useCallback((id: string, canonicalValue: unknown, source: 'NETWORK' | 'CIRCUIT') => {
     setDocuments((current) => current.map((item) => {
       if (item.id !== id) return item;
       const revision = item.revision + 1;
@@ -565,7 +577,7 @@ export default function InputControlFileEditorClient(): ReactNode {
       return {...item, text: jsonText, revision, canonicalValue, formatDrafts};
     }));
     setFocusedDocumentId(id);
-    setStatus('Applied NETWORK changes to the open document. Save the file to keep them.');
+    setStatus(`Applied ${source} changes to the open document. Save the file to keep them.`);
   }, []);
 
   const selectDocumentFormat = useCallback((id: string, format: EditorFormat) => {
@@ -773,7 +785,7 @@ export default function InputControlFileEditorClient(): ReactNode {
         <div className={styles.identity}>Input Control File Editor</div>
         <div className={styles.windowActions}>
           <button className="button button--sm button--secondary" type="button" onClick={() => void openFiles()}>
-            Open files
+            <EditorIcon name="open" /> Open files
           </button>
           <button
             className="button button--sm button--secondary"
@@ -783,7 +795,7 @@ export default function InputControlFileEditorClient(): ReactNode {
               ? `Fix ${actionFormatLabel} problems in ${actionDocument?.displayName ?? 'the active file'} before formatting`
               : `Format ${actionDocument?.displayName ?? 'the active file'} as ${actionFormatLabel}`}
             onClick={formatActionDocument}>
-            Format
+            <EditorIcon name="format" /> Format
           </button>
           <button
             className="button button--sm button--secondary"
@@ -795,7 +807,7 @@ export default function InputControlFileEditorClient(): ReactNode {
             onClick={() => {
               if (actionDocument) void saveDocument(actionDocument.id);
             }}>
-            Save
+            <EditorIcon name="save" /> Save
           </button>
           {actionNetworkSections.length > 0 && (
             <button
@@ -810,7 +822,23 @@ export default function InputControlFileEditorClient(): ReactNode {
               onClick={() => {
                 if (actionDocument) setNetworkEditorDocumentId(actionDocument.id);
               }}>
-              Edit NETWORK
+              <EditorIcon name="network" /> Edit NETWORK
+            </button>
+          )}
+          {actionCircuitSections.length > 0 && (
+            <button
+              className="button button--sm button--secondary"
+              type="button"
+              disabled={actionHasInvalidAlternate || actionHasMalformedCircuit}
+              title={actionHasInvalidAlternate
+                ? `Fix or discard invalid ${actionFormatLabel} changes before editing CIRCUIT`
+                : actionHasMalformedCircuit
+                  ? 'CIRCUIT exists but is not an editable object'
+                  : `Edit ${actionCircuitSections.length > 1 ? `${actionCircuitSections.length} CIRCUIT entries` : 'CIRCUIT connections'} in ${actionDocument?.displayName ?? 'the active file'}`}
+              onClick={() => {
+                if (actionDocument) setCircuitEditorDocumentId(actionDocument.id);
+              }}>
+              <EditorIcon name="circuit" /> Edit CIRCUIT
             </button>
           )}
           {documents.length >= 2 && (
@@ -830,7 +858,7 @@ export default function InputControlFileEditorClient(): ReactNode {
           )}
           {comparisonDocument && (
             <button className="button button--sm button--secondary" type="button" onClick={closeSplit}>
-              Close split
+              <EditorIcon name="splitClose" /> Close split
             </button>
           )}
           <button
@@ -839,6 +867,7 @@ export default function InputControlFileEditorClient(): ReactNode {
             aria-pressed={isFullscreen}
             title={isFullscreen ? 'Exit fullscreen mode' : 'Open the editor in fullscreen mode'}
             onClick={() => void toggleFullscreen()}>
+            <EditorIcon name={isFullscreen ? 'fullscreenExit' : 'fullscreen'} />
             {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           </button>
         </div>
@@ -866,7 +895,8 @@ export default function InputControlFileEditorClient(): ReactNode {
                   type="button"
                   className={styles.closeTab}
                   aria-label={`Close ${item.displayName}`}
-                  onClick={() => closeDocument(item.id)}>×</button>
+                  title={`Close ${item.displayName}`}
+                  onClick={() => closeDocument(item.id)}><EditorIcon name="close" /></button>
               </div>
             );
           })}
@@ -885,7 +915,7 @@ export default function InputControlFileEditorClient(): ReactNode {
               <>
                 <p>Drag and drop one or more JSON files here.</p>
                 <button className="button button--primary button--lg" type="button" onClick={() => void openFiles()}>
-                  Open Input Control Files
+                  <EditorIcon name="open" /> Open Input Control Files
                 </button>
               </>
             )}
@@ -939,8 +969,22 @@ export default function InputControlFileEditorClient(): ReactNode {
             portalTarget={document.fullscreenElement ?? document.body}
             onClose={() => setNetworkEditorDocumentId(undefined)}
             onApply={(nextValue) => {
-              updateCanonicalDocument(networkEditorDocument.id, nextValue);
+              updateCanonicalDocument(networkEditorDocument.id, nextValue, 'NETWORK');
               setNetworkEditorDocumentId(undefined);
+            }}
+          />
+        )}
+      {circuitEditorDocument?.canonicalValue !== undefined
+        && findCircuitSections(circuitEditorDocument.canonicalValue).every((item) => isCircuitDefinition(item.circuit))
+        && (
+          <CircuitEditorModal
+            documentName={circuitEditorDocument.displayName}
+            value={circuitEditorDocument.canonicalValue}
+            portalTarget={document.fullscreenElement ?? document.body}
+            onClose={() => setCircuitEditorDocumentId(undefined)}
+            onApply={(nextValue) => {
+              updateCanonicalDocument(circuitEditorDocument.id, nextValue, 'CIRCUIT');
+              setCircuitEditorDocumentId(undefined);
             }}
           />
         )}
@@ -1128,7 +1172,7 @@ function EditorPane({
         </span>
         {blocksSwitching && (
           <button type="button" className={styles.discardButton} onClick={() => onDiscardInvalid(documentItem.id)}>
-            Discard invalid changes
+            <EditorIcon name="cancel" /> Discard invalid changes
           </button>
         )}
       </div>
