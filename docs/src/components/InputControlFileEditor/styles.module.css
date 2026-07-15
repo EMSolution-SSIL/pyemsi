@@ -21,6 +21,22 @@
   border-color: var(--ifm-color-primary);
 }
 
+.shell:fullscreen {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  flex-direction: column;
+}
+
+.shell:fullscreen .editorGrid,
+.shell:fullscreen .dropZone {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
 .hiddenInput {
   display: none;
 }

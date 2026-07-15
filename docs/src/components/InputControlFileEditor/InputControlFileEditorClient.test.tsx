@@ -10,6 +10,7 @@ vi.mock('@docusaurus/theme-common', () => ({
 }));
 
 const disposedModels = new Set<string>();
+let fullscreenElement: Element | null = null;
 
 vi.mock('monaco-editor', () => ({}));
 
@@ -77,10 +78,29 @@ async function chooseFiles(container: HTMLElement, files: File[]): Promise<void>
 describe('InputControlFileEditorClient', () => {
   beforeEach(() => {
     disposedModels.clear();
+    fullscreenElement = null;
     document.title = 'Original title';
     Object.defineProperty(window, 'showOpenFilePicker', {value: undefined, configurable: true});
     Object.defineProperty(URL, 'createObjectURL', {value: vi.fn(() => 'blob:test'), configurable: true});
     Object.defineProperty(URL, 'revokeObjectURL', {value: vi.fn(), configurable: true});
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: vi.fn(async function requestFullscreen(this: HTMLElement) {
+        fullscreenElement = this;
+        document.dispatchEvent(new Event('fullscreenchange'));
+      }),
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: vi.fn(async () => {
+        fullscreenElement = null;
+        document.dispatchEvent(new Event('fullscreenchange'));
+      }),
+    });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
   });
 
@@ -164,5 +184,24 @@ describe('InputControlFileEditorClient', () => {
     expect(await screen.findByRole('tab', {name: 'valid.json'})).toBeInTheDocument();
     expect(screen.getByText(/Rejected notes\.txt/)).toBeInTheDocument();
     expect(within(screen.getByLabelText('Primary editor')).getByText('Valid JSON')).toBeInTheDocument();
+  });
+
+  it('enters and exits fullscreen mode', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('input.json', '{"first": 1, "second": 2}')]);
+
+    await userEvent.click(screen.getByRole('button', {name: 'Fullscreen'}));
+    expect(HTMLElement.prototype.requestFullscreen).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', {name: 'Exit fullscreen'})).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(screen.getByRole('button', {name: '…'}));
+    const menu = screen.getByRole('menu', {name: '… entries'});
+    expect(menu.parentElement).toBe(fullscreenElement);
+    expect(within(menu).getByRole('menuitem', {name: /first/})).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', {name: 'Exit fullscreen'}));
+    expect(document.exitFullscreen).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', {name: 'Fullscreen'})).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('menu', {name: '… entries'})).not.toBeInTheDocument();
   });
 });

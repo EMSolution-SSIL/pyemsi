@@ -133,7 +133,9 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [focusedDocumentId, setFocusedDocumentId] = useState<string>();
   const [status, setStatus] = useState('No files are open.');
   const [isDragging, setIsDragging] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
   const originalTitleRef = useRef(document.title);
   const documentsRef = useRef<OpenDocument[]>([]);
@@ -177,6 +179,30 @@ export default function InputControlFileEditorClient(): ReactNode {
     window.addEventListener('beforeunload', warnBeforeUnload);
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [hasDirtyDocuments]);
+
+  useEffect(() => {
+    const updateFullscreenState = () => {
+      setIsFullscreen(document.fullscreenElement === shellRef.current);
+    };
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', updateFullscreenState);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement === shellRef.current) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (!shellRef.current?.requestFullscreen) {
+        setStatus('Fullscreen mode is not supported by this browser.');
+        return;
+      }
+      await shellRef.current.requestFullscreen();
+    } catch {
+      setStatus('The browser could not enter fullscreen mode.');
+    }
+  }, []);
 
   const addCandidates = useCallback(async (candidates: FileCandidate[]) => {
     const accepted = candidates.filter(({file}) => isJsonFile(file));
@@ -382,6 +408,7 @@ export default function InputControlFileEditorClient(): ReactNode {
 
   return (
     <section
+      ref={shellRef}
       className={`${styles.shell} ${isDragging ? styles.dragging : ''}`}
       onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
       onDragOver={(event) => event.preventDefault()}
@@ -424,6 +451,14 @@ export default function InputControlFileEditorClient(): ReactNode {
               Close split
             </button>
           )}
+          <button
+            className="button button--sm button--secondary"
+            type="button"
+            aria-pressed={isFullscreen}
+            title={isFullscreen ? 'Exit fullscreen mode' : 'Open the editor in fullscreen mode'}
+            onClick={() => void toggleFullscreen()}>
+            {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          </button>
         </div>
       </div>
 
@@ -764,6 +799,11 @@ function Breadcrumbs({filename, roots, cursorOffset, onNavigate}: BreadcrumbsPro
   };
 
   const openEntry = openIndex === undefined ? undefined : entries[openIndex];
+  const fullscreenRoot = document.fullscreenElement;
+  const portalTarget = fullscreenRoot instanceof HTMLElement
+    && fullscreenRoot.contains(breadcrumbRef.current)
+    ? fullscreenRoot
+    : document.body;
   return (
     <>
       <div ref={breadcrumbRef} className={styles.breadcrumbs} aria-label="JSON breadcrumbs">
@@ -815,7 +855,7 @@ function Breadcrumbs({filename, roots, cursorOffset, onNavigate}: BreadcrumbsPro
             </button>
           ))}
         </div>,
-        document.body,
+        portalTarget,
       )}
     </>
   );
