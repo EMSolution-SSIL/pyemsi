@@ -17,6 +17,8 @@ import {createPortal} from 'react-dom';
 import EditorIcon from './EditorIcon';
 import FieldSourceEditorModal from './FieldSourceEditorModal';
 import {hasMalformedFieldSourceRoot} from './fieldSourceModel';
+import MaterialPropertyEditorModal from './MaterialPropertyEditorModal';
+import {hasMalformedMaterialPropertyRoot} from './materialPropertyModel';
 import {isEmSolutionInput} from './emSolutionModel';
 import {
   editorWindowTitle,
@@ -224,6 +226,7 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fieldSourceEditorDocumentId, setFieldSourceEditorDocumentId] = useState<string>();
+  const [materialPropertyEditorDocumentId, setMaterialPropertyEditorDocumentId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
@@ -253,7 +256,10 @@ export default function InputControlFileEditorClient(): ReactNode {
   const actionIsEmSolution = actionDocument?.canonicalValue !== undefined && isEmSolutionInput(actionDocument.canonicalValue);
   const actionHasMalformedFieldSources = actionDocument?.canonicalValue !== undefined
     && hasMalformedFieldSourceRoot(actionDocument.canonicalValue);
+  const actionHasMalformedMaterialProperties = actionDocument?.canonicalValue !== undefined
+    && hasMalformedMaterialPropertyRoot(actionDocument.canonicalValue);
   const fieldSourceEditorDocument = documents.find((item) => item.id === fieldSourceEditorDocumentId);
+  const materialPropertyEditorDocument = documents.find((item) => item.id === materialPropertyEditorDocumentId);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -799,6 +805,22 @@ export default function InputControlFileEditorClient(): ReactNode {
             <button
               className="button button--sm button--secondary"
               type="button"
+              disabled={actionHasInvalidAlternate || actionHasMalformedMaterialProperties}
+              title={actionHasInvalidAlternate
+                ? `Fix or discard invalid ${actionFormatLabel} changes before editing Material Properties`
+                : actionHasMalformedMaterialProperties
+                  ? '16_Material_Properties or one of its material collections does not use the current object/array format'
+                  : `Edit Material Properties in ${actionDocument?.displayName ?? 'the active file'}`}
+              onClick={() => {
+                if (actionDocument) setMaterialPropertyEditorDocumentId(actionDocument.id);
+              }}>
+              <EditorIcon name="material" /> Edit Material Properties
+            </button>
+          )}
+          {actionIsEmSolution && (
+            <button
+              className="button button--sm button--secondary"
+              type="button"
               disabled={actionHasInvalidAlternate || actionHasMalformedFieldSources}
               title={actionHasInvalidAlternate
                 ? `Fix or discard invalid ${actionFormatLabel} changes before editing Field Sources`
@@ -939,6 +961,18 @@ export default function InputControlFileEditorClient(): ReactNode {
           onApply={(nextValue) => {
             updateCanonicalDocument(fieldSourceEditorDocument.id, nextValue, 'Field Source');
             setFieldSourceEditorDocumentId(undefined);
+          }}
+        />
+      )}
+      {materialPropertyEditorDocument?.canonicalValue !== undefined && (
+        <MaterialPropertyEditorModal
+          documentName={materialPropertyEditorDocument.displayName}
+          value={materialPropertyEditorDocument.canonicalValue}
+          portalTarget={document.fullscreenElement ?? document.body}
+          onClose={() => setMaterialPropertyEditorDocumentId(undefined)}
+          onApply={(nextValue) => {
+            updateCanonicalDocument(materialPropertyEditorDocument.id, nextValue, 'Material Property');
+            setMaterialPropertyEditorDocumentId(undefined);
           }}
         />
       )}

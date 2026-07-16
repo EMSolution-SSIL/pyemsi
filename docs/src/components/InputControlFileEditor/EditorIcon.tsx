@@ -14,6 +14,7 @@ export type EditorIconName =
   | 'format'
   | 'fullscreen'
   | 'fullscreenExit'
+  | 'material'
   | 'network'
   | 'open'
   | 'save'
@@ -39,6 +40,7 @@ export default function EditorIcon({name, className, ...props}: EditorIconProps)
     format: <><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></>,
     fullscreen: <><path d="M8 3H3v5"/><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M16 21h5v-5"/></>,
     fullscreenExit: <><path d="M3 8h5V3"/><path d="M21 8h-5V3"/><path d="M3 16h5v5"/><path d="M21 16h-5v5"/></>,
+    material: <><path d="m12 2 9 5-9 5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></>,
     network: <><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="m7 11 10-5"/><path d="m7 13 10 5"/></>,
     open: <><path d="M3 6h6l2 2h10v11H3Z"/><path d="m3 19 3-8h15"/></>,
     save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></>,

@@ -127,6 +127,11 @@ async function openFieldSourceEditor(): Promise<HTMLElement> {
   return screen.getByRole('dialog', {name: 'Field Source editor'});
 }
 
+async function openMaterialPropertyEditor(): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', {name: 'Edit Material Properties'}));
+  return screen.getByRole('dialog', {name: 'Material Properties editor'});
+}
+
 async function openSpecialSourceEditor(type: 'NETWORK' | 'CIRCUIT', row = 2): Promise<{dialog: HTMLElement; editor: HTMLElement}> {
   const dialog = await openFieldSourceEditor();
   await userEvent.click(within(dialog).getByRole('button', {name: `Edit Field Source row ${row}`}));
@@ -731,5 +736,105 @@ describe('InputControlFileEditorClient', () => {
     expect(sources).toHaveLength(2);
     expect(Object.keys(sources[0])).toEqual(['NETWORK']);
     expect(Object.keys(sources[1])).toEqual(['PHICOIL']);
+  });
+
+  it('creates a missing Material Properties block and edits optional MAT_NAME', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('materials.json', emsolutionInput())]);
+    const dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Volume (0)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add volume material'}));
+    fireEvent.change(within(dialog).getByLabelText('Material ID (MAT_ID)'), {target: {value: '10'}});
+    fireEvent.change(within(dialog).getByLabelText('Material name (MAT_NAME)'), {target: {value: 'stator'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(saved['16_Material_Properties']).toMatchObject({EXTEND_TOTAL_for_COIL: 0});
+    expect(saved['16_Material_Properties']['16_1_3D_Element_Properties'][0]).toMatchObject({
+      MAT_ID: 10, MAT_NAME: 'stator', POTENTIAL: 0,
+      ElectricProperty: {conductivity: {SIGMA: 0}}, MagneticProperty: {MU: 1},
+    });
+    expect(screen.getByText('Applied Material Property changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Modified')).toBeInTheDocument();
+  });
+
+  it('edits advanced volume properties while preserving vendor data', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      vendorRoot: 'keep',
+      '16_1_3D_Element_Properties': [{
+        MAT_ID: 10, MAT_NAME: 'old', POTENTIAL: 0, vendor: {flag: true},
+        ElectricProperty: {conductivity: {SIGMA: 0, note: 'keep'}},
+        MagneticProperty: {MU: 1},
+      }],
+      '16_2_2D_Element_Properties': [],
+    };
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('advanced-material.json', JSON.stringify(input))]);
+    const dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Volume (1)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit volume material row 1'}));
+    fireEvent.change(within(dialog).getByLabelText('Material name (MAT_NAME)'), {target: {value: 'stator'}});
+    const packingCard = within(dialog).getByText('Lamination packing').closest('section')!;
+    await userEvent.click(within(packingCard).getByRole('button', {name: 'Add Lamination packing'}));
+    fireEvent.change(within(dialog).getByLabelText('Packing factor (PACKING_FACTOR)'), {target: {value: '0.96'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const materialRoot = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value)['16_Material_Properties'];
+    const material = materialRoot['16_1_3D_Element_Properties'][0];
+    expect(materialRoot.vendorRoot).toBe('keep');
+    expect(material).toMatchObject({MAT_NAME: 'stator', vendor: {flag: true}});
+    expect(material.ElectricProperty.conductivity.note).toBe('keep');
+    expect(material.MagneticProperty.PACKING).toMatchObject({PACKING_FACTOR: 0.96, PACKING_DIRECTION: [0, 0, 1]});
+  });
+
+  it('adds surface materials and preserves legacy nonlinear parameter spelling', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [],
+      '16_2_2D_Element_Properties': [{SMAT_ID: 1, SURFACE_IMPEDANCE: {
+        SIGMA: 1, MU: 1, IMP_TYPE: 1,
+        Nonliear_Parameters: {BH_CURVE_ID: 1, AGRWALL: 0.75, K: 5, HK: 2000, vendor: 'keep'},
+      }}],
+    };
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('surface-material.json', JSON.stringify(input))]);
+    const dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Surface (1)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit surface material row 1'}));
+    fireEvent.change(within(dialog).getByLabelText('K value (K)'), {target: {value: '6'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Back to materials'}));
+    await userEvent.selectOptions(within(dialog).getByLabelText('New surface material type'), 'GAP_ELEMENT');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add surface material'}));
+    fireEvent.change(within(dialog).getByLabelText('Surface material ID (SMAT_ID)'), {target: {value: '2'}});
+    fireEvent.change(within(dialog).getByLabelText('Thickness (THICKNESS)'), {target: {value: '0.01'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const surfaces = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value)['16_Material_Properties']['16_2_2D_Element_Properties'];
+    expect(surfaces[0].SURFACE_IMPEDANCE.Nonliear_Parameters).toMatchObject({K: 6, vendor: 'keep'});
+    expect(surfaces[0].SURFACE_IMPEDANCE).not.toHaveProperty('Nonlinear_Parameters');
+    expect(surfaces[1]).toEqual({SMAT_ID: 2, GAP_ELEMENT: {THICKNESS: 0.01}});
+  });
+
+  it('disables malformed material roots and cancels staged changes', async () => {
+    const malformed = JSON.parse(emsolutionInput());
+    malformed['16_Material_Properties'] = {'16_1_3D_Element_Properties': {MAT_ID: 1}};
+    const valid = JSON.parse(emsolutionInput());
+    valid['16_Material_Properties'] = {EXTEND_TOTAL_for_COIL: 0, '16_1_3D_Element_Properties': [], '16_2_2D_Element_Properties': []};
+    const original = JSON.stringify(valid);
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('malformed-material.json', JSON.stringify(malformed))]);
+    expect(screen.getByRole('button', {name: 'Edit Material Properties'})).toBeDisabled();
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    fireEvent.change(input, {target: {files: [jsonFile('valid-material.json', original)]}});
+    const dialog = await openMaterialPropertyEditor();
+    fireEvent.change(within(dialog).getByLabelText('Extend total-potential region (EXTEND_TOTAL_for_COIL)'), {target: {value: '1'}});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
+    expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue(original);
+    expect(screen.queryByLabelText('Modified')).not.toBeInTheDocument();
   });
 });
