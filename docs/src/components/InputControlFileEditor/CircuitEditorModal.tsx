@@ -29,6 +29,8 @@ interface CircuitEditorModalProps {
   documentName: string;
   value: unknown;
   portalTarget?: Element;
+  embedded?: boolean;
+  initialSection?: number;
   onApply: (value: unknown) => void;
   onClose: () => void;
 }
@@ -72,13 +74,15 @@ export default function CircuitEditorModal({
   documentName,
   value,
   portalTarget,
+  embedded = false,
+  initialSection = 0,
   onApply,
   onClose,
 }: CircuitEditorModalProps): ReactNode {
   const initialSectionsRef = useRef(sectionCopies(value));
   const initialJsonRef = useRef(JSON.stringify(initialSectionsRef.current));
   const [sections, setSections] = useState(initialSectionsRef.current);
-  const [selectedSection, setSelectedSection] = useState(0);
+  const [selectedSection, setSelectedSection] = useState(() => Math.max(0, Math.min(initialSection, initialSectionsRef.current.length - 1)));
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const sectionsRef = useRef(sections);
@@ -108,6 +112,7 @@ export default function CircuitEditorModal({
   }, [onClose]);
 
   useEffect(() => {
+    if (embedded) return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     closeButtonRef.current?.focus();
@@ -138,7 +143,18 @@ export default function CircuitEditorModal({
       document.removeEventListener('keydown', onKeyDown);
       restoreFocusRef.current?.focus();
     };
-  }, [requestClose]);
+  }, [embedded, requestClose]);
+
+  useEffect(() => {
+    if (!embedded) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      requestClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [embedded, requestClose]);
 
   const allIssues = useMemo(() => sections.flatMap((item, index) => (
     validateCircuit(item.circuit, value).map((issue) => ({...issue, sectionIndex: index}))
@@ -226,18 +242,14 @@ export default function CircuitEditorModal({
     onApply(replaceCircuitSections(value, normalized));
   };
 
-  const modal = (
-    <div
-      className={styles.networkModalBackdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) requestClose();
-      }}>
+  const editor = (
       <div
         ref={dialogRef}
-        className={styles.networkModal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="circuit-editor-title">
+        className={embedded ? styles.fieldSourceEmbeddedSpecial : styles.networkModal}
+        role={embedded ? 'region' : 'dialog'}
+        aria-modal={embedded ? undefined : true}
+        aria-label={embedded ? 'CIRCUIT editor' : undefined}
+        aria-labelledby={embedded ? undefined : 'circuit-editor-title'}>
         <header className={styles.networkModalHeader}>
           <div>
             <h2 id="circuit-editor-title">CIRCUIT editor</h2>
@@ -361,9 +373,18 @@ export default function CircuitEditorModal({
           </div>
         </footer>
       </div>
-    </div>
   );
 
+  if (embedded) return editor;
+  const modal = (
+    <div
+      className={styles.networkModalBackdrop}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) requestClose();
+      }}>
+      {editor}
+    </div>
+  );
   return createPortal(modal, portalTarget ?? document.body);
 }
 

@@ -86,7 +86,7 @@ function emsolutionInput(networkData: unknown[] = [
     '1_Execution_Control': {},
     '2_Analysis_Type': {STATIC: 0, AC: 0, TRANSIENT: 1},
     '17_Field_Source': [
-      {PHICOIL: {SERIES_ID: 1, data: []}},
+      {PHICOIL: {SERIES_ID: 1, IN_ROTOR: 0, data: []}},
       {NETWORK: {REGION_FACTOR: 8, REGION_PARALLEL: 1, data: networkData}},
     ],
     '18_Time_Function': [{TIME_ID: 1, OPTION: 2}],
@@ -108,7 +108,7 @@ function emsolutionCircuitInput(circuit: Record<string, unknown> = {
     '1_Execution_Control': {},
     '2_Analysis_Type': {STATIC: 0, AC: 0, TRANSIENT: 1},
     '17_Field_Source': [
-      {ELMCUR: {SERIES_ID: 1, data: []}},
+      {ELMCUR: {SERIES_ID: 1, OPTION: 1, IN_ROTOR: 0, data: []}},
       {CIRCUIT: circuit},
     ],
     '18_Time_Function': [{TIME_ID: 1, OPTION: 2}],
@@ -120,6 +120,22 @@ async function chooseFiles(container: HTMLElement, files: File[]): Promise<void>
   if (!input) throw new Error('File input was not rendered');
   fireEvent.change(input, {target: {files}});
   await waitFor(() => expect(screen.getAllByRole('tab')).toHaveLength(files.length));
+}
+
+async function openFieldSourceEditor(): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', {name: 'Edit Field Sources'}));
+  return screen.getByRole('dialog', {name: 'Field Source editor'});
+}
+
+async function openSpecialSourceEditor(type: 'NETWORK' | 'CIRCUIT', row = 2): Promise<{dialog: HTMLElement; editor: HTMLElement}> {
+  const dialog = await openFieldSourceEditor();
+  await userEvent.click(within(dialog).getByRole('button', {name: `Edit Field Source row ${row}`}));
+  return {dialog, editor: within(dialog).getByRole('region', {name: `${type} editor`})};
+}
+
+async function applySpecialSourceEditor(dialog: HTMLElement, editor: HTMLElement): Promise<void> {
+  await userEvent.click(within(editor).getByRole('button', {name: 'Apply changes'}));
+  await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
 }
 
 describe('InputControlFileEditorClient', () => {
@@ -376,50 +392,50 @@ describe('InputControlFileEditorClient', () => {
     expect((within(comparison).getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value).toContain('value = 2');
   });
 
-  it('shows the NETWORK action only for recognized EMSolution inputs', async () => {
+  it('shows the Field Source action only for recognized EMSolution inputs', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('generic.json', '{"NETWORK": {"data": []}}')]);
-    expect(screen.queryByRole('button', {name: 'Edit NETWORK'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Edit Field Sources'})).not.toBeInTheDocument();
 
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     fireEvent.change(input, {target: {files: [jsonFile('transient.json', emsolutionInput())]}});
-    expect(await screen.findByRole('button', {name: 'Edit NETWORK'})).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    expect(within(dialog).getByText('FEM source')).toBeInTheDocument();
-    expect(within(dialog).getByText('Current source')).toBeInTheDocument();
-    expect(within(dialog).getByText('Resistor')).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_9_NETWORK'));
+    expect(await screen.findByRole('button', {name: 'Edit Field Sources'})).toBeInTheDocument();
+    const {editor} = await openSpecialSourceEditor('NETWORK');
+    expect(within(editor).getByText('FEM source')).toBeInTheDocument();
+    expect(within(editor).getByText('Current source')).toBeInTheDocument();
+    expect(within(editor).getByText('Resistor')).toBeInTheDocument();
+    expect(within(editor).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_9_NETWORK'));
+    fireEvent.keyDown(document, {key: 'Escape'});
+    expect(within(screen.getByRole('dialog', {name: 'Field Source editor'})).queryByRole('region', {name: 'NETWORK editor'})).not.toBeInTheDocument();
   });
 
   it('applies staged NETWORK row edits through the canonical document', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('transient.json', emsolutionInput())]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK');
 
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit NETWORK row 3'}));
-    fireEvent.change(within(dialog).getByLabelText('Resistance'), {target: {value: '42.5'}});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Save row'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Edit NETWORK row 3'}));
+    fireEvent.change(within(editor).getByLabelText('Resistance'), {target: {value: '42.5'}});
+    await userEvent.click(within(editor).getByRole('button', {name: 'Save row'}));
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     expect(savedValue['17_Field_Source'][1].NETWORK.data[2].RESISTANCE).toBe(42.5);
     expect(screen.getByLabelText('Modified')).toBeInTheDocument();
-    expect(screen.getByText('Applied NETWORK changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+    expect(screen.getByText('Applied Field Source changes to the open document. Save the file to keep them.')).toBeInTheDocument();
   });
 
   it('discards staged NETWORK changes when the modal is cancelled', async () => {
     const original = emsolutionInput();
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('transient.json', original)]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    fireEvent.change(within(dialog).getByLabelText('Region factor'), {target: {value: '4'}});
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK');
+    fireEvent.change(within(editor).getByLabelText('Region factor'), {target: {value: '4'}});
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(editor).getByRole('button', {name: 'Cancel'}));
     await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
 
-    expect(screen.queryByRole('dialog', {name: 'NETWORK editor'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', {name: 'Field Source editor'})).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue(original);
     expect(screen.queryByLabelText('Modified')).not.toBeInTheDocument();
   });
@@ -427,16 +443,15 @@ describe('InputControlFileEditorClient', () => {
   it('adds and derives counts for a TABLE dataset', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('transient.json', emsolutionInput())]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    await userEvent.selectOptions(within(dialog).getByLabelText('New NETWORK component type'), 'TABLE');
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Add component'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Add dataset'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Add I–V point'}));
-    fireEvent.change(within(dialog).getByLabelText('Table 1 current 1'), {target: {value: '2'}});
-    fireEvent.change(within(dialog).getByLabelText('Table 1 voltage 1'), {target: {value: '0.7'}});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Save row'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK');
+    await userEvent.selectOptions(within(editor).getByLabelText('New NETWORK component type'), 'TABLE');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Add component'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Add dataset'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Add I–V point'}));
+    fireEvent.change(within(editor).getByLabelText('Table 1 current 1'), {target: {value: '2'}});
+    fireEvent.change(within(editor).getByLabelText('Table 1 voltage 1'), {target: {value: '0.7'}});
+    await userEvent.click(within(editor).getByRole('button', {name: 'Save row'}));
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     const table = savedValue['17_Field_Source'][1].NETWORK.data[3];
@@ -448,13 +463,12 @@ describe('InputControlFileEditorClient', () => {
     const unknown = {type: 'FUTURE', ID: 77, vendor: {flag: true}};
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('future.json', emsolutionInput([unknown]))]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit NETWORK row 1'}));
-    const raw = within(dialog).getByLabelText('Raw NETWORK component JSON');
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Edit NETWORK row 1'}));
+    const raw = within(editor).getByLabelText('Raw NETWORK component JSON');
     fireEvent.change(raw, {target: {value: JSON.stringify({...unknown, added: 'kept'})}});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Save row'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Save row'}));
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     expect(savedValue['17_Field_Source'][1].NETWORK.data[0]).toEqual({...unknown, added: 'kept'});
@@ -463,11 +477,10 @@ describe('InputControlFileEditorClient', () => {
   it('adds a SWITCH with paired timings and phase-aware fields', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('switch.json', emsolutionInput())]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    await userEvent.selectOptions(within(dialog).getByLabelText('New NETWORK component type'), 'SWITCH');
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Add component'}));
-    const editor = within(dialog).getByLabelText('SWITCH component editor');
+    const {dialog, editor: networkEditor} = await openSpecialSourceEditor('NETWORK');
+    await userEvent.selectOptions(within(networkEditor).getByLabelText('New NETWORK component type'), 'SWITCH');
+    await userEvent.click(within(networkEditor).getByRole('button', {name: 'Add component'}));
+    const editor = within(networkEditor).getByLabelText('SWITCH component editor');
     for (const [label, value] of [
       ['Start node', '1'], ['End node', '2'], ['On resistance', '0.01'],
       ['Off resistance', '1000000'], ['Cycle', '0.02'], ['Time function', '1'],
@@ -479,7 +492,7 @@ describe('InputControlFileEditorClient', () => {
     fireEvent.change(within(editor).getByLabelText('Switch on time 1'), {target: {value: '30'}});
     fireEvent.change(within(editor).getByLabelText('Switch off time 1'), {target: {value: '180'}});
     await userEvent.click(within(editor).getByRole('button', {name: 'Save row'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    await applySpecialSourceEditor(dialog, networkEditor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     expect(savedValue['17_Field_Source'][1].NETWORK.data[3]).toMatchObject({
@@ -491,13 +504,12 @@ describe('InputControlFileEditorClient', () => {
   it('duplicates, reorders, and deletes NETWORK rows', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('actions.json', emsolutionInput())]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate NETWORK row 3'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Move NETWORK row 4 up'}));
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Duplicate NETWORK row 3'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Move NETWORK row 4 up'}));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Delete NETWORK row 1'}));
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Delete NETWORK row 1'}));
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     const data = savedValue['17_Field_Source'][1].NETWORK.data;
@@ -515,11 +527,11 @@ describe('InputControlFileEditorClient', () => {
       screen.getByLabelText('Split editor with'),
       screen.getByRole('option', {name: 'network.json'}),
     );
-    const networkButton = await screen.findByRole('button', {name: 'Edit NETWORK'});
+    const networkButton = await screen.findByRole('button', {name: 'Edit Field Sources'});
     await userEvent.click(networkButton);
-    expect(screen.getByRole('dialog', {name: 'NETWORK editor'})).toHaveTextContent('network.json');
+    expect(screen.getByRole('dialog', {name: 'Field Source editor'})).toHaveTextContent('network.json');
     fireEvent.keyDown(document, {key: 'Escape'});
-    expect(screen.queryByRole('dialog', {name: 'NETWORK editor'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', {name: 'Field Source editor'})).not.toBeInTheDocument();
     expect(networkButton).toHaveFocus();
   });
 
@@ -532,41 +544,38 @@ describe('InputControlFileEditorClient', () => {
     }});
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('multiple.json', JSON.stringify(payload))]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit NETWORK'}));
-    const dialog = screen.getByRole('dialog', {name: 'NETWORK editor'});
-    await userEvent.selectOptions(within(dialog).getByLabelText('NETWORK occurrence'), '1');
-    fireEvent.change(within(dialog).getByLabelText('Region factor'), {target: {value: '3'}});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK', 3);
+    expect(within(editor).getByLabelText('NETWORK occurrence')).toHaveValue('1');
+    fireEvent.change(within(editor).getByLabelText('Region factor'), {target: {value: '3'}});
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     expect(savedValue['17_Field_Source'][1].NETWORK.REGION_FACTOR).toBe(8);
     expect(savedValue['17_Field_Source'][2].NETWORK.REGION_FACTOR).toBe(3);
   });
 
-  it('shows CIRCUIT only for recognized EMSolution field sources and links its documentation', async () => {
+  it('shows Field Sources only for recognized EMSolution inputs and links CIRCUIT documentation', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('generic.json', JSON.stringify({CIRCUIT: {SERIES_IDS: []}}))]);
-    expect(screen.queryByRole('button', {name: 'Edit CIRCUIT'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Edit Field Sources'})).not.toBeInTheDocument();
 
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     fireEvent.change(input, {target: {files: [jsonFile('circuit.json', emsolutionCircuitInput())]}});
-    const button = await screen.findByRole('button', {name: 'Edit CIRCUIT'});
-    await userEvent.click(button);
-    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
-    expect(within(dialog).getByText('Source series')).toBeInTheDocument();
-    expect(within(dialog).getByText('Power supplies')).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_8_CIRCUIT'));
+    expect(await screen.findByRole('button', {name: 'Edit Field Sources'})).toBeInTheDocument();
+    const {editor} = await openSpecialSourceEditor('CIRCUIT');
+    expect(within(editor).getByText('Source series')).toBeInTheDocument();
+    expect(within(editor).getByText('Power supplies')).toBeInTheDocument();
+    expect(within(editor).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_8_CIRCUIT'));
   });
 
   it('applies staged CIRCUIT settings, matrix, and power-supply edits', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('circuit.json', emsolutionCircuitInput())]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit CIRCUIT'}));
-    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
-    fireEvent.change(within(dialog).getByLabelText('CIRCUIT region factor'), {target: {value: '4'}});
-    fireEvent.change(within(dialog).getByLabelText('External inductance row 1 column 1'), {target: {value: '0.25'}});
-    fireEvent.change(within(dialog).getByLabelText('Power supply 1 initial current'), {target: {value: '3'}});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    const {dialog, editor} = await openSpecialSourceEditor('CIRCUIT');
+    fireEvent.change(within(editor).getByLabelText('CIRCUIT region factor'), {target: {value: '4'}});
+    fireEvent.change(within(editor).getByLabelText('External inductance row 1 column 1'), {target: {value: '0.25'}});
+    fireEvent.change(within(editor).getByLabelText('Power supply 1 initial current'), {target: {value: '3'}});
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     const circuit = savedValue['17_Field_Source'][1].CIRCUIT;
@@ -574,27 +583,26 @@ describe('InputControlFileEditorClient', () => {
     expect(circuit.INDUCTANCE_MATRIX.MATRIX).toEqual([[0.25]]);
     expect(circuit.POWER_SUPPLIES[0]).toMatchObject({INITIAL_CURRENT: 3, vendor: 'keep'});
     expect(circuit.INDUCTANCE_MATRIX.comment).toBe('keep');
-    expect(screen.getByText('Applied CIRCUIT changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+    expect(screen.getByText('Applied Field Source changes to the open document. Save the file to keep them.')).toBeInTheDocument();
     expect(screen.getByLabelText('Modified')).toBeInTheDocument();
   });
 
   it('resizes CIRCUIT matrices when adding a series and blocks Apply until new cells are complete', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('circuit.json', emsolutionCircuitInput())]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit CIRCUIT'}));
-    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Add series'}));
-    expect(within(dialog).getByRole('button', {name: 'Apply changes'})).toBeDisabled();
-    fireEvent.change(within(dialog).getByLabelText('Series ID 2'), {target: {value: '2'}});
+    const {dialog, editor} = await openSpecialSourceEditor('CIRCUIT');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Add series'}));
+    expect(within(editor).getByRole('button', {name: 'Apply changes'})).toBeDisabled();
+    fireEvent.change(within(editor).getByLabelText('Series ID 2'), {target: {value: '2'}});
     for (const [label, value] of [
       ['External inductance row 2 column 1', '0.1'],
       ['External inductance row 2 column 2', '0.2'],
       ['External resistance row 2 column 1', '0'],
       ['External resistance row 2 column 2', '6'],
       ['Connection row 2 column 1', '1'],
-    ]) fireEvent.change(within(dialog).getByLabelText(label), {target: {value}});
-    expect(within(dialog).getByRole('button', {name: 'Apply changes'})).toBeEnabled();
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    ]) fireEvent.change(within(editor).getByLabelText(label), {target: {value}});
+    expect(within(editor).getByRole('button', {name: 'Apply changes'})).toBeEnabled();
+    await applySpecialSourceEditor(dialog, editor);
 
     const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     const circuit = savedValue['17_Field_Source'][1].CIRCUIT;
@@ -612,20 +620,20 @@ describe('InputControlFileEditorClient', () => {
     const original = JSON.stringify(payload);
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('multiple-circuit.json', original)]);
-    await userEvent.click(screen.getByRole('button', {name: 'Edit CIRCUIT'}));
-    const dialog = screen.getByRole('dialog', {name: 'CIRCUIT editor'});
-    await userEvent.selectOptions(within(dialog).getByLabelText('CIRCUIT occurrence'), '1');
-    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate power supply row 1'}));
-    expect(within(dialog).getByLabelText('Power supply 2 ID')).toHaveValue(2);
-    expect(within(dialog).getByLabelText('Connection row 1 column 2')).toHaveValue(1);
-    fireEvent.change(within(dialog).getByLabelText('CIRCUIT region factor'), {target: {value: '3'}});
+    const {dialog, editor} = await openSpecialSourceEditor('CIRCUIT', 3);
+    expect(within(editor).getByLabelText('CIRCUIT occurrence')).toHaveValue('1');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Duplicate power supply row 1'}));
+    expect(within(editor).getByLabelText('Power supply 2 ID')).toHaveValue(2);
+    expect(within(editor).getByLabelText('Connection row 1 column 2')).toHaveValue(1);
+    fireEvent.change(within(editor).getByLabelText('CIRCUIT region factor'), {target: {value: '3'}});
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(editor).getByRole('button', {name: 'Cancel'}));
     await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
     expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue(original);
     expect(screen.queryByLabelText('Modified')).not.toBeInTheDocument();
   });
 
-  it('disables malformed CIRCUIT data and targets the focused split document', async () => {
+  it('raw-edits malformed CIRCUIT data and targets the focused split document', async () => {
     const malformed = JSON.parse(emsolutionCircuitInput());
     malformed['17_Field_Source'][1].CIRCUIT = [];
     const {container} = render(<InputControlFileEditorClient />);
@@ -633,20 +641,95 @@ describe('InputControlFileEditorClient', () => {
       jsonFile('malformed.json', JSON.stringify(malformed)),
       jsonFile('focused-circuit.json', emsolutionCircuitInput()),
     ]);
-    const malformedButton = screen.getByRole('button', {name: 'Edit CIRCUIT'});
-    expect(malformedButton).toBeDisabled();
-    expect(malformedButton).toHaveAttribute('title', expect.stringContaining('not an editable object'));
+    const malformedButton = screen.getByRole('button', {name: 'Edit Field Sources'});
+    expect(malformedButton).toBeEnabled();
+    await userEvent.click(malformedButton);
+    let fieldDialog = screen.getByRole('dialog', {name: 'Field Source editor'});
+    await userEvent.click(within(fieldDialog).getByRole('button', {name: 'Edit Field Source row 2'}));
+    expect((within(fieldDialog).getByLabelText('Raw Field Source entry JSON') as HTMLTextAreaElement).value).toContain('"CIRCUIT"');
+    await userEvent.click(within(fieldDialog).getByRole('button', {name: 'Cancel'}));
 
     await userEvent.selectOptions(
       screen.getByLabelText('Split editor with'),
       screen.getByRole('option', {name: 'focused-circuit.json'}),
     );
-    const focusedButton = screen.getByRole('button', {name: 'Edit CIRCUIT'});
+    const focusedButton = screen.getByRole('button', {name: 'Edit Field Sources'});
     expect(focusedButton).toBeEnabled();
     await userEvent.click(focusedButton);
-    expect(screen.getByRole('dialog', {name: 'CIRCUIT editor'})).toHaveTextContent('focused-circuit.json');
+    fieldDialog = screen.getByRole('dialog', {name: 'Field Source editor'});
+    expect(fieldDialog).toHaveTextContent('focused-circuit.json');
     fireEvent.keyDown(document, {key: 'Escape'});
-    expect(screen.queryByRole('dialog', {name: 'CIRCUIT editor'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', {name: 'Field Source editor'})).not.toBeInTheDocument();
     expect(focusedButton).toHaveFocus();
+  });
+
+  it('creates a missing Field Source array through the unified editor', async () => {
+    const input = JSON.stringify({
+      metaData: {type: 'EMSolution_Input', version: '1.0'},
+      '0_Release_Number': {RLS_NO: 'r6.6'},
+      '1_Execution_Control': {},
+      '2_Analysis_Type': {STATIC: 0, AC: 0, TRANSIENT: 1},
+    });
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('empty-field-sources.json', input)]);
+
+    const action = screen.getByRole('button', {name: 'Edit Field Sources'});
+    expect(action).toBeEnabled();
+    const dialog = await openFieldSourceEditor();
+    expect(within(dialog).getByText('No Field Sources match the current filters.')).toBeInTheDocument();
+    await userEvent.selectOptions(within(dialog).getByLabelText('New Field Source type'), 'NETWORK');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add source'}));
+    const editor = within(dialog).getByRole('region', {name: 'NETWORK editor'});
+    await applySpecialSourceEditor(dialog, editor);
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source']).toEqual([{
+      NETWORK: {REGION_FACTOR: 1, REGION_PARALLEL: 1, data: []},
+    }]);
+  });
+
+  it('edits generic fields and nested rows with descriptions and documentation', async () => {
+    const payload = JSON.parse(emsolutionInput());
+    payload['17_Field_Source'][0].PHICOIL.vendor = 'retained';
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('generic-field-source.json', JSON.stringify(payload))]);
+    const dialog = await openFieldSourceEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Field Source row 1'}));
+
+    expect(within(dialog).getByText('Potential-derived current distribution for a single conductor region.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', {name: 'Official documentation'})).toHaveAttribute('href', expect.stringContaining('17_4_PHICOIL'));
+    fireEvent.change(within(dialog).getByLabelText('Series ID (SERIES_ID)'), {target: {value: '2'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add row'}));
+    fireEvent.change(within(dialog).getByLabelText('Material IDs (MAT_IDS)'), {target: {value: '10000, 10001'}});
+    fireEvent.change(within(dialog).getByLabelText('Surface material ID (SMAT_ID)'), {target: {value: '20000'}});
+    fireEvent.change(within(dialog).getByLabelText('Current (CURRENT)'), {target: {value: '12.5'}});
+    fireEvent.change(within(dialog).getByLabelText('Conductivity (SIGMA)'), {target: {value: '58000000'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate nested row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Move nested row 2 up'}));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Delete nested row 2'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][0].PHICOIL).toMatchObject({SERIES_ID: 2, vendor: 'retained'});
+    expect(savedValue['17_Field_Source'][0].PHICOIL.data).toEqual([{
+      MAT_IDS: [10000, 10001], SMAT_ID: 20000, CURRENT: 12.5, SIGMA: 58000000, CAL_Je: 0,
+    }]);
+  });
+
+  it('duplicates, reorders, and deletes complete Field Source entries', async () => {
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('source-crud.json', emsolutionInput())]);
+    const dialog = await openFieldSourceEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate Field Source row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Move Field Source row 2 down'}));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Delete Field Source row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const sources = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value)['17_Field_Source'];
+    expect(sources).toHaveLength(2);
+    expect(Object.keys(sources[0])).toEqual(['NETWORK']);
+    expect(Object.keys(sources[1])).toEqual(['PHICOIL']);
   });
 });

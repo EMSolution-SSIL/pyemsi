@@ -15,11 +15,9 @@ import React, {
 import {createPortal} from 'react-dom';
 
 import EditorIcon from './EditorIcon';
-import CircuitEditorModal from './CircuitEditorModal';
-import {
-  findCircuitSections,
-  isCircuitDefinition,
-} from './circuitModel';
+import FieldSourceEditorModal from './FieldSourceEditorModal';
+import {hasMalformedFieldSourceRoot} from './fieldSourceModel';
+import {isEmSolutionInput} from './emSolutionModel';
 import {
   editorWindowTitle,
   findSymbolTrail,
@@ -35,11 +33,6 @@ import {
   parseStructuredFormat,
   serializeStructuredFormat,
 } from './structuredFormats';
-import NetworkEditorModal from './NetworkEditorModal';
-import {
-  findNetworkSections,
-  isNetworkDefinition,
-} from './networkModel';
 import styles from './styles.module.css';
 
 loader.config({monaco: monacoEditor});
@@ -230,8 +223,7 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [status, setStatus] = useState('No files are open.');
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [networkEditorDocumentId, setNetworkEditorDocumentId] = useState<string>();
-  const [circuitEditorDocumentId, setCircuitEditorDocumentId] = useState<string>();
+  const [fieldSourceEditorDocumentId, setFieldSourceEditorDocumentId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
@@ -258,16 +250,10 @@ export default function InputControlFileEditorClient(): ReactNode {
     primaryDocument?.displayName,
     comparisonDocument?.displayName,
   );
-  const actionNetworkSections = actionDocument?.canonicalValue === undefined
-    ? []
-    : findNetworkSections(actionDocument.canonicalValue);
-  const actionHasMalformedNetwork = actionNetworkSections.some((item) => !isNetworkDefinition(item.network));
-  const actionCircuitSections = actionDocument?.canonicalValue === undefined
-    ? []
-    : findCircuitSections(actionDocument.canonicalValue);
-  const actionHasMalformedCircuit = actionCircuitSections.some((item) => !isCircuitDefinition(item.circuit));
-  const networkEditorDocument = documents.find((item) => item.id === networkEditorDocumentId);
-  const circuitEditorDocument = documents.find((item) => item.id === circuitEditorDocumentId);
+  const actionIsEmSolution = actionDocument?.canonicalValue !== undefined && isEmSolutionInput(actionDocument.canonicalValue);
+  const actionHasMalformedFieldSources = actionDocument?.canonicalValue !== undefined
+    && hasMalformedFieldSourceRoot(actionDocument.canonicalValue);
+  const fieldSourceEditorDocument = documents.find((item) => item.id === fieldSourceEditorDocumentId);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -543,7 +529,7 @@ export default function InputControlFileEditorClient(): ReactNode {
     }));
   }, []);
 
-  const updateCanonicalDocument = useCallback((id: string, canonicalValue: unknown, source: 'NETWORK' | 'CIRCUIT') => {
+  const updateCanonicalDocument = useCallback((id: string, canonicalValue: unknown, source: string) => {
     setDocuments((current) => current.map((item) => {
       if (item.id !== id) return item;
       const revision = item.revision + 1;
@@ -809,36 +795,20 @@ export default function InputControlFileEditorClient(): ReactNode {
             }}>
             <EditorIcon name="save" /> Save
           </button>
-          {actionNetworkSections.length > 0 && (
+          {actionIsEmSolution && (
             <button
               className="button button--sm button--secondary"
               type="button"
-              disabled={actionHasInvalidAlternate || actionHasMalformedNetwork}
+              disabled={actionHasInvalidAlternate || actionHasMalformedFieldSources}
               title={actionHasInvalidAlternate
-                ? `Fix or discard invalid ${actionFormatLabel} changes before editing NETWORK`
-                : actionHasMalformedNetwork
-                  ? 'NETWORK exists but is not an editable object'
-                  : `Edit ${actionNetworkSections.length > 1 ? `${actionNetworkSections.length} NETWORK entries` : 'NETWORK components'} in ${actionDocument?.displayName ?? 'the active file'}`}
+                ? `Fix or discard invalid ${actionFormatLabel} changes before editing Field Sources`
+                : actionHasMalformedFieldSources
+                  ? '17_Field_Source exists but is not an editable array'
+                  : `Edit Field Sources in ${actionDocument?.displayName ?? 'the active file'}`}
               onClick={() => {
-                if (actionDocument) setNetworkEditorDocumentId(actionDocument.id);
+                if (actionDocument) setFieldSourceEditorDocumentId(actionDocument.id);
               }}>
-              <EditorIcon name="network" /> Edit NETWORK
-            </button>
-          )}
-          {actionCircuitSections.length > 0 && (
-            <button
-              className="button button--sm button--secondary"
-              type="button"
-              disabled={actionHasInvalidAlternate || actionHasMalformedCircuit}
-              title={actionHasInvalidAlternate
-                ? `Fix or discard invalid ${actionFormatLabel} changes before editing CIRCUIT`
-                : actionHasMalformedCircuit
-                  ? 'CIRCUIT exists but is not an editable object'
-                  : `Edit ${actionCircuitSections.length > 1 ? `${actionCircuitSections.length} CIRCUIT entries` : 'CIRCUIT connections'} in ${actionDocument?.displayName ?? 'the active file'}`}
-              onClick={() => {
-                if (actionDocument) setCircuitEditorDocumentId(actionDocument.id);
-              }}>
-              <EditorIcon name="circuit" /> Edit CIRCUIT
+              <EditorIcon name="network" /> Edit Field Sources
             </button>
           )}
           {documents.length >= 2 && (
@@ -960,34 +930,18 @@ export default function InputControlFileEditorClient(): ReactNode {
       {isDragging && primaryDocument && (
         <div className={styles.dropOverlay}>Drop JSON files to open them</div>
       )}
-      {networkEditorDocument?.canonicalValue !== undefined
-        && findNetworkSections(networkEditorDocument.canonicalValue).every((item) => isNetworkDefinition(item.network))
-        && (
-          <NetworkEditorModal
-            documentName={networkEditorDocument.displayName}
-            value={networkEditorDocument.canonicalValue}
-            portalTarget={document.fullscreenElement ?? document.body}
-            onClose={() => setNetworkEditorDocumentId(undefined)}
-            onApply={(nextValue) => {
-              updateCanonicalDocument(networkEditorDocument.id, nextValue, 'NETWORK');
-              setNetworkEditorDocumentId(undefined);
-            }}
-          />
-        )}
-      {circuitEditorDocument?.canonicalValue !== undefined
-        && findCircuitSections(circuitEditorDocument.canonicalValue).every((item) => isCircuitDefinition(item.circuit))
-        && (
-          <CircuitEditorModal
-            documentName={circuitEditorDocument.displayName}
-            value={circuitEditorDocument.canonicalValue}
-            portalTarget={document.fullscreenElement ?? document.body}
-            onClose={() => setCircuitEditorDocumentId(undefined)}
-            onApply={(nextValue) => {
-              updateCanonicalDocument(circuitEditorDocument.id, nextValue, 'CIRCUIT');
-              setCircuitEditorDocumentId(undefined);
-            }}
-          />
-        )}
+      {fieldSourceEditorDocument?.canonicalValue !== undefined && (
+        <FieldSourceEditorModal
+          documentName={fieldSourceEditorDocument.displayName}
+          value={fieldSourceEditorDocument.canonicalValue}
+          portalTarget={document.fullscreenElement ?? document.body}
+          onClose={() => setFieldSourceEditorDocumentId(undefined)}
+          onApply={(nextValue) => {
+            updateCanonicalDocument(fieldSourceEditorDocument.id, nextValue, 'Field Source');
+            setFieldSourceEditorDocumentId(undefined);
+          }}
+        />
+      )}
     </section>
   );
 }

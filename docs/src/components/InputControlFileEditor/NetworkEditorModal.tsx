@@ -31,6 +31,8 @@ interface NetworkEditorModalProps {
   documentName: string;
   value: unknown;
   portalTarget?: Element;
+  embedded?: boolean;
+  initialSection?: number;
   onApply: (value: unknown) => void;
   onClose: () => void;
 }
@@ -95,13 +97,15 @@ export default function NetworkEditorModal({
   documentName,
   value,
   portalTarget,
+  embedded = false,
+  initialSection = 0,
   onApply,
   onClose,
 }: NetworkEditorModalProps): ReactNode {
   const initialSectionsRef = useRef(sectionCopies(value));
   const initialJsonRef = useRef(JSON.stringify(initialSectionsRef.current));
   const [sections, setSections] = useState(initialSectionsRef.current);
-  const [selectedSection, setSelectedSection] = useState(0);
+  const [selectedSection, setSelectedSection] = useState(() => Math.max(0, Math.min(initialSection, initialSectionsRef.current.length - 1)));
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [addType, setAddType] = useState<NetworkComponentType>('FEM');
@@ -137,6 +141,7 @@ export default function NetworkEditorModal({
   }, [onClose]);
 
   useEffect(() => {
+    if (embedded) return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     closeButtonRef.current?.focus();
@@ -167,7 +172,18 @@ export default function NetworkEditorModal({
       document.removeEventListener('keydown', onKeyDown);
       restoreFocusRef.current?.focus();
     };
-  }, [requestClose]);
+  }, [embedded, requestClose]);
+
+  useEffect(() => {
+    if (!embedded) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      requestClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [embedded, requestClose]);
 
   const normalizedSections = useMemo(() => sections.map((item) => ({
     ...item,
@@ -269,18 +285,14 @@ export default function NetworkEditorModal({
     onApply(replaceNetworkSections(value, normalizedSections));
   };
 
-  const modal = (
-    <div
-      className={styles.networkModalBackdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) requestClose();
-      }}>
+  const editor = (
       <div
         ref={dialogRef}
-        className={styles.networkModal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="network-editor-title">
+        className={embedded ? styles.fieldSourceEmbeddedSpecial : styles.networkModal}
+        role={embedded ? 'region' : 'dialog'}
+        aria-modal={embedded ? undefined : true}
+        aria-label={embedded ? 'NETWORK editor' : undefined}
+        aria-labelledby={embedded ? undefined : 'network-editor-title'}>
         <header className={styles.networkModalHeader}>
           <div>
             <h2 id="network-editor-title">NETWORK editor</h2>
@@ -429,9 +441,18 @@ export default function NetworkEditorModal({
           </div>
         </footer>
       </div>
-    </div>
   );
 
+  if (embedded) return editor;
+  const modal = (
+    <div
+      className={styles.networkModalBackdrop}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) requestClose();
+      }}>
+      {editor}
+    </div>
+  );
   return createPortal(modal, portalTarget ?? document.body);
 }
 
