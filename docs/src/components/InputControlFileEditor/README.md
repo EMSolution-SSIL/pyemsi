@@ -182,7 +182,7 @@ The Material Properties action is disabled when `16_Material_Properties` is not 
 
 The General section edits `EXTEND_TOTAL_for_COIL` and optional `THIN_CRITERION`. The Volume section provides searchable master/detail CRUD for `16_1_3D_Element_Properties`, including optional `MAT_NAME`, potential regions, electric properties, magnetic properties, advanced anisotropy/hysteresis/complex-permeability/iron-loss blocks, and optional material flags. New-row defaults use `2_Analysis_Type`, while every documented group remains available in every analysis mode.
 
-The Surface section supports `SURFACE_IMPEDANCE`, `GAP_ELEMENT`, `THIN_CONDUCTOR`, and `SHELL_COIL`, including nonlinear impedance and anisotropic thin-conductor settings. `Nonlinear_Parameters` and the legacy `Nonliear_Parameters` spelling are both editable without renaming the original key.
+The Surface section supports `SURFACE_IMPEDANCE`, `GAP_ELEMENT`, `THIN_CONDUCTOR`, and `SHELL_COIL`, including nonlinear impedance and anisotropic thin-conductor settings. The **Add surface material** button opens a menu whose options show each readable type name, canonical key, and a short description; choosing an option creates the material and opens its detail editor. `Nonlinear_Parameters` and the legacy `Nonliear_Parameters` spelling are both editable without renaming the original key.
 
 Non-object volume rows, unknown or malformed surface rows, and multi-definition surface rows use raw JSON repair. Unknown surface definitions are advisory; malformed and multi-definition structures block Apply. Updates replace only selected keys, and removing an optional group or changing a surface type requires confirmation.
 
@@ -201,7 +201,19 @@ The source list shows:
 - validation state;
 - edit, duplicate, move, and delete actions.
 
-Users can search all entry JSON, filter by type/status, and add new definitions. Source deletion and type replacement require confirmation. Deleting the final entry leaves `"17_Field_Source": []`.
+Users can search all entry JSON, filter by type/status, and add new definitions. The **Add source** button opens a menu whose options show each schema label, canonical key, and short description; choosing an option creates the source and opens its detail editor. Source deletion and type replacement require confirmation. Deleting the final entry leaves `"17_Field_Source": []`.
+
+### Add-item interaction convention
+
+Typed collections should use one clearly labeled **Add** menu button instead of a persistent type combobox followed by a separate Add button. The menu should:
+
+- show a readable type name, the canonical JSON key, and a concise description for every option;
+- create the item immediately when an option is chosen and open its detail editor;
+- derive labels and descriptions from the relevant model schema rather than duplicating them in the modal;
+- expose button/menu semantics, move among options with arrow, Home, and End keys, close on Escape or outside click, and restore focus to the Add button after Escape;
+- remain usable in narrow layouts without placing a default type into the document accidentally.
+
+Use this convention for future typed add-item controls in the guided editors unless the collection has a materially different workflow.
 
 ### Detail view
 

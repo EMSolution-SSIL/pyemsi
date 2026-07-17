@@ -1,6 +1,7 @@
 import React, {type ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 
+import AddItemMenu from './AddItemMenu';
 import CircuitEditorModal from './CircuitEditorModal';
 import EditorIcon from './EditorIcon';
 import {
@@ -139,7 +140,6 @@ export default function FieldSourceEditorModal({
   const [selectedIndex, setSelectedIndex] = useState<number>();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [addType, setAddType] = useState<FieldSourceType>('COIL');
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const draftRootRef = useRef(draftRoot);
@@ -209,8 +209,8 @@ export default function FieldSourceEditorModal({
 
   const setEntries = (nextEntries: unknown[]) => setDraftRoot((current) => replaceFieldSourceEntries(current, nextEntries));
 
-  const addEntry = () => {
-    const next = [...entries, createFieldSourceEntry(addType)];
+  const addEntry = (type: FieldSourceType) => {
+    const next = [...entries, createFieldSourceEntry(type)];
     setEntries(next);
     setSelectedIndex(next.length - 1);
   };
@@ -327,10 +327,15 @@ export default function FieldSourceEditorModal({
                   <option value="MULTIPLE">Multiple definitions</option>
                 </select>
                 <div className={styles.networkAddGroup}>
-                  <select aria-label="New Field Source type" value={addType} onChange={(event) => setAddType(event.target.value as FieldSourceType)}>
-                    {FIELD_SOURCE_TYPES.map((type) => <option key={type} value={type}>{type} — {FIELD_SOURCE_SCHEMAS[type].label}</option>)}
-                  </select>
-                  <button type="button" className="button button--primary button--sm" onClick={addEntry}><EditorIcon name="add" /> Add source</button>
+                  <AddItemMenu
+                    label="Add source"
+                    itemName="Field Source"
+                    options={FIELD_SOURCE_TYPES.map((type) => ({
+                      value: type,
+                      label: FIELD_SOURCE_SCHEMAS[type].label,
+                      description: FIELD_SOURCE_SCHEMAS[type].description,
+                    }))}
+                    onSelect={addEntry} />
                 </div>
               </div>
 

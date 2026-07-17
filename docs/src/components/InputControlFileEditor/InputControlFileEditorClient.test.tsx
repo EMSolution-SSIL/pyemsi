@@ -682,8 +682,14 @@ describe('InputControlFileEditorClient', () => {
     expect(action).toBeEnabled();
     const dialog = await openFieldSourceEditor();
     expect(within(dialog).getByText('No Field Sources match the current filters.')).toBeInTheDocument();
-    await userEvent.selectOptions(within(dialog).getByLabelText('New Field Source type'), 'NETWORK');
     await userEvent.click(within(dialog).getByRole('button', {name: 'Add source'}));
+    expect(within(dialog).getByRole('menu', {name: 'Choose Field Source type'})).toHaveTextContent('External lumped-element circuit network connected to FEM source series.');
+    await userEvent.keyboard('{Escape}');
+    expect(within(dialog).queryByRole('menu', {name: 'Choose Field Source type'})).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', {name: 'Add source'})).toHaveFocus();
+    expect(screen.getByRole('dialog', {name: 'Field Source editor'})).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add source'}));
+    await userEvent.click(within(dialog).getByRole('menuitem', {name: 'Add External network (NETWORK)'}));
     const editor = within(dialog).getByRole('region', {name: 'NETWORK editor'});
     await applySpecialSourceEditor(dialog, editor);
 
@@ -907,8 +913,9 @@ describe('InputControlFileEditorClient', () => {
     await userEvent.click(within(dialog).getByRole('button', {name: 'Edit surface material row 1'}));
     fireEvent.change(within(dialog).getByLabelText('K value (K)'), {target: {value: '6'}});
     await userEvent.click(within(dialog).getByRole('button', {name: 'Back to materials'}));
-    await userEvent.selectOptions(within(dialog).getByLabelText('New surface material type'), 'GAP_ELEMENT');
     await userEvent.click(within(dialog).getByRole('button', {name: 'Add surface material'}));
+    expect(within(dialog).getByRole('menu', {name: 'Choose surface material type'})).toHaveTextContent('Thin magnetic or insulating gap element.');
+    await userEvent.click(within(dialog).getByRole('menuitem', {name: 'Add Gap element (GAP_ELEMENT)'}));
     fireEvent.change(within(dialog).getByLabelText('Surface material ID (SMAT_ID)'), {target: {value: '2'}});
     fireEvent.change(within(dialog).getByLabelText('Thickness (THICKNESS)'), {target: {value: '0.01'}});
     await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));

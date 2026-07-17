@@ -1,6 +1,7 @@
 import React, {type ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 
+import AddItemMenu from './AddItemMenu';
 import EditorIcon from './EditorIcon';
 import {
   createMaterialProperties,
@@ -105,7 +106,6 @@ export default function MaterialPropertyEditorModal({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [surfaceTypeFilter, setSurfaceTypeFilter] = useState('ALL');
-  const [addSurfaceType, setAddSurfaceType] = useState<SurfaceMaterialType>('SURFACE_IMPEDANCE');
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const draftRef = useRef(draftProperties);
@@ -195,11 +195,11 @@ export default function MaterialPropertyEditorModal({
                 }} />
             )
           ) : selectedIndex === undefined ? (
-            <SurfaceMaster entries={surfaces} issues={issues} search={search} statusFilter={statusFilter} typeFilter={surfaceTypeFilter} addType={addSurfaceType}
-              onSearch={setSearch} onStatusFilter={setStatusFilter} onTypeFilter={setSurfaceTypeFilter} onAddType={setAddSurfaceType} onEdit={setSelectedIndex}
+            <SurfaceMaster entries={surfaces} issues={issues} search={search} statusFilter={statusFilter} typeFilter={surfaceTypeFilter}
+              onSearch={setSearch} onStatusFilter={setStatusFilter} onTypeFilter={setSurfaceTypeFilter} onEdit={setSelectedIndex}
               onEntries={(entries) => setDraftProperties((current) => replaceSurfaceMaterials(current, entries))}
-              onAdd={() => {
-                const next = [...surfaces, createSurfaceMaterial(addSurfaceType)];
+              onAdd={(type) => {
+                const next = [...surfaces, createSurfaceMaterial(type)];
                 setDraftProperties((current) => replaceSurfaceMaterials(current, next));
                 setSelectedIndex(next.length - 1);
               }} />
@@ -288,20 +288,18 @@ function VolumeMaster({entries, issues, search, statusFilter, onSearch, onStatus
   </>;
 }
 
-function SurfaceMaster({entries, issues, search, statusFilter, typeFilter, addType, onSearch, onStatusFilter, onTypeFilter, onAddType, onEdit, onEntries, onAdd}: {
+function SurfaceMaster({entries, issues, search, statusFilter, typeFilter, onSearch, onStatusFilter, onTypeFilter, onEdit, onEntries, onAdd}: {
   entries: unknown[];
   issues: MaterialPropertyValidationIssue[];
   search: string;
   statusFilter: StatusFilter;
   typeFilter: string;
-  addType: SurfaceMaterialType;
   onSearch: (value: string) => void;
   onStatusFilter: (value: StatusFilter) => void;
   onTypeFilter: (value: string) => void;
-  onAddType: (value: SurfaceMaterialType) => void;
   onEdit: (index: number) => void;
   onEntries: (entries: unknown[]) => void;
-  onAdd: () => void;
+  onAdd: (type: SurfaceMaterialType) => void;
 }): ReactNode {
   const visible = entries.map((entry, index) => ({entry, index, inspected: inspectSurfaceMaterial(entry)})).filter(({entry, index, inspected}) => {
     const type = inspected.kind === 'known' ? inspected.type : inspected.reason.toUpperCase();
@@ -314,8 +312,17 @@ function SurfaceMaster({entries, issues, search, statusFilter, typeFilter, addTy
       <input aria-label="Search surface materials" type="search" placeholder="Search surface materials…" value={search} onChange={(event) => onSearch(event.target.value)} />
       <select aria-label="Filter surface material type" value={typeFilter} onChange={(event) => onTypeFilter(event.target.value)}><option value="ALL">All types</option>{SURFACE_MATERIAL_TYPES.map((type) => <option key={type}>{type}</option>)}<option value="UNKNOWN">Unknown</option><option value="MALFORMED">Malformed</option><option value="MULTIPLE">Multiple</option></select>
       <StatusSelect label="Filter surface material status" value={statusFilter} onChange={onStatusFilter} />
-      <div className={styles.networkAddGroup}><select aria-label="New surface material type" value={addType} onChange={(event) => onAddType(event.target.value as SurfaceMaterialType)}>{SURFACE_MATERIAL_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select>
-        <button type="button" className="button button--primary button--sm" onClick={onAdd}><EditorIcon name="add" /> Add surface material</button></div>
+      <div className={styles.networkAddGroup}>
+        <AddItemMenu
+          label="Add surface material"
+          itemName="surface material"
+          options={SURFACE_MATERIAL_TYPES.map((type) => ({
+            value: type,
+            label: SURFACE_MATERIAL_SCHEMAS[type].label,
+            description: SURFACE_MATERIAL_SCHEMAS[type].description,
+          }))}
+          onSelect={onAdd} />
+      </div>
     </div>
     <div className={styles.networkTableWrap}><table className={styles.networkTable}>
       <thead><tr><th>#</th><th>Type</th><th>SMAT_ID</th><th>Summary</th><th>Status</th><th>Actions</th></tr></thead>

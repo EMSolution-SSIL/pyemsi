@@ -833,6 +833,88 @@
   margin-left: auto;
 }
 
+.addItemMenu {
+  position: relative;
+}
+
+.addItemMenuTrigger {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 0.35rem;
+}
+
+.addItemMenuTrigger svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.addItemMenuCaret {
+  margin-left: 0.15rem;
+  font-size: 0.72rem;
+}
+
+.addItemMenuPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  display: grid;
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: min(28rem, 65vh);
+  padding: 0.35rem;
+  overflow-y: auto;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.45rem;
+  background: var(--network-modal-surface);
+  box-shadow: 0 0.65rem 1.8rem rgb(0 0 0 / 22%);
+  gap: 0.15rem;
+}
+
+.addItemMenuOption {
+  display: grid;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 0.32rem;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  font: inherit;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.addItemMenuOption:hover,
+.addItemMenuOption:focus-visible {
+  background: var(--ifm-color-emphasis-200);
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: -2px;
+}
+
+.addItemMenuOptionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.addItemMenuOptionHeading strong {
+  font-size: 0.78rem;
+}
+
+.addItemMenuOptionHeading code {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.addItemMenuOption small {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
 .networkWorkspace {
   display: grid;
   min-height: 19rem;
@@ -1656,6 +1738,21 @@
 
   .networkAddGroup {
     margin-left: 0;
+  }
+
+  .addItemMenu,
+  .addItemMenuTrigger {
+    width: 100%;
+  }
+
+  .addItemMenuTrigger {
+    justify-content: center;
+  }
+
+  .addItemMenuPanel {
+    right: auto;
+    left: 0;
+    width: 100%;
   }
 
   .circuitCardHeader,
