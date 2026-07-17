@@ -56,6 +56,24 @@ describe('EMSolution Field Source model', () => {
     }
   });
 
+  it('marks scalar and array material references with their material collection', () => {
+    expect(FIELD_SOURCE_SCHEMAS.SUFCUR.fields.find((field) => field.key === 'SMAT_ID')).toMatchObject({
+      kind: 'integer', materialReference: 'surface',
+    });
+    expect(FIELD_SOURCE_SCHEMAS.PHICOIL.rowSchema?.fields.find((field) => field.key === 'MAT_IDS')).toMatchObject({
+      kind: 'integer-array', materialReference: 'volume',
+    });
+    expect(FIELD_SOURCE_SCHEMAS.PHICOIL.rowSchema?.fields.find((field) => field.key === 'SMAT_ID')).toMatchObject({
+      kind: 'integer', materialReference: 'surface',
+    });
+    expect(FIELD_SOURCE_SCHEMAS.SDEFCOIL.rowSchema?.fields.find((field) => field.key === 'SMAT_IDS')).toMatchObject({
+      kind: 'integer-array', exactItems: 4, materialReference: 'surface',
+    });
+    expect(FIELD_SOURCE_SCHEMAS.MAGNET.fields.find((field) => field.key === 'MAT_ID')).toMatchObject({
+      kind: 'integer', materialReference: 'volume',
+    });
+  });
+
   it('creates an absent source array and immutably replaces all entries', () => {
     const input = root();
     delete (input as any)['17_Field_Source'];

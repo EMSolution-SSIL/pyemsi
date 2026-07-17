@@ -1235,6 +1235,164 @@
   gap: 0.65rem 0.8rem;
 }
 
+.materialReferenceField {
+  position: relative;
+}
+
+.materialReferenceInputRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.15rem;
+  gap: 0.3rem;
+}
+
+.materialReferenceButton,
+.materialReferencePickerHeader button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 0;
+  height: 2.15rem;
+  padding: 0;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 0.3rem;
+  background: var(--network-modal-surface);
+  color: var(--ifm-color-primary);
+  cursor: pointer;
+}
+
+.materialReferenceButton:hover,
+.materialReferenceButton:focus-visible,
+.materialReferenceButton[aria-expanded='true'],
+.materialReferencePickerHeader button:hover,
+.materialReferencePickerHeader button:focus-visible {
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary-lightest);
+}
+
+.materialReferenceButton svg,
+.materialReferencePickerHeader button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.materialReferencePicker {
+  display: grid;
+  margin-top: 0.25rem;
+  padding: 0.55rem;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 0.4rem;
+  background: var(--network-modal-surface);
+  box-shadow: 0 0.35rem 1rem rgb(0 0 0 / 14%);
+  gap: 0.45rem;
+}
+
+.materialReferencePickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.materialReferencePickerHeader button {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.materialReferenceSection {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.materialReferenceSection + .materialReferenceSection {
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.materialReferenceSection h5 {
+  margin: 0;
+  color: var(--ifm-color-emphasis-800);
+  font-size: 0.74rem;
+}
+
+.materialReferenceList {
+  display: grid;
+  max-height: 18rem;
+  overflow: auto;
+  gap: 0.4rem;
+}
+
+.materialReferenceChoice {
+  display: grid;
+  align-items: start;
+  padding: 0.45rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.32rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.5rem;
+}
+
+.materialReferenceChoice > div,
+.materialReferenceChoice > div span {
+  display: grid;
+  min-width: 0;
+}
+
+.materialReferenceChoice > div span {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.materialReferenceChoice > button {
+  min-width: 3.8rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 0.28rem;
+  background: var(--ifm-color-primary);
+  color: var(--ifm-color-primary-contrast-background);
+  cursor: pointer;
+  font: inherit;
+}
+
+.materialReferenceChoice > button:disabled {
+  border-color: var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-600);
+  cursor: default;
+}
+
+.materialReferenceChoice details {
+  grid-column: 1 / -1;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.materialReferenceChoice summary {
+  cursor: pointer;
+}
+
+.materialReferenceChoice pre {
+  max-height: 12rem;
+  margin: 0.35rem 0 0;
+  padding: 0.45rem;
+  overflow: auto;
+  border-radius: 0.3rem;
+  background: var(--network-modal-subtle);
+  color: var(--ifm-font-color-base);
+  font-size: 0.65rem;
+  white-space: pre-wrap;
+}
+
+.materialReferenceEmpty {
+  margin: 0;
+  padding: 0.45rem;
+  border-radius: 0.3rem;
+  background: var(--network-modal-subtle);
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
 .fieldSourceVector {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

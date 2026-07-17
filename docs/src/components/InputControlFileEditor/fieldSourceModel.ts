@@ -20,6 +20,7 @@ export const FIELD_SOURCE_TYPES = [
 export type FieldSourceType = typeof FIELD_SOURCE_TYPES[number];
 export type FieldSourceFieldKind =
   | 'integer' | 'number' | 'string' | 'enum' | 'vector3' | 'integer-array' | 'number-array';
+export type MaterialReferenceKind = 'volume' | 'surface';
 
 export interface FieldSourceOption {
   value: number;
@@ -43,6 +44,7 @@ export interface FieldSourceFieldDefinition {
   exactItems?: number;
   visibleWhen?: FieldSourceCondition;
   defaultValue?: unknown;
+  materialReference?: MaterialReferenceKind;
 }
 
 export interface FieldSourceRowSchema {
@@ -117,8 +119,8 @@ const enumField = (key: string, label: string, help: string, options: FieldSourc
 const SERIES_ID = integer('SERIES_ID', 'Series ID', 'Identifier used when connecting this source to CIRCUIT or NETWORK.');
 const TIME_ID = integer('TIME_ID', 'Time function', 'TIME_ID from 18_Time_Function; use 0 where the source is driven by CIRCUIT or NETWORK.');
 const IN_ROTOR = enumField('IN_ROTOR', 'Region', 'Whether the source belongs to the fixed or moving region.', BINARY);
-const MAT_ID = integer('MAT_ID', 'Material ID', 'Volume-element material identifier.');
-const SMAT_ID = integer('SMAT_ID', 'Surface material ID', 'Surface-element material identifier.');
+const MAT_ID = integer('MAT_ID', 'Material ID', 'Volume-element material identifier.', {materialReference: 'volume'});
+const SMAT_ID = integer('SMAT_ID', 'Surface material ID', 'Surface-element material identifier.', {materialReference: 'surface'});
 const CURRENT = number('CURRENT', 'Current', 'Normalized current value.', 'A');
 const SIGMA = number('SIGMA', 'Conductivity', 'Electrical conductivity assigned to the source region.', 'S/m');
 const CAL_JE = enumField('CAL_Je', 'Include eddy current', 'Whether eddy current is calculated in the defined region.', BINARY);
@@ -211,17 +213,17 @@ export const FIELD_SOURCE_SCHEMAS: Record<FieldSourceType, FieldSourceSchema> = 
   SDEFCOIL: {
     type: 'SDEFCOIL', label: 'Surface-defined coil', description: 'Coil current distribution defined by four surrounding surface materials.',
     documentationUrl: `${DOC_ROOT}/17_3_SDEFCOIL.html`, fields: [SERIES_ID, IN_ROTOR], rowLabel: 'Coil region',
-    rowSchema: conductorRow('Coil region', [MAT_ID, integerArray('SMAT_IDS', 'Boundary surfaces', 'Four surface material IDs surrounding the conductor.', {exactItems: 4}), CURRENT, SIGMA, CAL_JE]),
+    rowSchema: conductorRow('Coil region', [MAT_ID, integerArray('SMAT_IDS', 'Boundary surfaces', 'Four surface material IDs surrounding the conductor.', {exactItems: 4, materialReference: 'surface'}), CURRENT, SIGMA, CAL_JE]),
   },
   PHICOIL: {
     type: 'PHICOIL', label: 'Potential current source', description: 'Potential-derived current distribution for a single conductor region.',
     documentationUrl: `${DOC_ROOT}/17_4_PHICOIL.html`, fields: [SERIES_ID, IN_ROTOR], rowLabel: 'Conductor',
-    rowSchema: conductorRow('Conductor', [integerArray('MAT_IDS', 'Material IDs', 'Volume material IDs forming the conductor.'), SMAT_ID, CURRENT, SIGMA, CAL_JE]),
+    rowSchema: conductorRow('Conductor', [integerArray('MAT_IDS', 'Material IDs', 'Volume material IDs forming the conductor.', {materialReference: 'volume'}), SMAT_ID, CURRENT, SIGMA, CAL_JE]),
   },
   DCCURR: {
     type: 'DCCURR', label: 'Multi-conductor potential current', description: 'Potential-derived current distribution spanning multiple conductor materials.',
     documentationUrl: `${DOC_ROOT}/17_5_DCCURR.html`, fields: [SERIES_ID, IN_ROTOR], rowLabel: 'Conductor group',
-    rowSchema: conductorRow('Conductor group', [integerArray('MAT_IDS', 'Material IDs', 'Volume material IDs forming the conductor group.'), SMAT_ID, CURRENT, numberArray('SIGMA', 'Conductivities', 'Conductivity for each material ID.', 'S/m'), CAL_JE]),
+    rowSchema: conductorRow('Conductor group', [integerArray('MAT_IDS', 'Material IDs', 'Volume material IDs forming the conductor group.', {materialReference: 'volume'}), SMAT_ID, CURRENT, numberArray('SIGMA', 'Conductivities', 'Conductivity for each material ID.', 'S/m'), CAL_JE]),
   },
   SUFCUR: {
     type: 'SUFCUR', label: 'Surface current', description: 'Current entering through a surface while eddy current is solved in the conductor.',
@@ -230,13 +232,13 @@ export const FIELD_SOURCE_SCHEMAS: Record<FieldSourceType, FieldSourceSchema> = 
   SUFCUR2: {
     type: 'SUFCUR2', label: 'Multi-conductor surface current', description: 'Surface inflow current applied to multiple conductor regions.',
     documentationUrl: `${DOC_ROOT}/17_6_SUFCUR.html`, fields: [SERIES_ID, IN_ROTOR], rowLabel: 'Conductor',
-    rowSchema: conductorRow('Conductor', [integerArray('MAT_IDS', 'Material IDs', 'Volume material IDs forming the conductor.'), SMAT_ID, CURRENT, CAL_JE]),
+    rowSchema: conductorRow('Conductor', [integerArray('MAT_IDS', 'Material IDs', 'Volume material IDs forming the conductor.', {materialReference: 'volume'}), SMAT_ID, CURRENT, CAL_JE]),
   },
   MAGNET: {
     type: 'MAGNET', label: 'Magnetization vector', description: 'Linear, distributed, nonlinear, or temperature-dependent permanent-magnet source.',
     documentationUrl: `${DOC_ROOT}/17_7_MAGNET.html`, fields: [
       SERIES_ID, TIME_ID, enumField('INPUT_TYPE', 'Input type', 'Magnetization input mode.', MAGNET_INPUT_OPTIONS),
-      integer('MAT_ID', 'Material ID', 'Material containing per-element magnetization data.', {visibleWhen: {key: 'INPUT_TYPE', values: [1]}}),
+      integer('MAT_ID', 'Material ID', 'Material containing per-element magnetization data.', {materialReference: 'volume', visibleWhen: {key: 'INPUT_TYPE', values: [1]}}),
       integer('COORD_ID', 'Coordinate system', 'Coordinate system for per-element magnetization data.', {visibleWhen: {key: 'INPUT_TYPE', values: [1]}}),
       enumField('READ_OPTION', 'Read option', 'Per-element magnetization read mode.', [{value: 0, label: '0 — Inline data'}, {value: 1, label: '1 — External file'}], {visibleWhen: {key: 'INPUT_TYPE', values: [1]}}),
       string('INITIAL_MAGNETIZATION_FILE_NAME', 'Initial magnetization file', 'External per-element magnetization filename.', {required: false, visibleWhen: {key: 'INPUT_TYPE', values: [1]}}),
@@ -266,7 +268,7 @@ export const FIELD_SOURCE_SCHEMAS: Record<FieldSourceType, FieldSourceSchema> = 
   },
   POTNODE: {
     type: 'POTNODE', label: 'Node potential source', description: 'Normalized electric potential assigned to selected mesh nodes.',
-    documentationUrl: `${DOC_ROOT}/17_11_POTNODE.html`, fields: [SERIES_ID, integer('SMAT_ID', 'Surface material ID', 'Optional surface material used to accelerate node lookup; use 0 when omitted.', {defaultValue: 0}), TIME_ID,
+    documentationUrl: `${DOC_ROOT}/17_11_POTNODE.html`, fields: [SERIES_ID, integer('SMAT_ID', 'Surface material ID', 'Optional surface material used to accelerate node lookup; use 0 when omitted.', {defaultValue: 0, materialReference: 'surface'}), TIME_ID,
       integerArray('NODE_IDS', 'Node IDs', 'Mesh node identifiers receiving prescribed potential.'),
       numberArray('POTENTIALS', 'Potential values', 'Normalized potential for each node ID.', 'V')],
   },

@@ -25,7 +25,16 @@ import {
   type FieldSourceFieldDefinition,
   type FieldSourceRowSchema,
   type FieldSourceType,
+  type MaterialReferenceKind,
 } from './fieldSourceModel';
+import {
+  findMaterialProperties,
+  inspectSurfaceMaterial,
+  surfaceMaterialSummary,
+  surfaceMaterials,
+  volumeMaterialSummary,
+  volumeMaterials,
+} from './materialPropertyModel';
 import NetworkEditorModal from './NetworkEditorModal';
 import styles from './styles.module.css';
 
@@ -57,6 +66,64 @@ function arrayValue(raw: string): Array<number | string> {
     const parsed = Number(part);
     return Number.isFinite(parsed) ? parsed : part;
   });
+}
+
+interface MaterialChoice {
+  key: string;
+  id?: number;
+  title: string;
+  summary: string;
+  json: string;
+}
+
+interface MaterialCatalogSection {
+  state: 'ready' | 'empty' | 'malformed';
+  choices: MaterialChoice[];
+}
+
+type MaterialCatalog = Record<MaterialReferenceKind, MaterialCatalogSection>;
+
+function materialCollectionState(rootValue: unknown, kind: MaterialReferenceKind): MaterialCatalogSection['state'] {
+  if (!isPlainRecord(rootValue)) return 'malformed';
+  const properties = rootValue['16_Material_Properties'];
+  if (properties === undefined) return 'empty';
+  if (!isPlainRecord(properties)) return 'malformed';
+  const key = kind === 'volume' ? '16_1_3D_Element_Properties' : '16_2_2D_Element_Properties';
+  if (!Object.hasOwn(properties, key)) return 'empty';
+  if (!Array.isArray(properties[key])) return 'malformed';
+  return properties[key].length > 0 ? 'ready' : 'empty';
+}
+
+function createMaterialCatalog(rootValue: unknown): MaterialCatalog {
+  const properties = findMaterialProperties(rootValue);
+  const volumes = volumeMaterials(properties).map((entry, index): MaterialChoice => {
+    const record = isPlainRecord(entry) ? entry : undefined;
+    const name = typeof record?.MAT_NAME === 'string' && record.MAT_NAME.trim()
+      ? record.MAT_NAME.trim() : `Volume material ${index + 1}`;
+    return {
+      key: `volume-${index}`,
+      id: Number.isInteger(record?.MAT_ID) ? record.MAT_ID as number : undefined,
+      title: name,
+      summary: volumeMaterialSummary(entry),
+      json: JSON.stringify(entry, null, 2) ?? String(entry),
+    };
+  });
+  const surfaces = surfaceMaterials(properties).map((entry, index): MaterialChoice => {
+    const record = isPlainRecord(entry) ? entry : undefined;
+    const inspected = inspectSurfaceMaterial(entry);
+    const title = inspected.kind === 'known' ? inspected.type : `Surface material ${index + 1}`;
+    return {
+      key: `surface-${index}`,
+      id: Number.isInteger(record?.SMAT_ID) ? record.SMAT_ID as number : undefined,
+      title,
+      summary: surfaceMaterialSummary(entry),
+      json: JSON.stringify(entry, null, 2) ?? String(entry),
+    };
+  });
+  return {
+    volume: {state: materialCollectionState(rootValue, 'volume'), choices: volumes},
+    surface: {state: materialCollectionState(rootValue, 'surface'), choices: surfaces},
+  };
 }
 
 export default function FieldSourceEditorModal({
@@ -136,6 +203,7 @@ export default function FieldSourceEditorModal({
   }, [selectedIndex]);
 
   const issues = useMemo(() => validateFieldSources(draftRoot), [draftRoot]);
+  const materialCatalog = useMemo(() => createMaterialCatalog(draftRoot), [draftRoot]);
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
   const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
 
@@ -222,6 +290,7 @@ export default function FieldSourceEditorModal({
         entry={entries[selectedIndex]}
         index={selectedIndex}
         issues={issues.filter((issue) => issue.sourceIndex === selectedIndex)}
+        materialCatalog={materialCatalog}
         onBack={() => setSelectedIndex(undefined)}
         onChange={(entry) => replaceEntry(selectedIndex, entry)}
         onChangeType={(type) => changeEntryType(selectedIndex, type)}
@@ -315,10 +384,11 @@ export default function FieldSourceEditorModal({
   return createPortal(modal, portalTarget ?? document.body);
 }
 
-function SourceDetailEditor({entry, index, issues, onBack, onChange, onChangeType}: {
+function SourceDetailEditor({entry, index, issues, materialCatalog, onBack, onChange, onChangeType}: {
   entry: unknown;
   index: number;
   issues: ReturnType<typeof validateFieldSources>;
+  materialCatalog: MaterialCatalog;
   onBack: () => void;
   onChange: (entry: unknown) => void;
   onChangeType: (type: FieldSourceType) => void;
@@ -345,7 +415,7 @@ function SourceDetailEditor({entry, index, issues, onBack, onChange, onChangeTyp
       </div>
       <div className={styles.fieldSourceFieldGrid}>
         {visibleFieldSourceFields(schema.fields, definition).map((field) => (
-          <FieldInput key={field.key} field={field} value={getFieldValue(definition, field.key)} onChange={(nextValue) => {
+          <FieldInput key={field.key} field={field} value={getFieldValue(definition, field.key)} materialCatalog={materialCatalog} onChange={(nextValue) => {
             const next = deepClone(definition);
             setFieldValue(next, field.key, nextValue);
             updateDefinition(next);
@@ -353,7 +423,7 @@ function SourceDetailEditor({entry, index, issues, onBack, onChange, onChangeTyp
         ))}
       </div>
       {schema.rowLabel && (
-        <NestedRowsEditor type={inspected.type} definition={definition} onDefinition={updateDefinition} />
+        <NestedRowsEditor type={inspected.type} definition={definition} materialCatalog={materialCatalog} onDefinition={updateDefinition} />
       )}
       <ValidationIssues issues={issues} />
     </div>
@@ -378,12 +448,16 @@ function DetailHeading({index, type, onBack, onChangeType}: {
   );
 }
 
-function FieldInput({field, value, onChange}: {
+function FieldInput({field, value, materialCatalog, onChange}: {
   field: FieldSourceFieldDefinition;
   value: unknown;
+  materialCatalog: MaterialCatalog;
   onChange: (value: unknown) => void;
 }): ReactNode {
   const label = `${field.label} (${field.key})`;
+  if (field.materialReference) {
+    return <MaterialReferenceInput field={field} value={value} catalog={materialCatalog} onChange={onChange} />;
+  }
   if (field.kind === 'vector3') {
     const values = Array.isArray(value) ? value : ['', '', ''];
     return <label className={styles.networkField}><span>{field.label}<em>{field.key}{field.unit ? ` · ${field.unit}` : ''}</em></span><div className={styles.fieldSourceVector}>
@@ -410,9 +484,98 @@ function FieldInput({field, value, onChange}: {
     <small>{field.help}</small></label>;
 }
 
-function NestedRowsEditor({type, definition, onDefinition}: {
+function MaterialReferenceInput({field, value, catalog, onChange}: {
+  field: FieldSourceFieldDefinition;
+  value: unknown;
+  catalog: MaterialCatalog;
+  onChange: (value: unknown) => void;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const label = `${field.label} (${field.key})`;
+  const kind = field.materialReference!;
+  const sections: Array<{kind: MaterialReferenceKind; catalog: MaterialCatalogSection}> = kind === 'surface'
+    ? [{kind: 'surface', catalog: catalog.surface}, {kind: 'volume', catalog: catalog.volume}]
+    : [{kind: 'volume', catalog: catalog.volume}];
+  const browserLabel = kind === 'surface' ? 'surface and volume materials' : 'volume materials';
+  const isArray = field.kind === 'integer-array';
+  const current = isArray && Array.isArray(value) ? value : [];
+  const totalChoices = sections.reduce((count, section) => count + section.catalog.choices.length, 0);
+  const close = () => {
+    setOpen(false);
+    setSearch('');
+    buttonRef.current?.focus();
+  };
+  return <div className={`${styles.networkField} ${styles.materialReferenceField}`} onKeyDown={(event) => {
+    if (!open || event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.nativeEvent.stopImmediatePropagation();
+    close();
+  }}>
+    <span>{field.label}<em>{field.key}{field.unit ? ` · ${field.unit}` : ''}</em></span>
+    <div className={styles.materialReferenceInputRow}>
+      <input aria-label={label} type={isArray ? 'text' : 'number'} step={isArray ? undefined : '1'} value={isArray ? arrayText(value) : inputValue(value)}
+        placeholder={isArray ? 'Comma-separated values' : undefined}
+        onChange={(event) => onChange(isArray ? arrayValue(event.target.value) : numberValue(event.target.value))} />
+      <button ref={buttonRef} type="button" className={styles.materialReferenceButton}
+        aria-label={`Browse ${browserLabel} for ${label}`} aria-expanded={open}
+        title={`Browse current ${browserLabel}`} onClick={() => setOpen((currentOpen) => !currentOpen)}>
+        <EditorIcon name="material" />
+      </button>
+    </div>
+    <small>{field.help}</small>
+    {open && <div className={styles.materialReferencePicker} role="region" aria-label={`${label} material picker`}>
+      <div className={styles.materialReferencePickerHeader}>
+        <strong>Current {browserLabel}</strong>
+        <button type="button" aria-label={`Close ${label} material picker`} onClick={close}><EditorIcon name="close" /></button>
+      </div>
+      {totalChoices > 0 && <input aria-label={`Search ${browserLabel} for ${label}`} type="search" placeholder="Search IDs, names, types, or properties…"
+        value={search} onChange={(event) => setSearch(event.target.value)} />}
+      {sections.map((section) => {
+        const sectionLabel = section.kind === 'surface' ? 'Surface materials' : 'Volume materials';
+        const itemLabel = section.kind === 'surface' ? 'surface' : 'volume';
+        const filtered = section.catalog.choices.filter((choice) => (
+          `${choice.id ?? ''} ${choice.title} ${choice.summary} ${choice.json}`.toLowerCase().includes(search.trim().toLowerCase())
+        ));
+        return <section key={section.kind} className={styles.materialReferenceSection} aria-label={`${sectionLabel} for ${label}`}>
+          <h5>{sectionLabel}</h5>
+          {section.catalog.state === 'malformed' && <p className={styles.materialReferenceEmpty}>The current {itemLabel} material collection is malformed. Manual entry remains available.</p>}
+          {section.catalog.state === 'empty' && <p className={styles.materialReferenceEmpty}>No {itemLabel} materials are defined in 16_Material_Properties.</p>}
+          {section.catalog.state === 'ready' && filtered.length === 0 && <p className={styles.materialReferenceEmpty}>No {itemLabel} materials match this search.</p>}
+          {filtered.length > 0 && <div className={styles.materialReferenceList}>
+          {filtered.map((choice) => {
+          const selected = choice.id !== undefined && (isArray ? current.includes(choice.id) : value === choice.id);
+          const atLimit = isArray && field.exactItems !== undefined && current.length >= field.exactItems;
+          const disabled = choice.id === undefined || (!selected && atLimit) || (!isArray && selected);
+          const action = choice.id === undefined ? 'Invalid ID' : isArray ? selected ? 'Remove' : 'Add' : selected ? 'Selected' : 'Use';
+          return <article key={choice.key} className={styles.materialReferenceChoice}>
+            <div><strong>{choice.id === undefined ? 'Invalid ID' : choice.id} · {choice.title}</strong><span>{choice.summary}</span></div>
+            <button type="button" disabled={disabled} aria-label={`${action} ${itemLabel} material ${choice.id ?? choice.key} for ${label}`} onClick={() => {
+              if (choice.id === undefined) return;
+              if (isArray) {
+                onChange(selected ? current.filter((item) => item !== choice.id) : [...current, choice.id]);
+              } else {
+                onChange(choice.id);
+                close();
+              }
+            }}>{action}</button>
+            <details><summary>Show material data</summary><pre>{choice.json}</pre></details>
+          </article>;
+          })}
+          </div>}
+        </section>;
+      })}
+      {isArray && field.exactItems !== undefined && <small>Select up to {field.exactItems} material IDs. Selected: {current.length}.</small>}
+    </div>}
+  </div>;
+}
+
+function NestedRowsEditor({type, definition, materialCatalog, onDefinition}: {
   type: FieldSourceType;
   definition: Record<string, unknown>;
+  materialCatalog: MaterialCatalog;
   onDefinition: (definition: Record<string, unknown>) => void;
 }): ReactNode {
   const rows = fieldSourceRows(definition);
@@ -440,6 +603,7 @@ function NestedRowsEditor({type, definition, onDefinition}: {
         </select>}<button type="button" className="button button--primary button--sm" onClick={addRow}><EditorIcon name="add" /> Add row</button></div>
       </div>
       {rows.map((row, index) => <NestedRowCard key={index} type={type} definition={definition} row={row} index={index} count={rows.length}
+        materialCatalog={materialCatalog}
         onChange={(next) => updateRow(index, next)} onDuplicate={() => {
           const next = [...rows]; next.splice(index + 1, 0, deepClone(row)); replaceRows(next);
         }} onMove={(direction) => moveRow(index, direction)} onDelete={() => deleteRow(index)} />)}
@@ -448,12 +612,13 @@ function NestedRowsEditor({type, definition, onDefinition}: {
   );
 }
 
-function NestedRowCard({type, definition, row, index, count, onChange, onDuplicate, onMove, onDelete}: {
+function NestedRowCard({type, definition, row, index, count, materialCatalog, onChange, onDuplicate, onMove, onDelete}: {
   type: FieldSourceType;
   definition: Record<string, unknown>;
   row: unknown;
   index: number;
   count: number;
+  materialCatalog: MaterialCatalog;
   onChange: (row: unknown) => void;
   onDuplicate: () => void;
   onMove: (direction: -1 | 1) => void;
@@ -474,7 +639,7 @@ function NestedRowCard({type, definition, row, index, count, onChange, onDuplica
     {type === 'COIL' && <label className={styles.networkField}><span>Element type<em>type</em></span><select aria-label={`COIL row ${index + 1} type`} value={String(row.type)} onChange={(event) => changeCoilType(event.target.value)}>
       {sourceRowTypes(type).map((item) => <option key={item} value={item}>{item} — {FIELD_SOURCE_SCHEMAS.COIL.rowSchemas?.[item].label}</option>)}
     </select></label>}
-    <div className={styles.fieldSourceFieldGrid}>{rowSchema.fields.map((field) => <FieldInput key={field.key} field={field} value={getFieldValue(row, field.key)} onChange={(nextValue) => {
+    <div className={styles.fieldSourceFieldGrid}>{rowSchema.fields.map((field) => <FieldInput key={field.key} field={field} value={getFieldValue(row, field.key)} materialCatalog={materialCatalog} onChange={(nextValue) => {
       const next = deepClone(row); setFieldValue(next, field.key, nextValue); onChange(next);
     }} />)}</div>
   </div>;

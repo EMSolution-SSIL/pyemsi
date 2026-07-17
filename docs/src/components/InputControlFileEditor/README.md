@@ -216,6 +216,8 @@ For supported generic definitions, fields are generated from `FIELD_SOURCE_SCHEM
 
 Nested `data` rows support add, duplicate, reorder, and delete operations. COIL rows can also change element type with confirmation.
 
+Fields annotated with a `materialReference` in `FIELD_SOURCE_SCHEMAS` show a material-browser button beside the ordinary manual input. `MAT_ID` and `MAT_IDS` browse the current volume-material collection. Because some EMSolution configurations use volume material IDs in SMAT fields, `SMAT_ID` and `SMAT_IDS` show both surface and volume materials in separate labeled sections. The searchable picker shows IDs, names or surface types, concise property summaries, and expandable JSON data. Scalar fields replace their value with **Use**; array fields support deduplicated **Add** and **Remove** actions, with `SDEFCOIL.SMAT_IDS` limited to four selections. Invalid material rows remain visible but cannot be assigned, and missing or malformed collections show an explanatory empty state without disabling manual entry or hiding the other collection. Material browsing is read-only and assignments remain part of the staged Field Source draft until Apply.
+
 ### Supported Field Source definitions
 
 | Type | Guided behavior |
@@ -320,8 +322,9 @@ NETWORK and CIRCUIT validation is delegated to `validateNetwork` and `validateCi
 1. Update the relevant entry in `FIELD_SOURCE_SCHEMAS`.
 2. Choose the correct field kind: integer, number, string, enum, vector, or numeric array.
 3. Add units, enum labels, defaults, descriptions, exact/minimum lengths, and `visibleWhen` conditions.
-4. Add cross-field validation in `validateFieldSourceEntry` when a schema field alone cannot express the rule.
-5. Add model tests and at least one integration test if UI behavior changes.
+4. Set `materialReference` to `volume` or `surface` when the value references the corresponding Material Properties collection.
+5. Add cross-field validation in `validateFieldSourceEntry` when a schema field alone cannot express the rule.
+6. Add model tests and at least one integration test if UI behavior changes.
 
 Do not hand-code a new generic input in `FieldSourceEditorModal` unless the schema system cannot represent it.
 
@@ -378,7 +381,7 @@ Tests live beside the implementation:
 - `circuitModel.test.ts`: CIRCUIT matrix transformations and validation;
 - `fieldSourceModel.test.ts`: source schemas, variants, defaults, preservation, validation, legacy handling, and round trips;
 - `materialPropertyModel.test.ts`: material schemas, defaults, surface classification, advanced validation, aliases, preservation, and round trips;
-- `InputControlFileEditorClient.test.tsx`: file workflows, format switching, split targeting, unified modal behavior, nested/source CRUD, raw repair, focus, cancel/apply, and NETWORK/CIRCUIT regressions.
+- `InputControlFileEditorClient.test.tsx`: file workflows, format switching, split targeting, unified modal behavior, nested/source CRUD, material-reference browsing, raw repair, focus, cancel/apply, and NETWORK/CIRCUIT regressions.
 
 Run from the `docs` directory:
 

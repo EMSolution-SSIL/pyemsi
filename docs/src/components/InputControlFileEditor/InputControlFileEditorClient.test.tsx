@@ -722,6 +722,107 @@ describe('InputControlFileEditorClient', () => {
     }]);
   });
 
+  it('browses current volume and surface materials while assigning Field Source IDs', async () => {
+    const payload = JSON.parse(emsolutionInput());
+    payload['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [
+        {MAT_ID: 10000, MAT_NAME: 'Copper', POTENTIAL: 0, ElectricProperty: {conductivity: {SIGMA: 58_000_000}}, vendor: 'keep'},
+        {MAT_ID: 10001, MAT_NAME: 'Aluminium', ElectricProperty: {conductivity: {SIGMA: 35_000_000}}},
+      ],
+      '16_2_2D_Element_Properties': [
+        {SMAT_ID: 20000, GAP_ELEMENT: {THICKNESS: 0.001}},
+        {SMAT_ID: 'invalid', FUTURE_SURFACE: {vendor: true}},
+      ],
+    };
+    payload['17_Field_Source'][0].PHICOIL.data = [{MAT_IDS: [], SMAT_ID: '', CURRENT: 12.5, SIGMA: 58_000_000, CAL_Je: 0}];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('material-picker.json', JSON.stringify(payload))]);
+    const dialog = await openFieldSourceEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Field Source row 1'}));
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Browse volume materials for Material IDs (MAT_IDS)'}));
+    await userEvent.keyboard('{Escape}');
+    expect(within(dialog).queryByRole('region', {name: 'Material IDs (MAT_IDS) material picker'})).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', {name: 'Field Source editor'})).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Browse volume materials for Material IDs (MAT_IDS)'}));
+    const volumePicker = within(dialog).getByRole('region', {name: 'Material IDs (MAT_IDS) material picker'});
+    expect(within(volumePicker).getByText('10000 · Copper')).toBeInTheDocument();
+    await userEvent.click(within(volumePicker).getByRole('button', {name: 'Add volume material 10000 for Material IDs (MAT_IDS)'}));
+    await userEvent.click(within(volumePicker).getByRole('button', {name: 'Remove volume material 10000 for Material IDs (MAT_IDS)'}));
+    await userEvent.click(within(volumePicker).getByRole('button', {name: 'Add volume material 10000 for Material IDs (MAT_IDS)'}));
+    await userEvent.click(within(volumePicker).getByRole('button', {name: 'Add volume material 10001 for Material IDs (MAT_IDS)'}));
+    await userEvent.click(within(volumePicker).getByRole('button', {name: 'Close Material IDs (MAT_IDS) material picker'}));
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Browse surface and volume materials for Surface material ID (SMAT_ID)'}));
+    const surfacePicker = within(dialog).getByRole('region', {name: 'Surface material ID (SMAT_ID) material picker'});
+    expect(within(surfacePicker).getByRole('region', {name: 'Surface materials for Surface material ID (SMAT_ID)'})).toBeInTheDocument();
+    expect(within(surfacePicker).getByRole('region', {name: 'Volume materials for Surface material ID (SMAT_ID)'})).toBeInTheDocument();
+    expect(within(surfacePicker).getByRole('button', {name: 'Invalid ID surface material surface-1 for Surface material ID (SMAT_ID)'})).toBeDisabled();
+    await userEvent.click(within(surfacePicker).getByRole('button', {name: 'Use volume material 10000 for Surface material ID (SMAT_ID)'}));
+
+    expect(within(dialog).getByLabelText('Material IDs (MAT_IDS)')).toHaveValue('10000, 10001');
+    expect(within(dialog).getByLabelText('Surface material ID (SMAT_ID)')).toHaveValue(10000);
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][0].PHICOIL.data[0]).toMatchObject({MAT_IDS: [10000, 10001], SMAT_ID: 10000});
+    expect(savedValue['16_Material_Properties']['16_1_3D_Element_Properties'][0].vendor).toBe('keep');
+  });
+
+  it('offers volume materials for SMAT_ID when the surface collection is empty', async () => {
+    const payload = JSON.parse(emsolutionInput());
+    payload['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [{MAT_ID: 77, MAT_NAME: 'Volume fallback'}],
+      '16_2_2D_Element_Properties': [],
+    };
+    payload['17_Field_Source'][0].PHICOIL.data = [{MAT_IDS: [1], SMAT_ID: 2, CURRENT: 1, SIGMA: 1, CAL_Je: 0}];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('material-picker-empty.json', JSON.stringify(payload))]);
+    const dialog = await openFieldSourceEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Field Source row 1'}));
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Browse surface and volume materials for Surface material ID (SMAT_ID)'}));
+    const picker = within(dialog).getByRole('region', {name: 'Surface material ID (SMAT_ID) material picker'});
+    expect(within(picker).getByText('No surface materials are defined in 16_Material_Properties.')).toBeInTheDocument();
+    expect(within(picker).getByText('77 · Volume fallback')).toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use volume material 77 for Surface material ID (SMAT_ID)'}));
+    expect(within(dialog).getByLabelText('Material IDs (MAT_IDS)')).toHaveValue('1');
+    expect(within(dialog).getByLabelText('Surface material ID (SMAT_ID)')).toHaveValue(77);
+  });
+
+  it('limits the SDEFCOIL boundary-surface picker to four material IDs', async () => {
+    const payload = JSON.parse(emsolutionInput());
+    payload['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [{MAT_ID: 10, MAT_NAME: 'Coil'}],
+      '16_2_2D_Element_Properties': [1, 2, 3, 4, 5].map((id) => ({SMAT_ID: id, GAP_ELEMENT: {THICKNESS: id / 1000}})),
+    };
+    payload['17_Field_Source'] = [{SDEFCOIL: {
+      SERIES_ID: 1, IN_ROTOR: 0,
+      data: [{MAT_ID: 10, SMAT_IDS: [], CURRENT: 1, SIGMA: 1, CAL_Je: 0}],
+    }}];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('surface-limit.json', JSON.stringify(payload))]);
+    const dialog = await openFieldSourceEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Field Source row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Browse surface and volume materials for Boundary surfaces (SMAT_IDS)'}));
+    const picker = within(dialog).getByRole('region', {name: 'Boundary surfaces (SMAT_IDS) material picker'});
+    await userEvent.click(within(picker).getByRole('button', {name: 'Add volume material 10 for Boundary surfaces (SMAT_IDS)'}));
+    for (const id of [1, 2, 3]) {
+      await userEvent.click(within(picker).getByRole('button', {name: `Add surface material ${id} for Boundary surfaces (SMAT_IDS)`}));
+    }
+    expect(within(picker).getByRole('button', {name: 'Add surface material 4 for Boundary surfaces (SMAT_IDS)'})).toBeDisabled();
+    await userEvent.click(within(picker).getByRole('button', {name: 'Remove volume material 10 for Boundary surfaces (SMAT_IDS)'}));
+    await userEvent.click(within(picker).getByRole('button', {name: 'Add surface material 4 for Boundary surfaces (SMAT_IDS)'}));
+    expect(within(dialog).getByLabelText('Boundary surfaces (SMAT_IDS)')).toHaveValue('1, 2, 3, 4');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const savedValue = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(savedValue['17_Field_Source'][0].SDEFCOIL.data[0].SMAT_IDS).toEqual([1, 2, 3, 4]);
+  });
+
   it('duplicates, reorders, and deletes complete Field Source entries', async () => {
     const {container} = render(<InputControlFileEditorClient />);
     await chooseFiles(container, [jsonFile('source-crud.json', emsolutionInput())]);
