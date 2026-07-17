@@ -4,7 +4,7 @@ This document explains the purpose, behavior, internal structure, and extension 
 
 ## Purpose
 
-`InputControlFileEditor` is a browser-only editor for EMSolution input control files. It combines a general Monaco-based structured-data editor with guided editors for EMSolution's `16_Material_Properties` and `17_Field_Source` definitions.
+`InputControlFileEditor` is a browser-only editor for EMSolution input control files. It combines a general Monaco-based structured-data editor with guided editors for EMSolution's `16_Material_Properties`, `17_Field_Source`, and `18_Time_Function` definitions.
 
 The component is designed to:
 
@@ -15,6 +15,7 @@ The component is designed to:
 - save back to a selected file when the browser provides a writable file handle, or download JSON as a fallback;
 - provide a schema-driven Field Source editor for recognized EMSolution inputs;
 - provide a context-aware Material Properties editor for volume and surface materials;
+- provide a guided Time Function editor with safe analytic/table/AC previews;
 - preserve unknown properties and unsupported definitions instead of silently deleting them.
 
 This component does not upload files to a server. Browser security may prevent it from knowing the original full path of a selected file.
@@ -37,6 +38,11 @@ Changes to this component should preserve these rules:
 12. Missing Material Properties are editable, but an existing malformed root or non-array material collection disables the guided action.
 13. Optional `MAT_NAME`, legacy nonlinear-parameter spelling, vendor fields, and unsupported material structures must survive guided edits.
 14. Material validation warnings are advisory; structural errors block Apply.
+15. Guided Time Function edits use a deep-cloned staged `18_Time_Function` array and apply only through `updateCanonicalDocument`.
+16. Missing Time Functions are editable, but an existing non-array root disables the guided action.
+17. `OPTION` 3 and unknown Time Function options are raw-only and must not be partially normalized or evaluated.
+18. Time Function previews are advisory browser visualizations; formula strings and motion equations are never executed.
+19. TIME_ID pickers are read-only views of `18_Time_Function`; they update only the staged referencing field and must never normalize or mutate Time Functions.
 
 ## High-level data flow
 
@@ -73,6 +79,9 @@ The canonical value is updated only after a representation parses successfully o
 | `FieldSourceEditorModal.tsx` | Unified Field Source master/detail workflow, source CRUD, nested-row CRUD, raw JSON repair, confirmation behavior, staging, and Apply/Cancel handling. |
 | `materialPropertyModel.ts` | Material schemas, context-aware defaults, immutable helpers, surface-type inspection, legacy aliases, summaries, and validation. |
 | `MaterialPropertyEditorModal.tsx` | Unified General/Volume/Surface material workflow, CRUD, optional property groups, raw repair, staging, and Apply/Cancel handling. |
+| `timeFunctionModel.ts` | Time Function schemas, immutable collection helpers, raw/guided classification, consumer discovery, validation, summaries, reference-catalog construction, and deterministic preview sampling. |
+| `TimeFunctionEditorModal.tsx` | Unified Time Function master/detail workflow, guided forms, raw-only unsupported options, paired table rows, equations, SVG previews, staging, and Apply/Cancel handling. |
+| `TimeFunctionReferencePicker.tsx` | Shared searchable TIME_ID control used by generic Field Sources, NETWORK components, and CIRCUIT power supplies. |
 | `networkModel.ts` | NETWORK component schemas, immutable transformations, reference discovery, normalization, summaries, and validation. |
 | `NetworkEditorModal.tsx` | Reusable NETWORK component editor. It can render as a standalone modal or as an embedded panel inside the Field Source modal. |
 | `circuitModel.ts` | CIRCUIT series and power-supply transformations, matrix conversion/remapping, normalization, and validation. |
@@ -169,12 +178,14 @@ JSON is created when a file opens. YAML and TOML drafts are created lazily when 
 - `metaData.type` is `EMSolution_Input`; or
 - at least two of `0_Release_Number`, `1_Execution_Control`, and `2_Analysis_Type` exist.
 
-Recognized inputs show `Edit Field Sources` and `Edit Material Properties`, even when the corresponding section is absent. The Field Source action is disabled when:
+Recognized inputs show `Edit Field Sources`, `Edit Material Properties`, and `Edit Time Functions`, even when the corresponding section is absent. The Field Source action is disabled when:
 
 - the active YAML/TOML representation has invalid uncommitted edits; or
 - `17_Field_Source` exists but is not an array.
 
 The Material Properties action is disabled when `16_Material_Properties` is not an object or either current-format material collection exists but is not an array.
+
+The Time Functions action is disabled when `18_Time_Function` exists but is not an array. A missing section opens as an empty staged collection.
 
 ## Unified Material Properties editor
 
@@ -230,6 +241,8 @@ Nested `data` rows support add, duplicate, reorder, and delete operations. COIL 
 
 Fields annotated with a `materialReference` in `FIELD_SOURCE_SCHEMAS` show a material-browser button beside the ordinary manual input. `MAT_ID` and `MAT_IDS` browse the current volume-material collection. Because some EMSolution configurations use volume material IDs in SMAT fields, `SMAT_ID` and `SMAT_IDS` show both surface and volume materials in separate labeled sections. The searchable picker shows IDs, names or surface types, concise property summaries, and expandable JSON data. Scalar fields replace their value with **Use**; array fields support deduplicated **Add** and **Remove** actions, with `SDEFCOIL.SMAT_IDS` limited to four selections. Invalid material rows remain visible but cannot be assigned, and missing or malformed collections show an explanatory empty state without disabling manual entry or hiding the other collection. Material browsing is read-only and assignments remain part of the staged Field Source draft until Apply.
 
+Fields annotated with `timeReference` use the shared Time Function reference picker. It keeps the ordinary numeric input for manual and unresolved IDs, pins `TIME_ID 0` as the circuit/network-driven or constant-source choice, and searches current guided and raw Time Functions by ID, option, label, summary, and formatted JSON. Entries with integer IDs remain selectable even when their option is unsupported; invalid-ID rows remain visible for inspection but are disabled, and duplicate IDs are flagged. Missing, empty, or malformed collections show a non-blocking explanation. The panel is portaled into the active editor dialog and viewport-positioned so table overflow does not clip it. NETWORK time fields and CIRCUIT power-supply rows use the same component and memoized catalog.
+
 ### Supported Field Source definitions
 
 | Type | Guided behavior |
@@ -262,6 +275,14 @@ Unknown definitions remain available through raw JSON editing and produce an adv
 
 At all guided levels, updates begin with cloned existing objects and replace only known keys. This preserves vendor fields, future EMSolution properties, comments stored as JSON properties, and additions such as `MAGNET.data[].M`.
 
+## Unified Time Function editor
+
+`TimeFunctionEditorModal` stages a deep-cloned `18_Time_Function` array. Its searchable master table shows `TIME_ID`, option, summary, consumer count, validation status, and CRUD actions. New and duplicated entries receive the next unused positive `TIME_ID`; changing or deleting an ID that is used by a Field Source, NETWORK component, or CIRCUIT power supply requires confirmation.
+
+Options `0`, `1`, `2`, `4`, and `11` have guided editors. Option `1` uses paired time/value rows and permits equal consecutive times for step transitions. Option `3`, unknown future options, missing options, and malformed entries open only in the whole-entry raw JSON editor. Unsupported entries retain all nested and vendor data and never expose partial guided controls.
+
+Options `0` and `2` show their documented equations using semantic HTML. Options `0`, `1`, and `2` provide dependency-free SVG previews generated by pure sampling helpers in the model. Preview failures do not execute user input: `OPTION` 11 expressions, raw JSON, and motion equations are never evaluated.
+
 ## NETWORK editor
 
 The NETWORK panel supports these component types:
@@ -275,7 +296,7 @@ Features include:
 - automatic IDs for newly created components where appropriate;
 - TABLE dataset editing with paired current/voltage arrays;
 - SWITCH timing interval editing;
-- reference-aware selectors for source series, time functions, inductors, table IDs, and element IDs;
+- reference-aware selectors for source series, inductors, table IDs, and element IDs, plus the searchable shared Time Function picker for every `TIME_ID` field;
 - structural validation for IDs, node references, order-sensitive references, arrays, switch intervals, and known component requirements;
 - warnings for unresolved cross-document references where the data can still be preserved.
 
@@ -315,6 +336,10 @@ Warnings remain advisory. Examples include:
 - unsupported raw definitions;
 - unresolved time/reference IDs when sufficient reference data exists;
 - electric-potential sources used outside the documented static analysis modes.
+- raw-only or future Time Function options;
+- unresolved Time Function consumers and cyclic-table endpoint guidance.
+
+Time Function errors include duplicate IDs, malformed raw entries, invalid guided scalar fields, negative time constants or periods, and malformed, mismatched, or decreasing time tables. `TEXP` and `TCYCLE` may be zero, and equal consecutive table times remain valid.
 
 NETWORK and CIRCUIT validation is delegated to `validateNetwork` and `validateCircuit` so their existing rules remain authoritative.
 
@@ -335,8 +360,9 @@ NETWORK and CIRCUIT validation is delegated to `validateNetwork` and `validateCi
 2. Choose the correct field kind: integer, number, string, enum, vector, or numeric array.
 3. Add units, enum labels, defaults, descriptions, exact/minimum lengths, and `visibleWhen` conditions.
 4. Set `materialReference` to `volume` or `surface` when the value references the corresponding Material Properties collection.
-5. Add cross-field validation in `validateFieldSourceEntry` when a schema field alone cannot express the rule.
-6. Add model tests and at least one integration test if UI behavior changes.
+5. Set `timeReference: true` when an integer field references `18_Time_Function`; do not infer reference behavior from the key name alone.
+6. Add cross-field validation in `validateFieldSourceEntry` when a schema field alone cannot express the rule.
+7. Add model tests and at least one integration test if UI behavior changes.
 
 Do not hand-code a new generic input in `FieldSourceEditorModal` unless the schema system cannot represent it.
 
@@ -356,6 +382,14 @@ Do not hand-code a new generic input in `FieldSourceEditorModal` unless the sche
 3. Extend cross-field validation for alternative arrays, analysis-mode guidance, or referenced curve IDs.
 4. Keep legacy aliases in accessors rather than normalizing stored keys.
 5. Add model coverage and an integration test for visible UI behavior and unknown-key preservation.
+
+### Add or change a Time Function option
+
+1. Add the option to `SUPPORTED_TIME_FUNCTION_OPTIONS` only when the complete JSON form can be safely represented and validated.
+2. Define its label, fields, defaults, help, and units in `TIME_FUNCTION_SCHEMAS`.
+3. Keep option-specific transformation, validation, and sampling in `timeFunctionModel.ts`.
+4. Do not evaluate arbitrary expression strings or partially guide unsupported nested formats.
+5. Add classification, preservation, validation, preview, and integration coverage.
 
 ### Add a NETWORK component
 
@@ -393,7 +427,8 @@ Tests live beside the implementation:
 - `circuitModel.test.ts`: CIRCUIT matrix transformations and validation;
 - `fieldSourceModel.test.ts`: source schemas, variants, defaults, preservation, validation, legacy handling, and round trips;
 - `materialPropertyModel.test.ts`: material schemas, defaults, surface classification, advanced validation, aliases, preservation, and round trips;
-- `InputControlFileEditorClient.test.tsx`: file workflows, format switching, split targeting, unified modal behavior, nested/source CRUD, material-reference browsing, raw repair, focus, cancel/apply, and NETWORK/CIRCUIT regressions.
+- `timeFunctionModel.test.ts`: option schemas, defaults, immutable transformations, raw classification, reference catalogs, validation, preservation, and preview sampling;
+- `InputControlFileEditorClient.test.tsx`: file workflows, format switching, split targeting, unified modal behavior, nested/source CRUD, material- and time-reference browsing, raw repair, focus, cancel/apply, and NETWORK/CIRCUIT regressions.
 
 Run from the `docs` directory:
 
@@ -415,6 +450,12 @@ For Material Property changes, use:
 npm test -- --run src/components/InputControlFileEditor/materialPropertyModel.test.ts src/components/InputControlFileEditor/InputControlFileEditorClient.test.tsx
 ```
 
+For Time Function changes, use:
+
+```powershell
+npm test -- --run src/components/InputControlFileEditor/timeFunctionModel.test.ts src/components/InputControlFileEditor/InputControlFileEditorClient.test.tsx
+```
+
 ## External reference
 
 The schema labels and descriptions are based on the official EMSolution input control documentation:
@@ -428,5 +469,7 @@ The schema labels and descriptions are based on the official EMSolution input co
 <https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/16_1_2_ES_3D_Element_Properties.html>
 
 <https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/16_2_2D_Element_Properties.html>
+
+<https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/18_Time_Function.html>
 
 When documentation and existing files differ, preserve the original data, add compatibility handling where safe, and avoid destructive normalization.

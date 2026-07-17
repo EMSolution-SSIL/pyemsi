@@ -20,6 +20,8 @@ import {hasMalformedFieldSourceRoot} from './fieldSourceModel';
 import MaterialPropertyEditorModal from './MaterialPropertyEditorModal';
 import {hasMalformedMaterialPropertyRoot} from './materialPropertyModel';
 import {isEmSolutionInput} from './emSolutionModel';
+import TimeFunctionEditorModal from './TimeFunctionEditorModal';
+import {hasMalformedTimeFunctionRoot} from './timeFunctionModel';
 import {
   editorWindowTitle,
   findSymbolTrail,
@@ -227,6 +229,7 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fieldSourceEditorDocumentId, setFieldSourceEditorDocumentId] = useState<string>();
   const [materialPropertyEditorDocumentId, setMaterialPropertyEditorDocumentId] = useState<string>();
+  const [timeFunctionEditorDocumentId, setTimeFunctionEditorDocumentId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
@@ -258,8 +261,11 @@ export default function InputControlFileEditorClient(): ReactNode {
     && hasMalformedFieldSourceRoot(actionDocument.canonicalValue);
   const actionHasMalformedMaterialProperties = actionDocument?.canonicalValue !== undefined
     && hasMalformedMaterialPropertyRoot(actionDocument.canonicalValue);
+  const actionHasMalformedTimeFunctions = actionDocument?.canonicalValue !== undefined
+    && hasMalformedTimeFunctionRoot(actionDocument.canonicalValue);
   const fieldSourceEditorDocument = documents.find((item) => item.id === fieldSourceEditorDocumentId);
   const materialPropertyEditorDocument = documents.find((item) => item.id === materialPropertyEditorDocumentId);
+  const timeFunctionEditorDocument = documents.find((item) => item.id === timeFunctionEditorDocumentId);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -833,6 +839,22 @@ export default function InputControlFileEditorClient(): ReactNode {
               <EditorIcon name="network" /> Edit Field Sources
             </button>
           )}
+          {actionIsEmSolution && (
+            <button
+              className="button button--sm button--secondary"
+              type="button"
+              disabled={actionHasInvalidAlternate || actionHasMalformedTimeFunctions}
+              title={actionHasInvalidAlternate
+                ? `Fix or discard invalid ${actionFormatLabel} changes before editing Time Functions`
+                : actionHasMalformedTimeFunctions
+                  ? '18_Time_Function exists but is not an editable array'
+                  : `Edit Time Functions in ${actionDocument?.displayName ?? 'the active file'}`}
+              onClick={() => {
+                if (actionDocument) setTimeFunctionEditorDocumentId(actionDocument.id);
+              }}>
+              <EditorIcon name="time" /> Edit Time Functions
+            </button>
+          )}
           {documents.length >= 2 && (
             <select
               className={styles.select}
@@ -973,6 +995,18 @@ export default function InputControlFileEditorClient(): ReactNode {
           onApply={(nextValue) => {
             updateCanonicalDocument(materialPropertyEditorDocument.id, nextValue, 'Material Property');
             setMaterialPropertyEditorDocumentId(undefined);
+          }}
+        />
+      )}
+      {timeFunctionEditorDocument?.canonicalValue !== undefined && (
+        <TimeFunctionEditorModal
+          documentName={timeFunctionEditorDocument.displayName}
+          value={timeFunctionEditorDocument.canonicalValue}
+          portalTarget={document.fullscreenElement ?? document.body}
+          onClose={() => setTimeFunctionEditorDocumentId(undefined)}
+          onApply={(nextValue) => {
+            updateCanonicalDocument(timeFunctionEditorDocument.id, nextValue, 'Time Function');
+            setTimeFunctionEditorDocumentId(undefined);
           }}
         />
       )}

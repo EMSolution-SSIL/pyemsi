@@ -21,6 +21,8 @@ import {
 } from './circuitModel';
 import EditorIcon from './EditorIcon';
 import {collectEmSolutionReferences, deepClone, isPlainRecord} from './emSolutionModel';
+import TimeFunctionReferencePicker from './TimeFunctionReferencePicker';
+import {createTimeFunctionReferenceCatalog} from './timeFunctionModel';
 import styles from './styles.module.css';
 
 const DOCUMENTATION_URL = 'https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/17_8_CIRCUIT.html';
@@ -90,6 +92,7 @@ export default function CircuitEditorModal({
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
   const references = useMemo(() => collectEmSolutionReferences(value), [value]);
+  const timeFunctionCatalog = useMemo(() => createTimeFunctionReferenceCatalog(value), [value]);
   const section = sections[selectedSection];
   const circuit = section?.circuit;
   const series = circuit && Array.isArray(circuit.SERIES_IDS) ? circuit.SERIES_IDS : [];
@@ -118,6 +121,7 @@ export default function CircuitEditorModal({
     closeButtonRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (dialogRef.current?.querySelector(`.${styles.timeFunctionReferencePicker}`)) return;
         event.preventDefault();
         requestClose();
         return;
@@ -149,6 +153,7 @@ export default function CircuitEditorModal({
     if (!embedded) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (dialogRef.current?.querySelector(`.${styles.timeFunctionReferencePicker}`)) return;
       event.preventDefault();
       requestClose();
     };
@@ -198,11 +203,11 @@ export default function CircuitEditorModal({
     return remapCircuitSeries(current, indices.map((source) => series[source]), indices);
   });
 
-  const updateSupply = (index: number, key: keyof CircuitPowerSupply, raw: string) => {
+  const updateSupply = (index: number, key: keyof CircuitPowerSupply, raw: string | number) => {
     updateCircuit((current) => ({
       ...current,
       POWER_SUPPLIES: supplies.map((entry, itemIndex) => (
-        itemIndex === index ? {...supplyRecord(entry), [key]: numberValue(raw)} : entry
+        itemIndex === index ? {...supplyRecord(entry), [key]: typeof raw === 'number' ? raw : numberValue(raw)} : entry
       )),
     }));
   };
@@ -319,7 +324,6 @@ export default function CircuitEditorModal({
                 <div><h3 id="circuit-supplies-title">Power supplies</h3><p>Independent current or voltage sources connected through the connection matrix.</p></div>
                 <button type="button" onClick={addSupply}><EditorIcon name="add" /> Add power supply</button>
               </div>
-              <datalist id="circuit-time-options"><option value="0" />{references.timeIds.map((id) => <option key={id} value={id} />)}</datalist>
               <div className={styles.networkTableWrap}>
                 <table className={styles.networkTable}>
                   <thead><tr><th>#</th><th>PS ID</th><th>Type</th><th>Time ID</th><th>Initial current (A)</th><th>Actions</th></tr></thead>
@@ -331,7 +335,7 @@ export default function CircuitEditorModal({
                           <td data-label="#">{index + 1}</td>
                           <td data-label="PS ID"><input className={styles.circuitTableInput} aria-label={`Power supply ${index + 1} ID`} type="number" step="1" value={inputValue(supply.PS_ID)} onChange={(event) => updateSupply(index, 'PS_ID', event.target.value)} /></td>
                           <td data-label="Type"><select className={styles.circuitTableSelect} aria-label={`Power supply ${index + 1} type`} value={inputValue(supply.TYPE)} onChange={(event) => updateSupply(index, 'TYPE', event.target.value)}><option value="">Select…</option><option value="0">0 — current</option><option value="1">1 — voltage</option></select></td>
-                          <td data-label="Time ID"><input className={styles.circuitTableInput} aria-label={`Power supply ${index + 1} time ID`} type="number" step="1" list="circuit-time-options" value={inputValue(supply.TIME_ID)} onChange={(event) => updateSupply(index, 'TIME_ID', event.target.value)} /></td>
+                          <td data-label="Time ID"><TimeFunctionReferencePicker compact catalog={timeFunctionCatalog} value={supply.TIME_ID} label={`Power supply ${index + 1} time ID`} onChange={(nextValue) => updateSupply(index, 'TIME_ID', nextValue)} /></td>
                           <td data-label="Initial current"><input className={styles.circuitTableInput} aria-label={`Power supply ${index + 1} initial current`} type="number" step="any" value={inputValue(supply.INITIAL_CURRENT)} onChange={(event) => updateSupply(index, 'INITIAL_CURRENT', event.target.value)} /></td>
                           <td data-label="Actions"><RowActions label={`power supply row ${index + 1}`} index={index} count={supplies.length} onDuplicate={() => duplicateSupply(index)} onMove={moveSupply} onDelete={() => deleteSupply(index)} /></td>
                         </tr>

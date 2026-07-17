@@ -19,6 +19,7 @@ export type EditorIconName =
   | 'open'
   | 'save'
   | 'splitClose'
+  | 'time'
   | 'up';
 
 interface EditorIconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
@@ -45,6 +46,7 @@ export default function EditorIcon({name, className, ...props}: EditorIconProps)
     open: <><path d="M3 6h6l2 2h10v11H3Z"/><path d="m3 19 3-8h15"/></>,
     save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></>,
     splitClose: <><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/><path d="m15.5 9 3 3-3 3"/></>,
+    time: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M3 12h2"/><path d="M19 12h2"/></>,
     up: <><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></>,
   } satisfies Record<EditorIconName, React.ReactNode>;
 

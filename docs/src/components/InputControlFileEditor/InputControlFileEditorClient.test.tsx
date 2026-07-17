@@ -132,6 +132,11 @@ async function openMaterialPropertyEditor(): Promise<HTMLElement> {
   return screen.getByRole('dialog', {name: 'Material Properties editor'});
 }
 
+async function openTimeFunctionEditor(): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', {name: 'Edit Time Functions'}));
+  return screen.getByRole('dialog', {name: 'Time Function editor'});
+}
+
 async function openSpecialSourceEditor(type: 'NETWORK' | 'CIRCUIT', row = 2): Promise<{dialog: HTMLElement; editor: HTMLElement}> {
   const dialog = await openFieldSourceEditor();
   await userEvent.click(within(dialog).getByRole('button', {name: `Edit Field Source row ${row}`}));
@@ -944,5 +949,167 @@ describe('InputControlFileEditorClient', () => {
     await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
     expect(screen.getByRole('textbox', {name: /Monaco/})).toHaveValue(original);
     expect(screen.queryByLabelText('Modified')).not.toBeInTheDocument();
+  });
+
+  it('creates a missing Time Function collection and previews a guided AC waveform', async () => {
+    const input = JSON.parse(emsolutionInput());
+    delete input['18_Time_Function'];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('time-functions.json', JSON.stringify(input))]);
+    const dialog = await openTimeFunctionEditor();
+    expect(within(dialog).getByText('No Time Functions match the current filters.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add time function'}));
+    expect(within(dialog).getByRole('menu', {name: 'Choose Time Function type'})).toHaveTextContent('Create an unsupported or advanced time function');
+    await userEvent.click(within(dialog).getByRole('menuitem', {name: 'Add AC waveform (2)'}));
+    expect(within(dialog).getByRole('img', {name: /f of t equals amplitude/})).toBeInTheDocument();
+    expect(within(dialog).getByRole('img', {name: /Time-function preview/})).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Amplitude (AMPLITUDE)'), {target: {value: '5'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(saved['18_Time_Function']).toEqual([{TIME_ID: 1, OPTION: 2, AMPLITUDE: 5, TCYCLE: 1, PHASE: 0}]);
+    expect(screen.getByText('Applied Time Function changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+  });
+
+  it('edits paired table points and keeps equal consecutive times as a vertical preview step', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['18_Time_Function'] = [{TIME_ID: 1, OPTION: 1, CYCLE: 1, TIME: [0, 0.5, 1], VALUE: [0, 1, 0]}];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('table-time.json', JSON.stringify(input))]);
+    const dialog = await openTimeFunctionEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Time Function row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Duplicate time point 2'}));
+    fireEvent.change(within(dialog).getByLabelText('Value point 3'), {target: {value: '2'}});
+    expect(within(dialog).getByRole('img', {name: /Time-function preview/})).toBeInTheDocument();
+    expect(within(dialog).queryByText(/non-decreasing/)).not.toHaveClass('networkIssueError');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    const table = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value)['18_Time_Function'][0];
+    expect(table.TIME).toEqual([0, 0.5, 0.5, 1]);
+    expect(table.VALUE).toEqual([0, 1, 2, 0]);
+  });
+
+  it('presents OPTION 3 and future options only as whole-entry raw JSON', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['18_Time_Function'] = [{TIME_ID: 4, OPTION: 3, SPRING: [{vendor: 'keep'}], custom: {nested: true}}];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('raw-time.json', JSON.stringify(input))]);
+    const dialog = await openTimeFunctionEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Time Function row 1'}));
+    expect((within(dialog).getByLabelText('Raw Time Function entry JSON') as HTMLTextAreaElement).value).toContain('"SPRING"');
+    expect(within(dialog).queryByLabelText('Time Function option')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Preview')).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Raw Time Function entry JSON'), {target: {value: JSON.stringify({TIME_ID: 4, OPTION: 99, vendor: {keep: true}})}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Save raw JSON'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value)['18_Time_Function'][0];
+    expect(saved).toEqual({TIME_ID: 4, OPTION: 99, vendor: {keep: true}});
+  });
+
+  it('disables malformed Time Function roots and repairs malformed array entries through raw JSON', async () => {
+    const malformedRoot = JSON.parse(emsolutionInput());
+    malformedRoot['18_Time_Function'] = {TIME_ID: 1, OPTION: 2};
+    const repairable = JSON.parse(emsolutionInput());
+    repairable['18_Time_Function'] = ['bad'];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('malformed-time-root.json', JSON.stringify(malformedRoot))]);
+    expect(screen.getByRole('button', {name: 'Edit Time Functions'})).toBeDisabled();
+
+    fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {target: {files: [jsonFile('repair-time.json', JSON.stringify(repairable))]}});
+    const dialog = await openTimeFunctionEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Time Function row 1'}));
+    expect(within(dialog).getByRole('button', {name: 'Apply changes'})).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('Raw Time Function entry JSON'), {target: {value: JSON.stringify({TIME_ID: 1, OPTION: 3, vendor: 'kept'})}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Save raw JSON'}));
+    expect(within(dialog).getByRole('button', {name: 'Apply changes'})).toBeEnabled();
+  });
+
+  it('picks guided and raw TIME_ID references while retaining manual entry and pinned zero', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['17_Field_Source'][0] = {SUFCUR: {SERIES_ID: 1, TIME_ID: 123, SMAT_ID: 1, CURRENT: 2, IN_ROTOR: 0}};
+    input['18_Time_Function'] = [
+      {TIME_ID: 7, OPTION: 2, AMPLITUDE: 3, TCYCLE: 1, PHASE: 0},
+      {TIME_ID: 9, OPTION: 99, vendorRaw: {searchable: true}},
+      {TIME_ID: 'bad', OPTION: 4, PSIM_IN: 1, PSIM_OUT: 2},
+    ];
+    const timeFunctionsBefore = structuredClone(input['18_Time_Function']);
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('time-picker.json', JSON.stringify(input))]);
+    const dialog = await openFieldSourceEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Field Source row 1'}));
+
+    const trigger = within(dialog).getByRole('button', {name: 'Choose Time function'});
+    const timeInput = within(dialog).getByLabelText('Time function (TIME_ID)');
+    expect(timeInput).toHaveValue(123);
+    await userEvent.click(trigger);
+    let picker = screen.getByRole('dialog', {name: 'Choose a Time Function'});
+    expect(dialog.contains(picker)).toBe(true);
+    expect(within(picker).getByRole('button', {name: 'Entry 3 has an invalid TIME_ID'})).toBeDisabled();
+    await userEvent.type(within(picker).getByRole('searchbox', {name: 'Search Time Functions'}), 'vendorRaw');
+    expect(within(picker).getAllByText(/Unsupported OPTION 99/)).toHaveLength(2);
+    await userEvent.click(within(picker).getByText('Raw JSON'));
+    expect(within(picker).getByText(/"vendorRaw"/)).toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use TIME_ID 9'}));
+    expect(timeInput).toHaveValue(9);
+
+    await userEvent.click(trigger);
+    picker = screen.getByRole('dialog', {name: 'Choose a Time Function'});
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', {name: 'Choose a Time Function'})).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.getByRole('dialog', {name: 'Field Source editor'})).toBeInTheDocument();
+
+    fireEvent.change(timeInput, {target: {value: '404'}});
+    expect(timeInput).toHaveValue(404);
+    await userEvent.click(trigger);
+    fireEvent.mouseDown(within(dialog).getByText(/Entry 1 · SUFCUR/));
+    await waitFor(() => expect(screen.queryByRole('dialog', {name: 'Choose a Time Function'})).not.toBeInTheDocument());
+    await userEvent.click(trigger);
+    picker = screen.getByRole('dialog', {name: 'Choose a Time Function'});
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use TIME_ID 0'}));
+    expect(timeInput).toHaveValue(0);
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(saved['17_Field_Source'][0].SUFCUR.TIME_ID).toBe(0);
+    expect(saved['18_Time_Function']).toEqual(timeFunctionsBefore);
+  });
+
+  it('uses the TIME_ID picker in staged NETWORK components', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['18_Time_Function'].push({TIME_ID: 5, OPTION: 11, FUNCTION: 'T'});
+    const timeFunctionsBefore = structuredClone(input['18_Time_Function']);
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('network-time-picker.json', JSON.stringify(input))]);
+    const {dialog, editor} = await openSpecialSourceEditor('NETWORK');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Edit NETWORK row 2'}));
+    await userEvent.click(within(editor).getByRole('button', {name: 'Choose Time function'}));
+    const picker = screen.getByRole('dialog', {name: 'Choose a Time Function'});
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use TIME_ID 5'}));
+    expect(within(editor).getByLabelText('Time function')).toHaveValue(5);
+    await userEvent.click(within(editor).getByRole('button', {name: 'Save row'}));
+    await applySpecialSourceEditor(dialog, editor);
+
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(saved['17_Field_Source'][1].NETWORK.data[1].TIME_ID).toBe(5);
+    expect(saved['18_Time_Function']).toEqual(timeFunctionsBefore);
+  });
+
+  it('uses the portaled TIME_ID picker in CIRCUIT power-supply rows', async () => {
+    const input = JSON.parse(emsolutionCircuitInput());
+    input['18_Time_Function'].push({TIME_ID: 5, OPTION: 3, vendor: 'raw-selectable'});
+    const timeFunctionsBefore = structuredClone(input['18_Time_Function']);
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('circuit-time-picker.json', JSON.stringify(input))]);
+    const {dialog, editor} = await openSpecialSourceEditor('CIRCUIT');
+    await userEvent.click(within(editor).getByRole('button', {name: 'Choose Power supply 1 time ID'}));
+    const picker = screen.getByRole('dialog', {name: 'Choose a Time Function'});
+    expect(dialog.contains(picker)).toBe(true);
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use TIME_ID 5'}));
+    expect(within(editor).getByLabelText('Power supply 1 time ID')).toHaveValue(5);
+    await applySpecialSourceEditor(dialog, editor);
+
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(saved['17_Field_Source'][1].CIRCUIT.POWER_SUPPLIES[0].TIME_ID).toBe(5);
+    expect(saved['18_Time_Function']).toEqual(timeFunctionsBefore);
   });
 });

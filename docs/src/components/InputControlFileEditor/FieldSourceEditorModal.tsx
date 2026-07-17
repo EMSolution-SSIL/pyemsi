@@ -37,6 +37,8 @@ import {
   volumeMaterials,
 } from './materialPropertyModel';
 import NetworkEditorModal from './NetworkEditorModal';
+import TimeFunctionReferencePicker from './TimeFunctionReferencePicker';
+import {createTimeFunctionReferenceCatalog, type TimeFunctionReferenceCatalog} from './timeFunctionModel';
 import styles from './styles.module.css';
 
 const OVERVIEW_URL = 'https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/17_Field_Source.html';
@@ -167,6 +169,7 @@ export default function FieldSourceEditorModal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (specialOpenRef.current) return;
+        if (dialogRef.current?.querySelector(`.${styles.materialReferencePicker}, .${styles.timeFunctionReferencePicker}`)) return;
         event.preventDefault();
         requestClose();
         return;
@@ -204,6 +207,7 @@ export default function FieldSourceEditorModal({
 
   const issues = useMemo(() => validateFieldSources(draftRoot), [draftRoot]);
   const materialCatalog = useMemo(() => createMaterialCatalog(draftRoot), [draftRoot]);
+  const timeFunctionCatalog = useMemo(() => createTimeFunctionReferenceCatalog(draftRoot), [draftRoot]);
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
   const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
 
@@ -291,6 +295,7 @@ export default function FieldSourceEditorModal({
         index={selectedIndex}
         issues={issues.filter((issue) => issue.sourceIndex === selectedIndex)}
         materialCatalog={materialCatalog}
+        timeFunctionCatalog={timeFunctionCatalog}
         onBack={() => setSelectedIndex(undefined)}
         onChange={(entry) => replaceEntry(selectedIndex, entry)}
         onChangeType={(type) => changeEntryType(selectedIndex, type)}
@@ -389,11 +394,12 @@ export default function FieldSourceEditorModal({
   return createPortal(modal, portalTarget ?? document.body);
 }
 
-function SourceDetailEditor({entry, index, issues, materialCatalog, onBack, onChange, onChangeType}: {
+function SourceDetailEditor({entry, index, issues, materialCatalog, timeFunctionCatalog, onBack, onChange, onChangeType}: {
   entry: unknown;
   index: number;
   issues: ReturnType<typeof validateFieldSources>;
   materialCatalog: MaterialCatalog;
+  timeFunctionCatalog: TimeFunctionReferenceCatalog;
   onBack: () => void;
   onChange: (entry: unknown) => void;
   onChangeType: (type: FieldSourceType) => void;
@@ -420,7 +426,7 @@ function SourceDetailEditor({entry, index, issues, materialCatalog, onBack, onCh
       </div>
       <div className={styles.fieldSourceFieldGrid}>
         {visibleFieldSourceFields(schema.fields, definition).map((field) => (
-          <FieldInput key={field.key} field={field} value={getFieldValue(definition, field.key)} materialCatalog={materialCatalog} onChange={(nextValue) => {
+          <FieldInput key={field.key} field={field} value={getFieldValue(definition, field.key)} materialCatalog={materialCatalog} timeFunctionCatalog={timeFunctionCatalog} onChange={(nextValue) => {
             const next = deepClone(definition);
             setFieldValue(next, field.key, nextValue);
             updateDefinition(next);
@@ -428,7 +434,7 @@ function SourceDetailEditor({entry, index, issues, materialCatalog, onBack, onCh
         ))}
       </div>
       {schema.rowLabel && (
-        <NestedRowsEditor type={inspected.type} definition={definition} materialCatalog={materialCatalog} onDefinition={updateDefinition} />
+        <NestedRowsEditor type={inspected.type} definition={definition} materialCatalog={materialCatalog} timeFunctionCatalog={timeFunctionCatalog} onDefinition={updateDefinition} />
       )}
       <ValidationIssues issues={issues} />
     </div>
@@ -453,15 +459,19 @@ function DetailHeading({index, type, onBack, onChangeType}: {
   );
 }
 
-function FieldInput({field, value, materialCatalog, onChange}: {
+function FieldInput({field, value, materialCatalog, timeFunctionCatalog, onChange}: {
   field: FieldSourceFieldDefinition;
   value: unknown;
   materialCatalog: MaterialCatalog;
+  timeFunctionCatalog: TimeFunctionReferenceCatalog;
   onChange: (value: unknown) => void;
 }): ReactNode {
   const label = `${field.label} (${field.key})`;
   if (field.materialReference) {
     return <MaterialReferenceInput field={field} value={value} catalog={materialCatalog} onChange={onChange} />;
+  }
+  if (field.timeReference) {
+    return <TimeFunctionReferencePicker catalog={timeFunctionCatalog} value={value} label={field.label} fieldKey={field.key} help={field.help} unit={field.unit} onChange={onChange} />;
   }
   if (field.kind === 'vector3') {
     const values = Array.isArray(value) ? value : ['', '', ''];
@@ -577,10 +587,11 @@ function MaterialReferenceInput({field, value, catalog, onChange}: {
   </div>;
 }
 
-function NestedRowsEditor({type, definition, materialCatalog, onDefinition}: {
+function NestedRowsEditor({type, definition, materialCatalog, timeFunctionCatalog, onDefinition}: {
   type: FieldSourceType;
   definition: Record<string, unknown>;
   materialCatalog: MaterialCatalog;
+  timeFunctionCatalog: TimeFunctionReferenceCatalog;
   onDefinition: (definition: Record<string, unknown>) => void;
 }): ReactNode {
   const rows = fieldSourceRows(definition);
@@ -608,7 +619,7 @@ function NestedRowsEditor({type, definition, materialCatalog, onDefinition}: {
         </select>}<button type="button" className="button button--primary button--sm" onClick={addRow}><EditorIcon name="add" /> Add row</button></div>
       </div>
       {rows.map((row, index) => <NestedRowCard key={index} type={type} definition={definition} row={row} index={index} count={rows.length}
-        materialCatalog={materialCatalog}
+        materialCatalog={materialCatalog} timeFunctionCatalog={timeFunctionCatalog}
         onChange={(next) => updateRow(index, next)} onDuplicate={() => {
           const next = [...rows]; next.splice(index + 1, 0, deepClone(row)); replaceRows(next);
         }} onMove={(direction) => moveRow(index, direction)} onDelete={() => deleteRow(index)} />)}
@@ -617,13 +628,14 @@ function NestedRowsEditor({type, definition, materialCatalog, onDefinition}: {
   );
 }
 
-function NestedRowCard({type, definition, row, index, count, materialCatalog, onChange, onDuplicate, onMove, onDelete}: {
+function NestedRowCard({type, definition, row, index, count, materialCatalog, timeFunctionCatalog, onChange, onDuplicate, onMove, onDelete}: {
   type: FieldSourceType;
   definition: Record<string, unknown>;
   row: unknown;
   index: number;
   count: number;
   materialCatalog: MaterialCatalog;
+  timeFunctionCatalog: TimeFunctionReferenceCatalog;
   onChange: (row: unknown) => void;
   onDuplicate: () => void;
   onMove: (direction: -1 | 1) => void;
@@ -644,7 +656,7 @@ function NestedRowCard({type, definition, row, index, count, materialCatalog, on
     {type === 'COIL' && <label className={styles.networkField}><span>Element type<em>type</em></span><select aria-label={`COIL row ${index + 1} type`} value={String(row.type)} onChange={(event) => changeCoilType(event.target.value)}>
       {sourceRowTypes(type).map((item) => <option key={item} value={item}>{item} — {FIELD_SOURCE_SCHEMAS.COIL.rowSchemas?.[item].label}</option>)}
     </select></label>}
-    <div className={styles.fieldSourceFieldGrid}>{rowSchema.fields.map((field) => <FieldInput key={field.key} field={field} value={getFieldValue(row, field.key)} materialCatalog={materialCatalog} onChange={(nextValue) => {
+    <div className={styles.fieldSourceFieldGrid}>{rowSchema.fields.map((field) => <FieldInput key={field.key} field={field} value={getFieldValue(row, field.key)} materialCatalog={materialCatalog} timeFunctionCatalog={timeFunctionCatalog} onChange={(nextValue) => {
       const next = deepClone(row); setFieldValue(next, field.key, nextValue); onChange(next);
     }} />)}</div>
   </div>;

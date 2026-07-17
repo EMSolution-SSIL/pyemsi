@@ -23,6 +23,8 @@ import {
   replaceNetworkSections,
   validateNetwork,
 } from './networkModel';
+import TimeFunctionReferencePicker from './TimeFunctionReferencePicker';
+import {createTimeFunctionReferenceCatalog, type TimeFunctionReferenceCatalog} from './timeFunctionModel';
 import styles from './styles.module.css';
 
 const DOCUMENTATION_URL = 'https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/17_9_NETWORK.html';
@@ -120,6 +122,7 @@ export default function NetworkEditorModal({
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
   const references = useMemo(() => collectNetworkReferences(value), [value]);
+  const timeFunctionCatalog = useMemo(() => createTimeFunctionReferenceCatalog(value), [value]);
   const section = sections[selectedSection];
   const network = section?.network;
   const rows = network ? dataRows(network) : [];
@@ -147,6 +150,7 @@ export default function NetworkEditorModal({
     closeButtonRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (dialogRef.current?.querySelector(`.${styles.timeFunctionReferencePicker}`)) return;
         event.preventDefault();
         requestClose();
         return;
@@ -178,6 +182,7 @@ export default function NetworkEditorModal({
     if (!embedded) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (dialogRef.current?.querySelector(`.${styles.timeFunctionReferencePicker}`)) return;
       event.preventDefault();
       requestClose();
     };
@@ -411,6 +416,7 @@ export default function NetworkEditorModal({
                 rawText={rawText}
                 rawError={rawError}
                 references={references}
+                timeFunctionCatalog={timeFunctionCatalog}
                 rows={rows}
                 isNew={editingIndex >= rows.length}
                 onDraft={setDraft}
@@ -461,6 +467,7 @@ interface ComponentEditorProps {
   rawText: string;
   rawError: string;
   references: ReturnType<typeof collectNetworkReferences>;
+  timeFunctionCatalog: TimeFunctionReferenceCatalog;
   rows: unknown[];
   isNew: boolean;
   onDraft: (draft: NetworkComponent) => void;
@@ -474,6 +481,7 @@ function ComponentEditor({
   rawText,
   rawError,
   references,
+  timeFunctionCatalog,
   rows,
   isNew,
   onDraft,
@@ -508,7 +516,7 @@ function ComponentEditor({
     const expectedType = draft.type === 'SETV' ? 'C' : draft.type === 'SETI' ? 'VPS' : undefined;
     return component && component.type === expectedType && Number.isInteger(component.ID) ? [component.ID as number] : [];
   });
-  const change = (key: string, raw: string) => onDraft({...draft, [key]: numberValue(raw)});
+  const change = (key: string, raw: string | number) => onDraft({...draft, [key]: typeof raw === 'number' ? raw : numberValue(raw)});
 
   return (
     <aside className={styles.networkComponentEditor} aria-label={`${draft.type} component editor`}>
@@ -522,9 +530,9 @@ function ComponentEditor({
           key={field.key}
           field={field}
           value={draft[field.key]}
+          timeFunctionCatalog={timeFunctionCatalog}
           options={field.kind === 'series' ? references.seriesIds
-            : field.kind === 'time' ? references.timeIds
-                : field.kind === 'inductor' ? inductors
+            : field.kind === 'inductor' ? inductors
                 : field.kind === 'table' ? tableIds
                   : field.kind === 'element' ? targetElementIds : []}
           onChange={(raw) => change(field.key, raw)}
@@ -537,12 +545,23 @@ function ComponentEditor({
   );
 }
 
-function FieldInput({field, value, options, onChange}: {
+function FieldInput({field, value, options, timeFunctionCatalog, onChange}: {
   field: NetworkFieldDefinition;
   value: unknown;
   options: number[];
-  onChange: (value: string) => void;
+  timeFunctionCatalog: TimeFunctionReferenceCatalog;
+  onChange: (value: string | number) => void;
 }): ReactNode {
+  if (field.kind === 'time') {
+    return <TimeFunctionReferencePicker
+      catalog={timeFunctionCatalog}
+      value={value}
+      label={field.label}
+      help={field.help}
+      unit={field.unit}
+      onChange={onChange}
+    />;
+  }
   const listId = options.length > 0 ? `network-options-${field.kind}-${field.key}` : undefined;
   if (field.key === 'PHASE_OP') {
     return (

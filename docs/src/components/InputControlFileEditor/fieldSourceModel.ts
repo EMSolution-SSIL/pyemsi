@@ -45,6 +45,7 @@ export interface FieldSourceFieldDefinition {
   visibleWhen?: FieldSourceCondition;
   defaultValue?: unknown;
   materialReference?: MaterialReferenceKind;
+  timeReference?: boolean;
 }
 
 export interface FieldSourceRowSchema {
@@ -117,7 +118,7 @@ const enumField = (key: string, label: string, help: string, options: FieldSourc
 );
 
 const SERIES_ID = integer('SERIES_ID', 'Series ID', 'Identifier used when connecting this source to CIRCUIT or NETWORK.');
-const TIME_ID = integer('TIME_ID', 'Time function', 'TIME_ID from 18_Time_Function; use 0 where the source is driven by CIRCUIT or NETWORK.');
+const TIME_ID = integer('TIME_ID', 'Time function', 'TIME_ID from 18_Time_Function; use 0 where the source is driven by CIRCUIT or NETWORK.', {timeReference: true});
 const IN_ROTOR = enumField('IN_ROTOR', 'Region', 'Whether the source belongs to the fixed or moving region.', BINARY);
 const MAT_ID = integer('MAT_ID', 'Material ID', 'Volume-element material identifier.', {materialReference: 'volume'});
 const SMAT_ID = integer('SMAT_ID', 'Surface material ID', 'Surface-element material identifier.', {materialReference: 'surface'});

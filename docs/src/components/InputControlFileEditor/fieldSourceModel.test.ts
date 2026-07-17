@@ -74,6 +74,14 @@ describe('EMSolution Field Source model', () => {
     });
   });
 
+  it('marks every guided TIME_ID field explicitly as a Time Function reference', () => {
+    for (const type of ['COIL', 'SUFCUR', 'MAGNET', 'EPOTSUF', 'POTNODE'] as const) {
+      expect(FIELD_SOURCE_SCHEMAS[type].fields.find((field) => field.key === 'TIME_ID')).toMatchObject({
+        kind: 'integer', timeReference: true,
+      });
+    }
+  });
+
   it('creates an absent source array and immutably replaces all entries', () => {
     const input = root();
     delete (input as any)['17_Field_Source'];
