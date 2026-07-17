@@ -4,7 +4,7 @@ This document explains the purpose, behavior, internal structure, and extension 
 
 ## Purpose
 
-`InputControlFileEditor` is a browser-only editor for EMSolution input control files. It combines a general Monaco-based structured-data editor with guided editors for EMSolution's `16_Material_Properties`, `17_Field_Source`, and `18_Time_Function` definitions.
+`InputControlFileEditor` is a browser-only editor for EMSolution input control files. It combines a general Monaco-based structured-data editor with guided editors for EMSolution's `16_Material_Properties`, `17_Field_Source`, `18_Time_Function`, and `20_BH_Curve` definitions.
 
 The component is designed to:
 
@@ -16,6 +16,7 @@ The component is designed to:
 - provide a schema-driven Field Source editor for recognized EMSolution inputs;
 - provide a context-aware Material Properties editor for volume and surface materials;
 - provide a guided Time Function editor with safe analytic/table/AC previews;
+- provide a guided isotropic B-H Curve editor with paired table editing and an advisory preview;
 - preserve unknown properties and unsupported definitions instead of silently deleting them.
 
 This component does not upload files to a server. Browser security may prevent it from knowing the original full path of a selected file.
@@ -43,6 +44,11 @@ Changes to this component should preserve these rules:
 17. `OPTION` 3 and unknown Time Function options are raw-only and must not be partially normalized or evaluated.
 18. Time Function previews are advisory browser visualizations; formula strings and motion equations are never executed.
 19. TIME_ID pickers are read-only views of `18_Time_Function`; they update only the staged referencing field and must never normalize or mutate Time Functions.
+20. Guided B-H Curve edits use a deep-cloned staged `20_BH_Curve` array and apply only through `updateCanonicalDocument`.
+21. Missing B-H Curves are editable, but an existing non-array root disables the guided action.
+22. Encrypted, ambiguous, unsupported, and malformed B-H Curve entries remain whole-entry raw-editable; guided H/B updates preserve unknown entry and `data` properties.
+23. B-H Curve previews are advisory browser visualizations and do not replace EMSolution validation or simulation.
+24. Material B-H Curve pickers are read-only views of `20_BH_Curve`; they update only the staged material field and must never normalize or mutate curve entries.
 
 ## High-level data flow
 
@@ -82,6 +88,9 @@ The canonical value is updated only after a representation parses successfully o
 | `timeFunctionModel.ts` | Time Function schemas, immutable collection helpers, raw/guided classification, consumer discovery, validation, summaries, reference-catalog construction, and deterministic preview sampling. |
 | `TimeFunctionEditorModal.tsx` | Unified Time Function master/detail workflow, guided forms, raw-only unsupported options, paired table rows, equations, SVG previews, staging, and Apply/Cancel handling. |
 | `TimeFunctionReferencePicker.tsx` | Shared searchable TIME_ID control used by generic Field Sources, NETWORK components, and CIRCUIT power supplies. |
+| `bhCurveModel.ts` | Isotropic B-H Curve classification, immutable collection helpers, consumer discovery, validation, summaries, ID allocation, reference catalogs, and preview points. |
+| `BhCurveEditorModal.tsx` | Unified B-H Curve master/detail workflow, paired H/B table editing, raw encrypted entries, reference-aware confirmations, and SVG preview. |
+| `BhCurveReferencePicker.tsx` | Shared searchable `20_BH_Curve` control used by scalar, XYZ-axis, Z-direction, and nonlinear surface material fields. |
 | `networkModel.ts` | NETWORK component schemas, immutable transformations, reference discovery, normalization, summaries, and validation. |
 | `NetworkEditorModal.tsx` | Reusable NETWORK component editor. It can render as a standalone modal or as an embedded panel inside the Field Source modal. |
 | `circuitModel.ts` | CIRCUIT series and power-supply transformations, matrix conversion/remapping, normalization, and validation. |
@@ -178,7 +187,7 @@ JSON is created when a file opens. YAML and TOML drafts are created lazily when 
 - `metaData.type` is `EMSolution_Input`; or
 - at least two of `0_Release_Number`, `1_Execution_Control`, and `2_Analysis_Type` exist.
 
-Recognized inputs show `Edit Field Sources`, `Edit Material Properties`, and `Edit Time Functions`, even when the corresponding section is absent. The Field Source action is disabled when:
+Recognized inputs show `Edit Field Sources`, `Edit Material Properties`, `Edit Time Functions`, and `Edit B-H Curves`, even when the corresponding section is absent. The Field Source action is disabled when:
 
 - the active YAML/TOML representation has invalid uncommitted edits; or
 - `17_Field_Source` exists but is not an array.
@@ -187,6 +196,8 @@ The Material Properties action is disabled when `16_Material_Properties` is not 
 
 The Time Functions action is disabled when `18_Time_Function` exists but is not an array. A missing section opens as an empty staged collection.
 
+The B-H Curves action is disabled when `20_BH_Curve` exists but is not an array. A missing section opens as an empty staged collection.
+
 ## Unified Material Properties editor
 
 `MaterialPropertyEditorModal` stages a deep-cloned material object and applies a complete canonical root only after validation succeeds. A missing section begins with `EXTEND_TOTAL_for_COIL: 0` and empty volume/surface arrays.
@@ -194,6 +205,8 @@ The Time Functions action is disabled when `18_Time_Function` exists but is not 
 The General section edits `EXTEND_TOTAL_for_COIL` and optional `THIN_CRITERION`. The Volume section provides searchable master/detail CRUD for `16_1_3D_Element_Properties`, including optional `MAT_NAME`, potential regions, electric properties, magnetic properties, advanced anisotropy/hysteresis/complex-permeability/iron-loss blocks, and optional material flags. New-row defaults use `2_Analysis_Type`, while every documented group remains available in every analysis mode.
 
 The Surface section supports `SURFACE_IMPEDANCE`, `GAP_ELEMENT`, `THIN_CONDUCTOR`, and `SHELL_COIL`, including nonlinear impedance and anisotropic thin-conductor settings. The **Add surface material** button opens a menu whose options show each readable type name, canonical key, and a short description; choosing an option creates the material and opens its detail editor. `Nonlinear_Parameters` and the legacy `Nonliear_Parameters` spelling are both editable without renaming the original key.
+
+Material fields explicitly annotated with `bhCurveReference` retain manual numeric input and add a searchable browser for `20_BH_Curve`. The browser shows guided, encrypted, and raw entries with validation and duplicate status, formatted JSON, and non-blocking missing/malformed states. Isotropic `BH_CURVE_ID`, XYZ `BH_XYZ_ID`, `BH_Z`, and both nonlinear-parameter spellings use it; IDs belonging to other curve collections do not. XYZ values use independent X/Y/Z pickers so assignment never changes axis order. Fields that support linear permeability pin ID `0` above the current positive curve IDs. Picker assignments remain staged with the material draft, and applying materials leaves `20_BH_Curve` unchanged.
 
 Non-object volume rows, unknown or malformed surface rows, and multi-definition surface rows use raw JSON repair. Unknown surface definitions are advisory; malformed and multi-definition structures block Apply. Updates replace only selected keys, and removing an optional group or changing a surface type requires confirmation.
 
@@ -283,6 +296,14 @@ Options `0`, `1`, `2`, `4`, and `11` have guided editors. Option `1` uses paired
 
 Options `0` and `2` show their documented equations using semantic HTML. Options `0`, `1`, and `2` provide dependency-free SVG previews generated by pure sampling helpers in the model. Preview failures do not execute user input: `OPTION` 11 expressions, raw JSON, and motion equations are never evaluated.
 
+## Unified B-H Curve editor
+
+`BhCurveEditorModal` stages a deep-cloned `20_BH_Curve` array. Its searchable master table shows `BH_CURVE_ID`, table/raw type, summary, consumer count, validation status, and CRUD actions. New and duplicated entries receive the next unused positive ID. Changing or deleting an ID referenced by material properties or a magnetization curve requires confirmation.
+
+Ordinary curves use paired `data.H` and `data.B` row controls. Adding, duplicating, moving, or deleting a point always transforms both arrays together. Guided changes replace only `BH_CURVE_ID`, `data.H`, or `data.B`, preserving unknown properties on both the entry and nested `data` object. A dependency-free SVG plots B against H when at least two complete finite pairs are available.
+
+Entries containing `encrypted_data` are supported but whole-entry raw-only. Ambiguous entries containing both `data` and `encrypted_data`, malformed entries, and future shapes also use raw JSON repair. The editor covers only the exact `20_BH_Curve` collection; the separate temperature-dependent, anisotropic, demagnetization, and magnetization collections remain outside its editing scope.
+
 ## NETWORK editor
 
 The NETWORK panel supports these component types:
@@ -341,6 +362,8 @@ Warnings remain advisory. Examples include:
 
 Time Function errors include duplicate IDs, malformed raw entries, invalid guided scalar fields, negative time constants or periods, and malformed, mismatched, or decreasing time tables. `TEXP` and `TCYCLE` may be zero, and equal consecutive table times remain valid.
 
+B-H Curve errors include non-object entries, non-positive or duplicate IDs, invalid raw/encrypted objects, ambiguous table/encrypted representations, non-finite values, fewer than two points, and mismatched H/B arrays. A nonzero first point, non-increasing H values, negative segment slopes, encrypted raw entries, and unresolved consumers produce advisory warnings. The documented high-field slope guidance is shown in the editor without applying an invented numerical tolerance.
+
 NETWORK and CIRCUIT validation is delegated to `validateNetwork` and `validateCircuit` so their existing rules remain authoritative.
 
 ## Modal and accessibility behavior
@@ -380,8 +403,9 @@ Do not hand-code a new generic input in `FieldSourceEditorModal` unless the sche
 1. Update the appropriate base, group, or surface schema in `materialPropertyModel.ts`.
 2. Add a safe default only when the field belongs to a user-added optional group or a new material skeleton.
 3. Extend cross-field validation for alternative arrays, analysis-mode guidance, or referenced curve IDs.
-4. Keep legacy aliases in accessors rather than normalizing stored keys.
-5. Add model coverage and an integration test for visible UI behavior and unknown-key preservation.
+4. Add `bhCurveReference` only when the field refers to the exact `20_BH_Curve` collection; configure zero support and axis labels explicitly rather than inferring them from the key.
+5. Keep legacy aliases in accessors rather than normalizing stored keys.
+6. Add model coverage and an integration test for visible UI behavior and unknown-key preservation.
 
 ### Add or change a Time Function option
 
@@ -390,6 +414,14 @@ Do not hand-code a new generic input in `FieldSourceEditorModal` unless the sche
 3. Keep option-specific transformation, validation, and sampling in `timeFunctionModel.ts`.
 4. Do not evaluate arbitrary expression strings or partially guide unsupported nested formats.
 5. Add classification, preservation, validation, preview, and integration coverage.
+
+### Add or change B-H Curve behavior
+
+1. Keep entry inspection, immutable transformations, consumer discovery, validation, and preview preparation in `bhCurveModel.ts`.
+2. Keep `data.H` and `data.B` transformations paired, and preserve unknown properties on the entry and `data` object.
+3. Do not partially guide encrypted or future curve formats; retain whole-entry raw JSON repair.
+4. Treat structural/numeric failures as blocking errors and documented physical-quality guidance as advisory warnings.
+5. Add model coverage and an integration test for any visible workflow change.
 
 ### Add a NETWORK component
 
@@ -428,7 +460,8 @@ Tests live beside the implementation:
 - `fieldSourceModel.test.ts`: source schemas, variants, defaults, preservation, validation, legacy handling, and round trips;
 - `materialPropertyModel.test.ts`: material schemas, defaults, surface classification, advanced validation, aliases, preservation, and round trips;
 - `timeFunctionModel.test.ts`: option schemas, defaults, immutable transformations, raw classification, reference catalogs, validation, preservation, and preview sampling;
-- `InputControlFileEditorClient.test.tsx`: file workflows, format switching, split targeting, unified modal behavior, nested/source CRUD, material- and time-reference browsing, raw repair, focus, cancel/apply, and NETWORK/CIRCUIT regressions.
+- `bhCurveModel.test.ts`: classification, immutable transformations, encrypted/raw preservation, consumers, validation, summaries, and preview points;
+- `InputControlFileEditorClient.test.tsx`: file workflows, format switching, split targeting, unified modal behavior, nested/source CRUD, material-, time-, and B-H-curve-reference browsing, raw repair, focus, cancel/apply, and NETWORK/CIRCUIT regressions.
 
 Run from the `docs` directory:
 
@@ -456,6 +489,12 @@ For Time Function changes, use:
 npm test -- --run src/components/InputControlFileEditor/timeFunctionModel.test.ts src/components/InputControlFileEditor/InputControlFileEditorClient.test.tsx
 ```
 
+For B-H Curve changes, use:
+
+```powershell
+npm test -- --run src/components/InputControlFileEditor/bhCurveModel.test.ts src/components/InputControlFileEditor/InputControlFileEditorClient.test.tsx
+```
+
 ## External reference
 
 The schema labels and descriptions are based on the official EMSolution input control documentation:
@@ -471,5 +510,7 @@ The schema labels and descriptions are based on the official EMSolution input co
 <https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/16_2_2D_Element_Properties.html>
 
 <https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/18_Time_Function.html>
+
+<https://emsolution-ssil.github.io/EMSolutionDocs/handbook/inputControl/20_BH_Curve.html>
 
 When documentation and existing files differ, preserve the original data, add compatibility handling where safe, and avoid destructive normalization.

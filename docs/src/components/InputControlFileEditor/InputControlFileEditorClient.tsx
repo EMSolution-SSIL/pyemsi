@@ -14,6 +14,8 @@ import React, {
 } from 'react';
 import {createPortal} from 'react-dom';
 
+import BhCurveEditorModal from './BhCurveEditorModal';
+import {hasMalformedBhCurveRoot} from './bhCurveModel';
 import EditorIcon from './EditorIcon';
 import FieldSourceEditorModal from './FieldSourceEditorModal';
 import {hasMalformedFieldSourceRoot} from './fieldSourceModel';
@@ -230,6 +232,7 @@ export default function InputControlFileEditorClient(): ReactNode {
   const [fieldSourceEditorDocumentId, setFieldSourceEditorDocumentId] = useState<string>();
   const [materialPropertyEditorDocumentId, setMaterialPropertyEditorDocumentId] = useState<string>();
   const [timeFunctionEditorDocumentId, setTimeFunctionEditorDocumentId] = useState<string>();
+  const [bhCurveEditorDocumentId, setBhCurveEditorDocumentId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const monacoRef = useRef<Monaco | undefined>(undefined);
@@ -263,9 +266,12 @@ export default function InputControlFileEditorClient(): ReactNode {
     && hasMalformedMaterialPropertyRoot(actionDocument.canonicalValue);
   const actionHasMalformedTimeFunctions = actionDocument?.canonicalValue !== undefined
     && hasMalformedTimeFunctionRoot(actionDocument.canonicalValue);
+  const actionHasMalformedBhCurves = actionDocument?.canonicalValue !== undefined
+    && hasMalformedBhCurveRoot(actionDocument.canonicalValue);
   const fieldSourceEditorDocument = documents.find((item) => item.id === fieldSourceEditorDocumentId);
   const materialPropertyEditorDocument = documents.find((item) => item.id === materialPropertyEditorDocumentId);
   const timeFunctionEditorDocument = documents.find((item) => item.id === timeFunctionEditorDocumentId);
+  const bhCurveEditorDocument = documents.find((item) => item.id === bhCurveEditorDocumentId);
 
   useEffect(() => {
     documentsRef.current = documents;
@@ -855,6 +861,22 @@ export default function InputControlFileEditorClient(): ReactNode {
               <EditorIcon name="time" /> Edit Time Functions
             </button>
           )}
+          {actionIsEmSolution && (
+            <button
+              className="button button--sm button--secondary"
+              type="button"
+              disabled={actionHasInvalidAlternate || actionHasMalformedBhCurves}
+              title={actionHasInvalidAlternate
+                ? `Fix or discard invalid ${actionFormatLabel} changes before editing B-H Curves`
+                : actionHasMalformedBhCurves
+                  ? '20_BH_Curve exists but is not an editable array'
+                  : `Edit B-H Curves in ${actionDocument?.displayName ?? 'the active file'}`}
+              onClick={() => {
+                if (actionDocument) setBhCurveEditorDocumentId(actionDocument.id);
+              }}>
+              <EditorIcon name="curve" /> Edit B-H Curves
+            </button>
+          )}
           {documents.length >= 2 && (
             <select
               className={styles.select}
@@ -1007,6 +1029,18 @@ export default function InputControlFileEditorClient(): ReactNode {
           onApply={(nextValue) => {
             updateCanonicalDocument(timeFunctionEditorDocument.id, nextValue, 'Time Function');
             setTimeFunctionEditorDocumentId(undefined);
+          }}
+        />
+      )}
+      {bhCurveEditorDocument?.canonicalValue !== undefined && (
+        <BhCurveEditorModal
+          documentName={bhCurveEditorDocument.displayName}
+          value={bhCurveEditorDocument.canonicalValue}
+          portalTarget={document.fullscreenElement ?? document.body}
+          onClose={() => setBhCurveEditorDocumentId(undefined)}
+          onApply={(nextValue) => {
+            updateCanonicalDocument(bhCurveEditorDocument.id, nextValue, 'B-H Curve');
+            setBhCurveEditorDocumentId(undefined);
           }}
         />
       )}

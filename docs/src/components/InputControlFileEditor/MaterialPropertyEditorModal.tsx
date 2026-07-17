@@ -1,7 +1,9 @@
-import React, {type ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 
 import AddItemMenu from './AddItemMenu';
+import BhCurveReferencePicker from './BhCurveReferencePicker';
+import {createBhCurveReferenceCatalog, type BhCurveReferenceCatalog} from './bhCurveModel';
 import EditorIcon from './EditorIcon';
 import {
   createMaterialProperties,
@@ -46,6 +48,8 @@ interface MaterialPropertyEditorModalProps {
 }
 
 type StatusFilter = 'ALL' | 'VALID' | 'WARNING' | 'ERROR';
+
+const BhCurveCatalogContext = createContext<BhCurveReferenceCatalog>({state: 'missing', choices: []});
 
 const GROUP_DEFAULTS: Record<string, Record<string, unknown>> = {
   conductivity: {SIGMA: 0},
@@ -144,6 +148,7 @@ export default function MaterialPropertyEditorModal({
   }, [requestClose]);
 
   const stagedRoot = useMemo(() => replaceMaterialProperties(value, draftProperties), [draftProperties, value]);
+  const bhCurveCatalog = useMemo(() => createBhCurveReferenceCatalog(stagedRoot), [stagedRoot]);
   const issues = useMemo(() => validateMaterialProperties(stagedRoot), [stagedRoot]);
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
   const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
@@ -222,7 +227,7 @@ export default function MaterialPropertyEditorModal({
       </div>
     </div>
   );
-  return createPortal(modal, portalTarget ?? document.body);
+  return createPortal(<BhCurveCatalogContext.Provider value={bhCurveCatalog}>{modal}</BhCurveCatalogContext.Provider>, portalTarget ?? document.body);
 }
 
 function GeneralEditor({properties, issues, onChange}: {
@@ -462,7 +467,27 @@ function OptionalGroup({groupKey, entry, onAdd, onRemove, onField, compact, chil
 }
 
 function MaterialInput({field, value, onChange}: {field: MaterialFieldDefinition; value: unknown; onChange: (value: unknown) => void}): ReactNode {
+  const bhCurveCatalog = useContext(BhCurveCatalogContext);
   const label = `${field.label} (${field.key})`;
+  if (field.bhCurveReference) {
+    const reference = field.bhCurveReference;
+    if (field.kind === 'integer-array' && reference.axisLabels) {
+      const values = Array.isArray(value) ? value : [];
+      return <div className={`${styles.networkField} ${styles.materialReferenceField}`}><span>{field.label}<em>{field.key}</em></span>
+        <div className={styles.bhCurveAxisGrid}>{reference.axisLabels.map((axis, index) => <div key={axis} className={styles.bhCurveAxisInput}>
+          <span>{axis}</span>
+          <BhCurveReferencePicker catalog={bhCurveCatalog} compact allowZero={reference.allowZero} required={field.required}
+            value={values[index]} label={`${field.label} ${axis}`} fieldKey={`${field.key}[${index}]`}
+            onChange={(nextValue) => {
+              const next = Array.from({length: reference.axisLabels!.length}, (_, itemIndex) => values[itemIndex] ?? '');
+              next[index] = nextValue;
+              onChange(next);
+            }} />
+        </div>)}</div><small>{field.help}</small></div>;
+    }
+    return <BhCurveReferencePicker catalog={bhCurveCatalog} value={value} label={field.label} fieldKey={field.key}
+      help={field.help} unit={field.unit} allowZero={reference.allowZero} required={field.required} onChange={onChange} />;
+  }
   if (field.kind === 'vector3') {
     const values = Array.isArray(value) ? value : ['', '', ''];
     return <label className={styles.networkField}><span>{field.label}<em>{field.key}{field.unit ? ` · ${field.unit}` : ''}</em></span><div className={styles.fieldSourceVector}>{['X', 'Y', 'Z'].map((axis, index) => <input key={axis} aria-label={`${label} ${axis}`} type="number" step="any" value={inputValue(values[index])} onChange={(event) => { const next = [...values]; next[index] = numberValue(event.target.value); onChange(next); }} />)}</div><small>{field.help}</small></label>;

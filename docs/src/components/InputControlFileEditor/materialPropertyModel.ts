@@ -37,6 +37,10 @@ export interface MaterialFieldDefinition {
   max?: number;
   exclusiveMin?: number;
   exclusiveMax?: number;
+  bhCurveReference?: {
+    allowZero?: boolean;
+    axisLabels?: string[];
+  };
 }
 
 export interface MaterialFieldGroupDefinition {
@@ -83,8 +87,8 @@ const string = (key: string, label: string, help: string, extra: Partial<Materia
 const vector3 = (key: string, label: string, help: string, unit?: string, extra: Partial<MaterialFieldDefinition> = {}): MaterialFieldDefinition => (
   {key, label, kind: 'vector3', help, unit, required, exactItems: 3, ...extra}
 );
-const integerArray = (key: string, label: string, help: string, exactItems: number): MaterialFieldDefinition => (
-  {key, label, kind: 'integer-array', help, required, exactItems}
+const integerArray = (key: string, label: string, help: string, exactItems: number, extra: Partial<MaterialFieldDefinition> = {}): MaterialFieldDefinition => (
+  {key, label, kind: 'integer-array', help, required, exactItems, ...extra}
 );
 const numberArray = (key: string, label: string, help: string, exactItems: number, unit?: string): MaterialFieldDefinition => (
   {key, label, kind: 'number-array', help, unit, required, exactItems}
@@ -133,7 +137,7 @@ export const MATERIAL_FIELD_GROUPS: Record<string, MaterialFieldGroupDefinition>
     key: 'MagneticProperty', label: 'Magnetic property', description: 'Base isotropic magnetic material values.',
     documentationUrl: MATERIAL_DOCUMENTATION.volume, fields: [
       number('MU', 'Relative permeability', 'Linear relative permeability.', undefined, {required: false}),
-      integer('BH_CURVE_ID', 'B-H curve', 'B-H curve identifier; 0 selects linear permeability.', {required: false, min: 0}),
+      integer('BH_CURVE_ID', 'B-H curve', 'B-H curve identifier; 0 selects linear permeability.', {required: false, min: 0, bhCurveReference: {allowZero: true}}),
     ],
   },
   muXyz: {
@@ -152,7 +156,7 @@ export const MATERIAL_FIELD_GROUPS: Record<string, MaterialFieldGroupDefinition>
     key: 'MagneticProperty.BH_CURVE_XYZ', label: 'XYZ B-H curves', description: 'Independent nonlinear magnetic characteristics along three local axes.',
     documentationUrl: MATERIAL_DOCUMENTATION.volume, fields: [
       integer('COORD_ID', 'Coordinate system', 'Local coordinate-system identifier.'),
-      integerArray('BH_XYZ_ID', 'XYZ B-H curve IDs', 'B-H curve identifiers along X, Y, and Z.', 3),
+      integerArray('BH_XYZ_ID', 'XYZ B-H curve IDs', 'B-H curve identifiers along X, Y, and Z.', 3, {bhCurveReference: {allowZero: true, axisLabels: ['X', 'Y', 'Z']}}),
       numberArray('MU_XYZ', 'XYZ permeability', 'Linear relative permeability used where the corresponding curve ID is 0.', 3),
     ],
   },
@@ -161,7 +165,7 @@ export const MATERIAL_FIELD_GROUPS: Record<string, MaterialFieldGroupDefinition>
     documentationUrl: MATERIAL_DOCUMENTATION.volume, fields: [
       integer('COORD_ID', 'Coordinate system', 'Local coordinate-system identifier.'),
       integer('BH_XY', 'XY B-H curve', 'Two-dimensional in-plane B-H curve identifier.'),
-      integer('BH_Z', 'Z B-H curve', 'Optional Z-direction B-H curve identifier.', {required: false}),
+      integer('BH_Z', 'Z B-H curve', 'Optional Z-direction B-H curve identifier.', {required: false, bhCurveReference: {allowZero: true}}),
       number('MU_Z', 'Z permeability', 'Optional linear Z-direction relative permeability.', undefined, {required: false}),
     ],
   },
@@ -245,7 +249,7 @@ export const SURFACE_MATERIAL_SCHEMAS: Record<SurfaceMaterialType, MaterialField
 };
 
 export const NONLINEAR_IMPEDANCE_FIELDS: MaterialFieldDefinition[] = [
-  integer('BH_CURVE_ID', 'B-H curve', 'Nonlinear B-H curve identifier.'),
+  integer('BH_CURVE_ID', 'B-H curve', 'Nonlinear B-H curve identifier.', {bhCurveReference: {}}),
   number('AGRWALL', 'Agarwal factor', 'Agarwal nonlinear surface-impedance factor.'),
   number('K', 'K value', 'Nonlinear surface-impedance K parameter.'),
   number('HK', 'Knee-point field', 'Magnetic field strength at the B-H curve knee point.', 'A/m'),

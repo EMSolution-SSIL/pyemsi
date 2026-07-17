@@ -7,6 +7,7 @@ export type EditorIconName =
   | 'circuit'
   | 'close'
   | 'copy'
+  | 'curve'
   | 'delete'
   | 'down'
   | 'edit'
@@ -34,6 +35,7 @@ export default function EditorIcon({name, className, ...props}: EditorIconProps)
     circuit: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h2v3H7z"/><path d="M15 8h2v3h-2z"/><path d="M7 15h2v1H7z"/><path d="M15 15h2v1h-2z"/><path d="M9 9.5h6"/><path d="M9 15.5h6"/></>,
     close: <><path d="m6 6 12 12"/><path d="m18 6-12 12"/></>,
     copy: <><rect width="13" height="13" x="9" y="9" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+    curve: <><path d="M3 20V4"/><path d="M3 20h18"/><path d="M6 17c3-1 3-7 6-9s5-2 9-3"/></>,
     delete: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></>,
     down: <><path d="M12 5v14"/><path d="m18 13-6 6-6-6"/></>,
     edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></>,

@@ -137,6 +137,11 @@ async function openTimeFunctionEditor(): Promise<HTMLElement> {
   return screen.getByRole('dialog', {name: 'Time Function editor'});
 }
 
+async function openBhCurveEditor(): Promise<HTMLElement> {
+  await userEvent.click(screen.getByRole('button', {name: 'Edit B-H Curves'}));
+  return screen.getByRole('dialog', {name: 'B-H Curve editor'});
+}
+
 async function openSpecialSourceEditor(type: 'NETWORK' | 'CIRCUIT', row = 2): Promise<{dialog: HTMLElement; editor: HTMLElement}> {
   const dialog = await openFieldSourceEditor();
   await userEvent.click(within(dialog).getByRole('button', {name: `Edit Field Source row ${row}`}));
@@ -691,7 +696,7 @@ describe('InputControlFileEditorClient', () => {
     expect(within(dialog).getByRole('menu', {name: 'Choose Field Source type'})).toHaveTextContent('External lumped-element circuit network connected to FEM source series.');
     await userEvent.keyboard('{Escape}');
     expect(within(dialog).queryByRole('menu', {name: 'Choose Field Source type'})).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('button', {name: 'Add source'})).toHaveFocus();
+    await waitFor(() => expect(within(dialog).getByRole('button', {name: 'Add source'})).toHaveFocus());
     expect(screen.getByRole('dialog', {name: 'Field Source editor'})).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', {name: 'Add source'}));
     await userEvent.click(within(dialog).getByRole('menuitem', {name: 'Add External network (NETWORK)'}));
@@ -753,8 +758,9 @@ describe('InputControlFileEditorClient', () => {
     await userEvent.click(within(dialog).getByRole('button', {name: 'Edit Field Source row 1'}));
 
     await userEvent.click(within(dialog).getByRole('button', {name: 'Browse volume materials for Material IDs (MAT_IDS)'}));
+    within(dialog).getByRole('searchbox', {name: 'Search volume materials for Material IDs (MAT_IDS)'}).focus();
     await userEvent.keyboard('{Escape}');
-    expect(within(dialog).queryByRole('region', {name: 'Material IDs (MAT_IDS) material picker'})).not.toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).queryByRole('region', {name: 'Material IDs (MAT_IDS) material picker'})).not.toBeInTheDocument());
     expect(screen.getByRole('dialog', {name: 'Field Source editor'})).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', {name: 'Browse volume materials for Material IDs (MAT_IDS)'}));
     const volumePicker = within(dialog).getByRole('region', {name: 'Material IDs (MAT_IDS) material picker'});
@@ -901,6 +907,135 @@ describe('InputControlFileEditorClient', () => {
     expect(material.MagneticProperty.PACKING).toMatchObject({PACKING_FACTOR: 0.96, PACKING_DIRECTION: [0, 0, 1]});
   });
 
+  it('picks ordinary B-H curves for scalar, XYZ, Z-direction, and nonlinear material fields', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['20_BH_Curve'] = [
+      {BH_CURVE_ID: 1, data: {H: [0, 10], B: [0, 1]}, vendor: 'table-keep'},
+      {BH_CURVE_ID: 2, encrypted_data: 'ciphertext', vendor: 'encrypted-keep'},
+      {BH_CURVE_ID: 'bad', vendor: 'invalid-visible'},
+    ];
+    const curvesBefore = structuredClone(input['20_BH_Curve']);
+    input['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [
+        {MAT_ID: 1, MagneticProperty: {MU: 1, BH_CURVE_ID: 99, BH_CURVE_XYZ: {COORD_ID: 0, BH_XYZ_ID: [0, 0, 0], MU_XYZ: [1, 1, 1]}}},
+        {MAT_ID: 2, MagneticProperty: {MU: 1, ANISOTROPY2D: {COORD_ID: 0, BH_XY: 7, BH_Z: 0, MU_Z: 1}}},
+      ],
+      '16_2_2D_Element_Properties': [{SMAT_ID: 1, SURFACE_IMPEDANCE: {
+        SIGMA: 1, MU: 1, IMP_TYPE: 1,
+        Nonliear_Parameters: {BH_CURVE_ID: 9, AGRWALL: 0.75, K: 5, HK: 2000, vendor: 'keep'},
+      }}],
+    };
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('material-bh-picker.json', JSON.stringify(input))]);
+    const dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Volume (2)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit volume material row 1'}));
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose B-H curve'}));
+    let picker = within(dialog).getByRole('dialog', {name: 'Choose B-H curve'});
+    expect(within(picker).getByRole('button', {name: 'Entry 3 has an invalid BH_CURVE_ID'})).toBeDisabled();
+    await userEvent.type(within(picker).getByRole('searchbox', {name: 'Search B-H Curves for B-H curve'}), 'encrypted-keep');
+    await userEvent.click(within(picker).getByText('Raw JSON'));
+    expect(within(picker).getByText(/ciphertext/)).toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use BH_CURVE_ID 2 for B-H curve'}));
+    expect(within(dialog).getByLabelText('B-H curve (BH_CURVE_ID)')).toHaveValue(2);
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose XYZ B-H curve IDs X'}));
+    picker = within(dialog).getByRole('dialog', {name: 'Choose XYZ B-H curve IDs X'});
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use BH_CURVE_ID 1 for XYZ B-H curve IDs X'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose XYZ B-H curve IDs Y'}));
+    picker = within(dialog).getByRole('dialog', {name: 'Choose XYZ B-H curve IDs Y'});
+    expect(within(picker).getByRole('button', {name: 'Use BH_CURVE_ID 0 for XYZ B-H curve IDs Y'})).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose XYZ B-H curve IDs Z'}));
+    picker = within(dialog).getByRole('dialog', {name: 'Choose XYZ B-H curve IDs Z'});
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use BH_CURVE_ID 2 for XYZ B-H curve IDs Z'}));
+    expect(within(dialog).getByLabelText('XYZ B-H curve IDs X (BH_XYZ_ID[0])')).toHaveValue(1);
+    expect(within(dialog).getByLabelText('XYZ B-H curve IDs Y (BH_XYZ_ID[1])')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('XYZ B-H curve IDs Z (BH_XYZ_ID[2])')).toHaveValue(2);
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Back to materials'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit volume material row 2'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose Z B-H curve'}));
+    picker = within(dialog).getByRole('dialog', {name: 'Choose Z B-H curve'});
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use BH_CURVE_ID 1 for Z B-H curve'}));
+
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Back to materials'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Surface (1)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit surface material row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose B-H curve'}));
+    picker = within(dialog).getByRole('dialog', {name: 'Choose B-H curve'});
+    expect(within(picker).queryByRole('button', {name: 'Use BH_CURVE_ID 0 for B-H curve'})).not.toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', {name: 'Use BH_CURVE_ID 1 for B-H curve'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    const volumes = saved['16_Material_Properties']['16_1_3D_Element_Properties'];
+    expect(volumes[0].MagneticProperty).toMatchObject({BH_CURVE_ID: 2, BH_CURVE_XYZ: {BH_XYZ_ID: [1, 0, 2]}});
+    expect(volumes[1].MagneticProperty.ANISOTROPY2D.BH_Z).toBe(1);
+    expect(saved['16_Material_Properties']['16_2_2D_Element_Properties'][0].SURFACE_IMPEDANCE.Nonliear_Parameters).toMatchObject({BH_CURVE_ID: 1, vendor: 'keep'});
+    expect(saved['20_BH_Curve']).toEqual(curvesBefore);
+  });
+
+  it('keeps manual B-H curve entry available for missing collections and restores picker focus', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['16_Material_Properties'] = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [{MAT_ID: 1, MagneticProperty: {MU: 1, BH_CURVE_ID: 4}}],
+      '16_2_2D_Element_Properties': [],
+    };
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('missing-bh-picker.json', JSON.stringify(input))]);
+    await userEvent.click(screen.getByRole('button', {name: 'Fullscreen'}));
+    const dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Volume (1)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit volume material row 1'}));
+    const trigger = within(dialog).getByRole('button', {name: 'Choose B-H curve'});
+    await userEvent.click(trigger);
+    const picker = within(dialog).getByRole('dialog', {name: 'Choose B-H curve'});
+    expect(within(picker).getByText(/20_BH_Curve is missing/)).toBeInTheDocument();
+    expect(fullscreenElement?.contains(picker)).toBe(true);
+    within(picker).getByRole('searchbox', {name: 'Search B-H Curves for B-H curve'}).focus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(within(dialog).queryByRole('dialog', {name: 'Choose B-H curve'})).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    fireEvent.change(within(dialog).getByLabelText('B-H curve (BH_CURVE_ID)'), {target: {value: '77'}});
+    expect(within(dialog).getByLabelText('B-H curve (BH_CURVE_ID)')).toHaveValue(77);
+    await userEvent.click(trigger);
+    fireEvent.mouseDown(within(dialog).getByText('Volume material'));
+    await waitFor(() => expect(within(dialog).queryByRole('dialog', {name: 'Choose B-H curve'})).not.toBeInTheDocument());
+  });
+
+  it('explains malformed and empty B-H Curve catalogs without disabling material editing', async () => {
+    const materialProperties = {
+      EXTEND_TOTAL_for_COIL: 0,
+      '16_1_3D_Element_Properties': [{MAT_ID: 1, MagneticProperty: {MU: 1, BH_CURVE_ID: 4}}],
+      '16_2_2D_Element_Properties': [],
+    };
+    const malformed = JSON.parse(emsolutionInput());
+    malformed['16_Material_Properties'] = materialProperties;
+    malformed['20_BH_Curve'] = {BH_CURVE_ID: 1};
+    const empty = JSON.parse(emsolutionInput());
+    empty['16_Material_Properties'] = materialProperties;
+    empty['20_BH_Curve'] = [];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('malformed-bh-catalog.json', JSON.stringify(malformed))]);
+    let dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Volume (1)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit volume material row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose B-H curve'}));
+    expect(within(dialog).getByText(/20_BH_Curve is malformed/)).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
+
+    fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {target: {files: [jsonFile('empty-bh-catalog.json', JSON.stringify(empty))]}});
+    dialog = await openMaterialPropertyEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Volume (1)'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit volume material row 1'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Choose B-H curve'}));
+    expect(within(dialog).getByText(/No B-H Curves are defined/)).toBeInTheDocument();
+  });
+
   it('adds surface materials and preserves legacy nonlinear parameter spelling', async () => {
     const input = JSON.parse(emsolutionInput());
     input['16_Material_Properties'] = {
@@ -1044,7 +1179,7 @@ describe('InputControlFileEditorClient', () => {
     let picker = screen.getByRole('dialog', {name: 'Choose a Time Function'});
     expect(dialog.contains(picker)).toBe(true);
     expect(within(picker).getByRole('button', {name: 'Entry 3 has an invalid TIME_ID'})).toBeDisabled();
-    await userEvent.type(within(picker).getByRole('searchbox', {name: 'Search Time Functions'}), 'vendorRaw');
+    fireEvent.change(within(picker).getByRole('searchbox', {name: 'Search Time Functions'}), {target: {value: 'vendorRaw'}});
     expect(within(picker).getAllByText(/Unsupported OPTION 99/)).toHaveLength(2);
     await userEvent.click(within(picker).getByText('Raw JSON'));
     expect(within(picker).getByText(/"vendorRaw"/)).toBeInTheDocument();
@@ -1111,5 +1246,86 @@ describe('InputControlFileEditorClient', () => {
     const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
     expect(saved['17_Field_Source'][1].CIRCUIT.POWER_SUPPLIES[0].TIME_ID).toBe(5);
     expect(saved['18_Time_Function']).toEqual(timeFunctionsBefore);
+  });
+
+  it('creates a missing B-H Curve collection, edits paired points, and previews the curve', async () => {
+    const input = JSON.parse(emsolutionInput());
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('bh-curves.json', JSON.stringify(input))]);
+    const dialog = await openBhCurveEditor();
+    expect(within(dialog).getByText('No B-H Curves match the current filters.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Add B-H curve'}));
+    expect(within(dialog).getByRole('menu', {name: 'Choose B-H Curve type'})).toHaveTextContent('paired magnetic field strength');
+    await userEvent.click(within(dialog).getByRole('menuitem', {name: 'Add B-H table (table)'}));
+    fireEvent.change(within(dialog).getByLabelText('H point 2'), {target: {value: '100'}});
+    fireEvent.change(within(dialog).getByLabelText('B point 2'), {target: {value: '1.5'}});
+    expect(within(dialog).getByRole('img', {name: /B-H curve preview with 2 points/})).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const saved = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value);
+    expect(saved['20_BH_Curve']).toEqual([{BH_CURVE_ID: 1, data: {H: [0, 100], B: [0, 1.5]}}]);
+    expect(screen.getByText('Applied B-H Curve changes to the open document. Save the file to keep them.')).toBeInTheDocument();
+  });
+
+  it('preserves unknown table properties and edits encrypted curves only as raw JSON', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['20_BH_Curve'] = [
+      {BH_CURVE_ID: 1, data: {H: [0, 10], B: [0, 1], vendorData: 'keep'}, vendorEntry: {keep: true}},
+      {BH_CURVE_ID: 2, encrypted_data: 'ciphertext', vendor: 'keep'},
+    ];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('preserve-bh.json', JSON.stringify(input))]);
+    const dialog = await openBhCurveEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit B-H Curve row 1'}));
+    fireEvent.change(within(dialog).getByLabelText('B point 2'), {target: {value: '2'}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Back to B-H curves'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit B-H Curve row 2'}));
+    const rawEditor = within(dialog).getByLabelText('Raw B-H Curve entry JSON') as HTMLTextAreaElement;
+    expect(rawEditor.value).toContain('encrypted_data');
+    expect(within(dialog).queryByLabelText('H point 1')).not.toBeInTheDocument();
+    fireEvent.change(rawEditor, {target: {value: JSON.stringify({BH_CURVE_ID: 2, encrypted_data: 'new-cipher', vendor: 'keep'})}});
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Save raw JSON'}));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Apply changes'}));
+
+    const curves = JSON.parse((screen.getByRole('textbox', {name: /Monaco/}) as HTMLTextAreaElement).value)['20_BH_Curve'];
+    expect(curves[0]).toEqual({BH_CURVE_ID: 1, data: {H: [0, 10], B: [0, 2], vendorData: 'keep'}, vendorEntry: {keep: true}});
+    expect(curves[1]).toEqual({BH_CURVE_ID: 2, encrypted_data: 'new-cipher', vendor: 'keep'});
+  });
+
+  it('disables malformed B-H roots and confirms referenced ID changes', async () => {
+    const malformed = JSON.parse(emsolutionInput());
+    malformed['20_BH_Curve'] = {BH_CURVE_ID: 1, data: {H: [0, 1], B: [0, 1]}};
+    const valid = JSON.parse(emsolutionInput());
+    valid['20_BH_Curve'] = [{BH_CURVE_ID: 1, data: {H: [0, 1], B: [0, 1]}}];
+    valid['16_Material_Properties'] = {
+      '16_1_3D_Element_Properties': [{MAT_ID: 1, MagneticProperty: {BH_CURVE_ID: 1}}],
+      '16_2_2D_Element_Properties': [],
+    };
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('malformed-bh.json', JSON.stringify(malformed))]);
+    expect(screen.getByRole('button', {name: 'Edit B-H Curves'})).toBeDisabled();
+
+    fireEvent.change(container.querySelector<HTMLInputElement>('input[type="file"]')!, {target: {files: [jsonFile('referenced-bh.json', JSON.stringify(valid))]}});
+    const trigger = screen.getByRole('button', {name: 'Edit B-H Curves'});
+    const dialog = await openBhCurveEditor();
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Edit B-H Curve row 1'}));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
+    fireEvent.change(within(dialog).getByLabelText('B-H curve ID (BH_CURVE_ID)'), {target: {value: '2'}});
+    expect(within(dialog).getByLabelText('B-H curve ID (BH_CURVE_ID)')).toHaveValue(1);
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('referenced 1 time'));
+    await userEvent.click(within(dialog).getByRole('button', {name: 'Cancel'}));
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('targets a focused split B-H document and portals the modal into fullscreen', async () => {
+    const input = JSON.parse(emsolutionInput());
+    input['20_BH_Curve'] = [];
+    const {container} = render(<InputControlFileEditorClient />);
+    await chooseFiles(container, [jsonFile('generic.json', '{"value":1}'), jsonFile('curves.json', JSON.stringify(input))]);
+    await userEvent.selectOptions(screen.getByLabelText('Split editor with'), screen.getByRole('option', {name: 'curves.json'}));
+    await userEvent.click(screen.getByRole('button', {name: 'Fullscreen'}));
+    const dialog = await openBhCurveEditor();
+    expect(dialog).toHaveTextContent('curves.json');
+    expect(fullscreenElement?.contains(dialog)).toBe(true);
   });
 });

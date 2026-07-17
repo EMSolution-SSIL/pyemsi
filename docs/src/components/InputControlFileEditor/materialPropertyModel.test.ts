@@ -7,6 +7,8 @@ import {
   hasMalformedMaterialPropertyRoot,
   inspectSurfaceMaterial,
   MATERIAL_DOCUMENTATION,
+  MATERIAL_FIELD_GROUPS,
+  NONLINEAR_IMPEDANCE_FIELDS,
   nonlinearParametersKey,
   replaceMaterialProperties,
   SURFACE_MATERIAL_TYPES,
@@ -31,6 +33,14 @@ describe('EMSolution Material Property model', () => {
     expect(MATERIAL_DOCUMENTATION.electrostatic).toContain('16_1_2_ES_3D_Element_Properties');
     expect(MATERIAL_DOCUMENTATION.surface).toContain('16_2_2D_Element_Properties');
     expect(SURFACE_MATERIAL_TYPES).toEqual(['SURFACE_IMPEDANCE', 'GAP_ELEMENT', 'THIN_CONDUCTOR', 'SHELL_COIL']);
+  });
+
+  it('annotates only ordinary B-H curve material references with picker behavior', () => {
+    expect(MATERIAL_FIELD_GROUPS.magnetic.fields.find((field) => field.key === 'BH_CURVE_ID')?.bhCurveReference).toEqual({allowZero: true});
+    expect(MATERIAL_FIELD_GROUPS.bhCurveXyz.fields.find((field) => field.key === 'BH_XYZ_ID')?.bhCurveReference).toEqual({allowZero: true, axisLabels: ['X', 'Y', 'Z']});
+    expect(MATERIAL_FIELD_GROUPS.anisotropy2d.fields.find((field) => field.key === 'BH_Z')?.bhCurveReference).toEqual({allowZero: true});
+    expect(MATERIAL_FIELD_GROUPS.anisotropy2d.fields.find((field) => field.key === 'BH_XY')?.bhCurveReference).toBeUndefined();
+    expect(NONLINEAR_IMPEDANCE_FIELDS.find((field) => field.key === 'BH_CURVE_ID')?.bhCurveReference).toEqual({});
   });
 
   it('creates a missing material block without mutating the input', () => {
