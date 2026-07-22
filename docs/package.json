@@ -10,6 +10,8 @@
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc"
@@ -20,17 +22,29 @@
     "@docusaurus/preset-classic": "^3.10.0",
     "@kitware/vtk.js": "^35.4.0",
     "@mdx-js/react": "^3.0.0",
+    "@monaco-editor/react": "^4.7.0",
     "clsx": "^2.0.0",
+    "jsonc-parser": "^3.3.1",
     "lil-gui": "^0.21.0",
+    "monaco-editor": "^0.55.1",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "smol-toml": "^1.7.0",
+    "toml-eslint-parser": "^1.0.3",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "^3.10.0",
     "@docusaurus/tsconfig": "^3.10.0",
     "@docusaurus/types": "^3.10.0",
-    "typescript": "~5.6.2"
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "jsdom": "^29.1.1",
+    "monaco-editor-webpack-plugin": "^7.1.1",
+    "typescript": "~5.6.2",
+    "vitest": "^4.1.10"
   },
   "browserslist": {
     "production": [
