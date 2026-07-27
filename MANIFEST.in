@@ -22,7 +22,7 @@ include pyemsi/widgets/xterm/index.html
 recursive-include pyemsi/widgets/xterm/xterm-js *
 
 # Include example data files
-recursive-include pyemsi/examples *.pvd *.vtm *.vtu
+recursive-include pyemsi/examples *.pvd *.vtm *.vtu *.vtk
 
 # Exclude test files
 global-exclude tests/

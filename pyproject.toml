@@ -82,6 +82,10 @@ gmsh = "*"
 cython = ">=3.0.0"
 pytest = ">=7.0.0"
 pytest-cov = ">=3.0.0"
+trame-vtk = ">=2.11.14,<3"
+trame-vuetify = ">=3.2.5,<4"
+trame-server = ">=3.12.5,<4"
+trame = ">=3.13.2,<4"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
@@ -114,6 +118,7 @@ version = {attr = "pyemsi.__version__"}
 [tool.setuptools.package-data]
 "pyemsi.examples" = [
     "*.pvd",
+    "*.vtk",
     "ipm_motor/*.vtm",
     "ipm_motor/*/*.vtu",
     "transient/*.vtm",

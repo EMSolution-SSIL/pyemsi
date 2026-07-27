@@ -122,6 +122,7 @@ class Plotter:
     _window: "QtPlotterWindow | None"
     _qt_props: dict[str, object]
     _qt_interactor_kwargs: dict[str, object]
+    _deformation_props: dict[str, object] | None
     _feature_edges_props: dict[str, object] | None
     _scalar_props: dict[str, object]
     _vector_props: dict[str, object]
@@ -167,6 +168,7 @@ class Plotter:
         self.reader = None
         self._qt_props = {"title": title, "window_size": window_size, "position": position}
         self._qt_interactor_kwargs = kwargs
+        self._deformation_props = None
         self._feature_edges_props = {
             "color": "white",
             "line_width": 1,
@@ -649,6 +651,70 @@ class Plotter:
 
         # Render to update display
         self.plotter.render()
+
+    def set_deformation(self, name: str, scale: float = 1.0) -> "Plotter":
+        """
+        Configure nodal deformation by a point-data vector array.
+
+        The deformation is applied when the visualization pipeline is rebuilt by
+        :meth:`show`, :meth:`render`, or :meth:`export`. Mesh points are displaced
+        according to ``points + scale * vectors``.
+
+        Parameters
+        ----------
+        name : str
+            Name of the three-component point-data vector array.
+        scale : float, optional
+            Multiplier applied to the vectors. Default is 1.0.
+
+        Returns
+        -------
+        Plotter
+            Returns self to enable method chaining.
+
+        Raises
+        ------
+        ValueError
+            If ``scale`` is not a finite number.
+        """
+        try:
+            scale_value = float(scale)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("scale must be a finite number.") from exc
+
+        if not np.isfinite(scale_value):
+            raise ValueError("scale must be a finite number.")
+
+        self._deformation_props = {"name": name, "scale": scale_value}
+        return self
+
+    def _apply_deformation(self) -> None:
+        """Apply the configured nodal deformation to the freshly loaded mesh."""
+        if self._deformation_props is None:
+            return
+
+        name = str(self._deformation_props["name"])
+        scale = float(self._deformation_props["scale"])
+        matching_blocks = []
+
+        for idx, block, block_name in self._iter_blocks():
+            if name not in block.point_data:
+                continue
+
+            vectors = np.asarray(block.point_data[name])
+            if vectors.ndim != 2 or vectors.shape[1] != 3:
+                block_label = block_name if block_name is not None else idx
+                raise ValueError(
+                    f"Deformation array '{name}' must be a three-component point-data array, "
+                    f"got shape {vectors.shape} in block '{block_label}'."
+                )
+            matching_blocks.append(block)
+
+        if not matching_blocks:
+            raise ValueError(f"Deformation point-data array '{name}' was not found in any non-empty mesh block.")
+
+        for block in matching_blocks:
+            block.warp_by_vector(vectors=name, factor=scale, inplace=True)
 
     def set_feature_edges(
         self,
@@ -1159,11 +1225,12 @@ class Plotter:
         Display the plotter.
 
         If a mesh was loaded via set_file() or the filepath parameter, this method:
-        1. Plots scalar fields (if set_scalar() was called)
-        2. Plots contours (if set_contour() was called)
-        3. Plots vector fields (if set_vector() was called)
-        4. Extracts and plots feature edges (automatically)
-        5. Resets the camera to frame the mesh
+        1. Applies nodal deformation (if set_deformation() was called)
+        2. Plots scalar fields (if set_scalar() was called)
+        3. Plots contours (if set_contour() was called)
+        4. Plots vector fields (if set_vector() was called)
+        5. Extracts and plots feature edges (automatically)
+        6. Resets the camera to frame the mesh
 
         In desktop mode, shows the QMainWindow and starts the Qt event loop (blocking).
         In notebook mode, returns the interactive widget for display in Jupyter.
@@ -1184,6 +1251,7 @@ class Plotter:
             self._plot_contours()
             self._plot_vector_field()
             self._plot_feature_edges()
+            self._apply_deformation()
 
         if self._notebook:
             # Notebook mode: return the widget for Jupyter display
@@ -1204,8 +1272,8 @@ class Plotter:
 
         This method captures a screenshot of the current visualization and saves it to the
         specified file. If a reader is available, the mesh is reset and plot elements
-        (scalar fields, contours, vector fields, and feature edges) are refreshed before
-        exporting to ensure a clean render.
+        (deformation, scalar fields, contours, vector fields, and feature edges) are
+        refreshed before exporting to ensure a clean render.
 
         Parameters
         ----------
@@ -1236,6 +1304,7 @@ class Plotter:
             self._plot_contours()
             self._plot_vector_field()
             self._plot_feature_edges()
+            self._apply_deformation()
             self.plotter.reset_camera()
 
         self.plotter.screenshot(
@@ -1248,8 +1317,8 @@ class Plotter:
         Re-render the current scene without reopening the plot window.
 
         When a reader is available, this method resets the mesh and re-plots all
-        visualization elements (scalar fields, contours, vector fields, and feature
-        edges) before triggering a render on the underlying PyVista/Qt plotter.
+        visualization elements (deformation, scalar fields, contours, vector fields,
+        and feature edges) before triggering a render on the underlying PyVista/Qt plotter.
 
         Unlike :meth:`show`, which is responsible for displaying the plot window
         (or notebook view) and starting the interactive session, :meth:`render`
@@ -1266,6 +1335,7 @@ class Plotter:
             self._plot_contours()
             self._plot_vector_field()
             self._plot_feature_edges()
+            self._apply_deformation()
             self.plotter.suppress_rendering = False
             self.plotter.render()
 

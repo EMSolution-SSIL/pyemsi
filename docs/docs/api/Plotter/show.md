@@ -10,7 +10,8 @@ If a file was loaded (via `filepath` or [`set_file()`](/docs/api/Plotter/set_fil
 2. Contours ([`set_contour()`](/docs/api/Plotter/set_contour.md))
 3. Vector glyphs ([`set_vector()`](/docs/api/Plotter/set_vector.md))
 4. Feature edges ([`set_feature_edges()`](/docs/api/Plotter/set_feature_edges.md))
-5. Camera reset
+5. Nodal deformation ([`set_deformation()`](/docs/api/Plotter/set_deformation.md))
+6. Camera reset
 
 :::info[Returns]
 - Desktop mode (`notebook=False`): `None` (starts the Qt event loop; blocking).
@@ -22,7 +23,7 @@ If a file was loaded (via `filepath` or [`set_file()`](/docs/api/Plotter/set_fil
 ```python
 from pyemsi import examples, Plotter
 
-file_path = examples.transient_path() # Or path to .pvd file
+file_path = examples.transient_path()  # Or path to .pvd file
 
 plt = Plotter(file_path)
 plt.set_scalar("B-Mag (T)")

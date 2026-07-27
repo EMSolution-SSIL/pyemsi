@@ -72,6 +72,7 @@ If a file was loaded (via `filepath` or [`set_file()`](./set_file.md)), [`show()
 - Scalar field ([`set_scalar()`](./set_scalar.md))
 - Contours ([`set_contour()`](./set_contour.md))
 - Vector glyphs ([`set_vector()`](./set_vector.md))
+- Nodal deformation ([`set_deformation()`](./set_deformation.md))
 - Feature edges ([`set_feature_edges()`](./set_feature_edges.md), enabled by default)
 - Camera reset
 
@@ -89,6 +90,7 @@ If no file was loaded, you can still use the underlying `plotter` directly and a
 | [`set_scalar(...)`](./set_scalar) | Configure scalar coloring. |
 | [`set_contour(...)`](./set_contour) | Configure contours. |
 | [`set_vector(...)`](./set_vector) | Configure vector glyphs. |
+| [`set_deformation(name, scale=1.0)`](./set_deformation) | Configure nodal mesh deformation. |
 | [`get_block_names()`](./get_block_names) | Get list of block names from multi-block mesh. |
 | [`get_block_visibility(block_name)`](./get_block_visibility) | Check visibility state of a block. |
 | [`set_block_visibility(block_name, visible)`](./set_block_visibility) | Set visibility for a single block. |
