@@ -572,3 +572,140 @@ def test_field_plot_builder_dialog_plots_external_selection(tmp_path, monkeypatc
     assert calls[1][1]["mode"] == "node"
     assert added["title"] == "Field Plot"
     assert dialog.result() == QDialog.DialogCode.Accepted
+
+
+def _cached_dialog(tmp_path):
+    manager, workspace = _make_manager(tmp_path)
+    plot_path = workspace / ".pyemsi" / "output.pvd"
+    plot_path.parent.mkdir(parents=True)
+    plot_path.write_text("dummy", encoding="utf-8")
+    manager.set_local("tools.field_plot.cached_pvds", [_cached_entry(os.path.join(".pyemsi", "output.pvd"))])
+    manager.save()
+    return FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace)), plot_path
+
+
+def test_field_plot_builder_dialog_deformation_defaults_to_disabled(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+
+    assert not dialog._deformation_enabled_checkbox.isChecked()
+    assert dialog._deformation_panel.summary_text() == "Disabled"
+    assert dialog._deformation_name_combo.count() == 0
+    assert dialog._deformation_scale_edit.text() == dialog_module._format_float_text(1.0)
+
+
+def test_field_plot_builder_dialog_deformation_lists_only_point_vectors_for_external_files(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    external_path = workspace / "external.vtu"
+    external_path.write_text("dummy", encoding="utf-8")
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+
+    dialog._select_external_field(_external_metadata(external_path))
+
+    assert [
+        dialog._deformation_name_combo.itemData(index) for index in range(dialog._deformation_name_combo.count())
+    ] == ["Point Vector"]
+
+
+def test_field_plot_builder_dialog_deformation_falls_back_to_all_cached_vectors(tmp_path):
+    _app()
+    dialog, _plot_path = _cached_dialog(tmp_path)
+
+    assert [
+        dialog._deformation_name_combo.itemData(index) for index in range(dialog._deformation_name_combo.count())
+    ] == ["Point Vector"]
+
+
+def test_field_plot_builder_dialog_suggest_deformation_scale_uses_cached_metadata(tmp_path, monkeypatch):
+    _app()
+    dialog, _plot_path = _cached_dialog(tmp_path)
+    dialog._deformation_enabled_checkbox.setChecked(True)
+
+    class _UnexpectedPlotter:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AssertionError("Plotter should not be created for cached scale suggestions")
+
+    monkeypatch.setattr(dialog_module, "Plotter", _UnexpectedPlotter)
+
+    dialog._on_suggest_deformation_scale()
+
+    # 0.1 * mesh_length (20.0) / max magnitude (5.0)
+    assert dialog._deformation_scale_edit.text() == dialog_module._format_float_text(0.4)
+    assert dialog._deformation_panel.summary_text() == "Point Vector | x 0.4"
+
+
+def test_field_plot_builder_dialog_deformation_alone_is_not_a_stage(tmp_path, monkeypatch):
+    _app()
+    dialog, _plot_path = _cached_dialog(tmp_path)
+    dialog._deformation_enabled_checkbox.setChecked(True)
+    warnings = []
+    monkeypatch.setattr(dialog_module.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+
+    dialog._on_plot()
+
+    assert warnings == ["Select at least one plotting stage."]
+
+
+def test_field_plot_builder_dialog_deformation_scale_accepts_zero_and_negative(tmp_path):
+    _app()
+    dialog, _plot_path = _cached_dialog(tmp_path)
+    dialog._deformation_enabled_checkbox.setChecked(True)
+    dialog._scalar_enabled_checkbox.setChecked(True)
+
+    dialog._deformation_scale_edit.setText("-1.5")
+    assert dialog._validate_for_plot() is None
+    dialog._deformation_scale_edit.setText("0")
+    assert dialog._validate_for_plot() is None
+    dialog._deformation_scale_edit.setText("")
+    assert dialog._validate_for_plot() == "Deformation scale is required."
+
+
+def test_field_plot_builder_dialog_plots_and_scripts_deformation(tmp_path, monkeypatch):
+    _app()
+    dialog, plot_path = _cached_dialog(tmp_path)
+    dialog._scalar_enabled_checkbox.setChecked(True)
+    dialog._deformation_enabled_checkbox.setChecked(True)
+    dialog._deformation_scale_edit.setText("5000")
+
+    captured = {}
+
+    class _FakeGeneratedScriptDialog:
+        def __init__(self, script_text, parent=None) -> None:
+            captured["script"] = script_text
+
+        def exec(self) -> int:
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(dialog_module, "GeneratedScriptDialog", _FakeGeneratedScriptDialog)
+    dialog._open_script_dialog()
+
+    assert "field_plot.set_deformation(name='Point Vector', scale=5000.0)" in captured["script"]
+
+    calls = []
+
+    class _FakePlotter:
+        def __init__(self, filepath) -> None:
+            calls.append(("init", filepath))
+
+        def set_scalar(self, **kwargs) -> None:
+            calls.append(("set_scalar", kwargs))
+
+        def set_feature_edges(self, **kwargs) -> None:
+            calls.append(("set_feature_edges", kwargs))
+
+        def set_deformation(self, **kwargs) -> None:
+            calls.append(("set_deformation", kwargs))
+
+        def close(self) -> None:
+            calls.append(("close", None))
+
+    monkeypatch.setattr(dialog_module, "Plotter", _FakePlotter)
+    monkeypatch.setattr(gui, "add_field", lambda plotter, title: None)
+
+    dialog._on_plot()
+
+    assert ("set_deformation", {"name": "Point Vector", "scale": 5000.0}) in calls
+    assert dialog.result() == QDialog.DialogCode.Accepted

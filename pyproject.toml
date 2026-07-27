@@ -94,6 +94,7 @@ ems-file-format-converter = "*"
 [tool.pixi.activation.env]
 QT_API = "pyside6"
 PYTHONPATH = "%CONDA_PREFIX%\\Library\\bin"
+QTWEBENGINE_CHROMIUM_FLAGS = "--no-sandbox"
 
 [tool.pixi.tasks]
 gui = "python -m pyemsi.gui"

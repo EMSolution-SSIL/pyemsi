@@ -214,6 +214,15 @@ def _vector_scale_options_from_names(names: list[str]) -> list[tuple[str, str | 
     ]
 
 
+def _deformation_names(metadata) -> list[str]:
+    # ponytail: cached FEMAP entries carry no point/cell association; offer everything there
+    # and let Plotter raise if a cell vector is picked.
+    associations = getattr(metadata, "vector_associations", None)
+    if associations is None:
+        return list(metadata.vector_names)
+    return [name for name in metadata.vector_names if "point" in associations.get(name, ())]
+
+
 @dataclass(slots=True)
 class _CachedPlotMetadata:
     relative_path: str
@@ -461,6 +470,43 @@ class FieldPlotBuilderDialog(QDialog):
         )
         self._feature_edges_panel.set_content_widget(self._feature_edges_section)
 
+        self._deformation_enabled_checkbox = QCheckBox("Deformation", self)
+        self._deformation_enabled_checkbox.setStyleSheet("font-weight: 800;")
+        self._deformation_enabled_checkbox.setChecked(defaults["deformation_enabled"])
+        self._deformation_name_combo = QComboBox(self)
+        self._populate_named_combo(self._deformation_name_combo, [], defaults["deformation_name"])
+        deformation_scale_validator = QDoubleValidator(self)
+        deformation_scale_validator.setNotation(QDoubleValidator.Notation.ScientificNotation)
+        deformation_scale_validator.setBottom(-1e300)
+        deformation_scale_validator.setTop(1e300)
+        deformation_scale_validator.setDecimals(1000)
+        deformation_scale_validator.setLocale(QLocale.c())
+        self._deformation_scale_edit = QLineEdit(_format_float_text(float(defaults["deformation_scale"])), self)
+        self._deformation_scale_edit.setValidator(deformation_scale_validator)
+        self._deformation_scale_edit.setPlaceholderText("1.0")
+        self._suggest_deformation_scale_button = QPushButton(self)
+        self._suggest_deformation_scale_button.setText("Suggest")
+        self._suggest_deformation_scale_button.setIcon(QIcon(":/icons/Telescope.svg"))
+        self._suggest_deformation_scale_button.setToolTip(
+            "Suggest a deformation scale from the discovered field data"
+        )
+        deformation_scale_widget = QWidget(self)
+        deformation_scale_layout = QHBoxLayout(deformation_scale_widget)
+        deformation_scale_layout.setContentsMargins(0, 0, 0, 0)
+        deformation_scale_layout.setSpacing(6)
+        deformation_scale_layout.addWidget(self._deformation_scale_edit, 1)
+        deformation_scale_layout.addWidget(self._suggest_deformation_scale_button)
+        self._deformation_section = self._build_two_column_form(
+            [(("Name", self._deformation_name_combo), ("Scale", deformation_scale_widget))],
+            self,
+        )
+        self._deformation_panel = _CollapsibleSection(
+            "Deformation",
+            self,
+            header_widget=self._deformation_enabled_checkbox,
+        )
+        self._deformation_panel.set_content_widget(self._deformation_section)
+
         self._sections_scroll_area = QScrollArea(self)
         self._sections_scroll_area.setWidgetResizable(True)
         self._sections_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
@@ -474,6 +520,7 @@ class FieldPlotBuilderDialog(QDialog):
         sections_layout.addWidget(self._contour_panel)
         sections_layout.addWidget(self._vector_panel)
         sections_layout.addWidget(self._feature_edges_panel)
+        sections_layout.addWidget(self._deformation_panel)
         sections_layout.addStretch(1)
         self._sections_scroll_area.setWidget(sections_container)
         layout.addWidget(self._sections_scroll_area, 1)
@@ -494,6 +541,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._contour_enabled_checkbox.toggled.connect(self._on_contour_enabled_toggled)
         self._vector_enabled_checkbox.toggled.connect(self._on_vector_enabled_toggled)
         self._feature_edges_enabled_checkbox.toggled.connect(self._on_feature_edges_enabled_toggled)
+        self._deformation_enabled_checkbox.toggled.connect(self._on_deformation_enabled_toggled)
         self._vector_use_tolerance_checkbox.toggled.connect(self._vector_tolerance_spin.setEnabled)
         self._scalar_show_edges_checkbox.toggled.connect(self._on_scalar_show_edges_toggled)
         self._feature_edges_remove_small_loops_checkbox.toggled.connect(
@@ -518,9 +566,12 @@ class FieldPlotBuilderDialog(QDialog):
         self._feature_edges_remove_small_loops_checkbox.toggled.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_max_loop_edges_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_feature_angle_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._deformation_name_combo.currentTextChanged.connect(self._update_deformation_panel_summary)
+        self._deformation_scale_edit.textChanged.connect(self._update_deformation_panel_summary)
         self._file_combo.currentIndexChanged.connect(self._on_field_selection_changed)
         self._browse_button.clicked.connect(self._on_browse_field_file)
         self._suggest_factor_button.clicked.connect(self._on_suggest_vector_factor)
+        self._suggest_deformation_scale_button.clicked.connect(self._on_suggest_deformation_scale)
         self._script_button.clicked.connect(self._open_script_dialog)
         self._plot_button.clicked.connect(self._on_plot)
         self._cancel_button.clicked.connect(self.reject)
@@ -531,10 +582,12 @@ class FieldPlotBuilderDialog(QDialog):
         self._on_contour_enabled_toggled(self._contour_enabled_checkbox.isChecked())
         self._on_vector_enabled_toggled(self._vector_enabled_checkbox.isChecked())
         self._on_feature_edges_enabled_toggled(self._feature_edges_enabled_checkbox.isChecked())
+        self._on_deformation_enabled_toggled(self._deformation_enabled_checkbox.isChecked())
         self._update_scalar_panel_summary()
         self._update_contour_panel_summary()
         self._update_vector_panel_summary()
         self._update_feature_edges_panel_summary()
+        self._update_deformation_panel_summary()
         self._on_scalar_show_edges_toggled(self._scalar_show_edges_checkbox.isChecked())
         self._vector_tolerance_spin.setEnabled(self._vector_use_tolerance_checkbox.isChecked())
         self._feature_edges_max_loop_edges_spin.setEnabled(self._feature_edges_remove_small_loops_checkbox.isChecked())
@@ -569,6 +622,9 @@ class FieldPlotBuilderDialog(QDialog):
             "feature_edges_remove_small_loops": True,
             "feature_edges_max_loop_edges": 10,
             "feature_edges_feature_angle": 30.0,
+            "deformation_enabled": False,
+            "deformation_name": None,
+            "deformation_scale": 1.0,
         }
 
     def showEvent(self, event) -> None:
@@ -602,6 +658,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._populate_named_combo(self._scalar_name_combo, [], None)
         self._populate_named_combo(self._contour_name_combo, [], None)
         self._populate_named_combo(self._vector_name_combo, [], None)
+        self._populate_named_combo(self._deformation_name_combo, [], None)
         self._populate_scale_combo(_vector_scale_options_from_names([]), None)
 
     def _workspace_root(self) -> str | None:
@@ -819,6 +876,7 @@ class FieldPlotBuilderDialog(QDialog):
         current_scalar = self._scalar_name_combo.currentData()
         current_contour = self._contour_name_combo.currentData()
         current_vector = self._vector_name_combo.currentData()
+        current_deformation = self._deformation_name_combo.currentData()
         current_scale = self._vector_scale_combo.currentData()
         scalar_names = metadata.scalar_names if metadata is not None else []
         contour_names = (
@@ -830,6 +888,11 @@ class FieldPlotBuilderDialog(QDialog):
         self._populate_named_combo(self._scalar_name_combo, scalar_names, current_scalar)
         self._populate_named_combo(self._contour_name_combo, contour_names, current_contour)
         self._populate_named_combo(self._vector_name_combo, vector_names, current_vector)
+        self._populate_named_combo(
+            self._deformation_name_combo,
+            _deformation_names(metadata) if metadata is not None else [],
+            current_deformation,
+        )
         selected_vector = self._vector_name_combo.currentData()
         scale_names = (
             self._vector_scale_names(metadata, str(selected_vector) if selected_vector is not None else None)
@@ -873,6 +936,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._update_scalar_panel_summary()
         self._update_contour_panel_summary()
         self._update_vector_panel_summary()
+        self._update_deformation_panel_summary()
 
     def _on_scalar_name_changed(self, _text: str | None = None) -> None:
         self._update_scalar_mode_options()
@@ -970,6 +1034,10 @@ class FieldPlotBuilderDialog(QDialog):
         self._set_stage_panel_state(self._feature_edges_panel, checked)
         self._update_feature_edges_panel_summary()
 
+    def _on_deformation_enabled_toggled(self, checked: bool) -> None:
+        self._set_stage_panel_state(self._deformation_panel, checked)
+        self._update_deformation_panel_summary()
+
     def _update_scalar_panel_summary(self) -> None:
         if not self._scalar_enabled_checkbox.isChecked():
             self._scalar_panel.set_summary("Disabled")
@@ -1051,6 +1119,40 @@ class FieldPlotBuilderDialog(QDialog):
                 )
             )
 
+    def _update_deformation_panel_summary(self) -> None:
+        if not self._deformation_enabled_checkbox.isChecked():
+            self._deformation_panel.set_summary("Disabled")
+            return
+        scale = self._deformation_scale_edit.text().strip() or "1.0"
+        self._deformation_panel.set_summary(
+            f"{self._selected_name(self._deformation_name_combo, fallback='Select array')} | x {scale}"
+        )
+
+    def _update_deformation_scale_from_metadata(
+        self,
+        metadata: _CachedPlotMetadata | FieldFileMetadata,
+    ) -> None:
+        if not self._deformation_enabled_checkbox.isChecked():
+            return
+
+        deformation_name = self._deformation_name_combo.currentData()
+        if deformation_name is None:
+            raise ValueError("Select a field file and choose a displacement vector before suggesting a scale.")
+
+        mesh_length = metadata.mesh_length
+        if not math.isfinite(mesh_length) or mesh_length <= 0.0:
+            raise ValueError("Unable to determine the mesh size for deformation auto-scaling.")
+
+        source_name = str(deformation_name)
+        source_range = metadata.array_ranges.get(source_name)
+        if source_range is None:
+            raise ValueError(f"Unable to determine range data for '{source_name}'.")
+        source_max = source_range["max"]
+        if not math.isfinite(source_max) or source_max <= 0.0:
+            raise ValueError(f"Maximum value for '{source_name}' must be greater than 0.")
+
+        self._deformation_scale_edit.setText(_format_float_text(0.1 * mesh_length / source_max))
+
     def _update_vector_factor_from_metadata(
         self,
         metadata: _CachedPlotMetadata | FieldFileMetadata,
@@ -1110,6 +1212,11 @@ class FieldPlotBuilderDialog(QDialog):
                 self._vector_factor()
             except ValueError as exc:
                 return str(exc)
+        if self._deformation_enabled_checkbox.isChecked():
+            try:
+                self._deformation_scale()
+            except ValueError as exc:
+                return str(exc)
         return None
 
     def _validate_stage_selections(self) -> str | None:
@@ -1119,6 +1226,8 @@ class FieldPlotBuilderDialog(QDialog):
             return "Select a field file and choose a point-associated scalar field before plotting contours."
         if self._vector_enabled_checkbox.isChecked() and self._vector_name_combo.currentData() is None:
             return "Select a field file and choose a vector field before plotting."
+        if self._deformation_enabled_checkbox.isChecked() and self._deformation_name_combo.currentData() is None:
+            return "Select a field file and choose a displacement vector before plotting deformation."
         return None
 
     def _scalar_kwargs(self) -> dict[str, object]:
@@ -1166,6 +1275,24 @@ class FieldPlotBuilderDialog(QDialog):
             "factor": self._vector_factor(),
             "tolerance": self._vector_tolerance(),
             "color_mode": str(self._vector_color_mode_combo.currentData()),
+        }
+
+    def _deformation_scale(self) -> float:
+        text = self._deformation_scale_edit.text().strip()
+        if not text:
+            raise ValueError("Deformation scale is required.")
+        try:
+            value = float(text)
+        except ValueError as exc:
+            raise ValueError("Deformation scale must be a valid number.") from exc
+        if not math.isfinite(value):
+            raise ValueError("Deformation scale must be finite.")
+        return value  # ponytail: zero and negative are valid per set_deformation()
+
+    def _deformation_kwargs(self) -> dict[str, object]:
+        return {
+            "name": self._selected_name(self._deformation_name_combo),
+            "scale": self._deformation_scale(),
         }
 
     def _feature_edges_kwargs(self) -> dict[str, object]:
@@ -1223,6 +1350,13 @@ class FieldPlotBuilderDialog(QDialog):
         )
         if not self._feature_edges_enabled_checkbox.isChecked():
             lines.append("field_plot._feature_edges_props = None")
+        if self._deformation_enabled_checkbox.isChecked():
+            deformation_kwargs = self._deformation_kwargs()
+            lines.append(
+                "field_plot.set_deformation("
+                f"name={deformation_kwargs['name']!r}, scale={deformation_kwargs['scale']!r}"
+                ")"
+            )
         lines.extend(["", f"gui.add_field(field_plot, {self._current_title()!r})"])
         return "\n".join(lines)
 
@@ -1253,6 +1387,21 @@ class FieldPlotBuilderDialog(QDialog):
             QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
             return
 
+    def _on_suggest_deformation_scale(self) -> None:
+        error_message = self._validate_field_selection()
+        if error_message is not None:
+            QMessageBox.warning(self, "Invalid Field Plot", error_message)
+            return
+
+        try:
+            metadata = self._current_field_metadata()
+            if metadata is None:
+                raise ValueError("Select a field file before suggesting a deformation scale.")
+            self._update_deformation_scale_from_metadata(metadata)
+        except Exception as exc:
+            QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
+            return
+
     def _on_plot(self) -> None:
         error_message = self._validate_for_plot()
         if error_message is not None:
@@ -1274,6 +1423,8 @@ class FieldPlotBuilderDialog(QDialog):
                 plotter.set_feature_edges(**self._feature_edges_kwargs())
             else:
                 plotter._feature_edges_props = None
+            if self._deformation_enabled_checkbox.isChecked():
+                plotter.set_deformation(**self._deformation_kwargs())
 
             self._persist_settings()
 

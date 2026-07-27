@@ -27,8 +27,8 @@ Or click on <img src="/pyemsi/img/Field.svg" alt="Run icon" width="20"/> icon on
 1. Run the FEMAP conversion so the VTK output files are available.
 2. Open the Field Plot dialog.
 3. Select a cached converted field file from `Field File`.
-4. Enable and configure one or more plot stages such as scalar, contour, vector, and optional feature-edge display.
-5. If you are using vectors, click `Suggest` beside `Factor` when you want pyemsi to compute a glyph scale from the cached mesh size and array ranges.
+4. Enable and configure one or more plot stages such as scalar, contour, vector, and optional feature-edge and deformation display.
+5. If you are using vectors or deformation, click the `Suggest` button beside `Factor` or `Scale` when you want pyemsi to compute a value from the cached mesh size and array ranges.
 6. Click `Plot` to open the field view in pyemsi.
 
 ## Main Inputs
@@ -47,7 +47,7 @@ The dialog reloads the cached field-file list each time it opens.
 When you choose a cached `Field File`, pyemsi automatically:
 
 - loads the available scalar names into the `Scalar` and `Contour` sections
-- loads the available vector names into the `Vector` section
+- loads the available vector names into the `Vector` and `Deformation` sections
 - updates vector `Scale` choices from the cached scalar and vector names
 
 This data comes from FEMAP conversion metadata cached in the current workspace rather than from reading the selected file inside the dialog.
@@ -110,6 +110,36 @@ It includes:
 
 This helps make geometry boundaries easier to read in the final field view.
 
+### Deformation
+
+The `Deformation` section warps the displayed mesh by a nodal displacement vector, so a structural
+result can be viewed in its deformed shape. It is disabled by default.
+
+It includes:
+
+- `Name`: the three-component node (point) vector used as the displacement, such as `displacement`
+- `Scale`: the multiplier applied to every displacement vector, with a `Suggest` button to compute a
+  value from the cached mesh size and array ranges
+
+Displayed coordinates become `original_points + Scale * vectors`. The source VTK file is never
+modified, so replotting or changing other settings does not accumulate deformation.
+
+Displacements are usually far smaller than the model itself, so a `Scale` of `1.0` often looks
+identical to the undeformed mesh. Click `Suggest` to size the warp to roughly 10% of the model,
+which is the same rule used by the vector `Factor` suggestion. Values of `0` and negative numbers
+are also accepted — `0` shows the undeformed shape and a negative value inverts the displacement.
+
+`Name` only accepts node (point) vectors. When you browse for a VTK file directly, the dialog
+inspects it and lists point vectors only. For cached FEMAP files the node/element association is not
+stored in the cache, so every vector name is offered; picking an element vector reports an error when
+you click `Plot`.
+
+Deformation is a modifier rather than a plot stage, so — like `Feature Edges` — enabling it alone is
+not enough. Combine it with `Scalar`, `Contour`, or `Vector`; pairing it with a stress or
+displacement-magnitude `Scalar` is the typical structural view.
+
+For the underlying API, see [`set_deformation()`](/docs/api/Plotter/set_deformation).
+
 ## Script And Plot Actions
 
 The bottom row of the dialog provides the main actions.
@@ -120,9 +150,9 @@ The bottom row of the dialog provides the main actions.
 | `Plot` | Builds the field plot and opens it in pyemsi. |
 | `Cancel` | Closes the dialog without creating a plot. |
 
-The `Suggest` button in the `Vector` section is the only inline helper action. It uses cached mesh and range metadata for the selected field file to suggest a vector `Factor`.
+The `Suggest` buttons in the `Vector` and `Deformation` sections are the inline helper actions. Both use cached mesh and range metadata for the selected field file to suggest a vector `Factor` or a deformation `Scale`.
 
-`Plot` and `Script...` require a cached `Field File` selection. Any enabled scalar, contour, or vector stage must also have a valid field selection.
+`Plot` and `Script...` require a cached `Field File` selection. Any enabled scalar, contour, vector, or deformation section must also have a valid field selection.
 
 ## Result
 
