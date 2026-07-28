@@ -5,7 +5,7 @@ sidebar_position: 7
 
 Saves a screenshot of the rendered scene to an image file via [`plotter.screenshot()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.screenshot#pyvista.Plotter.screenshot).
 
-If a file-backed mesh is loaded, `export()` triggers the same full [visualization pipeline](./index.md#visualization-pipeline) rebuild as [`show()`](./show.md) before capturing the image — so all configured pipeline components ([`set_scalar()`](./set_scalar.md), [`set_contour()`](./set_contour.md), [`set_vector()`](./set_vector.md), [`set_feature_edges()`](./set_feature_edges.md)) are applied automatically.
+If a file-backed mesh is loaded, `export()` triggers the same full [visualization pipeline](./index.md#visualization-pipeline) rebuild as [`show()`](./show.md) before capturing the image — so all configured pipeline components ([`set_deformation()`](./set_deformation.md), [`set_scalar()`](./set_scalar.md), [`set_contour()`](./set_contour.md), [`set_vector()`](./set_vector.md), [`set_feature_edges()`](./set_feature_edges.md)) are applied automatically.
 
 If no mesh is loaded, the current state of the underlying [`plotter`](./plotter0.md) is captured as-is.
 
@@ -42,4 +42,5 @@ The output image would look like the following:
 - [`set_scalar()`](./set_scalar.md) — configure scalar field coloring
 - [`set_contour()`](./set_contour.md) — add contour lines
 - [`set_vector()`](./set_vector.md) — overlay vector glyphs
+- [`set_deformation()`](./set_deformation.md) — deform mesh points by nodal vectors
 - [`set_feature_edges()`](./set_feature_edges.md) — configure edge overlay

@@ -31,6 +31,17 @@ plt.plotter.export_html("docs/static/demos/ipm_motor.html")
 # plt.render()
 # plt.plotter.export_html("docs/static/demos/set_feature_edges.html")
 
+# --------- SET DEFORMATION DEMO ---------
+file_path = examples.structural_displacement_path()
+plt = Plotter(file_path)
+plt.set_feature_edges(color="red", line_width=2)
+plt.set_scalar("von_mises", mode="element")
+plt.set_deformation("displacement", scale=5e4)
+plt.plotter.view_xy()
+# plt.show()
+plt.render()
+plt.plotter.export_html("docs/static/demos/set_deformation.html")
+
 # --------- SET SCALAR DEMO ---------
 file_path = examples.ipm_motor_path()
 plt = Plotter(file_path)

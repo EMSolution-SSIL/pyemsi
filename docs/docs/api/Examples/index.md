@@ -9,3 +9,4 @@ The `pyemsi.examples` module provides built-in sample datasets for quick testing
 
 - [Transient](./transient.md)
 - [IPM Motor](./ipm_motor.md)
+- [Structural Displacement](./structural_displacement.md)

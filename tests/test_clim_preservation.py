@@ -59,6 +59,7 @@ def _make_plotter_with_offscreen():
     p.reader = None
     p._qt_props = {}
     p._qt_interactor_kwargs = {}
+    p._deformation_props = None
     p._feature_edges_props = {"color": "white", "line_width": 1, "opacity": 1.0}
     p._scalar_props = {}
     p._vector_props = {}

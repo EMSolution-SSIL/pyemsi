@@ -8,11 +8,13 @@ import os
 from PySide6.QtCore import QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QDoubleValidator, QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QColorDialog,
     QComboBox,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFrame,
     QFormLayout,
     QGridLayout,
@@ -31,12 +33,34 @@ from PySide6.QtWidgets import (
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi import Plotter
+from pyemsi.gui._field_file_metadata import FieldFileMetadata, inspect_field_file
 from pyemsi.gui.emsolution_output_plot_builder_dialog import GeneratedScriptDialog
 from pyemsi.plotter.colormaps import CMAP_CHOICES, cmap_choice_to_name, cmap_name_to_choice
 from pyemsi.settings import SettingsManager
 
 GLYPH_TYPE_OPTIONS: tuple[str, ...] = ("arrow", "cone", "sphere")
 COLOR_MODE_OPTIONS: tuple[str, ...] = ("scale", "scalar", "vector")
+VTK_FIELD_FILE_FILTER = (
+    "VTK Field Files "
+    "(*.vtk *.vtu *.vtp *.vti *.vtr *.vts *.vtm *.pvd *.pvtu *.pvtp *.pvti *.pvtr *.pvts)"
+)
+SUPPORTED_VTK_FIELD_SUFFIXES: frozenset[str] = frozenset(
+    {
+        ".vtk",
+        ".vtu",
+        ".vtp",
+        ".vti",
+        ".vtr",
+        ".vts",
+        ".vtm",
+        ".pvd",
+        ".pvtu",
+        ".pvtp",
+        ".pvti",
+        ".pvtr",
+        ".pvts",
+    }
+)
 
 
 class _ColorSelector(QWidget):
@@ -190,6 +214,15 @@ def _vector_scale_options_from_names(names: list[str]) -> list[tuple[str, str | 
     ]
 
 
+def _deformation_names(metadata) -> list[str]:
+    # ponytail: cached FEMAP entries carry no point/cell association; offer everything there
+    # and let Plotter raise if a cell vector is picked.
+    associations = getattr(metadata, "vector_associations", None)
+    if associations is None:
+        return list(metadata.vector_names)
+    return [name for name in metadata.vector_names if "point" in associations.get(name, ())]
+
+
 @dataclass(slots=True)
 class _CachedPlotMetadata:
     relative_path: str
@@ -200,6 +233,9 @@ class _CachedPlotMetadata:
     scale_names: list[str]
     mesh_length: float
     array_ranges: dict[str, dict[str, float]]
+    contour_names: list[str] | None = None
+    scalar_associations: dict[str, frozenset[str]] | None = None
+    vector_scale_names: dict[str, list[str]] | None = None
 
 
 class FieldPlotBuilderDialog(QDialog):
@@ -235,16 +271,18 @@ class FieldPlotBuilderDialog(QDialog):
         self._settings = settings_manager
         self._browse_dir_getter = browse_dir_getter
         self._cached_fields: list[_CachedPlotMetadata] = []
+        self._external_field: FieldFileMetadata | None = None
 
         self.setWindowTitle("Field Plot")
         self.setWindowIcon(QIcon(":/icons/Field.svg"))
         self.resize(720, 560)
 
         defaults = self._load_defaults()
-        self._default_selected_relative_path = defaults["selected_relative_path"]
 
         self._file_combo = QComboBox(self)
-        self._file_combo.setPlaceholderText("Run FEMAP conversion to populate cached field files")
+        self._file_combo.setPlaceholderText("Select a cached field file or browse for a VTK file")
+        self._browse_button = QPushButton("Browse…", self)
+        self._browse_button.setToolTip("Browse for a VTK field file")
         self._title_edit = QLineEdit(defaults["title"], self)
         self._title_edit.setPlaceholderText("Field Plot")
 
@@ -359,12 +397,20 @@ class FieldPlotBuilderDialog(QDialog):
             self,
         )
 
+        file_widget = QWidget(self)
+        file_widget_layout = QHBoxLayout(file_widget)
+        file_widget_layout.setContentsMargins(0, 0, 0, 0)
+        file_widget_layout.setSpacing(6)
+        file_widget_layout.addWidget(self._file_combo, 1)
+        file_widget_layout.addWidget(self._browse_button)
+
         file_layout = QFormLayout()
-        file_layout.addRow("Field File:", self._file_combo)
+        file_layout.addRow("Field File:", file_widget)
         file_layout.addRow("Title:", self._title_edit)
 
         helper_label = QLabel(
-            "Available field files and arrays come from cached FEMAP conversion metadata stored in this workspace. Run FEMAP conversion first if the field list is empty, then use Suggest to compute a vector scale from the cached full-run mesh size and array ranges.",
+            "Choose a cached FEMAP field file or browse for a VTK-family file. Browsed files are inspected for "
+            "point and cell scalar/vector arrays; Suggest uses the discovered mesh size and array ranges.",
             self,
         )
         helper_label.setWordWrap(True)
@@ -424,6 +470,43 @@ class FieldPlotBuilderDialog(QDialog):
         )
         self._feature_edges_panel.set_content_widget(self._feature_edges_section)
 
+        self._deformation_enabled_checkbox = QCheckBox("Deformation", self)
+        self._deformation_enabled_checkbox.setStyleSheet("font-weight: 800;")
+        self._deformation_enabled_checkbox.setChecked(defaults["deformation_enabled"])
+        self._deformation_name_combo = QComboBox(self)
+        self._populate_named_combo(self._deformation_name_combo, [], defaults["deformation_name"])
+        deformation_scale_validator = QDoubleValidator(self)
+        deformation_scale_validator.setNotation(QDoubleValidator.Notation.ScientificNotation)
+        deformation_scale_validator.setBottom(-1e300)
+        deformation_scale_validator.setTop(1e300)
+        deformation_scale_validator.setDecimals(1000)
+        deformation_scale_validator.setLocale(QLocale.c())
+        self._deformation_scale_edit = QLineEdit(_format_float_text(float(defaults["deformation_scale"])), self)
+        self._deformation_scale_edit.setValidator(deformation_scale_validator)
+        self._deformation_scale_edit.setPlaceholderText("1.0")
+        self._suggest_deformation_scale_button = QPushButton(self)
+        self._suggest_deformation_scale_button.setText("Suggest")
+        self._suggest_deformation_scale_button.setIcon(QIcon(":/icons/Telescope.svg"))
+        self._suggest_deformation_scale_button.setToolTip(
+            "Suggest a deformation scale from the discovered field data"
+        )
+        deformation_scale_widget = QWidget(self)
+        deformation_scale_layout = QHBoxLayout(deformation_scale_widget)
+        deformation_scale_layout.setContentsMargins(0, 0, 0, 0)
+        deformation_scale_layout.setSpacing(6)
+        deformation_scale_layout.addWidget(self._deformation_scale_edit, 1)
+        deformation_scale_layout.addWidget(self._suggest_deformation_scale_button)
+        self._deformation_section = self._build_two_column_form(
+            [(("Name", self._deformation_name_combo), ("Scale", deformation_scale_widget))],
+            self,
+        )
+        self._deformation_panel = _CollapsibleSection(
+            "Deformation",
+            self,
+            header_widget=self._deformation_enabled_checkbox,
+        )
+        self._deformation_panel.set_content_widget(self._deformation_section)
+
         self._sections_scroll_area = QScrollArea(self)
         self._sections_scroll_area.setWidgetResizable(True)
         self._sections_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
@@ -437,6 +520,7 @@ class FieldPlotBuilderDialog(QDialog):
         sections_layout.addWidget(self._contour_panel)
         sections_layout.addWidget(self._vector_panel)
         sections_layout.addWidget(self._feature_edges_panel)
+        sections_layout.addWidget(self._deformation_panel)
         sections_layout.addStretch(1)
         self._sections_scroll_area.setWidget(sections_container)
         layout.addWidget(self._sections_scroll_area, 1)
@@ -457,12 +541,13 @@ class FieldPlotBuilderDialog(QDialog):
         self._contour_enabled_checkbox.toggled.connect(self._on_contour_enabled_toggled)
         self._vector_enabled_checkbox.toggled.connect(self._on_vector_enabled_toggled)
         self._feature_edges_enabled_checkbox.toggled.connect(self._on_feature_edges_enabled_toggled)
+        self._deformation_enabled_checkbox.toggled.connect(self._on_deformation_enabled_toggled)
         self._vector_use_tolerance_checkbox.toggled.connect(self._vector_tolerance_spin.setEnabled)
         self._scalar_show_edges_checkbox.toggled.connect(self._on_scalar_show_edges_toggled)
         self._feature_edges_remove_small_loops_checkbox.toggled.connect(
             self._feature_edges_max_loop_edges_spin.setEnabled
         )
-        self._scalar_name_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
+        self._scalar_name_combo.currentTextChanged.connect(self._on_scalar_name_changed)
         self._scalar_mode_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
         self._scalar_cmap_combo.currentTextChanged.connect(self._update_scalar_panel_summary)
         self._scalar_show_edges_checkbox.toggled.connect(self._update_scalar_panel_summary)
@@ -471,7 +556,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._contour_name_combo.currentTextChanged.connect(self._update_contour_panel_summary)
         self._contour_n_contours_spin.valueChanged.connect(self._update_contour_panel_summary)
         self._contour_color_edit.valueChanged.connect(self._update_contour_panel_summary)
-        self._vector_name_combo.currentTextChanged.connect(self._update_vector_panel_summary)
+        self._vector_name_combo.currentTextChanged.connect(self._on_vector_name_changed)
         self._vector_scale_combo.currentTextChanged.connect(self._update_vector_panel_summary)
         self._vector_glyph_type_combo.currentTextChanged.connect(self._update_vector_panel_summary)
         self._vector_factor_edit.textChanged.connect(self._update_vector_panel_summary)
@@ -481,8 +566,12 @@ class FieldPlotBuilderDialog(QDialog):
         self._feature_edges_remove_small_loops_checkbox.toggled.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_max_loop_edges_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_feature_angle_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
+        self._deformation_name_combo.currentTextChanged.connect(self._update_deformation_panel_summary)
+        self._deformation_scale_edit.textChanged.connect(self._update_deformation_panel_summary)
         self._file_combo.currentIndexChanged.connect(self._on_field_selection_changed)
+        self._browse_button.clicked.connect(self._on_browse_field_file)
         self._suggest_factor_button.clicked.connect(self._on_suggest_vector_factor)
+        self._suggest_deformation_scale_button.clicked.connect(self._on_suggest_deformation_scale)
         self._script_button.clicked.connect(self._open_script_dialog)
         self._plot_button.clicked.connect(self._on_plot)
         self._cancel_button.clicked.connect(self.reject)
@@ -493,10 +582,12 @@ class FieldPlotBuilderDialog(QDialog):
         self._on_contour_enabled_toggled(self._contour_enabled_checkbox.isChecked())
         self._on_vector_enabled_toggled(self._vector_enabled_checkbox.isChecked())
         self._on_feature_edges_enabled_toggled(self._feature_edges_enabled_checkbox.isChecked())
+        self._on_deformation_enabled_toggled(self._deformation_enabled_checkbox.isChecked())
         self._update_scalar_panel_summary()
         self._update_contour_panel_summary()
         self._update_vector_panel_summary()
         self._update_feature_edges_panel_summary()
+        self._update_deformation_panel_summary()
         self._on_scalar_show_edges_toggled(self._scalar_show_edges_checkbox.isChecked())
         self._vector_tolerance_spin.setEnabled(self._vector_use_tolerance_checkbox.isChecked())
         self._feature_edges_max_loop_edges_spin.setEnabled(self._feature_edges_remove_small_loops_checkbox.isChecked())
@@ -504,7 +595,6 @@ class FieldPlotBuilderDialog(QDialog):
 
     def _load_defaults(self) -> dict[str, object]:
         return {
-            "selected_relative_path": self._settings.get_effective("tools.field_plot.selected_relative_path"),
             "title": "Field Plot",
             "scalar_enabled": False,
             "scalar_name": None,
@@ -532,6 +622,9 @@ class FieldPlotBuilderDialog(QDialog):
             "feature_edges_remove_small_loops": True,
             "feature_edges_max_loop_edges": 10,
             "feature_edges_feature_angle": 30.0,
+            "deformation_enabled": False,
+            "deformation_name": None,
+            "deformation_scale": 1.0,
         }
 
     def showEvent(self, event) -> None:
@@ -565,6 +658,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._populate_named_combo(self._scalar_name_combo, [], None)
         self._populate_named_combo(self._contour_name_combo, [], None)
         self._populate_named_combo(self._vector_name_combo, [], None)
+        self._populate_named_combo(self._deformation_name_combo, [], None)
         self._populate_scale_combo(_vector_scale_options_from_names([]), None)
 
     def _workspace_root(self) -> str | None:
@@ -582,13 +676,16 @@ class FieldPlotBuilderDialog(QDialog):
         data = self._file_combo.currentData()
         if data is None:
             return None
-        return str(data)
+        value = str(data)
+        return value if any(entry.relative_path == value for entry in self._cached_fields) else None
 
     def _selected_field_path(self) -> str | None:
         entry = self._current_cached_field()
-        if entry is None:
-            return None
-        return entry.resolved_path
+        if entry is not None:
+            return entry.resolved_path
+        if self._external_field is not None and self._file_combo.currentData() == self._external_field.resolved_path:
+            return self._external_field.resolved_path
+        return None
 
     def _current_cached_field(self) -> _CachedPlotMetadata | None:
         relative_path = self._selected_relative_path()
@@ -597,6 +694,14 @@ class FieldPlotBuilderDialog(QDialog):
         for entry in self._cached_fields:
             if entry.relative_path == relative_path:
                 return entry
+        return None
+
+    def _current_field_metadata(self) -> _CachedPlotMetadata | FieldFileMetadata | None:
+        cached_entry = self._current_cached_field()
+        if cached_entry is not None:
+            return cached_entry
+        if self._external_field is not None and self._file_combo.currentData() == self._external_field.resolved_path:
+            return self._external_field
         return None
 
     def _build_cached_plot_metadata(self, entry: dict[str, object]) -> _CachedPlotMetadata | None:
@@ -640,6 +745,42 @@ class FieldPlotBuilderDialog(QDialog):
             array_ranges=normalized_ranges,
         )
 
+    def _inspect_external_field(self, filepath: str, *, show_error: bool) -> FieldFileMetadata | None:
+        suffix = os.path.splitext(filepath)[1].lower()
+        if suffix not in SUPPORTED_VTK_FIELD_SUFFIXES:
+            if show_error:
+                QMessageBox.critical(
+                    self,
+                    "Field File Error",
+                    f"Unsupported field file type '{suffix or '(none)'}'. Select a VTK-family field file.",
+                )
+            return None
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        inspection_error: Exception | None = None
+        try:
+            metadata = inspect_field_file(filepath)
+        except Exception as exc:
+            metadata = None
+            inspection_error = exc
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if inspection_error is not None:
+            if show_error:
+                QMessageBox.critical(self, "Field File Error", str(inspection_error))
+            return None
+        assert metadata is not None
+        if not metadata.scalar_names and not metadata.vector_names:
+            if show_error:
+                QMessageBox.critical(
+                    self,
+                    "Field File Error",
+                    "The selected file contains no supported one-component scalar or three-component vector arrays.",
+                )
+            return None
+        return metadata
+
     def _reload_cached_fields(self) -> None:
         if self._settings.workspace_path is not None:
             self._settings.load_workspace(self._settings.workspace_path)
@@ -670,69 +811,207 @@ class FieldPlotBuilderDialog(QDialog):
         self._cached_fields = valid_entries
 
         selected_relative_path = self._settings.get_local("tools.field_plot.selected_relative_path")
-        if selected_relative_path is None:
-            selected_relative_path = self._default_selected_relative_path
         available_paths = {entry.relative_path for entry in valid_entries}
-        if selected_relative_path not in available_paths:
+        selected_relative_path = selected_relative_path if selected_relative_path in available_paths else None
+
+        remembered_filepath = self._settings.get_effective("tools.field_plot.filepath")
+        external_field = None
+        if selected_relative_path is None and isinstance(remembered_filepath, str) and remembered_filepath:
+            normalized_filepath = os.path.abspath(os.path.normpath(remembered_filepath))
+            if self._external_field is not None and self._external_field.resolved_path == normalized_filepath:
+                external_field = self._external_field
+            elif os.path.isfile(normalized_filepath):
+                external_field = self._inspect_external_field(normalized_filepath, show_error=False)
+        self._external_field = external_field
+
+        if selected_relative_path is None and external_field is None:
             selected_relative_path = valid_entries[0].relative_path if valid_entries else None
 
         self._file_combo.blockSignals(True)
         self._file_combo.clear()
         for entry in valid_entries:
             self._file_combo.addItem(entry.relative_path, entry.relative_path)
-        if selected_relative_path is not None:
+        if external_field is not None:
+            external_index = self._file_combo.count()
+            self._file_combo.addItem(
+                f"{os.path.basename(external_field.resolved_path)} (external)",
+                external_field.resolved_path,
+            )
+            self._file_combo.setItemData(external_index, external_field.resolved_path, Qt.ItemDataRole.ToolTipRole)
+        if external_field is not None and selected_relative_path is None:
+            self._file_combo.setCurrentIndex(self._file_combo.count() - 1)
+        elif selected_relative_path is not None:
             self._file_combo.setCurrentIndex(_combo_index_for_data(self._file_combo, selected_relative_path))
-        self._file_combo.setEnabled(bool(valid_entries))
+        self._file_combo.setEnabled(bool(valid_entries or external_field is not None))
         self._file_combo.blockSignals(False)
 
         needs_save = normalized_entries != cached_entries
-        if valid_entries:
-            current_filepath = self._settings.get_local("tools.field_plot.filepath")
-            selected_entry = self._current_cached_field()
-            if selected_entry is not None and current_filepath != selected_entry.resolved_path:
-                needs_save = True
-        else:
-            if self._settings.get_local("tools.field_plot.selected_relative_path") is not None:
-                needs_save = True
-            if self._settings.get_local("tools.field_plot.filepath") is not None:
-                needs_save = True
+        selected_filepath = self._selected_field_path()
+        if self._settings.get_local("tools.field_plot.selected_relative_path") != selected_relative_path:
+            needs_save = True
+        if self._settings.get_local("tools.field_plot.filepath") != selected_filepath:
+            needs_save = True
 
         if needs_save and self._settings.workspace_path is not None:
             self._settings.set_local("tools.field_plot.cached_pvds", normalized_entries)
             self._settings.set_local("tools.field_plot.selected_relative_path", selected_relative_path)
-            self._settings.set_local(
-                "tools.field_plot.filepath",
-                self._current_cached_field().resolved_path if self._current_cached_field() is not None else None,
-            )
+            self._settings.set_local("tools.field_plot.filepath", selected_filepath)
+            self._settings.save()
+        elif needs_save and self._settings.workspace_path is None:
+            self._settings.set_global("tools.field_plot.filepath", selected_filepath)
             self._settings.save()
 
         self._on_field_selection_changed()
 
-    def _apply_cached_plot_arrays(self, metadata: _CachedPlotMetadata | None) -> None:
+    def _vector_scale_names(
+        self,
+        metadata: _CachedPlotMetadata | FieldFileMetadata,
+        vector_name: str | None,
+    ) -> list[str]:
+        if vector_name and metadata.vector_scale_names is not None:
+            return metadata.vector_scale_names.get(vector_name, [])
+        return metadata.scale_names
+
+    def _apply_plot_arrays(self, metadata: _CachedPlotMetadata | FieldFileMetadata | None) -> None:
         current_scalar = self._scalar_name_combo.currentData()
         current_contour = self._contour_name_combo.currentData()
         current_vector = self._vector_name_combo.currentData()
+        current_deformation = self._deformation_name_combo.currentData()
         current_scale = self._vector_scale_combo.currentData()
         scalar_names = metadata.scalar_names if metadata is not None else []
+        contour_names = (
+            metadata.contour_names
+            if metadata is not None and metadata.contour_names is not None
+            else scalar_names
+        )
         vector_names = metadata.vector_names if metadata is not None else []
-        scale_names = metadata.scale_names if metadata is not None else []
         self._populate_named_combo(self._scalar_name_combo, scalar_names, current_scalar)
-        self._populate_named_combo(self._contour_name_combo, scalar_names, current_contour)
+        self._populate_named_combo(self._contour_name_combo, contour_names, current_contour)
         self._populate_named_combo(self._vector_name_combo, vector_names, current_vector)
+        self._populate_named_combo(
+            self._deformation_name_combo,
+            _deformation_names(metadata) if metadata is not None else [],
+            current_deformation,
+        )
+        selected_vector = self._vector_name_combo.currentData()
+        scale_names = (
+            self._vector_scale_names(metadata, str(selected_vector) if selected_vector is not None else None)
+            if metadata is not None
+            else []
+        )
         self._populate_scale_combo(_vector_scale_options_from_names(scale_names), current_scale)
+        self._update_scalar_mode_options()
+
+    def _update_scalar_mode_options(self) -> None:
+        current_mode = self._scalar_mode_combo.currentData()
+        metadata = self._current_field_metadata()
+        scalar_name = self._scalar_name_combo.currentData()
+        associations = None
+        if metadata is not None and metadata.scalar_associations is not None and scalar_name is not None:
+            associations = metadata.scalar_associations.get(str(scalar_name))
+
+        options: list[tuple[str, str]] = []
+        if not associations or "cell" in associations:
+            options.append(("element", "element"))
+        if not associations or "point" in associations:
+            options.append(("node", "node"))
+
+        self._scalar_mode_combo.blockSignals(True)
+        self._scalar_mode_combo.clear()
+        for label, data in options:
+            self._scalar_mode_combo.addItem(label, data)
+        self._scalar_mode_combo.setCurrentIndex(_combo_index_for_data(self._scalar_mode_combo, current_mode))
+        self._scalar_mode_combo.setEnabled(len(options) > 1)
+        self._scalar_mode_combo.blockSignals(False)
 
     def _on_field_selection_changed(self, _index: int | None = None) -> None:
-        metadata = self._current_cached_field()
+        metadata = self._current_field_metadata()
         if metadata is None:
             self._clear_cached_plot_arrays()
         else:
-            self._apply_cached_plot_arrays(metadata)
+            self._apply_plot_arrays(metadata)
         if self._settings.workspace_path is not None:
             self._settings.set_local("tools.field_plot.selected_relative_path", self._selected_relative_path())
             self._settings.set_local("tools.field_plot.filepath", self._selected_field_path())
         self._update_scalar_panel_summary()
         self._update_contour_panel_summary()
         self._update_vector_panel_summary()
+        self._update_deformation_panel_summary()
+
+    def _on_scalar_name_changed(self, _text: str | None = None) -> None:
+        self._update_scalar_mode_options()
+        self._update_scalar_panel_summary()
+
+    def _on_vector_name_changed(self, _text: str | None = None) -> None:
+        current_scale = self._vector_scale_combo.currentData()
+        metadata = self._current_field_metadata()
+        vector_name = self._vector_name_combo.currentData()
+        scale_names = (
+            self._vector_scale_names(metadata, str(vector_name) if vector_name is not None else None)
+            if metadata is not None
+            else []
+        )
+        self._populate_scale_combo(_vector_scale_options_from_names(scale_names), current_scale)
+        self._update_vector_panel_summary()
+
+    def _browse_initial_directory(self) -> str:
+        selected_path = self._selected_field_path()
+        if selected_path:
+            selected_directory = os.path.dirname(selected_path)
+            if os.path.isdir(selected_directory):
+                return selected_directory
+
+        if self._browse_dir_getter is not None:
+            browse_directory = self._browse_dir_getter()
+            if browse_directory and os.path.isdir(browse_directory):
+                return os.path.abspath(os.path.normpath(browse_directory))
+
+        workspace_root = self._workspace_root()
+        if workspace_root and os.path.isdir(workspace_root):
+            return workspace_root
+        return os.getcwd()
+
+    def _select_external_field(self, metadata: FieldFileMetadata) -> None:
+        self._file_combo.blockSignals(True)
+        previous_external_path = self._external_field.resolved_path if self._external_field is not None else None
+        if previous_external_path is not None and previous_external_path != metadata.resolved_path:
+            previous_external_index = self._file_combo.findData(previous_external_path)
+            if previous_external_index >= 0:
+                self._file_combo.removeItem(previous_external_index)
+        self._external_field = metadata
+
+        external_index = self._file_combo.findData(metadata.resolved_path)
+        if external_index < 0:
+            external_index = self._file_combo.count()
+            self._file_combo.addItem(
+                f"{os.path.basename(metadata.resolved_path)} (external)",
+                metadata.resolved_path,
+            )
+        self._file_combo.setItemData(external_index, metadata.resolved_path, Qt.ItemDataRole.ToolTipRole)
+        self._file_combo.setCurrentIndex(external_index)
+        self._file_combo.setEnabled(True)
+        self._file_combo.blockSignals(False)
+        self._on_field_selection_changed()
+
+        setter = self._settings.set_local if self._settings.workspace_path is not None else self._settings.set_global
+        setter("tools.field_plot.filepath", metadata.resolved_path)
+        if self._settings.workspace_path is not None:
+            self._settings.set_local("tools.field_plot.selected_relative_path", None)
+        self._settings.save()
+
+    def _on_browse_field_file(self) -> None:
+        selected_path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Select VTK Field File",
+            self._browse_initial_directory(),
+            VTK_FIELD_FILE_FILTER,
+        )
+        if not selected_path:
+            return
+
+        metadata = self._inspect_external_field(selected_path, show_error=True)
+        if metadata is not None:
+            self._select_external_field(metadata)
 
     def _on_scalar_enabled_toggled(self, checked: bool) -> None:
         self._set_stage_panel_state(self._scalar_panel, checked)
@@ -754,6 +1033,10 @@ class FieldPlotBuilderDialog(QDialog):
     def _on_feature_edges_enabled_toggled(self, checked: bool) -> None:
         self._set_stage_panel_state(self._feature_edges_panel, checked)
         self._update_feature_edges_panel_summary()
+
+    def _on_deformation_enabled_toggled(self, checked: bool) -> None:
+        self._set_stage_panel_state(self._deformation_panel, checked)
+        self._update_deformation_panel_summary()
 
     def _update_scalar_panel_summary(self) -> None:
         if not self._scalar_enabled_checkbox.isChecked():
@@ -836,13 +1119,50 @@ class FieldPlotBuilderDialog(QDialog):
                 )
             )
 
-    def _update_vector_factor_from_cache(self, metadata: _CachedPlotMetadata) -> None:
+    def _update_deformation_panel_summary(self) -> None:
+        if not self._deformation_enabled_checkbox.isChecked():
+            self._deformation_panel.set_summary("Disabled")
+            return
+        scale = self._deformation_scale_edit.text().strip() or "1.0"
+        self._deformation_panel.set_summary(
+            f"{self._selected_name(self._deformation_name_combo, fallback='Select array')} | x {scale}"
+        )
+
+    def _update_deformation_scale_from_metadata(
+        self,
+        metadata: _CachedPlotMetadata | FieldFileMetadata,
+    ) -> None:
+        if not self._deformation_enabled_checkbox.isChecked():
+            return
+
+        deformation_name = self._deformation_name_combo.currentData()
+        if deformation_name is None:
+            raise ValueError("Select a field file and choose a displacement vector before suggesting a scale.")
+
+        mesh_length = metadata.mesh_length
+        if not math.isfinite(mesh_length) or mesh_length <= 0.0:
+            raise ValueError("Unable to determine the mesh size for deformation auto-scaling.")
+
+        source_name = str(deformation_name)
+        source_range = metadata.array_ranges.get(source_name)
+        if source_range is None:
+            raise ValueError(f"Unable to determine range data for '{source_name}'.")
+        source_max = source_range["max"]
+        if not math.isfinite(source_max) or source_max <= 0.0:
+            raise ValueError(f"Maximum value for '{source_name}' must be greater than 0.")
+
+        self._deformation_scale_edit.setText(_format_float_text(0.1 * mesh_length / source_max))
+
+    def _update_vector_factor_from_metadata(
+        self,
+        metadata: _CachedPlotMetadata | FieldFileMetadata,
+    ) -> None:
         if not self._vector_enabled_checkbox.isChecked():
             return
 
         vector_name = self._vector_name_combo.currentData()
         if vector_name is None:
-            raise ValueError("Select a cached field and choose a vector field before suggesting a factor.")
+            raise ValueError("Select a field file and choose a vector field before suggesting a factor.")
 
         mesh_length = metadata.mesh_length
         if not math.isfinite(mesh_length) or mesh_length <= 0.0:
@@ -855,7 +1175,7 @@ class FieldPlotBuilderDialog(QDialog):
             source_name = str(vector_name) if scale is None else str(scale)
             source_range = metadata.array_ranges.get(source_name)
             if source_range is None:
-                raise ValueError(f"Unable to determine cached range data for '{source_name}'.")
+                raise ValueError(f"Unable to determine range data for '{source_name}'.")
             source_max = source_range["max"]
             if not math.isfinite(source_max) or source_max <= 0.0:
                 raise ValueError(f"Maximum value for '{source_name}' must be greater than 0.")
@@ -873,13 +1193,13 @@ class FieldPlotBuilderDialog(QDialog):
             )
         )
 
-    def _validate_cached_field_selection(self) -> str | None:
+    def _validate_field_selection(self) -> str | None:
         if self._selected_field_path() is None:
-            return "Run FEMAP conversion first to create a cached field file."
+            return "Select a cached field file or browse for a VTK field file."
         return None
 
     def _validate_for_plot(self) -> str | None:
-        field_error = self._validate_cached_field_selection()
+        field_error = self._validate_field_selection()
         if field_error is not None:
             return field_error
         if not self._has_enabled_stage():
@@ -892,15 +1212,22 @@ class FieldPlotBuilderDialog(QDialog):
                 self._vector_factor()
             except ValueError as exc:
                 return str(exc)
+        if self._deformation_enabled_checkbox.isChecked():
+            try:
+                self._deformation_scale()
+            except ValueError as exc:
+                return str(exc)
         return None
 
     def _validate_stage_selections(self) -> str | None:
         if self._scalar_enabled_checkbox.isChecked() and self._scalar_name_combo.currentData() is None:
-            return "Select a cached field and choose a scalar field before plotting."
+            return "Select a field file and choose a scalar field before plotting."
         if self._contour_enabled_checkbox.isChecked() and self._contour_name_combo.currentData() is None:
-            return "Select a cached field and choose a contour field before plotting."
+            return "Select a field file and choose a point-associated scalar field before plotting contours."
         if self._vector_enabled_checkbox.isChecked() and self._vector_name_combo.currentData() is None:
-            return "Select a cached field and choose a vector field before plotting."
+            return "Select a field file and choose a vector field before plotting."
+        if self._deformation_enabled_checkbox.isChecked() and self._deformation_name_combo.currentData() is None:
+            return "Select a field file and choose a displacement vector before plotting deformation."
         return None
 
     def _scalar_kwargs(self) -> dict[str, object]:
@@ -948,6 +1275,24 @@ class FieldPlotBuilderDialog(QDialog):
             "factor": self._vector_factor(),
             "tolerance": self._vector_tolerance(),
             "color_mode": str(self._vector_color_mode_combo.currentData()),
+        }
+
+    def _deformation_scale(self) -> float:
+        text = self._deformation_scale_edit.text().strip()
+        if not text:
+            raise ValueError("Deformation scale is required.")
+        try:
+            value = float(text)
+        except ValueError as exc:
+            raise ValueError("Deformation scale must be a valid number.") from exc
+        if not math.isfinite(value):
+            raise ValueError("Deformation scale must be finite.")
+        return value  # ponytail: zero and negative are valid per set_deformation()
+
+    def _deformation_kwargs(self) -> dict[str, object]:
+        return {
+            "name": self._selected_name(self._deformation_name_combo),
+            "scale": self._deformation_scale(),
         }
 
     def _feature_edges_kwargs(self) -> dict[str, object]:
@@ -1005,11 +1350,18 @@ class FieldPlotBuilderDialog(QDialog):
         )
         if not self._feature_edges_enabled_checkbox.isChecked():
             lines.append("field_plot._feature_edges_props = None")
+        if self._deformation_enabled_checkbox.isChecked():
+            deformation_kwargs = self._deformation_kwargs()
+            lines.append(
+                "field_plot.set_deformation("
+                f"name={deformation_kwargs['name']!r}, scale={deformation_kwargs['scale']!r}"
+                ")"
+            )
         lines.extend(["", f"gui.add_field(field_plot, {self._current_title()!r})"])
         return "\n".join(lines)
 
     def _open_script_dialog(self) -> None:
-        error_message = self._validate_cached_field_selection()
+        error_message = self._validate_field_selection()
         if error_message is not None:
             QMessageBox.warning(self, "Invalid Field Plot", error_message)
             return
@@ -1021,16 +1373,31 @@ class FieldPlotBuilderDialog(QDialog):
         dialog.exec()
 
     def _on_suggest_vector_factor(self) -> None:
-        error_message = self._validate_cached_field_selection()
+        error_message = self._validate_field_selection()
         if error_message is not None:
             QMessageBox.warning(self, "Invalid Field Plot", error_message)
             return
 
         try:
-            metadata = self._current_cached_field()
+            metadata = self._current_field_metadata()
             if metadata is None:
-                raise ValueError("Run FEMAP conversion first to create a cached field file.")
-            self._update_vector_factor_from_cache(metadata)
+                raise ValueError("Select a field file before suggesting a vector factor.")
+            self._update_vector_factor_from_metadata(metadata)
+        except Exception as exc:
+            QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
+            return
+
+    def _on_suggest_deformation_scale(self) -> None:
+        error_message = self._validate_field_selection()
+        if error_message is not None:
+            QMessageBox.warning(self, "Invalid Field Plot", error_message)
+            return
+
+        try:
+            metadata = self._current_field_metadata()
+            if metadata is None:
+                raise ValueError("Select a field file before suggesting a deformation scale.")
+            self._update_deformation_scale_from_metadata(metadata)
         except Exception as exc:
             QMessageBox.critical(self, "Field Plot Analysis Error", str(exc))
             return
@@ -1056,6 +1423,8 @@ class FieldPlotBuilderDialog(QDialog):
                 plotter.set_feature_edges(**self._feature_edges_kwargs())
             else:
                 plotter._feature_edges_props = None
+            if self._deformation_enabled_checkbox.isChecked():
+                plotter.set_deformation(**self._deformation_kwargs())
 
             self._persist_settings()
 

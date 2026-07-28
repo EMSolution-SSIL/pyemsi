@@ -10,3 +10,7 @@ def transient_path() -> str:
 
 def ipm_motor_path() -> str:
     return os.path.join(dir_path, "ipm_motor.pvd")
+
+
+def structural_displacement_path() -> str:
+    return os.path.join(dir_path, "structural_displacement.vtk")
