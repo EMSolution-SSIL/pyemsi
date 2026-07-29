@@ -31,6 +31,25 @@ Python tools for EMSolution FEMAP Neutral file conversion and interactive 3D vis
 - Explore simulation results in a Qt desktop app or inside Jupyter notebooks.
 - Work with displacement, magnetic, current, force, and heat result data.
 
+## Video Guides
+
+<div align="center">
+	<details name="video-guide-language" open>
+		<summary><strong>English</strong></summary>
+		<br>
+		<a href="https://youtu.be/FYmjsGyMiI0">
+			<img src="https://img.youtube.com/vi/FYmjsGyMiI0/hqdefault.jpg" alt="English pyemsi video guide" width="70%">
+		</a>
+	</details>
+	<details name="video-guide-language">
+		<summary><strong>日本語</strong></summary>
+		<br>
+		<a href="https://youtu.be/_hKSQTfcKyA">
+			<img src="https://img.youtube.com/vi/_hKSQTfcKyA/hqdefault.jpg" alt="Japanese pyemsi video guide" width="70%">
+		</a>
+	</details>
+</div>
+
 ## Get Started
 
 Install the base package:

@@ -40,6 +40,7 @@ dependencies = [
     "scienceplots",
     "gmsh",
     "ems-file-format-converter",
+    "pywinpty; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -86,10 +87,13 @@ trame-vtk = ">=2.11.14,<3"
 trame-vuetify = ">=3.2.5,<4"
 trame-server = ">=3.12.5,<4"
 trame = ">=3.13.2,<4"
+pywinpty = "*"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
 ems-file-format-converter = "*"
+build = "*"
+twine = "*"
 
 [tool.pixi.activation.env]
 QT_API = "pyside6"

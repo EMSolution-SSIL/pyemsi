@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def _load_builder_module():
@@ -102,3 +105,24 @@ def test_build_layout_uses_scoped_output_directories(tmp_path):
     assert layout.app_dir == layout.dist_dir / "app"
     assert layout.launcher_exe == layout.dist_dir / "pyemsi.exe"
     assert layout.script_launcher_exe == layout.dist_dir / "run_script.exe"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows extended-length path regression")
+def test_reset_output_directories_removes_long_windows_paths(tmp_path):
+    layout = builder.build_layout(tmp_path)
+    long_dir = layout.runtime_dir
+    while len(str(long_dir / "stale-header.h")) <= 270:
+        long_dir /= "viskores-long-include-directory"
+
+    os.makedirs(builder._extended_length_path(long_dir))
+    long_file = long_dir / "stale-header.h"
+    with open(builder._extended_length_path(long_file), "w", encoding="utf-8") as stream:
+        stream.write("stale")
+
+    builder.reset_output_directories(layout)
+
+    assert layout.dist_dir.is_dir()
+    assert layout.runtime_dir.is_dir()
+    assert layout.app_dir.is_dir()
+    assert layout.cache_dir.is_dir()
+    assert not os.path.exists(builder._extended_length_path(long_file))

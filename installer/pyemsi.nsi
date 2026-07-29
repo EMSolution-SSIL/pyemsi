@@ -9,7 +9,7 @@
 ;---------------------------------------------------------------------------
 !define APP_NAME        "pyemsi"
 !ifndef APP_VERSION
-!define APP_VERSION     "0.4.0"
+!define APP_VERSION     "0.5.0"
 !endif
 !define APP_PUBLISHER   "SSIL"
 !define APP_URL         "https://github.com/EMSolution-SSIL/pyemsi"

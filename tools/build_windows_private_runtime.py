@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import textwrap
@@ -288,9 +289,39 @@ def ensure_runtime_source_artifacts(repo_root: Path) -> None:
             raise FileNotFoundError(f"Missing {pattern}. {message}")
 
 
+def _extended_length_path(path: Path) -> str:
+    absolute_path = str(path.resolve())
+    if sys.platform != "win32" or absolute_path.startswith("\\\\?\\"):
+        return absolute_path
+    if absolute_path.startswith("\\\\"):
+        return f"\\\\?\\UNC\\{absolute_path[2:]}"
+    return f"\\\\?\\{absolute_path}"
+
+
+def _handle_remove_error(function, filename: str, exc_info) -> None:
+    error = exc_info[1]
+    if isinstance(error, FileNotFoundError):
+        return
+    if isinstance(error, PermissionError):
+        os.chmod(filename, stat.S_IWRITE)
+        try:
+            function(filename)
+        except FileNotFoundError:
+            pass
+        return
+    raise error
+
+
+def _remove_tree(path: Path) -> None:
+    try:
+        shutil.rmtree(_extended_length_path(path), onerror=_handle_remove_error)
+    except FileNotFoundError:
+        pass
+
+
 def reset_output_directories(layout: BuildLayout) -> None:
     if layout.dist_dir.exists():
-        shutil.rmtree(layout.dist_dir)
+        _remove_tree(layout.dist_dir)
     for path in (layout.dist_dir, layout.runtime_dir, layout.app_dir, layout.cache_dir):
         path.mkdir(parents=True, exist_ok=True)
 

@@ -6,35 +6,41 @@ This repository produces three distributables:
 - A Windows portable `pyemsi` GUI runtime staged under `dist/`.
 - A Windows NSIS installer built from the portable runtime.
 
+The local packaging commands use the checked-in Pixi environment. Run the following command from the repository root before building:
+
+```powershell
+pixi install
+```
+
+Pixi installs the locked Python version, build dependencies, and packaging tools. Do not create a separate virtual environment or install packaging tools with `pip`.
+
 ## Build The `pyemsi` Wheel
 
 From the repository root:
 
-```bash
-python -m pip install --upgrade pip build
-python -m build --wheel
+```powershell
+pixi run python -m build --wheel
 ```
 
-Output:
+Wheel files are written to `dist/`.
 
-- Wheel files are written to `dist/`.
+Check the generated wheel metadata:
 
-Optional reinstall check:
-
-```bash
-python -m pip install --force-reinstall dist/*.whl
+```powershell
+pixi run python -m twine check dist/*.whl
 ```
 
-If you want a source distribution alongside the wheel for publishing, build both artifacts instead:
+To produce a source distribution alongside the wheel, build both artifact types:
 
-```bash
-python -m pip install --upgrade pip build
-python -m build
+```powershell
+pixi run python -m build
 ```
 
-Output:
+The wheel and source distribution are written to `dist/`. Check all generated artifacts before publishing:
 
-- Wheel and source distribution files are written to `dist/`.
+```powershell
+pixi run python -m twine check dist/*
+```
 
 ## Build Distributions With GitHub Actions
 
@@ -43,6 +49,8 @@ The repository also includes a manual GitHub Actions workflow at [.github/workfl
 - Linux wheels
 - Windows wheels
 - A source distribution (`sdist`)
+
+The workflow manages its own Python build environment and does not use the local Pixi environment.
 
 To run it from the GitHub web UI:
 
@@ -59,30 +67,26 @@ To run it from the GitHub web UI:
 Notes:
 
 - The workflow is configured with `workflow_dispatch`, so it only runs when started manually.
-- The combined `all-dist` artifact contains the wheels and the source distribution merged into one download.
+- The combined `all-dist` artifact contains the wheels and source distribution in one download.
 - GitHub downloads artifacts as a `.zip`; extract it locally before uploading.
 
 ## Upload Distributions To PyPI
 
-PyPI uploads can be done from artifacts built locally or downloaded from GitHub Actions.
+PyPI uploads can use artifacts built locally or downloaded from GitHub Actions.
 
-1. Create a release on [pypi.org](https://pypi.org/) if this is the first time publishing the project.
+1. Create a PyPI account if needed.
 2. Generate a PyPI API token from **Account settings** -> **API tokens**.
-3. In a shell, set the token as `TWINE_PASSWORD` and use `__token__` as the username.
-4. Upload the files in `dist/` with `twine`.
+3. Set `TWINE_USERNAME` to `__token__`.
+4. Set `TWINE_PASSWORD` to the API token.
+5. Check and upload the files with the Pixi-managed `twine`.
 
-Install the upload tool:
+From `cmd.exe`:
 
-```bash
-python -m pip install --upgrade twine
-```
-
-Upload to the real PyPI index:
-
-```bash
+```cmd
 set TWINE_USERNAME=__token__
 set TWINE_PASSWORD=pypi-...
-python -m twine upload dist/*
+pixi run python -m twine check dist/*
+pixi run python -m twine upload dist/*
 ```
 
 PowerShell equivalent:
@@ -90,37 +94,32 @@ PowerShell equivalent:
 ```powershell
 $env:TWINE_USERNAME = "__token__"
 $env:TWINE_PASSWORD = "pypi-..."
-python -m twine upload dist/*
+pixi run python -m twine check dist/*
+pixi run python -m twine upload dist/*
 ```
 
-Recommended checks before uploading:
-
-```bash
-python -m twine check dist/*
-```
-
-After upload, verify the release on PyPI by opening the project page and confirming the new version and files are present.
+After upload, open the project page on PyPI and confirm the version and files.
 
 ## Build The Windows Portable GUI Runtime
 
-The portable Windows builder lives at [tools/build_windows_private_runtime.py](./tools/build_windows_private_runtime.py). It assembles an embeddable Python runtime under `dist/pyemsi/`, stages the local `pyemsi` source tree into `app/`, installs GUI dependencies into `runtime/`, and generates native `.exe` launchers (or `.bat` fallbacks when MSVC is not available).
+The portable Windows builder lives at [tools/build_windows_private_runtime.py](./tools/build_windows_private_runtime.py). It assembles an embeddable Python runtime under `dist/pyemsi/`, stages the local `pyemsi` source tree into `app/`, installs GUI dependencies into `runtime/`, and generates native `.exe` launchers (or `.bat` fallbacks when MSVC is unavailable).
 
-1. Rebuild the compiled extension in place before packaging:
+1. Rebuild the compiled extension in place:
 
-   ```bash
-   .venv311\Scripts\python.exe setup.py build_ext --inplace
+   ```powershell
+   pixi run python setup.py build_ext --inplace
    ```
 
 2. Run the Windows private-runtime builder:
 
-   ```bash
-   .venv311\Scripts\python.exe .\tools\build_windows_private_runtime.py
+   ```powershell
+   pixi run python .\tools\build_windows_private_runtime.py
    ```
 
 Optional flags:
 
-```bash
-.venv311\Scripts\python.exe .\tools\build_windows_private_runtime.py --skip-dependency-install --skip-smoke-test
+```powershell
+pixi run python .\tools\build_windows_private_runtime.py --skip-dependency-install --skip-smoke-test
 ```
 
 Output:
@@ -129,15 +128,15 @@ Output:
 - The portable app is written to `dist/pyemsi/`.
 - The main launcher is `dist/pyemsi/pyemsi.exe` (GUI mode, no console window).
 - The helper script launcher is `dist/pyemsi/run_script.exe`.
-- If MSVC is not found, `.bat` launchers are generated instead.
+- If MSVC is unavailable, `.bat` launchers are generated instead.
 
 ## Windows Packaging Notes
 
-- This flow currently targets Windows only because it relies on the official embeddable CPython distribution.
-- The builder expects `pyemsi/core/femap_parser*.pyd` and `pyemsi/resources/resources.py` to already exist in the repo tree.
-- When MSVC is available (Developer Command Prompt or discoverable via `vswhere`), the builder compiles native `.exe` launchers from [tools/launcher.c](./tools/launcher.c). The GUI launcher links as a Windows subsystem app and uses `pythonw.exe` so no console window appears.
-- The portable build preserves a real `runtime/python.exe` so packaged subprocess flows that depend on `sys.executable` continue to work.
-- This produces a portable folder. To create an installer from it, see the next section.
+- This flow currently targets Windows because it relies on the official embeddable CPython distribution.
+- The builder expects `pyemsi/core/femap_parser*.pyd` and `pyemsi/resources/resources.py` to already exist in the repository tree.
+- When MSVC is available (in a Developer Command Prompt or discoverable through `vswhere`), the builder compiles native `.exe` launchers from [tools/launcher.c](./tools/launcher.c). The GUI launcher links as a Windows subsystem app and uses `pythonw.exe`, so no console window appears.
+- The portable build preserves a real `runtime/python.exe`, allowing packaged subprocess flows that depend on `sys.executable` to continue working.
+- This produces a portable folder. To create an installer from it, continue with the next section.
 
 ## Build The Windows NSIS Installer
 
@@ -145,13 +144,13 @@ The NSIS script lives at [installer/pyemsi.nsi](./installer/pyemsi.nsi). It pack
 
 Prerequisites:
 
-- [NSIS 3.x](https://nsis.sourceforge.io/) installed and `makensis` on `PATH`.
-- A completed portable runtime build under `dist/pyemsi/` (see above).
+- [NSIS 3.x](https://nsis.sourceforge.io/) installed with `makensis` on `PATH`.
+- A completed portable runtime under `dist/pyemsi/`.
 
-From the repository root (`cmd.exe`):
+From the repository root in `cmd.exe`:
 
 ```cmd
-for /f %%v in ('python -c "import pathlib,re; print(re.search(r'^__version__\\s*=\\s*\"([^\"]+)\"', pathlib.Path(r'pyemsi/__init__.py').read_text(encoding='utf-8'), re.M).group(1))"') do set APPVER=%%v
+for /f %%v in ('pixi run python -c "import pathlib,re; print(re.search(r'^__version__\\s*=\\s*\"([^\"]+)\"', pathlib.Path(r'pyemsi/__init__.py').read_text(encoding='utf-8'), re.M).group(1))"') do set APPVER=%%v
 makensis /DAPP_VERSION=%APPVER% installer\pyemsi.nsi
 ```
 
@@ -168,10 +167,10 @@ Output:
 
 The installer:
 
-- Installs to `%LOCALAPPDATA%\pyemsi` by default (no admin required).
+- Installs to `%LOCALAPPDATA%\pyemsi` by default (no administrator privileges required).
 - Creates a desktop shortcut and a Start Menu group.
 - Registers an "Open with pyemsi" entry in the Windows Explorer folder context menu.
-- Writes an uninstaller and Add/Remove Programs entry under `HKCU`.
+- Writes an uninstaller and an Add/Remove Programs entry under `HKCU`.
 
 ## Related Guides
 
