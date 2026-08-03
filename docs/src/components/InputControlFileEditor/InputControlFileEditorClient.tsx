@@ -406,6 +406,7 @@ export default function InputControlFileEditorClient(): ReactNode {
       return;
     }
 
+    let candidates: FileCandidate[];
     try {
       const handles = await picker({
         multiple: true,
@@ -414,16 +415,17 @@ export default function InputControlFileEditorClient(): ReactNode {
           accept: {'application/json': ['.json']},
         }],
       });
-      const candidates = await Promise.all(handles.map(async (handle) => ({
+      candidates = await Promise.all(handles.map(async (handle) => ({
         file: await handle.getFile(),
         handle,
       })));
-      await addCandidates(candidates);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setStatus('The enhanced file picker was unavailable. Use the standard file picker instead.');
       inputRef.current?.click();
+      return;
     }
+    await addCandidates(candidates);
   }, [addCandidates]);
 
   const onInputChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
@@ -435,26 +437,37 @@ export default function InputControlFileEditorClient(): ReactNode {
   const onDrop = useCallback(async (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
     setIsDragging(false);
-    const candidates: FileCandidate[] = [];
-    const items = Array.from(event.dataTransfer.items ?? []) as DataTransferItemWithHandle[];
+    // Snapshot synchronously: the drag data store is emptied once this handler yields,
+    // after which getAsFile() returns null and dataTransfer.files is empty.
+    const dropped = (Array.from(event.dataTransfer.items ?? []) as DataTransferItemWithHandle[])
+      .filter((item) => item.kind === 'file')
+      .map((item) => {
+        let handlePromise: Promise<FileHandleLike | null> | undefined;
+        try {
+          handlePromise = item.getAsFileSystemHandle?.();
+        } catch {
+          // The plain File fallback below remains available.
+        }
+        return {file: item.getAsFile(), handlePromise};
+      });
+    const fallbackFiles = Array.from(event.dataTransfer.files);
 
-    for (const item of items) {
-      if (item.kind !== 'file') continue;
+    const candidates: FileCandidate[] = [];
+    for (const {file, handlePromise} of dropped) {
       try {
-        const handle = await item.getAsFileSystemHandle?.();
+        const handle = await handlePromise;
         if (handle?.kind === 'file') {
           candidates.push({file: await handle.getFile(), handle});
           continue;
         }
       } catch {
-        // The standard File fallback below remains available.
+        // The plain File fallback below remains available.
       }
-      const file = item.getAsFile();
       if (file) candidates.push({file});
     }
 
     if (candidates.length === 0) {
-      candidates.push(...Array.from(event.dataTransfer.files).map((file) => ({file})));
+      candidates.push(...fallbackFiles.map((file) => ({file})));
     }
     await addCandidates(candidates);
   }, [addCandidates]);
