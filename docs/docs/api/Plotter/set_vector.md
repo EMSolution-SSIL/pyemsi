@@ -31,7 +31,8 @@ Glyphs are generated per-block for [`pyvista.MultiBlock`](https://docs.pyvista.o
 - **`factor`** (`float`, default: `1.0`) — Global size multiplier.
 - **`tolerance`** (`float | None`, default: `None`) — Reduce glyph density (fraction of bounding box). `None` shows all glyphs.
 - **`color_mode`** (`str`, default: `"scale"`) — Passed to PyVista’s glyph coloring (typically `"scale"`, `"scalar"`, or `"vector"`).
-- **`**kwargs`** — Forwarded to [`add_mesh()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.add_mesh) for the glyph actor(s) (examples: `cmap`, `clim`, `opacity`).
+- **`cmap`** (`str`, default: `"jet"`) — Colormap used to color the glyphs.
+- **`**kwargs`** — Forwarded to [`add_mesh()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.add_mesh) for the glyph actor(s) (examples: `clim`, `opacity`).
 :::
 
 :::info[Returns]
@@ -45,7 +46,7 @@ from pyemsi import Plotter, examples
 
 file_path = examples.transient_path()
 plt = Plotter(file_path)
-plt.set_vector("B-Vec (T)", scale="B-Mag (T)", factor=5e-1, show_scalar_bar=False)
+plt.set_vector("B-Vec (T)", scale="B-Mag (T)", factor=5e-1, cmap="turbo", show_scalar_bar=False)
 plt.set_feature_edges(color="red", line_width=3)
 plt.set_block_visibility("4", False)
 plt.show()

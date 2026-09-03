@@ -92,6 +92,7 @@ It includes:
 - `Factor`: the multiplier applied to glyph size, with a `Suggest` button to compute a value from the cached mesh size and array ranges
 - `Tolerance`: an optional tolerance control for glyph generation
 - `Color Mode`: how glyph coloring is determined
+- `Colormap`: the colormap used to color the glyphs; the default is `jet`
 
 The vector stage is especially useful for magnetic flux density, current density, and force vectors.
 

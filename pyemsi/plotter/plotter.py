@@ -1047,6 +1047,7 @@ class Plotter:
         factor: float = 1.0,
         tolerance: float | None = None,
         color_mode: str = "scale",
+        cmap: str = "jet",
         **kwargs,
     ) -> "Plotter":
         """
@@ -1081,9 +1082,11 @@ class Plotter:
             - 'scalar': Color by scalar values
             - 'vector': Color by vector magnitude
             Default is 'scale'.
+        cmap : str, optional
+            Colormap used for glyph coloring. Default is 'jet'.
         **kwargs
             Additional keyword arguments passed to add_mesh() for glyph visualization.
-            Common options include: cmap, clim, opacity.
+            Common options include: clim, opacity.
 
         Returns
         -------
@@ -1109,6 +1112,7 @@ class Plotter:
         self._vector_props["factor"] = factor
         self._vector_props["tolerance"] = tolerance
         self._vector_props["color_mode"] = color_mode
+        self._vector_props["cmap"] = cmap
         for key, value in kwargs.items():
             self._vector_props[key] = value
         return self

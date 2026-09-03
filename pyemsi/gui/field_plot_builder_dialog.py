@@ -388,11 +388,18 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_color_mode_combo.setCurrentIndex(
             _combo_index_for_data(self._vector_color_mode_combo, defaults["vector_color_mode"])
         )
+        self._vector_cmap_combo = QComboBox(self)
+        for choice in CMAP_CHOICES:
+            self._vector_cmap_combo.addItem(choice, choice)
+        self._vector_cmap_combo.setCurrentIndex(
+            _combo_index_for_data(self._vector_cmap_combo, defaults["vector_cmap"])
+        )
         self._vector_section = self._build_two_column_form(
             [
                 (("Name", self._vector_name_combo), ("Scale", self._vector_scale_combo)),
                 (("Glyph Type", self._vector_glyph_type_combo), ("Factor", factor_widget)),
                 (("Tolerance", tolerance_widget), ("Color Mode", self._vector_color_mode_combo)),
+                (("Colormap", self._vector_cmap_combo), None),
             ],
             self,
         )
@@ -560,6 +567,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_scale_combo.currentTextChanged.connect(self._update_vector_panel_summary)
         self._vector_glyph_type_combo.currentTextChanged.connect(self._update_vector_panel_summary)
         self._vector_factor_edit.textChanged.connect(self._update_vector_panel_summary)
+        self._vector_cmap_combo.currentTextChanged.connect(self._update_vector_panel_summary)
         self._feature_edges_color_edit.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_line_width_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
         self._feature_edges_opacity_spin.valueChanged.connect(self._update_feature_edges_panel_summary)
@@ -615,6 +623,7 @@ class FieldPlotBuilderDialog(QDialog):
             "vector_factor": 1.0,
             "vector_tolerance": None,
             "vector_color_mode": "scale",
+            "vector_cmap": cmap_name_to_choice("jet"),
             "feature_edges_enabled": True,
             "feature_edges_color": "white",
             "feature_edges_line_width": 1,
@@ -1088,6 +1097,7 @@ class FieldPlotBuilderDialog(QDialog):
                     self._vector_scale_summary(),
                     str(self._vector_glyph_type_combo.currentData()),
                     f"x {factor}",
+                    self._vector_cmap_combo.currentText(),
                 )
             )
         )
@@ -1275,6 +1285,7 @@ class FieldPlotBuilderDialog(QDialog):
             "factor": self._vector_factor(),
             "tolerance": self._vector_tolerance(),
             "color_mode": str(self._vector_color_mode_combo.currentData()),
+            "cmap": cmap_choice_to_name(str(self._vector_cmap_combo.currentData())),
         }
 
     def _deformation_scale(self) -> float:
@@ -1339,7 +1350,7 @@ class FieldPlotBuilderDialog(QDialog):
             vector_kwargs = self._vector_kwargs()
             lines.append(
                 "field_plot.set_vector("
-                f"name={vector_kwargs['name']!r}, scale={vector_kwargs['scale']!r}, glyph_type={vector_kwargs['glyph_type']!r}, factor={vector_kwargs['factor']!r}, tolerance={vector_kwargs['tolerance']!r}, color_mode={vector_kwargs['color_mode']!r}"
+                f"name={vector_kwargs['name']!r}, scale={vector_kwargs['scale']!r}, glyph_type={vector_kwargs['glyph_type']!r}, factor={vector_kwargs['factor']!r}, tolerance={vector_kwargs['tolerance']!r}, color_mode={vector_kwargs['color_mode']!r}, cmap={vector_kwargs['cmap']!r}"
                 ")"
             )
         fe_kwargs = self._feature_edges_kwargs()
