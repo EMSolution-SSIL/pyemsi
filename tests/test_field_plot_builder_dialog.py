@@ -96,6 +96,32 @@ def test_field_plot_builder_dialog_defaults_to_disabled_stages_and_empty_cache(t
         None,
         False,
     ]
+    assert dialog._vector_kwargs()["cmap"] == "jet"
+
+
+def test_field_plot_builder_dialog_vector_colormap_selection_uses_shared_choices(tmp_path):
+    _app()
+    manager, workspace = _make_manager(tmp_path)
+    dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
+    dialog._vector_enabled_checkbox.setChecked(True)
+
+    dialog._vector_cmap_combo.setCurrentIndex(
+        dialog_module._combo_index_for_data(dialog._vector_cmap_combo, "turbo : miscellaneous")
+    )
+
+    assert dialog._vector_kwargs()["cmap"] == "turbo"
+    assert dialog._vector_panel.summary_text().endswith("turbo : miscellaneous")
+
+
+def test_plotter_set_vector_colormap_defaults_to_jet_and_accepts_override():
+    plotter = dialog_module.Plotter.__new__(dialog_module.Plotter)
+    plotter._vector_props = {}
+
+    assert plotter.set_vector("Point Vector") is plotter
+    assert plotter._vector_props["cmap"] == "jet"
+
+    plotter.set_vector("Point Vector", cmap="turbo")
+    assert plotter._vector_props["cmap"] == "turbo"
 
 
 def test_field_plot_builder_dialog_populates_from_cached_workspace_metadata(tmp_path):
@@ -258,6 +284,7 @@ def test_field_plot_builder_dialog_script_uses_cached_selection_without_creating
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._title_edit.setText("Rotor Field")
     dialog._scalar_enabled_checkbox.setChecked(True)
+    dialog._vector_enabled_checkbox.setChecked(True)
 
     captured = {}
 
@@ -280,6 +307,8 @@ def test_field_plot_builder_dialog_script_uses_cached_selection_without_creating
     assert f"field_plot = Plotter({os.fspath(plot_path)!r})" in script
     assert "field_plot.set_scalar(" in script
     assert "name='Point Scalar'" in script
+    assert "field_plot.set_vector(" in script
+    assert "cmap='jet'" in script
     assert "gui.add_field(field_plot, 'Rotor Field')" in script
 
 
@@ -295,6 +324,7 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_cached_sele
 
     dialog = FieldPlotBuilderDialog(manager, browse_dir_getter=lambda: os.fspath(workspace))
     dialog._scalar_enabled_checkbox.setChecked(True)
+    dialog._vector_enabled_checkbox.setChecked(True)
 
     calls = []
 
@@ -304,6 +334,9 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_cached_sele
 
         def set_scalar(self, **kwargs) -> None:
             calls.append(("set_scalar", kwargs))
+
+        def set_vector(self, **kwargs) -> None:
+            calls.append(("set_vector", kwargs))
 
         def set_feature_edges(self, **kwargs) -> None:
             calls.append(("set_feature_edges", kwargs))
@@ -320,7 +353,9 @@ def test_field_plot_builder_dialog_plot_creates_plotter_and_persists_cached_sele
     assert calls[0] == ("init", os.path.abspath(os.path.normpath(os.fspath(plot_path))))
     assert calls[1][0] == "set_scalar"
     assert calls[1][1]["name"] == "Point Scalar"
-    assert calls[2][0] == "set_feature_edges"
+    assert calls[2][0] == "set_vector"
+    assert calls[2][1]["cmap"] == "jet"
+    assert calls[3][0] == "set_feature_edges"
     assert added["title"] == "Field Plot"
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert manager.get_local("tools.field_plot.selected_relative_path") == os.path.normpath(relative_path)
