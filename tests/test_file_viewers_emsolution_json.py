@@ -47,6 +47,16 @@ def test_classify_emsolution_json_detects_input_files(tmp_path):
     assert _factory.classify_emsolution_json(str(path)) == "emsolution-input"
 
 
+def test_classify_emsolution_json_detects_input_files_by_metadata_type(tmp_path):
+    path = tmp_path / "minimal-input.json"
+    path.write_text(
+        json.dumps({"metaData": {"type": "EMSolution_Input"}, "0_Release_Number": {}}),
+        encoding="utf-8",
+    )
+
+    assert _factory.classify_emsolution_json(str(path)) == "emsolution-input"
+
+
 def test_classify_emsolution_json_uses_loose_matching(tmp_path):
     path = tmp_path / "partial-output.json"
     path.write_text(

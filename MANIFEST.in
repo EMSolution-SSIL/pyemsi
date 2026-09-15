@@ -20,6 +20,7 @@ recursive-include pyemsi/widgets/monaco_lsp/grammars *
 recursive-include pyemsi/widgets/monaco_lsp/monaco-editor *
 include pyemsi/widgets/xterm/index.html
 recursive-include pyemsi/widgets/xterm/xterm-js *
+recursive-include pyemsi/widgets/input_control_editor/editor *
 
 # Include example data files
 recursive-include pyemsi/examples *.pvd *.vtm *.vtu *.vtk
