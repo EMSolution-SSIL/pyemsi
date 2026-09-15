@@ -27,7 +27,7 @@ def _run(command: list[str], cwd: Path) -> str:
     executable = shutil.which(command[0])
     if executable is None:
         sys.exit(f"'{command[0]}' was not found on PATH.")
-    result = subprocess.run([executable, *command[1:]], cwd=cwd, check=True, capture_output=True, text=True)
+    result = subprocess.run([executable, *command[1:]], cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return result.stdout.strip()
 
 
