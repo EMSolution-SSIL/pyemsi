@@ -27,6 +27,15 @@ def _matches_signature_keys(payload: object, signature_keys: frozenset[str]) -> 
     return len(signature_keys.intersection(payload)) >= 2
 
 
+def _is_emsolution_input(payload: object) -> bool:
+    # Mirrors isEmSolutionInput in the EMSolutionDocs editor (emSolutionModel.ts).
+    if isinstance(payload, dict):
+        meta_data = payload.get("metaData")
+        if isinstance(meta_data, dict) and meta_data.get("type") == "EMSolution_Input":
+            return True
+    return _matches_signature_keys(payload, _EMSOLUTION_INPUT_KEYS)
+
+
 def classify_emsolution_json(path: str) -> str | None:
     """Return the EMSolution JSON kind for *path*, if recognized."""
     if os.path.splitext(path)[1].lower() != ".json":
@@ -40,7 +49,7 @@ def classify_emsolution_json(path: str) -> str | None:
 
     if _matches_signature_keys(payload, _EMSOLUTION_OUTPUT_KEYS):
         return "emsolution-output"
-    if _matches_signature_keys(payload, _EMSOLUTION_INPUT_KEYS):
+    if _is_emsolution_input(payload):
         return "emsolution-input"
     return None
 

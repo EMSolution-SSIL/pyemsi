@@ -140,6 +140,10 @@ version = {attr = "pyemsi.__version__"}
     "monaco-editor/*",
     "monaco-editor/**/*",
 ]
+"pyemsi.widgets.input_control_editor" = [
+    "editor/*",
+    "editor/**/*",
+]
 "pyemsi.widgets.xterm" = [
     "index.html",
     "xterm-js/*",

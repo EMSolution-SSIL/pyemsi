@@ -5,11 +5,11 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QLabel, QToolBar, QVBoxLayout, QWidget
 
 import pyemsi.resources.resources  # noqa: F401
-from pyemsi.widgets.monaco_lsp import MonacoLspWidget
+from pyemsi.widgets.input_control_editor import InputControlEditorWidget
 
 
 class EMSolutionInputViewer(QWidget):
-    """Monaco-based JSON viewer for EMSolution input files with Run/Stop buttons."""
+    """EMSolutionDocs input control file editor with Run/Stop buttons."""
 
     textChanged = Signal(str)
     dirtyChanged = Signal(bool)
@@ -25,9 +25,7 @@ class EMSolutionInputViewer(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.editor = MonacoLspWidget(language="json", parent=self)
-        self.editor.setTheme("vs")
-        self.editor.setLanguage("json")
+        self.editor = InputControlEditorWidget(parent=self)
 
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
@@ -54,12 +52,9 @@ class EMSolutionInputViewer(QWidget):
 
         self.editor.textChanged.connect(self.textChanged.emit)
         self.editor.dirtyChanged.connect(self.dirtyChanged.emit)
-        if hasattr(self.editor, "syncStateChanged"):
-            self.editor.syncStateChanged.connect(self.syncStateChanged.emit)
-        if hasattr(self.editor, "externalChangeChanged"):
-            self.editor.externalChangeChanged.connect(self.externalChangeChanged.emit)
-        if hasattr(self.editor, "fileMissingChanged"):
-            self.editor.fileMissingChanged.connect(self.fileMissingChanged.emit)
+        self.editor.syncStateChanged.connect(self.syncStateChanged.emit)
+        self.editor.externalChangeChanged.connect(self.externalChangeChanged.emit)
+        self.editor.fileMissingChanged.connect(self.fileMissingChanged.emit)
 
     def load_file(self, path: str) -> None:
         self.editor.load_file(path)
