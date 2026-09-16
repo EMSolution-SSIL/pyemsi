@@ -862,6 +862,10 @@ class PyEmsiMainWindow(QMainWindow):
             if not getattr(viewer, "_run_connected", False):
                 viewer.run_external_requested.connect(self._run_emsol_external)
                 viewer.stop_external_requested.connect(self._stop_emsol_external)
+                viewer.set_backend_defaults(
+                    self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol",
+                    self._settings.get_effective("tools.emsolution_run.run_style") or "background",
+                )
                 viewer._run_connected = True
 
     @staticmethod
@@ -1037,26 +1041,59 @@ class PyEmsiMainWindow(QMainWindow):
         if xterm is not None:
             xterm.kill()
 
+    def _ensure_emsolution_executable_path(self) -> str | None:
+        """Return a usable EMSolution.exe path, prompting the user if needed.
+
+        Returns None if the user cancels the browse prompt.
+        """
+        saved_path = self._settings.get_effective("tools.emsolution_run.executable_path")
+        if saved_path and os.path.isfile(saved_path):
+            return saved_path
+
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Select EMSolution.exe",
+            os.getcwd(),
+            "Executable Files (*.exe);;All Files (*)",
+        )
+        if not path:
+            return None
+
+        self._settings.set_global("tools.emsolution_run.executable_path", path)
+        self._settings.save()
+        return self._settings.get_effective("tools.emsolution_run.executable_path")
+
     def _run_emsol_external(self, path: str) -> None:
-        """Run an EMSolution input file via pyemsol in an external terminal."""
-        import sys
+        """Run an EMSolution input file via the selected backend in an external terminal."""
+        from pyemsi.tools.emsolution_run import build_run_command
 
         viewer = self.sender()
-        cwd = os.path.dirname(path)
-        title = f"pyemsol — {os.path.basename(path)}"
+        backend = viewer.backend if viewer is not None else "pyemsol"
+        run_style = viewer.run_style if viewer is not None else "background"
+
+        executable_path = None
+        if backend == "executable":
+            executable_path = self._ensure_emsolution_executable_path()
+            if executable_path is None:
+                return
+
+        run_command = build_run_command(
+            input_path=path,
+            backend=backend,
+            run_style=run_style,
+            executable_path=executable_path,
+        )
 
         if viewer is not None:
             viewer.set_external_running(True)
 
-        run_emsol_script = os.path.join(os.path.dirname(__file__), os.pardir, "tools", "run_emsol.py")
-
         self._external_terminal_dock.show()
         self._external_terminal_dock.raise_()
         xterm = self._external_terminal_dock.add_terminal(
-            title=title,
-            cmd=sys.executable,
-            args=[run_emsol_script, path],
-            cwd=cwd,
+            title=run_command.title,
+            cmd=run_command.cmd,
+            args=run_command.args,
+            cwd=run_command.cwd,
         )
 
         if viewer is not None:
