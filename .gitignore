@@ -223,3 +223,10 @@ __marimo__/
 # remotion
 remotion/node_modules/
 remotion/build/
+
+# Vendored xterm.js prebuilt bundles: the generic `lib/` rule above (meant for
+# Python packaging artifacts) unintentionally also matches these directories,
+# which are the actual browser-ready files the terminal widget loads at
+# runtime (only TypeScript source is vendored otherwise) -- unignore them.
+!pyemsi/widgets/xterm/xterm-js/*/lib/
+!pyemsi/widgets/xterm/xterm-js/*/lib/**
