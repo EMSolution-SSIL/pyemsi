@@ -46,6 +46,8 @@ def check_executable(path: str) -> tuple[bool, str]:
     """
     try:
         result = subprocess.run([path, "-v"], capture_output=True, text=True, timeout=5)
+    except subprocess.TimeoutExpired as exc:
+        return False, f"{path} -v timed out after {exc.timeout} seconds"
     except OSError as exc:
         return False, f"Could not launch {path}: {exc}"
     if result.returncode != 0:

@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -98,3 +99,16 @@ def test_check_executable_reports_failure_for_missing_file(tmp_path):
 
     assert ok is False
     assert message
+
+
+def test_check_executable_handles_timeout(monkeypatch):
+    def mock_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["dummy"], timeout=5)
+
+    monkeypatch.setattr(dialog_module.subprocess, "run", mock_run)
+
+    ok, message = dialog_module.check_executable("dummy_path")
+
+    assert ok is False
+    assert message
+    assert "timed out" in message.lower()
