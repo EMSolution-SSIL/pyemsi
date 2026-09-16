@@ -63,6 +63,8 @@ If the IPython Terminal is not visible, enable it from:
 
 After the `pyemsol` package is installed, restart pyemsi if needed and the GUI will be ready to run EMSolution simulations.
 
+If you already have a standalone `EMSolution.exe` and would rather not install `pyemsol`, you can skip this step and use the `EMSolution.exe` run backend instead — see [Choosing A Run Backend](/docs/docs/basics/run-simulation#choosing-a-run-backend).
+
 ## Verify The Installation
 
 You should now be able to:

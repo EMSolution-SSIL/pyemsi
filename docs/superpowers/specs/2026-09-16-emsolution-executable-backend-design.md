@@ -153,20 +153,52 @@ hardcoding the `run_emsol.py` invocation, and the resulting
 
 ## Assumptions / open questions to verify during implementation
 
-- **Input file format compatibility**: this design assumes the file
-  pyemsi's input control editor saves (the same JSON file passed to
-  `pyemsol.initialize`) is also directly readable by `EMSolution.exe`'s
-  `-f`/`-d` batch mode, with no conversion step. This should be
-  confirmed against a real installed executable before/while
-  implementing; if the formats differ, a conversion step would need to
-  be added to `build_run_command`, which would be a scope change.
-- **`-d` trailing backslash**: the docs' batch-file example always
-  suffixes the run directory with a trailing backslash
-  (`-d dat1\`); it's unclear whether this is required by the argument
-  parser or just a convention in the example. Verify empirically; if
-  required, `build_run_command` appends it.
-- **Console output under `-m`**: assumed `-m` only adds a window and
-  does not suppress normal batch console output. Verify empirically.
+- **Input file format compatibility** — VERIFIED. A real pyemsi-saved
+  input JSON (see the manual-verification memory note below) runs
+  directly via `EMSolution.exe -f/-d` batch mode with no conversion
+  step, confirmed across multiple full runs.
+- **`-d` trailing backslash** — applied unconditionally in
+  `build_run_command` (`run_dir = folder + os.sep`), matching the
+  docs' example. Every manual run with the trailing backslash present
+  has completed successfully; whether omitting it would actually break
+  parsing was not isolated separately, so the code keeps it rather
+  than relying on that being optional.
+- **Console output under `-m`** — CORRECTED, not just verified: on the
+  real, CodeMeter-licensed binary used for manual verification
+  (`EMSolution x64 r2025.11.2 (CodeMeter)`), a native window appears
+  **regardless of whether `-m` is passed** — `-b` alone also opens it,
+  contradicting `runWindows.rst`'s documented behavior (window only
+  with `-m`). This is external/vendor behavior on this specific build,
+  not something `build_run_command`'s flag construction can change.
+  See "Known limitations" below.
+
+## Known limitations (discovered during manual verification)
+
+- **"Background" style still shows a native window on this binary.**
+  The Goals section above states Background should run "quietly ...
+  (default, matches today's experience)". In practice, on the
+  CodeMeter-licensed `EMSolution.exe` build used for verification,
+  both `Background` (`-b`) and `Window` (`-b -m`) styles show the same
+  native progress window — `-m` makes no observable difference on this
+  build. Investigated as a full root-cause pass (not assumed): ruled
+  out pyemsi's flag construction (verified correct against the docs)
+  and ruled out a misleading test harness (an initial repro using raw
+  `subprocess.Popen` was discarded because `Popen` can itself allocate
+  a console window for a console-subsystem exe; the corrected repro
+  drove the real `XtermWidget`/pywinpty code path used in production).
+  No pyemsi-side fix is possible for this; users on affected builds
+  will see a window either way.
+- **Stop must kill the whole process tree, not just the immediate
+  child.** `EMSolution.exe` runs as a grandchild of the PTY's tracked
+  process (`cmd /c echo ... && EMSolution.exe ...`, see
+  `build_run_command`). `PtyProcess.terminate()`/`kill()` only signal
+  the single top-level pid winpty tracks (`cmd.exe`) — never
+  descendants — so a naive Stop only killed `cmd.exe` and left
+  `EMSolution.exe` running unattended mid-simulation.
+  `XtermWidget.kill()` now also runs `taskkill /F /T /PID <pid>`
+  (terminates the full process tree) before falling back to
+  `PtyProcess.terminate()`. Fixed and covered by a regression test in
+  `tests/test_xterm_widget.py`.
 
 ## Testing
 
