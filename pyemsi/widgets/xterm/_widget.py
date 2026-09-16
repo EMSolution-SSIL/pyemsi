@@ -11,6 +11,7 @@ Architecture mirrors :class:`MonacoLspWidget`:
 from __future__ import annotations
 
 import os
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -250,9 +251,26 @@ class XtermWidget(QWebEngineView):
         return self._pty is not None and self._pty.isalive()
 
     def kill(self) -> None:
-        """Force-kill the PTY process."""
+        """Force-kill the PTY process and any children it spawned.
+
+        ``PtyProcess.terminate()`` only calls ``TerminateProcess`` on the
+        single pid winpty tracks -- ``cmd.exe`` here. It does not touch any
+        grandchild process cmd.exe spawned via ``&&`` (e.g. EMSolution.exe,
+        see ``build_run_command``). Once EMSolution.exe is actually running,
+        killing only cmd.exe orphans it and the simulation keeps running
+        untouched. ``taskkill /T`` terminates the whole process tree rooted
+        at that pid, which actually stops it.
+        """
         self._stop_reading = True
         if self._pty is not None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(self._pty.pid)],
+                    capture_output=True,
+                    check=False,
+                )
+            except Exception:
+                pass
             try:
                 self._pty.terminate(force=True)
             except Exception:

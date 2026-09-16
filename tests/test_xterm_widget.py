@@ -1,3 +1,4 @@
+import subprocess
 import threading
 import time
 
@@ -99,3 +100,59 @@ def test_kill_reports_finished_even_when_read_loop_is_stuck(monkeypatch):
     xterm.kill()
 
     assert _pump_until(lambda: "code" in received), "processFinished never fired after kill()"
+
+
+def _ping_pids() -> list[str]:
+    out = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq PING.EXE"],
+        capture_output=True,
+        text=True,
+    )
+    return [line.split()[1] for line in out.stdout.splitlines() if line.upper().startswith("PING.EXE")]
+
+
+def test_kill_terminates_grandchild_process_not_just_immediate_child():
+    """Regression test: EMSolution.exe is spawned as a grandchild of the PTY's
+    tracked process, via `cmd /c echo ... && EMSolution.exe ...` (see
+    build_run_command). `PtyProcess.terminate()` only calls TerminateProcess
+    on the single pid winpty tracks (cmd.exe) -- it does not touch any
+    grandchild process cmd.exe spawned. Once EMSolution.exe is actually
+    running mid-simulation, killing only cmd.exe orphans it and the
+    simulation keeps running untouched, which is exactly the reported bug
+    ("stop button does not halt the process in the middle of the
+    simulation"). Uses `ping.exe` (always present on Windows, chained the
+    same way EMSolution.exe is) as a fast, portable stand-in for a real
+    long-running grandchild -- no dependency on the user's real
+    EMSolution.exe binary.
+    """
+    _app()
+
+    for _ in range(50):
+        if not _ping_pids():
+            break
+        time.sleep(0.1)
+    assert not _ping_pids(), "a leftover PING.EXE from a previous run is still alive; aborting"
+
+    xterm = XtermWidget()
+    xterm.start_process(cmd="cmd", args=["/c", "echo", "starting", "&&", "ping", "-n", "30", "127.0.0.1"])
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline and not _ping_pids():
+        time.sleep(0.1)
+    pids_before = _ping_pids()
+    assert pids_before, "ping.exe (the grandchild process) never started"
+
+    try:
+        xterm.kill()
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and _ping_pids():
+            time.sleep(0.1)
+
+        assert not _ping_pids(), (
+            "ping.exe (the grandchild process) is still running after kill() -- "
+            "the process tree was not actually terminated"
+        )
+    finally:
+        for pid in _ping_pids():
+            subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
