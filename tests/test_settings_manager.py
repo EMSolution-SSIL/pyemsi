@@ -356,3 +356,67 @@ def test_settings_manager_persists_atlas_to_femap_values_in_local_scope(tmp_path
     assert reloaded.get_local("tools.atlas_to_femap.mesh_output") == os.path.join("exports", "post_geom_custom.neu")
     assert reloaded.get_local("tools.atlas_to_femap.electric") == "electric.atl"
     assert reloaded.get_local("tools.atlas_to_femap.electric_output") == "electric_custom.neu"
+
+
+def test_settings_manager_exposes_emsolution_run_defaults(tmp_path):
+    manager = SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
+
+    assert manager.get_effective("tools.emsolution_run.backend") == "pyemsol"
+    assert manager.get_effective("tools.emsolution_run.executable_path") is None
+    assert manager.get_effective("tools.emsolution_run.run_style") == "background"
+
+
+def test_settings_manager_persists_global_emsolution_run_settings(tmp_path):
+    global_settings_path = tmp_path / "config" / "settings.json"
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.set_global("tools.emsolution_run.backend", "executable")
+    manager.set_global("tools.emsolution_run.executable_path", str(tmp_path / "EMSolution.exe"))
+    manager.set_global("tools.emsolution_run.run_style", "window")
+    manager.save()
+
+    reloaded = SettingsManager(global_settings_path=global_settings_path)
+
+    assert reloaded.get_global("tools.emsolution_run.backend") == "executable"
+    assert reloaded.get_global("tools.emsolution_run.executable_path") == os.path.abspath(
+        os.path.normpath(str(tmp_path / "EMSolution.exe"))
+    )
+    assert reloaded.get_global("tools.emsolution_run.run_style") == "window"
+
+
+def test_settings_manager_ignores_invalid_emsolution_run_choice_values(tmp_path):
+    global_settings_path = tmp_path / "config" / "settings.json"
+    global_settings_path.parent.mkdir(parents=True)
+    global_settings_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "tools": {
+                    "emsolution_run": {
+                        "backend": "not-a-backend",
+                        "run_style": "not-a-style",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+
+    assert manager.get_effective("tools.emsolution_run.backend") == "pyemsol"
+    assert manager.get_effective("tools.emsolution_run.run_style") == "background"
+    assert any("ignored invalid value for tools.emsolution_run.backend" in warning for warning in manager.warnings)
+    assert any("ignored invalid value for tools.emsolution_run.run_style" in warning for warning in manager.warnings)
+
+
+def test_settings_manager_rejects_emsolution_run_settings_in_local_scope(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    manager = SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
+    manager.load_workspace(workspace)
+
+    try:
+        manager.set_local("tools.emsolution_run.backend", "executable")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
