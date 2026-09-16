@@ -44,6 +44,7 @@ from pyemsi.widgets.split_container import SplitContainer
 ExternalTerminalDock = None
 FieldPlotBuilderDialog = None
 EMSolutionOutputPlotBuilderDialog = None
+EMSolutionRunSettingsDialog = None
 
 
 _DOCUMENTATION_URL = "https://emsolution-ssil.github.io/pyemsi/"
@@ -190,6 +191,10 @@ class PyEmsiMainWindow(QMainWindow):
         self._open_workspace_settings_action = QAction("Open &Workspace Settings", self)
         self._open_workspace_settings_action.triggered.connect(self._open_workspace_settings)
         self._settings_menu.addAction(self._open_workspace_settings_action)
+
+        self._open_emsolution_run_settings_action = QAction("&EMSolution Run Settings...", self)
+        self._open_emsolution_run_settings_action.triggered.connect(self._open_emsolution_run_settings_dialog)
+        self._settings_menu.addAction(self._open_emsolution_run_settings_action)
 
         self._exit_action = QAction("E&xit", self)
         self._exit_action.setShortcut(QKeySequence("Alt+F4"))
@@ -732,6 +737,47 @@ class PyEmsiMainWindow(QMainWindow):
         if path is None or not path.is_file():
             return
         self._container.open_file(os.fspath(path))
+
+    def _open_emsolution_run_settings_dialog(self) -> None:
+        """Open the EMSolution run-backend settings dialog and persist if accepted."""
+        # Bootstrap the default settings if they haven't been set yet
+        self._bootstrap_emsolution_run_settings()
+
+        dialog_class = EMSolutionRunSettingsDialog
+        if dialog_class is None:
+            from pyemsi.gui.emsolution_run_settings_dialog import (
+                EMSolutionRunSettingsDialog as dialog_class,
+            )
+
+            globals()["EMSolutionRunSettingsDialog"] = dialog_class
+
+        dialog = dialog_class(self._settings, parent=self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        config = dialog.config()
+        if config is None:
+            return
+
+        self._persist_emsolution_run_settings(config)
+
+    def _persist_emsolution_run_settings(self, config) -> None:
+        """Persist the EMSolution run-backend settings dialog's accepted config."""
+        for key, value in config.to_settings().items():
+            self._settings.set_global(key, value)
+        self._settings.save()
+
+    def _bootstrap_emsolution_run_settings(self) -> None:
+        """Initialize EMSolution run settings from effective defaults if not set."""
+        changed = False
+
+        for key in ("tools.emsolution_run.backend", "tools.emsolution_run.executable_path", "tools.emsolution_run.run_style"):
+            if self._settings.get_global(key) is None:
+                self._settings.set_global(key, self._settings.get_effective(key))
+                changed = True
+
+        if changed:
+            self._settings.save()
 
     def _open_url(self, url: str) -> None:
         """Open *url* in the user's default external browser."""
