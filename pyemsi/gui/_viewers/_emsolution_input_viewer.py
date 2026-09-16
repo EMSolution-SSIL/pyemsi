@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QLabel, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QLabel, QToolBar, QVBoxLayout, QWidget
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi.widgets.input_control_editor import InputControlEditorWidget
@@ -43,6 +45,24 @@ class EMSolutionInputViewer(QWidget):
         self._stop_act.setEnabled(False)
         self._stop_act.triggered.connect(self._on_stop_clicked)
         toolbar.addAction(self._stop_act)
+
+        self._backend_combo = QComboBox(self)
+        self._backend_combo.setToolTip("Choose which program runs this input file")
+        self._backend_combo.addItem("Pyemsol", "pyemsol")
+        if sys.platform.startswith("win"):
+            self._backend_combo.addItem("EMSolution.exe", "executable")
+        self._backend_combo.currentIndexChanged.connect(self._update_style_combo_state)
+
+        self._style_combo = QComboBox(self)
+        self._style_combo.setToolTip("Background: no extra window. Window: also show EMSolution's own progress window.")
+        self._style_combo.addItem("Background", "background")
+        self._style_combo.addItem("Window", "window")
+
+        self._backend_toolbar_action = toolbar.addWidget(self._backend_combo)
+        self._style_toolbar_action = toolbar.addWidget(self._style_combo)
+        if not sys.platform.startswith("win"):
+            self._backend_toolbar_action.setVisible(False)
+        self._update_style_combo_state()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -93,6 +113,28 @@ class EMSolutionInputViewer(QWidget):
         """Toggle toolbar state: disable Run while a process is active."""
         self._run_act.setEnabled(not running)
         self._stop_act.setEnabled(running)
+
+    @property
+    def backend(self) -> str:
+        return self._backend_combo.currentData()
+
+    @property
+    def run_style(self) -> str:
+        return self._style_combo.currentData()
+
+    def set_backend_defaults(self, backend: str, run_style: str) -> None:
+        """Initialize the Backend/Style combos from global settings defaults."""
+        backend_index = self._backend_combo.findData(backend)
+        if backend_index >= 0:
+            self._backend_combo.setCurrentIndex(backend_index)
+        style_index = self._style_combo.findData(run_style)
+        if style_index >= 0:
+            self._style_combo.setCurrentIndex(style_index)
+
+    def _update_style_combo_state(self) -> None:
+        is_executable = self.backend == "executable"
+        self._style_combo.setEnabled(is_executable)
+        self._style_toolbar_action.setVisible(is_executable)
 
     def _on_run_clicked(self) -> None:
         path = self.editor.file_path
