@@ -53,17 +53,32 @@ def build_run_command(
     flags = ["-b"]
     if run_style == "window":
         flags.append("-m")
-        message = "Running EMSolution.exe -- its own progress window may also open."
+        message_words = ["Running", "EMSolution.exe", "--", "its", "own", "progress", "window", "may", "also", "open."]
     else:
-        message = "Running EMSolution.exe in the background."
+        message_words = ["Running", "EMSolution.exe", "in", "the", "background."]
 
-    inner_command = " ".join(
-        [f'"{executable_path}"', *flags, "-d", f'"{run_dir}"', "-f", f'"{filename}"']
-    )
+    # args must be plain, unquoted argv tokens, never a pre-quoted shell
+    # string: XtermWidget spawns via pywinpty's PtyProcess.spawn, which
+    # re-quotes every element with subprocess.list2cmdline. Handing it a
+    # token that already contains literal '"' characters (meant for cmd.exe's
+    # own parsing) makes list2cmdline escape those quotes and wrap the whole
+    # token again, corrupting the command cmd.exe actually receives.
+    args = [
+        "/c",
+        "echo",
+        *message_words,
+        "&&",
+        executable_path,
+        *flags,
+        "-d",
+        run_dir,
+        "-f",
+        filename,
+    ]
 
     return RunCommand(
         cmd="cmd",
-        args=["/c", f"echo {message} && {inner_command}"],
+        args=args,
         cwd=folder,
         title=f"EMSolution.exe — {filename}",
     )

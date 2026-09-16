@@ -230,7 +230,7 @@ def test_run_emsol_external_uses_executable_backend_when_path_saved(tmp_path, mo
         call = window._external_terminal_dock.calls[0]
         assert call["cmd"] == "cmd"
         assert call["args"][0] == "/c"
-        assert os.path.abspath(os.path.normpath(str(exe_path))) in call["args"][1]
+        assert os.path.abspath(os.path.normpath(str(exe_path))) in call["args"]
     finally:
         window.close()
 
