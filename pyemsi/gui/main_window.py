@@ -740,9 +740,6 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _open_emsolution_run_settings_dialog(self) -> None:
         """Open the EMSolution run-backend settings dialog and persist if accepted."""
-        # Bootstrap the default settings if they haven't been set yet
-        self._bootstrap_emsolution_run_settings()
-
         dialog_class = EMSolutionRunSettingsDialog
         if dialog_class is None:
             from pyemsi.gui.emsolution_run_settings_dialog import (
@@ -766,18 +763,6 @@ class PyEmsiMainWindow(QMainWindow):
         for key, value in config.to_settings().items():
             self._settings.set_global(key, value)
         self._settings.save()
-
-    def _bootstrap_emsolution_run_settings(self) -> None:
-        """Initialize EMSolution run settings from effective defaults if not set."""
-        changed = False
-
-        for key in ("tools.emsolution_run.backend", "tools.emsolution_run.executable_path", "tools.emsolution_run.run_style"):
-            if self._settings.get_global(key) is None:
-                self._settings.set_global(key, self._settings.get_effective(key))
-                changed = True
-
-        if changed:
-            self._settings.save()
 
     def _open_url(self, url: str) -> None:
         """Open *url* in the user's default external browser."""

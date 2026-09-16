@@ -140,6 +140,6 @@ def test_canceling_emsolution_run_settings_dialog_does_not_persist(tmp_path, mon
     try:
         window._open_emsolution_run_settings_dialog()
 
-        assert manager.get_global("tools.emsolution_run.backend") == "pyemsol"
+        assert manager.get_global("tools.emsolution_run.backend") is None
     finally:
         window.close()
