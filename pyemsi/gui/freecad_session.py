@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Callable
 
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import QEventLoop
+from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QWidget
 
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError, import_freecad
 
@@ -85,7 +87,25 @@ class FreeCADSession:
         self._main_window = main_window
         self._parking = parking
         self._park()
+        self._settle_start_page()
         LOGGER.info("FreeCAD GUI initialization complete")
+
+    def _settle_start_page(self, timeout_s: float = 2.0) -> None:
+        """Let FreeCAD create its deferred Start page before any document is opened.
+
+        FreeCAD 1.1 adds the Start page as an MDI sub-window from a timer that
+        fires shortly after ``showMainWindow()``. If a document view is created
+        first, that late Start page lands on top of it and hides the model. The
+        wait is bounded and a no-op for main windows without an MDI area.
+        """
+        assert self._main_window is not None
+        area = self._main_window.findChild(QMdiArea)
+        app = QApplication.instance()
+        if area is None or app is None:
+            return
+        deadline = time.monotonic() + timeout_s
+        while not area.subWindowList() and time.monotonic() < deadline:
+            app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
 
     def _park(self) -> None:
         assert self._main_window is not None and self._parking is not None
@@ -110,10 +130,30 @@ class FreeCADSession:
         layout = host.layout()
         if layout is None:
             raise ValueError("FreeCADSession.attach() requires a host widget with a layout")
+        self._adopt_top_level(host)
         layout.addWidget(self._main_window)  # reparents into host
         self._main_window.show()
         self._host = host
         LOGGER.info("FreeCAD native window attached")
+
+    def _adopt_top_level(self, host: QWidget) -> None:
+        """Park under the host's top-level window so re-parenting never crosses windows.
+
+        Moving a QOpenGLWidget to a different top-level window destroys and
+        recreates its OpenGL context. FreeCAD's Coin3D viewer keeps GL caches
+        bound to the old context and then renders black (seen on Windows
+        after closing and re-opening the FreeCAD tab). Keeping the parking
+        widget inside the same top-level window as the tab shell avoids the
+        context change. Top-level hosts keep a standalone parking widget so
+        the native window never dies with its host.
+        """
+        assert self._parking is not None
+        top = host.window()
+        if top is host:
+            return
+        if self._parking.parentWidget() is not top:
+            self._parking.setParent(top)
+            self._parking.hide()
 
     def detach(self, host: QWidget | None = None) -> None:
         """Return the native window to parking. No-op if not attached (or attached elsewhere)."""
@@ -135,6 +175,11 @@ class FreeCADSession:
         """Detach from any shell so pyemsi's tab teardown never owns the native window."""
         LOGGER.info("FreeCAD application-shutdown preparation")
         self.detach()
+        if self._parking is not None and self._parking.parentWidget() is not None:
+            # Give the parking widget back its own top level so pyemsi's main
+            # window teardown never deletes the native FreeCAD window.
+            self._parking.setParent(None)
+            self._parking.hide()
 
     # ------------------------------------------------------------------
     # documents
@@ -180,8 +225,29 @@ class FreeCADSession:
                 view.viewAxonometric()
             if hasattr(view, "fitAll"):
                 view.fitAll()
+            self._raise_view(view)
         LOGGER.info("FreeCAD document activated: %s", norm_path)
         return doc.Name
+
+    @staticmethod
+    def _raise_view(view) -> None:
+        """Make the MDI sub-window that hosts *view* the active one.
+
+        ``Gui.setActiveDocument`` does not reorder FreeCAD's MDI area, so a
+        Start page (or another document) created later can stay on top of
+        the document the user just opened.
+        """
+        try:
+            widget = view.graphicsView()
+        except Exception:
+            return
+        while widget is not None and not isinstance(widget, QMdiSubWindow):
+            widget = widget.parentWidget()
+        if widget is None:
+            return
+        area = widget.mdiArea()
+        if area is not None:
+            area.setActiveSubWindow(widget)
 
     def _active_view(self, name: str):
         modules = self._require_initialized()
@@ -218,6 +284,13 @@ class FreeCADSession:
             doc.save()
         except Exception as exc:
             raise FreeCADDocumentError(f"Could not save {doc.FileName}:\n{exc}") from exc
+        # App.Document.save() leaves the GUI document's Modified flag set in
+        # FreeCAD 1.1 (only the Std_Save command clears it), so clear it here
+        # or the exit prompt would ask again for a document just saved.
+        try:
+            modules.gui.getDocument(name).Modified = False
+        except Exception:
+            LOGGER.debug("Could not clear the Modified flag of FreeCAD document %s", name, exc_info=True)
 
 
 # ----------------------------------------------------------------------
