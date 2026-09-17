@@ -1229,12 +1229,19 @@ class Plotter:
         Display the plotter.
 
         If a mesh was loaded via set_file() or the filepath parameter, this method:
-        1. Applies nodal deformation (if set_deformation() was called)
-        2. Plots scalar fields (if set_scalar() was called)
-        3. Plots contours (if set_contour() was called)
-        4. Plots vector fields (if set_vector() was called)
-        5. Extracts and plots feature edges (automatically)
+        1. Extracts and plots feature edges (automatically), capturing the
+           mesh's original (undeformed) outline
+        2. Applies nodal deformation (if set_deformation() was called)
+        3. Plots scalar fields (if set_scalar() was called), on the deformed mesh
+        4. Plots contours (if set_contour() was called), on the deformed mesh
+        5. Plots vector fields (if set_vector() was called), on the deformed mesh
         6. Resets the camera to frame the mesh
+
+        Feature edges are extracted before deformation is applied, so they stay
+        fixed on the original shape even when the mesh is warped -- a visual
+        marker of "where the boundary used to be". The scalar field, contours,
+        and vector glyphs are drawn after deformation, so they reflect the new,
+        deformed shape. This lets a user compare before and after in one frame.
 
         In desktop mode, shows the QMainWindow and starts the Qt event loop (blocking).
         In notebook mode, returns the interactive widget for display in Jupyter.
@@ -1251,11 +1258,11 @@ class Plotter:
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._scalar_bar_sources = {}
+            self._plot_feature_edges()
+            self._apply_deformation()
             self._plot_scalar_field()
             self._plot_contours()
             self._plot_vector_field()
-            self._plot_feature_edges()
-            self._apply_deformation()
 
         if self._notebook:
             # Notebook mode: return the widget for Jupyter display
@@ -1304,11 +1311,11 @@ class Plotter:
         if self.reader is not None:
             self._mesh = None  # Reset mesh to ensure fresh load
             self._scalar_bar_sources = {}
+            self._plot_feature_edges()
+            self._apply_deformation()
             self._plot_scalar_field()
             self._plot_contours()
             self._plot_vector_field()
-            self._plot_feature_edges()
-            self._apply_deformation()
             self.plotter.reset_camera()
 
         self.plotter.screenshot(
@@ -1335,11 +1342,11 @@ class Plotter:
             self.plotter.suppress_rendering = True
             self._mesh = None  # Reset mesh to ensure fresh load
             self._scalar_bar_sources = {}
+            self._plot_feature_edges()
+            self._apply_deformation()
             self._plot_scalar_field()
             self._plot_contours()
             self._plot_vector_field()
-            self._plot_feature_edges()
-            self._apply_deformation()
             self.plotter.suppress_rendering = False
             self.plotter.render()
 

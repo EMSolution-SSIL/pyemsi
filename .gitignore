@@ -6,6 +6,7 @@ z.py
 todo
 .claude/
 .copilot-tracking/
+tests/visual_output/
 
 .pyemsi
 # Byte-compiled / optimized / DLL files
