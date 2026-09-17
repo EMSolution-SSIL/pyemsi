@@ -9,7 +9,9 @@ import pytest
 
 # Test bootstrap: allow importing pyemsi on interpreters without the compiled
 # femap_parser extension available.
-if "pyemsi.core.femap_parser" not in sys.modules:
+try:
+    import pyemsi.core.femap_parser  # noqa: F401
+except ImportError:
     _stub = types.ModuleType("pyemsi.core.femap_parser")
 
     class _DummyFemapType:  # pragma: no cover - bootstrap only
