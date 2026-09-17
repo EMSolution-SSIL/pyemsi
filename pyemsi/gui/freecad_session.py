@@ -89,8 +89,15 @@ class FreeCADSession:
 
     def _park(self) -> None:
         assert self._main_window is not None and self._parking is not None
-        self._main_window.hide()
-        self._main_window.setParent(self._parking)  # resets window flags to Qt.Widget
+        try:
+            self._main_window.hide()
+            self._main_window.setParent(self._parking)  # resets window flags to Qt.Widget
+        except RuntimeError:
+            # The host was deleted while still holding the native window. This
+            # must never happen (shells detach in closeEvent); log loudly rather
+            # than crash inside a destroyed() handler.
+            LOGGER.error("FreeCAD native window was destroyed together with its host shell")
+            return
         LOGGER.info("FreeCAD native window parked")
 
     def attach(self, host: QWidget) -> None:
