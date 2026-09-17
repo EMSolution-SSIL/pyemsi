@@ -75,7 +75,9 @@ def test_delete_without_close_still_detaches_once():
 
     viewer.deleteLater()
     # processEvents() alone never runs deferred deletes outside a nested loop.
-    app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    # Flush only this receiver: a global flush would also destroy widgets
+    # left half-torn-down by unrelated tests earlier in the same process.
+    app.sendPostedEvents(viewer, QEvent.Type.DeferredDelete)
     app.processEvents()
 
     detaches = [e for e in session.events if e[0] == "detach"]

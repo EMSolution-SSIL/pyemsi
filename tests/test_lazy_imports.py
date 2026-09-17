@@ -73,6 +73,8 @@ def test_import_pyemsi_gui_keeps_optional_stacks_lazy():
         "ipykernel",
         "pyemsi.plotter",
         "pyemsi.io",
+        "FreeCAD",
+        "FreeCADGui",
     ]
     snippet = f"""
 import json
