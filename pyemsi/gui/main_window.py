@@ -1111,8 +1111,42 @@ class PyEmsiMainWindow(QMainWindow):
         if self._kernel_manager is not None:
             self._kernel_manager.kernel.shell.push(kwargs)
 
+    def _confirm_freecad_documents(self) -> bool:
+        """Prompt Save/Discard/Cancel for every modified FreeCAD document.
+
+        Returns False when the user cancels or a requested save fails, in
+        which case the application must stay open. Runs before the generic
+        tab close so a cancel leaves every tab intact.
+        """
+        from pyemsi.gui import freecad_session as freecad_session_module
+
+        session = freecad_session_module.peek_freecad_session()
+        if session is None or not session.is_initialized:
+            return True
+
+        for name, file_name in session.modified_documents():
+            label = os.path.basename(file_name) if file_name else name
+            answer = QMessageBox.question(
+                self,
+                "Unsaved FreeCAD Changes",
+                f"Save changes to {label}?",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            )
+            if answer == QMessageBox.StandardButton.Cancel:
+                return False
+            if answer == QMessageBox.StandardButton.Save:
+                try:
+                    session.save_document(name)
+                except freecad_session_module.FreeCADDocumentError as exc:
+                    QMessageBox.warning(self, "FreeCAD", str(exc))
+                    return False
+        return True
+
     def closeEvent(self, event):
-        """Clean up kernel on close."""
+        """Confirm unsaved FreeCAD documents, close tabs, then clean up kernel/session."""
+        if not self._confirm_freecad_documents():
+            event.ignore()
+            return
         if not self._container.close_all_tabs():
             event.ignore()
             return
@@ -1123,4 +1157,10 @@ class PyEmsiMainWindow(QMainWindow):
         self._external_terminal_dock.close_all_terminals()
         if self._kernel_manager is not None:
             self._kernel_manager.shutdown_kernel()
+
+        from pyemsi.gui import freecad_session as freecad_session_module
+
+        session = freecad_session_module.peek_freecad_session()
+        if session is not None and session.is_initialized:
+            session.prepare_for_application_exit()
         super().closeEvent(event)
