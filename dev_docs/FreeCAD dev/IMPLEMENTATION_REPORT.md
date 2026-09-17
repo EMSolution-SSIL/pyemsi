@@ -20,7 +20,7 @@ The runtime facts in the handoff were re-verified live before coding (offscreen 
 | `pyemsi/gui/freecad_session.py` | new: `FreeCADDocumentError`, `normalize_document_path`, `FreeCADSession` (parking, attach/detach, open/activate/save, exit preparation, Report-view message listeners), `get_freecad_session`, `peek_freecad_session` |
 | `pyemsi/gui/_viewers/_freecad.py` | new: `FreeCADViewer` disposable tab shell (`viewer_kind="freecad"`, `supports_panel_move=False`) |
 | `pyemsi/gui/_viewers/_constants.py`, `pyemsi/gui/file_viewers.py` | `.fcstd` → `"freecad"` category; exports |
-| `pyemsi/widgets/split_container.py` | `"freecad"` branch in `open_file()`, `_open_freecad_file`/`_find_freecad_viewer`, leftmost insertion of the FreeCAD tab, `freecad_session_initialized` signal, `supports_panel_move` honoured in the tab context menu |
+| `pyemsi/widgets/split_container.py` | `"freecad"` branch in `open_file()`, `_open_freecad_file`/`_find_freecad_viewer`, `freecad_session_initialized` signal, `supports_panel_move` honoured in the tab context menu |
 | `pyemsi/gui/main_window.py` | `_confirm_freecad_documents()` Save/Discard/Cancel prompt and session exit preparation in `closeEvent`; `_attach_freecad_messages()` opens the "FreeCAD messages" log tab |
 | `pyemsi/gui/external_terminal_dock.py` | `add_log_tab(title)` — process-free xterm tab |
 | `pyemsi/widgets/xterm/_widget.py` | `XtermWidget.write(text)` — push text to xterm.js with CRLF line endings |
@@ -92,7 +92,7 @@ The web-only control shows the `0xC0000409` teardown code is caused by the graph
 - **`Gui.Document.Modified` is reset after `save_document`**: FreeCAD leaves the flag set after `App.Document.save()`, which would re-prompt on exit.
 - **`open_file` returns `None` on runtime failure** (after a critical message box) instead of raising, matching how the explorer double-click path treats other failures.
 - **`supports_panel_move` opt-out attribute** on the viewer instead of a FreeCAD-specific check in `_TabPanel`.
-- **FreeCAD tab is inserted leftmost** (user request after first review) instead of appended.
+- **pyemsi tab bars forced left-aligned.** FreeCAD's GUI init installs an application-wide stylesheet (`FreeCAD.qss`, ~70 KB, together with its own `QStyle`) that contains `QTabWidget::tab-bar { alignment: center; }`, which centred every pyemsi tab bar once a `.FCStd` was opened. `PyEmsiMainWindow` now sets `QTabWidget::tab-bar { alignment: left; }` on itself; widget-level rules win over the application stylesheet for all descendants (split panels, External Terminal tabs, dialogs parented to the window). Other FreeCAD.qss rules (buttons, frames, etc.) still apply to pyemsi widgets after FreeCAD init and were not overridden.
 - **Report-view mirroring** (user request): FreeCAD 1.1 has no Python console observer, so the session listens to the Report view `QTextEdit` document and forwards inserted text verbatim to a "FreeCAD messages" xterm tab. Because FreeCAD redirects Python stdout/stderr into its Report view once the GUI exists, Python `print` output from pyemsi also shows up there after FreeCAD is initialised.
 - **Smoke driver must run under Pixi** (`pixi run python`); noted so future smoke runs do not misreport blank Monaco tabs.
 

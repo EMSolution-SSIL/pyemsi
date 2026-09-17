@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent
-from PySide6.QtWidgets import QApplication, QDockWidget, QMessageBox, QWidget
+from PySide6.QtWidgets import QApplication, QDockWidget, QMessageBox, QTabWidget, QWidget
 
 from pyemsi.gui import freecad_session as session_module
 from pyemsi.gui import main_window as main_window_module
@@ -255,3 +255,43 @@ def test_destroyed_message_tab_unregisters_listener(tmp_path, monkeypatch):
         assert session.listeners == []
     finally:
         window.deleteLater()
+
+
+# ----------------------------------------------------------------------
+# Tab bars stay left-aligned under FreeCAD's application stylesheet
+# ----------------------------------------------------------------------
+
+
+def test_tab_bars_stay_left_aligned_under_centering_app_stylesheet(tmp_path, monkeypatch):
+    """FreeCAD.qss (applied app-wide on FreeCAD init) centres QTabWidget tab bars.
+
+    The main window's own stylesheet must override that for pyemsi's tabs.
+    """
+    app = _app()
+    previous = app.styleSheet()
+    app.setStyleSheet("QTabWidget::tab-bar { alignment: center; }")
+    window = None
+    try:
+        window = _make_window(tmp_path, monkeypatch)
+        window.resize(1200, 700)
+        panel = window._container.left_panel
+        window._container.add_tab(QWidget(), "one")
+        window._container.add_tab(QWidget(), "two")
+        window.show()
+        app.processEvents()
+
+        control = QTabWidget()
+        control.addTab(QWidget(), "one")
+        control.addTab(QWidget(), "two")
+        control.resize(1200, 300)
+        control.show()
+        app.processEvents()
+
+        assert panel.tabBar().geometry().x() < 10
+        assert control.tabBar().geometry().x() > 100  # the app rule really centres plain tab widgets
+        control.close()
+    finally:
+        app.setStyleSheet(previous)
+        if window is not None:
+            window.close()
+            window.deleteLater()

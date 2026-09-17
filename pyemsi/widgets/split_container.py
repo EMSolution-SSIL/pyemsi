@@ -510,10 +510,7 @@ class SplitContainer(QWidget):
             from pyemsi.gui.file_viewers import FreeCADViewer
 
             viewer = FreeCADViewer(session, parent=self._left)
-            # The CAD model is the primary artefact of a workspace, so the
-            # single FreeCAD tab always sits leftmost in the primary panel.
-            self._left.insertTab(0, viewer, "FreeCAD")
-            self._left.setCurrentWidget(viewer)
+            self.add_tab(viewer, "FreeCAD")
         else:
             self.focus_widget(viewer)
 

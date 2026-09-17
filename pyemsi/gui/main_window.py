@@ -76,6 +76,11 @@ class PyEmsiMainWindow(QMainWindow):
         self._container = SplitContainer()
         self.setCentralWidget(self._container)
 
+        # FreeCAD installs an application-wide stylesheet (FreeCAD.qss) that
+        # centres every QTabWidget tab bar. A widget-level rule wins over the
+        # application stylesheet, so pyemsi's tab bars stay left-aligned.
+        self.setStyleSheet("QTabWidget::tab-bar { alignment: left; }")
+
         self.menuBar().setStyleSheet("QMenuBar { padding: 0px; } QMenuBar::item { padding: 2px 8px; }")
         self._setup_file_actions()
         self._setup_converters_menu()
