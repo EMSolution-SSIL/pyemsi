@@ -83,6 +83,24 @@ def _create_splash(app):
         return None
 
 
+def _configure_graphics_policy(environ=None) -> None:
+    """Align Qt Quick / WebEngine composition with FreeCAD's OpenGL view.
+
+    Must run before ``QApplication`` exists. Validated on Windows/Qt 6.10:
+    without ``QSG_RHI_BACKEND=opengl`` the Monaco WebEngine view renders
+    black once a FreeCAD (QOpenGLWidget) view is shown in the same window,
+    and ``AA_ShareOpenGLContexts`` alone is not sufficient. ``setdefault``
+    keeps an explicit user/diagnostic override intact.
+    """
+    import os
+
+    from PySide6.QtCore import QCoreApplication, Qt
+
+    env = os.environ if environ is None else environ
+    env.setdefault("QSG_RHI_BACKEND", "opengl")
+    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
+
+
 def _exec_app(app) -> None:
     """Run the Qt event loop. Extracted so tests can monkeypatch this."""
     app.exec()
@@ -108,6 +126,8 @@ def launch(
         Folder to open as the initial workspace.
     """
     global _window, _app
+
+    _configure_graphics_policy()
 
     from PySide6.QtWidgets import QApplication
 

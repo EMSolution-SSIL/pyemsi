@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pyemsi.gui as gui_module
 from pyemsi.gui import main_window as main_window_module
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QApplication, QSplashScreen, QWidget
 
 
@@ -168,3 +169,53 @@ def test_create_splash_returns_splash_screen():
     finally:
         if splash is not None:
             splash.close()
+
+
+# ---------------------------------------------------------------------------
+# Graphics policy (FreeCAD / WebEngine coexistence)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_graphics_policy_defaults_rhi_backend_to_opengl():
+    env: dict[str, str] = {}
+    gui_module._configure_graphics_policy(env)
+    assert env["QSG_RHI_BACKEND"] == "opengl"
+
+
+def test_configure_graphics_policy_preserves_explicit_rhi_backend():
+    env = {"QSG_RHI_BACKEND": "d3d11"}
+    gui_module._configure_graphics_policy(env)
+    assert env["QSG_RHI_BACKEND"] == "d3d11"
+
+
+def test_configure_graphics_policy_requests_shared_opengl_contexts():
+    gui_module._configure_graphics_policy({})
+    assert QCoreApplication.testAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+
+
+def test_launch_applies_graphics_policy_before_splash_and_window(monkeypatch):
+    _ensure_app()
+    call_log: list[str] = []
+
+    def _mock_policy(environ=None):
+        call_log.append("policy")
+
+    def _mock_create_splash(app):
+        call_log.append("splash")
+        return _FakeSplash()
+
+    class _RecordingWindow(_FakeWindow):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            call_log.append("window")
+
+    monkeypatch.setattr(gui_module, "_configure_graphics_policy", _mock_policy)
+    monkeypatch.setattr(gui_module, "_create_splash", _mock_create_splash)
+    monkeypatch.setattr(main_window_module, "PyEmsiMainWindow", _RecordingWindow)
+    monkeypatch.setattr(gui_module, "_exec_app", lambda app: None)
+    monkeypatch.setattr(gui_module, "_window", None)
+    monkeypatch.setattr(gui_module, "_app", None)
+
+    gui_module.launch()
+
+    assert call_log[:3] == ["policy", "splash", "window"]

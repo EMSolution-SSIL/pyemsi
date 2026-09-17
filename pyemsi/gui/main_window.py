@@ -76,6 +76,11 @@ class PyEmsiMainWindow(QMainWindow):
         self._container = SplitContainer()
         self.setCentralWidget(self._container)
 
+        # FreeCAD installs an application-wide stylesheet (FreeCAD.qss) that
+        # centres every QTabWidget tab bar. A widget-level rule wins over the
+        # application stylesheet, so pyemsi's tab bars stay left-aligned.
+        self.setStyleSheet("QTabWidget::tab-bar { alignment: left; }")
+
         self.menuBar().setStyleSheet("QMenuBar { padding: 0px; } QMenuBar::item { padding: 2px 8px; }")
         self._setup_file_actions()
         self._setup_converters_menu()
@@ -113,6 +118,7 @@ class PyEmsiMainWindow(QMainWindow):
         self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
         self._ipython_dock.hide()
         self._external_terminal_dock.hide()
+        self._container.freecad_session_initialized.connect(self._attach_freecad_messages)
 
         self._setup_view_menu()
         self.menuBar().addMenu(self._converters_menu)
@@ -1111,8 +1117,62 @@ class PyEmsiMainWindow(QMainWindow):
         if self._kernel_manager is not None:
             self._kernel_manager.kernel.shell.push(kwargs)
 
+    def _attach_freecad_messages(self, session) -> None:
+        """Mirror FreeCAD's Report view into a "FreeCAD messages" tab of the External Terminal dock.
+
+        Connected to ``SplitContainer.freecad_session_initialized``, so it
+        runs once per process. The listener is removed when the user closes
+        the tab, so a closed tab simply stops mirroring.
+        """
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
+        log_tab = self._external_terminal_dock.add_log_tab("FreeCAD messages")
+
+        def _forward(text: str, _tab=log_tab) -> None:
+            try:
+                _tab.write(text)
+            except RuntimeError:  # tab's C++ object already deleted
+                session.remove_message_listener(_forward)
+
+        session.add_message_listener(_forward)
+        log_tab.destroyed.connect(lambda *_: session.remove_message_listener(_forward))
+
+    def _confirm_freecad_documents(self) -> bool:
+        """Prompt Save/Discard/Cancel for every modified FreeCAD document.
+
+        Returns False when the user cancels or a requested save fails, in
+        which case the application must stay open. Runs before the generic
+        tab close so a cancel leaves every tab intact.
+        """
+        from pyemsi.gui import freecad_session as freecad_session_module
+
+        session = freecad_session_module.peek_freecad_session()
+        if session is None or not session.is_initialized:
+            return True
+
+        for name, file_name in session.modified_documents():
+            label = os.path.basename(file_name) if file_name else name
+            answer = QMessageBox.question(
+                self,
+                "Unsaved FreeCAD Changes",
+                f"Save changes to {label}?",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            )
+            if answer == QMessageBox.StandardButton.Cancel:
+                return False
+            if answer == QMessageBox.StandardButton.Save:
+                try:
+                    session.save_document(name)
+                except freecad_session_module.FreeCADDocumentError as exc:
+                    QMessageBox.warning(self, "FreeCAD", str(exc))
+                    return False
+        return True
+
     def closeEvent(self, event):
-        """Clean up kernel on close."""
+        """Confirm unsaved FreeCAD documents, close tabs, then clean up kernel/session."""
+        if not self._confirm_freecad_documents():
+            event.ignore()
+            return
         if not self._container.close_all_tabs():
             event.ignore()
             return
@@ -1123,4 +1183,10 @@ class PyEmsiMainWindow(QMainWindow):
         self._external_terminal_dock.close_all_terminals()
         if self._kernel_manager is not None:
             self._kernel_manager.shutdown_kernel()
+
+        from pyemsi.gui import freecad_session as freecad_session_module
+
+        session = freecad_session_module.peek_freecad_session()
+        if session is not None and session.is_initialized:
+            session.prepare_for_application_exit()
         super().closeEvent(event)

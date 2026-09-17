@@ -73,6 +73,18 @@ class ExternalTerminalDock(QDockWidget):
         xterm.start_process(cmd=cmd, args=args, cwd=cwd, env=env)
         return xterm
 
+    def add_log_tab(self, title: str) -> XtermWidget:
+        """Create a terminal tab with no process behind it, for log output.
+
+        Callers push text with :meth:`XtermWidget.write`. Closing the tab
+        works like any other terminal tab (``kill`` is a no-op without a PTY).
+        """
+        xterm = XtermWidget(parent=self._tabs)
+        idx = self._tabs.addTab(xterm, title)
+        self._tabs.setCurrentIndex(idx)
+        self._stack.setCurrentWidget(self._tabs)
+        return xterm
+
     def close_all_terminals(self) -> None:
         """Kill every open terminal tab and return to the empty-state page."""
         for i in range(self._tabs.count()):
