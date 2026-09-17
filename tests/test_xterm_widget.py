@@ -156,3 +156,15 @@ def test_kill_terminates_grandchild_process_not_just_immediate_child():
     finally:
         for pid in _ping_pids():
             subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
+
+
+def test_write_pushes_text_to_the_terminal_with_crlf_line_endings():
+    _app()
+    xterm = XtermWidget()
+    sent: list[tuple[str, object]] = []
+    xterm._bridge.send_to_js = lambda name, value: sent.append((name, value))
+
+    xterm.write("line one\nline two\r\nno newline")
+
+    assert sent == [("data", "line one\r\nline two\r\nno newline")]
+    assert xterm.is_alive is False

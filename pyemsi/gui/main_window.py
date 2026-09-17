@@ -113,6 +113,7 @@ class PyEmsiMainWindow(QMainWindow):
         self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
         self._ipython_dock.hide()
         self._external_terminal_dock.hide()
+        self._container.freecad_session_initialized.connect(self._attach_freecad_messages)
 
         self._setup_view_menu()
         self.menuBar().addMenu(self._converters_menu)
@@ -1110,6 +1111,26 @@ class PyEmsiMainWindow(QMainWindow):
         self._extra_namespace.update(kwargs)
         if self._kernel_manager is not None:
             self._kernel_manager.kernel.shell.push(kwargs)
+
+    def _attach_freecad_messages(self, session) -> None:
+        """Mirror FreeCAD's Report view into a "FreeCAD messages" tab of the External Terminal dock.
+
+        Connected to ``SplitContainer.freecad_session_initialized``, so it
+        runs once per process. The listener is removed when the user closes
+        the tab, so a closed tab simply stops mirroring.
+        """
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
+        log_tab = self._external_terminal_dock.add_log_tab("FreeCAD messages")
+
+        def _forward(text: str, _tab=log_tab) -> None:
+            try:
+                _tab.write(text)
+            except RuntimeError:  # tab's C++ object already deleted
+                session.remove_message_listener(_forward)
+
+        session.add_message_listener(_forward)
+        log_tab.destroyed.connect(lambda *_: session.remove_message_listener(_forward))
 
     def _confirm_freecad_documents(self) -> bool:
         """Prompt Save/Discard/Cancel for every modified FreeCAD document.

@@ -398,3 +398,76 @@ def test_get_freecad_session_is_a_process_singleton(monkeypatch):
     first = session_module.get_freecad_session()
     assert session_module.get_freecad_session() is first
     assert session_module.peek_freecad_session() is first
+
+
+# ----------------------------------------------------------------------
+# Report view message forwarding
+# ----------------------------------------------------------------------
+
+
+def _report_view(fake: _FakeFreeCAD):
+    from PySide6.QtWidgets import QTextEdit
+
+    edit = QTextEdit(fake.main_window)
+    edit.setObjectName("Report view")
+    fake.main_window.setCentralWidget(edit)
+    return edit
+
+
+def test_report_view_text_is_forwarded_to_message_listeners():
+    _app()
+    fake = _FakeFreeCAD()
+    edit = _report_view(fake)
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+    received: list[str] = []
+    session.add_message_listener(received.append)
+
+    edit.append("12:00:00  <PartDesign> skip edge that is not C0 continuous")
+    edit.append("12:00:01  Hole: Hole error: Finding axis failed")
+
+    assert "".join(received).splitlines() == [
+        "12:00:00  <PartDesign> skip edge that is not C0 continuous",
+        "12:00:01  Hole: Hole error: Finding axis failed",
+    ]
+
+
+def test_removed_message_listener_stops_receiving():
+    _app()
+    fake = _FakeFreeCAD()
+    edit = _report_view(fake)
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+    received: list[str] = []
+    session.add_message_listener(received.append)
+    session.remove_message_listener(received.append)
+    session.remove_message_listener(received.append)  # idempotent
+
+    edit.append("ignored")
+
+    assert received == []
+
+
+def test_report_view_clear_does_not_forward_text():
+    _app()
+    fake = _FakeFreeCAD()
+    edit = _report_view(fake)
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+    received: list[str] = []
+    session.add_message_listener(received.append)
+    edit.append("first")
+    received.clear()
+
+    edit.clear()
+
+    assert received == []
+
+
+def test_session_without_report_view_accepts_listeners():
+    _app()
+    fake = _FakeFreeCAD()
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+
+    session.add_message_listener(lambda text: None)  # must not raise

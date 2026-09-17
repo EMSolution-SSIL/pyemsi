@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication, QDockWidget, QMessageBox, QWidget
 
 from pyemsi.gui import freecad_session as session_module
@@ -165,5 +166,92 @@ def test_uninitialized_session_is_ignored(tmp_path, monkeypatch):
     window = _make_window(tmp_path, monkeypatch)
     try:
         assert window.close() is True
+    finally:
+        window.deleteLater()
+
+
+# ----------------------------------------------------------------------
+# FreeCAD messages forwarded to the External Terminal dock
+# ----------------------------------------------------------------------
+
+
+class _FakeLogTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.written: list[str] = []
+
+    def write(self, text):
+        self.written.append(text)
+
+
+class _LogDock(_DummyExternalTerminalDock):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.log_tabs: list[tuple[str, _FakeLogTab]] = []
+        self.shown = 0
+
+    def show(self):
+        self.shown += 1
+        super().show()
+
+    def add_log_tab(self, title):
+        tab = _FakeLogTab()
+        self.log_tabs.append((title, tab))
+        return tab
+
+
+class _MessageSession:
+    def __init__(self):
+        self.listeners: list = []
+
+    def add_message_listener(self, listener):
+        self.listeners.append(listener)
+
+    def remove_message_listener(self, listener):
+        if listener in self.listeners:
+            self.listeners.remove(listener)
+
+    def emit(self, text):
+        for listener in list(self.listeners):
+            listener(text)
+
+
+def _make_window_with_log_dock(tmp_path, monkeypatch):
+    _app()
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _LogDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    manager = SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
+    return main_window_module.PyEmsiMainWindow(settings_manager=manager)
+
+
+def test_freecad_session_init_opens_message_tab_and_forwards_text(tmp_path, monkeypatch):
+    window = _make_window_with_log_dock(tmp_path, monkeypatch)
+    session = _MessageSession()
+    try:
+        window._container.freecad_session_initialized.emit(session)
+
+        dock = window._external_terminal_dock
+        assert [title for title, _ in dock.log_tabs] == ["FreeCAD messages"]
+        assert dock.shown >= 1
+        session.emit("Hole: Hole error: Finding axis failed\n")
+        assert dock.log_tabs[0][1].written == ["Hole: Hole error: Finding axis failed\n"]
+    finally:
+        window.deleteLater()
+
+
+def test_destroyed_message_tab_unregisters_listener(tmp_path, monkeypatch):
+    app = _app()
+    window = _make_window_with_log_dock(tmp_path, monkeypatch)
+    session = _MessageSession()
+    try:
+        window._container.freecad_session_initialized.emit(session)
+        tab = window._external_terminal_dock.log_tabs[0][1]
+        assert len(session.listeners) == 1
+
+        tab.deleteLater()
+        app.sendPostedEvents(tab, QEvent.Type.DeferredDelete)
+        app.processEvents()
+
+        assert session.listeners == []
     finally:
         window.deleteLater()

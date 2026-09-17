@@ -250,6 +250,17 @@ class XtermWidget(QWebEngineView):
         """Return ``True`` if the PTY process is still running."""
         return self._pty is not None and self._pty.isalive()
 
+    def write(self, text: str) -> None:
+        """Display *text* in the terminal without any process behind it.
+
+        Used for log-style tabs (e.g. FreeCAD's Report view). xterm.js
+        needs CRLF line endings, so bare ``\\n`` is expanded. Text sent
+        before the JavaScript side has initialised is queued by the bridge.
+        """
+        if not text:
+            return
+        self._bridge.send_to_js("data", text.replace("\r\n", "\n").replace("\n", "\r\n"))
+
     def kill(self) -> None:
         """Force-kill the PTY process and any children it spawned.
 

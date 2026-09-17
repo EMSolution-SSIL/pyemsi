@@ -14,7 +14,7 @@ import time
 from typing import Callable
 
 from PySide6.QtCore import QEventLoop
-from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QWidget
+from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QTextEdit, QWidget
 
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError, import_freecad
 
@@ -39,6 +39,8 @@ class FreeCADSession:
         self._main_window: QWidget | None = None
         self._parking: QWidget | None = None
         self._host: QWidget | None = None
+        self._message_listeners: list[Callable[[str], None]] = []
+        self._report_view: QWidget | None = None
 
     # ------------------------------------------------------------------
     # state
@@ -88,7 +90,59 @@ class FreeCADSession:
         self._parking = parking
         self._park()
         self._settle_start_page()
+        self._hook_report_view()
         LOGGER.info("FreeCAD GUI initialization complete")
+
+    # ------------------------------------------------------------------
+    # messages (FreeCAD Report view)
+    # ------------------------------------------------------------------
+
+    def add_message_listener(self, listener: Callable[[str], None]) -> None:
+        """Register *listener* to receive every text chunk FreeCAD appends to its Report view.
+
+        FreeCAD 1.1 exposes no Python-side console observer, so the text is
+        taken from the Report view ``QTextEdit`` as FreeCAD writes to it.
+        Chunks are raw Report view text (timestamp prefix included), exactly
+        as inserted; a single line may arrive in several chunks.
+        """
+        if listener not in self._message_listeners:
+            self._message_listeners.append(listener)
+
+    def remove_message_listener(self, listener: Callable[[str], None]) -> None:
+        """Stop forwarding messages to *listener*; ignores unknown listeners."""
+        if listener in self._message_listeners:
+            self._message_listeners.remove(listener)
+
+    def _hook_report_view(self) -> None:
+        if self._main_window is None:
+            return
+        try:
+            edits = self._main_window.findChildren(QTextEdit, "Report view")
+        except RuntimeError:
+            edits = []
+        if not edits:
+            LOGGER.warning("FreeCAD Report view not found; console messages will not be forwarded")
+            return
+        self._report_view = edits[0]
+        self._report_view.document().contentsChange.connect(self._on_report_view_changed)
+        LOGGER.info("FreeCAD Report view hooked for message forwarding")
+
+    def _on_report_view_changed(self, position: int, chars_removed: int, chars_added: int) -> None:
+        if chars_added <= 0 or not self._message_listeners or self._report_view is None:
+            return
+        try:
+            text = self._report_view.toPlainText()[position : position + chars_added]
+        except RuntimeError:
+            return
+        if not text:
+            return
+        # Forward verbatim: toPlainText() already maps block separators to
+        # "\n", and FreeCAD may write a line in several partial chunks.
+        for listener in list(self._message_listeners):
+            try:
+                listener(text)
+            except Exception:  # a broken listener must never break FreeCAD output
+                LOGGER.exception("FreeCAD message listener failed")
 
     def _settle_start_page(self, timeout_s: float = 2.0) -> None:
         """Let FreeCAD create its deferred Start page before any document is opened.

@@ -203,3 +203,42 @@ def test_context_menu_hides_move_action_for_freecad_viewer(fake_session, tmp_pat
     panel._show_context_menu(QPoint(0, 0))  # _tab_index_at falls back to currentIndex()
 
     assert captured == [["Close Tab", "Close Others", "Close All"]]
+
+
+def test_freecad_tab_is_inserted_as_the_leftmost_tab(fake_session, tmp_path):
+    _app()
+    container = SplitContainer()
+    container.add_tab(QWidget(), "first")
+    container.add_tab(QWidget(), "second")
+
+    viewer = container.open_file(str(tmp_path / "A.FCStd"))
+
+    assert container.left_panel.indexOf(viewer) == 0
+    assert container.left_panel.currentWidget() is viewer
+    assert [container.left_panel.tabText(i) for i in range(3)] == ["FreeCAD \u2014 A.FCStd", "first", "second"]
+
+
+def test_freecad_session_initialized_signal_fires_once_per_process(fake_session, tmp_path):
+    _app()
+    container = SplitContainer()
+    seen: list[object] = []
+    container.freecad_session_initialized.connect(seen.append)
+
+    container.open_file(str(tmp_path / "A.FCStd"))
+    container.open_file(str(tmp_path / "B.FCStd"))
+
+    assert seen == [fake_session]
+
+
+def test_freecad_session_initialized_signal_not_fired_on_runtime_failure(monkeypatch, tmp_path):
+    _app()
+    session = _FakeSession(init_error=FreeCADRuntimeError("nope"))
+    monkeypatch.setattr(session_module, "get_freecad_session", lambda: session)
+    monkeypatch.setattr(split_container_module.QMessageBox, "critical", lambda *a, **k: None)
+    container = SplitContainer()
+    seen: list[object] = []
+    container.freecad_session_initialized.connect(seen.append)
+
+    container.open_file(str(tmp_path / "A.FCStd"))
+
+    assert seen == []

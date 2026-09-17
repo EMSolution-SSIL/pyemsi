@@ -196,7 +196,15 @@ class SplitContainer(QWidget):
     add_tab(widget, title)   Add a tab to the left (primary) panel.
     left_panel               The left (primary) _TabPanel.
     right_panel              The right _TabPanel (always exists, may be hidden).
+
+    Signals
+    -------
+    freecad_session_initialized(session)
+        Emitted once per process, right after the shared FreeCAD session
+        finished initialising while opening the first ``.FCStd`` file.
     """
+
+    freecad_session_initialized = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -488,18 +496,24 @@ class SplitContainer(QWidget):
         from pyemsi.gui.freecad_runtime import FreeCADRuntimeError
 
         session = freecad_session_module.get_freecad_session()
+        was_initialized = session.is_initialized
         try:
             session.ensure_initialized()
         except FreeCADRuntimeError as exc:
             QMessageBox.critical(self, "FreeCAD", str(exc))
             return None
+        if not was_initialized:
+            self.freecad_session_initialized.emit(session)
 
         viewer = self._find_freecad_viewer()
         if viewer is None:
             from pyemsi.gui.file_viewers import FreeCADViewer
 
             viewer = FreeCADViewer(session, parent=self._left)
-            self.add_tab(viewer, "FreeCAD")
+            # The CAD model is the primary artefact of a workspace, so the
+            # single FreeCAD tab always sits leftmost in the primary panel.
+            self._left.insertTab(0, viewer, "FreeCAD")
+            self._left.setCurrentWidget(viewer)
         else:
             self.focus_widget(viewer)
 
