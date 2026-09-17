@@ -73,6 +73,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "y_label": "",
             "y_log_scale": False,
         },
+        "emsolution_run": {
+            "backend": "pyemsol",
+            "executable_path": None,
+            "run_style": "background",
+        },
         "field_plot": {
             "cached_pvds": [],
             "filepath": None,
@@ -303,6 +308,20 @@ def _normalize_field_plot_cached_pvds(value: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+def _normalize_emsolution_run_backend(value: Any) -> str:
+    normalized = _normalize_text(value)
+    if normalized not in {"pyemsol", "executable"}:
+        raise ValueError("expected 'pyemsol' or 'executable'")
+    return normalized
+
+
+def _normalize_emsolution_run_style(value: Any) -> str:
+    normalized = _normalize_text(value)
+    if normalized not in {"background", "window"}:
+        raise ValueError("expected 'background' or 'window'")
+    return normalized
+
+
 @dataclass(frozen=True)
 class SettingDefinition:
     default: Any
@@ -358,6 +377,9 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
     "tools.emsolution_plot.x_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
     "tools.emsolution_plot.y_label": SettingDefinition("", SCOPE_BOTH, _normalize_optional_text),
     "tools.emsolution_plot.y_log_scale": SettingDefinition(False, SCOPE_BOTH, _normalize_bool),
+    "tools.emsolution_run.backend": SettingDefinition("pyemsol", SCOPE_GLOBAL, _normalize_emsolution_run_backend),
+    "tools.emsolution_run.executable_path": SettingDefinition(None, SCOPE_GLOBAL, _normalize_optional_path),
+    "tools.emsolution_run.run_style": SettingDefinition("background", SCOPE_GLOBAL, _normalize_emsolution_run_style),
     "tools.field_plot.cached_pvds": SettingDefinition([], SCOPE_LOCAL, _normalize_field_plot_cached_pvds),
     "tools.field_plot.filepath": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
     "tools.field_plot.selected_relative_path": SettingDefinition(None, SCOPE_LOCAL, _normalize_optional_relative_text),
@@ -390,6 +412,7 @@ _CONTAINER_PATHS = {
     "tools",
     "tools.atlas_to_femap",
     "tools.emsolution_plot",
+    "tools.emsolution_run",
     "tools.femap_converter",
     "tools.field_plot",
     "tools.unv_to_femap",

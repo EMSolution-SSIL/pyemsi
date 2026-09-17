@@ -44,6 +44,7 @@ from pyemsi.widgets.split_container import SplitContainer
 ExternalTerminalDock = None
 FieldPlotBuilderDialog = None
 EMSolutionOutputPlotBuilderDialog = None
+EMSolutionRunSettingsDialog = None
 
 
 _DOCUMENTATION_URL = "https://emsolution-ssil.github.io/pyemsi/"
@@ -190,6 +191,10 @@ class PyEmsiMainWindow(QMainWindow):
         self._open_workspace_settings_action = QAction("Open &Workspace Settings", self)
         self._open_workspace_settings_action.triggered.connect(self._open_workspace_settings)
         self._settings_menu.addAction(self._open_workspace_settings_action)
+
+        self._open_emsolution_run_settings_action = QAction("&EMSolution Run Settings...", self)
+        self._open_emsolution_run_settings_action.triggered.connect(self._open_emsolution_run_settings_dialog)
+        self._settings_menu.addAction(self._open_emsolution_run_settings_action)
 
         self._exit_action = QAction("E&xit", self)
         self._exit_action.setShortcut(QKeySequence("Alt+F4"))
@@ -733,6 +738,32 @@ class PyEmsiMainWindow(QMainWindow):
             return
         self._container.open_file(os.fspath(path))
 
+    def _open_emsolution_run_settings_dialog(self) -> None:
+        """Open the EMSolution run-backend settings dialog and persist if accepted."""
+        dialog_class = EMSolutionRunSettingsDialog
+        if dialog_class is None:
+            from pyemsi.gui.emsolution_run_settings_dialog import (
+                EMSolutionRunSettingsDialog as dialog_class,
+            )
+
+            globals()["EMSolutionRunSettingsDialog"] = dialog_class
+
+        dialog = dialog_class(self._settings, parent=self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        config = dialog.config()
+        if config is None:
+            return
+
+        self._persist_emsolution_run_settings(config)
+
+    def _persist_emsolution_run_settings(self, config) -> None:
+        """Persist the EMSolution run-backend settings dialog's accepted config."""
+        for key, value in config.to_settings().items():
+            self._settings.set_global(key, value)
+        self._settings.save()
+
     def _open_url(self, url: str) -> None:
         """Open *url* in the user's default external browser."""
         QDesktopServices.openUrl(QUrl(url))
@@ -831,6 +862,10 @@ class PyEmsiMainWindow(QMainWindow):
             if not getattr(viewer, "_run_connected", False):
                 viewer.run_external_requested.connect(self._run_emsol_external)
                 viewer.stop_external_requested.connect(self._stop_emsol_external)
+                viewer.set_backend_defaults(
+                    self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol",
+                    self._settings.get_effective("tools.emsolution_run.run_style") or "background",
+                )
                 viewer._run_connected = True
 
     @staticmethod
@@ -1006,26 +1041,59 @@ class PyEmsiMainWindow(QMainWindow):
         if xterm is not None:
             xterm.kill()
 
+    def _ensure_emsolution_executable_path(self) -> str | None:
+        """Return a usable EMSolution.exe path, prompting the user if needed.
+
+        Returns None if the user cancels the browse prompt.
+        """
+        saved_path = self._settings.get_effective("tools.emsolution_run.executable_path")
+        if saved_path and os.path.isfile(saved_path):
+            return saved_path
+
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Select EMSolution.exe",
+            os.getcwd(),
+            "Executable Files (*.exe);;All Files (*)",
+        )
+        if not path:
+            return None
+
+        self._settings.set_global("tools.emsolution_run.executable_path", path)
+        self._settings.save()
+        return self._settings.get_effective("tools.emsolution_run.executable_path")
+
     def _run_emsol_external(self, path: str) -> None:
-        """Run an EMSolution input file via pyemsol in an external terminal."""
-        import sys
+        """Run an EMSolution input file via the selected backend in an external terminal."""
+        from pyemsi.tools.emsolution_run import build_run_command
 
         viewer = self.sender()
-        cwd = os.path.dirname(path)
-        title = f"pyemsol — {os.path.basename(path)}"
+        backend = viewer.backend if viewer is not None else "pyemsol"
+        run_style = viewer.run_style if viewer is not None else "background"
+
+        executable_path = None
+        if backend == "executable":
+            executable_path = self._ensure_emsolution_executable_path()
+            if executable_path is None:
+                return
+
+        run_command = build_run_command(
+            input_path=path,
+            backend=backend,
+            run_style=run_style,
+            executable_path=executable_path,
+        )
 
         if viewer is not None:
             viewer.set_external_running(True)
 
-        run_emsol_script = os.path.join(os.path.dirname(__file__), os.pardir, "tools", "run_emsol.py")
-
         self._external_terminal_dock.show()
         self._external_terminal_dock.raise_()
         xterm = self._external_terminal_dock.add_terminal(
-            title=title,
-            cmd=sys.executable,
-            args=[run_emsol_script, path],
-            cwd=cwd,
+            title=run_command.title,
+            cmd=run_command.cmd,
+            args=run_command.args,
+            cwd=run_command.cwd,
         )
 
         if viewer is not None:

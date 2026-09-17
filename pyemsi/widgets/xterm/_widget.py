@@ -11,7 +11,9 @@ Architecture mirrors :class:`MonacoLspWidget`:
 from __future__ import annotations
 
 import os
+import subprocess
 import threading
+import time
 from pathlib import Path
 
 from qtpy.QtCore import QUrl, Signal, QObject
@@ -156,7 +158,10 @@ class XtermWidget(QWebEngineView):
         super().__init__(parent)
         self._pty = None
         self._reader_thread: threading.Thread | None = None
+        self._watch_thread: threading.Thread | None = None
         self._stop_reading = False
+        self._finish_lock = threading.Lock()
+        self._finished = False
         self._signals = _PtyReaderSignals()
         self._signals.output.connect(self._on_pty_output)
         self._signals.finished.connect(self._on_pty_finished)
@@ -226,11 +231,19 @@ class XtermWidget(QWebEngineView):
         )
 
         self._stop_reading = False
+        self._finished = False
         self._reader_thread = threading.Thread(
             target=self._read_loop,
             daemon=True,
         )
         self._reader_thread.start()
+
+        self._watch_thread = threading.Thread(
+            target=self._watch_loop,
+            args=(self._pty,),
+            daemon=True,
+        )
+        self._watch_thread.start()
 
     @property
     def is_alive(self) -> bool:
@@ -238,9 +251,26 @@ class XtermWidget(QWebEngineView):
         return self._pty is not None and self._pty.isalive()
 
     def kill(self) -> None:
-        """Force-kill the PTY process."""
+        """Force-kill the PTY process and any children it spawned.
+
+        ``PtyProcess.terminate()`` only calls ``TerminateProcess`` on the
+        single pid winpty tracks -- ``cmd.exe`` here. It does not touch any
+        grandchild process cmd.exe spawned via ``&&`` (e.g. EMSolution.exe,
+        see ``build_run_command``). Once EMSolution.exe is actually running,
+        killing only cmd.exe orphans it and the simulation keeps running
+        untouched. ``taskkill /T`` terminates the whole process tree rooted
+        at that pid, which actually stops it.
+        """
         self._stop_reading = True
         if self._pty is not None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(self._pty.pid)],
+                    capture_output=True,
+                    check=False,
+                )
+            except Exception:
+                pass
             try:
                 self._pty.terminate(force=True)
             except Exception:
@@ -277,13 +307,44 @@ class XtermWidget(QWebEngineView):
                 except Exception:
                     break
         finally:
-            exitcode = -1
+            self._report_finished(pty)
+
+    def _watch_loop(self, pty) -> None:
+        """Fallback completion watcher, polling independently of `_read_loop`.
+
+        Some child processes leave winpty's blocking `pty.read()` hanging
+        forever even after the process has exited (observed with
+        EMSolution.exe under ConPTY: the console pipe never signals EOF even
+        though `pty.isalive()` correctly flips to False). Without this,
+        neither natural process exit nor a forced `kill()` ever reaches
+        `_read_loop`'s exit path, so the UI never learns the run finished.
+        `isalive()` is a cheap, always-non-blocking check, so poll it here
+        independently and report completion ourselves if `_read_loop` is
+        stuck.
+        """
+        while not self._stop_reading:
             try:
                 if not pty.isalive():
-                    exitcode = pty.exitstatus or 0
+                    break
             except Exception:
-                pass
-            self._signals.finished.emit(exitcode)
+                break
+            time.sleep(0.15)
+        self._report_finished(pty)
+
+    def _report_finished(self, pty) -> None:
+        """Emit the `finished` signal exactly once, from whichever of
+        `_read_loop`/`_watch_loop` notices completion first."""
+        with self._finish_lock:
+            if self._finished:
+                return
+            self._finished = True
+        exitcode = -1
+        try:
+            if not pty.isalive():
+                exitcode = pty.exitstatus or 0
+        except Exception:
+            pass
+        self._signals.finished.emit(exitcode)
 
     def _on_pty_output(self, data: str) -> None:
         """Slot: receive PTY data on the main thread and push to JS."""
