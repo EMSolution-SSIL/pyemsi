@@ -65,6 +65,10 @@ _AUDIO_EXTENSIONS = {
     ".m4a",
 }
 
+_FREECAD_EXTENSIONS = {
+    ".fcstd",
+}
+
 for _ext in _PYTHON_EXTENSIONS:
     _CATEGORY[_ext] = "python"
 for _ext in _TEXT_EXTENSIONS:
@@ -75,3 +79,5 @@ for _ext in _IMAGE_EXTENSIONS:
     _CATEGORY[_ext] = "image"
 for _ext in _AUDIO_EXTENSIONS:
     _CATEGORY[_ext] = "audio"
+for _ext in _FREECAD_EXTENSIONS:
+    _CATEGORY[_ext] = "freecad"

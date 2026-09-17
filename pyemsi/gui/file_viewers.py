@@ -11,6 +11,7 @@ from ._viewers._audio import AudioViewer
 from ._viewers._constants import (
     _AUDIO_EXTENSIONS,
     _CATEGORY,
+    _FREECAD_EXTENSIONS,
     _IMAGE_EXTENSIONS,
     _MARKDOWN_EXTENSIONS,
     _PYTHON_EXTENSIONS,
@@ -39,6 +40,7 @@ __all__ = [
     "_MARKDOWN_EXTENSIONS",
     "_IMAGE_EXTENSIONS",
     "_AUDIO_EXTENSIONS",
+    "_FREECAD_EXTENSIONS",
     "AudioViewer",
     "MarkdownViewer",
     "MarkdownPreviewViewer",
