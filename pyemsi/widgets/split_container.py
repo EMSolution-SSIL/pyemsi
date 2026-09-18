@@ -35,7 +35,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -137,6 +137,8 @@ class _TabPanel(QTabWidget):
             return
 
         widget = self.widget(index)
+        if getattr(widget, "viewer_kind", None) == "freecad":
+            return
         title = self.tabText(index)
         menu = QMenu(self)
 
@@ -205,6 +207,7 @@ class SplitContainer(QWidget):
     """
 
     freecad_session_initialized = Signal(object)
+    freecad_session_starting = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -236,6 +239,8 @@ class SplitContainer(QWidget):
         self._right.tab_move_requested.connect(self._on_tab_move_requested)
         self._left.last_tab_closed.connect(self._on_left_emptied)
         self._right.last_tab_closed.connect(self._on_right_emptied)
+        self._left.currentChanged.connect(lambda index: self._on_current_tab_changed(self._left, index))
+        self._right.currentChanged.connect(lambda index: self._on_current_tab_changed(self._right, index))
 
         # Pre-create one Monaco editor so first text-file open can reuse an
         # existing WebEngine widget instead of creating one on demand.
@@ -476,52 +481,86 @@ class SplitContainer(QWidget):
                     return w
         return None
 
-    def _find_freecad_viewer(self) -> QWidget | None:
-        """Return the singleton FreeCAD tab shell if one is open."""
-        for panel in (self._left, self._right):
-            for i in range(panel.count()):
-                w = panel.widget(i)
-                if getattr(w, "viewer_kind", None) == "freecad":
-                    return w
-        return None
+    def create_freecad_file(self, path: str) -> QWidget | None:
+        """Create a FreeCAD document at *path* in its own tab."""
+        return self._open_freecad_file(_resolve_open_path(path), create=True)
 
-    def _open_freecad_file(self, norm_path: str) -> QWidget | None:
-        """Open *norm_path* in the single shared FreeCAD tab, creating the shell if needed.
+    def _open_freecad_file(self, norm_path: str, *, create: bool = False) -> QWidget | None:
+        """Open *norm_path* in its own tab backed by the shared FreeCAD session.
 
-        The FreeCAD GUI is a process singleton, so this path bypasses the
-        per-file factory: at most one ``FreeCADViewer`` exists, and every
-        ``.FCStd`` becomes a document inside the shared session.
+        Each file gets a lightweight shell.  Only the selected shell borrows
+        the process-wide FreeCAD window, so documents stay loaded without
+        creating another FreeCAD engine for every pyemsi tab.
         """
         from pyemsi.gui import freecad_session as freecad_session_module
-        from pyemsi.gui.freecad_runtime import FreeCADRuntimeError
+
+        existing = self._find_tab_by_path(norm_path)
+        if existing is not None:
+            panel = self._find_panel_for_widget(existing)
+            was_current = panel is not None and panel.currentWidget() is existing
+            self.focus_widget(existing)
+            # Changing tabs invokes activate() through currentChanged.  If it
+            # was already selected, activate it directly instead.
+            if was_current and hasattr(existing, "activate"):
+                existing.activate()
+            return existing
 
         session = freecad_session_module.get_freecad_session()
+        self.freecad_session_starting.emit(session)
+        from pyemsi.gui.file_viewers import FreeCADViewer
+
+        viewer = FreeCADViewer(session, parent=self._left)
+        viewer.setProperty("file_path", norm_path)
+        base_name = os.path.basename(norm_path)
+        viewer.dirtyChanged.connect(lambda _dirty, w=viewer, bn=base_name: self._refresh_tab_title(w, bn))
+        self.add_tab(viewer, base_name)
+        QTimer.singleShot(0, lambda: self._initialize_freecad_viewer(viewer, norm_path, create=create))
+        return viewer
+
+    def _initialize_freecad_viewer(self, viewer: QWidget, norm_path: str, *, create: bool = False) -> None:
+        from pyemsi.gui.freecad_runtime import FreeCADRuntimeError
+
+        if self._find_panel_for_widget(viewer) is None:
+            return
+        session = viewer.session
         was_initialized = session.is_initialized
         try:
             session.ensure_initialized()
         except FreeCADRuntimeError as exc:
-            QMessageBox.critical(self, "FreeCAD", str(exc))
-            return None
+            viewer.show_loading_error(str(exc))
+            return
         if not was_initialized:
             self.freecad_session_initialized.emit(session)
+        verb = "Creating" if create else "Opening"
+        viewer.set_loading_message(f"{verb} {os.path.basename(norm_path)}…")
+        QTimer.singleShot(0, lambda: self._load_freecad_document(viewer, norm_path, create=create))
 
-        viewer = self._find_freecad_viewer()
-        if viewer is None:
-            from pyemsi.gui.file_viewers import FreeCADViewer
-
-            viewer = FreeCADViewer(session, parent=self._left)
-            self.add_tab(viewer, "FreeCAD")
-        else:
-            self.focus_widget(viewer)
+    def _load_freecad_document(self, viewer: QWidget, norm_path: str, *, create: bool = False) -> None:
+        if self._find_panel_for_widget(viewer) is None:
+            return
+        from pyemsi.gui import freecad_session as freecad_session_module
 
         try:
-            viewer.open_file(norm_path)
+            viewer.create_file(norm_path) if create else viewer.open_file(norm_path)
         except freecad_session_module.FreeCADDocumentError as exc:
-            QMessageBox.warning(self, "FreeCAD", str(exc))
-            return viewer
+            viewer.show_loading_error(str(exc))
 
-        self._refresh_tab_title(viewer, f"FreeCAD — {os.path.basename(norm_path)}")
-        return viewer
+    def _on_current_tab_changed(self, panel: _TabPanel, index: int) -> None:
+        """Give a selected FreeCAD file tab the shared native window."""
+        viewer = panel.widget(index)
+        if (
+            viewer is None
+            or getattr(viewer, "viewer_kind", None) != "freecad"
+            or getattr(viewer, "loading", False)
+        ):
+            return
+        try:
+            viewer.activate()
+        except Exception as exc:
+            # Activation normally reuses an already-open document.  Keep a
+            # signal handler failure from escaping into Qt if FreeCAD reports
+            # an unexpected problem while switching tabs.
+            QMessageBox.warning(self, "FreeCAD", f"Could not activate this FreeCAD document:\n{exc}")
 
     def _find_panel_for_widget(self, widget: QWidget) -> _TabPanel | None:
         for panel in (self._left, self._right):

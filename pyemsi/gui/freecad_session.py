@@ -14,7 +14,7 @@ import time
 from typing import Callable
 
 from PySide6.QtCore import QEventLoop
-from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QTextEdit, QWidget
+from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QTabBar, QTextEdit, QWidget
 
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError, import_freecad
 
@@ -189,6 +189,7 @@ class FreeCADSession:
         self._main_window.show()
         self._host = host
         LOGGER.info("FreeCAD native window attached")
+        LOGGER.debug("FreeCAD session host: %r", host)
 
     def _adopt_top_level(self, host: QWidget) -> None:
         """Park under the host's top-level window so re-parenting never crosses windows.
@@ -265,7 +266,7 @@ class FreeCADSession:
         newly_opened = doc is None
         if newly_opened:
             try:
-                doc = modules.app.openDocument(norm_path)
+                doc = modules.app.openDocument(norm_path, False)
             except Exception as exc:  # FreeCAD raises OSError / Base.FreeCADError
                 LOGGER.error("FreeCAD could not open %s: %s", norm_path, exc)
                 raise FreeCADDocumentError(f"FreeCAD could not open {norm_path}:\n{exc}") from exc
@@ -280,8 +281,48 @@ class FreeCADSession:
             if hasattr(view, "fitAll"):
                 view.fitAll()
             self._raise_view(view)
+        self._hide_document_tabs()
+        LOGGER.debug(
+            "FreeCAD documents: %s",
+            [
+                (item.Name, normalize_document_path(item.FileName) if getattr(item, "FileName", "") else "")
+                for item in self._documents()
+            ],
+        )
         LOGGER.info("FreeCAD document activated: %s", norm_path)
         return doc.Name
+
+    def create_document(self, path: str) -> str:
+        """Create and save an empty FreeCAD document at *path*."""
+        modules = self._require_initialized()
+        norm_path = os.path.abspath(os.path.normpath(path))
+        LOGGER.info("FreeCAD document creation requested: %s", norm_path)
+        doc = None
+        try:
+            doc = modules.app.newDocument()
+            doc.Label = os.path.splitext(os.path.basename(norm_path))[0]
+            doc.saveAs(norm_path)
+        except Exception as exc:
+            if doc is not None:
+                try:
+                    modules.app.closeDocument(doc.Name)
+                except Exception:
+                    pass
+            raise FreeCADDocumentError(f"FreeCAD could not create {norm_path}:\n{exc}") from exc
+
+        modules.app.setActiveDocument(doc.Name)
+        modules.gui.setActiveDocument(doc.Name)
+        self._hide_document_tabs()
+        LOGGER.info("FreeCAD document created: %s", norm_path)
+        return doc.Name
+
+    def _hide_document_tabs(self) -> None:
+        """Hide FreeCAD's MDI tab bar; pyemsi provides the document tabs."""
+        assert self._main_window is not None
+        area = self._main_window.findChild(QMdiArea)
+        tab_bar = area.findChild(QTabBar) if area is not None else None
+        if tab_bar is not None:
+            tab_bar.hide()
 
     @staticmethod
     def _raise_view(view) -> None:
@@ -324,6 +365,14 @@ class FreeCADSession:
             if getattr(gui_doc, "Modified", False):
                 result.append((doc.Name, getattr(doc, "FileName", "") or ""))
         return result
+
+    def is_document_modified(self, name: str) -> bool:
+        """Return FreeCAD's current modified state for document *name*."""
+        modules = self._require_initialized()
+        try:
+            return bool(modules.gui.getDocument(name).Modified)
+        except Exception:
+            return False
 
     def save_document(self, name: str) -> None:
         """Save document *name* to its existing FileName."""

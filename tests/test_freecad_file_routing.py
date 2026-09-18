@@ -4,7 +4,7 @@ import os
 
 import pytest
 from PySide6.QtCore import QPoint
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from pyemsi.gui import freecad_session as session_module
 from pyemsi.gui._viewers._constants import _CATEGORY
@@ -27,6 +27,8 @@ class _FakeSession:
         self.open_error = open_error
         self.events: list[tuple] = []
         self.host = None
+        self.main_window = None
+        self.modified_documents: set[str] = set()
 
     @property
     def is_initialized(self):
@@ -51,6 +53,17 @@ class _FakeSession:
         self.events.append(("open", path))
         return os.path.splitext(os.path.basename(path))[0]
 
+    def create_document(self, path):
+        self.events.append(("create", path))
+        return os.path.splitext(os.path.basename(path))[0]
+
+    def is_document_modified(self, name):
+        return name in self.modified_documents
+
+    def save_document(self, name):
+        self.events.append(("save", name))
+        self.modified_documents.discard(name)
+
 
 @pytest.fixture
 def fake_session(monkeypatch):
@@ -63,6 +76,11 @@ def _open_calls(session):
     return [e[1] for e in session.events if e[0] == "open"]
 
 
+def _finish_loading():
+    _app().processEvents()
+    _app().processEvents()
+
+
 def test_fcstd_extension_maps_to_freecad_category():
     assert _CATEGORY[".fcstd"] == "freecad"
     assert _CATEGORY[".py"] == "python"
@@ -70,34 +88,68 @@ def test_fcstd_extension_maps_to_freecad_category():
     assert ".FCStd".lower() in _CATEGORY
 
 
-def test_first_fcstd_creates_single_freecad_tab(fake_session, tmp_path):
+def test_first_fcstd_creates_its_own_freecad_tab(fake_session, tmp_path):
     _app()
     container = SplitContainer()
     path = str(tmp_path / "Motor.FCStd")
+    diagnostics_started: list[list[tuple]] = []
+    container.freecad_session_starting.connect(lambda session: diagnostics_started.append(list(session.events)))
 
     viewer = container.open_file(path)
 
     assert isinstance(viewer, FreeCADViewer)
     assert container.left_panel.count() == 1
-    assert container.left_panel.tabText(0) == "FreeCAD — Motor.FCStd"
+    assert container.left_panel.tabText(0) == "Motor.FCStd"
+    assert viewer.loading is True
+    assert fake_session.events == []
+    assert diagnostics_started == [[]]
+
+    _finish_loading()
+
+    assert viewer.loading is False
     assert fake_session.events[0] == ("init",)
     assert _open_calls(fake_session) == [os.path.abspath(os.path.normpath(path))]
 
 
-def test_second_fcstd_reuses_tab_and_passes_new_path(fake_session, tmp_path):
+def test_second_fcstd_creates_another_tab_with_same_session(fake_session, tmp_path):
     _app()
     container = SplitContainer()
     first = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
     other = QWidget()
     container.add_tab(other, "other")
 
     second = container.open_file(str(tmp_path / "b.fcstd"))
 
-    assert second is first
-    assert container.left_panel.count() == 2
-    assert container.left_panel.currentWidget() is first
-    assert container.left_panel.tabText(container.left_panel.indexOf(first)) == "FreeCAD — b.fcstd"
+    assert second.loading is True
+    assert [os.path.basename(p) for p in _open_calls(fake_session)] == ["A.FCStd"]
+
+    _finish_loading()
+
+    assert second is not first
+    assert second.session is first.session
+    assert container.left_panel.count() == 3
+    assert container.left_panel.currentWidget() is second
+    assert container.left_panel.tabText(container.left_panel.indexOf(first)) == "A.FCStd"
+    assert container.left_panel.tabText(container.left_panel.indexOf(second)) == "b.fcstd"
     assert [os.path.basename(p) for p in _open_calls(fake_session)] == ["A.FCStd", "b.fcstd"]
+
+
+def test_new_fcstd_uses_loading_tab_and_shared_session(fake_session, tmp_path):
+    _app()
+    container = SplitContainer()
+    path = str(tmp_path / "NewPart.FCStd")
+
+    viewer = container.create_freecad_file(path)
+
+    assert isinstance(viewer, FreeCADViewer)
+    assert viewer.loading is True
+    assert container.left_panel.tabText(0) == "NewPart.FCStd"
+
+    _finish_loading()
+
+    assert viewer.loading is False
+    assert ("create", os.path.abspath(os.path.normpath(path))) in fake_session.events
 
 
 def test_reopening_same_path_does_not_add_tab(fake_session, tmp_path):
@@ -105,15 +157,55 @@ def test_reopening_same_path_does_not_add_tab(fake_session, tmp_path):
     container = SplitContainer()
     path = str(tmp_path / "A.FCStd")
     container.open_file(path)
+    _finish_loading()
     container.open_file(path)
     assert container.left_panel.count() == 1
     assert len(_open_calls(fake_session)) == 2  # session decides activate-vs-open
+
+
+def test_freecad_dirty_change_updates_outer_tab_title(fake_session, tmp_path):
+    _app()
+    container = SplitContainer()
+    viewer = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
+    index = container.left_panel.indexOf(viewer)
+
+    fake_session.modified_documents.add("A")
+    viewer._sync_dirty()
+
+    assert container.left_panel.tabText(index) == "A.FCStd *"
+
+    fake_session.modified_documents.clear()
+    viewer._sync_dirty()
+
+    assert container.left_panel.tabText(index) == "A.FCStd"
+
+
+def test_switching_freecad_tabs_moves_shared_window_and_activates_file(fake_session, tmp_path):
+    _app()
+    container = SplitContainer()
+    first = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
+    second = container.open_file(str(tmp_path / "B.FCStd"))
+    _finish_loading()
+    fake_session.events.clear()
+
+    container.left_panel.setCurrentWidget(first)
+
+    assert fake_session.host is first
+    assert fake_session.events == [
+        ("attach", first),
+        ("open", first.current_path),
+    ]
+    assert container.left_panel.currentWidget() is first
+    assert second.current_path.endswith("B.FCStd")
 
 
 def test_closing_freecad_tab_detaches_before_shell_deletion(fake_session, tmp_path):
     app = _app()
     container = SplitContainer()
     viewer = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
 
     assert container.left_panel._close_tab(container.left_panel.indexOf(viewer)) is True
     app.processEvents()
@@ -127,10 +219,12 @@ def test_reopen_after_close_creates_new_shell_with_same_session(fake_session, tm
     app = _app()
     container = SplitContainer()
     first = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
     container.left_panel._close_tab(container.left_panel.indexOf(first))
     app.processEvents()
 
     second = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
 
     assert isinstance(second, FreeCADViewer)
     assert second is not first
@@ -139,38 +233,36 @@ def test_reopen_after_close_creates_new_shell_with_same_session(fake_session, tm
     assert fake_session.host is second
 
 
-def test_runtime_failure_shows_message_and_creates_no_tab(monkeypatch, tmp_path):
+def test_runtime_failure_is_shown_inside_the_file_tab(monkeypatch, tmp_path):
     _app()
     session = _FakeSession(
         init_error=FreeCADRuntimeError("FreeCAD could not be initialized in the active pyemsi environment.")
     )
     monkeypatch.setattr(session_module, "get_freecad_session", lambda: session)
-    shown: list[str] = []
-    monkeypatch.setattr(split_container_module.QMessageBox, "critical", lambda parent, title, text, *a: shown.append(text))
     container = SplitContainer()
 
     result = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
 
-    assert result is None
-    assert container.left_panel.count() == 0
-    assert shown and "could not be initialized" in shown[0]
+    assert isinstance(result, FreeCADViewer)
+    assert container.left_panel.count() == 1
+    assert "could not be initialized" in result.findChild(QLabel).text()
 
 
-def test_invalid_document_shows_warning_and_keeps_tab(monkeypatch, tmp_path):
+def test_invalid_document_error_is_shown_inside_the_file_tab(monkeypatch, tmp_path):
     _app()
     session = _FakeSession(
         open_error=session_module.FreeCADDocumentError("FreeCAD could not open bad.FCStd:\nInvalid project file")
     )
     monkeypatch.setattr(session_module, "get_freecad_session", lambda: session)
-    shown: list[str] = []
-    monkeypatch.setattr(split_container_module.QMessageBox, "warning", lambda parent, title, text, *a: shown.append(text))
     container = SplitContainer()
 
     viewer = container.open_file(str(tmp_path / "bad.FCStd"))
+    _finish_loading()
 
     assert isinstance(viewer, FreeCADViewer)
     assert container.left_panel.count() == 1
-    assert shown and "Invalid project file" in shown[0]
+    assert "Invalid project file" in viewer.findChild(QLabel).text()
 
 
 def test_non_freecad_files_still_use_generic_path(fake_session, tmp_path):
@@ -186,10 +278,11 @@ def test_non_freecad_files_still_use_generic_path(fake_session, tmp_path):
     assert fake_session.events == []
 
 
-def test_context_menu_hides_move_action_for_freecad_viewer(fake_session, tmp_path, monkeypatch):
+def test_context_menu_is_disabled_for_freecad_viewer(fake_session, tmp_path, monkeypatch):
     _app()
     container = SplitContainer()
     viewer = container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
     captured: list[list[str]] = []
 
     class _RecordingMenu(split_container_module.QMenu):
@@ -202,7 +295,7 @@ def test_context_menu_hides_move_action_for_freecad_viewer(fake_session, tmp_pat
     panel.setCurrentWidget(viewer)
     panel._show_context_menu(QPoint(0, 0))  # _tab_index_at falls back to currentIndex()
 
-    assert captured == [["Close Tab", "Close Others", "Close All"]]
+    assert captured == []
 
 
 def test_freecad_session_initialized_signal_fires_once_per_process(fake_session, tmp_path):
@@ -212,7 +305,9 @@ def test_freecad_session_initialized_signal_fires_once_per_process(fake_session,
     container.freecad_session_initialized.connect(seen.append)
 
     container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
     container.open_file(str(tmp_path / "B.FCStd"))
+    _finish_loading()
 
     assert seen == [fake_session]
 
@@ -227,5 +322,6 @@ def test_freecad_session_initialized_signal_not_fired_on_runtime_failure(monkeyp
     container.freecad_session_initialized.connect(seen.append)
 
     container.open_file(str(tmp_path / "A.FCStd"))
+    _finish_loading()
 
     assert seen == []

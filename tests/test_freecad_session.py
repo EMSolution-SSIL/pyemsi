@@ -4,7 +4,7 @@ import os
 import types
 
 import pytest
-from PySide6.QtWidgets import QApplication, QMainWindow, QMdiArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QMdiArea, QTabBar, QVBoxLayout, QWidget
 
 from pyemsi.gui import freecad_session as session_module
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError
@@ -46,6 +46,10 @@ class _FakeAppDoc:
             raise RuntimeError("no file name")
         self.saved += 1
 
+    def saveAs(self, path):  # noqa: N802
+        self.FileName = path.replace("\\", "/")
+        self.saved += 1
+
 
 class _FakeGuiDoc:
     def __init__(self, modified=False):
@@ -64,12 +68,15 @@ class _FakeFreeCAD:
         self.active: list[tuple[str, str]] = []
         self.show_main_window_calls = 0
         self.open_error = open_error
+        self.open_hidden_values: list[bool] = []
         self.main_window = QMainWindow()
         self.main_window.show()
 
         self.app.listDocuments = lambda: dict(self._docs)
         self.app.getDocument = lambda name: self._docs[name]
         self.app.openDocument = self._open
+        self.app.newDocument = self._new
+        self.app.closeDocument = self._close
         self.app.setActiveDocument = lambda name: self.active.append(("app", name))
         self.gui.showMainWindow = self._show_main_window
         self.gui.getMainWindow = lambda: self.main_window
@@ -79,9 +86,10 @@ class _FakeFreeCAD:
     def _show_main_window(self):
         self.show_main_window_calls += 1
 
-    def _open(self, path):
+    def _open(self, path, hidden=False):
         if self.open_error is not None:
             raise self.open_error
+        self.open_hidden_values.append(hidden)
         name = os.path.splitext(os.path.basename(path))[0]
         doc = _FakeAppDoc(name, path.replace("\\", "/"))  # FreeCAD reports forward slashes
         self._docs[name] = doc
@@ -89,6 +97,17 @@ class _FakeFreeCAD:
         gui_doc.ActiveView.graphics_widget = getattr(self, "_pending_graphics_widget", None)
         self._gui_docs[name] = gui_doc
         return doc
+
+    def _new(self):
+        name = "Unnamed" if "Unnamed" not in self._docs else f"Unnamed{len(self._docs)}"
+        doc = _FakeAppDoc(name, "")
+        self._docs[name] = doc
+        self._gui_docs[name] = _FakeGuiDoc()
+        return doc
+
+    def _close(self, name):
+        self._docs.pop(name, None)
+        self._gui_docs.pop(name, None)
 
     def modules(self) -> FreeCADModules:
         return FreeCADModules(app=self.app, gui=self.gui)
@@ -195,6 +214,7 @@ def test_open_document_opens_activates_and_fits_new_document(tmp_path):
     assert fake.active == [("app", "Motor"), ("gui", "Motor")]
     assert fake._gui_docs["Motor"].ActiveView.calls == ["viewAxonometric", "fitAll"]
     assert session.is_document_open(path)
+    assert fake.open_hidden_values == [False]
 
 
 def test_open_document_activates_existing_document_instead_of_duplicating(tmp_path):
@@ -205,7 +225,7 @@ def test_open_document_activates_existing_document_instead_of_duplicating(tmp_pa
     path = str(tmp_path / "Motor.FCStd")
     session.open_document(path)
     open_calls: list[str] = []
-    fake.app.openDocument = lambda p: open_calls.append(p)
+    fake.app.openDocument = lambda p, hidden=False: open_calls.append((p, hidden))
 
     name = session.open_document(path.upper() if os.name == "nt" else path)
 
@@ -234,6 +254,22 @@ def test_open_document_requires_initialization(tmp_path):
         session.open_document(str(tmp_path / "x.FCStd"))
 
 
+def test_create_document_saves_and_activates_new_document(tmp_path):
+    _app()
+    fake = _FakeFreeCAD()
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+    path = str(tmp_path / "NewPart.FCStd")
+
+    name = session.create_document(path)
+
+    assert name == "Unnamed"
+    assert fake._docs[name].Label == "NewPart"
+    assert fake._docs[name].FileName == path.replace("\\", "/")
+    assert fake._docs[name].saved == 1
+    assert fake.active == [("app", name), ("gui", name)]
+
+
 def test_modified_documents_reports_only_dirty_docs(tmp_path):
     _app()
     fake = _FakeFreeCAD()
@@ -251,6 +287,18 @@ def test_modified_documents_reports_only_dirty_docs(tmp_path):
 def test_modified_documents_is_empty_before_initialization():
     session = session_module.FreeCADSession(loader=lambda: None)
     assert session.modified_documents() == []
+
+
+def test_is_document_modified_reads_gui_document_flag(tmp_path):
+    _app()
+    fake = _FakeFreeCAD()
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+    session.open_document(str(tmp_path / "A.FCStd"))
+
+    assert session.is_document_modified("A") is False
+    fake._gui_docs["A"].Modified = True
+    assert session.is_document_modified("A") is True
 
 
 def test_save_document_calls_freecad_save(tmp_path):
@@ -298,6 +346,24 @@ def test_open_document_raises_its_mdi_subwindow_above_start_page(tmp_path):
     session.open_document(path)
 
     assert area.activeSubWindow() is doc_window
+
+
+def test_open_document_hides_freecad_mdi_document_tabs(tmp_path):
+    _app()
+    fake = _FakeFreeCAD()
+    area = QMdiArea()
+    area.setViewMode(QMdiArea.ViewMode.TabbedView)
+    fake.main_window.setCentralWidget(area)
+    area.addSubWindow(QWidget())
+    tab_bar = area.findChild(QTabBar)
+    assert tab_bar is not None
+    tab_bar.show()
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+
+    session.open_document(str(tmp_path / "Motor.FCStd"))
+
+    assert tab_bar.isHidden()
 
 
 def test_open_document_tolerates_views_without_graphics_view(tmp_path):
