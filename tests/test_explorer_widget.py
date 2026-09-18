@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QFile, QFileInfo, QSize
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QFile, QFileInfo, QMimeData, QPointF, QSize, Qt, QUrl
+from PySide6.QtGui import QDropEvent, QIcon
+from PySide6.QtWidgets import QAbstractItemView, QApplication
 
 from pyemsi.widgets.explorer_icons import MaterialFileIconProvider, icon_name_for_path
-from pyemsi.widgets.explorer_widget import ExplorerWidget
+from pyemsi.widgets.explorer_widget import ExplorerWidget, _top_level_paths, _unique_destination
 
 
 def _app() -> QApplication:
@@ -71,6 +71,146 @@ def test_explorer_exposes_expected_context_commands_and_terminal_signal(tmp_path
         assert widget._trash_action.text() in {"Move to Recycle Bin", "Move to Trash"}
         assert widget._copy_relative_action.text() == "Copy Relative Path"
         assert widget._copy_full_action.text() == "Copy Full Path"
+        assert widget._cut_action.text() == "Cut"
+        assert widget._copy_action.text() == "Copy"
+        assert widget._paste_action.text() == "Paste"
+        assert widget._duplicate_action.text() == "Duplicate"
+        assert widget._tree.dragDropMode() == QAbstractItemView.DragDropMode.DragDrop
+        assert widget._tree.defaultDropAction() == Qt.DropAction.MoveAction
         assert terminal_paths == [str(tmp_path)]
+    finally:
+        widget.close()
+
+
+def test_file_operation_helpers_dedupe_nested_paths_and_name_copies(tmp_path) -> None:
+    parent = tmp_path / "folder"
+    child = parent / "child.txt"
+    child.parent.mkdir()
+    child.touch()
+
+    assert _top_level_paths([str(child), str(parent), str(child)]) == [str(parent)]
+
+    original = tmp_path / "model.FCStd"
+    original.touch()
+    assert _unique_destination(original, copy_label=True).name == "model - Copy.FCStd"
+    (tmp_path / "model - Copy.FCStd").touch()
+    assert _unique_destination(original, copy_label=True).name == "model - Copy (2).FCStd"
+
+
+def test_transfer_supports_external_copy_internal_move_and_duplicate(tmp_path) -> None:
+    _app()
+    workspace = tmp_path / "workspace"
+    destination = workspace / "destination"
+    external = tmp_path / "external.txt"
+    workspace.mkdir()
+    destination.mkdir()
+    external.write_text("external")
+
+    widget = ExplorerWidget()
+    try:
+        widget.set_directory(str(workspace))
+        widget._transfer_paths([str(external)], str(destination), copy=True)
+        assert external.exists()
+        assert (destination / "external.txt").read_text() == "external"
+
+        internal = workspace / "internal.txt"
+        internal.write_text("internal")
+        widget._transfer_paths([str(internal)], str(destination), copy=False)
+        assert not internal.exists()
+        assert (destination / "internal.txt").read_text() == "internal"
+
+        copied = destination / "external.txt"
+        widget._transfer_paths([str(copied)], str(destination), copy=True, duplicate=True)
+        assert (destination / "external - Copy.txt").read_text() == "external"
+    finally:
+        widget.close()
+
+
+def test_folder_merge_conflict_supports_keep_both_and_apply_to_all(tmp_path, monkeypatch) -> None:
+    _app()
+    workspace = tmp_path / "workspace"
+    incoming = tmp_path / "incoming"
+    existing = workspace / "incoming"
+    workspace.mkdir()
+    incoming.mkdir()
+    existing.mkdir()
+    for name in ("a.txt", "b.txt"):
+        (incoming / name).write_text("new")
+        (existing / name).write_text("old")
+
+    widget = ExplorerWidget()
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        widget,
+        "_ask_conflict",
+        lambda source, _destination: (prompts.append(source.name) or "keep_both", True),
+    )
+    try:
+        widget.set_directory(str(workspace))
+        widget._transfer_paths([str(incoming)], str(workspace), copy=True)
+
+        assert prompts == ["a.txt"]
+        assert (existing / "a.txt").read_text() == "old"
+        assert (existing / "a (2).txt").read_text() == "new"
+        assert (existing / "b (2).txt").read_text() == "new"
+    finally:
+        widget.close()
+
+
+def test_clipboard_paste_copies_external_files_and_moves_cut_files(tmp_path) -> None:
+    app = _app()
+    workspace = tmp_path / "workspace"
+    destination = workspace / "destination"
+    external = tmp_path / "external.txt"
+    workspace.mkdir()
+    destination.mkdir()
+    external.write_text("external")
+
+    widget = ExplorerWidget()
+    try:
+        widget.set_directory(str(workspace))
+        widget._context_path = str(destination)
+
+        widget._set_file_clipboard([str(external)], cut=False)
+        widget._paste_selected()
+        assert external.exists()
+        assert (destination / "external.txt").exists()
+
+        internal = workspace / "internal.txt"
+        internal.write_text("internal")
+        widget._set_file_clipboard([str(internal)], cut=True)
+        widget._paste_selected()
+        assert not internal.exists()
+        assert (destination / "internal.txt").exists()
+        assert not app.clipboard().mimeData().hasFormat("application/x-pyemsi-cut")
+    finally:
+        app.clipboard().clear()
+        widget.close()
+
+
+def test_external_drop_always_copies_into_workspace(tmp_path) -> None:
+    _app()
+    workspace = tmp_path / "workspace"
+    external = tmp_path / "external.txt"
+    workspace.mkdir()
+    external.write_text("external")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(external))])
+    event = QDropEvent(
+        QPointF(-1, -1),
+        Qt.DropAction.CopyAction | Qt.DropAction.MoveAction,
+        mime,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    widget = ExplorerWidget()
+    try:
+        widget.set_directory(str(workspace))
+        widget._tree.dropEvent(event)
+
+        assert event.dropAction() == Qt.DropAction.CopyAction
+        assert external.exists()
+        assert (workspace / "external.txt").read_text() == "external"
     finally:
         widget.close()

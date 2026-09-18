@@ -8,14 +8,17 @@ Displays an empty-state page with a Ctrl+O hint when no directory is open.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QModelIndex, QPoint, QSize, Qt, Signal
+from PySide6.QtCore import QFile, QItemSelectionModel, QMimeData, QModelIndex, QPoint, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
+    QCheckBox,
     QFileSystemModel,
     QHBoxLayout,
     QInputDialog,
@@ -31,6 +34,107 @@ from PySide6.QtWidgets import (
 )
 
 from pyemsi.widgets.explorer_icons import MaterialFileIconProvider
+
+
+_CUT_MIME = "application/x-pyemsi-cut"
+
+
+def _is_within(path: str | Path, parent: str | Path) -> bool:
+    """Return whether *path* is *parent* or one of its descendants."""
+    path = os.path.normcase(os.path.realpath(path))
+    parent = os.path.normcase(os.path.realpath(parent))
+    try:
+        return os.path.commonpath((path, parent)) == parent
+    except ValueError:  # Different Windows drives.
+        return False
+
+
+def _top_level_paths(paths: list[str]) -> list[str]:
+    """Remove duplicates and children whose parent is already selected."""
+    result: list[str] = []
+    for path in sorted({os.path.abspath(path) for path in paths}, key=lambda value: (len(Path(value).parts), value)):
+        if not any(_is_within(path, parent) for parent in result):
+            result.append(path)
+    return result
+
+
+def _unique_destination(path: Path, *, copy_label: bool = False) -> Path:
+    """Return a non-existing sibling path using normal file-manager naming."""
+    if not path.exists():
+        return path
+    stem, suffix = path.stem, path.suffix
+    if copy_label:
+        candidate = path.with_name(f"{stem} - Copy{suffix}")
+        number = 2
+        while candidate.exists():
+            candidate = path.with_name(f"{stem} - Copy ({number}){suffix}")
+            number += 1
+        return candidate
+    number = 2
+    candidate = path.with_name(f"{stem} ({number}){suffix}")
+    while candidate.exists():
+        number += 1
+        candidate = path.with_name(f"{stem} ({number}){suffix}")
+    return candidate
+
+
+class _ExplorerTreeView(QTreeView):
+    """Tree view that delegates filesystem drops to :class:`ExplorerWidget`."""
+
+    paths_dropped = Signal(list, str, bool)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.root_path = ""
+
+    @staticmethod
+    def _local_paths(event) -> list[str]:
+        return [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
+
+    def _drop_directory(self, event) -> str:
+        model = self.model()
+        if not isinstance(model, QFileSystemModel):
+            return ""
+        index = self.indexAt(event.position().toPoint())
+        if not index.isValid():
+            return self.root_path
+        path = model.filePath(index)
+        return path if model.isDir(index) else str(Path(path).parent)
+
+    def _drop_action(self, event) -> Qt.DropAction:
+        control = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        return Qt.DropAction.CopyAction if event.source() is not self or control else Qt.DropAction.MoveAction
+
+    def dragEnterEvent(self, event) -> None:
+        if self._local_paths(event):
+            action = self._drop_action(event)
+            event.setDropAction(action)
+            super().dragEnterEvent(event)
+            event.setDropAction(action)
+            event.accept()
+            return
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event) -> None:
+        if self._local_paths(event) and self._drop_directory(event):
+            action = self._drop_action(event)
+            event.setDropAction(action)
+            super().dragMoveEvent(event)
+            event.setDropAction(action)
+            event.accept()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event) -> None:
+        paths = self._local_paths(event)
+        destination = self._drop_directory(event)
+        if not paths or not destination:
+            event.ignore()
+            return
+        action = self._drop_action(event)
+        self.paths_dropped.emit(paths, destination, action == Qt.DropAction.CopyAction)
+        event.setDropAction(action)
+        event.accept()
 
 
 class ExplorerWidget(QWidget):
@@ -56,8 +160,13 @@ class ExplorerWidget(QWidget):
         self._model: QFileSystemModel | None = None
         self._context_index = QModelIndex()
         self._context_path: str | None = None
+        self._workspace_open = False
         self._create_actions()
         self._setup_ui()
+        self._set_actions_enabled(False)
+        app = QApplication.instance()
+        if app is not None:
+            app.clipboard().dataChanged.connect(self._update_paste_action)
 
     # ------------------------------------------------------------------
     # Properties
@@ -78,6 +187,7 @@ class ExplorerWidget(QWidget):
 
         if self._model is None:
             self._model = QFileSystemModel(self)
+            self._model.setReadOnly(False)
             self._icon_provider = MaterialFileIconProvider()
             self._model.setIconProvider(self._icon_provider)
             self._tree.setModel(self._model)
@@ -85,9 +195,11 @@ class ExplorerWidget(QWidget):
             for col in range(1, self._model.columnCount()):
                 self._tree.hideColumn(col)
             self._tree.doubleClicked.connect(self._on_item_double_clicked)
+            self._tree.selectionModel().selectionChanged.connect(self._update_selection_actions)
 
         root_index = self._model.setRootPath(path)
         self._tree.setRootIndex(root_index)
+        self._tree.root_path = path
         self._root_label.setText(Path(path).name.upper() or path.upper())
         self._set_actions_enabled(True)
         self._stack.setCurrentWidget(self._tree_page)
@@ -99,6 +211,7 @@ class ExplorerWidget(QWidget):
             self._tree.setModel(None)
             self._model.deleteLater()
             self._model = None
+        self._tree.root_path = ""
         self._root_label.clear()
         self._set_actions_enabled(False)
         self._stack.setCurrentWidget(self._empty_page)
@@ -141,7 +254,7 @@ class ExplorerWidget(QWidget):
         self._trash_action = QAction(trash_text, self)
         self._trash_action.setShortcut(QKeySequence.StandardKey.Delete)
         self._trash_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        self._trash_action.triggered.connect(lambda: self._trash_item(self._context_or_current_index()))
+        self._trash_action.triggered.connect(self._trash_selected)
         self.addAction(self._trash_action)
 
         self._reveal_action = QAction(QIcon(":/icons/FolderOpen.svg"), "Open in File Explorer", self)
@@ -156,9 +269,32 @@ class ExplorerWidget(QWidget):
         self._copy_full_action = QAction("Copy Full Path", self)
         self._copy_full_action.triggered.connect(lambda: self._copy_full_path(self._context_or_root_path()))
 
-        self._set_actions_enabled(False)
+        self._cut_action = QAction(QIcon(":/icons/Cut.svg"), "Cut", self)
+        self._cut_action.setShortcut(QKeySequence.StandardKey.Cut)
+        self._cut_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._cut_action.triggered.connect(self._cut_selected)
+        self.addAction(self._cut_action)
+
+        self._copy_action = QAction(QIcon(":/icons/Copy.svg"), "Copy", self)
+        self._copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self._copy_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._copy_action.triggered.connect(self._copy_selected)
+        self.addAction(self._copy_action)
+
+        self._paste_action = QAction(QIcon(":/icons/Paste.svg"), "Paste", self)
+        self._paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self._paste_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._paste_action.triggered.connect(self._paste_selected)
+        self.addAction(self._paste_action)
+
+        self._duplicate_action = QAction("Duplicate", self)
+        self._duplicate_action.setShortcut(QKeySequence("Ctrl+D"))
+        self._duplicate_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._duplicate_action.triggered.connect(self._duplicate_selected)
+        self.addAction(self._duplicate_action)
 
     def _set_actions_enabled(self, enabled: bool) -> None:
+        self._workspace_open = enabled
         for action in (
             self._new_file_action,
             self._new_folder_action,
@@ -170,6 +306,17 @@ class ExplorerWidget(QWidget):
             self._copy_full_action,
         ):
             action.setEnabled(enabled)
+        self._update_selection_actions()
+        self._update_paste_action()
+
+    def _update_selection_actions(self, *_args) -> None:
+        has_selection = self._workspace_open and bool(self._selected_paths())
+        for action in (self._open_action, self._rename_action, self._trash_action, self._cut_action, self._copy_action,
+                       self._duplicate_action):
+            action.setEnabled(has_selection)
+
+    def _update_paste_action(self, *_args) -> None:
+        self._paste_action.setEnabled(self._workspace_open and bool(self._clipboard_paths()))
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -234,17 +381,27 @@ class ExplorerWidget(QWidget):
             toolbar_layout.addWidget(button)
         vl.addWidget(toolbar)
 
-        self._tree = QTreeView()
+        self._tree = _ExplorerTreeView()
         self._tree.setHeaderHidden(True)
         self._tree.setUniformRowHeights(True)
         self._tree.setAnimated(True)
         self._tree.setIndentation(12)
         self._tree.setIconSize(QSize(18, 18))
         self._tree.setSelectionMode(QTreeView.SelectionMode.ExtendedSelection)
+        self._tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._tree.setDragEnabled(True)
+        self._tree.setAcceptDrops(True)
+        self._tree.viewport().setAcceptDrops(True)
+        self._tree.setDropIndicatorShown(True)
+        self._tree.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        self._tree.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._tree.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self._tree.setStyleSheet("QTreeView::item { padding-top: 1px; padding-bottom: 1px; font-size: 12px; }")
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
+        self._tree.paths_dropped.connect(
+            lambda paths, destination, copy: self._transfer_paths(paths, destination, copy=copy)
+        )
         vl.addWidget(self._tree)
 
         return page
@@ -269,13 +426,27 @@ class ExplorerWidget(QWidget):
         self._context_index = index
 
         if index.isValid():
+            selection = self._tree.selectionModel()
+            if selection is not None and not selection.isSelected(index):
+                selection.setCurrentIndex(
+                    index,
+                    QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+                )
             item_path = self._model.filePath(index)
             self._context_path = item_path
+            single_selection = len(self._selected_paths()) == 1
+            self._open_action.setEnabled(single_selection)
+            self._rename_action.setEnabled(single_selection)
 
             menu.addAction(self._open_action)
             menu.addSeparator()
             menu.addAction(self._new_file_action)
             menu.addAction(self._new_folder_action)
+            menu.addSeparator()
+            menu.addAction(self._cut_action)
+            menu.addAction(self._copy_action)
+            menu.addAction(self._paste_action)
+            menu.addAction(self._duplicate_action)
             menu.addSeparator()
             menu.addAction(self._rename_action)
             menu.addAction(self._trash_action)
@@ -290,6 +461,7 @@ class ExplorerWidget(QWidget):
             self._context_path = self._current_path
             menu.addAction(self._new_file_action)
             menu.addAction(self._new_folder_action)
+            menu.addAction(self._paste_action)
             menu.addSeparator()
             menu.addAction(self._refresh_action)
             menu.addAction(self._collapse_action)
@@ -300,6 +472,8 @@ class ExplorerWidget(QWidget):
         menu.exec(self._tree.viewport().mapToGlobal(pos))
         self._context_index = QModelIndex()
         self._context_path = None
+        self._update_selection_actions()
+        self._update_paste_action()
 
     def _context_or_current_index(self) -> QModelIndex:
         return self._context_index if self._context_index.isValid() else self._tree.currentIndex()
@@ -307,9 +481,27 @@ class ExplorerWidget(QWidget):
     def _context_or_root_path(self) -> str:
         return self._context_path or self._current_path or ""
 
+    def _selected_paths(self) -> list[str]:
+        if self._model is None:
+            return []
+        selection = self._tree.selectionModel()
+        indexes = selection.selectedRows(0) if selection is not None else []
+        if self._context_index.isValid() and self._context_index not in indexes:
+            indexes = [self._context_index]
+        return _top_level_paths([self._model.filePath(index) for index in indexes if index.isValid()])
+
+    @staticmethod
+    def _clipboard_paths() -> list[str]:
+        app = QApplication.instance()
+        if app is None:
+            return []
+        return [url.toLocalFile() for url in app.clipboard().mimeData().urls() if url.isLocalFile()]
+
     def _selected_parent_dir(self) -> str:
         if self._model is None or self._current_path is None:
             return ""
+        if self._context_path and not self._context_index.isValid():
+            return self._context_path if os.path.isdir(self._context_path) else str(Path(self._context_path).parent)
         index = self._context_or_current_index()
         if not index.isValid():
             return self._current_path
@@ -346,6 +538,143 @@ class ExplorerWidget(QWidget):
     # ------------------------------------------------------------------
     # Context menu action implementations
     # ------------------------------------------------------------------
+
+    def _set_file_clipboard(self, paths: list[str], *, cut: bool) -> None:
+        app = QApplication.instance()
+        if app is None or not paths:
+            return
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(path) for path in paths])
+        if cut:
+            mime.setData(_CUT_MIME, b"1")
+        app.clipboard().setMimeData(mime)
+
+    def _cut_selected(self) -> None:
+        self._set_file_clipboard(self._selected_paths(), cut=True)
+
+    def _copy_selected(self) -> None:
+        self._set_file_clipboard(self._selected_paths(), cut=False)
+
+    def _paste_selected(self) -> None:
+        app = QApplication.instance()
+        destination = self._selected_parent_dir()
+        if app is None or not destination:
+            return
+        mime = app.clipboard().mimeData()
+        paths = self._clipboard_paths()
+        cut = mime.hasFormat(_CUT_MIME)
+        self._transfer_paths(paths, destination, copy=not cut)
+        if cut and not any(Path(path).exists() for path in paths):
+            app.clipboard().clear()
+
+    def _duplicate_selected(self) -> None:
+        for path in self._selected_paths():
+            self._transfer_paths([path], str(Path(path).parent), copy=True, duplicate=True)
+
+    def _ask_conflict(self, source: Path, destination: Path) -> tuple[str, bool]:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("File Already Exists")
+        box.setText(f"'{destination.name}' already exists in this location.")
+        box.setInformativeText(f"Choose what to do with '{source.name}'.")
+        replace = box.addButton("Replace", QMessageBox.ButtonRole.AcceptRole)
+        keep_both = box.addButton("Keep Both", QMessageBox.ButtonRole.ActionRole)
+        skip = box.addButton("Skip", QMessageBox.ButtonRole.DestructiveRole)
+        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+        apply_all = QCheckBox("Apply to all conflicts")
+        box.setCheckBox(apply_all)
+        box.setDefaultButton(keep_both)
+        box.setEscapeButton(cancel)
+        box.exec()
+        choice = {
+            replace: "replace",
+            keep_both: "keep_both",
+            skip: "skip",
+            cancel: "cancel",
+        }.get(box.clickedButton(), "cancel")
+        return choice, apply_all.isChecked()
+
+    def _transfer_paths(
+        self,
+        paths: list[str],
+        destination_dir: str,
+        *,
+        copy: bool,
+        duplicate: bool = False,
+    ) -> None:
+        destination_root = Path(destination_dir)
+        if not destination_root.is_dir():
+            return
+
+        errors: list[str] = []
+        policy: str | None = None
+        cancelled = False
+
+        def transfer(source: Path, destination: Path) -> None:
+            nonlocal policy, cancelled
+            if cancelled:
+                return
+
+            source_is_dir = source.is_dir() and not source.is_symlink()
+            if source_is_dir and destination.is_dir() and not destination.is_symlink():
+                for child in source.iterdir():
+                    transfer(child, destination / child.name)
+                if not copy:
+                    try:
+                        source.rmdir()
+                    except OSError:
+                        pass  # Skipped children keep the source folder non-empty.
+                return
+
+            if destination.exists():
+                choice = policy
+                if choice is None:
+                    choice, apply_all = self._ask_conflict(source, destination)
+                    if apply_all and choice != "cancel":
+                        policy = choice
+                if choice == "cancel":
+                    cancelled = True
+                    return
+                if choice == "skip":
+                    return
+                if choice == "keep_both":
+                    destination = _unique_destination(destination)
+                elif not QFile.moveToTrash(str(destination)):
+                    raise OSError(f"Could not replace '{destination}'")
+
+            if copy:
+                if source_is_dir:
+                    shutil.copytree(source, destination, symlinks=True)
+                else:
+                    shutil.copy2(source, destination, follow_symlinks=False)
+            else:
+                shutil.move(str(source), str(destination))
+
+        for source_name in _top_level_paths(paths):
+            source = Path(source_name)
+            if not source.exists():
+                continue
+            destination = destination_root / source.name
+            same_path = os.path.normcase(os.path.realpath(source)) == os.path.normcase(os.path.realpath(destination))
+            if same_path:
+                if not copy:
+                    continue
+                destination = _unique_destination(destination, copy_label=True)
+            if source.is_dir() and _is_within(destination_root, source):
+                errors.append(f"Cannot place '{source.name}' inside itself.")
+                continue
+            if duplicate:
+                destination = _unique_destination(destination, copy_label=True)
+            try:
+                transfer(source, destination)
+            except (OSError, shutil.Error) as exc:
+                errors.append(f"{source.name}: {exc}")
+
+        if errors:
+            detail = "\n".join(errors[:8])
+            if len(errors) > 8:
+                detail += f"\n…and {len(errors) - 8} more"
+            QMessageBox.critical(self, "File Operation Failed", detail)
 
     def _new_file(self, parent_dir: str) -> None:
         """Prompt for a file name, create it inside *parent_dir*, and open it."""
@@ -409,30 +738,29 @@ class ExplorerWidget(QWidget):
         except OSError as exc:
             QMessageBox.critical(self, "Error", f"Could not rename:\n{exc}")
 
-    def _trash_item(self, index: QModelIndex) -> None:
-        """Ask for confirmation then move the item at *index* to the trash."""
-        if self._model is None or not index.isValid():
+    def _trash_selected(self) -> None:
+        """Ask for confirmation then move the selected items to the trash."""
+        paths = self._selected_paths()
+        if not paths:
             return
-        item_path = self._model.filePath(index)
-        item_name = self._model.fileName(index)
-        is_dir = self._model.isDir(index)
-        kind = "folder" if is_dir else "file"
+        if len(paths) == 1:
+            prompt = f"Move '{Path(paths[0]).name}' to the "
+        else:
+            prompt = f"Move {len(paths)} selected items to the "
 
         answer = QMessageBox.question(
             self,
             "Move to Recycle Bin" if sys.platform == "win32" else "Move to Trash",
-            f"Move the {kind} '{item_name}' to the "
-            + ("Recycle Bin?" if sys.platform == "win32" else "Trash?"),
+            prompt + ("Recycle Bin?" if sys.platform == "win32" else "Trash?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
 
-        try:
-            if not QFile.moveToTrash(item_path):
-                raise OSError("the operating system did not accept the item")
-        except OSError as exc:
-            QMessageBox.critical(self, "Error", f"Could not move '{item_name}' to trash:\n{exc}")
+        failed = [path for path in paths if not QFile.moveToTrash(path)]
+        if failed:
+            names = "\n".join(Path(path).name for path in failed)
+            QMessageBox.critical(self, "Error", f"Could not move these items to trash:\n{names}")
 
     def _copy_full_path(self, path: str) -> None:
         """Copy the absolute path to the system clipboard."""

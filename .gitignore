@@ -7,6 +7,8 @@ todo
 .claude/
 .copilot-tracking/
 tests/visual_output/
+# pytest --basetemp directories from local test runs
+.test-tmp*/
 
 .pyemsi
 
