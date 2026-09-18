@@ -23,7 +23,6 @@ class RunCommand:
 def build_run_command(
     input_path: str,
     backend: str,
-    run_style: str,
     executable_path: str | None = None,
 ) -> RunCommand:
     """Build the terminal command that runs *input_path* with the chosen backend."""
@@ -43,19 +42,10 @@ def build_run_command(
         raise ValueError(f"unknown backend: {backend!r}")
     if not executable_path:
         raise ValueError("executable_path is required for the executable backend")
-    if run_style not in {"background", "window"}:
-        raise ValueError(f"unknown run_style: {run_style!r}")
 
     # EMSolution's own docs require the run directory to end with a
     # trailing backslash (runWindows.rst: "directory名の最後は\として下さい").
     run_dir = folder + os.sep
-
-    flags = ["-b"]
-    if run_style == "window":
-        flags.append("-m")
-        message_words = ["Running", "EMSolution.exe", "--", "its", "own", "progress", "window", "may", "also", "open."]
-    else:
-        message_words = ["Running", "EMSolution.exe", "in", "the", "background."]
 
     # args must be plain, unquoted argv tokens, never a pre-quoted shell
     # string: XtermWidget spawns via pywinpty's PtyProcess.spawn, which
@@ -66,10 +56,11 @@ def build_run_command(
     args = [
         "/c",
         "echo",
-        *message_words,
+        "Running",
+        "EMSolution.exe.",
         "&&",
         executable_path,
-        *flags,
+        "-b",
         "-d",
         run_dir,
         "-f",

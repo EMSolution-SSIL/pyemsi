@@ -1110,9 +1110,8 @@ class PyEmsiMainWindow(QMainWindow):
             if not getattr(viewer, "_run_connected", False):
                 viewer.run_external_requested.connect(self._run_emsol_external)
                 viewer.stop_external_requested.connect(self._stop_emsol_external)
-                viewer.set_backend_defaults(
-                    self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol",
-                    self._settings.get_effective("tools.emsolution_run.run_style") or "background",
+                viewer.set_backend_default(
+                    self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol"
                 )
                 viewer._run_connected = True
 
@@ -1317,7 +1316,6 @@ class PyEmsiMainWindow(QMainWindow):
 
         viewer = self.sender()
         backend = viewer.backend if viewer is not None else "pyemsol"
-        run_style = viewer.run_style if viewer is not None else "background"
 
         executable_path = None
         if backend == "executable":
@@ -1328,7 +1326,6 @@ class PyEmsiMainWindow(QMainWindow):
         run_command = build_run_command(
             input_path=path,
             backend=backend,
-            run_style=run_style,
             executable_path=executable_path,
         )
 

@@ -12,34 +12,20 @@ def _app():
     return app
 
 
-def test_backend_and_run_style_default_to_pyemsol_and_background():
+def test_backend_defaults_to_pyemsol():
     _app()
     viewer = EMSolutionInputViewer()
 
     assert viewer.backend == "pyemsol"
-    assert viewer.run_style == "background"
 
 
-def test_set_backend_defaults_updates_both_combos():
+def test_set_backend_default_updates_combo():
     _app()
     viewer = EMSolutionInputViewer()
 
-    viewer.set_backend_defaults("executable", "window")
+    viewer.set_backend_default("executable")
 
     assert viewer.backend == "executable"
-    assert viewer.run_style == "window"
-
-
-def test_style_combo_only_enabled_when_backend_is_executable():
-    _app()
-    viewer = EMSolutionInputViewer()
-    viewer.set_backend_defaults("executable", "window")
-
-    assert viewer._style_combo.isEnabled()
-
-    viewer.set_backend_defaults("pyemsol", "window")
-
-    assert not viewer._style_combo.isEnabled()
 
 
 def test_executable_backend_option_hidden_on_non_windows(monkeypatch):
