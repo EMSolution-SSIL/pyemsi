@@ -58,6 +58,7 @@ class FreeCADSession:
         self._host: QWidget | None = None
         self._message_listeners: list[Callable[[str], None]] = []
         self._report_view: QWidget | None = None
+        self._last_status_message = ""
 
     # ------------------------------------------------------------------
     # state
@@ -108,6 +109,7 @@ class FreeCADSession:
         self._park()
         self._settle_start_page()
         self._hook_report_view()
+        self._hook_status_bar()
         self._hook_layout_defaults()
         LOGGER.info("FreeCAD GUI initialization complete")
 
@@ -172,6 +174,24 @@ class FreeCADSession:
         if listener in self._message_listeners:
             self._message_listeners.remove(listener)
 
+    def _forward_message(self, text: str) -> None:
+        for listener in list(self._message_listeners):
+            try:
+                listener(text)
+            except Exception:  # a broken listener must never break FreeCAD output
+                LOGGER.exception("FreeCAD message listener failed")
+
+    def _hook_status_bar(self) -> None:
+        assert self._main_window is not None
+        self._main_window.statusBar().messageChanged.connect(self._on_status_message)
+
+    def _on_status_message(self, text: str) -> None:
+        if not text or text == self._last_status_message:
+            self._last_status_message = text
+            return
+        self._last_status_message = text
+        self._forward_message(f"\x1b[36m[Status]\x1b[0m {text}\n")
+
     def _hook_report_view(self) -> None:
         if self._main_window is None:
             return
@@ -197,11 +217,7 @@ class FreeCADSession:
             return
         # Forward verbatim: toPlainText() already maps block separators to
         # "\n", and FreeCAD may write a line in several partial chunks.
-        for listener in list(self._message_listeners):
-            try:
-                listener(text)
-            except Exception:  # a broken listener must never break FreeCAD output
-                LOGGER.exception("FreeCAD message listener failed")
+        self._forward_message(text)
 
     def _settle_start_page(self, timeout_s: float = 2.0) -> None:
         """Let FreeCAD create its deferred Start page before any document is opened.

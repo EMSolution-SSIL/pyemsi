@@ -573,6 +573,21 @@ def test_removed_message_listener_stops_receiving():
     assert received == []
 
 
+def test_status_bar_messages_are_forwarded_with_duplicates_removed():
+    _app()
+    fake = _FakeFreeCAD()
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+    received: list[str] = []
+    session.add_message_listener(received.append)
+
+    fake.main_window.statusBar().showMessage("Recomputing model")
+    fake.main_window.statusBar().showMessage("Recomputing model")
+    fake.main_window.statusBar().clearMessage()
+
+    assert received == ["\x1b[36m[Status]\x1b[0m Recomputing model\n"]
+
+
 def test_report_view_clear_does_not_forward_text():
     _app()
     fake = _FakeFreeCAD()

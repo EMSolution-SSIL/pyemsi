@@ -7,15 +7,36 @@ a bottom dock hosting an embedded IPython terminal.
 
 from __future__ import annotations
 
+from datetime import datetime
 from importlib import metadata
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
+import platform
+import re
+import subprocess
+import sys
 import tempfile
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSize, QTimer, Qt, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence
+from PySide6 import __version__ as PYSIDE_VERSION
+from PySide6.QtCore import (
+    QByteArray,
+    QObject,
+    QSize,
+    QSysInfo,
+    QTimer,
+    Qt,
+    QUrl,
+    Signal,
+    qInstallMessageHandler,
+    qVersion,
+)
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QSurfaceFormat
 from PySide6.QtWidgets import (
+    QApplication,
     QDockWidget,
     QFileDialog,
     QLabel,
@@ -56,6 +77,182 @@ Tel: 03-3711-8908, Fax: 03-3711-8910
 Web: https://www.ssil.co.jp
 Email: em_solution@ssil.co.jp
 Copyright (c) 2026 SSIL All rights reserved."""
+
+_FREECAD_LOGGER_NAMES = (
+    "pyemsi.gui.freecad_runtime",
+    "pyemsi.gui.freecad_session",
+    "pyemsi.gui._viewers._freecad",
+)
+_FREECAD_LOG_MAX_BYTES = 5 * 1024 * 1024
+_FREECAD_LOG_BACKUPS = 2
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+class _DiagnosticBridge(QObject):
+    text = Signal(str)
+
+
+class _FreeCADLogHandler(logging.Handler):
+    _COLORS = {
+        logging.DEBUG: "\x1b[90m",
+        logging.INFO: "\x1b[32m",
+        logging.WARNING: "\x1b[33m",
+        logging.ERROR: "\x1b[31m",
+        logging.CRITICAL: "\x1b[1;31m",
+    }
+
+    def __init__(self, bridge: _DiagnosticBridge) -> None:
+        super().__init__(logging.DEBUG)
+        self._bridge = bridge
+        self.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", "%H:%M:%S"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            color = self._COLORS.get(record.levelno, "")
+            self._bridge.text.emit(f"{color}{self.format(record)}\x1b[0m\n")
+        except Exception:
+            pass
+
+
+class _StreamTee:
+    def __init__(self, original, bridge: _DiagnosticBridge, label: str, color: str) -> None:
+        self.original = original
+        self._bridge = bridge
+        self._prefix = f"{color}[{label}]\x1b[0m "
+        self._buffer = ""
+        self._lock = threading.Lock()
+
+    def write(self, text: str) -> int:
+        if self.original is not None:
+            self.original.write(text)
+        with self._lock:
+            self._buffer += text
+            while "\n" in self._buffer:
+                line, self._buffer = self._buffer.split("\n", 1)
+                self._bridge.text.emit(f"{self._prefix}{line}\n")
+        return len(text)
+
+    def flush(self) -> None:
+        if self.original is not None:
+            self.original.flush()
+        with self._lock:
+            if self._buffer:
+                self._bridge.text.emit(f"{self._prefix}{self._buffer}\n")
+                self._buffer = ""
+
+    def __getattr__(self, name):
+        if self.original is None:
+            raise AttributeError(name)
+        return getattr(self.original, name)
+
+
+def _application_diagnostics() -> str:
+    app = QApplication.instance()
+    fmt = QSurfaceFormat.defaultFormat()
+    try:
+        pyemsi_version = metadata.version("pyemsi")
+    except metadata.PackageNotFoundError:
+        pyemsi_version = "development checkout"
+    lines = [
+        "\x1b[1;35m=== pyemsi / FreeCAD diagnostic session ===\x1b[0m",
+        f"Started: {datetime.now().astimezone().isoformat(timespec='seconds')}",
+        f"pyemsi: {pyemsi_version}",
+        f"Python: {sys.version.replace(chr(10), ' ')}",
+        f"Executable: {sys.executable}",
+        f"OS: {QSysInfo.prettyProductName()} ({platform.platform()})",
+        f"CPU architecture: {QSysInfo.currentCpuArchitecture()} / {platform.machine()}",
+        f"Qt: {qVersion()} | PySide: {PYSIDE_VERSION}",
+        "Graphics environment: "
+        + ", ".join(
+            f"{name}={os.environ.get(name, '<unset>')}"
+            for name in (
+                "QSG_RHI_BACKEND",
+                "QT_OPENGL",
+                "QT_ANGLE_PLATFORM",
+                "QT_QUICK_BACKEND",
+                "QTWEBENGINE_CHROMIUM_FLAGS",
+            )
+        ),
+        "Qt graphics attributes: "
+        + ", ".join(
+            f"{attribute.name}={QApplication.testAttribute(attribute)}"
+            for attribute in (
+                Qt.ApplicationAttribute.AA_ShareOpenGLContexts,
+                Qt.ApplicationAttribute.AA_UseDesktopOpenGL,
+                Qt.ApplicationAttribute.AA_UseOpenGLES,
+                Qt.ApplicationAttribute.AA_UseSoftwareOpenGL,
+            )
+        ),
+        (
+            "Default surface: "
+            f"OpenGL {fmt.majorVersion()}.{fmt.minorVersion()}, "
+            f"profile={fmt.profile().name}, renderable={fmt.renderableType().name}, "
+            f"depth={fmt.depthBufferSize()}, stencil={fmt.stencilBufferSize()}, samples={fmt.samples()}"
+        ),
+    ]
+    if app is not None:
+        for screen in app.screens():
+            geometry = screen.geometry()
+            lines.append(
+                f"Screen: {screen.name()} {geometry.width()}x{geometry.height()} "
+                f"depth={screen.depth()} DPR={screen.devicePixelRatio():g} "
+                f"refresh={screen.refreshRate():g}Hz"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _windows_hardware_diagnostics() -> str:
+    lines = []
+    if sys.platform != "win32":
+        lines.append(f"Hardware: processor={platform.processor() or '<unknown>'}, cores={os.cpu_count()}")
+    else:
+        script = (
+            "[Console]::OutputEncoding=[Text.UTF8Encoding]::new();"
+            "$cs=Get-CimInstance Win32_ComputerSystem;"
+            "$cpu=Get-CimInstance Win32_Processor|Select-Object -First 1;"
+            "$gpu=Get-CimInstance Win32_VideoController|"
+            "Select-Object Name,DriverVersion,AdapterRAM,VideoModeDescription;"
+            "[pscustomobject]@{Manufacturer=$cs.Manufacturer;Model=$cs.Model;"
+            "Memory=$cs.TotalPhysicalMemory;CPU=$cpu.Name;Cores=$cpu.NumberOfCores;"
+            "LogicalProcessors=$cpu.NumberOfLogicalProcessors;GPU=$gpu}|ConvertTo-Json -Compress -Depth 3"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                check=True,
+            )
+            lines.append(f"Hardware: {result.stdout.strip()}")
+        except Exception as exc:
+            lines.append(f"Hardware query failed: {exc}")
+
+    gl_probe = (
+        "from vtkmodules.vtkRenderingOpenGL2 import vtkOpenGLRenderWindow;"
+        "w=vtkOpenGLRenderWindow();w.SetOffScreenRendering(1);w.Render();"
+        "r=w.ReportCapabilities();"
+        "print('\\n'.join(x for x in r.splitlines() if x.strip().startswith("
+        "('OpenGL vendor','OpenGL renderer','OpenGL version','OpenGL shading'))))"
+    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", gl_probe],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            check=True,
+        )
+        lines.append(f"VTK offscreen OpenGL probe:\n{result.stdout.strip() or '<no capability strings returned>'}")
+    except Exception as exc:
+        lines.append(f"VTK offscreen OpenGL probe failed: {exc}")
+    return "\n".join(lines) + "\n"
 
 class PyEmsiMainWindow(QMainWindow):
     """
@@ -118,7 +315,18 @@ class PyEmsiMainWindow(QMainWindow):
         self.tabifyDockWidget(self._ipython_dock, self._external_terminal_dock)
         self._ipython_dock.hide()
         self._external_terminal_dock.hide()
-        self._container.freecad_session_initialized.connect(self._attach_freecad_messages)
+        self._freecad_diagnostics_tab = None
+        self._freecad_diagnostics_session = None
+        self._freecad_diagnostics_bridge = None
+        self._freecad_log_handler = None
+        self._freecad_diagnostic_file_handler = None
+        self._freecad_logger_levels: dict[str, int] = {}
+        self._freecad_stdout = None
+        self._freecad_stderr = None
+        self._previous_qt_message_handler = None
+        self._qt_message_guard = threading.local()
+        self._container.freecad_session_starting.connect(self._attach_freecad_messages)
+        self._container.freecad_session_initialized.connect(self._complete_freecad_diagnostics)
 
         self._setup_view_menu()
         self.menuBar().addMenu(self._converters_menu)
@@ -1118,24 +1326,152 @@ class PyEmsiMainWindow(QMainWindow):
             self._kernel_manager.kernel.shell.push(kwargs)
 
     def _attach_freecad_messages(self, session) -> None:
-        """Mirror FreeCAD's Report view into a "FreeCAD messages" tab of the External Terminal dock.
-
-        Connected to ``SplitContainer.freecad_session_initialized``, so it
-        runs once per process. The listener is removed when the user closes
-        the tab, so a closed tab simply stops mirroring.
-        """
+        """Start full FreeCAD diagnostics before the runtime is imported."""
+        if self._freecad_diagnostics_tab is not None:
+            return
         self._external_terminal_dock.show()
         self._external_terminal_dock.raise_()
         log_tab = self._external_terminal_dock.add_log_tab("FreeCAD messages")
+        bridge = _DiagnosticBridge(self)
+        bridge.text.connect(self._write_freecad_diagnostic)
 
-        def _forward(text: str, _tab=log_tab) -> None:
+        self._freecad_diagnostics_tab = log_tab
+        self._freecad_diagnostics_session = session
+        self._freecad_diagnostics_bridge = bridge
+        session.add_message_listener(self._write_freecad_diagnostic)
+
+        workspace = self._settings.workspace_path
+        if workspace is not None:
+            log_path = workspace / ".pyemsi" / "freecad-diagnostics.log"
             try:
-                _tab.write(text)
-            except RuntimeError:  # tab's C++ object already deleted
-                session.remove_message_listener(_forward)
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                file_handler = RotatingFileHandler(
+                    log_path,
+                    maxBytes=_FREECAD_LOG_MAX_BYTES,
+                    backupCount=_FREECAD_LOG_BACKUPS,
+                    encoding="utf-8",
+                )
+                file_handler.terminator = ""
+                self._freecad_diagnostic_file_handler = file_handler
+                self._write_freecad_diagnostic(
+                    f"Persistent log: {log_path} (5 MB per file, 2 backups)\n"
+                )
+            except OSError as exc:
+                self._write_freecad_diagnostic(f"Persistent log could not be opened: {exc}\n")
 
-        session.add_message_listener(_forward)
-        log_tab.destroyed.connect(lambda *_: session.remove_message_listener(_forward))
+        handler = _FreeCADLogHandler(bridge)
+        self._freecad_log_handler = handler
+        for name in _FREECAD_LOGGER_NAMES:
+            logger = logging.getLogger(name)
+            self._freecad_logger_levels[name] = logger.level
+            logger.setLevel(logging.DEBUG)
+            logger.addHandler(handler)
+
+        self._install_freecad_stream_tees()
+        self._previous_qt_message_handler = qInstallMessageHandler(self._forward_qt_message)
+        self._write_freecad_diagnostic(_application_diagnostics())
+        threading.Thread(
+            target=lambda: bridge.text.emit(_windows_hardware_diagnostics()),
+            name="freecad-hardware-diagnostics",
+            daemon=True,
+        ).start()
+        log_tab.destroyed.connect(lambda *_: self._stop_freecad_diagnostics())
+
+    def _write_freecad_diagnostic(self, text: str) -> None:
+        tab = self._freecad_diagnostics_tab
+        if tab is None:
+            return
+        file_handler = self._freecad_diagnostic_file_handler
+        if file_handler is not None:
+            record = logging.LogRecord(
+                "pyemsi.freecad.diagnostics",
+                logging.INFO,
+                "",
+                0,
+                _ANSI_ESCAPE.sub("", text),
+                (),
+                None,
+            )
+            file_handler.emit(record)
+        try:
+            tab.write(text)
+        except RuntimeError:
+            self._stop_freecad_diagnostics()
+
+    def _install_freecad_stream_tees(self) -> None:
+        bridge = self._freecad_diagnostics_bridge
+        if bridge is None:
+            return
+        if sys.stdout is not self._freecad_stdout:
+            self._freecad_stdout = _StreamTee(sys.stdout, bridge, "stdout", "\x1b[90m")
+            sys.stdout = self._freecad_stdout
+        if sys.stderr is not self._freecad_stderr:
+            self._freecad_stderr = _StreamTee(sys.stderr, bridge, "stderr", "\x1b[31m")
+            sys.stderr = self._freecad_stderr
+
+    def _forward_qt_message(self, message_type, context, message: str) -> None:
+        if getattr(self._qt_message_guard, "active", False):
+            return
+        self._qt_message_guard.active = True
+        try:
+            category = getattr(context, "category", None) or "Qt"
+            location = ""
+            if getattr(context, "file", None):
+                location = f" ({context.file}:{context.line})"
+            bridge = self._freecad_diagnostics_bridge
+            if bridge is not None:
+                bridge.text.emit(f"\x1b[35m[Qt {message_type.name}] [{category}]\x1b[0m {message}{location}\n")
+            previous = self._previous_qt_message_handler
+            if previous is not None:
+                previous(message_type, context, message)
+            elif sys.__stderr__ is not None:
+                sys.__stderr__.write(f"{message}\n")
+        finally:
+            self._qt_message_guard.active = False
+
+    def _complete_freecad_diagnostics(self, session) -> None:
+        self._attach_freecad_messages(session)
+        self._install_freecad_stream_tees()  # FreeCAD may replace Python streams during GUI startup.
+        modules = getattr(session, "_modules", None)
+        if modules is None:
+            return
+        version = ".".join(str(part) for part in modules.app.Version())
+        self._write_freecad_diagnostic(
+            "\x1b[1;35m=== FreeCAD runtime ===\x1b[0m\n"
+            f"FreeCAD: {version}\n"
+            f"FreeCAD module: {getattr(modules.app, '__file__', '<unknown>')}\n"
+            f"FreeCADGui module: {getattr(modules.gui, '__file__', '<unknown>')}\n"
+        )
+
+    def _stop_freecad_diagnostics(self) -> None:
+        if self._freecad_diagnostics_tab is None:
+            return
+        session = self._freecad_diagnostics_session
+        if session is not None:
+            session.remove_message_listener(self._write_freecad_diagnostic)
+        handler = self._freecad_log_handler
+        if handler is not None:
+            for name, level in self._freecad_logger_levels.items():
+                logger = logging.getLogger(name)
+                logger.removeHandler(handler)
+                logger.setLevel(level)
+            handler.close()
+        if self._freecad_diagnostic_file_handler is not None:
+            self._freecad_diagnostic_file_handler.close()
+        if sys.stdout is self._freecad_stdout:
+            sys.stdout = self._freecad_stdout.original
+        if sys.stderr is self._freecad_stderr:
+            sys.stderr = self._freecad_stderr.original
+        qInstallMessageHandler(self._previous_qt_message_handler)
+        self._freecad_diagnostics_tab = None
+        self._freecad_diagnostics_session = None
+        self._freecad_diagnostics_bridge = None
+        self._freecad_log_handler = None
+        self._freecad_diagnostic_file_handler = None
+        self._freecad_logger_levels.clear()
+        self._freecad_stdout = None
+        self._freecad_stderr = None
+        self._previous_qt_message_handler = None
 
     def _confirm_freecad_documents(self) -> bool:
         """Prompt Save/Discard/Cancel for every modified FreeCAD document.
@@ -1180,7 +1516,6 @@ class PyEmsiMainWindow(QMainWindow):
         self._persist_workspace_state()
         for path in list(self._temp_converter_configs):
             self._cleanup_temp_converter_config(path)
-        self._external_terminal_dock.close_all_terminals()
         if self._kernel_manager is not None:
             self._kernel_manager.shutdown_kernel()
 
@@ -1189,4 +1524,6 @@ class PyEmsiMainWindow(QMainWindow):
         session = freecad_session_module.peek_freecad_session()
         if session is not None and session.is_initialized:
             session.prepare_for_application_exit()
+        self._stop_freecad_diagnostics()
+        self._external_terminal_dock.close_all_terminals()
         super().closeEvent(event)

@@ -63,6 +63,7 @@ class ExternalTerminalDock(QDockWidget):
         Returns the :class:`XtermWidget` instance.
         """
         xterm = XtermWidget(parent=self._tabs)
+        xterm.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         idx = self._tabs.addTab(xterm, title)
         self._tabs.setCurrentIndex(idx)
         self._stack.setCurrentWidget(self._tabs)

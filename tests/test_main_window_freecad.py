@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent
+import logging
+import sys
+
+from PySide6.QtCore import QEvent, qWarning
 from PySide6.QtWidgets import QApplication, QDockWidget, QMessageBox, QTabWidget, QWidget
 
 from pyemsi.gui import freecad_session as session_module
@@ -220,7 +223,9 @@ def _make_window_with_log_dock(tmp_path, monkeypatch):
     _app()
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _LogDock)
     monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(main_window_module, "_windows_hardware_diagnostics", lambda: "Hardware: test\n")
     manager = SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
+    manager.load_workspace(tmp_path)
     return main_window_module.PyEmsiMainWindow(settings_manager=manager)
 
 
@@ -233,9 +238,17 @@ def test_freecad_session_init_opens_message_tab_and_forwards_text(tmp_path, monk
         dock = window._external_terminal_dock
         assert [title for title, _ in dock.log_tabs] == ["FreeCAD messages"]
         assert dock.shown >= 1
+        assert "QSG_RHI_BACKEND" in "".join(dock.log_tabs[0][1].written)
         session.emit("Hole: Hole error: Finding axis failed\n")
-        assert dock.log_tabs[0][1].written == ["Hole: Hole error: Finding axis failed\n"]
+        assert dock.log_tabs[0][1].written[-1] == "Hole: Hole error: Finding axis failed\n"
+        log_path = tmp_path / ".pyemsi" / "freecad-diagnostics.log"
+        log_text = log_path.read_text(encoding="utf-8")
+        assert "Hole: Hole error: Finding axis failed" in log_text
+        assert "\x1b[" not in log_text
+        assert window._freecad_diagnostic_file_handler.maxBytes == 5 * 1024 * 1024
+        assert window._freecad_diagnostic_file_handler.backupCount == 2
     finally:
+        window._stop_freecad_diagnostics()
         window.deleteLater()
 
 
@@ -254,6 +267,26 @@ def test_destroyed_message_tab_unregisters_listener(tmp_path, monkeypatch):
 
         assert session.listeners == []
     finally:
+        window.deleteLater()
+
+
+def test_freecad_diagnostics_capture_debug_logs_and_python_streams(tmp_path, monkeypatch):
+    window = _make_window_with_log_dock(tmp_path, monkeypatch)
+    session = _MessageSession()
+    try:
+        window._container.freecad_session_starting.emit(session)
+        logging.getLogger("pyemsi.gui.freecad_runtime").debug("graphics probe")
+        print("stdout probe")
+        sys.stderr.write("stderr probe\n")
+        qWarning("Qt graphics probe")
+
+        output = "".join(window._external_terminal_dock.log_tabs[0][1].written)
+        assert "[DEBUG] pyemsi.gui.freecad_runtime: graphics probe" in output
+        assert "[stdout]" in output and "stdout probe" in output
+        assert "[stderr]" in output and "stderr probe" in output
+        assert "[Qt QtWarningMsg]" in output and "Qt graphics probe" in output
+    finally:
+        window._stop_freecad_diagnostics()
         window.deleteLater()
 
 
