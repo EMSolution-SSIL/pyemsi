@@ -4,7 +4,17 @@ import os
 import types
 
 import pytest
-from PySide6.QtWidgets import QApplication, QMainWindow, QMdiArea, QTabBar, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QMainWindow,
+    QMdiArea,
+    QTabBar,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from pyemsi.gui import freecad_session as session_module
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError
@@ -57,6 +67,17 @@ class _FakeGuiDoc:
         self.ActiveView = _FakeView()
 
 
+class _FakeParamGroup:
+    def __init__(self):
+        self.values: dict[str, int] = {}
+
+    def GetInt(self, name, default):  # noqa: N802
+        return self.values.get(name, default)
+
+    def SetInt(self, name, value):  # noqa: N802
+        self.values[name] = value
+
+
 class _FakeFreeCAD:
     """Stands in for FreeCAD (App) + FreeCADGui with the verified 1.1 API surface."""
 
@@ -69,6 +90,7 @@ class _FakeFreeCAD:
         self.show_main_window_calls = 0
         self.open_error = open_error
         self.open_hidden_values: list[bool] = []
+        self.param_groups: dict[str, _FakeParamGroup] = {}
         self.main_window = QMainWindow()
         self.main_window.show()
 
@@ -78,6 +100,7 @@ class _FakeFreeCAD:
         self.app.newDocument = self._new
         self.app.closeDocument = self._close
         self.app.setActiveDocument = lambda name: self.active.append(("app", name))
+        self.app.ParamGet = lambda path: self.param_groups.setdefault(path, _FakeParamGroup())
         self.gui.showMainWindow = self._show_main_window
         self.gui.getMainWindow = lambda: self.main_window
         self.gui.getDocument = lambda name: self._gui_docs[name]
@@ -151,6 +174,42 @@ def test_ensure_initialized_wraps_loader_failure():
     with pytest.raises(FreeCADRuntimeError):
         session.ensure_initialized()
     assert not session.is_initialized
+
+
+def test_layout_defaults_apply_once_then_preserve_user_changes():
+    _app()
+    fake = _FakeFreeCAD()
+    tasks = QDockWidget("Tasks", fake.main_window)
+    tasks.setObjectName("Tasks")
+    fake.main_window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, tasks)
+    tasks.setFloating(True)
+    fake.main_window.statusBar().hide()
+
+    toolbars = []
+    for name in ("File", *session_module._PART_DESIGN_TOOLBARS):
+        toolbar = QToolBar(name, fake.main_window)
+        toolbar.setObjectName(name)
+        fake.main_window.addToolBar(toolbar)
+        toolbar.hide()
+        toolbars.append(toolbar)
+
+    session = session_module.FreeCADSession(loader=fake.modules)
+    session.ensure_initialized()
+
+    assert not tasks.isFloating()
+    assert fake.main_window.dockWidgetArea(tasks) == Qt.DockWidgetArea.RightDockWidgetArea
+    assert not fake.main_window.statusBar().isHidden()
+    assert all(not toolbar.isHidden() for toolbar in toolbars)
+
+    # Once initialized, later user choices are not forced back to defaults.
+    tasks.setFloating(True)
+    fake.main_window.statusBar().hide()
+    toolbars[0].hide()
+    session._apply_layout_defaults()
+
+    assert tasks.isFloating()
+    assert fake.main_window.statusBar().isHidden()
+    assert toolbars[0].isHidden()
 
 
 def test_attach_and_detach_move_native_window_between_host_and_parking():

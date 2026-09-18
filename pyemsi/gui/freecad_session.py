@@ -13,12 +13,29 @@ import os
 import time
 from typing import Callable
 
-from PySide6.QtCore import QEventLoop
-from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QTabBar, QTextEdit, QWidget
+from PySide6.QtCore import QEventLoop, Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QMdiArea,
+    QMdiSubWindow,
+    QTabBar,
+    QTextEdit,
+    QToolBar,
+    QWidget,
+)
 
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError, import_freecad
 
 LOGGER = logging.getLogger(__name__)
+
+_LAYOUT_DEFAULTS_VERSION = 1
+_PART_DESIGN_TOOLBARS = (
+    "Part Design Helper Features",
+    "Part Design Modeling Features",
+    "Part Design Dress-Up Features",
+    "Part Design Transformation Features",
+)
 
 
 class FreeCADDocumentError(RuntimeError):
@@ -91,7 +108,49 @@ class FreeCADSession:
         self._park()
         self._settle_start_page()
         self._hook_report_view()
+        self._hook_layout_defaults()
         LOGGER.info("FreeCAD GUI initialization complete")
+
+    def _hook_layout_defaults(self) -> None:
+        """Apply pyemsi's FreeCAD layout defaults once, then respect user changes."""
+        assert self._main_window is not None
+        signal = getattr(self._main_window, "workbenchActivated", None)
+        if signal is not None:
+            signal.connect(lambda *_: QTimer.singleShot(0, self._apply_layout_defaults))
+        self._apply_layout_defaults()
+
+    def _apply_layout_defaults(self) -> None:
+        if self._main_window is None or self._modules is None:
+            return
+
+        preferences = self._modules.app.ParamGet("User parameter:BaseApp/Preferences/PyEmsi")
+        base_applied = preferences.GetInt("BaseLayoutDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
+        part_design_applied = (
+            preferences.GetInt("PartDesignToolbarDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
+        )
+
+        if not base_applied:
+            tasks = self._main_window.findChild(QDockWidget, "Tasks")
+            file_toolbar = self._main_window.findChild(QToolBar, "File")
+            if tasks is not None:
+                tasks.setFloating(False)
+                self._main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, tasks)
+                tasks.show()
+            self._main_window.statusBar().show()
+            if file_toolbar is not None:
+                file_toolbar.show()
+            if tasks is not None and file_toolbar is not None:
+                preferences.SetInt("BaseLayoutDefaultsVersion", _LAYOUT_DEFAULTS_VERSION)
+
+        if not part_design_applied:
+            toolbars = [self._main_window.findChild(QToolBar, name) for name in _PART_DESIGN_TOOLBARS]
+            for toolbar in toolbars:
+                if toolbar is not None:
+                    toolbar.show()
+            # These toolbars do not exist until Part Design is loaded, so keep
+            # trying after workbench changes until all four were found.
+            if all(toolbar is not None for toolbar in toolbars):
+                preferences.SetInt("PartDesignToolbarDefaultsVersion", _LAYOUT_DEFAULTS_VERSION)
 
     # ------------------------------------------------------------------
     # messages (FreeCAD Report view)
