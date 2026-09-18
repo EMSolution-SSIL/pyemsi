@@ -132,6 +132,10 @@ version = {attr = "pyemsi.__version__"}
 "pyemsi.resources" = [
     "*.qrc",
     "icons/*.svg",
+    "icons/BRAND_ASSETS.md",
+    "icons/material/*.svg",
+    "icons/material/LICENSE",
+    "icons/material/README.md",
 ]
 "pyemsi.widgets.monaco_lsp" = [
     "index.html",

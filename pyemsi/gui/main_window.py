@@ -686,6 +686,7 @@ class PyEmsiMainWindow(QMainWindow):
         self._explorer_widget.setMinimumWidth(200)
         self._explorer_widget.open_folder_requested.connect(self._open_folder)
         self._explorer_widget.file_activated.connect(self._on_file_activated)
+        self._explorer_widget.terminal_requested.connect(self._open_explorer_terminal)
 
         self._explorer_dock = QDockWidget("Explorer", self)
         self._explorer_dock.setObjectName("explorer_dock")
@@ -706,6 +707,13 @@ class PyEmsiMainWindow(QMainWindow):
         )
         if path:
             self._set_workspace_path(path)
+
+    def _open_explorer_terminal(self, path: str) -> None:
+        """Open an external terminal rooted at an Explorer directory."""
+        title = Path(path).name or "Terminal"
+        self._external_terminal_dock.add_terminal(title=title, cwd=path)
+        self._external_terminal_dock.show()
+        self._external_terminal_dock.raise_()
 
     def _new_freecad_document(self) -> None:
         """Ask for a name, then create a FreeCAD document in the current folder."""

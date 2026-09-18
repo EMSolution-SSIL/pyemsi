@@ -22,6 +22,7 @@
     <file>icons/First.svg</file>
     <file>icons/FolderOpen.svg</file>
     <file>icons/Forward.svg</file>
+    <file>icons/FreeCAD.svg</file>
     <file>icons/Gear.svg</file>
     <file>icons/Graph.svg</file>
     <file>icons/Grid.svg</file>
@@ -69,5 +70,35 @@
     <file>icons/YPlus.svg</file>
     <file>icons/ZMinus.svg</file>
     <file>icons/ZPlus.svg</file>
+    <file>icons/material/audio.svg</file>
+    <file>icons/material/console.svg</file>
+    <file>icons/material/database.svg</file>
+    <file>icons/material/document.svg</file>
+    <file>icons/material/folder-base.svg</file>
+    <file>icons/material/folder-dist.svg</file>
+    <file>icons/material/folder-docs.svg</file>
+    <file>icons/material/folder-examples.svg</file>
+    <file>icons/material/folder-git.svg</file>
+    <file>icons/material/folder-github.svg</file>
+    <file>icons/material/folder-python.svg</file>
+    <file>icons/material/folder-resource.svg</file>
+    <file>icons/material/folder-simulations.svg</file>
+    <file>icons/material/folder-test.svg</file>
+    <file>icons/material/git.svg</file>
+    <file>icons/material/image.svg</file>
+    <file>icons/material/javascript.svg</file>
+    <file>icons/material/json.svg</file>
+    <file>icons/material/license.svg</file>
+    <file>icons/material/markdown.svg</file>
+    <file>icons/material/python-misc.svg</file>
+    <file>icons/material/python.svg</file>
+    <file>icons/material/readme.svg</file>
+    <file>icons/material/settings.svg</file>
+    <file>icons/material/simulink.svg</file>
+    <file>icons/material/table.svg</file>
+    <file>icons/material/typescript.svg</file>
+    <file>icons/material/xml.svg</file>
+    <file>icons/material/yaml.svg</file>
+    <file>icons/material/zip.svg</file>
   </qresource>
 </RCC>

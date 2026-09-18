@@ -8,24 +8,29 @@ Displays an empty-state page with a Ctrl+O hint when no directory is open.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QModelIndex, QPoint, Qt, Signal
+from PySide6.QtCore import QFile, QModelIndex, QPoint, QSize, Qt, Signal
+from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QFileSystemModel,
+    QHBoxLayout,
     QInputDialog,
     QLabel,
     QMenu,
     QMessageBox,
     QStackedWidget,
+    QStyle,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
+
+from pyemsi.widgets.explorer_icons import MaterialFileIconProvider
 
 
 class ExplorerWidget(QWidget):
@@ -43,11 +48,15 @@ class ExplorerWidget(QWidget):
 
     file_activated = Signal(str)
     open_folder_requested = Signal()
+    terminal_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._current_path: str | None = None
         self._model: QFileSystemModel | None = None
+        self._context_index = QModelIndex()
+        self._context_path: str | None = None
+        self._create_actions()
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -69,6 +78,8 @@ class ExplorerWidget(QWidget):
 
         if self._model is None:
             self._model = QFileSystemModel(self)
+            self._icon_provider = MaterialFileIconProvider()
+            self._model.setIconProvider(self._icon_provider)
             self._tree.setModel(self._model)
             # Show only the Name column
             for col in range(1, self._model.columnCount()):
@@ -77,6 +88,8 @@ class ExplorerWidget(QWidget):
 
         root_index = self._model.setRootPath(path)
         self._tree.setRootIndex(root_index)
+        self._root_label.setText(Path(path).name.upper() or path.upper())
+        self._set_actions_enabled(True)
         self._stack.setCurrentWidget(self._tree_page)
 
     def clear(self) -> None:
@@ -86,11 +99,77 @@ class ExplorerWidget(QWidget):
             self._tree.setModel(None)
             self._model.deleteLater()
             self._model = None
+        self._root_label.clear()
+        self._set_actions_enabled(False)
         self._stack.setCurrentWidget(self._empty_page)
 
     # ------------------------------------------------------------------
     # Internal setup
     # ------------------------------------------------------------------
+
+    def _create_actions(self) -> None:
+        self._new_file_action = QAction(QIcon(":/icons/material/document.svg"), "New File...", self)
+        self._new_file_action.setToolTip("New File")
+        self._new_file_action.triggered.connect(lambda: self._new_file(self._selected_parent_dir()))
+
+        self._new_folder_action = QAction(QIcon(":/icons/material/folder-base.svg"), "New Folder...", self)
+        self._new_folder_action.setToolTip("New Folder")
+        self._new_folder_action.triggered.connect(lambda: self._new_folder(self._selected_parent_dir()))
+
+        self._refresh_action = QAction(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload), "Refresh", self
+        )
+        self._refresh_action.setToolTip("Refresh Explorer")
+        self._refresh_action.triggered.connect(self._refresh)
+
+        self._collapse_action = QAction(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowUp), "Collapse All", self
+        )
+        self._collapse_action.setToolTip("Collapse All Folders")
+        self._collapse_action.triggered.connect(self._collapse_all)
+
+        self._open_action = QAction("Open", self)
+        self._open_action.triggered.connect(self._open_context_item)
+
+        self._rename_action = QAction("Rename...", self)
+        self._rename_action.setShortcut(QKeySequence("F2"))
+        self._rename_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._rename_action.triggered.connect(lambda: self._rename_item(self._context_or_current_index()))
+        self.addAction(self._rename_action)
+
+        trash_text = "Move to Recycle Bin" if sys.platform == "win32" else "Move to Trash"
+        self._trash_action = QAction(trash_text, self)
+        self._trash_action.setShortcut(QKeySequence.StandardKey.Delete)
+        self._trash_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._trash_action.triggered.connect(lambda: self._trash_item(self._context_or_current_index()))
+        self.addAction(self._trash_action)
+
+        self._reveal_action = QAction(QIcon(":/icons/FolderOpen.svg"), "Open in File Explorer", self)
+        self._reveal_action.triggered.connect(lambda: self._open_in_explorer(self._context_or_root_path()))
+
+        self._terminal_action = QAction(QIcon(":/icons/ExternalTerminal.svg"), "Open in Terminal", self)
+        self._terminal_action.triggered.connect(self._open_context_terminal)
+
+        self._copy_relative_action = QAction("Copy Relative Path", self)
+        self._copy_relative_action.triggered.connect(lambda: self._copy_relative_path(self._context_or_root_path()))
+
+        self._copy_full_action = QAction("Copy Full Path", self)
+        self._copy_full_action.triggered.connect(lambda: self._copy_full_path(self._context_or_root_path()))
+
+        self._set_actions_enabled(False)
+
+    def _set_actions_enabled(self, enabled: bool) -> None:
+        for action in (
+            self._new_file_action,
+            self._new_folder_action,
+            self._refresh_action,
+            self._collapse_action,
+            self._reveal_action,
+            self._terminal_action,
+            self._copy_relative_action,
+            self._copy_full_action,
+        ):
+            action.setEnabled(enabled)
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -133,11 +212,35 @@ class ExplorerWidget(QWidget):
         vl.setContentsMargins(0, 0, 0, 0)
         vl.setSpacing(0)
 
+        toolbar = QWidget(page)
+        toolbar_layout = QHBoxLayout(toolbar)
+        toolbar_layout.setContentsMargins(8, 3, 4, 3)
+        toolbar_layout.setSpacing(1)
+
+        self._root_label = QLabel(toolbar)
+        self._root_label.setStyleSheet("font-size: 11px; font-weight: 600;")
+        toolbar_layout.addWidget(self._root_label, 1)
+
+        for action in (
+            self._new_file_action,
+            self._new_folder_action,
+            self._refresh_action,
+            self._collapse_action,
+        ):
+            button = QToolButton(toolbar)
+            button.setAutoRaise(True)
+            button.setIconSize(QSize(18, 18))
+            button.setDefaultAction(action)
+            toolbar_layout.addWidget(button)
+        vl.addWidget(toolbar)
+
         self._tree = QTreeView()
         self._tree.setHeaderHidden(True)
         self._tree.setUniformRowHeights(True)
         self._tree.setAnimated(True)
         self._tree.setIndentation(12)
+        self._tree.setIconSize(QSize(18, 18))
+        self._tree.setSelectionMode(QTreeView.SelectionMode.ExtendedSelection)
         self._tree.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self._tree.setStyleSheet("QTreeView::item { padding-top: 1px; padding-bottom: 1px; font-size: 12px; }")
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -163,42 +266,82 @@ class ExplorerWidget(QWidget):
         index = self._tree.indexAt(pos)
         menu = QMenu(self)
 
+        self._context_index = index
+
         if index.isValid():
             item_path = self._model.filePath(index)
-            is_dir = self._model.isDir(index)
-            parent_dir = item_path if is_dir else str(Path(item_path).parent)
+            self._context_path = item_path
 
-            new_file_action = menu.addAction("New File")
-            new_folder_action = menu.addAction("New Folder")
+            menu.addAction(self._open_action)
             menu.addSeparator()
-            rename_action = menu.addAction("Rename")
-            delete_action = menu.addAction("Delete")
+            menu.addAction(self._new_file_action)
+            menu.addAction(self._new_folder_action)
             menu.addSeparator()
-            open_action = menu.addAction("Open in File Explorer")
+            menu.addAction(self._rename_action)
+            menu.addAction(self._trash_action)
             menu.addSeparator()
-            copy_rel_action = menu.addAction("Copy Relative Path")
-            copy_full_action = menu.addAction("Copy Full Path")
-
-            new_file_action.triggered.connect(lambda: self._new_file(parent_dir))
-            new_folder_action.triggered.connect(lambda: self._new_folder(parent_dir))
-            rename_action.triggered.connect(lambda: self._rename_item(index))
-            delete_action.triggered.connect(lambda: self._delete_item(index))
-            open_action.triggered.connect(lambda: self._open_in_explorer(item_path))
-            copy_rel_action.triggered.connect(lambda: self._copy_relative_path(item_path))
-            copy_full_action.triggered.connect(lambda: self._copy_full_path(item_path))
+            menu.addAction(self._reveal_action)
+            menu.addAction(self._terminal_action)
+            menu.addSeparator()
+            menu.addAction(self._copy_relative_action)
+            menu.addAction(self._copy_full_action)
         else:
             # Empty space — actions apply to root directory
-            root_dir = self._current_path
-            new_file_action = menu.addAction("New File")
-            new_folder_action = menu.addAction("New Folder")
+            self._context_path = self._current_path
+            menu.addAction(self._new_file_action)
+            menu.addAction(self._new_folder_action)
             menu.addSeparator()
-            open_action = menu.addAction("Open in File Explorer")
-
-            new_file_action.triggered.connect(lambda: self._new_file(root_dir))
-            new_folder_action.triggered.connect(lambda: self._new_folder(root_dir))
-            open_action.triggered.connect(lambda: self._open_in_explorer(root_dir))
+            menu.addAction(self._refresh_action)
+            menu.addAction(self._collapse_action)
+            menu.addSeparator()
+            menu.addAction(self._reveal_action)
+            menu.addAction(self._terminal_action)
 
         menu.exec(self._tree.viewport().mapToGlobal(pos))
+        self._context_index = QModelIndex()
+        self._context_path = None
+
+    def _context_or_current_index(self) -> QModelIndex:
+        return self._context_index if self._context_index.isValid() else self._tree.currentIndex()
+
+    def _context_or_root_path(self) -> str:
+        return self._context_path or self._current_path or ""
+
+    def _selected_parent_dir(self) -> str:
+        if self._model is None or self._current_path is None:
+            return ""
+        index = self._context_or_current_index()
+        if not index.isValid():
+            return self._current_path
+        path = self._model.filePath(index)
+        return path if self._model.isDir(index) else str(Path(path).parent)
+
+    def _open_context_item(self) -> None:
+        if self._model is None:
+            return
+        index = self._context_or_current_index()
+        if not index.isValid():
+            return
+        if self._model.isDir(index):
+            self._tree.setExpanded(index, not self._tree.isExpanded(index))
+        else:
+            self.file_activated.emit(self._model.filePath(index))
+
+    def _open_context_terminal(self) -> None:
+        path = self._context_or_root_path()
+        if path:
+            directory = path if os.path.isdir(path) else str(Path(path).parent)
+            self.terminal_requested.emit(directory)
+
+    def _collapse_all(self) -> None:
+        self._tree.collapseAll()
+
+    def _refresh(self) -> None:
+        if self._model is None or self._current_path is None:
+            return
+        root_index = self._model.setRootPath(self._current_path)
+        self._tree.setRootIndex(root_index)
+        self._tree.viewport().update()
 
     # ------------------------------------------------------------------
     # Context menu action implementations
@@ -266,9 +409,9 @@ class ExplorerWidget(QWidget):
         except OSError as exc:
             QMessageBox.critical(self, "Error", f"Could not rename:\n{exc}")
 
-    def _delete_item(self, index: QModelIndex) -> None:
-        """Ask for confirmation then delete the file or folder at *index*."""
-        if self._model is None:
+    def _trash_item(self, index: QModelIndex) -> None:
+        """Ask for confirmation then move the item at *index* to the trash."""
+        if self._model is None or not index.isValid():
             return
         item_path = self._model.filePath(index)
         item_name = self._model.fileName(index)
@@ -277,20 +420,19 @@ class ExplorerWidget(QWidget):
 
         answer = QMessageBox.question(
             self,
-            "Delete",
-            f"Permanently delete the {kind} '{item_name}'?",
+            "Move to Recycle Bin" if sys.platform == "win32" else "Move to Trash",
+            f"Move the {kind} '{item_name}' to the "
+            + ("Recycle Bin?" if sys.platform == "win32" else "Trash?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
 
         try:
-            if is_dir:
-                shutil.rmtree(item_path)
-            else:
-                Path(item_path).unlink()
+            if not QFile.moveToTrash(item_path):
+                raise OSError("the operating system did not accept the item")
         except OSError as exc:
-            QMessageBox.critical(self, "Error", f"Could not delete '{item_name}':\n{exc}")
+            QMessageBox.critical(self, "Error", f"Could not move '{item_name}' to trash:\n{exc}")
 
     def _copy_full_path(self, path: str) -> None:
         """Copy the absolute path to the system clipboard."""
