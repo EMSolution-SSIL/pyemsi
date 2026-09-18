@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -62,6 +63,13 @@ class EMSolutionRunSettingsDialog(QDialog):
 
         self.setWindowTitle("EMSolution Run Settings")
 
+        self._path_help_label = QLabel(
+            "Choose which EMSolution.exe installation pyemsi should use. "
+            "To switch versions, browse to a different EMSolution.exe and click OK.",
+            self,
+        )
+        self._path_help_label.setWordWrap(True)
+
         self._backend_combo = QComboBox(self)
         self._backend_combo.addItem("Pyemsol", "pyemsol")
         self._backend_combo.addItem("EMSolution.exe", "executable")
@@ -94,6 +102,7 @@ class EMSolutionRunSettingsDialog(QDialog):
         self._button_box.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self._path_help_label)
         layout.addLayout(form_layout)
         layout.addWidget(self._button_box)
 

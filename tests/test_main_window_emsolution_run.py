@@ -244,6 +244,15 @@ def test_run_emsol_external_prompts_for_executable_path_when_missing(tmp_path, m
             pass
 
     monkeypatch.setattr(window, "sender", lambda: _FakeViewer())
+    questions = []
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *args, **kwargs: (
+            questions.append(args),
+            main_window_module.QMessageBox.StandardButton.Yes,
+        )[1],
+    )
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
@@ -257,11 +266,13 @@ def test_run_emsol_external_prompts_for_executable_path_when_missing(tmp_path, m
         assert manager.get_global("tools.emsolution_run.executable_path") == os.path.abspath(
             os.path.normpath(str(chosen_exe))
         )
+        assert "EMSolution.exe has not been configured" in questions[0][2]
+        assert "Settings > EMSolution Run Settings" in questions[0][2]
     finally:
         window.close()
 
 
-def test_run_emsol_external_is_a_no_op_when_executable_prompt_is_canceled(tmp_path, monkeypatch):
+def test_run_emsol_external_is_a_no_op_when_setup_prompt_is_canceled(tmp_path, monkeypatch):
     _app()
     window, _manager = _make_window(tmp_path, monkeypatch)
 
@@ -275,7 +286,20 @@ def test_run_emsol_external_is_a_no_op_when_executable_prompt_is_canceled(tmp_pa
             raise AssertionError("should not start running when the user cancels the path prompt")
 
     monkeypatch.setattr(window, "sender", lambda: _FakeViewer())
-    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *args, **kwargs: ("", ""))
+
+    def fail_file_picker(*args, **kwargs):
+        raise AssertionError("file picker should not open")
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *args, **kwargs: main_window_module.QMessageBox.StandardButton.Cancel,
+    )
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileName",
+        fail_file_picker,
+    )
 
     try:
         window._run_emsol_external(str(input_path))

@@ -1297,6 +1297,25 @@ class PyEmsiMainWindow(QMainWindow):
         if saved_path and os.path.isfile(saved_path):
             return saved_path
 
+        if saved_path:
+            reason = "The saved EMSolution.exe could not be found."
+            title = "EMSolution.exe Not Found"
+        else:
+            reason = "EMSolution.exe has not been configured."
+            title = "EMSolution.exe Not Configured"
+
+        answer = QMessageBox.question(
+            self,
+            title,
+            f"{reason}\n\n"
+            "Choose the EMSolution.exe version to use now?\n\n"
+            "To switch versions later, open Settings > EMSolution Run Settings.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return None
+
         path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Select EMSolution.exe",

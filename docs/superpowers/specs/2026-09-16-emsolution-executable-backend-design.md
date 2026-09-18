@@ -53,16 +53,18 @@ lives alongside pyemsi's other per-tool settings (`tools.*` in
 
 ### Configuring the executable path
 
-The first time the executable backend is chosen without a saved path,
-pyemsi prompts with a "Browse..." dialog (same `_PathSelector` pattern
-already used by `femap_converter_dialog.py`). The chosen path is checked
+The first time the executable backend is run without a saved path, pyemsi
+first explains why the executable is needed and asks whether to choose it.
+The message also explains that a different installed version can be selected
+later from `Settings > EMSolution Run Settings`. If accepted, pyemsi opens a
+native file picker. The chosen path is checked
 (file exists, and pyemsi attempts `<path> -v` to sanity-check it launches;
 this check is informational, not a hard gate, since `-v` is only
 documented from the 2024.11 release onward) and then remembered globally.
 
-A small settings dialog (opened from the Settings menu, e.g. "EMSolution
-Run Settings...") lets the user view/change the saved path and re-run the
-check later.
+A small settings dialog, opened from `Settings > EMSolution Run Settings`,
+lets the user view/change the saved path, switch to another installed version,
+and re-run the check later.
 
 ### Per-run override
 

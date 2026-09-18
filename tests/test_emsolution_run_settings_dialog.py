@@ -23,6 +23,7 @@ def test_dialog_loads_defaults_from_settings(tmp_path):
 
     dialog = EMSolutionRunSettingsDialog(manager)
     try:
+        assert "switch versions" in dialog._path_help_label.text()
         assert dialog._backend_combo.currentData() == "executable"
         assert dialog._path_edit.text() == os.path.abspath(os.path.normpath(str(tmp_path / "EMSolution.exe")))
     finally:
