@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QStyle,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -361,6 +362,15 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _setup_file_actions(self) -> None:
         """Create reusable File-menu actions and submenus."""
+        new_icon = QIcon.fromTheme(
+            "document-new",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
+        )
+        self._new_freecad_action = QAction(new_icon, "&New FreeCAD Document...", self)
+        self._new_freecad_action.setShortcut(QKeySequence.StandardKey.New)
+        self._new_freecad_action.setToolTip("Create a new FreeCAD document in the current folder (Ctrl+N)")
+        self._new_freecad_action.triggered.connect(self._new_freecad_document)
+
         self._open_folder_action = QAction(QIcon(":/icons/FolderOpen.svg"), "Open &Folder...", self)
         self._open_folder_action.setShortcut(QKeySequence("Ctrl+O"))
         self._open_folder_action.triggered.connect(self._open_folder)
@@ -467,6 +477,10 @@ class PyEmsiMainWindow(QMainWindow):
     def _setup_menu_bar(self) -> None:
         """Add a File menu with Open Folder (Ctrl+O) and Save (Ctrl+S)."""
         self._file_menu = self.menuBar().addMenu("&File")
+        self._file_menu.addAction(self._new_freecad_action)
+
+        self._file_menu.addSeparator()
+
         self._file_menu.addAction(self._open_folder_action)
 
         self._file_menu.addMenu(self._recent_menu)
@@ -511,6 +525,8 @@ class PyEmsiMainWindow(QMainWindow):
         self._file_toolbar.setIconSize(QSize(20, 20))
         self._file_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
+        self._file_toolbar.addAction(self._new_freecad_action)
+        self._file_toolbar.addSeparator()
         self._file_toolbar.addAction(self._open_folder_action)
         self._open_recent_tool_button = self._create_toolbar_menu_button(
             self._recent_menu,
@@ -690,6 +706,23 @@ class PyEmsiMainWindow(QMainWindow):
         )
         if path:
             self._set_workspace_path(path)
+
+    def _new_freecad_document(self) -> None:
+        """Ask for a name, then create a FreeCAD document in the current folder."""
+        current_path = self.explorer.current_path
+        if not current_path or not os.path.isdir(current_path):
+            return
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "New FreeCAD Document",
+            os.path.join(current_path, "Untitled.FCStd"),
+            "FreeCAD Documents (*.FCStd)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".fcstd"):
+            path += ".FCStd"
+        self._container.create_freecad_file(path)
 
     def _open_femap_converter_dialog(self) -> None:
         """Open the FEMAP conversion dialog and launch a conversion if accepted."""
@@ -931,6 +964,7 @@ class PyEmsiMainWindow(QMainWindow):
         explorer_path = getattr(explorer_widget, "current_path", None) or (
             os.fspath(self._settings.workspace_path) if self._settings.workspace_path is not None else None
         )
+        self._new_freecad_action.setEnabled(bool(explorer_path and os.path.isdir(explorer_path)))
         self._open_field_plot_action.setEnabled(bool(explorer_path and os.path.isdir(explorer_path)))
         self._open_emsolution_output_plot_action.setEnabled(bool(explorer_path and os.path.isdir(explorer_path)))
         self._open_global_settings_action.setEnabled(global_settings_path.is_file())
