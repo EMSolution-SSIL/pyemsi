@@ -9,6 +9,9 @@ todo
 tests/visual_output/
 
 .pyemsi
+
+# Private source checkout used only to rebuild the committed web editor bundle.
+/EMSolutionDocs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

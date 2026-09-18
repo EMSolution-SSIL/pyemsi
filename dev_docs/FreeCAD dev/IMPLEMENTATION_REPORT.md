@@ -1,8 +1,13 @@
-# FreeCAD `.FCStd` Tab — Implementation Report
+# FreeCAD `.FCStd` Integration — Implementation Report
+
+Sections 1–7 record the original integration completed on 2026-09-17. Section 8
+records the current design after the 2026-09-18 follow-up work and supersedes
+the original single-tab details where they differ.
 
 Branch: `feat/freecad-fcstd-tab` (10 commits on top of `main @ e912178`).
 Plan: `docs/superpowers/plans/2026-09-17-freecad-fcstd-tab.md`.
-Spec: `FreeCAD_Integration_Technical_Handoff.md` + `AI_Implementation_Directive.md` (this folder).
+Original research and implementation constraints are summarized in this report;
+the temporary AI handoff files were removed after implementation.
 Environment: Windows 11, Pixi env `.pixi/envs/default` (Python 3.11, PySide6 / Qt 6.10.2, FreeCAD 1.1.0 conda package), AMD GPU.
 
 ## 1. Baseline reconciliation
@@ -104,3 +109,57 @@ The web-only control shows the `0xC0000409` teardown code is caused by the graph
 - **Redirected Python output** in the "FreeCAD messages" tab (see §6). Filtering by FreeCAD message type is not possible without a console observer.
 - **Portable packaging is out of scope**: FreeCAD `.pyd`, Coin3D, OCCT, `Mod`/`Ext` are not handled by the private-runtime builder. This feature is **development/Pixi only**.
 - **Optional viewer-only trimming** of the embedded FreeCAD GUI was not done (full GUI decision).
+
+## 8. Current integration state (2026-09-18)
+
+The current UI presents one pyemsi tab per `.FCStd` file while retaining one
+FreeCAD engine and one native FreeCAD main window for the entire process. Each
+outer tab is a lightweight shell. Selecting a tab moves the shared native window
+into that shell and activates its already-open FreeCAD document. This preserves
+the performance advantage of a single runtime without exposing FreeCAD's own MDI
+document tabs, which are hidden after documents are opened.
+
+Current user-visible behavior:
+
+- FreeCAD files open with `FreeCAD.openDocument(path, False)` and remain loaded
+  in the shared session.
+- Each file has a separately named pyemsi tab showing only its filename.
+- A modified FreeCAD document adds `*` to its pyemsi tab title and participates
+  in pyemsi save handling.
+- FreeCAD tabs suppress pyemsi's tab context menu so only FreeCAD's relevant
+  context menus appear.
+- Runtime and document loading are deferred through the Qt event loop. A tab
+  displays an indeterminate loading page instead of freezing without feedback.
+- Switching back to a loaded FreeCAD tab explicitly selects the shared native
+  window in that tab's stacked layout; the old `Opening …` page cannot remain
+  visible after the document has loaded.
+- FreeCAD's Tasks dock defaults to the right, its status bar is visible, and the
+  requested File and Part Design toolbars default to visible. These defaults are
+  versioned in FreeCAD preferences and applied once, so later user choices are
+  not overwritten.
+- The FreeCAD messages terminal captures Report-view text, status messages,
+  selected pyemsi debug logs, Python stdout/stderr, Qt messages, application and
+  device details, and an offscreen VTK/OpenGL capability probe.
+- Diagnostics are also written to the active workspace at
+  `.pyemsi/freecad-diagnostics.log`, with a 5 MB limit and two backups. ANSI
+  terminal colour codes are removed from the file.
+- File > New FreeCAD Document and the main-toolbar button create an empty
+  `.FCStd` file in the current workspace and open it through the same shared
+  session.
+
+Relevant follow-up commits:
+
+- `957a3c3` — responsive per-document FreeCAD tabs
+- `6bfe25d` — loaded-tab switching fix
+- `d3e2c0c` — one-time layout defaults
+- `0eb15fa` — diagnostics and rotating workspace log
+- `72914f3` — New FreeCAD Document action
+
+Focused verification after these changes:
+
+```text
+95 passed in 23.88s
+```
+
+The known Qt WebEngine/AMD shutdown issue remains independent of FreeCAD and is
+documented in `dev_docs/Monaco_VTK_rendering_issue.md`.

@@ -2,11 +2,12 @@
 
 Usage (from the repository root, inside the pixi environment):
 
-    git submodule update --init EMSolutionDocs
+    git clone <private EMSolutionDocs repository URL> EMSolutionDocs
     python tools/sync_input_control_editor.py [--skip-build]
 
-The bundle is committed so pyemsi users do not need Node.js. The EMSolutionDocs
-commit it was built from is recorded in ``editor/SOURCE_COMMIT``.
+Only maintainers rebuilding the editor need the private checkout. The bundle is
+committed so pyemsi users do not need repository access or Node.js. The source
+commit is recorded in ``editor/SOURCE_COMMIT``.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if not EDITOR_DIR.is_dir():
-        sys.exit(f"Editor sources not found at {EDITOR_DIR}. Run: git submodule update --init EMSolutionDocs")
+        sys.exit(f"Editor sources not found at {EDITOR_DIR}. Clone the private EMSolutionDocs repository there.")
 
     if not args.skip_build:
         print("Installing editor dependencies...")
