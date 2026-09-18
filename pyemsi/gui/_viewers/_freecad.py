@@ -115,6 +115,8 @@ class FreeCADViewer(QWidget):
         if self._loading or self._current_path is None:
             return None
         self._session.attach(self)
+        if self._session.main_window is not None:
+            self._stack.setCurrentWidget(self._session.main_window)
         name = self._session.open_document(self._current_path)
         self._document_name = name
         self._sync_dirty()

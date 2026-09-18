@@ -42,6 +42,8 @@ class _FakeSession:
     def attach(self, host):
         self.host = host
         self.events.append(("attach", host))
+        if self.main_window is not None:
+            host.layout().addWidget(self.main_window)
 
     def detach(self, host=None):
         self.host = None
@@ -183,6 +185,7 @@ def test_freecad_dirty_change_updates_outer_tab_title(fake_session, tmp_path):
 
 def test_switching_freecad_tabs_moves_shared_window_and_activates_file(fake_session, tmp_path):
     _app()
+    fake_session.main_window = QWidget()
     container = SplitContainer()
     first = container.open_file(str(tmp_path / "A.FCStd"))
     _finish_loading()
@@ -193,6 +196,7 @@ def test_switching_freecad_tabs_moves_shared_window_and_activates_file(fake_sess
     container.left_panel.setCurrentWidget(first)
 
     assert fake_session.host is first
+    assert first.layout().currentWidget() is fake_session.main_window
     assert fake_session.events == [
         ("attach", first),
         ("open", first.current_path),
