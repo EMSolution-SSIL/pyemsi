@@ -195,7 +195,8 @@ def test_clipboard_paste_copies_external_files_and_moves_cut_files(tmp_path) -> 
         widget._paste_selected()
         assert not internal.exists()
         assert (destination / "internal.txt").exists()
-        assert not app.clipboard().mimeData().hasFormat("application/x-pyemsi-cut")
+        mime = app.clipboard().mimeData()
+        assert mime is None or not mime.hasFormat("application/x-pyemsi-cut")
     finally:
         app.clipboard().clear()
         widget.close()

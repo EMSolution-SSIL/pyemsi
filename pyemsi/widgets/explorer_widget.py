@@ -523,7 +523,10 @@ class ExplorerWidget(QWidget):
         app = QApplication.instance()
         if app is None:
             return []
-        return [url.toLocalFile() for url in app.clipboard().mimeData().urls() if url.isLocalFile()]
+        mime = app.clipboard().mimeData()
+        if mime is None:
+            return []
+        return [url.toLocalFile() for url in mime.urls() if url.isLocalFile()]
 
     def _selected_parent_dir(self) -> str:
         if self._model is None or self._current_path is None:
@@ -590,7 +593,7 @@ class ExplorerWidget(QWidget):
             return
         mime = app.clipboard().mimeData()
         paths = self._clipboard_paths()
-        cut = mime.hasFormat(_CUT_MIME)
+        cut = mime is not None and mime.hasFormat(_CUT_MIME)
         self._transfer_paths(paths, destination, copy=not cut)
         if cut and not any(Path(path).exists() for path in paths):
             app.clipboard().clear()
