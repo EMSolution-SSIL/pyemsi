@@ -52,6 +52,7 @@ dev = [
     "pytest-cov>=3.0.0",
     "Cython>=3.0.0",
     "ruff>=0.16.9,<0.17",
+    "pre-commit>=4",
 ]
 
 [tool.pixi.workspace]
@@ -90,6 +91,7 @@ trame-server = ">=3.12.5,<4"
 trame = ">=3.13.2,<4"
 pywinpty = "*"
 ruff = ">=0.16.9,<0.17"
+pre-commit = ">=4"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
@@ -107,6 +109,8 @@ gui = "python -m pyemsi.gui"
 test = "pytest tests"
 format = "ruff format"
 lint = "ruff check"
+# One-time per clone: git pre-commit hook + skip formatting-only commits in git blame
+install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blame-ignore-revs"
 python = "python"
 
 [project.urls]
