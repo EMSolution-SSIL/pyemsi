@@ -5,28 +5,23 @@ This file only handles Cython extension building.
 """
 
 from setuptools import setup, Extension
+from Cython.Build import cythonize
 import numpy as np
 
-try:
-    from Cython.Build import cythonize
+extensions = [
+    Extension(
+        "pyemsi.core.femap_parser",
+        ["pyemsi/core/femap_parser.pyx"],
+        include_dirs=[np.get_include()],
+        define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+    )
+]
 
-    USE_CYTHON = True
-except ImportError:
-    USE_CYTHON = False
-
-# Define Cython extensions
-ext_modules = []
-if USE_CYTHON:
-    extensions = [
-        Extension(
-            "pyemsi.core.femap_parser",
-            ["pyemsi/core/femap_parser.pyx"],
-            include_dirs=[np.get_include()],
-            define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        )
-    ]
-    ext_modules = cythonize(
+setup(
+    ext_modules=cythonize(
         extensions,
+        # Generate C into build/ instead of the source tree
+        build_dir="build",
         language_level="3",
         compiler_directives={
             "boundscheck": False,
@@ -35,15 +30,4 @@ if USE_CYTHON:
             "initializedcheck": False,
         },
     )
-else:
-    # Fallback to pre-generated C file when Cython is not available
-    ext_modules = [
-        Extension(
-            "pyemsi.core.femap_parser",
-            ["pyemsi/core/femap_parser.c"],
-            include_dirs=[np.get_include()],
-            define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-        )
-    ]
-
-setup(ext_modules=ext_modules)
+)

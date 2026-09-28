@@ -4,11 +4,8 @@ include LICENSE
 include requirements.txt
 
 # Include Cython source files
-include pyemsi/*.pyx
-include pyemsi/*.pxd
-
-# Include pre-generated C file for building without Cython
-include pyemsi/femap_parser.c
+include pyemsi/core/*.pyx
+include pyemsi/core/*.pxd
 
 # Include Qt resource files
 include pyemsi/resources/resources.qrc

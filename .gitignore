@@ -19,7 +19,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 
-# C extensions (keep compiled binaries out, but track Cython sources and generated C)
+# C extensions (track Cython sources only; generated C and binaries stay out)
+pyemsi/core/femap_parser.c
 *.so
 *.pyd
 *.prof

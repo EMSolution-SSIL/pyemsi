@@ -58,7 +58,6 @@ pyemsi/
 |---|---|
 | `femap_parser.pyx` | Cython source — defines `FEMAPParser` and `FEMAPBlock` |
 | `femap_parser.pxd` | Cython declaration file (typed C-level interface) |
-| `femap_parser.c` | Auto-generated C source (used when Cython is unavailable) |
 | `femap_parser.cp313-win_amd64.pyd` | Pre-compiled Windows extension for CPython 3.13 |
 | `femap_parser_bak.py` | Pure-Python reference implementation (not imported anywhere) |
 
@@ -376,7 +375,7 @@ The Cython extension is declared in `setup.py`:
 ```
 Extension name : pyemsi.core.femap_parser
 Source (.pyx)  : pyemsi/core/femap_parser.pyx
-Fallback (.c)  : pyemsi/core/femap_parser.c
+Generated C    : build/pyemsi/core/femap_parser.c (not tracked; Cython is required to build)
 ```
 
 Build commands:
