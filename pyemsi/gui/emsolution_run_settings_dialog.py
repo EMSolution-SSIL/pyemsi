@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -27,13 +28,11 @@ from pyemsi.settings import SettingsManager
 class EMSolutionRunSettingsDialogConfig:
     backend: str
     executable_path: str | None
-    run_style: str
 
     def to_settings(self) -> dict[str, str | None]:
         return {
             "tools.emsolution_run.backend": self.backend,
             "tools.emsolution_run.executable_path": self.executable_path,
-            "tools.emsolution_run.run_style": self.run_style,
         }
 
 
@@ -64,6 +63,13 @@ class EMSolutionRunSettingsDialog(QDialog):
 
         self.setWindowTitle("EMSolution Run Settings")
 
+        self._path_help_label = QLabel(
+            "Choose which EMSolution.exe installation pyemsi should use. "
+            "To switch versions, browse to a different EMSolution.exe and click OK.",
+            self,
+        )
+        self._path_help_label.setWordWrap(True)
+
         self._backend_combo = QComboBox(self)
         self._backend_combo.addItem("Pyemsol", "pyemsol")
         self._backend_combo.addItem("EMSolution.exe", "executable")
@@ -82,16 +88,11 @@ class EMSolutionRunSettingsDialog(QDialog):
         path_row_widget = QWidget(self)
         path_row_widget.setLayout(path_row)
 
-        self._run_style_combo = QComboBox(self)
-        self._run_style_combo.addItem("Background", "background")
-        self._run_style_combo.addItem("Window", "window")
-
         self._load_defaults()
 
         form_layout = QFormLayout()
         form_layout.addRow("Backend:", self._backend_combo)
         form_layout.addRow("Executable Path:", path_row_widget)
-        form_layout.addRow("Style:", self._run_style_combo)
 
         self._button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -101,6 +102,7 @@ class EMSolutionRunSettingsDialog(QDialog):
         self._button_box.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self._path_help_label)
         layout.addLayout(form_layout)
         layout.addWidget(self._button_box)
 
@@ -110,15 +112,11 @@ class EMSolutionRunSettingsDialog(QDialog):
     def _load_defaults(self) -> None:
         backend = self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol"
         executable_path = self._settings.get_effective("tools.emsolution_run.executable_path")
-        run_style = self._settings.get_effective("tools.emsolution_run.run_style") or "background"
 
         backend_index = self._backend_combo.findData(backend)
         if backend_index >= 0:
             self._backend_combo.setCurrentIndex(backend_index)
         self._path_edit.setText(executable_path or "")
-        style_index = self._run_style_combo.findData(run_style)
-        if style_index >= 0:
-            self._run_style_combo.setCurrentIndex(style_index)
 
     def _browse(self) -> None:
         path, _selected_filter = QFileDialog.getOpenFileName(
@@ -144,7 +142,6 @@ class EMSolutionRunSettingsDialog(QDialog):
     def _accept_if_valid(self) -> None:
         backend = self._backend_combo.currentData()
         executable_path = self._path_edit.text().strip() or None
-        run_style = self._run_style_combo.currentData()
 
         if backend == "executable" and not executable_path:
             QMessageBox.warning(self, "Missing Executable Path", "Enter the EMSolution.exe path first.")
@@ -153,6 +150,5 @@ class EMSolutionRunSettingsDialog(QDialog):
         self._config = EMSolutionRunSettingsDialogConfig(
             backend=backend,
             executable_path=executable_path,
-            run_style=run_style,
         )
         self.accept()

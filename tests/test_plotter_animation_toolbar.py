@@ -8,7 +8,9 @@ from PySide6.QtWidgets import QApplication, QToolButton, QWidget
 
 # Test bootstrap: allow importing pyemsi on interpreters without the compiled
 # femap_parser extension available.
-if "pyemsi.core.femap_parser" not in sys.modules:
+try:
+    import pyemsi.core.femap_parser  # noqa: F401
+except ImportError:
     _stub = types.ModuleType("pyemsi.core.femap_parser")
 
     class _DummyFemapType:  # pragma: no cover - bootstrap only
@@ -313,9 +315,7 @@ def test_camera_toolbar_includes_camera_position_action(monkeypatch):
     window, _parent_plotter = _make_window(monkeypatch)
 
     try:
-        matching_actions = [
-            action for action in window._camera_toolbar.actions() if action.text() == "Camera Position"
-        ]
+        matching_actions = [action for action in window._camera_toolbar.actions() if action.text() == "Camera Position"]
 
         assert len(matching_actions) == 1
         assert matching_actions[0].toolTip() == "Open camera position dialog"
@@ -341,7 +341,9 @@ def test_cursor_pick_toggle_enables_cell_picking_without_history_dialog(monkeypa
     captured = {}
 
     try:
-        monkeypatch.setattr(window, "disable_point_picking_mode", lambda render=False: captured.setdefault("disabled_point", render))
+        monkeypatch.setattr(
+            window, "disable_point_picking_mode", lambda render=False: captured.setdefault("disabled_point", render)
+        )
 
         def _fake_enable_cell_picking_mode(on_picked, picker_tolerance=0.025):
             captured["callback"] = on_picked
@@ -415,7 +417,7 @@ def test_plotter_context_menu_hide_block_updates_cell_pick_state(monkeypatch):
 
         window._show_plotter_context_menu(QPoint(0, 0))
 
-        assert ('Hide "BlockA"' in [action.text() for action in _FakeMenu.last_actions])
+        assert 'Hide "BlockA"' in [action.text() for action in _FakeMenu.last_actions]
         assert parent_plotter.set_block_visibility_calls == [("BlockA", False)]
         assert [name for name, _block in window._cell_pick_mode_visible_blocks] == ["BlockB"]
         assert window._cell_pick_mode_active_cell is None
@@ -564,7 +566,7 @@ def test_default_screenshot_filename_sanitizes_invalid_characters(monkeypatch):
     window, _parent_plotter = _make_window(monkeypatch)
 
     try:
-        monkeypatch.setattr(window, "_current_tab_title", lambda: 'Plot: A/B*Test?')
+        monkeypatch.setattr(window, "_current_tab_title", lambda: "Plot: A/B*Test?")
         assert window._default_screenshot_filename() == "Plot_ A_B_Test_.png"
     finally:
         window.close()
@@ -660,9 +662,7 @@ def test_save_gif_passes_settings_to_open_gif(monkeypatch):
 
         window._save_timesteps_to_gif()
 
-        assert window.plotter.open_gif_calls == [
-            (os.path.join(os.getcwd(), "capture.gif"), 2, 8.5, 64, True, {})
-        ]
+        assert window.plotter.open_gif_calls == [(os.path.join(os.getcwd(), "capture.gif"), 2, 8.5, 64, True, {})]
         assert frames == [0, 1]
         assert parent_plotter.active_time_point == 0
         assert window.plotter.mwriter.close_calls == 1

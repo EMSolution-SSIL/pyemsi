@@ -1,0 +1,22 @@
+# Git pre-commit hooks. Install once per clone with: pixi run install-hooks
+#
+# Hooks call the Ruff pinned in pyproject.toml / pixi.lock through Pixi, so the hook,
+# `pixi run format`, and `pixi run lint` always use the same Ruff version and settings.
+# --force-exclude keeps [tool.ruff] extend-exclude working when pre-commit passes
+# explicit file names (e.g. the generated pyemsi/resources/resources.py).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: pixi run --frozen ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
+      - id: ruff-check
+        name: ruff check
+        # No --fix: autofix could delete side-effect imports (FreeCAD) without review.
+        entry: pixi run --frozen ruff check --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true

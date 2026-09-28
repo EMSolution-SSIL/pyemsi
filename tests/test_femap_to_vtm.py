@@ -10,7 +10,9 @@ from unittest.mock import patch
 import pyvista as pv
 from vtk import VTK_QUAD, vtkXMLMultiBlockDataReader
 
-from pyemsi.tools.FemapConverter import FEMAP_TO_VTK, FemapConverter
+from pyemsi.tools.FemapConverter import FemapConverter, _get_femap_to_vtk
+
+FEMAP_TO_VTK = _get_femap_to_vtk()
 
 
 class TestFemapConverter(unittest.TestCase):

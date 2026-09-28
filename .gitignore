@@ -6,14 +6,21 @@ z.py
 todo
 .claude/
 .copilot-tracking/
+tests/visual_output/
+# pytest --basetemp directories from local test runs
+.test-tmp*/
 
 .pyemsi
+
+# Private source checkout used only to rebuild the committed web editor bundle.
+/EMSolutionDocs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
 
-# C extensions (keep compiled binaries out, but track Cython sources and generated C)
+# C extensions (track Cython sources only; generated C and binaries stay out)
+pyemsi/core/femap_parser.c
 *.so
 *.pyd
 *.prof

@@ -1,5 +1,3 @@
-import json
-
 from pyemsi.io import EMSolutionOutput
 
 

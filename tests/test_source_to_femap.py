@@ -1,6 +1,6 @@
 import os
 
-from pyemsi.tools.source_to_femap import convert_source_to_femap, load_source_to_femap_config
+from pyemsi.tools.source_to_femap import load_source_to_femap_config
 
 
 def test_load_source_to_femap_config_uses_source_paths_when_overwriting(tmp_path):

@@ -6,11 +6,11 @@ from PySide6.QtWidgets import QApplication, QDialog
 
 sys.modules.setdefault("scienceplots", types.ModuleType("scienceplots"))
 
-import pyemsi.gui as gui
-from pyemsi.gui import field_plot_builder_dialog as dialog_module
-from pyemsi.gui._field_file_metadata import FieldFileMetadata
-from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
-from pyemsi.settings import SettingsManager
+import pyemsi.gui as gui  # noqa: E402
+from pyemsi.gui import field_plot_builder_dialog as dialog_module  # noqa: E402
+from pyemsi.gui._field_file_metadata import FieldFileMetadata  # noqa: E402
+from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog  # noqa: E402
+from pyemsi.settings import SettingsManager  # noqa: E402
 
 
 def _app():
@@ -454,9 +454,10 @@ def test_field_plot_builder_dialog_external_associations_constrain_controls(tmp_
     dialog._select_external_field(_external_metadata(external_path))
     dialog._scalar_enabled_checkbox.setChecked(True)
 
-    assert [
-        dialog._contour_name_combo.itemData(index) for index in range(dialog._contour_name_combo.count())
-    ] == ["Point Scalar", "Both Scalar"]
+    assert [dialog._contour_name_combo.itemData(index) for index in range(dialog._contour_name_combo.count())] == [
+        "Point Scalar",
+        "Both Scalar",
+    ]
     assert dialog._scalar_mode_combo.count() == 1
     assert dialog._scalar_mode_combo.currentData() == "node"
     assert not dialog._scalar_mode_combo.isEnabled()
@@ -471,20 +472,29 @@ def test_field_plot_builder_dialog_external_associations_constrain_controls(tmp_
     dialog._scalar_name_combo.setCurrentIndex(
         dialog_module._combo_index_for_data(dialog._scalar_name_combo, "Both Scalar")
     )
-    assert [
-        dialog._scalar_mode_combo.itemData(index) for index in range(dialog._scalar_mode_combo.count())
-    ] == ["element", "node"]
+    assert [dialog._scalar_mode_combo.itemData(index) for index in range(dialog._scalar_mode_combo.count())] == [
+        "element",
+        "node",
+    ]
     assert dialog._scalar_mode_combo.isEnabled()
 
-    assert [
-        dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())
-    ] == [None, False, "Point Scalar", "Both Scalar", "Point Vector"]
+    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
+        None,
+        False,
+        "Point Scalar",
+        "Both Scalar",
+        "Point Vector",
+    ]
     dialog._vector_name_combo.setCurrentIndex(
         dialog_module._combo_index_for_data(dialog._vector_name_combo, "Cell Vector")
     )
-    assert [
-        dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())
-    ] == [None, False, "Cell Scalar", "Both Scalar", "Cell Vector"]
+    assert [dialog._vector_scale_combo.itemData(index) for index in range(dialog._vector_scale_combo.count())] == [
+        None,
+        False,
+        "Cell Scalar",
+        "Both Scalar",
+        "Cell Vector",
+    ]
 
 
 def test_field_plot_builder_dialog_restores_remembered_external_file(tmp_path, monkeypatch):
@@ -530,9 +540,7 @@ def test_field_plot_builder_dialog_missing_remembered_external_falls_back_to_cac
     assert dialog._file_combo.currentData() == os.path.normpath(relative_path)
     assert manager.get_local("tools.field_plot.cached_pvds") == [cached_entry]
     assert manager.get_local("tools.field_plot.selected_relative_path") == os.path.normpath(relative_path)
-    assert manager.get_local("tools.field_plot.filepath") == os.path.abspath(
-        os.path.normpath(os.fspath(cached_path))
-    )
+    assert manager.get_local("tools.field_plot.filepath") == os.path.abspath(os.path.normpath(os.fspath(cached_path)))
 
 
 def test_field_plot_builder_dialog_browse_failure_preserves_selection(tmp_path, monkeypatch):

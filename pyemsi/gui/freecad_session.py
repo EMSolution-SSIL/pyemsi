@@ -13,12 +13,29 @@ import os
 import time
 from typing import Callable
 
-from PySide6.QtCore import QEventLoop
-from PySide6.QtWidgets import QApplication, QMdiArea, QMdiSubWindow, QTextEdit, QWidget
+from PySide6.QtCore import QEventLoop, Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QMdiArea,
+    QMdiSubWindow,
+    QTabBar,
+    QTextEdit,
+    QToolBar,
+    QWidget,
+)
 
 from pyemsi.gui.freecad_runtime import FreeCADModules, FreeCADRuntimeError, import_freecad
 
 LOGGER = logging.getLogger(__name__)
+
+_LAYOUT_DEFAULTS_VERSION = 1
+_PART_DESIGN_TOOLBARS = (
+    "Part Design Helper Features",
+    "Part Design Modeling Features",
+    "Part Design Dress-Up Features",
+    "Part Design Transformation Features",
+)
 
 
 class FreeCADDocumentError(RuntimeError):
@@ -41,6 +58,7 @@ class FreeCADSession:
         self._host: QWidget | None = None
         self._message_listeners: list[Callable[[str], None]] = []
         self._report_view: QWidget | None = None
+        self._last_status_message = ""
 
     # ------------------------------------------------------------------
     # state
@@ -91,7 +109,48 @@ class FreeCADSession:
         self._park()
         self._settle_start_page()
         self._hook_report_view()
+        self._hook_status_bar()
+        self._hook_layout_defaults()
         LOGGER.info("FreeCAD GUI initialization complete")
+
+    def _hook_layout_defaults(self) -> None:
+        """Apply pyemsi's FreeCAD layout defaults once, then respect user changes."""
+        assert self._main_window is not None
+        signal = getattr(self._main_window, "workbenchActivated", None)
+        if signal is not None:
+            signal.connect(lambda *_: QTimer.singleShot(0, self._apply_layout_defaults))
+        self._apply_layout_defaults()
+
+    def _apply_layout_defaults(self) -> None:
+        if self._main_window is None or self._modules is None:
+            return
+
+        preferences = self._modules.app.ParamGet("User parameter:BaseApp/Preferences/PyEmsi")
+        base_applied = preferences.GetInt("BaseLayoutDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
+        part_design_applied = preferences.GetInt("PartDesignToolbarDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
+
+        if not base_applied:
+            tasks = self._main_window.findChild(QDockWidget, "Tasks")
+            file_toolbar = self._main_window.findChild(QToolBar, "File")
+            if tasks is not None:
+                tasks.setFloating(False)
+                self._main_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, tasks)
+                tasks.show()
+            self._main_window.statusBar().show()
+            if file_toolbar is not None:
+                file_toolbar.show()
+            if tasks is not None and file_toolbar is not None:
+                preferences.SetInt("BaseLayoutDefaultsVersion", _LAYOUT_DEFAULTS_VERSION)
+
+        if not part_design_applied:
+            toolbars = [self._main_window.findChild(QToolBar, name) for name in _PART_DESIGN_TOOLBARS]
+            for toolbar in toolbars:
+                if toolbar is not None:
+                    toolbar.show()
+            # These toolbars do not exist until Part Design is loaded, so keep
+            # trying after workbench changes until all four were found.
+            if all(toolbar is not None for toolbar in toolbars):
+                preferences.SetInt("PartDesignToolbarDefaultsVersion", _LAYOUT_DEFAULTS_VERSION)
 
     # ------------------------------------------------------------------
     # messages (FreeCAD Report view)
@@ -112,6 +171,24 @@ class FreeCADSession:
         """Stop forwarding messages to *listener*; ignores unknown listeners."""
         if listener in self._message_listeners:
             self._message_listeners.remove(listener)
+
+    def _forward_message(self, text: str) -> None:
+        for listener in list(self._message_listeners):
+            try:
+                listener(text)
+            except Exception:  # a broken listener must never break FreeCAD output
+                LOGGER.exception("FreeCAD message listener failed")
+
+    def _hook_status_bar(self) -> None:
+        assert self._main_window is not None
+        self._main_window.statusBar().messageChanged.connect(self._on_status_message)
+
+    def _on_status_message(self, text: str) -> None:
+        if not text or text == self._last_status_message:
+            self._last_status_message = text
+            return
+        self._last_status_message = text
+        self._forward_message(f"\x1b[36m[Status]\x1b[0m {text}\n")
 
     def _hook_report_view(self) -> None:
         if self._main_window is None:
@@ -138,11 +215,7 @@ class FreeCADSession:
             return
         # Forward verbatim: toPlainText() already maps block separators to
         # "\n", and FreeCAD may write a line in several partial chunks.
-        for listener in list(self._message_listeners):
-            try:
-                listener(text)
-            except Exception:  # a broken listener must never break FreeCAD output
-                LOGGER.exception("FreeCAD message listener failed")
+        self._forward_message(text)
 
     def _settle_start_page(self, timeout_s: float = 2.0) -> None:
         """Let FreeCAD create its deferred Start page before any document is opened.
@@ -189,6 +262,7 @@ class FreeCADSession:
         self._main_window.show()
         self._host = host
         LOGGER.info("FreeCAD native window attached")
+        LOGGER.debug("FreeCAD session host: %r", host)
 
     def _adopt_top_level(self, host: QWidget) -> None:
         """Park under the host's top-level window so re-parenting never crosses windows.
@@ -265,7 +339,7 @@ class FreeCADSession:
         newly_opened = doc is None
         if newly_opened:
             try:
-                doc = modules.app.openDocument(norm_path)
+                doc = modules.app.openDocument(norm_path, False)
             except Exception as exc:  # FreeCAD raises OSError / Base.FreeCADError
                 LOGGER.error("FreeCAD could not open %s: %s", norm_path, exc)
                 raise FreeCADDocumentError(f"FreeCAD could not open {norm_path}:\n{exc}") from exc
@@ -280,8 +354,48 @@ class FreeCADSession:
             if hasattr(view, "fitAll"):
                 view.fitAll()
             self._raise_view(view)
+        self._hide_document_tabs()
+        LOGGER.debug(
+            "FreeCAD documents: %s",
+            [
+                (item.Name, normalize_document_path(item.FileName) if getattr(item, "FileName", "") else "")
+                for item in self._documents()
+            ],
+        )
         LOGGER.info("FreeCAD document activated: %s", norm_path)
         return doc.Name
+
+    def create_document(self, path: str) -> str:
+        """Create and save an empty FreeCAD document at *path*."""
+        modules = self._require_initialized()
+        norm_path = os.path.abspath(os.path.normpath(path))
+        LOGGER.info("FreeCAD document creation requested: %s", norm_path)
+        doc = None
+        try:
+            doc = modules.app.newDocument()
+            doc.Label = os.path.splitext(os.path.basename(norm_path))[0]
+            doc.saveAs(norm_path)
+        except Exception as exc:
+            if doc is not None:
+                try:
+                    modules.app.closeDocument(doc.Name)
+                except Exception:
+                    pass
+            raise FreeCADDocumentError(f"FreeCAD could not create {norm_path}:\n{exc}") from exc
+
+        modules.app.setActiveDocument(doc.Name)
+        modules.gui.setActiveDocument(doc.Name)
+        self._hide_document_tabs()
+        LOGGER.info("FreeCAD document created: %s", norm_path)
+        return doc.Name
+
+    def _hide_document_tabs(self) -> None:
+        """Hide FreeCAD's MDI tab bar; pyemsi provides the document tabs."""
+        assert self._main_window is not None
+        area = self._main_window.findChild(QMdiArea)
+        tab_bar = area.findChild(QTabBar) if area is not None else None
+        if tab_bar is not None:
+            tab_bar.hide()
 
     @staticmethod
     def _raise_view(view) -> None:
@@ -324,6 +438,14 @@ class FreeCADSession:
             if getattr(gui_doc, "Modified", False):
                 result.append((doc.Name, getattr(doc, "FileName", "") or ""))
         return result
+
+    def is_document_modified(self, name: str) -> bool:
+        """Return FreeCAD's current modified state for document *name*."""
+        modules = self._require_initialized()
+        try:
+            return bool(modules.gui.getDocument(name).Modified)
+        except Exception:
+            return False
 
     def save_document(self, name: str) -> None:
         """Save document *name* to its existing FileName."""

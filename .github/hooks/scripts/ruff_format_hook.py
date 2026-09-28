@@ -6,11 +6,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
 EDIT_TOOL_NAMES = {
     "apply_patch",
     "create_file",
@@ -89,8 +91,15 @@ def _collect_python_files(payload: dict) -> list[Path]:
 
 
 def _run_ruff(files: list[Path]) -> tuple[bool, str]:
-    cmd = [sys.executable, "-m", "ruff", "format", *[str(p) for p in files]]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # Use the Ruff pinned in pixi.lock (same as `pixi run format` and the pre-commit hook);
+    # --force-exclude keeps [tool.ruff] extend-exclude working for explicitly passed files.
+    in_pixi_env = Path(sys.executable).resolve().is_relative_to(REPO_ROOT / ".pixi")
+    if not in_pixi_env and shutil.which("pixi"):
+        ruff = ["pixi", "run", "--frozen", "--manifest-path", str(REPO_ROOT / "pyproject.toml"), "ruff"]
+    else:
+        ruff = [sys.executable, "-m", "ruff"]
+    cmd = [*ruff, "format", "--force-exclude", *[str(p) for p in files]]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=REPO_ROOT)
 
     if result.returncode == 0:
         return True, ""

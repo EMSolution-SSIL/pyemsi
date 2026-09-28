@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from pyemsi.widgets.monaco_lsp import MonacoLspWidget
 
+
 class _LinkInsertDialog(QDialog):
     """Dialog that collects hyperlink label and URL for Markdown insertion."""
 
@@ -385,9 +386,5 @@ class MarkdownPreviewViewer(QWidget):
 
     @staticmethod
     def _apply_preview_styles(html: str) -> str:
-        style = (
-            "<style>"
-            "img { max-width: 100%; height: auto; }"
-            "</style>"
-        )
+        style = "<style>img { max-width: 100%; height: auto; }</style>"
         return f"{style}{html}"

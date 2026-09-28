@@ -99,11 +99,21 @@ def test_apply_deformation_does_not_accumulate_across_fresh_reads() -> None:
 
 
 @pytest.mark.parametrize("pipeline_method", ["show", "render", "export"])
-def test_visualization_pipelines_apply_deformation_before_plotting(pipeline_method: str) -> None:
+def test_feature_edges_freeze_on_original_shape_other_layers_use_deformed_shape(
+    pipeline_method: str,
+) -> None:
+    """Feature edges are extracted before deformation is applied, so they keep
+    showing the original (undeformed) outline -- a visual "old boundary" marker.
+    The scalar field, contours, and vector glyphs are drawn after deformation,
+    so they reflect the new (deformed) shape. This is intentional: it lets a
+    user compare "where the mesh used to be" against "where it is now" in a
+    single frame.
+    """
     source = _triangle()
     vectors = np.full((source.n_points, 3), [0.25, 0.0, 0.0])
     source.point_data["displacement"] = vectors
-    expected = source.points + 2.0 * vectors
+    original = source.points.copy()
+    deformed = source.points + 2.0 * vectors
 
     class _CopyingReader:
         def read(self):
@@ -132,20 +142,41 @@ def test_visualization_pipelines_apply_deformation_before_plotting(pipeline_meth
     plotter.plotter = _FakePyVistaPlotter()
     plotter.set_deformation("displacement", scale=2.0)
 
-    plotted_points = []
-    plotter._plot_scalar_field = lambda: plotted_points.append(plotter.mesh.points.copy())
-    plotter._plot_contours = lambda: plotted_points.append(plotter.mesh.points.copy())
-    plotter._plot_vector_field = lambda: plotted_points.append(plotter.mesh.points.copy())
-    plotter._plot_feature_edges = lambda: plotted_points.append(plotter.mesh.points.copy())
+    call_order = []
+    feature_edges_points = []
+    other_layer_points = []
+
+    def _record_feature_edges():
+        call_order.append("feature_edges")
+        feature_edges_points.append(plotter.mesh.points.copy())
+
+    def _record_other_layer(layer_name):
+        def _record():
+            call_order.append(layer_name)
+            other_layer_points.append(plotter.mesh.points.copy())
+
+        return _record
+
+    plotter._plot_feature_edges = _record_feature_edges
+    plotter._plot_scalar_field = _record_other_layer("scalar_field")
+    plotter._plot_contours = _record_other_layer("contours")
+    plotter._plot_vector_field = _record_other_layer("vector_field")
 
     if pipeline_method == "export":
         plotter.export("unused.png")
     else:
         getattr(plotter, pipeline_method)()
 
-    assert len(plotted_points) == 4
-    for points in plotted_points:
-        np.testing.assert_allclose(points, expected)
+    assert call_order.index("feature_edges") < call_order.index("scalar_field")
+    assert call_order.index("feature_edges") < call_order.index("contours")
+    assert call_order.index("feature_edges") < call_order.index("vector_field")
+
+    assert len(feature_edges_points) == 1
+    np.testing.assert_allclose(feature_edges_points[0], original)
+
+    assert len(other_layer_points) == 3
+    for points in other_layer_points:
+        np.testing.assert_allclose(points, deformed)
 
 
 def test_apply_deformation_only_changes_matching_multiblock_blocks() -> None:

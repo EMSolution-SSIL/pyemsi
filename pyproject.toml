@@ -51,6 +51,8 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
     "Cython>=3.0.0",
+    "ruff>=0.16.9,<0.17",
+    "pre-commit>=4",
 ]
 
 [tool.pixi.workspace]
@@ -88,6 +90,8 @@ trame-vuetify = ">=3.2.5,<4"
 trame-server = ">=3.12.5,<4"
 trame = ">=3.13.2,<4"
 pywinpty = "*"
+ruff = ">=0.16.9,<0.17"
+pre-commit = ">=4"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
@@ -103,6 +107,10 @@ QTWEBENGINE_CHROMIUM_FLAGS = "--no-sandbox"
 [tool.pixi.tasks]
 gui = "python -m pyemsi.gui"
 test = "pytest tests"
+format = "ruff format"
+lint = "ruff check"
+# One-time per clone: git pre-commit hook + skip formatting-only commits in git blame
+install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blame-ignore-revs"
 python = "python"
 
 [project.urls]
@@ -132,6 +140,10 @@ version = {attr = "pyemsi.__version__"}
 "pyemsi.resources" = [
     "*.qrc",
     "icons/*.svg",
+    "icons/BRAND_ASSETS.md",
+    "icons/material/*.svg",
+    "icons/material/LICENSE",
+    "icons/material/README.md",
 ]
 "pyemsi.widgets.monaco_lsp" = [
     "index.html",
@@ -152,6 +164,18 @@ version = {attr = "pyemsi.__version__"}
 
 [tool.ruff]
 line-length = 120
+target-version = "py311"
+# Skip Python code blocks inside Markdown docs, and generated pyside6-rcc output
+extend-exclude = ["*.md", "pyemsi/resources/resources.py"]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+
+[tool.ruff.lint]
+# Minimal core set; import sorting ("I") is deliberately off because FreeCAD
+# modules are import-order sensitive.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pyemsi.windows-private-runtime]
 app_module = "pyemsi.gui"

@@ -426,9 +426,7 @@ class ClipDialog(QDialog):
             for row in range(self._actor_list.count()):
                 item = self._actor_list.item(row)
                 new_state = (
-                    Qt.CheckState.Unchecked
-                    if item.checkState() == Qt.CheckState.Checked
-                    else Qt.CheckState.Checked
+                    Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
                 )
                 item.setCheckState(new_state)
         finally:

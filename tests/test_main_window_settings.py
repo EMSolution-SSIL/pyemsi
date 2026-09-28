@@ -2,6 +2,7 @@ import json
 import os
 
 import pyemsi
+from PySide6.QtCore import QEvent
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QToolButton, QWidget
 
@@ -402,9 +403,11 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         converters_actions = window._converters_menu.actions()
         help_actions = window._help_menu.actions()
 
-        assert file_actions[0].text() == "Open &Folder..."
-        assert file_actions[1].text() == "Open &Recent"
-        assert file_actions[2].isSeparator()
+        assert file_actions[0] is window._new_freecad_action
+        assert file_actions[1].isSeparator()
+        assert file_actions[2].text() == "Open &Folder..."
+        assert file_actions[3].text() == "Open &Recent"
+        assert file_actions[4].isSeparator()
         assert "&Converters" not in action_texts
         assert "Convert &FEMAP" not in action_texts
         assert "&Field Plot" in action_texts
@@ -473,9 +476,34 @@ def test_main_window_help_actions_open_expected_urls(tmp_path, monkeypatch):
 
 
 def test_main_window_schedules_startup_update_check_once(tmp_path, monkeypatch):
-    _app()
+    app = _app()
     global_settings_path = tmp_path / "config" / "settings.json"
-    timer_calls = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert window._update_checker.calls == []
+
+        app.processEvents()
+        app.processEvents()
+
+        assert window._update_checker.calls == [False]
+    finally:
+        window.close()
+
+
+def test_main_window_startup_update_check_is_dropped_with_the_window(tmp_path, monkeypatch):
+    app = _app()
+    started = []
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
     monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
@@ -485,23 +513,19 @@ def test_main_window_schedules_startup_update_check_once(tmp_path, monkeypatch):
         _stub_ipython_terminal,
     )
     monkeypatch.setattr(
-        main_window_module.QTimer,
-        "singleShot",
-        lambda interval, callback: timer_calls.append((interval, callback)),
+        main_window_module.PyEmsiMainWindow, "_start_automatic_update_check", lambda self: started.append(self)
     )
 
     window = main_window_module.PyEmsiMainWindow(
-        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+        settings_manager=SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
     )
-    try:
-        assert len(timer_calls) == 1
-        assert timer_calls[0][0] == 0
+    # A window deleted before the event loop runs must not leave its queued check
+    # behind: firing it later calls into deleted C++ objects and can crash.
+    window.deleteLater()
+    app.sendPostedEvents(window, QEvent.Type.DeferredDelete)
+    app.processEvents()
 
-        timer_calls[0][1]()
-
-        assert window._update_checker.calls == [False]
-    finally:
-        window.close()
+    assert started == []
 
 
 def test_main_window_manual_update_action_uses_checker(tmp_path, monkeypatch):
@@ -515,7 +539,7 @@ def test_main_window_manual_update_action_uses_checker(tmp_path, monkeypatch):
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -540,7 +564,7 @@ def test_main_window_manual_update_check_shows_latest_message(tmp_path, monkeypa
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
     monkeypatch.setattr(
         main_window_module.QMessageBox,
         "information",
@@ -573,7 +597,7 @@ def test_main_window_manual_update_check_shows_error_message(tmp_path, monkeypat
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
     monkeypatch.setattr(
         main_window_module.QMessageBox,
         "warning",
@@ -589,7 +613,9 @@ def test_main_window_manual_update_check_shows_error_message(tmp_path, monkeypat
             True,
         )
 
-        assert warning_calls == [(window, "Update Check Failed", "Could not check for updates. Please try again later.")]
+        assert warning_calls == [
+            (window, "Update Check Failed", "Could not check for updates. Please try again later.")
+        ]
     finally:
         window.close()
 
@@ -617,7 +643,7 @@ def test_main_window_update_available_path_opens_release_url(tmp_path, monkeypat
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
     monkeypatch.setattr(
         main_window_module.QDesktopServices,
         "openUrl",
@@ -743,6 +769,8 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
 
             if action is window._open_folder_action:
                 action_order.append("open_folder")
+            elif action is window._new_freecad_action:
+                action_order.append("new_freecad")
             elif action is window._open_femap_converter_action:
                 action_order.append("convert_femap")
             elif action is window._open_field_plot_action:
@@ -751,6 +779,8 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
                 action_order.append("output_plot")
 
         assert action_order == [
+            "new_freecad",
+            "separator",
             "open_folder",
             "open_recent",
             "separator",
@@ -766,6 +796,39 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
         assert window._settings_tool_button.objectName() == "settings_tool_button"
         assert window._settings_tool_button.menu() is window._settings_menu
         assert window._settings_tool_button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
+    finally:
+        window.close()
+
+
+def test_new_freecad_action_uses_current_folder_and_adds_extension(tmp_path, monkeypatch):
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    created = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getSaveFileName",
+        lambda *args: (str(workspace / "Bracket"), "FreeCAD Documents (*.FCStd)"),
+    )
+    monkeypatch.setattr(
+        main_window_module.SplitContainer,
+        "create_freecad_file",
+        lambda self, path: created.append(path),
+    )
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
+    )
+    try:
+        assert not window._new_freecad_action.isEnabled()
+        window._set_workspace_path(str(workspace))
+        assert window._new_freecad_action.isEnabled()
+
+        window._new_freecad_action.trigger()
+
+        assert created == [str(workspace / "Bracket.FCStd")]
     finally:
         window.close()
 

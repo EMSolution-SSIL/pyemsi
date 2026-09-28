@@ -87,7 +87,6 @@ def test_opening_emsolution_run_settings_dialog_persists_accepted_config(tmp_pat
     config = EMSolutionRunSettingsDialogConfig(
         backend="executable",
         executable_path=str(tmp_path / "EMSolution.exe"),
-        run_style="window",
     )
 
     class _AcceptedDialog:
@@ -111,8 +110,6 @@ def test_opening_emsolution_run_settings_dialog_persists_accepted_config(tmp_pat
         assert manager.get_global("tools.emsolution_run.executable_path") == os.path.abspath(
             os.path.normpath(str(tmp_path / "EMSolution.exe"))
         )
-        assert manager.get_global("tools.emsolution_run.run_style") == "window"
-
         reloaded = SettingsManager(global_settings_path=manager.global_settings_path)
         assert reloaded.get_global("tools.emsolution_run.backend") == "executable"
     finally:
@@ -145,11 +142,10 @@ def test_canceling_emsolution_run_settings_dialog_does_not_persist(tmp_path, mon
         window.close()
 
 
-def test_on_file_activated_sets_backend_defaults_from_settings(tmp_path, monkeypatch):
+def test_on_file_activated_sets_backend_default_from_settings(tmp_path, monkeypatch):
     _app()
     window, manager = _make_window(tmp_path, monkeypatch)
     manager.set_global("tools.emsolution_run.backend", "executable")
-    manager.set_global("tools.emsolution_run.run_style", "window")
 
     input_path = tmp_path / "transient.json"
     input_path.write_text(
@@ -165,7 +161,6 @@ def test_on_file_activated_sets_backend_defaults_from_settings(tmp_path, monkeyp
         viewer = window._container.open_file(str(input_path))
         assert isinstance(viewer, EMSolutionInputViewer)
         assert viewer.backend == "executable"
-        assert viewer.run_style == "window"
     finally:
         window.close()
 
@@ -179,7 +174,6 @@ def test_run_emsol_external_uses_pyemsol_backend_by_default(tmp_path, monkeypatc
 
     class _FakeViewer:
         backend = "pyemsol"
-        run_style = "background"
 
         def __init__(self) -> None:
             self.running_states = []
@@ -216,7 +210,6 @@ def test_run_emsol_external_uses_executable_backend_when_path_saved(tmp_path, mo
 
     class _FakeViewer:
         backend = "executable"
-        run_style = "background"
 
         def set_external_running(self, running: bool) -> None:
             pass
@@ -246,12 +239,20 @@ def test_run_emsol_external_prompts_for_executable_path_when_missing(tmp_path, m
 
     class _FakeViewer:
         backend = "executable"
-        run_style = "background"
 
         def set_external_running(self, running: bool) -> None:
             pass
 
     monkeypatch.setattr(window, "sender", lambda: _FakeViewer())
+    questions = []
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *args, **kwargs: (
+            questions.append(args),
+            main_window_module.QMessageBox.StandardButton.Yes,
+        )[1],
+    )
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
@@ -265,11 +266,13 @@ def test_run_emsol_external_prompts_for_executable_path_when_missing(tmp_path, m
         assert manager.get_global("tools.emsolution_run.executable_path") == os.path.abspath(
             os.path.normpath(str(chosen_exe))
         )
+        assert "EMSolution.exe has not been configured" in questions[0][2]
+        assert "Settings > EMSolution Run Settings" in questions[0][2]
     finally:
         window.close()
 
 
-def test_run_emsol_external_is_a_no_op_when_executable_prompt_is_canceled(tmp_path, monkeypatch):
+def test_run_emsol_external_is_a_no_op_when_setup_prompt_is_canceled(tmp_path, monkeypatch):
     _app()
     window, _manager = _make_window(tmp_path, monkeypatch)
 
@@ -278,13 +281,25 @@ def test_run_emsol_external_is_a_no_op_when_executable_prompt_is_canceled(tmp_pa
 
     class _FakeViewer:
         backend = "executable"
-        run_style = "background"
 
         def set_external_running(self, running: bool) -> None:
             raise AssertionError("should not start running when the user cancels the path prompt")
 
     monkeypatch.setattr(window, "sender", lambda: _FakeViewer())
-    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *args, **kwargs: ("", ""))
+
+    def fail_file_picker(*args, **kwargs):
+        raise AssertionError("file picker should not open")
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *args, **kwargs: main_window_module.QMessageBox.StandardButton.Cancel,
+    )
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileName",
+        fail_file_picker,
+    )
 
     try:
         window._run_emsol_external(str(input_path))
