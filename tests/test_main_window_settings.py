@@ -2,6 +2,7 @@ import json
 import os
 
 import pyemsi
+from PySide6.QtCore import QEvent
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QDialog, QDockWidget, QToolButton, QWidget
 
@@ -475,9 +476,34 @@ def test_main_window_help_actions_open_expected_urls(tmp_path, monkeypatch):
 
 
 def test_main_window_schedules_startup_update_check_once(tmp_path, monkeypatch):
-    _app()
+    app = _app()
     global_settings_path = tmp_path / "config" / "settings.json"
-    timer_calls = []
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
+    monkeypatch.setattr(
+        main_window_module.PyEmsiMainWindow,
+        "_setup_ipython_terminal",
+        _stub_ipython_terminal,
+    )
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        assert window._update_checker.calls == []
+
+        app.processEvents()
+        app.processEvents()
+
+        assert window._update_checker.calls == [False]
+    finally:
+        window.close()
+
+
+def test_main_window_startup_update_check_is_dropped_with_the_window(tmp_path, monkeypatch):
+    app = _app()
+    started = []
 
     monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
     monkeypatch.setattr(main_window_module, "UpdateChecker", _DummyUpdateChecker)
@@ -487,23 +513,19 @@ def test_main_window_schedules_startup_update_check_once(tmp_path, monkeypatch):
         _stub_ipython_terminal,
     )
     monkeypatch.setattr(
-        main_window_module.QTimer,
-        "singleShot",
-        lambda interval, callback: timer_calls.append((interval, callback)),
+        main_window_module.PyEmsiMainWindow, "_start_automatic_update_check", lambda self: started.append(self)
     )
 
     window = main_window_module.PyEmsiMainWindow(
-        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+        settings_manager=SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
     )
-    try:
-        assert len(timer_calls) == 1
-        assert timer_calls[0][0] == 0
+    # A window deleted before the event loop runs must not leave its queued check
+    # behind: firing it later calls into deleted C++ objects and can crash.
+    window.deleteLater()
+    app.sendPostedEvents(window, QEvent.Type.DeferredDelete)
+    app.processEvents()
 
-        timer_calls[0][1]()
-
-        assert window._update_checker.calls == [False]
-    finally:
-        window.close()
+    assert started == []
 
 
 def test_main_window_manual_update_action_uses_checker(tmp_path, monkeypatch):
@@ -517,7 +539,7 @@ def test_main_window_manual_update_action_uses_checker(tmp_path, monkeypatch):
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
 
     window = main_window_module.PyEmsiMainWindow(
         settings_manager=SettingsManager(global_settings_path=global_settings_path)
@@ -542,7 +564,7 @@ def test_main_window_manual_update_check_shows_latest_message(tmp_path, monkeypa
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
     monkeypatch.setattr(
         main_window_module.QMessageBox,
         "information",
@@ -575,7 +597,7 @@ def test_main_window_manual_update_check_shows_error_message(tmp_path, monkeypat
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
     monkeypatch.setattr(
         main_window_module.QMessageBox,
         "warning",
@@ -621,7 +643,7 @@ def test_main_window_update_available_path_opens_release_url(tmp_path, monkeypat
         "_setup_ipython_terminal",
         _stub_ipython_terminal,
     )
-    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda interval, callback: None)
+    monkeypatch.setattr(main_window_module.QTimer, "singleShot", lambda *args: None)
     monkeypatch.setattr(
         main_window_module.QDesktopServices,
         "openUrl",

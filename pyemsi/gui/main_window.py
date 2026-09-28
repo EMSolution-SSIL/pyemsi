@@ -1027,7 +1027,8 @@ class PyEmsiMainWindow(QMainWindow):
 
     def _schedule_startup_update_check(self) -> None:
         """Queue the automatic update check after the event loop starts."""
-        QTimer.singleShot(0, self._start_automatic_update_check)
+        # With self as context, Qt drops the timer if the window is deleted before it fires.
+        QTimer.singleShot(0, self, self._start_automatic_update_check)
 
     def _start_automatic_update_check(self) -> None:
         """Run the background update check if global policy says it is due."""
