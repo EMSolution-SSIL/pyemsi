@@ -1,3 +1,4 @@
+import gc
 import json
 from pathlib import Path
 
@@ -754,6 +755,23 @@ def test_emsolution_plot_dialog_only_shows_style_button_for_checked_leaf():
     leaf.setCheckState(0, Qt.CheckState.Unchecked)
 
     assert dialog._tree.itemWidget(leaf, dialog.SETTINGS_COLUMN) is None
+
+
+def test_emsolution_plot_dialog_style_button_does_not_keep_dialog_alive():
+    _app()
+    dialog = EMSolutionPlotDialog(EMSolutionOutput.from_dict(_sample_payload()))
+    leaf = _first_leaf(dialog._tree.topLevelItem(0))
+    leaf.setCheckState(0, Qt.CheckState.Checked)
+    destroyed: list[bool] = []
+    dialog.destroyed.connect(lambda *_args: destroyed.append(True))
+
+    # A slot closure over the dialog would form a cycle through C++ that gc
+    # cannot break, deferring the dialog's deletion to whenever the button
+    # dies -- which aborts if that happens inside a DeferredDelete flush.
+    del dialog, leaf
+    gc.collect()
+
+    assert destroyed == [True]
 
 
 def test_emsolution_plot_dialog_style_button_opens_for_checked_leaf(monkeypatch):

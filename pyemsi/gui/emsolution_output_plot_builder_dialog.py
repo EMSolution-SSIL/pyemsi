@@ -1069,9 +1069,18 @@ class EMSolutionOutputPlotBuilderDialog(QDialog):
             button.setDefault(False)
             button.setMinimumHeight(0)
             button.setStyleSheet("padding-top: 0px; padding-bottom: 0px; border: none;")
-            button.clicked.connect(lambda checked=False, tree_item=item: self._open_style_dialog_for_item(tree_item))
+            # A bound-method slot, not a lambda closing over self: the closure would
+            # keep this dialog alive via the button until the button is deleted.
+            button.clicked.connect(self._on_style_button_clicked)
             self._tree.setItemWidget(item, self.SETTINGS_COLUMN, button)
         button.setMaximumHeight(self._style_button_max_height(item))
+
+    def _on_style_button_clicked(self) -> None:
+        button = self.sender()
+        for item in self._iter_tree_items():
+            if self._tree.itemWidget(item, self.SETTINGS_COLUMN) is button:
+                self._open_style_dialog_for_item(item)
+                return
 
     def _refresh_tree_action_buttons(self) -> None:
         for item in self._iter_tree_items():
