@@ -41,8 +41,7 @@ from pyemsi.settings import SettingsManager
 GLYPH_TYPE_OPTIONS: tuple[str, ...] = ("arrow", "cone", "sphere")
 COLOR_MODE_OPTIONS: tuple[str, ...] = ("scale", "scalar", "vector")
 VTK_FIELD_FILE_FILTER = (
-    "VTK Field Files "
-    "(*.vtk *.vtu *.vtp *.vti *.vtr *.vts *.vtm *.pvd *.pvtu *.pvtp *.pvti *.pvtr *.pvts)"
+    "VTK Field Files (*.vtk *.vtu *.vtp *.vti *.vtr *.vts *.vtm *.pvd *.pvtu *.pvtp *.pvti *.pvtr *.pvts)"
 )
 SUPPORTED_VTK_FIELD_SUFFIXES: frozenset[str] = frozenset(
     {
@@ -391,9 +390,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._vector_cmap_combo = QComboBox(self)
         for choice in CMAP_CHOICES:
             self._vector_cmap_combo.addItem(choice, choice)
-        self._vector_cmap_combo.setCurrentIndex(
-            _combo_index_for_data(self._vector_cmap_combo, defaults["vector_cmap"])
-        )
+        self._vector_cmap_combo.setCurrentIndex(_combo_index_for_data(self._vector_cmap_combo, defaults["vector_cmap"]))
         self._vector_section = self._build_two_column_form(
             [
                 (("Name", self._vector_name_combo), ("Scale", self._vector_scale_combo)),
@@ -494,9 +491,7 @@ class FieldPlotBuilderDialog(QDialog):
         self._suggest_deformation_scale_button = QPushButton(self)
         self._suggest_deformation_scale_button.setText("Suggest")
         self._suggest_deformation_scale_button.setIcon(QIcon(":/icons/Telescope.svg"))
-        self._suggest_deformation_scale_button.setToolTip(
-            "Suggest a deformation scale from the discovered field data"
-        )
+        self._suggest_deformation_scale_button.setToolTip("Suggest a deformation scale from the discovered field data")
         deformation_scale_widget = QWidget(self)
         deformation_scale_layout = QHBoxLayout(deformation_scale_widget)
         deformation_scale_layout.setContentsMargins(0, 0, 0, 0)
@@ -724,7 +719,11 @@ class FieldPlotBuilderDialog(QDialog):
             return None
         if not isinstance(mesh_length, (int, float)):
             return None
-        if not isinstance(scalar_names, list) or not isinstance(vector_names, list) or not isinstance(array_ranges, dict):
+        if (
+            not isinstance(scalar_names, list)
+            or not isinstance(vector_names, list)
+            or not isinstance(array_ranges, dict)
+        ):
             return None
 
         resolved_path = self._resolve_cached_relative_path(relative_path)
@@ -889,9 +888,7 @@ class FieldPlotBuilderDialog(QDialog):
         current_scale = self._vector_scale_combo.currentData()
         scalar_names = metadata.scalar_names if metadata is not None else []
         contour_names = (
-            metadata.contour_names
-            if metadata is not None and metadata.contour_names is not None
-            else scalar_names
+            metadata.contour_names if metadata is not None and metadata.contour_names is not None else scalar_names
         )
         vector_names = metadata.vector_names if metadata is not None else []
         self._populate_named_combo(self._scalar_name_combo, scalar_names, current_scalar)
@@ -1126,8 +1123,8 @@ class FieldPlotBuilderDialog(QDialog):
                     loop_text,
                     f"angle {self._feature_edges_feature_angle_spin.value():.1f}",
                 )
-                )
             )
+        )
 
     def _update_deformation_panel_summary(self) -> None:
         if not self._deformation_enabled_checkbox.isChecked():

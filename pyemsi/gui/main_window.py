@@ -255,6 +255,7 @@ def _windows_hardware_diagnostics() -> str:
         lines.append(f"VTK offscreen OpenGL probe failed: {exc}")
     return "\n".join(lines) + "\n"
 
+
 class PyEmsiMainWindow(QMainWindow):
     """
     Main application window for the pyemsi GUI.
@@ -1118,9 +1119,7 @@ class PyEmsiMainWindow(QMainWindow):
             if not getattr(viewer, "_run_connected", False):
                 viewer.run_external_requested.connect(self._run_emsol_external)
                 viewer.stop_external_requested.connect(self._stop_emsol_external)
-                viewer.set_backend_default(
-                    self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol"
-                )
+                viewer.set_backend_default(self._settings.get_effective("tools.emsolution_run.backend") or "pyemsol")
                 viewer._run_connected = True
 
     @staticmethod
@@ -1411,9 +1410,7 @@ class PyEmsiMainWindow(QMainWindow):
                 )
                 file_handler.terminator = ""
                 self._freecad_diagnostic_file_handler = file_handler
-                self._write_freecad_diagnostic(
-                    f"Persistent log: {log_path} (5 MB per file, 2 backups)\n"
-                )
+                self._write_freecad_diagnostic(f"Persistent log: {log_path} (5 MB per file, 2 backups)\n")
             except OSError as exc:
                 self._write_freecad_diagnostic(f"Persistent log could not be opened: {exc}\n")
 
@@ -1550,7 +1547,9 @@ class PyEmsiMainWindow(QMainWindow):
                 self,
                 "Unsaved FreeCAD Changes",
                 f"Save changes to {label}?",
-                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
             )
             if answer == QMessageBox.StandardButton.Cancel:
                 return False

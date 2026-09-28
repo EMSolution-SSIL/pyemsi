@@ -311,8 +311,14 @@ class ExplorerWidget(QWidget):
 
     def _update_selection_actions(self, *_args) -> None:
         has_selection = self._workspace_open and bool(self._selected_paths())
-        for action in (self._open_action, self._rename_action, self._trash_action, self._cut_action, self._copy_action,
-                       self._duplicate_action):
+        for action in (
+            self._open_action,
+            self._rename_action,
+            self._trash_action,
+            self._cut_action,
+            self._copy_action,
+            self._duplicate_action,
+        ):
             action.setEnabled(has_selection)
 
     def _update_paste_action(self, *_args) -> None:

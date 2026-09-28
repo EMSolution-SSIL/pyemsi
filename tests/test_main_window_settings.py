@@ -591,7 +591,9 @@ def test_main_window_manual_update_check_shows_error_message(tmp_path, monkeypat
             True,
         )
 
-        assert warning_calls == [(window, "Update Check Failed", "Could not check for updates. Please try again later.")]
+        assert warning_calls == [
+            (window, "Update Check Failed", "Could not check for updates. Please try again later.")
+        ]
     finally:
         window.close()
 

@@ -74,29 +74,38 @@ def test_build_update_info_rejects_invalid_remote_tag():
 def test_should_check_for_updates_respects_automatic_interval():
     now = datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc)
 
-    assert should_check_for_updates(
-        manual=False,
-        check_automatically=True,
-        last_check_utc="2026-05-17T11:59:00Z",
-        now=now,
-    ) is True
-    assert should_check_for_updates(
-        manual=False,
-        check_automatically=True,
-        last_check_utc="2026-05-18T11:00:00Z",
-        now=now,
-    ) is False
+    assert (
+        should_check_for_updates(
+            manual=False,
+            check_automatically=True,
+            last_check_utc="2026-05-17T11:59:00Z",
+            now=now,
+        )
+        is True
+    )
+    assert (
+        should_check_for_updates(
+            manual=False,
+            check_automatically=True,
+            last_check_utc="2026-05-18T11:00:00Z",
+            now=now,
+        )
+        is False
+    )
 
 
 def test_should_check_for_updates_manual_ignores_throttle():
     now = datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc)
 
-    assert should_check_for_updates(
-        manual=True,
-        check_automatically=False,
-        last_check_utc="2026-05-18T11:59:00Z",
-        now=now,
-    ) is True
+    assert (
+        should_check_for_updates(
+            manual=True,
+            check_automatically=False,
+            last_check_utc="2026-05-18T11:59:00Z",
+            now=now,
+        )
+        is True
+    )
 
 
 def test_update_checker_uses_effective_defaults_when_global_update_keys_are_missing(tmp_path):

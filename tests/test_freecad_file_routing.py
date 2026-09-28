@@ -233,7 +233,9 @@ def test_reopen_after_close_creates_new_shell_with_same_session(fake_session, tm
     assert isinstance(second, FreeCADViewer)
     assert second is not first
     assert second.session is fake_session
-    assert [e[0] for e in fake_session.events].count("init") == 2  # ensure_initialized is idempotent in the real session
+    assert [e[0] for e in fake_session.events].count(
+        "init"
+    ) == 2  # ensure_initialized is idempotent in the real session
     assert fake_session.host is second
 
 

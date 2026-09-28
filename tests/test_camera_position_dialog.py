@@ -178,4 +178,3 @@ def test_refresh_pulls_live_plotter_camera_position():
         assert dialog._camera_position_edit.text() == "[(10, 11, 12), (1, 1, 1), (0, 0, 1)]"
     finally:
         dialog.close()
-

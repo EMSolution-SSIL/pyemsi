@@ -183,9 +183,7 @@ def inspect_field_file(filepath: str | os.PathLike[str]) -> FieldFileMetadata:
             }
             for name in context_scalar_names:
                 context_associations = {
-                    association
-                    for association, arrays in context_arrays.items()
-                    if arrays.get(name) == 1
+                    association for association, arrays in context_arrays.items() if arrays.get(name) == 1
                 }
                 existing_associations = scalar_associations_mutable.get(name)
                 if existing_associations is None:
@@ -226,9 +224,7 @@ def inspect_field_file(filepath: str | os.PathLike[str]) -> FieldFileMetadata:
                 pass
 
     inconsistent_names = scalar_seen & vector_seen
-    unsafe_scalar_names = {
-        name for name, associations in scalar_associations_mutable.items() if not associations
-    }
+    unsafe_scalar_names = {name for name, associations in scalar_associations_mutable.items() if not associations}
     excluded_names = inconsistent_names | unsafe_scalar_names
     scalar_names = [name for name in scalar_names if name not in excluded_names]
     vector_names = [name for name in vector_names if name not in inconsistent_names]
@@ -245,9 +241,7 @@ def inspect_field_file(filepath: str | os.PathLike[str]) -> FieldFileMetadata:
         for name, associations in vector_associations_mutable.items()
         if name not in inconsistent_names
     }
-    contour_names = [
-        name for name in scalar_names if "point" in scalar_associations.get(name, frozenset())
-    ]
+    contour_names = [name for name in scalar_names if "point" in scalar_associations.get(name, frozenset())]
     visible_scalar_names = set(scalar_names)
     scale_names = [*scalar_names, *(name for name in vector_names if name not in visible_scalar_names)]
     vector_scale_names = {

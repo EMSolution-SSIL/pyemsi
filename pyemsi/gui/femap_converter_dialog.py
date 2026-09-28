@@ -382,7 +382,9 @@ class FemapConverterDialog(QDialog):
             return None
 
         return FemapConverterDialogConfig(
-            workspace_path=os.fspath(self._settings.workspace_path) if self._settings.workspace_path is not None else None,
+            workspace_path=os.fspath(self._settings.workspace_path)
+            if self._settings.workspace_path is not None
+            else None,
             input_dir=input_dir,
             output_dir=output_dir,
             output_name=output_name,

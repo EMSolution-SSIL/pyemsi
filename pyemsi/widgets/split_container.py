@@ -548,11 +548,7 @@ class SplitContainer(QWidget):
     def _on_current_tab_changed(self, panel: _TabPanel, index: int) -> None:
         """Give a selected FreeCAD file tab the shared native window."""
         viewer = panel.widget(index)
-        if (
-            viewer is None
-            or getattr(viewer, "viewer_kind", None) != "freecad"
-            or getattr(viewer, "loading", False)
-        ):
+        if viewer is None or getattr(viewer, "viewer_kind", None) != "freecad" or getattr(viewer, "loading", False):
             return
         try:
             viewer.activate()

@@ -127,9 +127,7 @@ class FreeCADSession:
 
         preferences = self._modules.app.ParamGet("User parameter:BaseApp/Preferences/PyEmsi")
         base_applied = preferences.GetInt("BaseLayoutDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
-        part_design_applied = (
-            preferences.GetInt("PartDesignToolbarDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
-        )
+        part_design_applied = preferences.GetInt("PartDesignToolbarDefaultsVersion", 0) >= _LAYOUT_DEFAULTS_VERSION
 
         if not base_applied:
             tasks = self._main_window.findChild(QDockWidget, "Tasks")
