@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QFile, QFileInfo, QMimeData, QPointF, QSize, Qt, QUrl
+from pathlib import Path
+
+from PySide6.QtCore import QFile, QFileInfo, QMimeData, QModelIndex, QPointF, QSize, Qt, QUrl
 from PySide6.QtGui import QDropEvent, QIcon
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractItemView, QApplication
 
 from pyemsi.widgets.explorer_icons import MaterialFileIconProvider, icon_name_for_path
@@ -12,6 +15,16 @@ from pyemsi.widgets.explorer_widget import ExplorerWidget, _top_level_paths, _un
 
 def _app() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+def _wait_for_index(widget: ExplorerWidget, path: str) -> QModelIndex:
+    for _ in range(50):
+        QApplication.processEvents()
+        index = widget._model.index(path)
+        if index.isValid():
+            return index
+        QTest.qWait(10)
+    raise AssertionError(f"Explorer model did not load {path}")
 
 
 def test_material_icon_associations_cover_pyemsi_formats() -> None:
@@ -67,7 +80,7 @@ def test_explorer_exposes_expected_context_commands_and_terminal_signal(tmp_path
         widget._open_context_terminal()
 
         assert widget._open_action.text() == "Open"
-        assert widget._rename_action.text() == "Rename..."
+        assert widget._rename_action.text() == "Rename"
         assert widget._trash_action.text() in {"Move to Recycle Bin", "Move to Trash"}
         assert widget._copy_relative_action.text() == "Copy Relative Path"
         assert widget._copy_full_action.text() == "Copy Full Path"
@@ -212,5 +225,105 @@ def test_external_drop_always_copies_into_workspace(tmp_path) -> None:
         assert event.dropAction() == Qt.DropAction.CopyAction
         assert external.exists()
         assert (workspace / "external.txt").read_text() == "external"
+    finally:
+        widget.close()
+
+
+def test_inline_file_creation_waits_for_enter_then_opens_file(tmp_path) -> None:
+    _app()
+    widget = ExplorerWidget()
+    opened: list[str] = []
+    widget.file_activated.connect(opened.append)
+    try:
+        widget.set_directory(str(tmp_path))
+        widget._begin_inline_create("file")
+
+        assert widget._inline_editor is not None
+        assert list(tmp_path.iterdir()) == []
+
+        widget._inline_editor.setText("model.py")
+        widget._inline_editor.returnPressed.emit()
+
+        created = tmp_path / "model.py"
+        assert created.is_file()
+        assert opened == [str(created)]
+        assert widget._inline_editor is None
+    finally:
+        widget.close()
+
+
+def test_inline_creation_escape_cancels_and_duplicate_name_stays_editable(tmp_path) -> None:
+    _app()
+    existing = tmp_path / "existing.txt"
+    existing.touch()
+    widget = ExplorerWidget()
+    try:
+        widget.set_directory(str(tmp_path))
+        widget._begin_inline_create("file")
+        editor = widget._inline_editor
+        assert editor is not None
+        editor.setText(existing.name)
+        editor.returnPressed.emit()
+
+        assert widget._inline_editor is editor
+        assert "already exists" in editor.toolTip()
+
+        QTest.keyClick(editor, Qt.Key.Key_Escape)
+        assert widget._inline_editor is None
+        assert [path.name for path in tmp_path.iterdir()] == [existing.name]
+    finally:
+        widget.close()
+
+
+def test_inline_rename_selects_stem_only_and_commits(tmp_path) -> None:
+    _app()
+    original = tmp_path / "model.result.py"
+    original.touch()
+    widget = ExplorerWidget()
+    try:
+        widget.set_directory(str(tmp_path))
+        index = _wait_for_index(widget, str(original))
+        widget._tree.setCurrentIndex(index)
+        widget._begin_inline_rename()
+
+        editor = widget._inline_editor
+        assert editor is not None
+        assert editor.selectedText() == "model.result"
+
+        editor.insert("renamed")
+        editor.returnPressed.emit()
+        assert not original.exists()
+        assert (tmp_path / "renamed.py").is_file()
+    finally:
+        widget.close()
+
+
+def test_inline_folder_creation_expands_the_new_folder(tmp_path, monkeypatch) -> None:
+    _app()
+    widget = ExplorerWidget()
+    expanded: list[Path] = []
+    try:
+        widget.set_directory(str(tmp_path))
+        original_expand = widget._tree.expand
+
+        def record_expand(index: QModelIndex) -> None:
+            expanded.append(Path(widget._model.filePath(index)))
+            original_expand(index)
+
+        monkeypatch.setattr(widget._tree, "expand", record_expand)
+        widget._begin_inline_create("folder")
+        assert widget._inline_editor is not None
+        widget._inline_editor.setText("results")
+        widget._inline_editor.returnPressed.emit()
+
+        created = tmp_path / "results"
+        assert created.is_dir()
+        _wait_for_index(widget, str(created))
+        for _ in range(60):
+            QApplication.processEvents()
+            if created in expanded:
+                break
+            QTest.qWait(10)
+        assert created in expanded
     finally:
         widget.close()

@@ -13,7 +13,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QItemSelectionModel, QMimeData, QModelIndex, QPoint, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QFile,
+    QItemSelectionModel,
+    QMimeData,
+    QModelIndex,
+    QPoint,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+    Signal,
+)
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -21,13 +33,14 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileSystemModel,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QStackedWidget,
     QStyle,
     QToolButton,
+    QToolTip,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -161,6 +174,10 @@ class ExplorerWidget(QWidget):
         self._context_index = QModelIndex()
         self._context_path: str | None = None
         self._workspace_open = False
+        self._inline_editor: QLineEdit | None = None
+        self._inline_mode: str | None = None
+        self._inline_parent_dir = ""
+        self._inline_source_path: str | None = None
         self._create_actions()
         self._setup_ui()
         self._set_actions_enabled(False)
@@ -183,6 +200,7 @@ class ExplorerWidget(QWidget):
 
     def set_directory(self, path: str) -> None:
         """Switch the tree view to display *path*."""
+        self._cancel_inline_editor()
         self._current_path = path
 
         if self._model is None:
@@ -206,6 +224,7 @@ class ExplorerWidget(QWidget):
 
     def clear(self) -> None:
         """Reset the explorer to the empty (no folder) state."""
+        self._cancel_inline_editor()
         self._current_path = None
         if self._model is not None:
             self._tree.setModel(None)
@@ -221,13 +240,13 @@ class ExplorerWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _create_actions(self) -> None:
-        self._new_file_action = QAction(QIcon(":/icons/material/document.svg"), "New File...", self)
+        self._new_file_action = QAction(QIcon(":/icons/material/document.svg"), "New File", self)
         self._new_file_action.setToolTip("New File")
-        self._new_file_action.triggered.connect(lambda: self._new_file(self._selected_parent_dir()))
+        self._new_file_action.triggered.connect(lambda: self._begin_inline_create("file"))
 
-        self._new_folder_action = QAction(QIcon(":/icons/material/folder-base.svg"), "New Folder...", self)
+        self._new_folder_action = QAction(QIcon(":/icons/material/folder-base.svg"), "New Folder", self)
         self._new_folder_action.setToolTip("New Folder")
-        self._new_folder_action.triggered.connect(lambda: self._new_folder(self._selected_parent_dir()))
+        self._new_folder_action.triggered.connect(lambda: self._begin_inline_create("folder"))
 
         self._refresh_action = QAction(
             self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload), "Refresh", self
@@ -244,10 +263,10 @@ class ExplorerWidget(QWidget):
         self._open_action = QAction("Open", self)
         self._open_action.triggered.connect(self._open_context_item)
 
-        self._rename_action = QAction("Rename...", self)
+        self._rename_action = QAction("Rename", self)
         self._rename_action.setShortcut(QKeySequence("F2"))
         self._rename_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        self._rename_action.triggered.connect(lambda: self._rename_item(self._context_or_current_index()))
+        self._rename_action.triggered.connect(self._begin_inline_rename)
         self.addAction(self._rename_action)
 
         trash_text = "Move to Recycle Bin" if sys.platform == "win32" else "Move to Trash"
@@ -403,6 +422,9 @@ class ExplorerWidget(QWidget):
         self._tree.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._tree.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self._tree.setStyleSheet("QTreeView::item { padding-top: 1px; padding-bottom: 1px; font-size: 12px; }")
+        self._tree.viewport().installEventFilter(self)
+        self._tree.verticalScrollBar().valueChanged.connect(self._position_inline_editor)
+        self._tree.horizontalScrollBar().valueChanged.connect(self._position_inline_editor)
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
         self._tree.paths_dropped.connect(
@@ -682,67 +704,212 @@ class ExplorerWidget(QWidget):
                 detail += f"\n…and {len(errors) - 8} more"
             QMessageBox.critical(self, "File Operation Failed", detail)
 
-    def _new_file(self, parent_dir: str) -> None:
-        """Prompt for a file name, create it inside *parent_dir*, and open it."""
-        name, ok = QInputDialog.getText(self, "New File", "File name:")
-        if not ok or not name.strip():
+    def _begin_inline_create(self, kind: str) -> None:
+        parent_dir = self._selected_parent_dir()
+        if kind not in {"file", "folder"} or not os.path.isdir(parent_dir):
             return
-        name = name.strip()
-        if os.sep in name or (os.altsep and os.altsep in name):
-            QMessageBox.critical(self, "Invalid Name", "File name must not contain path separators.")
-            return
-        dest = Path(parent_dir) / name
-        if dest.exists():
-            QMessageBox.critical(self, "Already Exists", f"'{name}' already exists.")
-            return
-        try:
-            dest.touch()
-        except OSError as exc:
-            QMessageBox.critical(self, "Error", f"Could not create file:\n{exc}")
-            return
-        self.file_activated.emit(str(dest))
+        icon_name = "document.svg" if kind == "file" else "folder-base.svg"
+        self._start_inline_editor(kind, parent_dir, icon=QIcon(f":/icons/material/{icon_name}"))
 
-    def _new_folder(self, parent_dir: str) -> None:
-        """Prompt for a folder name and create it inside *parent_dir*."""
-        name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
-        if not ok or not name.strip():
-            return
-        name = name.strip()
-        if os.sep in name or (os.altsep and os.altsep in name):
-            QMessageBox.critical(self, "Invalid Name", "Folder name must not contain path separators.")
-            return
-        dest = Path(parent_dir) / name
-        if dest.exists():
-            QMessageBox.critical(self, "Already Exists", f"'{name}' already exists.")
-            return
-        try:
-            dest.mkdir()
-        except OSError as exc:
-            QMessageBox.critical(self, "Error", f"Could not create folder:\n{exc}")
-
-    def _rename_item(self, index: QModelIndex) -> None:
-        """Prompt for a new name and rename the item at *index*."""
+    def _begin_inline_rename(self) -> None:
         if self._model is None:
             return
-        old_path = self._model.filePath(index)
-        old_name = self._model.fileName(index)
-        new_name, ok = QInputDialog.getText(self, "Rename", "New name:", text=old_name)
-        if not ok or not new_name.strip():
+        index = self._context_or_current_index()
+        if not index.isValid():
             return
-        new_name = new_name.strip()
-        if new_name == old_name:
+        source_path = self._model.filePath(index)
+        self._start_inline_editor(
+            "rename", str(Path(source_path).parent), source_path=source_path, icon=self._model.fileIcon(index)
+        )
+
+    def _start_inline_editor(
+        self, mode: str, parent_dir: str, *, source_path: str | None = None, icon: QIcon | None = None
+    ) -> None:
+        self._cancel_inline_editor()
+        editor = QLineEdit(self._tree.viewport())
+        editor.setObjectName("explorerInlineEditor")
+        editor.setFrame(True)
+        editor.setPlaceholderText("File name" if mode == "file" else "Folder name")
+        if icon is not None:
+            editor.addAction(icon, QLineEdit.ActionPosition.LeadingPosition)
+        if source_path is not None:
+            editor.setText(Path(source_path).name)
+
+        self._inline_editor = editor
+        self._inline_mode = mode
+        self._inline_parent_dir = parent_dir
+        self._inline_source_path = source_path
+        editor.returnPressed.connect(self._commit_inline_editor)
+        editor.textChanged.connect(self._clear_inline_error)
+        editor.installEventFilter(self)
+
+        if mode != "rename" and self._model is not None:
+            parent_index = self._model.index(parent_dir)
+            if parent_index.isValid() and parent_index != self._tree.rootIndex():
+                self._tree.expand(parent_index)
+
+        self._position_inline_editor()
+        editor.show()
+        editor.raise_()
+        editor.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+        if mode == "rename" and source_path is not None:
+            name = Path(source_path).name
+            stem_length = len(Path(name).stem) if Path(name).suffix else len(name)
+            editor.setSelection(0, stem_length)
+
+    def _position_inline_editor(self, *_args) -> None:
+        editor = self._inline_editor
+        if editor is None or self._model is None:
             return
-        if os.sep in new_name or (os.altsep and os.altsep in new_name):
-            QMessageBox.critical(self, "Invalid Name", "Name must not contain path separators.")
+        viewport = self._tree.viewport()
+        row_height = max(22, self._tree.fontMetrics().height() + 6)
+
+        if self._inline_mode == "rename" and self._inline_source_path:
+            index = self._model.index(self._inline_source_path)
+            if not index.isValid():
+                self._cancel_inline_editor()
+                return
+            rect = self._tree.visualRect(index)
+            x = max(0, rect.left())
+            y = max(0, rect.top())
+            row_height = max(row_height, rect.height())
+        else:
+            parent_index = self._model.index(self._inline_parent_dir)
+            is_root = parent_index == self._tree.rootIndex()
+            if parent_index.isValid() and not is_root:
+                self._tree.scrollTo(parent_index)
+                rect = self._tree.visualRect(parent_index)
+                x = max(0, rect.left() + self._tree.indentation())
+                y = max(0, rect.bottom() + 1)
+            else:
+                x = 0
+                y = 0
+
+        y = min(y, max(0, viewport.height() - row_height))
+        editor.setGeometry(x, y, max(80, viewport.width() - x - 2), row_height)
+
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self._inline_editor:
+            if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+                self._cancel_inline_editor()
+                return True
+            if event.type() == QEvent.Type.FocusOut:
+                editor = self._inline_editor
+                QTimer.singleShot(0, lambda: self._commit_inline_editor_if_unfocused(editor))
+        elif watched is self._tree.viewport() and event.type() == QEvent.Type.Resize:
+            QTimer.singleShot(0, self._position_inline_editor)
+        return super().eventFilter(watched, event)
+
+    def _commit_inline_editor_if_unfocused(self, editor: QLineEdit | None) -> None:
+        if editor is not None and editor is self._inline_editor and not editor.hasFocus():
+            if editor.text().strip():
+                self._commit_inline_editor()
+            else:
+                self._cancel_inline_editor()
+
+    def _name_error(self, name: str, parent_dir: str, source_path: str | None = None) -> str | None:
+        if not name:
+            return "A name is required."
+        if name in {".", ".."} or "/" in name or "\\" in name or "\0" in name:
+            return "The name cannot contain path separators."
+        if sys.platform == "win32":
+            if any(char in name for char in '<>:"|?*'):
+                return 'The name cannot contain < > : " | ? *.'
+            if name.endswith((" ", ".")):
+                return "The name cannot end with a space or period."
+            reserved = {"CON", "PRN", "AUX", "NUL"}
+            reserved.update(f"COM{number}" for number in range(1, 10))
+            reserved.update(f"LPT{number}" for number in range(1, 10))
+            if name.split(".", 1)[0].upper() in reserved:
+                return "That name is reserved by Windows."
+
+        destination = str(Path(parent_dir) / name)
+        if source_path is not None:
+            same_path = os.path.normcase(os.path.abspath(destination)) == os.path.normcase(os.path.abspath(source_path))
+            if same_path:
+                return None
+        if Path(destination).exists():
+            return f"'{name}' already exists."
+        return None
+
+    def _commit_inline_editor(self) -> None:
+        editor = self._inline_editor
+        mode = self._inline_mode
+        if editor is None or mode is None:
             return
-        new_path = str(Path(old_path).parent / new_name)
-        if Path(new_path).exists():
-            QMessageBox.critical(self, "Already Exists", f"'{new_name}' already exists.")
+        name = editor.text().strip()
+        error = self._name_error(name, self._inline_parent_dir, self._inline_source_path)
+        if error:
+            self._show_inline_error(error)
             return
+
+        destination = Path(self._inline_parent_dir) / name
+        source_path = self._inline_source_path
         try:
-            os.rename(old_path, new_path)
+            if mode == "file":
+                destination.touch(exist_ok=False)
+            elif mode == "folder":
+                destination.mkdir()
+            elif source_path is not None:
+                if name == Path(source_path).name:
+                    self._cancel_inline_editor()
+                    return
+                os.rename(source_path, destination)
+            else:
+                return
         except OSError as exc:
-            QMessageBox.critical(self, "Error", f"Could not rename:\n{exc}")
+            self._show_inline_error(str(exc))
+            return
+
+        self._finish_inline_editor()
+        if mode == "file":
+            self.file_activated.emit(str(destination))
+        else:
+            self._reveal_path(str(destination), expand=mode == "folder")
+
+    def _show_inline_error(self, message: str) -> None:
+        editor = self._inline_editor
+        if editor is None:
+            return
+        editor.setStyleSheet("QLineEdit { border: 1px solid #f14c4c; }")
+        editor.setToolTip(message)
+        QToolTip.showText(editor.mapToGlobal(QPoint(0, editor.height())), message, editor)
+        editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        editor.selectAll()
+
+    def _clear_inline_error(self, *_args) -> None:
+        if self._inline_editor is not None:
+            self._inline_editor.setStyleSheet("")
+            self._inline_editor.setToolTip("")
+
+    def _finish_inline_editor(self) -> None:
+        editor = self._inline_editor
+        self._inline_editor = None
+        self._inline_mode = None
+        self._inline_parent_dir = ""
+        self._inline_source_path = None
+        if editor is not None:
+            QToolTip.hideText()
+            editor.removeEventFilter(self)
+            editor.hide()
+            editor.deleteLater()
+
+    def _cancel_inline_editor(self) -> None:
+        self._finish_inline_editor()
+
+    def _reveal_path(self, path: str, *, expand: bool, attempts: int = 10) -> None:
+        if self._model is None:
+            return
+        index = self._model.index(path)
+        if index.isValid():
+            self._tree.scrollTo(index)
+            if expand:
+                self._tree.expand(index)
+            self._tree.setCurrentIndex(index)
+            return
+        if attempts:
+            QTimer.singleShot(50, lambda: self._reveal_path(path, expand=expand, attempts=attempts - 1))
 
     def _trash_selected(self) -> None:
         """Ask for confirmation then move the selected items to the trash."""
