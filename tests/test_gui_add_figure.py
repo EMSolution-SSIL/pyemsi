@@ -123,7 +123,7 @@ def test_split_container_add_field_embeds_plotter():
 
 
 def test_gui_add_field_forwards_plotter():
-    app = _app()
+    _app()
     original_window = gui._window
     gui._window = _DummyWindow()
     plotter = _FakePlotter()

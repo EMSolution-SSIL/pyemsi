@@ -10,7 +10,6 @@ def test_build_run_command_pyemsol_matches_existing_behavior(tmp_path):
 
     command = build_run_command(input_path, backend="pyemsol")
 
-    expected_script = os.path.join(os.path.dirname(__file__), os.pardir, "pyemsi", "tools", "run_emsol.py")
     assert command.cmd == sys.executable
     assert command.args[0].endswith(os.path.join("tools", "run_emsol.py"))
     assert command.args[1] == input_path

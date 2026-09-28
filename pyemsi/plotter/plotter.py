@@ -1876,7 +1876,6 @@ class Plotter:
             - results: list of dicts (one per probe point) with sampled data
             - last_sampled: the last sampled PolyData (for advanced users)
         """
-        import pyvista as pv
 
         # Sample from entire mesh
         target = self.mesh

@@ -4,7 +4,7 @@ import sys
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QComboBox, QLabel, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QToolBar, QVBoxLayout, QWidget
 
 import pyemsi.resources.resources  # noqa: F401
 from pyemsi.widgets.input_control_editor import InputControlEditorWidget

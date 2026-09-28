@@ -6,11 +6,11 @@ from PySide6.QtWidgets import QApplication, QDialog
 
 sys.modules.setdefault("scienceplots", types.ModuleType("scienceplots"))
 
-import pyemsi.gui as gui
-from pyemsi.gui import field_plot_builder_dialog as dialog_module
-from pyemsi.gui._field_file_metadata import FieldFileMetadata
-from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog
-from pyemsi.settings import SettingsManager
+import pyemsi.gui as gui  # noqa: E402
+from pyemsi.gui import field_plot_builder_dialog as dialog_module  # noqa: E402
+from pyemsi.gui._field_file_metadata import FieldFileMetadata  # noqa: E402
+from pyemsi.gui.field_plot_builder_dialog import FieldPlotBuilderDialog  # noqa: E402
+from pyemsi.settings import SettingsManager  # noqa: E402
 
 
 def _app():
