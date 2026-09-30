@@ -24,7 +24,7 @@ def start(study):
     global _run
     try:
         job = jobwriter.write_job(study)
-    except jobwriter.StudyError as exc:
+    except Exception as exc:  # StudyError, or anything the geometry export trips on
         QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "EMSolution", str(exc))
         return None
     _run = MeshRun(study, job)

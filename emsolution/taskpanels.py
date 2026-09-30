@@ -67,7 +67,7 @@ class ItemPanel:
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
-        self.name = QtWidgets.QLineEdit(obj.Label)
+        self.name = QtWidgets.QLineEdit(getattr(obj, "GroupName", "") or obj.Label)
         layout.addRow("Name", self.name)
         self.size = None
         if isinstance(obj.Proxy, objects.MeshSize):
@@ -108,7 +108,11 @@ class ItemPanel:
     def accept(self):
         doc = self.obj.Document
         doc.openTransaction("Edit " + self.obj.Label)
-        self.obj.Label = self.name.text().strip() or self.obj.Label
+        name = self.name.text().strip()
+        if name:
+            self.obj.Label = name
+            if hasattr(self.obj, "GroupName"):
+                self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
         if self.faces:

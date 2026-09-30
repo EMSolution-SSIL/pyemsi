@@ -110,6 +110,21 @@ class StudyTest(unittest.TestCase):
         objects.update_ids(self.study)
         self.assertEqual(self.study.VolumeIds["B"], "3")
 
+    def test_group_names_keep_the_typed_name_when_freecad_renames_the_label(self):
+        air, a, b = self.box("Air"), self.box("A", 10), self.box("B", 20)
+        objects.make_material(self.study, "Air", [air])  # label taken by the body: Air001
+        objects.make_material(self.study, "Copper", [a])
+        objects.make_material(self.study, "Copper", [b])  # label taken: Copper001
+        objects.update_ids(self.study)
+        names = ["Air_Air", "Copper_A", "Copper_B"]
+        self.assertEqual([r[2] for r in objects.id_rows(self.study)], names)
+        path = os.path.join(self.tmp.name, "t.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        study = objects.find_study(self.doc)
+        self.assertEqual([r[2] for r in objects.id_rows(study)], names)
+
     # --- tree objects ------------------------------------------------------
 
     def test_pad_face_resolves_to_body(self):
@@ -173,6 +188,25 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Copper", [a])
         objects.make_excitation(self.study, "T", [(a, "Face60")])  # a box has 6 faces
         self.assertStudyError("has no Face60")
+
+    def test_check_part_container_is_refused(self):
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObject(self.box("A"))
+        objects.make_material(self.study, "Copper", [part])
+        self.assertStudyError("Part is not a solid body")
+
+    def test_check_link_is_refused(self):
+        link = self.doc.addObject("App::Link", "Link")
+        link.LinkedObject = self.box("A")
+        objects.make_material(self.study, "Copper", [link])
+        self.assertStudyError("Link is not a solid body")
+
+    def test_output_folder_with_persian_letters(self):
+        a = self.box("A")
+        objects.make_material(self.study, "Copper", [a])
+        self.study.OutputFolder = os.path.join(self.tmp.name, "مدل")
+        path = jobwriter.write_job(self.study)
+        self.assertTrue(os.path.exists(path))
 
     def test_check_unsaved_document(self):
         a = self.box("A")

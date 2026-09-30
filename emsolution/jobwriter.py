@@ -48,6 +48,9 @@ def check(study):
             if b.Name not in material_of:
                 raise StudyError(f"Body {b.Label} has a mesh size but no material.")
     for b, ms in material_of.values():
+        if not b.isDerivedFrom("Part::Feature"):
+            raise StudyError(f"{b.Label} is not a solid body "
+                             "(links and containers are not supported).")
         if len(ms) > 1:
             raise StudyError(f"Body {b.Label} has more than one material: "
                              + ", ".join(m.Label for m in ms))

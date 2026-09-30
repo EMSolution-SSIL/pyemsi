@@ -11,7 +11,7 @@ def clean(text):
 
 
 def item_name(item, body):
-    return f"{clean(item.Label)}_{clean(body.Label)}"
+    return f"{clean(getattr(item, 'GroupName', '') or item.Label)}_{clean(body.Label)}"
 
 
 class _Proxy:
@@ -25,7 +25,7 @@ class _Proxy:
 class Study(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
-        obj.addProperty("App::PropertyPath", "OutputFolder", "EMSolution",
+        obj.addProperty("App::PropertyString", "OutputFolder", "EMSolution",
                         "Empty = folder <document>_mesh next to the .FCStd")
         obj.addProperty("App::PropertyLength", "DefaultMeshSize", "EMSolution",
                         "Mesh size for bodies without a Mesh Size item")
@@ -49,16 +49,30 @@ class Study(_Proxy):
             obj.setEditorMode(prop, 2)  # hidden
 
 
-class Material(_Proxy):
+class _Named(_Proxy):
+    """GroupName holds the typed name: FreeCAD renames a Label that is already taken."""
+
+    def add_group_name(self, obj):
+        obj.addProperty("App::PropertyString", "GroupName", "EMSolution",
+                        "Name used in the mesh group names")
+
+    def onChanged(self, obj, prop):
+        if prop == "Label" and hasattr(obj, "GroupName") and not obj.Document.Restoring:
+            obj.GroupName = obj.Label
+
+
+class Material(_Named):
     def __init__(self, obj):
         obj.Proxy = self
+        self.add_group_name(obj)
         obj.addProperty("App::PropertyLinkList", "References", "EMSolution",
                         "Bodies made of this material")
 
 
-class Excitation(_Proxy):
+class Excitation(_Named):
     def __init__(self, obj):
         obj.Proxy = self
+        self.add_group_name(obj)
         obj.addProperty("App::PropertyLinkSubList", "References", "EMSolution",
                         "Body faces of this excitation")
 
@@ -90,6 +104,8 @@ def _add(study, group_prop, proxy_cls, label):
     obj = study.Document.addObject("App::FeaturePython", proxy_cls.__name__)
     proxy_cls(obj)
     obj.Label = label
+    if hasattr(obj, "GroupName"):
+        obj.GroupName = label
     getattr(study, group_prop).addObject(obj)
     return obj
 
