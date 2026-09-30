@@ -65,7 +65,7 @@ class Material(_Named):
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
-        obj.addProperty("App::PropertyLinkList", "References", "EMSolution",
+        obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution",
                         "Bodies made of this material")
 
 
@@ -73,7 +73,7 @@ class Excitation(_Named):
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
-        obj.addProperty("App::PropertyLinkSubList", "References", "EMSolution",
+        obj.addProperty("App::PropertyLinkSubListGlobal", "References", "EMSolution",
                         "Body faces of this excitation")
 
 
@@ -81,7 +81,7 @@ class MeshSize(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLength", "Size", "EMSolution", "Element size")
-        obj.addProperty("App::PropertyLinkList", "References", "EMSolution",
+        obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution",
                         "Bodies meshed with this size")
 
 
@@ -148,6 +148,12 @@ def owning_body(obj):
     if parent is not None and parent.isDerivedFrom("PartDesign::Body"):
         return parent
     return obj
+
+
+def pick_body(obj):
+    """The solid body behind a picked object; None for tree folders, study items and containers."""
+    body = owning_body(obj)
+    return body if body.isDerivedFrom("Part::Feature") else None
 
 
 def faces_by_body(excitation):

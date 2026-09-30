@@ -8,16 +8,18 @@ from . import icon, objects
 def selected_bodies():
     out = {}
     for sel in Gui.Selection.getSelectionEx():
-        body = objects.owning_body(sel.Object)
-        out.setdefault(body.Name, body)
+        body = objects.pick_body(sel.Object)
+        if body is not None:
+            out.setdefault(body.Name, body)
     return list(out.values())
 
 
 def selected_faces():
     out = []
     for sel in Gui.Selection.getSelectionEx():
-        body = objects.owning_body(sel.Object)
-        out += [(body, s) for s in sel.SubElementNames if s.startswith("Face")]
+        body = objects.pick_body(sel.Object)
+        if body is not None:
+            out += [(body, s) for s in sel.SubElementNames if s.startswith("Face")]
     return out
 
 

@@ -42,6 +42,7 @@ def main():
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A")
     Gui.Selection.addSelection(doc.Name, "B")
+    Gui.Selection.addSelection(doc.Name, study.MaterialsGroup.Name)  # must be ignored
     Gui.runCommand("EMS_Material")
     Gui.runCommand("EMS_MeshSize")
     Gui.Selection.clearSelection()

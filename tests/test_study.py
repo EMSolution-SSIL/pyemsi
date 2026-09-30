@@ -134,6 +134,26 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.owning_body(cube).Name, "Body")
         self.assertEqual(objects.owning_body(body).Name, "Body")
 
+    def test_only_solid_bodies_can_be_picked(self):
+        body = self.doc.addObject("PartDesign::Body", "Body")
+        cube = body.newObject("PartDesign::AdditiveBox", "Cube")
+        box = self.box("A")
+        mat = objects.make_material(self.study, "Copper", [box])
+        part = self.doc.addObject("App::Part", "Part")
+        self.assertEqual(objects.pick_body(cube).Name, "Body")
+        self.assertEqual(objects.pick_body(box).Name, "A")
+        # a material linking to its own folder would be a loop in the document
+        for obj in (self.study, self.study.MaterialsGroup, mat, part):
+            self.assertIsNone(objects.pick_body(obj), obj.Name)
+
+    def test_items_may_link_to_bodies_inside_a_part(self):
+        # plain links may not reach into an App::Part; FreeCAD warns on every recompute
+        items = [objects.make_material(self.study, "Copper", []),
+                 objects.make_excitation(self.study, "In", []),
+                 objects.make_mesh_size(self.study, 1.0, [])]
+        for item in items:
+            self.assertTrue(item.getTypeIdOfProperty("References").endswith("Global"), item.Name)
+
     def test_study_survives_save_and_reload(self):
         a = self.box("A")
         objects.make_material(self.study, "Copper", [a])
