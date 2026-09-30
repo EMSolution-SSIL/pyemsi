@@ -1,0 +1,10 @@
+# `PartGui` wrapper association audit
+
+[Namespace index](index.md) | [Audit overview](../wrapper-review.md)
+
+Every listed owner has no direct binding association in existing discovery. Native inheritance and closest verified implementation context are routing evidence, not automatic public Python class declarations. Exact descendant overrides, conditional compilation, initialization, cached PythonObject replacement, and target-version behavior remain unverified unless the linked type record supplies an explicit review.
+
+| Native owner | Closest discovered ancestor binding | Reviewed implementation context | Registration evidence |
+| --- | --- | --- | --- |
+| [PartGui::ViewProvider2DObject](ViewProvider2DObject.md) | PartGui::ViewProviderPartExt -> PartGui.ViewProviderPartExt | Gui::ViewProviderDocumentObject | `src/Mod/Part/Gui/ViewProvider2DObject.cpp:378` |
+| [PartGui::ViewProvider2DObjectGrid](ViewProvider2DObjectGrid.md) | PartGui::ViewProviderPartExt -> PartGui.ViewProviderPartExt | Gui::ViewProviderDocumentObject | `src/Mod/Part/Gui/ViewProvider2DObject.cpp:60` |

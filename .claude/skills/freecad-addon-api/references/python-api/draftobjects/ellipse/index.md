@@ -1,0 +1,70 @@
+# Python source module `draftobjects.ellipse`
+
+[Python catalogue](../../index.md)
+
+Evidence: `src/Mod/Draft/draftobjects/ellipse.py`. Import path is source-routed; installed availability is unverified.
+
+Provides the object code for the Ellipse object.
+
+Literal `__all__`: not available; source names do not imply supported public API.
+
+## Imports, aliases and conditional reexports
+
+### from PySide.QtCore import QT_TRANSLATE_NOOP
+
+Module-scope import; may be a dependency rather than supported addon API.
+
+Bound source name `draftobjects.ellipse.QT_TRANSLATE_NOOP` -> `PySide.QtCore.QT_TRANSLATE_NOOP`.
+
+Target not expanded in this selected Python catalogue; check the binding catalogue or source.
+
+Evidence: `src/Mod/Draft/draftobjects/ellipse.py:33`.
+
+### import FreeCAD as App
+
+Module-scope import; may be a dependency rather than supported addon API.
+
+Bound source name `draftobjects.ellipse.App` -> `FreeCAD`.
+
+Target not expanded in this selected Python catalogue; check the binding catalogue or source.
+
+Evidence: `src/Mod/Draft/draftobjects/ellipse.py:35`.
+
+### from draftobjects.base import DraftObject
+
+Module-scope import; may be a dependency rather than supported addon API.
+
+Bound source name `draftobjects.ellipse.DraftObject` -> `draftobjects.base.DraftObject`.
+
+[Source module `draftobjects.base`](../base/index.md).
+
+Evidence: `src/Mod/Draft/draftobjects/ellipse.py:36`.
+
+### from draftutils import gui_utils
+
+Module-scope import; may be a dependency rather than supported addon API.
+
+Bound source name `draftobjects.ellipse.gui_utils` -> `draftutils.gui_utils`.
+
+Target not expanded in this selected Python catalogue; check the binding catalogue or source.
+
+Evidence: `src/Mod/Draft/draftobjects/ellipse.py:37`.
+
+### from draftutils import params
+
+Module-scope import; may be a dependency rather than supported addon API.
+
+Bound source name `draftobjects.ellipse.params` -> `draftutils.params`.
+
+Target not expanded in this selected Python catalogue; check the binding catalogue or source.
+
+Evidence: `src/Mod/Draft/draftobjects/ellipse.py:38`.
+
+## Classes
+
+- [draftobjects.ellipse.Ellipse](Ellipse.md)
+
+## Internal definitions not expanded
+
+`draftobjects.ellipse._Ellipse`. These are source internals unless an explicit export establishes otherwise.
+
