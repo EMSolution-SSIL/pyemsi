@@ -1,8 +1,10 @@
-"""View providers, the item edit panel, folder watchers, the ID table dialog and selection helpers."""
+"""View providers, the item edit panel, folder watchers, the ID table dialog, the selection
+observer and selection helpers."""
 import FreeCADGui as Gui
+from pivy import coin
 from PySide import QtCore, QtWidgets
 
-from . import icon, objects
+from . import highlight, icon, objects
 
 
 def selected_bodies():
@@ -165,10 +167,11 @@ class FolderView:
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        for r, (_item, cells) in enumerate(self.rows):
+        for r, (_item, _refs, cells) in enumerate(self.rows):
             for c, text in enumerate(cells):
                 self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
         self.table.resizeColumnsToContents()
+        self.table.itemSelectionChanged.connect(self.highlight_rows)
         self.table.cellDoubleClicked.connect(self.open_item)
         layout.addWidget(self.table)
         if isinstance(folder.Proxy, objects.MaterialsFolder):
@@ -179,6 +182,10 @@ class FolderView:
                 missing.setWordWrap(True)
                 missing.setStyleSheet("color: #c00000")
                 layout.addWidget(missing)
+
+    def highlight_rows(self):
+        rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        highlight.show([ref for r in rows for ref in self.rows[r][1]])
 
     def open_item(self, row, _column):
         Gui.Control.showDialog(ItemPanel(self.rows[row][0]))
@@ -216,31 +223,75 @@ def folder_watchers():
 WORKBENCH = "EMSolutionWorkbench"
 
 
-class WorkbenchSwitch:
-    """Selecting a study object while another workbench is active switches to EMSolution,
-    so its panel can show. Bodies and faces do not switch; nor does anything during an edit."""
+class SelectionObserver:
+    """After each selection change:
+    - a single selected item highlights its bodies, faces, edges and vertices;
+    - selecting a study object while another workbench is active switches to EMSolution,
+      so its panel can show. Bodies and faces do not switch.
+    Neither happens during an edit."""
+
+    def __init__(self):
+        self.pending = False
 
     def addSelection(self, doc, obj, sub, pnt):
-        QtCore.QTimer.singleShot(0, self.check)  # switching inside the selection event is unsafe
+        self.later()
 
-    def check(self):
-        if Gui.activeWorkbench().name() == WORKBENCH or Gui.Control.activeDialog():
+    def removeSelection(self, doc, obj, sub):
+        self.later()
+
+    def setSelection(self, doc):
+        self.later()
+
+    def clearSelection(self, doc):
+        self.later()
+
+    def later(self):
+        if not self.pending:  # one update for a burst of events
+            self.pending = True
+            QtCore.QTimer.singleShot(0, self.update)  # acting inside the selection event is unsafe
+
+    def update(self):
+        self.pending = False
+        sel = Gui.Selection.getSelection()
+        editing = Gui.Control.activeDialog()
+        if len(sel) == 1 and objects.is_item(sel[0]) and not editing:
+            highlight.show(objects.item_refs(sel[0]))
+        else:
+            highlight.clear()
+        if editing or Gui.activeWorkbench().name() == WORKBENCH:
             return
-        if any(objects.is_study_object(o) for o in Gui.Selection.getSelection()):
+        if any(objects.is_study_object(o) for o in sel):
             Gui.activateWorkbench(WORKBENCH)
 
 
-_switch = None
+_observer = None
 
 
-def install_workbench_switch():
-    global _switch
-    if _switch is None:
-        _switch = WorkbenchSwitch()
-        Gui.Selection.addObserver(_switch)
+def install_selection_observer():
+    global _observer
+    if _observer is None:
+        _observer = SelectionObserver()
+        Gui.Selection.addObserver(_observer)
 
 
 class ViewProviderItem(_ViewProvider):
+    """Draws nothing, but needs a display mode: without one the tree greys the item out
+    as hidden. Hiding is undone, as there is nothing to hide."""
+
+    def attach(self, vobj):
+        super().attach(vobj)
+        vobj.addDisplayMode(coin.SoGroup(), "Default")
+
+    def getDisplayModes(self, vobj):
+        return ["Default"]
+
+    def getDefaultDisplayMode(self):
+        return "Default"
+
+    def onChanged(self, vobj, prop):
+        if prop == "Visibility" and not vobj.Visibility:  # later: FreeCAD hides after this call
+            QtCore.QTimer.singleShot(0, vobj.show)
+
     def getIcon(self):
         obj = getattr(self, "Object", None)
         return icon(type(obj.Proxy).__name__.lower()) if obj else icon("emsolution")
@@ -255,16 +306,15 @@ class ItemPanel:
 
     def __init__(self, obj):
         self.obj = obj
+        highlight.clear()  # it would not follow the edits
         self.bodies_only = isinstance(obj.Proxy, objects.Material)
         if self.bodies_only:
             self.pick, label = (lambda: [(b, "") for b in selected_bodies()]), "Bodies"
-            self.current = [(b, "") for b in obj.References]
+        elif isinstance(obj.Proxy, objects.Excitation):
+            self.pick, label = selected_faces, "Faces"
         else:
-            if isinstance(obj.Proxy, objects.Excitation):
-                self.pick, label = selected_faces, "Faces"
-            else:
-                self.pick, label = selected_mesh_refs, "Bodies, faces,\nedges, vertices"
-            self.current = [(b, s) for b, subs in obj.References for s in subs]
+            self.pick, label = selected_mesh_refs, "Bodies, faces,\nedges, vertices"
+        self.current = objects.item_refs(obj)
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)

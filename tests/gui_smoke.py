@@ -60,6 +60,14 @@ def main():
     assert size.Size.Value == 3.0
     assert size.References == [(doc.A, ("",)), (doc.B, ("",))], size.References
     assert fine.References == [(doc.A, ("Edge1",)), (doc.B, ("Vertex8",))], fine.References
+    for item in (mat, exc, size, fine):  # the tree would grey them out as hidden
+        assert item.ViewObject.isVisible(), item.Name
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, mat.Name)
+    Gui.runCommand("Std_ToggleVisibility")
+    for _ in range(3):  # shown again from a timer
+        Gui.updateGui()
+    assert mat.ViewObject.isVisible(), "the eye hid an item"
     log.append("commands ok")
 
     panel = taskpanels.ItemPanel(fine)
@@ -141,6 +149,47 @@ def main():
         Gui.updateGui()
     assert list(shown_folders()) == ["Materials"], "folder panel not back after the edit"
     log.append("folder panels ok")
+
+    from emsolution import highlight
+    shown_refs = []
+    real_show = highlight.show
+
+    def spy_show(refs):
+        shown_refs.append(sorted((b.Name, s) for b, s in refs))
+        real_show(refs)
+    highlight.show = spy_show
+
+    def drawn():
+        """Coin shapes drawn by the highlight: IndexedFaceSet, LineSet, PointSet."""
+        n = highlight.shown()
+        if n is None:
+            return []
+        assert Gui.getDocument(doc.Name).activeView().getSceneGraph().findChild(n) >= 0
+        return [n.getChild(i).getChild(2).getTypeId().getName().getString()
+                for i in range(2, n.getNumChildren())]
+
+    select(mat.Name)
+    assert shown_refs[-1] == [("A", ""), ("B", "")], shown_refs
+    assert drawn() == ["IndexedFaceSet"], drawn()
+    select(fine.Name)
+    assert shown_refs[-1] == [("A", "Edge1"), ("B", "Face2"), ("B", "Vertex8")], shown_refs
+    assert drawn() == ["IndexedFaceSet", "LineSet", "PointSet"], drawn()
+    select("A")
+    assert drawn() == [], "highlight kept for a body"
+    select(study.ExcitationsGroup.Name)
+    assert drawn() == [], "highlight shown for a folder"
+    shown_folders()["Excitations"].selectRow(0)
+    assert shown_refs[-1] == [("A", "Face1")] and drawn() == ["IndexedFaceSet"], shown_refs
+    select(study.MaterialsGroup.Name)
+    shown_folders()["Materials"].selectRow(1)
+    assert shown_refs[-1] == [("B", "")], shown_refs
+    shown_folders()["Materials"].cellDoubleClicked.emit(1, 0)
+    for _ in range(5):
+        Gui.updateGui()
+    assert drawn() == [], "highlight kept during an edit"
+    Gui.Control.closeDialog()
+    highlight.show = real_show
+    log.append("highlight ok")
 
     Gui.activateWorkbench("PartWorkbench")
     select("A")

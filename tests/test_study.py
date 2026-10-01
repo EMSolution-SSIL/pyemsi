@@ -182,15 +182,18 @@ class StudyTest(unittest.TestCase):
         size = objects.make_mesh_size(self.study, 1.5, [(a, ""), (c, "Edge1")])
         objects.update_ids(self.study)
         self.assertEqual(objects.material_rows(self.study), [
-            (mat, ["Copper", "A", "1"]), (mat, ["Copper", "B", "2"]), (empty, ["Iron", "", ""])])
+            (mat, [(a, "")], ["Copper", "A", "1"]), (mat, [(b, "")], ["Copper", "B", "2"]),
+            (empty, [], ["Iron", "", ""])])
         self.assertEqual(objects.excitation_rows(self.study),
-                         [(exc, ["In", "A", "Face1, Face2", "1001"])])
+                         [(exc, [(a, "Face1"), (a, "Face2")], ["In", "A", "Face1, Face2", "1001"])])
         self.assertEqual(objects.mesh_size_rows(self.study),
-                         [(size, ["MeshSize", "1.5 mm", "A, C.Edge1"])])
+                         [(size, [(a, ""), (c, "Edge1")], ["MeshSize", "1.5 mm", "A, C.Edge1"])])
+        self.assertEqual(objects.item_refs(mat), [(a, ""), (b, "")])
+        self.assertTrue(objects.is_item(size) and not objects.is_item(self.study.MeshSizesGroup))
         self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
         d = self.box("D", 30)
         mat.References += [d]
-        self.assertEqual(objects.material_rows(self.study)[2], (mat, ["Copper", "D", "–"]))
+        self.assertEqual(objects.material_rows(self.study)[2], (mat, [(d, "")], ["Copper", "D", "–"]))
 
     def test_mesh_settings_go_to_the_job(self):
         objects.make_material(self.study, "Copper", [self.box("A")])

@@ -58,11 +58,12 @@ A directory link at `%APPDATA%\FreeCAD\v1-1\Mod\EMSolution` points to it.
 ```
 EMSolution-FreeCAD/
 ├── package.xml            addon metadata
-├── InitGui.py             registers the workbench and the workbench switch
+├── InitGui.py             registers the workbench and the selection observer
 ├── emsolution/
 │   ├── objects.py         Study, Material, Excitation, MeshSize, ID table
 │   ├── commands.py        toolbar buttons
-│   ├── taskpanels.py      edit dialogs
+│   ├── taskpanels.py      edit dialogs, folder panels, selection observer
+│   ├── highlight.py       temporary highlight of references in the 3D view
 │   ├── jobwriter.py       tree → job file + geometry files
 │   ├── runner.py          starts the mesher, shows progress, loads result
 │   └── mesher.py          job file → .msh  (no FreeCAD imports)
@@ -113,6 +114,19 @@ workbench is active switches to the EMSolution workbench, so the panel can
 show. A selection observer registered at FreeCAD start-up does this, just
 after the selection event. Bodies and faces do not switch, and nothing
 switches while an edit dialog is open.
+
+**Highlight**: selecting a single item (Material, Excitation or Mesh Size)
+highlights its references in the 3D view: whole bodies are tinted, faces
+filled, edges drawn as thick lines and vertices as dots, in orange, drawn
+see-through over the model. Clicking rows in a folder panel highlights just
+those rows' references. The highlight is a temporary drawing added to the
+view: it does not change the selection or the document. It goes away on the
+next selection change and when an edit dialog opens. The same selection
+observer as the workbench switch does this.
+
+Items draw nothing themselves, but have an empty "Default" display mode so
+the tree does not grey them out as hidden. Hiding one (eye, Space) is undone
+right away.
 
 | Folder | Columns | Also shows |
 |---|---|---|
@@ -335,11 +349,12 @@ function and saved as BREP files, so FreeCAD is not needed:
 - `job.json` content matches a small hand-built document, mesh options
   included
 - folders keep their names when renamed
-- the folder overview rows (volume IDs, faces, sizes) are correct
+- the folder overview rows (volume IDs, faces, sizes, references) are correct
 
 **Manual checklist** (buttons and dialogs): create a study, add each item
 type, edit, rename, delete, select each folder (also from another
-workbench), double-click a row in its table, change the mesh settings, run
+workbench), select each item and each table row and check the highlight,
+double-click a row in its table, change the mesh settings, run
 the mesh, cancel a run, view the result, edit the ID table.
 
 ## 12. Later steps (each gets its own design)

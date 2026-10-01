@@ -33,4 +33,4 @@ class EMSolutionWorkbench(Gui.Workbench):
 
 EMSolutionWorkbench.Icon = emsolution.icon("emsolution")
 Gui.addWorkbench(EMSolutionWorkbench())
-taskpanels.install_workbench_switch()  # selecting a study object in any workbench switches here
+taskpanels.install_selection_observer()  # highlight and workbench switch, in any workbench

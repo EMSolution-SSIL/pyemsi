@@ -233,29 +233,40 @@ def subs_by_body(item):
     return list(out.values())
 
 
+def is_item(obj):
+    return isinstance(getattr(obj, "Proxy", None), (Material, Excitation, MeshSize))
+
+
+def item_refs(item):
+    """[(body, sub)] of a Material, Excitation or Mesh Size; sub "" = the whole body."""
+    if isinstance(item.Proxy, Material):
+        return [(b, "") for b in item.References]
+    return [(b, s) for b, subs in item.References for s in subs]
+
+
 def material_rows(study):
-    """Rows for the Materials panel: (material, [name, body, volume ID])."""
+    """Rows for the Materials panel: (material, refs, [name, body, volume ID])."""
     rows = []
     for m in materials(study):
-        rows += [(m, [display_name(m), b.Label, study.VolumeIds.get(b.Name, "–")])
-                 for b in m.References] or [(m, [display_name(m), "", ""])]
+        rows += [(m, [(b, "")], [display_name(m), b.Label, study.VolumeIds.get(b.Name, "–")])
+                 for b in m.References] or [(m, [], [display_name(m), "", ""])]
     return rows
 
 
 def excitation_rows(study):
-    """Rows for the Excitations panel: (excitation, [name, body, faces, surface ID])."""
+    """Rows for the Excitations panel: (excitation, refs, [name, body, faces, surface ID])."""
     rows = []
     for e in excitations(study):
-        rows += [(e, [display_name(e), b.Label, ", ".join(faces),
-                      study.SurfaceIds.get(f"{e.Name}|{b.Name}", "–")])
-                 for b, faces in subs_by_body(e)] or [(e, [display_name(e), "", "", ""])]
+        rows += [(e, [(b, f) for f in faces], [display_name(e), b.Label, ", ".join(faces),
+                                              study.SurfaceIds.get(f"{e.Name}|{b.Name}", "–")])
+                 for b, faces in subs_by_body(e)] or [(e, [], [display_name(e), "", "", ""])]
     return rows
 
 
 def mesh_size_rows(study):
-    """Rows for the Mesh Sizes panel: (mesh size, [name, size, applies to])."""
-    return [(s, [display_name(s), f"{s.Size.Value:g} mm",
-                 ", ".join(ref_label(b, sub) for b, subs in s.References for sub in subs)])
+    """Rows for the Mesh Sizes panel: (mesh size, refs, [name, size, applies to])."""
+    return [(s, item_refs(s), [display_name(s), f"{s.Size.Value:g} mm",
+                               ", ".join(ref_label(b, sub) for b, sub in item_refs(s))])
             for s in mesh_sizes(study)]
 
 
