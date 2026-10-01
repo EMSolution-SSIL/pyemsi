@@ -1,17 +1,25 @@
-"""Study tree objects and the ID table. No GUI code here."""
+"""Study tree objects and the ID table. No GUI code here, apart from attaching view providers."""
 import re
 
-GROUPS = (("MaterialsGroup", "Materials"),
-          ("ExcitationsGroup", "Excitations"),
-          ("MeshSizesGroup", "Mesh Sizes"))
+# Gmsh algorithm numbers; the first entry is the default
+ALGORITHMS_2D = {"Frontal-Delaunay": 6, "Delaunay": 5, "MeshAdapt": 1, "Automatic": 2}
+ALGORITHMS_3D = {"Delaunay": 1, "Frontal": 4, "HXT": 10}
 
 
 def clean(text):
     return re.sub(r"[^A-Za-z0-9_-]", "_", text)
 
 
+def display_name(item):
+    return getattr(item, "GroupName", "") or item.Label
+
+
 def item_name(item, body):
-    return f"{clean(getattr(item, 'GroupName', '') or item.Label)}_{clean(body.Label)}"
+    return f"{clean(display_name(item))}_{clean(body.Label)}"
+
+
+def ref_label(body, sub):
+    return f"{body.Label}.{sub}" if sub else body.Label
 
 
 class _Proxy:
@@ -22,14 +30,60 @@ class _Proxy:
         return None
 
 
+class Folder(_Proxy):
+    """A study folder with a fixed Label."""
+    LABEL = ""
+
+    def __init__(self, obj):
+        obj.Proxy = self
+
+    def onBeforeChangeLabel(self, obj, new_label):
+        return self.LABEL  # FreeCAD uses the returned text instead of the typed one
+
+
+class MaterialsFolder(Folder):
+    LABEL = "Materials"
+
+
+class ExcitationsFolder(Folder):
+    LABEL = "Excitations"
+
+
+class MeshSizesFolder(Folder):
+    """Also holds the mesh settings that apply to the whole study."""
+    LABEL = "Mesh Sizes"
+
+    def __init__(self, obj):
+        super().__init__(obj)
+        add = obj.addProperty
+        add("App::PropertyLength", "DefaultMeshSize", "Mesh",
+            "Mesh size for bodies without a Mesh Size item")
+        obj.DefaultMeshSize = 5.0
+        add("App::PropertyEnumeration", "SurfaceAlgorithm", "Mesh", "Gmsh algorithm for the faces")
+        obj.SurfaceAlgorithm = list(ALGORITHMS_2D)
+        add("App::PropertyEnumeration", "VolumeAlgorithm", "Mesh", "Gmsh algorithm for the volumes")
+        obj.VolumeAlgorithm = list(ALGORITHMS_3D)
+        add("App::PropertyFloatConstraint", "SizeFactor", "Mesh", "Multiplies every mesh size")
+        obj.SizeFactor = (1.0, 0.01, 100.0, 0.1)
+        add("App::PropertyLength", "MinSize", "Mesh", "Smallest element size, 0 = no limit")
+        add("App::PropertyLength", "MaxSize", "Mesh", "Largest element size, 0 = no limit")
+        add("App::PropertyIntegerConstraint", "SmoothingSteps", "Mesh",
+            "Smoothing passes over the face meshes")
+        obj.SmoothingSteps = (1, 0, 100, 1)
+        add("App::PropertyBool", "OptimizeNetgen", "Mesh",
+            "Improve element quality with Netgen (slower)")
+
+
+FOLDERS = (("MaterialsGroup", MaterialsFolder),
+           ("ExcitationsGroup", ExcitationsFolder),
+           ("MeshSizesGroup", MeshSizesFolder))
+
+
 class Study(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyString", "OutputFolder", "EMSolution",
                         "Empty = folder <document>_mesh next to the .FCStd")
-        obj.addProperty("App::PropertyLength", "DefaultMeshSize", "EMSolution",
-                        "Mesh size for bodies without a Mesh Size item")
-        obj.DefaultMeshSize = 5.0
         obj.addProperty("App::PropertyEnumeration", "MshVersion", "EMSolution",
                         "Gmsh file format version (ASCII)")
         obj.MshVersion = ["4.1", "2.2"]
@@ -40,13 +94,33 @@ class Study(_Proxy):
         obj.NextVolumeId = 1
         obj.addProperty("App::PropertyInteger", "NextSurfaceId", "IDs", "Next surface ID")
         obj.NextSurfaceId = 1001
-        for prop, _ in GROUPS:
+        for prop, _ in FOLDERS:
             obj.addProperty("App::PropertyLink", prop, "EMSolution", "")
         obj.addProperty("App::PropertyLink", "MeshResult", "EMSolution", "")
         for prop in ("VolumeIds", "SurfaceIds", "NextVolumeId", "NextSurfaceId"):
             obj.setEditorMode(prop, 1)  # read-only: edit through the ID table
-        for prop in [g for g, _ in GROUPS] + ["MeshResult"]:
+        for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
             obj.setEditorMode(prop, 2)  # hidden
+
+    def onDocumentRestored(self, obj):
+        """Older files: plain group folders, and DefaultMeshSize on the Study."""
+        folders = [getattr(obj, prop) for prop, _ in FOLDERS]
+        if all(isinstance(getattr(f, "Proxy", None), Folder) for f in folders):
+            return
+        for prop, cls in FOLDERS:
+            old = getattr(obj, prop)
+            if isinstance(getattr(old, "Proxy", None), Folder):
+                continue
+            items = old.Group
+            old.Group = []
+            obj.removeObject(old)
+            obj.Document.removeObject(old.Name)
+            _make_folder(obj, prop, cls).Group = items
+        if hasattr(obj, "DefaultMeshSize"):
+            obj.MeshSizesGroup.DefaultMeshSize = obj.DefaultMeshSize
+            obj.removeProperty("DefaultMeshSize")
+        folders = [getattr(obj, prop) for prop, _ in FOLDERS]
+        obj.Group = folders + [o for o in obj.Group if o not in folders]
 
 
 class _Named(_Proxy):
@@ -95,14 +169,23 @@ class MeshSize(_Proxy):
             obj.References = [(b, "") for b in bodies]
 
 
+def _make_folder(study, prop, cls):
+    folder = study.Document.addObject("App::DocumentObjectGroupPython", prop.replace("Group", ""))
+    cls(folder)
+    folder.Label = cls.LABEL
+    study.addObject(folder)
+    setattr(study, prop, folder)
+    if getattr(folder, "ViewObject", None) is not None:  # GUI running; also for converted files
+        from . import taskpanels
+        taskpanels.ViewProviderFolder(folder.ViewObject)
+    return folder
+
+
 def make_study(doc):
     study = doc.addObject("App::DocumentObjectGroupPython", "Study")
     Study(study)
-    for prop, label in GROUPS:
-        group = doc.addObject("App::DocumentObjectGroup", prop.replace("Group", ""))
-        group.Label = label
-        study.addObject(group)
-        setattr(study, prop, group)
+    for prop, cls in FOLDERS:
+        _make_folder(study, prop, cls)
     return study
 
 
@@ -153,6 +236,11 @@ def mesh_sizes(study):
     return list(study.MeshSizesGroup.Group)
 
 
+def is_study_object(obj):
+    """The Study, a folder or an item made by this addon."""
+    return isinstance(getattr(obj, "Proxy", None), _Proxy)
+
+
 def owning_body(obj):
     """A face picked in the 3D view resolves to a PartDesign feature; use its Body."""
     parent = obj.getParentGeoFeatureGroup()
@@ -172,6 +260,43 @@ def subs_by_body(item):
     out = {}
     for body, subs in item.References:
         out.setdefault(body.Name, (body, []))[1].extend(subs)
+    return list(out.values())
+
+
+def material_rows(study):
+    """Rows for the Materials panel: (material, [name, body, volume ID])."""
+    rows = []
+    for m in materials(study):
+        rows += [(m, [display_name(m), b.Label, study.VolumeIds.get(b.Name, "–")])
+                 for b in m.References] or [(m, [display_name(m), "", ""])]
+    return rows
+
+
+def excitation_rows(study):
+    """Rows for the Excitations panel: (excitation, [name, body, faces, surface ID])."""
+    rows = []
+    for e in excitations(study):
+        rows += [(e, [display_name(e), b.Label, ", ".join(faces),
+                      study.SurfaceIds.get(f"{e.Name}|{b.Name}", "–")])
+                 for b, faces in subs_by_body(e)] or [(e, [display_name(e), "", "", ""])]
+    return rows
+
+
+def mesh_size_rows(study):
+    """Rows for the Mesh Sizes panel: (mesh size, [name, size, applies to])."""
+    return [(s, [display_name(s), f"{s.Size.Value:g} mm",
+                 ", ".join(ref_label(b, sub) for b, subs in s.References for sub in subs)])
+            for s in mesh_sizes(study)]
+
+
+def bodies_without_material(study):
+    """Bodies used by an excitation or a mesh size that no material references."""
+    have = {b.Name for m in materials(study) for b in m.References}
+    out = {}
+    for item in excitations(study) + mesh_sizes(study):
+        for b, _ in subs_by_body(item):
+            if b.Name not in have:
+                out.setdefault(b.Name, b)
     return list(out.values())
 
 

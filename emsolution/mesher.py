@@ -102,8 +102,9 @@ def run(job_path):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         build(job, folder)
-        gmsh.option.setNumber("Mesh.Algorithm3D", 1)
-        gmsh.option.setNumber("Mesh.ElementOrder", 1)
+        for name, value in job.get("options", {}).items():  # the user's mesh settings
+            gmsh.option.setNumber(name, value)
+        gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
         gmsh.option.setNumber("Mesh.Optimize", 1)
         gmsh.model.mesh.generate(3)
         gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))

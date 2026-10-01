@@ -74,8 +74,11 @@ def check(study):
     elements = [el for el in elements if el[2]]
     for s, b, subs in elements:
         _check_subs("Mesh size", s, b, subs)
-    if study.DefaultMeshSize.Value <= 0:
+    settings = study.MeshSizesGroup
+    if settings.DefaultMeshSize.Value <= 0:
         raise StudyError("The default mesh size must be greater than 0.")
+    if 0 < settings.MaxSize.Value < settings.MinSize.Value:
+        raise StudyError("The minimum mesh size is larger than the maximum.")
     for s in objects.mesh_sizes(study):
         if s.Size.Value <= 0:
             raise StudyError(f"Mesh size {s.Label} must be greater than 0.")
@@ -83,7 +86,7 @@ def check(study):
     for s, b, subs in sized:
         if "" in subs:  # the whole body
             size[b.Name] = min(size.get(b.Name, s.Size.Value), s.Size.Value)
-    volumes = [(b, ms[0], size.get(b.Name, study.DefaultMeshSize.Value))
+    volumes = [(b, ms[0], size.get(b.Name, settings.DefaultMeshSize.Value))
                for b, ms in material_of.values()]
     names = [objects.item_name(m, b) for b, m, _ in volumes]
     names += [objects.item_name(e, b) for e, b, _ in surfaces]
@@ -92,6 +95,20 @@ def check(study):
         raise StudyError("These group names are the same after removing special characters: "
                          + ", ".join(dups) + ". Rename the items or bodies.")
     return volumes, surfaces, elements
+
+
+def mesh_options(settings):
+    """Gmsh options from the Mesh Sizes folder; a min or max size of 0 keeps Gmsh's default."""
+    opts = {"Mesh.Algorithm": objects.ALGORITHMS_2D[settings.SurfaceAlgorithm],
+            "Mesh.Algorithm3D": objects.ALGORITHMS_3D[settings.VolumeAlgorithm],
+            "Mesh.MeshSizeFactor": settings.SizeFactor,
+            "Mesh.Smoothing": settings.SmoothingSteps,
+            "Mesh.OptimizeNetgen": int(settings.OptimizeNetgen)}
+    if settings.MinSize.Value > 0:
+        opts["Mesh.MeshSizeMin"] = settings.MinSize.Value
+    if settings.MaxSize.Value > 0:
+        opts["Mesh.MeshSizeMax"] = settings.MaxSize.Value
+    return opts
 
 
 def export_subs(folder, body, subs, prefix):
@@ -112,6 +129,7 @@ def write_job(study):
     objects.update_ids(study)
     os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
     job = {"model_name": objects.clean(study.Label), "msh_version": float(study.MshVersion),
+           "options": mesh_options(study.MeshSizesGroup),
            "volumes": [], "surfaces": [], "sizes": []}
     for body, mat, size in volumes:
         vid = int(study.VolumeIds[body.Name])

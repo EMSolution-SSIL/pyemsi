@@ -167,7 +167,85 @@ class StudyTest(unittest.TestCase):
         self.assertIsInstance(objects.materials(study)[0].Proxy, objects.Material)
         self.assertEqual(study.VolumeIds, {"A": "1"})
 
+    def test_folders_keep_their_names(self):
+        folder = self.study.MaterialsGroup
+        folder.Label = "Stuff"
+        self.assertEqual(folder.Label, "Materials")
+        self.assertEqual([f.Label for f in self.study.Group],
+                         ["Materials", "Excitations", "Mesh Sizes"])
+
+    def test_old_plain_folders_are_converted_on_load(self):
+        a = self.box("A")
+        objects.make_material(self.study, "Copper", [a])
+        objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        for prop, cls in objects.FOLDERS:  # as written by earlier versions
+            new = getattr(self.study, prop)
+            items = new.Group
+            new.Group = []
+            self.study.removeObject(new)
+            self.doc.removeObject(new.Name)
+            old = self.doc.addObject("App::DocumentObjectGroup", prop.replace("Group", ""))
+            old.Label = cls.LABEL
+            old.Group = items
+            self.study.addObject(old)
+            setattr(self.study, prop, old)
+        self.study.addProperty("App::PropertyLength", "DefaultMeshSize", "EMSolution", "")
+        self.study.DefaultMeshSize = 3.0
+        path = os.path.join(self.tmp.name, "t.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        study = objects.find_study(self.doc)
+        for prop, cls in objects.FOLDERS:
+            self.assertIsInstance(getattr(study, prop).Proxy, cls)
+        self.assertEqual([f.Label for f in study.Group], ["Materials", "Excitations", "Mesh Sizes"])
+        self.assertEqual(objects.materials(study)[0].Label, "Copper")
+        self.assertEqual(len(objects.mesh_sizes(study)), 1)
+        self.assertFalse(hasattr(study, "DefaultMeshSize"))
+        self.assertEqual(study.MeshSizesGroup.DefaultMeshSize.Value, 3.0)
+        self.assertEqual(len([o for o in self.doc.Objects if o.TypeId == "App::DocumentObjectGroup"]), 0)
+
+    def test_folder_overview_rows(self):
+        a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
+        mat = objects.make_material(self.study, "Copper", [a, b])
+        empty = objects.make_material(self.study, "Iron", [])
+        exc = objects.make_excitation(self.study, "In", [(a, "Face1"), (a, "Face2")])
+        size = objects.make_mesh_size(self.study, 1.5, [(a, ""), (c, "Edge1")])
+        objects.update_ids(self.study)
+        self.assertEqual(objects.material_rows(self.study), [
+            (mat, ["Copper", "A", "1"]), (mat, ["Copper", "B", "2"]), (empty, ["Iron", "", ""])])
+        self.assertEqual(objects.excitation_rows(self.study),
+                         [(exc, ["In", "A", "Face1, Face2", "1001"])])
+        self.assertEqual(objects.mesh_size_rows(self.study),
+                         [(size, ["MeshSize", "1.5 mm", "A, C.Edge1"])])
+        self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
+        d = self.box("D", 30)
+        mat.References += [d]
+        self.assertEqual(objects.material_rows(self.study)[2], (mat, ["Copper", "D", "–"]))
+
+    def test_mesh_settings_go_to_the_job(self):
+        objects.make_material(self.study, "Copper", [self.box("A")])
+        settings = self.study.MeshSizesGroup
+        settings.SurfaceAlgorithm = "Delaunay"
+        settings.VolumeAlgorithm = "HXT"
+        settings.SizeFactor = 0.5
+        settings.MinSize = 0.1
+        settings.MaxSize = 2.0
+        settings.SmoothingSteps = 3
+        settings.OptimizeNetgen = True
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["options"], {
+                "Mesh.Algorithm": 5, "Mesh.Algorithm3D": 10, "Mesh.MeshSizeFactor": 0.5,
+                "Mesh.Smoothing": 3, "Mesh.OptimizeNetgen": 1,
+                "Mesh.MeshSizeMin": 0.1, "Mesh.MeshSizeMax": 2.0})
+
     # --- checks ------------------------------------------------------------
+
+    def test_check_min_size_above_max_size(self):
+        objects.make_material(self.study, "Copper", [self.box("A")])
+        self.study.MeshSizesGroup.MinSize = 3.0
+        self.study.MeshSizesGroup.MaxSize = 2.0
+        self.assertStudyError("larger than the maximum")
 
     def test_check_no_materials(self):
         self.assertStudyError("no materials")
@@ -284,6 +362,8 @@ class StudyTest(unittest.TestCase):
             job = json.load(fh)
         self.assertEqual(job, {
             "model_name": "My_Study", "msh_version": 4.1,
+            "options": {"Mesh.Algorithm": 6, "Mesh.Algorithm3D": 1, "Mesh.MeshSizeFactor": 1.0,
+                        "Mesh.Smoothing": 1, "Mesh.OptimizeNetgen": 0},
             "volumes": [
                 {"id": 1, "name": "Copper_A", "file": "geometry/vol_1.brep", "size": 2.0},
                 {"id": 2, "name": "Air_B", "file": "geometry/vol_2.brep", "size": 5.0}],
@@ -342,7 +422,10 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Air", [b])
         objects.make_excitation(self.study, "T", [(a, "Face1")])  # x = 0 face
         objects.make_mesh_size(self.study, 1.0, [(a, "Face1"), (a, "Edge1"), (b, "Vertex8")])
-        self.study.DefaultMeshSize = 4.0
+        settings = self.study.MeshSizesGroup
+        settings.DefaultMeshSize = 4.0
+        settings.VolumeAlgorithm = "HXT"
+        settings.SizeFactor = 0.8
         path = jobwriter.write_job(self.study)
         r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
         self.assertEqual(r.returncode, 0, r.stderr)

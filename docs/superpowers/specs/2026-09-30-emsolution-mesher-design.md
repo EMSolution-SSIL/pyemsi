@@ -58,7 +58,7 @@ A directory link at `%APPDATA%\FreeCAD\v1-1\Mod\EMSolution` points to it.
 ```
 EMSolution-FreeCAD/
 ├── package.xml            addon metadata
-├── InitGui.py             registers the workbench
+├── InitGui.py             registers the workbench and the workbench switch
 ├── emsolution/
 │   ├── objects.py         Study, Material, Excitation, MeshSize, ID table
 │   ├── commands.py        toolbar buttons
@@ -90,15 +90,50 @@ EMSolution Study
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | OutputFolder | path | empty | Empty = folder `<document name>_mesh` next to the `.FCStd` |
-| DefaultMeshSize | length | 5 mm | Size for bodies without a Mesh Size item |
 | MshVersion | choice | 4.1 | `4.1` or `2.2`, ASCII |
 | VolumeIds | map | empty | body internal Name → volume ID |
 | SurfaceIds | map | empty | `<excitation Name>|<body Name>` → surface ID |
 | NextVolumeId | integer | 1 | next volume ID to hand out |
 | NextSurfaceId | integer | 1001 | next surface ID to hand out |
 
-The Materials, Excitations and Mesh Sizes folders are plain groups created
-together with the Study.
+**Folders**: Materials, Excitations and Mesh Sizes are created together with
+the Study. Their names are fixed: a rename (F2, property editor or Python)
+keeps the folder name, and double-clicking a folder does nothing.
+
+Selecting a folder (a single click) shows its panel in the Tasks tab, the
+standard FreeCAD task watcher: the workbench adds the watchers when it is
+activated and clears them when it is left. A panel shows while its folder is
+the only selection and no edit dialog is open, and is rebuilt on each
+selection so it shows the latest items. It has a read-only overview table;
+double-clicking a row opens that item's edit panel. Items keep the usual
+pattern: click selects, double-click edits.
+
+Selecting a study object (the Study, a folder or an item) while another
+workbench is active switches to the EMSolution workbench, so the panel can
+show. A selection observer registered at FreeCAD start-up does this, just
+after the selection event. Bodies and faces do not switch, and nothing
+switches while an edit dialog is open.
+
+| Folder | Columns | Also shows |
+|---|---|---|
+| Materials | Material, Body, Volume ID ("–" before the first run) | bodies used by an excitation or mesh size that have no material |
+| Excitations | Excitation, Body, Faces, Surface ID | |
+| Mesh Sizes | Mesh size, Size, Applies to | the mesh settings below; each change applies at once as one undo step |
+
+The Mesh Sizes folder holds the mesh settings for the whole study:
+
+| Property | Type | Default | Gmsh option |
+|---|---|---|---|
+| DefaultMeshSize | length | 5 mm | size for bodies without a Mesh Size item |
+| SurfaceAlgorithm | choice | Frontal-Delaunay | `Mesh.Algorithm`: Frontal-Delaunay 6, Delaunay 5, MeshAdapt 1, Automatic 2 |
+| VolumeAlgorithm | choice | Delaunay | `Mesh.Algorithm3D`: Delaunay 1, Frontal 4, HXT 10 |
+| SizeFactor | number | 1 | `Mesh.MeshSizeFactor` |
+| MinSize, MaxSize | length | 0 = no limit | `Mesh.MeshSizeMin`, `Mesh.MeshSizeMax` |
+| SmoothingSteps | integer | 1 | `Mesh.Smoothing` |
+| OptimizeNetgen | yes/no | no | `Mesh.OptimizeNetgen` |
+
+Files from before this change have plain group folders and DefaultMeshSize on
+the Study; both are converted on load.
 
 **Material**: the user-visible Label is the material name. Property
 `References` is a list of bodies.
@@ -162,7 +197,8 @@ Run Mesh stops with a message naming the body or face if:
 4. a body has no material, or more than one (only bodies referenced by
    some tree item are considered)
 5. an excitation face belongs to a body with no material
-6. a Mesh Size item has a size ≤ 0, or the default size is ≤ 0
+6. a Mesh Size item has a size ≤ 0, the default size is ≤ 0, or the
+   minimum size is larger than the maximum
 7. the document is unsaved and OutputFolder is empty (the user is asked to
    save or pick a folder)
 
@@ -198,6 +234,8 @@ unit).
 {
   "model_name": "Study",
   "msh_version": 4.1,
+  "options": {"Mesh.Algorithm": 6, "Mesh.Algorithm3D": 1, "Mesh.MeshSizeFactor": 1.0,
+              "Mesh.Smoothing": 1, "Mesh.OptimizeNetgen": 0},
   "volumes": [
     {"id": 1, "name": "Copper_Body", "file": "geometry/vol_1.brep", "size": 1.0}
   ],
@@ -213,7 +251,9 @@ unit).
 
 Each volume already carries its effective size (Mesh Size item or default),
 so the mesher needs no size rules. `sizes` has one entry per (Mesh Size
-item, body) pair with faces, edges or vertices. Paths are relative to `job.json`.
+item, body) pair with faces, edges or vertices. `options` are the mesh
+settings as Gmsh option names; `Mesh.MeshSizeMin` and `Mesh.MeshSizeMax`
+are left out when 0. Paths are relative to `job.json`.
 `model_name` is the Study Label passed through the name cleanup.
 
 ## 9. Mesher (`mesher.py`)
@@ -244,8 +284,9 @@ Usage: `python.exe mesher.py <job.json>`
    `IncludeBoundary` = 1). A `Min` field
    over them is the background field. Turn off size from points,
    curvature and boundary extension, so only the fields decide.
-10. `Mesh.Algorithm3D` = 1 (Delaunay), `Mesh.ElementOrder` = 1,
-    `Mesh.Optimize` = 1. Generate the 3D mesh.
+10. Set each entry of `options` (an unknown name is an error). Then set
+    `Mesh.ElementOrder` = 1 and `Mesh.Optimize` = 1, last, so the options
+    cannot change them. Generate the 3D mesh.
 11. Write `<model_name>.msh` (the requested MSH version, ASCII) and
     `<model_name>.unv` (for display in FreeCAD). Because physical groups
     exist, only elements in them are saved: tetrahedra of all bodies and
@@ -285,6 +326,8 @@ function and saved as BREP files, so FreeCAD is not needed:
 - two sizes → the smaller-size box has more elements per volume
 - two overlapping boxes → exit code 1 and an overlap error
 - a face offset from its box → exit code 1 and a merge error
+- mesh options (HXT, size factor, Netgen, max size) are applied; an unknown
+  option name → exit code 1 and an error naming it
 
 **Study tests** (`tests/test_study.py`, run with `FreeCADCmd`):
 
@@ -293,11 +336,16 @@ function and saved as BREP files, so FreeCAD is not needed:
 - a deleted body's ID is not reused
 - a duplicate ID edit is refused
 - checks in section 7 produce their messages
-- `job.json` content matches a small hand-built document
+- `job.json` content matches a small hand-built document, mesh options
+  included
+- folders keep their names when renamed; old files with plain folders and
+  the size on the Study are converted on load
+- the folder overview rows (volume IDs, faces, sizes) are correct
 
 **Manual checklist** (buttons and dialogs): create a study, add each item
-type, edit, rename, delete, run the mesh, cancel a run, view the result,
-edit the ID table.
+type, edit, rename, delete, select each folder (also from another
+workbench), double-click a row in its table, change the mesh settings, run
+the mesh, cancel a run, view the result, edit the ID table.
 
 ## 12. Later steps (each gets its own design)
 

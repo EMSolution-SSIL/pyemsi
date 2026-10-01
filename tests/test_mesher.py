@@ -70,9 +70,11 @@ class MesherTest(unittest.TestCase):
     def geo(self, name):
         return os.path.join(self.dir, "geometry", name)
 
-    def run_job(self, volumes, surfaces=(), version=4.1, sizes=()):
+    def run_job(self, volumes, surfaces=(), version=4.1, sizes=(), options=None):
         job = {"model_name": "Model", "msh_version": version,
                "volumes": list(volumes), "surfaces": list(surfaces), "sizes": list(sizes)}
+        if options is not None:
+            job["options"] = options
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -176,6 +178,40 @@ class MesherTest(unittest.TestCase):
         last = r.stderr.strip().splitlines()[-1]
         self.assertIn("ERROR:", last)
         self.assertIn("Fine", last)
+
+    def box_tets(self, options=None):
+        """Mesh a unit box at size 0.5. Returns {element type: count} of the 3D elements."""
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")], options=options)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(os.path.join(self.dir, "Model.msh"))
+            types, tags, _ = gmsh.model.mesh.getElements(3)
+        finally:
+            gmsh.finalize()
+        return {int(t): len(x) for t, x in zip(types, tags)}
+
+    def test_options_are_applied(self):
+        plain = self.box_tets()
+        finer = self.box_tets({"Mesh.Algorithm3D": 10, "Mesh.MeshSizeFactor": 0.5,
+                               "Mesh.OptimizeNetgen": 1})
+        self.assertEqual(list(finer), [4], "only first-order tetrahedra")
+        self.assertGreater(finer[4], 3 * plain[4])  # 100 -> about 400 tetrahedra
+
+    def test_max_size_option_caps_the_body_size(self):
+        plain = self.box_tets()
+        capped = self.box_tets({"Mesh.MeshSizeMax": 0.2})
+        self.assertGreater(capped[4], 4 * plain[4])
+
+    def test_unknown_option_fails_cleanly(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")], options={"Mesh.NoSuchOption": 1})
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertIn("ERROR:", last)
+        self.assertIn("NoSuchOption", last)
 
     def test_msh_version_22(self):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)

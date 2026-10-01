@@ -1,4 +1,4 @@
-"""View providers, the item edit panel, the ID table dialog and selection helpers."""
+"""View providers, the item edit panel, folder watchers, the ID table dialog and selection helpers."""
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 
@@ -60,6 +60,187 @@ class ViewProviderStudy(_ViewProvider):
         return True
 
 
+class ViewProviderFolder(_ViewProvider):
+    """No getIcon: the standard folder icon. Its panel shows in the Tasks tab when the folder
+    is selected (FolderWatcher). Double-click does nothing, so it does not start a rename."""
+
+    def doubleClicked(self, vobj):
+        return True
+
+
+def _length_box(value, minimum=0.001, no_limit=False):
+    box = QtWidgets.QDoubleSpinBox()
+    box.setDecimals(3)
+    box.setRange(0.0 if no_limit else minimum, 1e6)
+    box.setSuffix(" mm")
+    if no_limit:
+        box.setSpecialValueText("no limit")  # shown for 0
+    box.setValue(value)
+    return box
+
+
+class MeshSettings:
+    """Edits the mesh settings stored on the Mesh Sizes folder. Each change applies at once."""
+
+    def __init__(self, folder):
+        self.folder = folder
+        self.box = QtWidgets.QGroupBox("Mesh settings")
+        form = QtWidgets.QFormLayout(self.box)
+        self.default = _length_box(folder.DefaultMeshSize.Value)
+        form.addRow("Default size", self.default)
+        self.algorithms = {}
+        for prop, label in (("SurfaceAlgorithm", "2D algorithm"),
+                            ("VolumeAlgorithm", "3D algorithm")):
+            combo = QtWidgets.QComboBox()
+            combo.addItems(folder.getEnumerationsOfProperty(prop))
+            combo.setCurrentText(getattr(folder, prop))
+            form.addRow(label, combo)
+            self.algorithms[prop] = combo
+        self.factor = QtWidgets.QDoubleSpinBox()
+        self.factor.setDecimals(3)
+        self.factor.setRange(0.01, 100.0)
+        self.factor.setSingleStep(0.1)
+        self.factor.setValue(folder.SizeFactor)
+        form.addRow("Size factor", self.factor)
+        self.min_size = _length_box(folder.MinSize.Value, no_limit=True)
+        self.max_size = _length_box(folder.MaxSize.Value, no_limit=True)
+        form.addRow("Min size", self.min_size)
+        form.addRow("Max size", self.max_size)
+        self.smoothing = QtWidgets.QSpinBox()
+        self.smoothing.setRange(0, 100)
+        self.smoothing.setValue(folder.SmoothingSteps)
+        form.addRow("Smoothing steps", self.smoothing)
+        self.netgen = QtWidgets.QCheckBox("Optimize with Netgen (slower)")
+        self.netgen.setChecked(folder.OptimizeNetgen)
+        form.addRow(self.netgen)
+        for box in (self.default, self.factor, self.min_size, self.max_size, self.smoothing):
+            box.setKeyboardTracking(False)  # typed numbers apply on Enter or leaving the box
+            box.valueChanged.connect(self.save)
+        for combo in self.algorithms.values():
+            combo.currentTextChanged.connect(self.save)
+        self.netgen.toggled.connect(self.save)
+
+    def values(self):
+        out = {prop: combo.currentText() for prop, combo in self.algorithms.items()}
+        out.update(DefaultMeshSize=self.default.value(), SizeFactor=self.factor.value(),
+                   MinSize=self.min_size.value(), MaxSize=self.max_size.value(),
+                   SmoothingSteps=self.smoothing.value(), OptimizeNetgen=self.netgen.isChecked())
+        return out
+
+    def save(self, *_):
+        f = self.folder
+        changed = {p: v for p, v in self.values().items()
+                   if getattr(getattr(f, p), "Value", getattr(f, p)) != v}  # Value: a length
+        if not changed:
+            return
+        f.Document.openTransaction("Edit mesh settings")
+        for prop, value in changed.items():
+            setattr(f, prop, value)
+        f.Document.commitTransaction()
+        f.Document.recompute()
+
+
+class FolderView:
+    """Overview of a folder's items. Double-click a row to edit that item.
+    The Mesh Sizes folder also edits the mesh settings."""
+
+    def __init__(self, folder):
+        study = objects.find_study(folder.Document)
+        headers, rows = {
+            objects.MaterialsFolder: (["Material", "Body", "Volume ID"], objects.material_rows),
+            objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "Surface ID"],
+                                        objects.excitation_rows),
+            objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
+        }[type(folder.Proxy)]
+        self.rows = rows(study)
+        self.form = QtWidgets.QWidget()  # the watcher's task box shows the folder name
+        layout = QtWidgets.QVBoxLayout(self.form)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.settings = None
+        if isinstance(folder.Proxy, objects.MeshSizesFolder):
+            self.settings = MeshSettings(folder)
+            layout.addWidget(self.settings.box)
+        self.table = QtWidgets.QTableWidget(len(self.rows), len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.verticalHeader().hide()
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        for r, (_item, cells) in enumerate(self.rows):
+            for c, text in enumerate(cells):
+                self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
+        self.table.resizeColumnsToContents()
+        self.table.cellDoubleClicked.connect(self.open_item)
+        layout.addWidget(self.table)
+        self.missing = None
+        if isinstance(folder.Proxy, objects.MaterialsFolder):
+            bodies = objects.bodies_without_material(study)
+            if bodies:
+                self.missing = QtWidgets.QLabel(
+                    "No material (Run Mesh will stop): " + ", ".join(b.Label for b in bodies))
+                self.missing.setWordWrap(True)
+                self.missing.setStyleSheet("color: #c00000")
+                layout.addWidget(self.missing)
+
+    def open_item(self, row, _column):
+        Gui.Control.showDialog(ItemPanel(self.rows[row][0]))
+
+
+class FolderWatcher:
+    """Shows a folder's overview in the Tasks tab while that folder is the only selection
+    and no edit dialog is open. FreeCAD calls shouldShow on every selection change."""
+
+    def __init__(self, cls):
+        self.cls = cls
+        self.title = cls.LABEL
+        self.box = QtWidgets.QWidget()
+        self.layout = QtWidgets.QVBoxLayout(self.box)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.widgets = [self.box]
+        self.view = None
+
+    def shouldShow(self):
+        sel = Gui.Selection.getSelection()
+        if len(sel) != 1 or not isinstance(getattr(sel[0], "Proxy", None), self.cls):
+            return False
+        if self.view is not None:  # rebuild, so the table shows the latest items
+            self.view.form.setParent(None)
+            self.view.form.deleteLater()
+        self.view = FolderView(sel[0])
+        self.layout.addWidget(self.view.form)
+        return True
+
+
+def folder_watchers():
+    return [FolderWatcher(cls) for _prop, cls in objects.FOLDERS]
+
+
+WORKBENCH = "EMSolutionWorkbench"
+
+
+class WorkbenchSwitch:
+    """Selecting a study object while another workbench is active switches to EMSolution,
+    so its panel can show. Bodies and faces do not switch; nor does anything during an edit."""
+
+    def addSelection(self, doc, obj, sub, pnt):
+        QtCore.QTimer.singleShot(0, self.check)  # switching inside the selection event is unsafe
+
+    def check(self):
+        if Gui.activeWorkbench().name() == WORKBENCH or Gui.Control.activeDialog():
+            return
+        if any(objects.is_study_object(o) for o in Gui.Selection.getSelection()):
+            Gui.activateWorkbench(WORKBENCH)
+
+
+_switch = None
+
+
+def install_workbench_switch():
+    global _switch
+    if _switch is None:
+        _switch = WorkbenchSwitch()
+        Gui.Selection.addObserver(_switch)
+
+
 class ViewProviderItem(_ViewProvider):
     def getIcon(self):
         obj = getattr(self, "Object", None)
@@ -92,11 +273,7 @@ class ItemPanel:
         layout.addRow("Name", self.name)
         self.size = None
         if isinstance(obj.Proxy, objects.MeshSize):
-            self.size = QtWidgets.QDoubleSpinBox()
-            self.size.setDecimals(3)
-            self.size.setRange(0.001, 1e6)
-            self.size.setSuffix(" mm")
-            self.size.setValue(obj.Size.Value)
+            self.size = _length_box(obj.Size.Value)
             layout.addRow("Size", self.size)
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -113,7 +290,7 @@ class ItemPanel:
 
     def refresh(self):
         self.refs.clear()
-        self.refs.addItems([f"{b.Label}.{f}" if f else b.Label for b, f in self.current])
+        self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
 
     def add_selection(self):
         new = self.pick()

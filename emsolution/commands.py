@@ -96,7 +96,7 @@ class AddMeshSize(_StudyCommand):
         refs = taskpanels.selected_mesh_refs()
         if not refs:
             return warn("Select one or more bodies, faces, edges or vertices first.")
-        size = ask_size(active_study().DefaultMeshSize.Value)
+        size = ask_size(active_study().MeshSizesGroup.DefaultMeshSize.Value)
         if size:
             _create(active_study(), "Add Mesh Size",
                     lambda: objects.make_mesh_size(active_study(), size, refs))

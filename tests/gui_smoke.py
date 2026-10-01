@@ -84,6 +84,76 @@ def main():
     mat.References = [doc.A, doc.B]
     log.append("panel ok")
 
+    from PySide import QtWidgets
+
+    def task_buttons():
+        boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
+        return sorted(b.text().replace("&", "") for box in boxes if box.isVisible()
+                      for b in box.buttons())
+
+    def select(*names):
+        Gui.Selection.clearSelection()
+        for name in names:
+            Gui.Selection.addSelection(doc.Name, name)
+        for _ in range(5):  # the watcher panel and the workbench switch follow the selection
+            Gui.updateGui()
+
+    first_column = {"Material": "Materials", "Excitation": "Excitations", "Mesh size": "Mesh Sizes"}
+
+    def shown_folders():
+        """{folder name: table} for the folder panels visible in the Tasks tab."""
+        tables = Gui.getMainWindow().findChildren(QtWidgets.QTableWidget)
+        return {first_column[t.horizontalHeaderItem(0).text()]: t for t in tables
+                if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column}
+
+    rows = {"Materials": 2, "Excitations": 1, "Mesh Sizes": 2}
+    for folder in (study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
+        assert isinstance(folder.ViewObject.Proxy, taskpanels.ViewProviderFolder), folder.Name
+        folder.Label = "Renamed"
+        assert folder.Label == folder.Proxy.LABEL, folder.Label
+        assert folder.ViewObject.Proxy.doubleClicked(folder.ViewObject)
+        assert not Gui.Control.activeDialog(), "double-click opened a dialog"
+        select(folder.Name)
+        shown = shown_folders()
+        assert list(shown) == [folder.Label], (folder.Name, list(shown))
+        assert shown[folder.Label].rowCount() == rows[folder.Label], folder.Name
+    select("A")
+    assert shown_folders() == {}, "folder panel still shown for a body"
+
+    select(study.MeshSizesGroup.Name)
+    combo, = [c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
+              if c.isVisible() and c.findText("HXT") >= 0]
+    combo.setCurrentText("HXT")
+    factor, = [s for s in Gui.getMainWindow().findChildren(QtWidgets.QDoubleSpinBox)
+               if s.isVisible() and s.suffix() == ""]
+    factor.setValue(0.9)
+    assert (study.MeshSizesGroup.VolumeAlgorithm, study.MeshSizesGroup.SizeFactor) == ("HXT", 0.9)
+    assert doc.UndoNames[:2] == ["Edit mesh settings"] * 2, doc.UndoNames
+
+    select(study.MaterialsGroup.Name)
+    shown_folders()["Materials"].cellDoubleClicked.emit(1, 0)
+    for _ in range(5):
+        Gui.updateGui()
+    assert task_buttons() == ["Cancel", "OK"], ("item panel did not open from the row", task_buttons())
+    assert shown_folders() == {}, "folder panel shown beside the edit dialog"
+    Gui.Control.closeDialog()
+    for _ in range(5):
+        Gui.updateGui()
+    assert list(shown_folders()) == ["Materials"], "folder panel not back after the edit"
+    log.append("folder panels ok")
+
+    Gui.activateWorkbench("PartWorkbench")
+    select("A")
+    assert Gui.activeWorkbench().name() == "PartWorkbench", "a body switched the workbench"
+    Gui.Control.showDialog(taskpanels.ItemPanel(mat))
+    select(study.ExcitationsGroup.Name)
+    assert Gui.activeWorkbench().name() == "PartWorkbench", "switched during an edit"
+    Gui.Control.closeDialog()
+    select(study.ExcitationsGroup.Name)
+    assert Gui.activeWorkbench().name() == "EMSolutionWorkbench", Gui.activeWorkbench().name()
+    assert list(shown_folders()) == ["Excitations"], list(shown_folders())
+    log.append("workbench switch ok")
+
     dialog = taskpanels.IdTableDialog(study)
     assert [r[2] for r in dialog.rows] == ["Iron_A", "Iron_B", "Terminal_In_A"], dialog.rows
     dialog.table.item(0, 2).setText("7")
@@ -98,6 +168,30 @@ def main():
     assert run.error == "", run.error
     assert study.MeshResult is not None and study.MeshResult.FemMesh.VolumeCount > 0
     log.append(f"mesh ok: {study.MeshResult.FemMesh.VolumeCount} volumes")
+
+    # an older file with plain group folders is converted on load, view providers included
+    for prop, cls in objects.FOLDERS:
+        new = getattr(study, prop)
+        items = new.Group
+        new.Group = []
+        study.removeObject(new)
+        doc.removeObject(new.Name)
+        old = doc.addObject("App::DocumentObjectGroup", prop.replace("Group", ""))
+        old.Label = cls.LABEL
+        old.Group = items
+        study.addObject(old)
+        setattr(study, prop, old)
+    path = os.path.join(study.OutputFolder, "old.FCStd")
+    doc.saveAs(path)
+    App.closeDocument(doc.Name)
+    doc = App.openDocument(path)
+    study = objects.find_study(doc)
+    for prop, cls in objects.FOLDERS:
+        folder = getattr(study, prop)
+        assert isinstance(folder.Proxy, cls), prop
+        assert isinstance(folder.ViewObject.Proxy, taskpanels.ViewProviderFolder), prop
+    assert len(objects.materials(study)) == 1
+    log.append("old file converted")
     App.closeDocument(doc.Name)
 
 
