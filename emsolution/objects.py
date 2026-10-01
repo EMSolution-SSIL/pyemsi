@@ -102,26 +102,6 @@ class Study(_Proxy):
         for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
             obj.setEditorMode(prop, 2)  # hidden
 
-    def onDocumentRestored(self, obj):
-        """Older files: plain group folders, and DefaultMeshSize on the Study."""
-        folders = [getattr(obj, prop) for prop, _ in FOLDERS]
-        if all(isinstance(getattr(f, "Proxy", None), Folder) for f in folders):
-            return
-        for prop, cls in FOLDERS:
-            old = getattr(obj, prop)
-            if isinstance(getattr(old, "Proxy", None), Folder):
-                continue
-            items = old.Group
-            old.Group = []
-            obj.removeObject(old)
-            obj.Document.removeObject(old.Name)
-            _make_folder(obj, prop, cls).Group = items
-        if hasattr(obj, "DefaultMeshSize"):
-            obj.MeshSizesGroup.DefaultMeshSize = obj.DefaultMeshSize
-            obj.removeProperty("DefaultMeshSize")
-        folders = [getattr(obj, prop) for prop, _ in FOLDERS]
-        obj.Group = folders + [o for o in obj.Group if o not in folders]
-
 
 class _Named(_Proxy):
     """GroupName holds the typed name: FreeCAD renames a Label that is already taken."""
@@ -155,18 +135,8 @@ class MeshSize(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLength", "Size", "EMSolution", "Element size")
-        self.add_references(obj)
-
-    def add_references(self, obj):
         obj.addProperty("App::PropertyLinkSubListGlobal", "References", "EMSolution",
                         "Bodies (empty sub-element), faces, edges and vertices meshed with this size")
-
-    def onDocumentRestored(self, obj):
-        if obj.getTypeIdOfProperty("References") == "App::PropertyLinkListGlobal":  # older files
-            bodies = obj.References
-            obj.removeProperty("References")
-            self.add_references(obj)
-            obj.References = [(b, "") for b in bodies]
 
 
 def _make_folder(study, prop, cls):
@@ -175,7 +145,7 @@ def _make_folder(study, prop, cls):
     folder.Label = cls.LABEL
     study.addObject(folder)
     setattr(study, prop, folder)
-    if getattr(folder, "ViewObject", None) is not None:  # GUI running; also for converted files
+    if getattr(folder, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
         taskpanels.ViewProviderFolder(folder.ViewObject)
     return folder

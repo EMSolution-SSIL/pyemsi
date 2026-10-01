@@ -132,9 +132,6 @@ The Mesh Sizes folder holds the mesh settings for the whole study:
 | SmoothingSteps | integer | 1 | `Mesh.Smoothing` |
 | OptimizeNetgen | yes/no | no | `Mesh.OptimizeNetgen` |
 
-Files from before this change have plain group folders and DefaultMeshSize on
-the Study; both are converted on load.
-
 **Material**: the user-visible Label is the material name. Property
 `References` is a list of bodies.
 
@@ -144,8 +141,7 @@ owns them.
 
 **Mesh Size**: property `Size` (length) and `References`, a list of
 (body, sub-element) pairs: an empty sub-element means the whole body,
-otherwise `FaceN`, `EdgeN` or `VertexN`. Files from before this change stored
-a plain list of bodies; it is converted on load.
+otherwise `FaceN`, `EdgeN` or `VertexN`.
 
 **Mesh Result**: a FEM mesh object used for display only. It is replaced on
 every successful run.
@@ -338,8 +334,7 @@ function and saved as BREP files, so FreeCAD is not needed:
 - checks in section 7 produce their messages
 - `job.json` content matches a small hand-built document, mesh options
   included
-- folders keep their names when renamed; old files with plain folders and
-  the size on the Study are converted on load
+- folders keep their names when renamed
 - the folder overview rows (volume IDs, faces, sizes) are correct
 
 **Manual checklist** (buttons and dialogs): create a study, add each item

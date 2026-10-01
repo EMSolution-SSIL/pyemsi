@@ -171,15 +171,14 @@ class FolderView:
         self.table.resizeColumnsToContents()
         self.table.cellDoubleClicked.connect(self.open_item)
         layout.addWidget(self.table)
-        self.missing = None
         if isinstance(folder.Proxy, objects.MaterialsFolder):
             bodies = objects.bodies_without_material(study)
             if bodies:
-                self.missing = QtWidgets.QLabel(
+                missing = QtWidgets.QLabel(
                     "No material (Run Mesh will stop): " + ", ".join(b.Label for b in bodies))
-                self.missing.setWordWrap(True)
-                self.missing.setStyleSheet("color: #c00000")
-                layout.addWidget(self.missing)
+                missing.setWordWrap(True)
+                missing.setStyleSheet("color: #c00000")
+                layout.addWidget(missing)
 
     def open_item(self, row, _column):
         Gui.Control.showDialog(ItemPanel(self.rows[row][0]))
@@ -269,7 +268,7 @@ class ItemPanel:
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
-        self.name = QtWidgets.QLineEdit(getattr(obj, "GroupName", "") or obj.Label)
+        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
         layout.addRow("Name", self.name)
         self.size = None
         if isinstance(obj.Proxy, objects.MeshSize):

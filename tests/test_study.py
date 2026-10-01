@@ -174,37 +174,6 @@ class StudyTest(unittest.TestCase):
         self.assertEqual([f.Label for f in self.study.Group],
                          ["Materials", "Excitations", "Mesh Sizes"])
 
-    def test_old_plain_folders_are_converted_on_load(self):
-        a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_mesh_size(self.study, 2.0, [(a, "")])
-        for prop, cls in objects.FOLDERS:  # as written by earlier versions
-            new = getattr(self.study, prop)
-            items = new.Group
-            new.Group = []
-            self.study.removeObject(new)
-            self.doc.removeObject(new.Name)
-            old = self.doc.addObject("App::DocumentObjectGroup", prop.replace("Group", ""))
-            old.Label = cls.LABEL
-            old.Group = items
-            self.study.addObject(old)
-            setattr(self.study, prop, old)
-        self.study.addProperty("App::PropertyLength", "DefaultMeshSize", "EMSolution", "")
-        self.study.DefaultMeshSize = 3.0
-        path = os.path.join(self.tmp.name, "t.FCStd")
-        self.doc.saveAs(path)
-        App.closeDocument(self.doc.Name)
-        self.doc = App.openDocument(path)
-        study = objects.find_study(self.doc)
-        for prop, cls in objects.FOLDERS:
-            self.assertIsInstance(getattr(study, prop).Proxy, cls)
-        self.assertEqual([f.Label for f in study.Group], ["Materials", "Excitations", "Mesh Sizes"])
-        self.assertEqual(objects.materials(study)[0].Label, "Copper")
-        self.assertEqual(len(objects.mesh_sizes(study)), 1)
-        self.assertFalse(hasattr(study, "DefaultMeshSize"))
-        self.assertEqual(study.MeshSizesGroup.DefaultMeshSize.Value, 3.0)
-        self.assertEqual(len([o for o in self.doc.Objects if o.TypeId == "App::DocumentObjectGroup"]), 0)
-
     def test_folder_overview_rows(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
         mat = objects.make_material(self.study, "Copper", [a, b])
@@ -398,23 +367,6 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Copper", [a])
         objects.make_mesh_size(self.study, 1.0, [(a, "Edge99")])  # a box has 12 edges
         self.assertStudyError("has no Edge99")
-
-    def test_old_mesh_size_with_body_list_is_converted_on_load(self):
-        a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
-        old = objects.make_mesh_size(self.study, 2.0, [])
-        old.removeProperty("References")  # as written by earlier versions
-        old.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution", "")
-        old.References = [a]
-        path = os.path.join(self.tmp.name, "t.FCStd")
-        self.doc.saveAs(path)
-        App.closeDocument(self.doc.Name)
-        self.doc = App.openDocument(path)
-        size, = objects.mesh_sizes(objects.find_study(self.doc))
-        self.assertEqual(size.getTypeIdOfProperty("References"), "App::PropertyLinkSubListGlobal")
-        self.assertEqual(size.References, [(self.doc.A, ("",))])
-        volumes = jobwriter.check(objects.find_study(self.doc))[0]
-        self.assertEqual(volumes[0][2], 2.0)
 
     def test_written_job_meshes(self):
         a, b = self.box("A"), self.box("B", 10)

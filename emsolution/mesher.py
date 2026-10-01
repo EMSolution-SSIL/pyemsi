@@ -52,7 +52,7 @@ def build(job, folder):
         body_vols[v["id"]] = tags
 
     surf_tags = {s["id"]: [] for s in surfs}
-    for (s, path), dimtags in zip(surf_files, out_map[len(vols):]):
+    for (s, _), dimtags in zip(surf_files, out_map[len(vols):]):
         surf_tags[s["id"]] += [t for d, t in dimtags if d == 2]
 
     for s in surfs:

@@ -168,30 +168,6 @@ def main():
     assert run.error == "", run.error
     assert study.MeshResult is not None and study.MeshResult.FemMesh.VolumeCount > 0
     log.append(f"mesh ok: {study.MeshResult.FemMesh.VolumeCount} volumes")
-
-    # an older file with plain group folders is converted on load, view providers included
-    for prop, cls in objects.FOLDERS:
-        new = getattr(study, prop)
-        items = new.Group
-        new.Group = []
-        study.removeObject(new)
-        doc.removeObject(new.Name)
-        old = doc.addObject("App::DocumentObjectGroup", prop.replace("Group", ""))
-        old.Label = cls.LABEL
-        old.Group = items
-        study.addObject(old)
-        setattr(study, prop, old)
-    path = os.path.join(study.OutputFolder, "old.FCStd")
-    doc.saveAs(path)
-    App.closeDocument(doc.Name)
-    doc = App.openDocument(path)
-    study = objects.find_study(doc)
-    for prop, cls in objects.FOLDERS:
-        folder = getattr(study, prop)
-        assert isinstance(folder.Proxy, cls), prop
-        assert isinstance(folder.ViewObject.Proxy, taskpanels.ViewProviderFolder), prop
-    assert len(objects.materials(study)) == 1
-    log.append("old file converted")
     App.closeDocument(doc.Name)
 
 
