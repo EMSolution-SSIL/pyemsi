@@ -13,10 +13,14 @@ class JobError(Exception):
     pass
 
 
-def _import_one(path, dim):
+FIELD_LISTS = {0: "PointsList", 1: "CurvesList", 2: "SurfacesList", 3: "VolumesList"}
+
+
+def _import_one(path, *dims):
     tags = gmsh.model.occ.importShapes(path, highestDimOnly=True)
-    if len(tags) != 1 or tags[0][0] != dim:
-        raise JobError(f"{os.path.basename(path)}: expected one {dim}D entity, got {tags}")
+    if len(tags) != 1 or tags[0][0] not in dims:
+        raise JobError(f"{os.path.basename(path)}: expected one "
+                       f"{'/'.join(map(str, dims))}D entity, got {tags}")
     return tags[0]
 
 
@@ -28,6 +32,8 @@ def build(job, folder):
     inputs = [_import_one(os.path.join(folder, v["file"]), 3) for v in vols]
     surf_files = [(s, os.path.join(folder, f)) for s in surfs for f in s["files"]]
     inputs += [_import_one(path, 2) for _, path in surf_files]
+    size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
+    inputs += [_import_one(path, 0, 1, 2) for _, path in size_files]
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
         out_map = [inputs]
@@ -61,14 +67,22 @@ def build(job, folder):
     for s in surfs:
         gmsh.model.addPhysicalGroup(2, sorted(set(surf_tags[s["id"]])), s["id"], name=s["name"])
 
-    by_size = {}
+    by_size = {}  # size -> {dim: [tags]}
     for v in vols:
-        by_size.setdefault(float(v["size"]), []).extend(body_vols[v["id"]])
+        by_size.setdefault(float(v["size"]), {}).setdefault(3, []).extend(body_vols[v["id"]])
+    first = len(vols) + len(surf_files)
+    for (z, path), dimtags in zip(size_files, out_map[first:]):
+        for d, t in dimtags:
+            if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
+                raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} "
+                               f"did not merge with the bodies")
+            by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
     fields = []
-    for size, tags in by_size.items():
+    for size, by_dim in by_size.items():
         f = gmsh.model.mesh.field.add("Constant")
         gmsh.model.mesh.field.setNumber(f, "VIn", size)
-        gmsh.model.mesh.field.setNumbers(f, "VolumesList", tags)
+        for d, tags in by_dim.items():
+            gmsh.model.mesh.field.setNumbers(f, FIELD_LISTS[d], tags)
         gmsh.model.mesh.field.setNumber(f, "IncludeBoundary", 1)
         fields.append(f)
     fmin = gmsh.model.mesh.field.add("Min")

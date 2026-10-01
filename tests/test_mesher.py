@@ -36,6 +36,28 @@ def write_rect(path, x, y, z, dx, dy):
         gmsh.finalize()
 
 
+def write_line(path, p, q):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.occ.addLine(gmsh.model.occ.addPoint(*p), gmsh.model.occ.addPoint(*q))
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_point(path, p):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.occ.addPoint(*p)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
 class MesherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -48,9 +70,9 @@ class MesherTest(unittest.TestCase):
     def geo(self, name):
         return os.path.join(self.dir, "geometry", name)
 
-    def run_job(self, volumes, surfaces=(), version=4.1):
+    def run_job(self, volumes, surfaces=(), version=4.1, sizes=()):
         job = {"model_name": "Model", "msh_version": version,
-               "volumes": list(volumes), "surfaces": list(surfaces)}
+               "volumes": list(volumes), "surfaces": list(surfaces), "sizes": list(sizes)}
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -106,6 +128,54 @@ class MesherTest(unittest.TestCase):
             ents = gmsh.model.getEntitiesForPhysicalGroup(3, group)
             return sum(len(gmsh.model.mesh.getElements(3, e)[1][0]) for e in ents)
         self.assertGreater(tets(1), 5 * tets(2))
+
+    def mesh_box_with_size(self, file=None, size=0.05):
+        """Mesh a unit box at size 0.5, plus one size item from geometry/<file> if given.
+        Returns the node coordinates as (x, y, z) tuples."""
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        sizes = [{"name": "Fine", "size": size, "files": ["geometry/" + file]}] if file else []
+        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")], sizes=sizes)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(os.path.join(self.dir, "Model.msh"))
+            c = gmsh.model.mesh.getNodes()[1]
+        finally:
+            gmsh.finalize()
+        return [tuple(c[i:i + 3]) for i in range(0, len(c), 3)]
+
+    def test_face_size_refines_only_that_face(self):
+        write_rect(self.geo("size_1_1.brep"), 0, 0, 1, 1, 1)  # top face
+        nodes = self.mesh_box_with_size("size_1_1.brep")
+        top = sum(abs(z - 1) < 1e-9 for x, y, z in nodes)
+        bottom = sum(abs(z) < 1e-9 for x, y, z in nodes)
+        self.assertGreater(top, 20 * bottom)
+
+    def test_edge_size_refines_that_edge(self):
+        write_line(self.geo("size_1_1.brep"), (0, 0, 0), (1, 0, 0))  # box edge along x
+        nodes = self.mesh_box_with_size("size_1_1.brep")
+        on_edge = sum(abs(y) < 1e-9 and abs(z) < 1e-9 for x, y, z in nodes)
+        opposite = sum(abs(y - 1) < 1e-9 and abs(z - 1) < 1e-9 for x, y, z in nodes)
+        self.assertGreaterEqual(on_edge, 20)
+        self.assertLess(opposite, 5)
+
+    def test_vertex_size_refines_around_that_corner(self):
+        def near_corner(nodes):
+            return sum(0 < x * x + y * y + z * z < 0.3 ** 2 for x, y, z in nodes)
+        before = near_corner(self.mesh_box_with_size())
+        write_point(self.geo("size_1_1.brep"), (0, 0, 0))
+        self.assertGreater(near_corner(self.mesh_box_with_size("size_1_1.brep")), before)
+
+    def test_size_face_off_the_bodies_fails(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_rect(self.geo("size_1_1.brep"), 0, 0, 1.5, 1, 1)  # floats above the box
+        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")],
+                         sizes=[{"name": "Fine", "size": 0.1, "files": ["geometry/size_1_1.brep"]}])
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertIn("ERROR:", last)
+        self.assertIn("Fine", last)
 
     def test_msh_version_22(self):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)

@@ -194,13 +194,13 @@ class StudyTest(unittest.TestCase):
     def test_check_mesh_size_on_body_without_material(self):
         a, b = self.box("A"), self.box("B", 10)
         objects.make_material(self.study, "Copper", [a])
-        objects.make_mesh_size(self.study, 1.0, [b])
+        objects.make_mesh_size(self.study, 1.0, [(b, "")])
         self.assertStudyError("mesh size but no material")
 
     def test_check_zero_size(self):
         a = self.box("A")
         objects.make_material(self.study, "Copper", [a])
-        objects.make_mesh_size(self.study, 0.0, [a])
+        objects.make_mesh_size(self.study, 0.0, [(a, "")])
         self.assertStudyError("greater than 0")
 
     def test_check_missing_face(self):
@@ -239,9 +239,9 @@ class StudyTest(unittest.TestCase):
     def test_smallest_mesh_size_wins(self):
         a = self.box("A")
         objects.make_material(self.study, "Copper", [a])
-        objects.make_mesh_size(self.study, 3.0, [a])
-        objects.make_mesh_size(self.study, 2.0, [a])
-        volumes, _ = jobwriter.check(self.study)
+        objects.make_mesh_size(self.study, 3.0, [(a, "")])
+        objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        volumes = jobwriter.check(self.study)[0]
         self.assertEqual(volumes[0][2], 2.0)
 
     def test_names_equal_after_cleanup_are_refused(self):
@@ -277,7 +277,7 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Copper", [a])
         objects.make_material(self.study, "Air", [b])
         objects.make_excitation(self.study, "Terminal In", [(a, "Face1"), (a, "Face2")])
-        objects.make_mesh_size(self.study, 2.0, [a])
+        objects.make_mesh_size(self.study, 2.0, [(a, "")])
         self.study.Label = "My Study"
         path = jobwriter.write_job(self.study)
         with open(path, encoding="utf-8") as fh:
@@ -289,15 +289,59 @@ class StudyTest(unittest.TestCase):
                 {"id": 2, "name": "Air_B", "file": "geometry/vol_2.brep", "size": 5.0}],
             "surfaces": [
                 {"id": 1001, "name": "Terminal_In_A", "volume_id": 1,
-                 "files": ["geometry/surf_1001_1.brep", "geometry/surf_1001_2.brep"]}]})
+                 "files": ["geometry/surf_1001_1.brep", "geometry/surf_1001_2.brep"]}],
+            "sizes": []})
         for rel in ("vol_1.brep", "vol_2.brep", "surf_1001_1.brep", "surf_1001_2.brep"):
             self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "geometry", rel)))
+
+    def test_face_edge_and_vertex_sizes_go_to_the_job(self):
+        a, b = self.box("A"), self.box("B", 10)
+        objects.make_material(self.study, "Copper", [a, b])
+        objects.make_mesh_size(self.study, 1.0, [(a, "Face6"), (a, "Edge1"), (b, "Vertex1")])
+        objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        path = jobwriter.write_job(self.study)
+        with open(path, encoding="utf-8") as fh:
+            job = json.load(fh)
+        # only the whole-body item sets a body size
+        self.assertEqual([v["size"] for v in job["volumes"]], [2.0, 5.0])
+        self.assertEqual(job["sizes"], [
+            {"name": "MeshSize", "size": 1.0,
+             "files": ["geometry/size_1_1.brep", "geometry/size_1_2.brep"]},
+            {"name": "MeshSize", "size": 1.0, "files": ["geometry/size_2_1.brep"]}])
+        vertex = Part.Shape()
+        vertex.read(os.path.join(self.tmp.name, "geometry", "size_2_1.brep"))
+        self.assertEqual(vertex.ShapeType, "Vertex")
+        self.assertEqual(vertex.Vertexes[0].Point, b.Shape.Vertex1.Point)
+
+    def test_check_missing_edge(self):
+        a = self.box("A")
+        objects.make_material(self.study, "Copper", [a])
+        objects.make_mesh_size(self.study, 1.0, [(a, "Edge99")])  # a box has 12 edges
+        self.assertStudyError("has no Edge99")
+
+    def test_old_mesh_size_with_body_list_is_converted_on_load(self):
+        a = self.box("A")
+        objects.make_material(self.study, "Copper", [a])
+        old = objects.make_mesh_size(self.study, 2.0, [])
+        old.removeProperty("References")  # as written by earlier versions
+        old.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution", "")
+        old.References = [a]
+        path = os.path.join(self.tmp.name, "t.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        size, = objects.mesh_sizes(objects.find_study(self.doc))
+        self.assertEqual(size.getTypeIdOfProperty("References"), "App::PropertyLinkSubListGlobal")
+        self.assertEqual(size.References, [(self.doc.A, ("",))])
+        volumes = jobwriter.check(objects.find_study(self.doc))[0]
+        self.assertEqual(volumes[0][2], 2.0)
 
     def test_written_job_meshes(self):
         a, b = self.box("A"), self.box("B", 10)
         objects.make_material(self.study, "Copper", [a])
         objects.make_material(self.study, "Air", [b])
         objects.make_excitation(self.study, "T", [(a, "Face1")])  # x = 0 face
+        objects.make_mesh_size(self.study, 1.0, [(a, "Face1"), (a, "Edge1"), (b, "Vertex8")])
         self.study.DefaultMeshSize = 4.0
         path = jobwriter.write_job(self.study)
         r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")

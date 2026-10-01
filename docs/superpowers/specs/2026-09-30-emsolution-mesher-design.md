@@ -18,8 +18,9 @@ excitation surface is a named group with a stable ID number.
 - 3D bodies only, meshed with first-order tetrahedra.
 - Tree with Materials, Excitations and Mesh Sizes. Items can be added,
   edited, renamed and deleted.
-- One mesh size per Mesh Size item, applied to its bodies, plus a default
-  size for bodies without one.
+- One mesh size per Mesh Size item, applied to its bodies, faces, edges and
+  vertices (a Gmsh `Constant` field), plus a default size for bodies
+  without one.
 - Fixed ID numbers that survive re-meshing, editable by the user.
 - Gmsh runs in a separate background process, so FreeCAD cannot crash or
   freeze because of it.
@@ -44,7 +45,8 @@ excitation surface is a named group with a stable ID number.
    (for example "Copper").
 4. Select faces and click **Excitation**, then give it a name (for example
    "Terminal_In").
-5. Optionally, select bodies and click **Mesh Size**, then enter a size.
+5. Optionally, select bodies, faces, edges or vertices and click
+   **Mesh Size**, then enter a size.
 6. Click **Run Mesh**.
 7. Hand the `.msh` file to EMSolution.
 
@@ -105,7 +107,10 @@ together with the Study.
 list of (body, `FaceN`) pairs. Selected faces are resolved to the body that
 owns them.
 
-**Mesh Size**: property `Size` (length) and `References` (list of bodies).
+**Mesh Size**: property `Size` (length) and `References`, a list of
+(body, sub-element) pairs: an empty sub-element means the whole body,
+otherwise `FaceN`, `EdgeN` or `VertexN`. Files from before this change stored
+a plain list of bodies; it is converted on load.
 
 **Mesh Result**: a FEM mesh object used for display only. It is replaced on
 every successful run.
@@ -161,8 +166,12 @@ Run Mesh stops with a message naming the body or face if:
 7. the document is unsaved and OutputFolder is empty (the user is asked to
    save or pick a folder)
 
+A Mesh Size face, edge or vertex that the body does not have is an error,
+like a missing excitation face.
+
 If a body is in several Mesh Size items, the smallest size wins. This is
-not an error.
+not an error. A face, edge or vertex size only changes the body size near
+that entity, and only when it is smaller than the body size.
 
 ## 8. Job file and geometry export
 
@@ -173,7 +182,8 @@ The job writer creates in the output folder:
 ├── job.json
 └── geometry/
     ├── vol_1.brep        one per body, named by volume ID
-    └── surf_1001_1.brep  one per selected face: surface ID, face counter
+    ├── surf_1001_1.brep  one per selected face: surface ID, face counter
+    └── size_1_1.brep     one per Mesh Size face/edge/vertex: entry, counter
 ```
 
 Shapes are exported in global coordinates, including App::Part
@@ -194,12 +204,16 @@ unit).
   "surfaces": [
     {"id": 1001, "name": "Terminal_In_Body", "volume_id": 1,
      "files": ["geometry/surf_1001_1.brep"]}
+  ],
+  "sizes": [
+    {"name": "MeshSize001", "size": 0.5, "files": ["geometry/size_1_1.brep"]}
   ]
 }
 ```
 
 Each volume already carries its effective size (Mesh Size item or default),
-so the mesher needs no size rules. Paths are relative to `job.json`.
+so the mesher needs no size rules. `sizes` has one entry per (Mesh Size
+item, body) pair with faces, edges or vertices. Paths are relative to `job.json`.
 `model_name` is the Study Label passed through the name cleanup.
 
 ## 9. Mesher (`mesher.py`)
@@ -208,7 +222,8 @@ Usage: `python.exe mesher.py <job.json>`
 
 1. Read `job.json`. Start Gmsh with terminal output on.
 2. Import each volume file. Each must give exactly one 3D entity.
-3. Import each surface file. Each must give exactly one 2D entity.
+3. Import each surface file. Each must give exactly one 2D entity. Import
+   each size file. Each must give exactly one 0D, 1D or 2D entity.
 4. Fragment all imported entities together in one call (first entity as
    the object, the rest as tools) with both removed. This glues touching
    bodies so they share faces and nodes.
@@ -222,8 +237,11 @@ Usage: `python.exe mesher.py <job.json>`
    (usually a rounding difference) → error naming the excitation and body.
 8. Create physical groups with the IDs and names from the job:
    dimension 3 for volumes, dimension 2 for excitation surfaces.
-9. Mesh sizes: group volumes by size. One `Constant` field per distinct
-   size (`VIn` = size, `VolumesList`, `IncludeBoundary` = 1). A `Min` field
+9. Mesh sizes: group volumes and size entities by size. A size entity with
+   nothing above it (no volume, face or edge it bounds) did not merge →
+   error naming the Mesh Size item. One `Constant` field per distinct size
+   (`VIn` = size, `VolumesList`, `SurfacesList`, `CurvesList`, `PointsList`,
+   `IncludeBoundary` = 1). A `Min` field
    over them is the background field. Turn off size from points,
    curvature and boundary extension, so only the fields decide.
 10. `Mesh.Algorithm3D` = 1 (Delaunay), `Mesh.ElementOrder` = 1,

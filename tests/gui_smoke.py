@@ -48,13 +48,31 @@ def main():
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A", "Face1")
     Gui.runCommand("EMS_Excitation")
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "A", "Edge1")
+    Gui.Selection.addSelection(doc.Name, "B", "Vertex8")
+    Gui.runCommand("EMS_MeshSize")
     mat, = objects.materials(study)
     exc, = objects.excitations(study)
-    size, = objects.mesh_sizes(study)
+    size, fine = objects.mesh_sizes(study)
     assert [b.Name for b in mat.References] == ["A", "B"], mat.References
     assert exc.References == [(doc.A, ("Face1",))], exc.References
     assert size.Size.Value == 3.0
+    assert size.References == [(doc.A, ("",)), (doc.B, ("",))], size.References
+    assert fine.References == [(doc.A, ("Edge1",)), (doc.B, ("Vertex8",))], fine.References
     log.append("commands ok")
+
+    panel = taskpanels.ItemPanel(fine)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "B", "Face2")
+    Gui.Selection.addSelection(doc.Name, "A")
+    panel.add_selection()
+    Gui.Control.showDialog(panel)
+    panel.accept()
+    refs = {(b.Name, s) for b, subs in fine.References for s in subs}
+    assert refs == {("A", "Edge1"), ("A", ""), ("B", "Vertex8"), ("B", "Face2")}, refs
+    fine.References = [(doc.A, "Edge1"), (doc.B, "Vertex8"), (doc.B, "Face2")]
+    log.append("mesh size panel ok")
 
     panel = taskpanels.ItemPanel(mat)
     panel.name.setText("Iron")

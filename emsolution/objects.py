@@ -81,8 +81,18 @@ class MeshSize(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLength", "Size", "EMSolution", "Element size")
-        obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution",
-                        "Bodies meshed with this size")
+        self.add_references(obj)
+
+    def add_references(self, obj):
+        obj.addProperty("App::PropertyLinkSubListGlobal", "References", "EMSolution",
+                        "Bodies (empty sub-element), faces, edges and vertices meshed with this size")
+
+    def onDocumentRestored(self, obj):
+        if obj.getTypeIdOfProperty("References") == "App::PropertyLinkListGlobal":  # older files
+            bodies = obj.References
+            obj.removeProperty("References")
+            self.add_references(obj)
+            obj.References = [(b, "") for b in bodies]
 
 
 def make_study(doc):
@@ -123,10 +133,11 @@ def make_excitation(study, label, faces):
     return obj
 
 
-def make_mesh_size(study, size, bodies):
+def make_mesh_size(study, size, refs):
+    """refs: list of (body, sub), sub = "" for the whole body or "FaceN", "EdgeN", "VertexN"."""
     obj = _add(study, "MeshSizesGroup", MeshSize, "MeshSize")
     obj.Size = size
-    obj.References = bodies
+    obj.References = refs
     return obj
 
 
@@ -156,10 +167,10 @@ def pick_body(obj):
     return body if body.isDerivedFrom("Part::Feature") else None
 
 
-def faces_by_body(excitation):
-    """[(body, [face names])] in reference order, one entry per body."""
+def subs_by_body(item):
+    """[(body, [sub-element names])] in reference order, one entry per body."""
     out = {}
-    for body, subs in excitation.References:
+    for body, subs in item.References:
         out.setdefault(body.Name, (body, []))[1].extend(subs)
     return list(out.values())
 
@@ -170,7 +181,7 @@ def volume_keys(study):
 
 def surface_keys(study):
     return list(dict.fromkeys(f"{e.Name}|{b.Name}"
-                              for e in excitations(study) for b, _ in faces_by_body(e)))
+                              for e in excitations(study) for b, _ in subs_by_body(e)))
 
 
 def update_ids(study):
@@ -224,7 +235,7 @@ def id_rows(study):
             if b.Name in study.VolumeIds:
                 rows.append(("VolumeIds", b.Name, item_name(m, b), int(study.VolumeIds[b.Name])))
     for e in excitations(study):
-        for b, _ in faces_by_body(e):
+        for b, _ in subs_by_body(e):
             key = f"{e.Name}|{b.Name}"
             if key in study.SurfaceIds:
                 rows.append(("SurfaceIds", key, item_name(e, b), int(study.SurfaceIds[key])))

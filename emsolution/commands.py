@@ -90,16 +90,16 @@ class AddExcitation(_StudyCommand):
 class AddMeshSize(_StudyCommand):
     def GetResources(self):
         return {"Pixmap": icon("meshsize"), "MenuText": "Mesh Size",
-                "ToolTip": "Set the mesh size of the selected bodies"}
+                "ToolTip": "Set the mesh size of the selected bodies, faces, edges or vertices"}
 
     def Activated(self):
-        bodies = taskpanels.selected_bodies()
-        if not bodies:
-            return warn("Select one or more bodies first.")
+        refs = taskpanels.selected_mesh_refs()
+        if not refs:
+            return warn("Select one or more bodies, faces, edges or vertices first.")
         size = ask_size(active_study().DefaultMeshSize.Value)
         if size:
             _create(active_study(), "Add Mesh Size",
-                    lambda: objects.make_mesh_size(active_study(), size, bodies))
+                    lambda: objects.make_mesh_size(active_study(), size, refs))
 
 
 class RunMesh(_StudyCommand):

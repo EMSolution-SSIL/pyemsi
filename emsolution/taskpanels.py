@@ -14,13 +14,27 @@ def selected_bodies():
     return list(out.values())
 
 
-def selected_faces():
+def selected_subs(kinds, whole_bodies=False):
+    """[(body, sub)] for picked sub-elements named kinds[i]N; (body, "") for a whole body."""
     out = []
     for sel in Gui.Selection.getSelectionEx():
         body = objects.pick_body(sel.Object)
-        if body is not None:
-            out += [(body, s) for s in sel.SubElementNames if s.startswith("Face")]
+        if body is None:
+            continue
+        if not sel.SubElementNames:
+            if whole_bodies:
+                out.append((body, ""))
+        else:
+            out += [(body, s) for s in sel.SubElementNames if s.startswith(kinds)]
     return out
+
+
+def selected_faces():
+    return selected_subs(("Face",))
+
+
+def selected_mesh_refs():
+    return selected_subs(("Face", "Edge", "Vertex"), whole_bodies=True)
 
 
 class _ViewProvider:
@@ -61,11 +75,16 @@ class ItemPanel:
 
     def __init__(self, obj):
         self.obj = obj
-        self.faces = isinstance(obj.Proxy, objects.Excitation)
-        if self.faces:
-            self.current = [(b, f) for b, subs in obj.References for f in subs]
+        self.bodies_only = isinstance(obj.Proxy, objects.Material)
+        if self.bodies_only:
+            self.pick, label = (lambda: [(b, "") for b in selected_bodies()]), "Bodies"
+            self.current = [(b, "") for b in obj.References]
         else:
-            self.current = [(b, None) for b in obj.References]
+            if isinstance(obj.Proxy, objects.Excitation):
+                self.pick, label = selected_faces, "Faces"
+            else:
+                self.pick, label = selected_mesh_refs, "Bodies, faces,\nedges, vertices"
+            self.current = [(b, s) for b, subs in obj.References for s in subs]
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
@@ -81,7 +100,7 @@ class ItemPanel:
             layout.addRow("Size", self.size)
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        layout.addRow("Faces" if self.faces else "Bodies", self.refs)
+        layout.addRow(label, self.refs)
         add = QtWidgets.QPushButton("Add selection")
         remove = QtWidgets.QPushButton("Remove")
         add.clicked.connect(self.add_selection)
@@ -97,7 +116,7 @@ class ItemPanel:
         self.refs.addItems([f"{b.Label}.{f}" if f else b.Label for b, f in self.current])
 
     def add_selection(self):
-        new = selected_faces() if self.faces else [(b, None) for b in selected_bodies()]
+        new = self.pick()
         have = {(b.Name, f) for b, f in self.current}
         self.current += [(b, f) for b, f in new if (b.Name, f) not in have]
         self.refresh()
@@ -117,10 +136,10 @@ class ItemPanel:
                 self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
-        if self.faces:
-            self.obj.References = list(self.current)
-        else:
+        if self.bodies_only:
             self.obj.References = [b for b, _ in self.current]
+        else:
+            self.obj.References = list(self.current)
         doc.commitTransaction()
         doc.recompute()
         Gui.Control.closeDialog()
