@@ -3,7 +3,25 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
 
-from . import icon, objects, runner, taskpanels
+from . import geometry, icon, objects, runner, taskpanels
+
+
+def ask_study():
+    dialog = QtWidgets.QDialog(Gui.getMainWindow())
+    dialog.setWindowTitle("New EMSolution Study")
+    layout = QtWidgets.QFormLayout(dialog)
+    name = QtWidgets.QLineEdit("EMSolution Study")
+    dimension = QtWidgets.QComboBox()
+    dimension.addItems(["3D", "2D"])
+    layout.addRow("Name", name)
+    layout.addRow("Dimension", dimension)
+    buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addRow(buttons)
+    if dialog.exec() == QtWidgets.QDialog.Accepted:
+        return name.text().strip() or "EMSolution Study", dimension.currentText()
+    return None
 
 
 def ask_text(title, label, default):
@@ -22,7 +40,17 @@ def warn(text):
 
 
 def active_study():
-    return objects.find_study(App.ActiveDocument) if App.ActiveDocument else None
+    return taskpanels.active_study()
+
+
+def assignment_study():
+    study = active_study()
+    if study is None:
+        warn("Select the Study you want to edit first.")
+    elif study.Dimension != "3D":
+        warn("2D assignments will be added with 2D mesh generation.")
+        study = None
+    return study
 
 
 def _create(study, title, make):
@@ -37,7 +65,8 @@ def _create(study, title, make):
 
 class _StudyCommand:
     def IsActive(self):
-        return active_study() is not None
+        study = active_study()
+        return study is not None and study.Dimension == "3D" and not Gui.Control.activeDialog()
 
 
 class NewStudy:
@@ -46,15 +75,22 @@ class NewStudy:
                 "ToolTip": "Create an EMSolution study in this document"}
 
     def IsActive(self):
-        return App.ActiveDocument is not None and active_study() is None
+        return App.ActiveDocument is not None and not Gui.Control.activeDialog()
 
     def Activated(self):
         doc = App.ActiveDocument
+        choice = ask_study()
+        if choice is None:
+            return
+        label, dimension = choice
         doc.openTransaction("New Study")
-        study = objects.make_study(doc)
+        study = objects.make_study(doc, dimension, label)
         taskpanels.ViewProviderStudy(study.ViewObject)
         doc.commitTransaction()
         doc.recompute()
+        taskpanels.set_active_study(study)
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(study)
 
 
 class AddMaterial(_StudyCommand):
@@ -63,13 +99,15 @@ class AddMaterial(_StudyCommand):
                 "ToolTip": "Give the selected bodies a material"}
 
     def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
         bodies = taskpanels.selected_bodies()
         if not bodies:
             return warn("Select one or more bodies first.")
         name = ask_text("Material", "Material name:", "Material")
         if name:
-            _create(active_study(), "Add Material",
-                    lambda: objects.make_material(active_study(), name, bodies))
+            _create(study, "Add Material", lambda: objects.make_material(study, name, bodies))
 
 
 class AddExcitation(_StudyCommand):
@@ -78,13 +116,15 @@ class AddExcitation(_StudyCommand):
                 "ToolTip": "Make the selected faces an excitation surface"}
 
     def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
         faces = taskpanels.selected_faces()
         if not faces:
             return warn("Select one or more faces first.")
         name = ask_text("Excitation", "Excitation name:", "Excitation")
         if name:
-            _create(active_study(), "Add Excitation",
-                    lambda: objects.make_excitation(active_study(), name, faces))
+            _create(study, "Add Excitation", lambda: objects.make_excitation(study, name, faces))
 
 
 class AddMeshSize(_StudyCommand):
@@ -93,13 +133,15 @@ class AddMeshSize(_StudyCommand):
                 "ToolTip": "Set the mesh size of the selected bodies, faces, edges or vertices"}
 
     def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
         refs = taskpanels.selected_mesh_refs()
         if not refs:
             return warn("Select one or more bodies, faces, edges or vertices first.")
-        size = ask_size(active_study().MeshSizesGroup.DefaultMeshSize.Value)
+        size = ask_size(study.MeshSizesGroup.DefaultMeshSize.Value)
         if size:
-            _create(active_study(), "Add Mesh Size",
-                    lambda: objects.make_mesh_size(active_study(), size, refs))
+            _create(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
 
 
 class RunMesh(_StudyCommand):
@@ -108,10 +150,15 @@ class RunMesh(_StudyCommand):
                 "ToolTip": "Write the .msh file with Gmsh"}
 
     def IsActive(self):
-        return super().IsActive() and not runner.busy()
+        study = active_study()
+        return (study is not None and not geometry.export_unavailable(study)
+                and not runner.busy() and not Gui.Control.activeDialog())
 
     def Activated(self):
-        runner.start(active_study())
+        study = active_study()
+        if study is None:
+            return warn("Select the Study you want to mesh first.")
+        runner.start(study)
 
 
 COMMANDS = {"EMS_NewStudy": NewStudy(), "EMS_Material": AddMaterial(),

@@ -101,6 +101,41 @@ class Study(_Proxy):
             obj.setEditorMode(prop, 1)  # read-only: edit through the ID table
         for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
             obj.setEditorMode(prop, 2)  # hidden
+        self.add_setup(obj)
+
+    @staticmethod
+    def add_setup(obj, legacy=False):
+        """Add missing properties only; restoring an old file must not reset its settings."""
+        if "Dimension" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyEnumeration", "Dimension", "Setup")
+            obj.Dimension = ["3D", "2D"]
+        obj.setEditorMode("Dimension", 1)  # choose at creation; assignments depend on it
+        if "Movement" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyEnumeration", "Movement", "Setup")
+            obj.Movement = ["No movement", "Sliding motion"]
+        for region in ("Main", "Moving"):
+            mode, source, refs = region + "Mode", region + "Source", region + "Objects"
+            if mode not in obj.PropertiesList:
+                obj.addProperty("App::PropertyEnumeration", mode, "Geometry")
+                choices = ["Unassigned", "Container", "Manual"]
+                if region == "Main":
+                    choices.append("Materials")
+                setattr(obj, mode, choices)
+                if region == "Main":
+                    setattr(obj, mode, "Materials")
+            if source not in obj.PropertiesList:
+                obj.addProperty("App::PropertyLinkGlobal", source, "Geometry")
+            if refs not in obj.PropertiesList:
+                obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
+            for prop in (mode, source, refs):
+                obj.setEditorMode(prop, 2)  # edit together in the Study panel
+        if "LegacyOutput" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyBool", "LegacyOutput", "Setup")
+            obj.LegacyOutput = legacy
+        obj.setEditorMode("LegacyOutput", 2)
+
+    def onDocumentRestored(self, obj):
+        self.add_setup(obj, legacy=True)
 
 
 class _Named(_Proxy):
@@ -151,16 +186,38 @@ def _make_folder(study, prop, cls):
     return folder
 
 
-def make_study(doc):
+def make_study(doc, dimension="3D", label=None):
+    if dimension not in ("2D", "3D"):
+        raise ValueError("Study dimension must be 2D or 3D")
     study = doc.addObject("App::DocumentObjectGroupPython", "Study")
     Study(study)
+    study.Dimension = dimension
+    if dimension == "2D":
+        study.MainMode = "Unassigned"
+    if label:
+        study.Label = label
     for prop, cls in FOLDERS:
         _make_folder(study, prop, cls)
     return study
 
 
+def studies(doc):
+    return [o for o in doc.Objects if isinstance(getattr(o, "Proxy", None), Study)]
+
+
 def find_study(doc):
-    return next((o for o in doc.Objects if isinstance(getattr(o, "Proxy", None), Study)), None)
+    """Convenience for a document with exactly one Study; never guess between several."""
+    found = studies(doc)
+    return found[0] if len(found) == 1 else None
+
+
+def owner_study(obj):
+    """Follow group membership, not the links in material/geometry references."""
+    while obj is not None:
+        if isinstance(getattr(obj, "Proxy", None), Study):
+            return obj
+        obj = obj.getParentGroup()
+    return None
 
 
 def _add(study, group_prop, proxy_cls, label):

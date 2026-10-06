@@ -14,7 +14,7 @@ sys.path[:0] = [_BIN, os.path.join(_BIN, "..", "lib")]
 import FreeCAD as App  # noqa: E402
 import Part  # noqa: E402
 
-from emsolution import jobwriter, objects  # noqa: E402
+from emsolution import geometry, jobwriter, objects  # noqa: E402
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "emsolution", "mesher.py")
 
@@ -385,6 +385,183 @@ class StudyTest(unittest.TestCase):
         r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "Study.msh")))
+
+    # --- Study setup --------------------------------------------------------
+
+    def face(self, name, z=0.0):
+        obj = self.doc.addObject("Part::Feature", name)
+        obj.Shape = Part.makePlane(10, 10)
+        obj.Placement.Base = App.Vector(0, 0, z)
+        return obj
+
+    def test_multiple_studies_have_independent_ownership_and_ids(self):
+        second = objects.make_study(self.doc, "2D", "Cross-section")
+        a = self.box("A")
+        material = objects.make_material(self.study, "Iron", [a])
+        other = objects.make_material(second, "Copper", [a])
+        objects.update_ids(self.study)
+        self.assertIsNone(objects.find_study(self.doc))
+        self.assertEqual(objects.owner_study(material), self.study)
+        self.assertEqual(objects.owner_study(other), second)
+        self.assertEqual(objects.owner_study(second.MeshSizesGroup), second)
+        self.assertIsNone(objects.owner_study(a))  # a reference does not imply ownership
+        self.assertEqual(second.VolumeIds, {})
+        self.assertEqual(len(objects.material_rows(second)), 1)
+
+    def test_nested_sources_use_body_tip_and_final_boolean_result(self):
+        root = self.doc.addObject("App::DocumentObjectGroup", "Geometry")
+        part = self.doc.addObject("App::Part", "Part")
+        root.addObject(part)
+        body = self.doc.addObject("PartDesign::Body", "Body")
+        body.newObject("PartDesign::AdditiveBox", "Feature")
+        part.addObject(body)
+        a, tool = self.box("A", 20), self.box("Tool", 25)
+        cut = self.doc.addObject("Part::Cut", "Cut")
+        cut.Base, cut.Tool = a, tool
+        for obj in (a, tool, cut):
+            root.addObject(obj)
+        self.doc.recompute()
+        body.Visibility = False  # hidden final geometry must still be included
+        found, errors = geometry.collect([root, part, body], "3D")
+        self.assertEqual([obj.Name for obj in found], [body.Name, cut.Name])
+        self.assertEqual(errors, [])
+
+    def test_planar_sources_are_checked_in_global_coordinates(self):
+        a, b = self.face("A"), self.face("B", 5)
+        part = self.doc.addObject("App::Part", "Part")
+        part.addObject(a)
+        part.Placement.Base = App.Vector(0, 0, 5)
+        self.doc.recompute()
+        self.assertEqual(geometry.collect([a, b], "2D"), ([a, b], []))
+        part.Placement.Base.z = 10
+        self.doc.recompute()
+        found, errors = geometry.collect([a, b], "2D")
+        self.assertEqual(found, [a])
+        self.assertIn("share one plane", errors[0])
+        self.assertIn("exactly one solid", geometry.collect([b], "3D")[1][0])
+        self.assertIn("without solids", geometry.collect([self.box("Solid")], "2D")[1][0])
+
+    def test_sources_update_after_rename_addition_and_deletion(self):
+        source = self.doc.addObject("App::DocumentObjectGroup", "Geometry")
+        a = self.box("A")
+        source.addObject(a)
+        self.study.MainMode, self.study.MainSource = "Container", source
+        source.Label = "Renamed"
+        b = self.box("B", 10)
+        source.addObject(b)
+        self.doc.recompute()
+        self.assertEqual(geometry.region(self.study, "Main"), ([a, b], []))
+        self.doc.removeObject(source.Name)
+        found, errors = geometry.region(self.study, "Main")
+        self.assertEqual(found, [])
+        self.assertIn("missing", errors[0])
+        self.assertEqual(self.study.MainMode, "Container")
+
+    def test_a_container_with_study_objects_is_not_a_geometry_source(self):
+        group = self.doc.addObject("App::DocumentObjectGroup", "Everything")
+        group.addObject(self.study)
+        self.assertTrue(geometry.is_container(group))
+        self.assertFalse(geometry.is_source(group))
+        self.assertFalse(geometry.is_source(self.study.MaterialsGroup))
+
+    def test_sliding_setup_checks_assignments_and_ignores_disabled_region(self):
+        a = self.box("A")
+        self.study.MainMode = self.study.MovingMode = "Manual"
+        self.study.MainObjects = self.study.MovingObjects = [a]
+        self.assertEqual(geometry.setup(self.study), ([a], [], []))
+        self.study.Movement = "Sliding motion"
+        self.assertIn("both fixed and moving", geometry.setup(self.study)[2][0])
+        self.assertEqual(self.study.MovingObjects, [a])
+
+    def test_two_studies_restore_their_sources_settings_and_ids(self):
+        second = objects.make_study(self.doc, "2D", "Cross-section")
+        source = self.doc.addObject("App::DocumentObjectGroup", "Faces")
+        source.addObject(self.face("Section"))
+        second.MainMode, second.MainSource = "Container", source
+        second.MeshSizesGroup.DefaultMeshSize = 1.5
+        objects.make_material(self.study, "Iron", [self.box("A")])
+        objects.update_ids(self.study)
+        path = os.path.join(self.tmp.name, "setup.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        first, second = objects.studies(self.doc)
+        self.study = first
+        self.assertEqual(first.VolumeIds, {"A": "1"})
+        self.assertEqual(second.Dimension, "2D")
+        self.assertEqual(second.MainSource.Name, "Faces")
+        self.assertEqual(second.MeshSizesGroup.DefaultMeshSize.Value, 1.5)
+        self.assertEqual(geometry.region(second, "Main")[1], [])
+        self.assertFalse(first.LegacyOutput)
+        code = """import os, sys
+bin_dir = os.path.dirname(sys.executable)
+sys.path[:0] = [bin_dir, os.path.join(bin_dir, '..', 'lib')]
+import FreeCAD as App
+from emsolution import geometry, objects
+doc = App.openDocument(sys.argv[1])
+first, second = objects.studies(doc)
+assert first.VolumeIds == {'A': '1'}
+assert second.Dimension == '2D' and second.MainSource.Name == 'Faces'
+assert geometry.region(second, 'Main')[1] == []
+App.closeDocument(doc.Name)
+print('RESTORE PASS')
+"""
+        result = subprocess.run([sys.executable, "-c", code, path], capture_output=True,
+                                encoding="utf-8", errors="replace")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("RESTORE PASS", result.stdout)
+
+    def test_old_study_upgrade_preserves_settings_ids_and_default_output(self):
+        objects.make_material(self.study, "Iron", [self.box("A")])
+        objects.update_ids(self.study)
+        self.study.MeshSizesGroup.DefaultMeshSize = 1.25
+        self.study.OutputFolder = ""
+        for prop in ("Dimension", "Movement", "LegacyOutput", "MainMode", "MovingMode",
+                     "MainSource", "MovingSource", "MainObjects", "MovingObjects"):
+            self.study.removeProperty(prop)
+        path = os.path.join(self.tmp.name, "old.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        self.study = objects.find_study(self.doc)
+        self.study.Proxy.onDocumentRestored(self.study)  # repeat must not reset data
+        self.assertEqual(self.study.VolumeIds, {"A": "1"})
+        self.assertEqual(self.study.MeshSizesGroup.DefaultMeshSize.Value, 1.25)
+        self.assertEqual(self.study.OutputFolder, "")
+        self.assertTrue(self.study.LegacyOutput)
+        self.assertEqual(os.path.normpath(jobwriter.output_folder(self.study)),
+                         os.path.normpath(os.path.splitext(path)[0] + "_mesh"))
+        self.assertEqual(geometry.export_unavailable(self.study), "")
+        self.assertTrue(os.path.isfile(jobwriter.write_job(self.study)))
+
+    def test_new_output_directories_are_independent_and_stable_under_rename(self):
+        second = objects.make_study(self.doc)
+        self.study.OutputFolder = ""
+        path = os.path.join(self.tmp.name, "model.FCStd")
+        self.doc.saveAs(path)
+        folder = jobwriter.output_folder(self.study)
+        self.study.Label = "Renamed"
+        self.assertEqual(folder, jobwriter.output_folder(self.study))
+        self.assertNotEqual(folder, jobwriter.output_folder(second))
+        second.OutputFolder = self.study.OutputFolder = self.tmp.name
+        objects.make_material(self.study, "Iron", [self.box("A")])
+        with self.assertRaisesRegex(jobwriter.StudyError, "also used"):
+            jobwriter.write_job(self.study)
+        self.assertEqual(self.study.VolumeIds, {})
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
+
+    def test_deferred_export_cannot_change_ids_or_write_files(self):
+        objects.make_material(self.study, "Iron", [self.box("A")])
+        for prop, value, message in (("Dimension", "2D", "2D mesh generation"),
+                                     ("Movement", "Sliding motion", "Sliding-motion"),
+                                     ("MainMode", "Manual", "selected geometry")):
+            old = getattr(self.study, prop)
+            setattr(self.study, prop, value)
+            with self.assertRaisesRegex(jobwriter.StudyError, message):
+                jobwriter.write_job(self.study)
+            self.assertEqual(self.study.VolumeIds, {})
+            self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
+            setattr(self.study, prop, old)
 
 
 if __name__ == "__main__":

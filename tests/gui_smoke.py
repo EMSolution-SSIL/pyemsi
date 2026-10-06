@@ -26,6 +26,7 @@ def main():
     commands.ask_text = lambda title, label, default: {"Material": "Copper",
                                                        "Excitation": "Terminal In"}[title]
     commands.ask_size = lambda default: 3.0
+    commands.ask_study = lambda: ("Study", "3D")
 
     doc = App.newDocument("Smoke")
     for name, x in (("A", 0), ("B", 10)):
@@ -128,7 +129,10 @@ def main():
     select("A")
     assert shown_folders() == {}, "folder panel still shown for a body"
 
-    select(study.MeshSizesGroup.Name)
+    select(study.Name)
+    advanced, = [w for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox)
+                  if w.isVisible() and w.title() == "Advanced mesh settings"]
+    advanced.setChecked(True)
     combo, = [c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
               if c.isVisible() and c.findText("HXT") >= 0]
     combo.setCurrentText("HXT")
@@ -217,6 +221,110 @@ def main():
     assert run.error == "", run.error
     assert study.MeshResult is not None and study.MeshResult.FemMesh.VolumeCount > 0
     log.append(f"mesh ok: {study.MeshResult.FemMesh.VolumeCount} volumes")
+
+    # Several Studies: ownership, setup controls, bulk selection and undo.
+    import Part
+    from emsolution import geometry
+    commands.ask_study = lambda: ("Cross-section", "2D")
+    Gui.runCommand("EMS_NewStudy")
+    for _ in range(5):
+        Gui.updateGui()
+    first, second = objects.studies(doc)
+    assert first == study and second.Dimension == "2D"
+    assert commands.active_study() == second
+    assert not commands.COMMANDS["EMS_Material"].IsActive()
+    assert not commands.COMMANDS["EMS_RunMesh"].IsActive()
+    assert taskpanels.FolderView(second.MaterialsGroup).rows == []
+    source = doc.addObject("App::DocumentObjectGroup", "FaceGroup")
+    section = doc.addObject("Part::Feature", "Section")
+    section.Shape = Part.makePlane(10, 10)
+    source.addObject(section)
+    part = doc.addObject("App::Part", "SolidPart")
+    part.addObject(doc.A)
+    doc.recompute()
+    view = taskpanels.StudyView(second)
+    combo = view.regions["Main"][1]
+    assert combo.findData("source:" + source.Name) >= 0 and combo.findData("source:" + part.Name) >= 0
+    named_manual = doc.addObject("App::DocumentObjectGroup", "Manual")
+    view.refresh()
+    combo.setCurrentIndex(combo.findData("source:" + named_manual.Name))
+    assert second.MainMode == "Container" and second.MainSource == named_manual
+    undo_before = list(doc.UndoNames)
+    view.refresh()
+    assert list(doc.UndoNames) == undo_before, "populating widgets changed the model"
+    combo.setCurrentIndex(combo.findData("source:" + source.Name))
+    assert second.MainSource == source and second.MainMode == "Container"
+    assert "1 face region" in view.regions["Main"][2].text()
+    assert not view.run_button.isEnabled()
+    view.movement.setCurrentText("Sliding motion")
+    assert second.Movement == "Sliding motion" and study.Movement == "No movement"
+    assert view.regions["Moving"][0].isHidden() is False
+    select(study.MaterialsGroup.Name)
+    assert commands.active_study() == study
+    select("B")
+    assert commands.active_study() == study, "geometry selection lost the target Study"
+    select(study.Name, second.Name)
+    assert commands.active_study() is None, "ambiguous Study selection picked a target"
+    select("B")
+    assert commands.active_study() is None, "ambiguous target was silently remembered"
+    select(second.Name)
+    manual = taskpanels.GeometryPanel(second, "Main", editable=True)
+    Gui.Control.showDialog(manual)
+    select(source.Name, section.Name)
+    manual.add_selection()
+    assert manual.current == [section], "bulk container selection duplicated a face"
+    manual.reject()
+    assert second.MainMode == "Container", "Cancel changed the saved geometry"
+    manual = taskpanels.GeometryPanel(second, "Main", editable=True)
+    Gui.Control.showDialog(manual)
+    select(source.Name)
+    manual.add_selection()
+    manual.accept()
+    assert second.MainMode == "Manual" and second.MainObjects == [section]
+    doc.undo()
+    assert second.MainMode == "Container" and second.MainObjects == []
+    doc.redo()
+    assert second.MainMode == "Manual" and second.MainObjects == [section]
+    assert study.MainMode == "Materials"
+    select(second.Name)
+    assert second.ViewObject.Proxy.doubleClicked(second.ViewObject)
+    assert not Gui.Control.activeDialog(), "double-click Study opened the ID dialog"
+    log.append("multiple Study setup and undo ok")
+
+    # The selected folder's settings stay isolated and targeting cannot cross documents.
+    view = taskpanels.StudyView(study)
+    view.settings.factor.setValue(0.7)
+    assert study.MeshSizesGroup.SizeFactor == 0.7
+    assert second.MeshSizesGroup.SizeFactor == 1.0
+    inspect = taskpanels.GeometryPanel(second, "Main")
+    Gui.Control.showDialog(inspect)
+    inspect.refs.item(0).setSelected(True)
+    assert highlight.shown() is not None
+    inspect.reject()
+    assert highlight.shown() is None
+    select(second.Name)
+    actual_combo, = [c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
+                     if c.isVisible() and c.objectName() == "MainGeometry"]
+    actual_combo.setCurrentIndex(actual_combo.findData("source:" + source.Name))
+    Gui.activeDocument().activeView().viewTop()
+    Gui.activeDocument().activeView().fitAll()
+    Gui.updateGui()
+    Gui.getMainWindow().grab().save(os.path.join(tempfile.gettempdir(), "study-setup.png"))
+    another_doc = App.newDocument("Other")
+    other_study = objects.make_study(another_doc)
+    assert commands.active_study() == other_study
+    App.closeDocument(another_doc.Name)
+    App.setActiveDocument(doc.Name)
+    select(second.Name)
+    name = second.Name
+    doc.removeObject(name)
+    select("B")
+    assert commands.active_study() == study, "deleted Study remained the target"
+    Gui.activateWorkbench("PartWorkbench")
+    Gui.activateWorkbench("EMSolutionWorkbench")
+    select(study.Name)
+    assert not geometry.export_unavailable(study)
+    log.append("Study isolation and lifecycle ok")
     App.closeDocument(doc.Name)
 
 

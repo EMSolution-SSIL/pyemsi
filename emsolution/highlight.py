@@ -4,7 +4,7 @@ Drawn on top of the model, without touching the selection or the document."""
 import FreeCADGui as Gui
 from pivy import coin
 
-from .jobwriter import global_shape
+from .geometry import global_shape
 
 COLOR = (1.0, 0.5, 0.0)  # orange: neither selection green nor preselection yellow
 _shown = None  # (view, node)

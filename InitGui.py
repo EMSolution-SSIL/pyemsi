@@ -8,7 +8,7 @@ class EMSolutionWorkbench(Gui.Workbench):
     # FreeCAD exec()s this file inside a function, so the class body and methods
     # cannot see names imported above. Import inside methods; set Icon below.
     MenuText = "EMSolution"
-    ToolTip = "Prepare 3D meshes for EMSolution"
+    ToolTip = "Configure EMSolution studies and prepare meshes"
 
     def Initialize(self):
         from emsolution import commands

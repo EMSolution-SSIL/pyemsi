@@ -2,20 +2,12 @@
 import json
 import os
 
-import FreeCAD as App
-
-from . import objects
+from . import geometry, objects
+from .geometry import global_shape
 
 
 class StudyError(Exception):
     pass
-
-
-def global_shape(obj):
-    """Shape in global coordinates, including App::Part placement (same as FEM's gmshtools)."""
-    shape = obj.getPropertyOfGeometry().transformed(App.Placement().Matrix)
-    shape.Placement = obj.getGlobalPlacement()
-    return shape
 
 
 def output_folder(study):
@@ -23,7 +15,8 @@ def output_folder(study):
         return study.OutputFolder
     if not study.Document.FileName:
         raise StudyError("Save the document first, or set the study's OutputFolder.")
-    return os.path.splitext(study.Document.FileName)[0] + "_mesh"
+    folder = os.path.splitext(study.Document.FileName)[0] + "_mesh"
+    return folder if study.LegacyOutput else os.path.join(folder, study.Name)
 
 
 def _check_subs(kind, item, body, subs):
@@ -41,6 +34,9 @@ def check(study):
     surfaces = [(excitation, body, [face names])] in tree order
     elements = [(mesh size, body, [face, edge and vertex names])] in tree order
     """
+    unavailable = geometry.export_unavailable(study)
+    if unavailable:
+        raise StudyError(unavailable)
     mats = objects.materials(study)
     if not mats:
         raise StudyError("The study has no materials.")
@@ -126,6 +122,12 @@ def write_job(study):
     """Run the checks, update the ID table, write job.json and BREPs. Returns the job path."""
     volumes, surfaces, elements = check(study)
     folder = output_folder(study)
+    target = os.path.normcase(os.path.realpath(folder))
+    for other in objects.studies(study.Document):
+        if other != study and (other.OutputFolder or study.Document.FileName):
+            if os.path.normcase(os.path.realpath(output_folder(other))) == target:
+                raise StudyError(f"Output folder is also used by Study {other.Label}. "
+                                 "Choose separate output folders.")
     objects.update_ids(study)
     os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
     job = {"model_name": objects.clean(study.Label), "msh_version": float(study.MshVersion),
