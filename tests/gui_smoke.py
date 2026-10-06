@@ -37,6 +37,8 @@ def main():
     Gui.runCommand("EMS_NewStudy")
     study = objects.find_study(doc)
     assert study is not None, "no study"
+    assert study.MainMode == "Unassigned"
+    study.MainMode = "Materials"  # legacy workflow remains supported
     study.OutputFolder = tempfile.mkdtemp()
     log.append("study ok")
 
@@ -130,9 +132,12 @@ def main():
     assert shown_folders() == {}, "folder panel still shown for a body"
 
     select(study.Name)
+    assert not any(w.isVisible() and w.title() == "Advanced mesh settings"
+                   for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox))
+    select(study.MeshSizesGroup.Name)
     advanced, = [w for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox)
                   if w.isVisible() and w.title() == "Advanced mesh settings"]
-    advanced.setChecked(True)
+    assert advanced.isChecked(), "Gmsh options are collapsed by default"
     combo, = [c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
               if c.isVisible() and c.findText("HXT") >= 0]
     combo.setCurrentText("HXT")
@@ -208,7 +213,7 @@ def main():
     log.append("workbench switch ok")
 
     dialog = taskpanels.IdTableDialog(study)
-    assert [r[2] for r in dialog.rows] == ["Iron_A", "Iron_B", "Terminal_In_A"], dialog.rows
+    assert [r[2] for r in dialog.rows] == ["A", "B", "Terminal_In_A"], dialog.rows
     dialog.table.item(0, 2).setText("7")
     assert study.VolumeIds["A"] == "7"
     log.append("id table ok")
@@ -292,10 +297,12 @@ def main():
     log.append("multiple Study setup and undo ok")
 
     # The selected folder's settings stay isolated and targeting cannot cross documents.
-    view = taskpanels.StudyView(study)
+    view = taskpanels.FolderView(study.MeshSizesGroup)
     view.settings.factor.setValue(0.7)
     assert study.MeshSizesGroup.SizeFactor == 0.7
     assert second.MeshSizesGroup.SizeFactor == 1.0
+    second_settings = taskpanels.FolderView(second.MeshSizesGroup)
+    assert not second_settings.settings.box.isEnabled()
     inspect = taskpanels.GeometryPanel(second, "Main")
     Gui.Control.showDialog(inspect)
     inspect.refs.item(0).setSelected(True)
@@ -324,6 +331,26 @@ def main():
     Gui.activateWorkbench("EMSolutionWorkbench")
     select(study.Name)
     assert not geometry.export_unavailable(study)
+    study.MainMode, study.MainSource = "Container", part
+    view = taskpanels.StudyView(study)
+    assert commands.COMMANDS["EMS_RunMesh"].IsActive()
+    assert view.run_button.isEnabled()
+    mat.References = [doc.B]
+    view.refresh()
+    assert "A (A)" in view.diagnostics.text()
+    assert view.run_button.isEnabled(), "missing materials disabled generation"
+    mat.References = [doc.A, doc.B]
+    view.refresh()
+    run = runner.start(study)
+    assert run is not None and run.proc.waitForFinished(120000)
+    Gui.updateGui()
+    assert run.error == "" and not runner.busy()
+    import json
+    with open(run.job, encoding="utf-8") as fh:
+        selected_job = json.load(fh)
+    assert [v["name"] for v in selected_job["volumes"]] == ["A"]
+    assert study.MeshResult.FemMesh.VolumeCount > 0
+    log.append("selected geometry mesh and missing-material validation ok")
     log.append("Study isolation and lifecycle ok")
     App.closeDocument(doc.Name)
 

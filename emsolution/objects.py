@@ -15,6 +15,8 @@ def display_name(item):
 
 
 def item_name(item, body):
+    if isinstance(item.Proxy, Material):
+        return clean(body.Label)
     return f"{clean(display_name(item))}_{clean(body.Label)}"
 
 
@@ -121,7 +123,7 @@ class Study(_Proxy):
                 if region == "Main":
                     choices.append("Materials")
                 setattr(obj, mode, choices)
-                if region == "Main":
+                if region == "Main" and legacy:
                     setattr(obj, mode, "Materials")
             if source not in obj.PropertiesList:
                 obj.addProperty("App::PropertyLinkGlobal", source, "Geometry")
@@ -328,8 +330,11 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Bodies used by an excitation or a mesh size that no material references."""
+    """Selected bodies without materials, or referenced bodies in the legacy workflow."""
     have = {b.Name for m in materials(study) for b in m.References}
+    if study.MainMode != "Materials":
+        from . import geometry
+        return [b for b in geometry.region(study, "Main")[0] if b.Name not in have]
     out = {}
     for item in excitations(study) + mesh_sizes(study):
         for b, _ in subs_by_body(item):
@@ -339,12 +344,17 @@ def bodies_without_material(study):
 
 
 def volume_keys(study):
+    if study.MainMode != "Materials":
+        from . import geometry
+        return [b.Name for b in geometry.region(study, "Main")[0]]
     return list(dict.fromkeys(b.Name for m in materials(study) for b in m.References))
 
 
 def surface_keys(study):
+    included = set(volume_keys(study)) if study.MainMode != "Materials" else None
     return list(dict.fromkeys(f"{e.Name}|{b.Name}"
-                              for e in excitations(study) for b, _ in subs_by_body(e)))
+                              for e in excitations(study) for b, _ in subs_by_body(e)
+                              if included is None or b.Name in included))
 
 
 def update_ids(study):
@@ -393,9 +403,17 @@ def set_id(study, table, key, new_id):
 def id_rows(study):
     """Rows for the ID table dialog: (table, key, name, id), volumes first."""
     rows = []
+    if study.MainMode != "Materials":
+        material_of = {b.Name: m for m in materials(study) for b in m.References}
+        for name in volume_keys(study):
+            if name in study.VolumeIds:
+                body = study.Document.getObject(name)
+                mat = material_of.get(name)
+                label = item_name(mat, body) if mat else f"No material: {body.Label}"
+                rows.append(("VolumeIds", name, label, int(study.VolumeIds[name])))
     for m in materials(study):
         for b in m.References:
-            if b.Name in study.VolumeIds:
+            if study.MainMode == "Materials" and b.Name in study.VolumeIds:
                 rows.append(("VolumeIds", b.Name, item_name(m, b), int(study.VolumeIds[b.Name])))
     for e in excitations(study):
         for b, _ in subs_by_body(e):

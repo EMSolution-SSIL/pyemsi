@@ -129,6 +129,4 @@ def export_unavailable(study):
         return "2D mesh generation is planned for a later phase. You can save this setup now."
     if study.Movement != "No movement":
         return "Sliding-motion mesh generation and interface setup are planned for a later phase."
-    if study.MainMode != "Materials":
-        return "Mesh generation from the selected geometry is planned for a later phase."
     return ""

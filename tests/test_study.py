@@ -24,6 +24,7 @@ class StudyTest(unittest.TestCase):
         self.doc = App.newDocument("T")
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
+        self.study.MainMode = "Materials"  # retain coverage of the legacy workflow
         self.study.OutputFolder = self.tmp.name
 
     def tearDown(self):
@@ -72,7 +73,7 @@ class StudyTest(unittest.TestCase):
         a.Label = "Coil"
         mat.Label = "Iron"
         objects.update_ids(self.study)
-        self.assertEqual(objects.id_rows(self.study), [("VolumeIds", "A", "Iron_Coil", 1)])
+        self.assertEqual(objects.id_rows(self.study), [("VolumeIds", "A", "Coil", 1)])
 
     def test_deleted_body_id_is_not_reused(self):
         a, b = self.box("A"), self.box("B", 10)
@@ -116,7 +117,7 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Copper", [a])
         objects.make_material(self.study, "Copper", [b])  # label taken: Copper001
         objects.update_ids(self.study)
-        names = ["Air_Air", "Copper_A", "Copper_B"]
+        names = ["Air", "A", "B"]
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], names)
         path = os.path.join(self.tmp.name, "t.FCStd")
         self.doc.saveAs(path)
@@ -300,7 +301,7 @@ class StudyTest(unittest.TestCase):
         b.Label = "A!"   # cleans to "A_"
         a.Label = "A?"   # cleans to "A_" too
         objects.make_material(self.study, "Cu", [a, b])
-        self.assertStudyError("Cu_A_")
+        self.assertStudyError("A_")
 
     # --- geometry and job file ----------------------------------------------
 
@@ -337,8 +338,8 @@ class StudyTest(unittest.TestCase):
             "options": {"Mesh.Algorithm": 6, "Mesh.Algorithm3D": 1, "Mesh.MeshSizeFactor": 1.0,
                         "Mesh.Smoothing": 1, "Mesh.OptimizeNetgen": 0},
             "volumes": [
-                {"id": 1, "name": "Copper_A", "file": "geometry/vol_1.brep", "size": 2.0},
-                {"id": 2, "name": "Air_B", "file": "geometry/vol_2.brep", "size": 5.0}],
+                {"id": 1, "name": "A", "file": "geometry/vol_1.brep", "size": 2.0},
+                {"id": 2, "name": "B", "file": "geometry/vol_2.brep", "size": 5.0}],
             "surfaces": [
                 {"id": 1001, "name": "Terminal_In_A", "volume_id": 1,
                  "files": ["geometry/surf_1001_1.brep", "geometry/surf_1001_2.brep"]}],
@@ -553,8 +554,7 @@ print('RESTORE PASS')
     def test_deferred_export_cannot_change_ids_or_write_files(self):
         objects.make_material(self.study, "Iron", [self.box("A")])
         for prop, value, message in (("Dimension", "2D", "2D mesh generation"),
-                                     ("Movement", "Sliding motion", "Sliding-motion"),
-                                     ("MainMode", "Manual", "selected geometry")):
+                                     ("Movement", "Sliding motion", "Sliding-motion")):
             old = getattr(self.study, prop)
             setattr(self.study, prop, value)
             with self.assertRaisesRegex(jobwriter.StudyError, message):
@@ -562,6 +562,84 @@ print('RESTORE PASS')
             self.assertEqual(self.study.VolumeIds, {})
             self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
             setattr(self.study, prop, old)
+
+    def test_new_study_requires_geometry_even_when_materials_exist(self):
+        study = objects.make_study(self.doc)
+        self.assertEqual(study.MainMode, "Unassigned")
+        objects.make_material(study, "Iron", [self.box("A")])
+        with self.assertRaisesRegex(jobwriter.StudyError, "No geometry assigned"):
+            jobwriter.check(study)
+
+    def test_selected_geometry_controls_export_and_filters_other_assignments(self):
+        a, b, outside = self.box("A"), self.box("B", 10), self.box("Outside", 20)
+        source = self.doc.addObject("App::Part", "Stator")
+        source.addObject(b)
+        source.addObject(a)
+        self.study.MainMode, self.study.MainSource = "Container", source
+        objects.make_material(self.study, "Copper", [outside, a, b])
+        # Conflicting/invalid assignments outside the source must not affect its mesh.
+        objects.make_material(self.study, "Unused", [outside])
+        objects.make_excitation(self.study, "Terminal", [(outside, "Face60"), (b, "Face1")])
+        objects.make_mesh_size(self.study, 0.5, [(outside, "Face60"), (a, "Face1")])
+        objects.make_mesh_size(self.study, 0.0, [(outside, "")])
+        path = jobwriter.write_job(self.study)
+        with open(path, encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual([v["name"] for v in job["volumes"]], ["B", "A"])
+        self.assertEqual([s["name"] for s in job["surfaces"]], ["Terminal_B"])
+        self.assertEqual(len(job["sizes"]), 1)
+        self.assertEqual(self.study.VolumeIds, {"B": "1", "A": "2"})
+        self.assertEqual(self.study.SurfaceIds, {"Excitation|B": "1001"})
+        result = subprocess.run([sys.executable, MESHER, path], capture_output=True,
+                                encoding="utf-8", errors="replace")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmp.name, "Study.unv")))
+        with open(os.path.join(self.tmp.name, "Study.msh"), encoding="utf-8") as fh:
+            physical_names = fh.read().split("$PhysicalNames\n", 1)[1].split("$EndPhysicalNames", 1)[0]
+        self.assertIn('3 1 "B"', physical_names)
+        self.assertIn('3 2 "A"', physical_names)
+        self.assertNotIn("Copper", physical_names)
+
+    def test_missing_selected_materials_are_named_before_ids_or_files_change(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.study.MainMode, self.study.MainObjects = "Manual", [a, b]
+        self.assertEqual(geometry.export_unavailable(self.study), "")
+        with self.assertRaisesRegex(jobwriter.StudyError, r"A \(A\), B \(B\)"):
+            jobwriter.write_job(self.study)
+        self.assertEqual(self.study.VolumeIds, {})
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
+        self.assertEqual(objects.bodies_without_material(self.study), [a, b])
+        objects.make_material(self.study, "Copper", [a])
+        self.assertEqual(objects.bodies_without_material(self.study), [b])
+        self.assertStudyError("B (B)")
+
+    def test_selection_ids_survive_material_changes_and_follow_live_membership(self):
+        a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
+        source = self.doc.addObject("App::DocumentObjectGroup", "Stator")
+        source.addObject(a)
+        source.addObject(b)
+        self.study.MainMode, self.study.MainSource = "Container", source
+        mat = objects.make_material(self.study, "Copper", [c, b, a])
+        objects.update_ids(self.study)
+        original = dict(self.study.VolumeIds)
+        mat.References = [c]
+        objects.update_ids(self.study)
+        self.assertEqual(self.study.VolumeIds, original)
+        self.assertEqual(len(objects.id_rows(self.study)), 2)
+        self.assertIn("No material: A", objects.id_rows(self.study)[0][2])
+        source.removeObject(b)
+        source.addObject(c)
+        objects.update_ids(self.study)
+        self.assertEqual(self.study.VolumeIds, {"A": "1", "C": "3"})
+
+    def test_selected_geometry_rejects_conflicting_materials_and_invalid_sources(self):
+        a = self.box("A")
+        self.study.MainMode, self.study.MainObjects = "Manual", [a]
+        objects.make_material(self.study, "Copper", [a])
+        objects.make_material(self.study, "Iron", [a])
+        self.assertStudyError("more than one material")
+        self.study.MainMode = "Container"
+        self.assertStudyError("Selected container is missing")
 
 
 if __name__ == "__main__":

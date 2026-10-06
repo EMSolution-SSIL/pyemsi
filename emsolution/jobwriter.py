@@ -37,20 +37,35 @@ def check(study):
     unavailable = geometry.export_unavailable(study)
     if unavailable:
         raise StudyError(unavailable)
+    selected = study.MainMode != "Materials"
+    bodies = None
+    if selected:
+        bodies, _, errors = geometry.setup(study)
+        if errors:
+            raise StudyError("\n".join(errors))
     mats = objects.materials(study)
-    if not mats:
+    if not mats and not selected:
         raise StudyError("The study has no materials.")
     material_of = {}
     for m in mats:
         for b in m.References:
             material_of.setdefault(b.Name, (b, []))[1].append(m)
+    if selected:
+        missing = [b for b in bodies if b.Name not in material_of]
+        if missing:
+            raise StudyError("Main geometry has bodies with no material: "
+                             + ", ".join(f"{b.Label} ({b.Name})" for b in missing)
+                             + ". Assign one material to each body.")
+        material_of = {b.Name: (b, material_of[b.Name][1]) for b in bodies}
     surfaces = [(e, b, faces) for e in objects.excitations(study)
-                for b, faces in objects.subs_by_body(e)]
+                for b, faces in objects.subs_by_body(e)
+                if not selected or b.Name in material_of]
     for e, b, _ in surfaces:
         if b.Name not in material_of:
             raise StudyError(f"Excitation {e.Label} is on body {b.Label}, which has no material.")
     sized = [(s, b, subs) for s in objects.mesh_sizes(study)
-             for b, subs in objects.subs_by_body(s)]
+             for b, subs in objects.subs_by_body(s)
+             if not selected or b.Name in material_of]
     for _, b, _ in sized:
         if b.Name not in material_of:
             raise StudyError(f"Body {b.Label} has a mesh size but no material.")
@@ -75,7 +90,9 @@ def check(study):
         raise StudyError("The default mesh size must be greater than 0.")
     if 0 < settings.MaxSize.Value < settings.MinSize.Value:
         raise StudyError("The minimum mesh size is larger than the maximum.")
-    for s in objects.mesh_sizes(study):
+    size_items = (dict.fromkeys(s for s, _, _ in sized) if selected
+                  else objects.mesh_sizes(study))
+    for s in size_items:
         if s.Size.Value <= 0:
             raise StudyError(f"Mesh size {s.Label} must be greater than 0.")
     size = {}

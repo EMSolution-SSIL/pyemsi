@@ -119,7 +119,7 @@ def _length_box(value, minimum=0.001, no_limit=False):
 
 
 class MeshSettings:
-    """Study UI; keep one settings copy on the folder for existing files/export readers."""
+    """General mesh controls stored on the owning Study's Mesh Sizes folder."""
 
     def __init__(self, folder):
         self.folder = folder
@@ -129,13 +129,13 @@ class MeshSettings:
         form.addRow("Default size", self.default)
         self.advanced = QtWidgets.QGroupBox("Advanced mesh settings")
         self.advanced.setCheckable(True)
-        self.advanced.setChecked(False)
+        self.advanced.setChecked(True)
         self.advanced_form = QtWidgets.QWidget()
         advanced_layout = QtWidgets.QVBoxLayout(self.advanced)
         advanced_layout.addWidget(self.advanced_form)
         form.addRow(self.advanced)
         form = QtWidgets.QFormLayout(self.advanced_form)
-        self.advanced_form.setVisible(False)
+        self.advanced_form.setVisible(True)
         self.advanced.toggled.connect(self.advanced_form.setVisible)
         self.algorithms = {}
         for prop, label in (("SurfaceAlgorithm", "Surface algorithm"),
@@ -190,7 +190,7 @@ class MeshSettings:
 
 
 class FolderView:
-    """Overview of the owning Study's local assignments."""
+    """Assignment overview, plus general settings for the Mesh Sizes folder."""
 
     def __init__(self, folder):
         study = objects.owner_study(folder)
@@ -206,11 +206,22 @@ class FolderView:
         layout = QtWidgets.QVBoxLayout(self.form)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QtWidgets.QLabel("Study: " + study.Label))
+        if study.MainMode != "Materials":
+            notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
+            notice.setWordWrap(True)
+            layout.addWidget(notice)
         if study.Dimension == "2D":
             notice = QtWidgets.QLabel("2D material, excitation and local size assignments "
                                      "will be added with 2D meshing.")
             notice.setWordWrap(True)
             layout.addWidget(notice)
+        self.settings = None
+        if isinstance(folder.Proxy, objects.MeshSizesFolder):
+            self.settings = MeshSettings(folder)
+            layout.addWidget(self.settings.box)
+            if study.Dimension == "2D":
+                self.settings.box.setEnabled(False)
+                self.settings.box.setToolTip("2D mesh settings will be enabled with 2D generation.")
         self.table = QtWidgets.QTableWidget(len(self.rows), len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.verticalHeader().hide()
@@ -302,11 +313,6 @@ class StudyView:
         self.version.addItems(study.getEnumerationsOfProperty("MshVersion"))
         self.version.setCurrentText(study.MshVersion)
         output.addRow("MSH version", self.version)
-        self.settings = MeshSettings(study.MeshSizesGroup)
-        layout.addWidget(self.settings.box)
-        if study.Dimension == "2D":
-            self.settings.box.setEnabled(False)
-            self.settings.box.setToolTip("2D mesh settings will be enabled with 2D generation.")
         self.id_button = QtWidgets.QPushButton("Edit IDs…")
         self.id_button.setEnabled(study.Dimension == "3D")
         self.id_button.clicked.connect(lambda: IdTableDialog(study).exec())
@@ -377,6 +383,11 @@ class StudyView:
                 text = f"Included: {len(resolved)} solid object{'s' if len(resolved) != 1 else ''}"
             count.setText(text)
         _, _, errors = geometry.setup(study)
+        if not errors and not geometry.export_unavailable(study):
+            try:
+                jobwriter.check(study)
+            except jobwriter.StudyError as exc:
+                errors.append(str(exc))
         self.diagnostics.setText("\n".join(errors))
         self.sliding_notice.setVisible(sliding)
         unavailable = geometry.export_unavailable(study)

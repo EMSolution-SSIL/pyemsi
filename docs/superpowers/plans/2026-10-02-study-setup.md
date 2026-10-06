@@ -152,3 +152,17 @@ Multiple named Studies can be created, configured, saved, reopened, and edited i
 
 The installed FreeCAD 1.1.4 runtime passed all 43 Study tests, including restoration in a fresh process and preservation of older Study settings. The isolated GUI smoke test passed Study selection, Part and Group dropdowns, bulk selection, cancel, undo and redo, highlighting, settings isolation, document switching, deletion, repeated workbench activation, and the existing 3D mesh workflow. Git diff whitespace checks passed. New mesh generation remains deferred as described above.
 
+## Follow-up: selected 3D geometry export (2026-10-06)
+
+The setup phase was committed as `2249167`. The next change enables 3D No movement export from Part/Group and manual geometry selections. Selected geometry determines the included bodies and their IDs; material assignments supply each body's material. Missing materials identify the affected bodies before job files or IDs are changed. Conflicting materials on included bodies are rejected. Material, excitation, and local-size assignments outside the selected geometry are excluded from export.
+
+New Studies start with geometry unassigned. Older Studies retain their saved selections and the legacy material-based workflow. Run Mesh stays enabled for supported 3D setups even when geometry or material validation needs attention, and the Study panel displays the validation message.
+
+Volume physical groups use the sanitized body label alone (for example, `Body1`), without the material prefix. The ID table uses the same names. Material validation and numeric IDs are unchanged; excitation surfaces retain their excitation/body naming.
+
+At the user's request, general Gmsh settings are back in the Mesh Sizes task panel, alongside local assignments. Advanced options are expanded by default. The Study panel retains geometry and output configuration; settings still have one storage location on each Study's Mesh Sizes folder.
+
+All 65 Study and mesher tests passed in FreeCAD 1.1.4. The isolated GUI smoke test passed selected-geometry generation and missing-material diagnostics while the generation button remained enabled. The user's `Unnamed.FCStd` also generated MSH and UNV files from its saved Stator selection in a separate diagnostic output directory, without saving or changing the original document.
+
+2D generation, sliding-motion interfaces, and separate fixed/moving mesh output remain deferred.
+
