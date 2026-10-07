@@ -19,6 +19,14 @@ np.import_array()
 from typing import Dict, List, Tuple, Optional
 
 
+cdef inline double _parse_float(str text) except? -1:
+    """Parse a float, accepting MSVC NaN spellings such as ``-nan(ind)``."""
+    cdef Py_ssize_t paren = text.find("(")
+    if paren > 0:
+        text = text[:paren]
+    return float(text)
+
+
 cdef class FEMAPBlock:
     """Represents a single FEMAP data block."""
 
@@ -467,7 +475,7 @@ cdef class FEMAPParser:
                         if i + 3 < n_lines:
                             value_parts = FEMAPParser._parse_csv_line_fast(<str>block.lines[i + 3])
                             if len(value_parts) >= 1:
-                                value = float(value_parts[0])
+                                value = _parse_float(value_parts[0])
 
                         output_sets[set_id] = {"title": title, "value": value}
                         i += 6
@@ -563,14 +571,14 @@ cdef class FEMAPParser:
 
                             if len(result_parts) == 2:
                                 entity_id = int(result_parts[0])
-                                value = float(result_parts[1])
+                                value = _parse_float(result_parts[1])
                                 results[entity_id] = value
                                 i += 1
 
                             elif len(result_parts) > 2:
                                 start_id = int(result_parts[0])
                                 end_id = int(result_parts[1])
-                                values = [float(v) for v in result_parts[2:]]
+                                values = [_parse_float(v) for v in result_parts[2:]]
 
                                 entity_count = end_id - start_id + 1
                                 i += 1
@@ -580,7 +588,7 @@ cdef class FEMAPParser:
                                         cont_parts[0] == "-1" and 
                                         cont_parts[1] == "0."):
                                         break
-                                    values.extend([float(v) for v in cont_parts])
+                                    values.extend([_parse_float(v) for v in cont_parts])
                                     i += 1
 
                                 for offset in range(min(len(values), entity_count)):
@@ -681,7 +689,7 @@ cdef class FEMAPParser:
 
                             if len(result_parts) == 2:
                                 entity_id = int(result_parts[0])
-                                value = float(result_parts[1])
+                                value = _parse_float(result_parts[1])
                                 entity_ids_list.append(entity_id)
                                 values_list.append(value)
                                 i += 1
@@ -689,7 +697,7 @@ cdef class FEMAPParser:
                             elif len(result_parts) > 2:
                                 start_id = int(result_parts[0])
                                 end_id = int(result_parts[1])
-                                values = [float(v) for v in result_parts[2:]]
+                                values = [_parse_float(v) for v in result_parts[2:]]
 
                                 entity_count = end_id - start_id + 1
                                 i += 1
@@ -699,7 +707,7 @@ cdef class FEMAPParser:
                                         cont_parts[0] == "-1" and 
                                         cont_parts[1] == "0."):
                                         break
-                                    values.extend([float(v) for v in cont_parts])
+                                    values.extend([_parse_float(v) for v in cont_parts])
                                     i += 1
 
                                 for offset in range(min(len(values), entity_count)):

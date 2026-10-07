@@ -17,6 +17,12 @@ Configures scalar field coloring for the loaded mesh.
     - `"F Lorents-Mag (N/m^3)"`
     - `"Heat Density (W/m^3)"`
     - `"Heat (W)"`
+    - `"Eddy Loss Density (W/m^3)"`
+    - `"Eddy Loss (W)"`
+    - `"Hysteresis Loss Density (W/m^3)"`
+    - `"Hysteresis Loss (W)"`
+    - `"Iron Loss Density (W/m^3)"`
+    - `"Iron Loss (W)"`
 - **`mode`** (`"node" | "element"`, default: `"node"`) — Whether `name` is point data (`"node"`) or cell data (`"element"`).
 - **`**kwargs`** — Forwarded to [`add_mesh()`](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.add_mesh) for the scalar mesh actor.
 :::

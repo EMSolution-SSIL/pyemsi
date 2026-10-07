@@ -63,7 +63,7 @@ The `FemapConverter` constructor stores mesh file and conversion parameters inte
 **Purpose**: Parse all configured FEMAP result files in parallel.
 
 **Process**:
-- Iterates over file map: displacement, magnetic, current, force, force_J_B, heat
+- Iterates over file map: displacement, magnetic, current, electric, force, force_J_B, heat, iron_loss
 - Spawns one thread per active file
 - Each thread calls `parse_data_file()` which:
   - Calls `FEMAPParser` on the file
@@ -107,6 +107,7 @@ The `FemapConverter` constructor stores mesh file and conversion parameters inte
   - Adds force field data (point & cell data)
   - Adds Lorentz force data (point & cell data)
   - Adds heat field data (point & cell data)
+  - Adds iron loss data (cell data); steps missing from a file add nothing
   - Writes mesh to VTM file grouped by PropertyID
 - Waits for all threads to complete
 

@@ -39,6 +39,7 @@ class FemapConverterDialogConfig:
     force: str | None
     force_J_B: str | None
     heat: str | None
+    iron_loss: str | None
     displacement: str | None
 
     def to_payload(self) -> dict[str, str | bool | None]:
@@ -53,6 +54,7 @@ class FemapConverterDialogConfig:
             "heat": self.heat,
             "input_control_file": self.input_control_file,
             "input_dir": self.input_dir,
+            "iron_loss": self.iron_loss,
             "magnetic": self.magnetic,
             "mesh": self.mesh,
             "output_dir": self.output_dir,
@@ -72,6 +74,7 @@ class FemapConverterDialogConfig:
             "tools.femap_converter.heat": self.heat,
             "tools.femap_converter.input_control_file": self.input_control_file,
             "tools.femap_converter.input_dir": self.input_dir,
+            "tools.femap_converter.iron_loss": self.iron_loss,
             "tools.femap_converter.magnetic": self.magnetic,
             "tools.femap_converter.mesh": self.mesh,
             "tools.femap_converter.output_dir": self.output_dir,
@@ -217,6 +220,7 @@ class FemapConverterDialog(QDialog):
         self._force_field = self._build_optional_file_field(defaults["force"])
         self._force_j_b_field = self._build_optional_file_field(defaults["force_J_B"])
         self._heat_field = self._build_optional_file_field(defaults["heat"])
+        self._iron_loss_field = self._build_optional_file_field(defaults["iron_loss"])
 
         self._apply_discovered_optional_paths()
 
@@ -239,6 +243,7 @@ class FemapConverterDialog(QDialog):
         form_layout.addRow("Force:", self._force_field)
         form_layout.addRow("Force J x B:", self._force_j_b_field)
         form_layout.addRow("Heat:", self._heat_field)
+        form_layout.addRow("Iron Loss:", self._iron_loss_field)
 
         self._button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -289,6 +294,7 @@ class FemapConverterDialog(QDialog):
             self._force_field,
             self._force_j_b_field,
             self._heat_field,
+            self._iron_loss_field,
         )
         for field in optional_fields:
             configured_value = field.line_edit().text().strip() or None
@@ -315,6 +321,7 @@ class FemapConverterDialog(QDialog):
             "input_control_file": self._settings.get_effective("tools.femap_converter.input_control_file")
             or "input_control.json",
             "input_dir": input_dir or "",
+            "iron_loss": self._settings.get_effective("tools.femap_converter.iron_loss") or "iron_loss",
             "magnetic": self._settings.get_effective("tools.femap_converter.magnetic") or "magnetic",
             "mesh": self._settings.get_effective("tools.femap_converter.mesh") or "post_geom",
             "output_dir": self._settings.get_effective("tools.femap_converter.output_dir") or ".pyemsi",
@@ -376,6 +383,9 @@ class FemapConverterDialog(QDialog):
         heat = self._validated_optional_path("Heat", self._heat_field, input_dir)
         if heat is False:
             return None
+        iron_loss = self._validated_optional_path("Iron Loss", self._iron_loss_field, input_dir)
+        if iron_loss is False:
+            return None
 
         output_dir = self._output_dir_field.value() or ".pyemsi"
         if not self._confirm_overwrite(input_dir, output_dir, output_name):
@@ -398,6 +408,7 @@ class FemapConverterDialog(QDialog):
             force=force,
             force_J_B=force_j_b,
             heat=heat,
+            iron_loss=iron_loss,
             displacement=displacement,
         )
 

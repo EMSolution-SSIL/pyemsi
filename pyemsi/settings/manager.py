@@ -56,6 +56,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "force_J_B": "force_J_B",
             "heat": "heat",
             "input_dir": None,
+            "iron_loss": "iron_loss",
             "magnetic": "magnetic",
             "mesh": "post_geom",
             "output_dir": ".pyemsi",
@@ -355,6 +356,7 @@ SETTING_DEFINITIONS: dict[str, SettingDefinition] = {
         "input_control.json", SCOPE_BOTH, _normalize_optional_path
     ),
     "tools.femap_converter.input_dir": SettingDefinition(None, SCOPE_BOTH, _normalize_optional_path),
+    "tools.femap_converter.iron_loss": SettingDefinition("iron_loss", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.magnetic": SettingDefinition("magnetic", SCOPE_BOTH, _normalize_optional_text),
     "tools.femap_converter.mesh": SettingDefinition("post_geom", SCOPE_BOTH, _normalize_text),
     "tools.femap_converter.output_dir": SettingDefinition(".pyemsi", SCOPE_BOTH, _normalize_text),

@@ -1123,6 +1123,7 @@ def test_main_window_launches_femap_converter_in_external_terminal(tmp_path, mon
         force=None,
         force_J_B=None,
         heat=None,
+        iron_loss=None,
         displacement="disp",
     )
 

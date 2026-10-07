@@ -94,6 +94,7 @@ class FemapConverter:
         force: str | Path | None = "force",
         force_J_B: str | Path | None = "force_J_B",
         heat: str | Path | None = "heat",
+        iron_loss: str | Path | None = "iron_loss",
         displacement: str | Path = "disp",
     ):
         logger.info("Initializing FemapConverter for input_dir=%s", input_dir)
@@ -190,6 +191,12 @@ class FemapConverter:
             heat_file = Path(heat) if Path(heat).is_file() else self.input_dir / heat
             if heat_file.exists():
                 self.heat_file = heat_file
+        # Add iron_loss
+        self.iron_loss_file = None
+        if iron_loss is not None:
+            iron_loss_file = Path(iron_loss) if Path(iron_loss).is_file() else self.input_dir / iron_loss
+            if iron_loss_file.exists():
+                self.iron_loss_file = iron_loss_file
 
         # Store parameters for run method
         self._mesh_file = mesh_file
@@ -544,6 +551,7 @@ class FemapConverter:
             "force": self.force_file,
             "force_J_B": self.force_J_B_file,
             "heat": self.heat_file,
+            "iron_loss": self.iron_loss_file,
         }
         active_files = {k: v for k, v in file_map.items() if v is not None}
         logger.info("Parsing %d data files in parallel: %s", len(active_files), list(active_files.keys()))
@@ -585,8 +593,9 @@ class FemapConverter:
         matching_vectors = [v for v in vectors if v["set_id"] == step]
 
         if not matching_vectors:
+            # A file may cover different steps than the others (e.g. iron_loss holds one averaged step).
             logger.warning("No vectors found for step=%d", step)
-            raise ValueError(f"No vectors found for step={step}")
+            return {}
 
         logger.debug("Processing %d vectors for step %d", len(matching_vectors), step)
         results_dict: dict[str, np.ndarray] = {}
@@ -683,6 +692,8 @@ class FemapConverter:
             self._process_force_J_B_field(step, mesh_copy)
         if "heat" in self.vectors:
             self._process_heat_field(step, mesh_copy)
+        if "iron_loss" in self.vectors:
+            self._process_iron_loss_field(step, mesh_copy)
         self._update_field_plot_metadata_from_mesh(mesh_copy)
         self._write_vtm_file(mesh_copy, vtm_path)
         logger.debug("Written time step %d to %s", step, vtm_path)
@@ -834,3 +845,17 @@ class FemapConverter:
         element_2 = data_arrays["HEAT-elem-2"]
         mesh.cell_data["Heat (W)"] = element_2
         logger.debug("Added heat field data for step %d", step)
+
+    def _process_iron_loss_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
+        logger.debug("Processing iron loss field for step %d", step)
+        data_arrays = self.get_data_array(step, self.vectors["iron_loss"])
+        if (element_1 := data_arrays.get("IRON_LOSS-elem-1")) is None:
+            logger.debug("No iron loss element data for step %d", step)
+            return
+        mesh.cell_data["Eddy Loss Density (W/m^3)"] = element_1
+        mesh.cell_data["Eddy Loss (W)"] = data_arrays["IRON_LOSS-elem-2"]
+        mesh.cell_data["Hysteresis Loss Density (W/m^3)"] = data_arrays["IRON_LOSS-elem-3"]
+        mesh.cell_data["Hysteresis Loss (W)"] = data_arrays["IRON_LOSS-elem-4"]
+        mesh.cell_data["Iron Loss Density (W/m^3)"] = data_arrays["IRON_LOSS-elem-5"]
+        mesh.cell_data["Iron Loss (W)"] = data_arrays["IRON_LOSS-elem-6"]
+        logger.debug("Added iron loss field data for step %d", step)
