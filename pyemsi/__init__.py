@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from .plotter import Plotter
     from .tools.FemapConverter import FemapConverter
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 
 _LAZY_EXPORTS = {
     "EMSolutionOutput": ("pyemsi.io", "EMSolutionOutput"),
