@@ -118,6 +118,7 @@ class FemapConverter:
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
+        self._sets_lock = threading.Lock()
         self._field_plot_metadata_lock = threading.Lock()
         self._field_plot_mesh_length = 0.0
         self._field_plot_scalar_names: list[str] = []
@@ -532,8 +533,9 @@ class FemapConverter:
         parser.parse()
         sets = parser.get_output_sets()
         self.vectors[name] = parser.get_output_vectors()
-        if not self.sets:
-            self.sets = sets
+        # Union of all files' steps, so a file covering fewer steps (e.g. iron_loss) doesn't drop the others'.
+        with self._sets_lock:
+            self.sets = dict(sorted({**sets, **self.sets}.items()))
         logger.debug(
             "Parsed %s: %d output sets, %d vectors",
             name,

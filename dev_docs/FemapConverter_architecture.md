@@ -75,7 +75,7 @@ The `FemapConverter` constructor stores mesh file and conversion parameters inte
 - `self.sets` - Dictionary of time step ID → {value, title}
 - `self.vectors` - Dictionary of channel name → list of vector records
 
-**Thread Safety**: Each parse operation is independent; `self.sets` is populated only from first file with results.
+**Thread Safety**: Each parse operation is independent; `self.sets` is the sorted union of every file's output sets, merged under a lock. A file with no data for a step adds nothing to that step.
 
 ### 3. `init_pvd()`
 
