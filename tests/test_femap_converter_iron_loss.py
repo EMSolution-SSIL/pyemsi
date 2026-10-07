@@ -1,5 +1,4 @@
 import sys
-import threading
 
 import numpy as np
 import pyvista as pv
@@ -23,7 +22,7 @@ def _single_vertex_mesh() -> pv.UnstructuredGrid:
 
 def test_process_iron_loss_field_maps_all_six_vectors():
     converter = FemapConverter.__new__(FemapConverter)
-    converter.vectors = {"iron_loss": []}
+    converter.vectors, converter.iron_loss_sets = {"iron_loss": []}, {40: {}}
     converter.get_data_array = lambda step, vectors: {
         f"IRON_LOSS-elem-{index}": np.array([float(index)], dtype=np.float32) for index in range(1, 7)
     }
@@ -35,10 +34,10 @@ def test_process_iron_loss_field_maps_all_six_vectors():
         np.testing.assert_allclose(mesh.cell_data[name], np.array([float(index)], dtype=np.float32))
 
 
-def test_parse_data_files_uses_union_of_steps(monkeypatch):
+def test_parse_data_file_keeps_iron_loss_out_of_steps(monkeypatch):
     file_sets = {
-        "magnetic": {2: {"title": "STEP:2", "value": 0.02}, 1: {"title": "STEP:1", "value": 0.01}},
-        "iron_loss": {40: {"title": "STEP:40", "value": 0.04}, 1: {"title": "other", "value": 9.0}},
+        "magnetic": {1: {"title": "STEP:1", "value": 0.01}, 2: {"title": "STEP:2", "value": 0.02}},
+        "iron_loss": {40: {"title": "STEP:40", "value": 0.04}},
     }
 
     class _FakeParser:
@@ -56,21 +55,28 @@ def test_parse_data_files_uses_union_of_steps(monkeypatch):
 
     monkeypatch.setattr(sys.modules[FemapConverter.__module__], "FEMAPParser", _FakeParser)
     converter = FemapConverter.__new__(FemapConverter)
-    converter.sets, converter.vectors, converter._sets_lock = {}, {}, threading.Lock()
+    converter.sets, converter.vectors = {}, {}
 
     converter.parse_data_file("iron_loss", "iron_loss")
     converter.parse_data_file("magnetic", "magnetic")
 
-    assert list(converter.sets) == [1, 2, 40]
-    assert converter.sets[1]["title"] == "other"  # first file to define a step keeps it
+    assert list(converter.sets) == [1, 2]  # iron_loss adds no steps of its own
+    assert list(converter.iron_loss_sets) == [40]
 
 
-def test_process_iron_loss_field_skips_step_missing_from_file():
-    # iron_loss holds only the averaged step (40); other files may define steps it doesn't have.
+def test_process_iron_loss_field_writes_averaged_set_on_every_step():
+    # iron_loss holds averaged sets only; every frame gets the latest one at or before it (the first one before that).
     converter = FemapConverter.__new__(FemapConverter)
-    converter.vectors = {"iron_loss": [{"set_id": 40, "title": "IRON_LOSS-elem-1", "ent_type": 8, "results": {}}]}
-    mesh = _single_vertex_mesh()
+    converter.vectors, converter.iron_loss_sets = {"iron_loss": []}, {20: {}, 40: {}}
+    requested = []
+    converter.get_data_array = lambda step, vectors: (
+        requested.append(step)
+        or {f"IRON_LOSS-elem-{index}": np.array([float(step)], dtype=np.float32) for index in range(1, 7)}
+    )
 
-    converter._process_iron_loss_field(1, mesh)
+    for step in (1, 20, 39, 40, 41):
+        mesh = _single_vertex_mesh()
+        converter._process_iron_loss_field(step, mesh)
+        assert all(name in mesh.cell_data for name in IRON_LOSS_NAMES)
 
-    assert not any(name in mesh.cell_data for name in IRON_LOSS_NAMES)
+    assert requested == [20, 20, 20, 40, 40]

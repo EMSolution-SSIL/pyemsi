@@ -179,7 +179,7 @@ The converter adds the following field data to meshes based on configured data f
 
 **Iron Loss** (from `iron_loss` file):
 - Cell data: `Eddy Loss Density (W/m^3)`, `Eddy Loss (W)`, `Hysteresis Loss Density (W/m^3)`, `Hysteresis Loss (W)`, `Iron Loss Density (W/m^3)`, `Iron Loss (W)`
-- EMSolution writes a single output set holding the loss averaged over the configured interval, so it appears at one time step only. Other time steps simply carry no iron loss data.
+- EMSolution writes iron loss only as a time average over the configured interval (usually a single output set). It adds no time steps of its own: every time step carries the latest averaged set at or before it (the first set for earlier steps), so all frames have the same arrays.
 
 ## Usage Example
 

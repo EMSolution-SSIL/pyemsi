@@ -118,7 +118,7 @@ class FemapConverter:
         mesh_file = Path(mesh) if Path(mesh).is_file() else self.input_dir / mesh
         self.sets: dict[int, dict[int, dict]] = {}
         self.vectors: dict[str, list[dict]] = {}
-        self._sets_lock = threading.Lock()
+        self.iron_loss_sets: dict[int, dict] = {}
         self._field_plot_metadata_lock = threading.Lock()
         self._field_plot_mesh_length = 0.0
         self._field_plot_scalar_names: list[str] = []
@@ -533,9 +533,13 @@ class FemapConverter:
         parser.parse()
         sets = parser.get_output_sets()
         self.vectors[name] = parser.get_output_vectors()
-        # Union of all files' steps, so a file covering fewer steps (e.g. iron_loss) doesn't drop the others'.
-        with self._sets_lock:
-            self.sets = dict(sorted({**sets, **self.sets}.items()))
+        if name == "iron_loss":
+            # Time-averaged result: written on every frame (see _process_iron_loss_field) rather than adding its own
+            # steps, so all frames carry the same arrays.
+            self.iron_loss_sets = sets
+            return
+        if not self.sets:
+            self.sets = sets
         logger.debug(
             "Parsed %s: %d output sets, %d vectors",
             name,
@@ -578,6 +582,8 @@ class FemapConverter:
             thread.join()
         if exceptions:
             raise exceptions[0]
+        if not self.sets:  # iron_loss is the only data file
+            self.sets = dict(sorted(self.iron_loss_sets.items()))
         logger.debug("All data files parsed successfully")
 
     def get_data_array(self, step: int, vectors: list[dict]) -> dict[str, np.ndarray]:
@@ -595,9 +601,8 @@ class FemapConverter:
         matching_vectors = [v for v in vectors if v["set_id"] == step]
 
         if not matching_vectors:
-            # A file may cover different steps than the others (e.g. iron_loss holds one averaged step).
             logger.warning("No vectors found for step=%d", step)
-            return {}
+            raise ValueError(f"No vectors found for step={step}")
 
         logger.debug("Processing %d vectors for step %d", len(matching_vectors), step)
         results_dict: dict[str, np.ndarray] = {}
@@ -850,7 +855,11 @@ class FemapConverter:
 
     def _process_iron_loss_field(self, step: int, mesh: pv.UnstructuredGrid) -> None:
         logger.debug("Processing iron loss field for step %d", step)
-        data_arrays = self.get_data_array(step, self.vectors["iron_loss"])
+        if not self.iron_loss_sets:
+            return
+        # Use the latest averaged set at or before this step (the first set for earlier steps).
+        set_id = max((s for s in self.iron_loss_sets if s <= step), default=min(self.iron_loss_sets))
+        data_arrays = self.get_data_array(set_id, self.vectors["iron_loss"])
         if (element_1 := data_arrays.get("IRON_LOSS-elem-1")) is None:
             logger.debug("No iron loss element data for step %d", step)
             return
