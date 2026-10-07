@@ -31,6 +31,7 @@ converter = FemapConverter(
     force="force",
     force_J_B="force_J_B",
     heat="heat",
+    iron_loss="iron_loss",
     displacement="disp"
 )
 ```
@@ -47,6 +48,7 @@ converter = FemapConverter(
 - **`force`** (`str | Path | None`, default: `"force"`) — Path to nodal force data file, or `None` to skip
 - **`force_J_B`** (`str | Path | None`, default: `"force_J_B"`) — Path to Lorentz force data file, or `None` to skip
 - **`heat`** (`str | Path | None`, default: `"heat"`) — Path to heat/thermal data file, or `None` to skip
+- **`iron_loss`** (`str | Path | None`, default: `"iron_loss"`) — Path to iron loss data file, or `None` to skip
 - **`displacement`** (`str | Path`, default: `"disp"`) — Path to displacement data file, or `None` to skip
 :::
 
@@ -174,6 +176,10 @@ The converter adds the following field data to meshes based on configured data f
 **Heat** (from `heat` file):
 - Point data: `Heat Density (W/m^3)`, `Heat (W)`
 - Cell data: `Heat Density (W/m^3)`, `Heat (W)`
+
+**Iron Loss** (from `iron_loss` file):
+- Cell data: `Eddy Loss Density (W/m^3)`, `Eddy Loss (W)`, `Hysteresis Loss Density (W/m^3)`, `Hysteresis Loss (W)`, `Iron Loss Density (W/m^3)`, `Iron Loss (W)`
+- EMSolution writes iron loss only as a time average over the configured interval (usually a single output set). It adds no time steps of its own: every time step carries the latest averaged set at or before it (the first set for earlier steps), so all frames have the same arrays.
 
 ## Usage Example
 

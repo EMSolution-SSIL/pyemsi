@@ -39,6 +39,7 @@ The FEMAP converter dialog is built around one required input directory and a se
 | `Force` | Optional | Nodal force data file. Enabled by default with the conventional name `force`. |
 | `Force J x B` | Optional | Lorentz force data file. Enabled by default with the conventional name `force_J_B`. |
 | `Heat` | Optional | Heat or thermal data file. Enabled by default with the conventional name `heat`. |
+| `Iron Loss` | Optional | Iron loss data file. Enabled by default with the conventional name `iron_loss`. |
 
 ### Notes About File Selection
 

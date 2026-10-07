@@ -19,6 +19,12 @@ For [`pyvista.MultiBlock`](https://docs.pyvista.org/api/core/_autosummary/pyvist
   - `"F Lorents-Mag (N/m^3)"`
   - `"Heat Density (W/m^3)"`
   - `"Heat (W)"`
+  - `"Eddy Loss Density (W/m^3)"`
+  - `"Eddy Loss (W)"`
+  - `"Hysteresis Loss Density (W/m^3)"`
+  - `"Hysteresis Loss (W)"`
+  - `"Iron Loss Density (W/m^3)"`
+  - `"Iron Loss (W)"`
 - **`n_contours`** (`int`, default: `10`) — Number of contour levels to generate.
 - **`color`** (`str`, default: `"red"`) — Color of the contour lines/surfaces.
 - **`line_width`** (`int`, default: `3`) — Width of the contour lines.

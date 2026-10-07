@@ -90,7 +90,7 @@ pyemsi/
 
 The conversion pipeline (executed by calling `.run()`):
 1. **Build mesh** — reads `post_geom` (or custom mesh file) via `FEMAPParser`, maps FEMAP topology IDs to VTK cell types using `FEMAP_TO_VTK`, assembles a `pv.MultiBlock` dataset.
-2. **Parse data files** — reads displacement, magnetic, current, force, `force_J_B`, and heat files (all optional, controlled by constructor arguments).
+2. **Parse data files** — reads displacement, magnetic, current, force, `force_J_B`, heat, and iron_loss files (all optional, controlled by constructor arguments).
 3. **Initialize PVD** — creates a ParaView dataset series file referencing each time step's `.vtm` file.
 4. **Time stepping** — iterates time steps, writes one `.vtm` per step via `vtkXMLMultiBlockDataWriter`.
 
@@ -109,7 +109,7 @@ FORCE_2D_TOPOLOGY: dict[int, int]
 **Constructor parameters of note:**
 - `force_2d: bool` — extract surface faces instead of volumetric cells (useful for surface-only visualization).
 - `ascii_mode: bool` — write `.vtm` in ASCII instead of binary (larger files, human-readable).
-- `mesh`, `displacement`, `magnetic`, `current`, `force`, `force_J_B`, `heat` — relative file names (or absolute `Path`s) within `input_dir`. Pass `None` to disable any data channel.
+- `mesh`, `displacement`, `magnetic`, `current`, `force`, `force_J_B`, `heat`, `iron_loss` — relative file names (or absolute `Path`s) within `input_dir`. Pass `None` to disable any data channel.
 
 **AI agent notes:**
 - Import path: `from pyemsi.tools.FemapConverter import FemapConverter`

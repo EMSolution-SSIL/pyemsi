@@ -47,6 +47,7 @@ def test_femap_converter_dialog_discovers_optional_files_from_input_directory(tm
     (workspace / "disp").write_text("disp", encoding="utf-8")
     (results_dir / "electric").write_text("electric", encoding="utf-8")
     (results_dir / "magnetic").write_text("mag", encoding="utf-8")
+    (results_dir / "iron_loss").write_text("iron_loss", encoding="utf-8")
     global_settings_path = tmp_path / "config" / "settings.json"
 
     manager = SettingsManager(global_settings_path=global_settings_path)
@@ -60,6 +61,8 @@ def test_femap_converter_dialog_discovers_optional_files_from_input_directory(tm
         assert dialog._electric_field.is_active()
         assert dialog._magnetic_field.value() == os.path.normpath(os.path.join("results", "magnetic"))
         assert dialog._magnetic_field.is_active()
+        assert dialog._iron_loss_field.value() == os.path.normpath(os.path.join("results", "iron_loss"))
+        assert dialog._iron_loss_field.is_active()
         assert dialog._current_field.value() is None
         assert not dialog._current_field.is_active()
     finally:
@@ -86,6 +89,7 @@ def test_femap_converter_dialog_builds_config_with_optional_channels_disabled(tm
         dialog._force_field.set_value(None)
         dialog._force_j_b_field.set_value(None)
         dialog._heat_field.set_value(None)
+        dialog._iron_loss_field.set_value(None)
         monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
 
         dialog._accept_if_valid()
@@ -103,6 +107,7 @@ def test_femap_converter_dialog_builds_config_with_optional_channels_disabled(tm
         assert config.force is None
         assert config.force_J_B is None
         assert config.heat is None
+        assert config.iron_loss is None
     finally:
         dialog.close()
 
@@ -128,6 +133,7 @@ def test_femap_converter_dialog_allows_current_and_electric_together(tmp_path):
         dialog._force_field.set_value(None)
         dialog._force_j_b_field.set_value(None)
         dialog._heat_field.set_value(None)
+        dialog._iron_loss_field.set_value(None)
 
         config = dialog._build_config()
 

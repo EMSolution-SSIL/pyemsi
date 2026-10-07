@@ -149,6 +149,55 @@ class TestFEMAPParser(unittest.TestCase):
         finally:
             os.unlink(empty_file)
 
+    def test_output_vectors_accept_msvc_nan(self):
+        """EMSolution writes NaN as ``-nan(ind)``; it must parse as NaN, not break the vector."""
+        import math
+        import tempfile
+
+        content = "\n".join(
+            [
+                "   -1",
+                "   450",
+                "40,",
+                "STEP:40 Time: 4.00000e-02",
+                "0,3,",
+                " 4.00000e-02,",
+                "1,",
+                "<NULL>",
+                "   -1",
+                "   -1",
+                "  1051",
+                "40, 60191,1,",
+                "IRON_LOSS-elem-1",
+                "0.,-1.,0.,",
+                "60191,0,0,0,0,0,0,0,0,0,",
+                "0,0,0,0,0,0,0,0,0,0,",
+                "0,0,3,8,",
+                "0,1,1,",
+                "1,3,1.5,-nan(ind),2.5,",
+                "4,nan(ind),",
+                "-1,0.,",
+                "   -1",
+                "",
+            ]
+        )
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".neu") as f:
+            f.write(content)
+            path = f.name
+
+        try:
+            parser = FEMAPParser(path)
+            parser.parse()
+            self.assertEqual(parser.get_output_sets(), {40: {"title": "STEP:40 Time: 4.00000e-02", "value": 0.04}})
+            vectors = parser.get_output_vectors()
+            self.assertEqual([v["title"] for v in vectors], ["IRON_LOSS-elem-1"])
+            results = vectors[0]["results"]
+            self.assertEqual(sorted(results), [1, 2, 3, 4])
+            self.assertEqual((results[1], results[3]), (1.5, 2.5))
+            self.assertTrue(math.isnan(results[2]) and math.isnan(results[4]))
+        finally:
+            os.unlink(path)
+
     def test_multiple_node_blocks(self):
         """Test that multiple node blocks are combined."""
         parser = FEMAPParser(self.mixed_mesh)

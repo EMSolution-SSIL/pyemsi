@@ -77,6 +77,7 @@ def main() -> None:
         force=_normalize_optional_text(payload.get("force")),
         force_J_B=_normalize_optional_text(payload.get("force_J_B")),
         heat=_normalize_optional_text(payload.get("heat")),
+        iron_loss=_normalize_optional_text(payload.get("iron_loss")),
         displacement=_normalize_optional_text(payload.get("displacement")),
     )
 

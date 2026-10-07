@@ -232,6 +232,7 @@ def test_settings_manager_persists_femap_converter_values_in_local_scope(tmp_pat
     manager.set_local("tools.femap_converter.mesh", "post_geom")
     manager.set_local("tools.femap_converter.displacement", None)
     manager.set_local("tools.femap_converter.electric", "electric")
+    manager.set_local("tools.femap_converter.iron_loss", "iron_loss")
     manager.set_local("tools.femap_converter.force_2d", True)
     manager.save()
 
@@ -244,6 +245,7 @@ def test_settings_manager_persists_femap_converter_values_in_local_scope(tmp_pat
     assert reloaded.get_local("tools.femap_converter.mesh") == "post_geom"
     assert reloaded.get_local("tools.femap_converter.displacement") is None
     assert reloaded.get_local("tools.femap_converter.electric") == "electric"
+    assert reloaded.get_local("tools.femap_converter.iron_loss") == "iron_loss"
     assert reloaded.get_local("tools.femap_converter.force_2d") is True
 
 
