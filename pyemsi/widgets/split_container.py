@@ -140,7 +140,9 @@ class _TabPanel(QTabWidget):
         if getattr(widget, "viewer_kind", None) == "freecad":
             return
         title = self.tabText(index)
-        menu = QMenu(self)
+        # Parent on the top-level window: VTK makes this panel native, and Qt warns when a menu's transient parent isn't
+        # top level ("... must be a top level window").
+        menu = QMenu(self.window())
 
         # Show only the action that moves to the *other* panel. Widgets that
         # opt out (e.g. the FreeCAD shell hosting a native singleton window)
@@ -364,7 +366,9 @@ class SplitContainer(QWidget):
         """Embed an existing Plotter as a new tab in the left panel."""
         from pyemsi.gui._viewers._field_viewer import FieldViewer
 
-        viewer = FieldViewer(plotter, parent=self._left)
+        # No parent here: building the native VTK window under the visible panel and then moving it into the tab stack
+        # leaves it offset by the panel's screen position (detached popups, QWindowsWindow::setGeometry warnings).
+        viewer = FieldViewer(plotter)
         self.add_tab(viewer, title)
         return viewer
 
