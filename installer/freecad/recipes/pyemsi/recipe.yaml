@@ -6,7 +6,7 @@ package:
   version: ${{ version }}
 
 source:
-  path: ${{ env.get("PYEMSI_SRC", default="C:/Users/eskandarih/pyemsi") }}
+  path: ../../../..
 
 build:
   number: 0

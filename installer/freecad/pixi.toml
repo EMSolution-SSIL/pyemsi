@@ -1,6 +1,6 @@
 # Builds the EMSolution FreeCAD Windows installer: conda packages with rattler-build, then the .exe with constructor.
 # pixi run installer          -> dist\EMSolution-FreeCAD-<version>-Windows-x86_64.exe
-# PYEMSI_SRC overrides the pyemsi checkout used for the pyemsi package.
+# pyemsi and the addon (freecad_addon/) are built from this repo.
 [workspace]
 name = "emsolution-installer"
 channels = ["conda-forge"]

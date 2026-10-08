@@ -6,7 +6,7 @@ package:
   version: ${{ version }}
 
 source:
-  path: ../../..
+  path: ../../../../freecad_addon
 
 build:
   number: 0

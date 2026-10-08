@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <date>2026-09-30</date>
   <maintainer email="eskandari.hmd@gmail.com">eskandarih</maintainer>
-  <license>Proprietary</license>
+  <license>GPL-3.0-or-later</license>
   <freecadmin>1.1.0</freecadmin>
   <content>
     <workbench>
