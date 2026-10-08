@@ -1,0 +1,19 @@
+# Builds the EMSolution FreeCAD Windows installer: conda packages with rattler-build, then the .exe with constructor.
+# pixi run installer          -> dist\EMSolution-FreeCAD-<version>-Windows-x86_64.exe
+# PYEMSI_SRC overrides the pyemsi checkout used for the pyemsi package.
+[workspace]
+name = "emsolution-installer"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+rattler-build = "*"
+constructor = "*"
+conda-standalone = "*"
+nsis = "*"
+
+[tasks]
+# --no-build-id keeps pyemsi's deepest Monaco file under Windows' 260-char MAX_PATH; build from a short checkout path.
+# Without build ids a failed build's dir is reused, hence the cleanup (pixi's rm chokes on read-only files).
+packages = "powershell -NoProfile -Command \"Remove-Item -Recurse -Force output/bld -ErrorAction SilentlyContinue\" ; rattler-build build --recipe-dir recipes --output-dir output -c conda-forge --skip-existing=local --no-build-id"
+installer = { cmd = "constructor . --output-dir dist", depends-on = ["packages"] }

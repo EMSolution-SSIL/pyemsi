@@ -1,0 +1,21 @@
+{% set local_channel = os.path.abspath("output") %}  {# invalid YAML on purpose: makes constructor render Jinja #}
+name: EMSolution-FreeCAD
+version: 0.1.0
+company: EMSolution
+
+channels:
+  - {{ local_channel }}  # rattler-build output; conda needs an absolute path
+  - conda-forge
+
+specs:
+  - python 3.11.*
+  - emsolution-freecad
+
+installer_type: exe
+# Without LongPathsEnabled the prefix must be <= 55 chars (vtk's viskores headers extract to 203-char pkgs\ paths),
+# so keep the folder name short: fits user names up to 20 chars. Running the installer as admin enables long paths.
+default_prefix: "%LOCALAPPDATA%\\EMS-FreeCAD"
+default_prefix_domain_user: "%LOCALAPPDATA%\\EMS-FreeCAD"
+register_python: false
+initialize_conda: false
+keep_pkgs: false
