@@ -2,12 +2,14 @@ r"""GUI smoke test: runs inside FreeCAD, drives the commands, runs a mesh, then 
 
 Needs the addon linked into a throwaway FreeCAD profile (PowerShell, repo root):
     $h = "$env:TEMP\ems_fc_home"; New-Item -ItemType Directory -Force "$h\Mod" | Out-Null
-    if (-not (Test-Path "$h\Mod\EMSolution")) { New-Item -ItemType Junction -Path "$h\Mod\EMSolution" -Target (Get-Location).Path | Out-Null }
+    if (-not (Test-Path "$h\Mod\EMSolution")) { New-Item -ItemType Junction -Path "$h\Mod\EMSolution" -Target "$PWD\freecad_addon" | Out-Null }
     $env:FREECAD_USER_HOME = $h
-    Start-Process -Wait "$env:LOCALAPPDATA\Programs\FreeCAD 1.1\bin\FreeCAD.exe" tests\gui_smoke.py
+    Start-Process -Wait "$env:LOCALAPPDATA\Programs\FreeCAD 1.1\bin\FreeCAD.exe" tests\freecad_addon\gui_smoke.py
     Get-Content "$env:TEMP\ems_gui_smoke.txt"
-The last line of the result file is "PASS" or "FAIL".
+The last line of the result file is "PASS" or "FAIL". It passes on stock FreeCAD 1.1.4; with the
+pixi env's FreeCAD 1.1.0 (`pixi run freecad tests\freecad_addon\gui_smoke.py`) the folder panels check fails.
 """
+
 import os
 import tempfile
 import traceback
@@ -23,8 +25,7 @@ def main():
     Gui.activateWorkbench("EMSolutionWorkbench")  # loaded by FreeCAD from the Mod folder
     from emsolution import commands, objects, runner, taskpanels
 
-    commands.ask_text = lambda title, label, default: {"Material": "Copper",
-                                                       "Excitation": "Terminal In"}[title]
+    commands.ask_text = lambda title, label, default: {"Material": "Copper", "Excitation": "Terminal In"}[title]
     commands.ask_size = lambda default: 3.0
     commands.ask_study = lambda: ("Study", "3D")
 
@@ -55,8 +56,8 @@ def main():
     Gui.Selection.addSelection(doc.Name, "A", "Edge1")
     Gui.Selection.addSelection(doc.Name, "B", "Vertex8")
     Gui.runCommand("EMS_MeshSize")
-    mat, = objects.materials(study)
-    exc, = objects.excitations(study)
+    (mat,) = objects.materials(study)
+    (exc,) = objects.excitations(study)
     size, fine = objects.mesh_sizes(study)
     assert [b.Name for b in mat.References] == ["A", "B"], mat.References
     assert exc.References == [(doc.A, ("Face1",))], exc.References
@@ -99,8 +100,7 @@ def main():
 
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
-        return sorted(b.text().replace("&", "") for box in boxes if box.isVisible()
-                      for b in box.buttons())
+        return sorted(b.text().replace("&", "") for box in boxes if box.isVisible() for b in box.buttons())
 
     def select(*names):
         Gui.Selection.clearSelection()
@@ -114,8 +114,11 @@ def main():
     def shown_folders():
         """{folder name: table} for the folder panels visible in the Tasks tab."""
         tables = Gui.getMainWindow().findChildren(QtWidgets.QTableWidget)
-        return {first_column[t.horizontalHeaderItem(0).text()]: t for t in tables
-                if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column}
+        return {
+            first_column[t.horizontalHeaderItem(0).text()]: t
+            for t in tables
+            if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column
+        }
 
     rows = {"Materials": 2, "Excitations": 1, "Mesh Sizes": 2}
     for folder in (study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
@@ -132,17 +135,24 @@ def main():
     assert shown_folders() == {}, "folder panel still shown for a body"
 
     select(study.Name)
-    assert not any(w.isVisible() and w.title() == "Advanced mesh settings"
-                   for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox))
+    assert not any(
+        w.isVisible() and w.title() == "Advanced mesh settings"
+        for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox)
+    )
     select(study.MeshSizesGroup.Name)
-    advanced, = [w for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox)
-                  if w.isVisible() and w.title() == "Advanced mesh settings"]
+    (advanced,) = [
+        w
+        for w in Gui.getMainWindow().findChildren(QtWidgets.QGroupBox)
+        if w.isVisible() and w.title() == "Advanced mesh settings"
+    ]
     assert advanced.isChecked(), "Gmsh options are collapsed by default"
-    combo, = [c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
-              if c.isVisible() and c.findText("HXT") >= 0]
+    (combo,) = [
+        c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox) if c.isVisible() and c.findText("HXT") >= 0
+    ]
     combo.setCurrentText("HXT")
-    factor, = [s for s in Gui.getMainWindow().findChildren(QtWidgets.QDoubleSpinBox)
-               if s.isVisible() and s.suffix() == ""]
+    (factor,) = [
+        s for s in Gui.getMainWindow().findChildren(QtWidgets.QDoubleSpinBox) if s.isVisible() and s.suffix() == ""
+    ]
     factor.setValue(0.9)
     assert (study.MeshSizesGroup.VolumeAlgorithm, study.MeshSizesGroup.SizeFactor) == ("HXT", 0.9)
     assert doc.UndoNames[:2] == ["Edit mesh settings"] * 2, doc.UndoNames
@@ -160,12 +170,14 @@ def main():
     log.append("folder panels ok")
 
     from emsolution import highlight
+
     shown_refs = []
     real_show = highlight.show
 
     def spy_show(refs):
         shown_refs.append(sorted((b.Name, s) for b, s in refs))
         real_show(refs)
+
     highlight.show = spy_show
 
     def drawn():
@@ -174,8 +186,7 @@ def main():
         if n is None:
             return []
         assert Gui.getDocument(doc.Name).activeView().getSceneGraph().findChild(n) >= 0
-        return [n.getChild(i).getChild(2).getTypeId().getName().getString()
-                for i in range(2, n.getNumChildren())]
+        return [n.getChild(i).getChild(2).getTypeId().getName().getString() for i in range(2, n.getNumChildren())]
 
     select(mat.Name)
     assert shown_refs[-1] == [("A", ""), ("B", "")], shown_refs
@@ -230,6 +241,7 @@ def main():
     # Several Studies: ownership, setup controls, bulk selection and undo.
     import Part
     from emsolution import geometry
+
     commands.ask_study = lambda: ("Cross-section", "2D")
     Gui.runCommand("EMS_NewStudy")
     for _ in range(5):
@@ -310,8 +322,11 @@ def main():
     inspect.reject()
     assert highlight.shown() is None
     select(second.Name)
-    actual_combo, = [c for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
-                     if c.isVisible() and c.objectName() == "MainGeometry"]
+    (actual_combo,) = [
+        c
+        for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
+        if c.isVisible() and c.objectName() == "MainGeometry"
+    ]
     actual_combo.setCurrentIndex(actual_combo.findData("source:" + source.Name))
     Gui.activeDocument().activeView().viewTop()
     Gui.activeDocument().activeView().fitAll()
@@ -346,6 +361,7 @@ def main():
     Gui.updateGui()
     assert run.error == "" and not runner.busy()
     import json
+
     with open(run.job, encoding="utf-8") as fh:
         selected_job = json.load(fh)
     assert [v["name"] for v in selected_job["volumes"]] == ["A"]

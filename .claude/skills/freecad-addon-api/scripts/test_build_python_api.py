@@ -1,7 +1,6 @@
 """One stdlib fixture for source aliases, guards, signatures and lifecycle docs."""
 
 import ast
-from pathlib import Path
 
 from build_python_api import build, exports, import_target
 from build_references import temporary_workspace
@@ -9,7 +8,8 @@ from build_references import temporary_workspace
 
 with temporary_workspace() as root:
     source = root / "facade.py"
-    source.write_text('''"""Facade documentation."""
+    source.write_text(
+        '''"""Facade documentation."""
 from factory import make_line as makeLine
 if App.GuiUp:
     from gui import Provider
@@ -37,9 +37,13 @@ class Shape(Base):
         """Setter behavior."""
         pass
 def _internal(): pass
-''', encoding="utf-8")
+''',
+        encoding="utf-8",
+    )
     factory = root / "factory.py"
-    factory.write_text('def make_line(first, last=None):\n    """Create a line."""\n    return None\n', encoding="utf-8")
+    factory.write_text(
+        'def make_line(first, last=None):\n    """Create a line."""\n    return None\n', encoding="utf-8"
+    )
     output = root / "references/python-api"
     result = build(root, output, {"Draft": source, "factory": factory})
     module = (output / "Draft/index.md").read_text(encoding="utf-8")

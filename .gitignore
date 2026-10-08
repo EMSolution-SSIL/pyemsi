@@ -4,7 +4,10 @@ t.py
 y.py
 z.py
 todo
-.claude/
+/.claude/*
+!/.claude/skills/
+.agents/
+.superpowers/study-setup-*/
 .copilot-tracking/
 tests/visual_output/
 # pytest --basetemp directories from local test runs

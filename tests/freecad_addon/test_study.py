@@ -1,6 +1,5 @@
-"""Study, ID table and job writer tests. Run from the repo root with FreeCAD's python.exe:
-    python.exe -m unittest tests.test_study -v
-"""
+"""Study, ID table and job writer tests. Run from the repo root: pixi run pytest tests/freecad_addon/test_study.py"""
+
 import json
 import os
 import subprocess
@@ -8,15 +7,12 @@ import sys
 import tempfile
 import unittest
 
-_BIN = os.path.dirname(sys.executable)
-sys.path[:0] = [_BIN, os.path.join(_BIN, "..", "lib")]
+import FreeCAD as App
+import Part
 
-import FreeCAD as App  # noqa: E402
-import Part  # noqa: E402
+from emsolution import geometry, jobwriter, objects
 
-from emsolution import geometry, jobwriter, objects  # noqa: E402
-
-MESHER = os.path.join(os.path.dirname(__file__), "..", "emsolution", "mesher.py")
+MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 
 
 class StudyTest(unittest.TestCase):
@@ -149,9 +145,11 @@ class StudyTest(unittest.TestCase):
 
     def test_items_may_link_to_bodies_inside_a_part(self):
         # plain links may not reach into an App::Part; FreeCAD warns on every recompute
-        items = [objects.make_material(self.study, "Copper", []),
-                 objects.make_excitation(self.study, "In", []),
-                 objects.make_mesh_size(self.study, 1.0, [])]
+        items = [
+            objects.make_material(self.study, "Copper", []),
+            objects.make_excitation(self.study, "In", []),
+            objects.make_mesh_size(self.study, 1.0, []),
+        ]
         for item in items:
             self.assertTrue(item.getTypeIdOfProperty("References").endswith("Global"), item.Name)
 
@@ -172,8 +170,7 @@ class StudyTest(unittest.TestCase):
         folder = self.study.MaterialsGroup
         folder.Label = "Stuff"
         self.assertEqual(folder.Label, "Materials")
-        self.assertEqual([f.Label for f in self.study.Group],
-                         ["Materials", "Excitations", "Mesh Sizes"])
+        self.assertEqual([f.Label for f in self.study.Group], ["Materials", "Excitations", "Mesh Sizes"])
 
     def test_folder_overview_rows(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
@@ -182,13 +179,21 @@ class StudyTest(unittest.TestCase):
         exc = objects.make_excitation(self.study, "In", [(a, "Face1"), (a, "Face2")])
         size = objects.make_mesh_size(self.study, 1.5, [(a, ""), (c, "Edge1")])
         objects.update_ids(self.study)
-        self.assertEqual(objects.material_rows(self.study), [
-            (mat, [(a, "")], ["Copper", "A", "1"]), (mat, [(b, "")], ["Copper", "B", "2"]),
-            (empty, [], ["Iron", "", ""])])
-        self.assertEqual(objects.excitation_rows(self.study),
-                         [(exc, [(a, "Face1"), (a, "Face2")], ["In", "A", "Face1, Face2", "1001"])])
-        self.assertEqual(objects.mesh_size_rows(self.study),
-                         [(size, [(a, ""), (c, "Edge1")], ["MeshSize", "1.5 mm", "A, C.Edge1"])])
+        self.assertEqual(
+            objects.material_rows(self.study),
+            [
+                (mat, [(a, "")], ["Copper", "A", "1"]),
+                (mat, [(b, "")], ["Copper", "B", "2"]),
+                (empty, [], ["Iron", "", ""]),
+            ],
+        )
+        self.assertEqual(
+            objects.excitation_rows(self.study),
+            [(exc, [(a, "Face1"), (a, "Face2")], ["In", "A", "Face1, Face2", "1001"])],
+        )
+        self.assertEqual(
+            objects.mesh_size_rows(self.study), [(size, [(a, ""), (c, "Edge1")], ["MeshSize", "1.5 mm", "A, C.Edge1"])]
+        )
         self.assertEqual(objects.item_refs(mat), [(a, ""), (b, "")])
         self.assertTrue(objects.is_item(size) and not objects.is_item(self.study.MeshSizesGroup))
         self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
@@ -207,10 +212,18 @@ class StudyTest(unittest.TestCase):
         settings.SmoothingSteps = 3
         settings.OptimizeNetgen = True
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
-            self.assertEqual(json.load(fh)["options"], {
-                "Mesh.Algorithm": 5, "Mesh.Algorithm3D": 10, "Mesh.MeshSizeFactor": 0.5,
-                "Mesh.Smoothing": 3, "Mesh.OptimizeNetgen": 1,
-                "Mesh.MeshSizeMin": 0.1, "Mesh.MeshSizeMax": 2.0})
+            self.assertEqual(
+                json.load(fh)["options"],
+                {
+                    "Mesh.Algorithm": 5,
+                    "Mesh.Algorithm3D": 10,
+                    "Mesh.MeshSizeFactor": 0.5,
+                    "Mesh.Smoothing": 3,
+                    "Mesh.OptimizeNetgen": 1,
+                    "Mesh.MeshSizeMin": 0.1,
+                    "Mesh.MeshSizeMax": 2.0,
+                },
+            )
 
     # --- checks ------------------------------------------------------------
 
@@ -231,8 +244,7 @@ class StudyTest(unittest.TestCase):
 
     def test_check_not_one_solid(self):
         two = self.doc.addObject("Part::Feature", "Two")
-        two.Shape = Part.makeCompound([Part.makeBox(1, 1, 1),
-                                       Part.makeBox(1, 1, 1, App.Vector(5, 0, 0))])
+        two.Shape = Part.makeCompound([Part.makeBox(1, 1, 1), Part.makeBox(1, 1, 1, App.Vector(5, 0, 0))])
         objects.make_material(self.study, "Copper", [two])
         self.assertStudyError("exactly one solid")
 
@@ -298,8 +310,8 @@ class StudyTest(unittest.TestCase):
     def test_names_equal_after_cleanup_are_refused(self):
         a = self.box("A")
         b = self.box("B", 10)
-        b.Label = "A!"   # cleans to "A_"
-        a.Label = "A?"   # cleans to "A_" too
+        b.Label = "A!"  # cleans to "A_"
+        a.Label = "A?"  # cleans to "A_" too
         objects.make_material(self.study, "Cu", [a, b])
         self.assertStudyError("A_")
 
@@ -333,17 +345,33 @@ class StudyTest(unittest.TestCase):
         path = jobwriter.write_job(self.study)
         with open(path, encoding="utf-8") as fh:
             job = json.load(fh)
-        self.assertEqual(job, {
-            "model_name": "My_Study", "msh_version": 4.1,
-            "options": {"Mesh.Algorithm": 6, "Mesh.Algorithm3D": 1, "Mesh.MeshSizeFactor": 1.0,
-                        "Mesh.Smoothing": 1, "Mesh.OptimizeNetgen": 0},
-            "volumes": [
-                {"id": 1, "name": "A", "file": "geometry/vol_1.brep", "size": 2.0},
-                {"id": 2, "name": "B", "file": "geometry/vol_2.brep", "size": 5.0}],
-            "surfaces": [
-                {"id": 1001, "name": "Terminal_In_A", "volume_id": 1,
-                 "files": ["geometry/surf_1001_1.brep", "geometry/surf_1001_2.brep"]}],
-            "sizes": []})
+        self.assertEqual(
+            job,
+            {
+                "model_name": "My_Study",
+                "msh_version": 4.1,
+                "options": {
+                    "Mesh.Algorithm": 6,
+                    "Mesh.Algorithm3D": 1,
+                    "Mesh.MeshSizeFactor": 1.0,
+                    "Mesh.Smoothing": 1,
+                    "Mesh.OptimizeNetgen": 0,
+                },
+                "volumes": [
+                    {"id": 1, "name": "A", "file": "geometry/vol_1.brep", "size": 2.0},
+                    {"id": 2, "name": "B", "file": "geometry/vol_2.brep", "size": 5.0},
+                ],
+                "surfaces": [
+                    {
+                        "id": 1001,
+                        "name": "Terminal_In_A",
+                        "volume_id": 1,
+                        "files": ["geometry/surf_1001_1.brep", "geometry/surf_1001_2.brep"],
+                    }
+                ],
+                "sizes": [],
+            },
+        )
         for rel in ("vol_1.brep", "vol_2.brep", "surf_1001_1.brep", "surf_1001_2.brep"):
             self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "geometry", rel)))
 
@@ -357,10 +385,13 @@ class StudyTest(unittest.TestCase):
             job = json.load(fh)
         # only the whole-body item sets a body size
         self.assertEqual([v["size"] for v in job["volumes"]], [2.0, 5.0])
-        self.assertEqual(job["sizes"], [
-            {"name": "MeshSize", "size": 1.0,
-             "files": ["geometry/size_1_1.brep", "geometry/size_1_2.brep"]},
-            {"name": "MeshSize", "size": 1.0, "files": ["geometry/size_2_1.brep"]}])
+        self.assertEqual(
+            job["sizes"],
+            [
+                {"name": "MeshSize", "size": 1.0, "files": ["geometry/size_1_1.brep", "geometry/size_1_2.brep"]},
+                {"name": "MeshSize", "size": 1.0, "files": ["geometry/size_2_1.brep"]},
+            ],
+        )
         vertex = Part.Shape()
         vertex.read(os.path.join(self.tmp.name, "geometry", "size_2_1.brep"))
         self.assertEqual(vertex.ShapeType, "Vertex")
@@ -494,9 +525,7 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(second.MeshSizesGroup.DefaultMeshSize.Value, 1.5)
         self.assertEqual(geometry.region(second, "Main")[1], [])
         self.assertFalse(first.LegacyOutput)
-        code = """import os, sys
-bin_dir = os.path.dirname(sys.executable)
-sys.path[:0] = [bin_dir, os.path.join(bin_dir, '..', 'lib')]
+        code = """import sys
 import FreeCAD as App
 from emsolution import geometry, objects
 doc = App.openDocument(sys.argv[1])
@@ -507,8 +536,9 @@ assert geometry.region(second, 'Main')[1] == []
 App.closeDocument(doc.Name)
 print('RESTORE PASS')
 """
-        result = subprocess.run([sys.executable, "-c", code, path], capture_output=True,
-                                encoding="utf-8", errors="replace")
+        result = subprocess.run(
+            [sys.executable, "-c", code, path], capture_output=True, encoding="utf-8", errors="replace"
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("RESTORE PASS", result.stdout)
 
@@ -517,8 +547,17 @@ print('RESTORE PASS')
         objects.update_ids(self.study)
         self.study.MeshSizesGroup.DefaultMeshSize = 1.25
         self.study.OutputFolder = ""
-        for prop in ("Dimension", "Movement", "LegacyOutput", "MainMode", "MovingMode",
-                     "MainSource", "MovingSource", "MainObjects", "MovingObjects"):
+        for prop in (
+            "Dimension",
+            "Movement",
+            "LegacyOutput",
+            "MainMode",
+            "MovingMode",
+            "MainSource",
+            "MovingSource",
+            "MainObjects",
+            "MovingObjects",
+        ):
             self.study.removeProperty(prop)
         path = os.path.join(self.tmp.name, "old.FCStd")
         self.doc.saveAs(path)
@@ -530,8 +569,9 @@ print('RESTORE PASS')
         self.assertEqual(self.study.MeshSizesGroup.DefaultMeshSize.Value, 1.25)
         self.assertEqual(self.study.OutputFolder, "")
         self.assertTrue(self.study.LegacyOutput)
-        self.assertEqual(os.path.normpath(jobwriter.output_folder(self.study)),
-                         os.path.normpath(os.path.splitext(path)[0] + "_mesh"))
+        self.assertEqual(
+            os.path.normpath(jobwriter.output_folder(self.study)), os.path.normpath(os.path.splitext(path)[0] + "_mesh")
+        )
         self.assertEqual(geometry.export_unavailable(self.study), "")
         self.assertTrue(os.path.isfile(jobwriter.write_job(self.study)))
 
@@ -553,8 +593,10 @@ print('RESTORE PASS')
 
     def test_deferred_export_cannot_change_ids_or_write_files(self):
         objects.make_material(self.study, "Iron", [self.box("A")])
-        for prop, value, message in (("Dimension", "2D", "2D mesh generation"),
-                                     ("Movement", "Sliding motion", "Sliding-motion")):
+        for prop, value, message in (
+            ("Dimension", "2D", "2D mesh generation"),
+            ("Movement", "Sliding motion", "Sliding-motion"),
+        ):
             old = getattr(self.study, prop)
             setattr(self.study, prop, value)
             with self.assertRaisesRegex(jobwriter.StudyError, message):
@@ -590,8 +632,7 @@ print('RESTORE PASS')
         self.assertEqual(len(job["sizes"]), 1)
         self.assertEqual(self.study.VolumeIds, {"B": "1", "A": "2"})
         self.assertEqual(self.study.SurfaceIds, {"Excitation|B": "1001"})
-        result = subprocess.run([sys.executable, MESHER, path], capture_output=True,
-                                encoding="utf-8", errors="replace")
+        result = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(os.path.isfile(os.path.join(self.tmp.name, "Study.unv")))
         with open(os.path.join(self.tmp.name, "Study.msh"), encoding="utf-8") as fh:

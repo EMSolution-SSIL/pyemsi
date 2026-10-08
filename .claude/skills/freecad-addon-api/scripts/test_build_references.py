@@ -9,10 +9,13 @@ from build_references import build, temporary_workspace
 
 with temporary_workspace() as temporary:
     root = Path(temporary)
-    (root / "version.json").write_text(json.dumps({"version_major": 1, "version_minor": 2, "version_patch": 3}), encoding="utf-8")
+    (root / "version.json").write_text(
+        json.dumps({"version_major": 1, "version_minor": 2, "version_patch": 3}), encoding="utf-8"
+    )
     stubs = root / "stubs"
     (stubs / "Part").mkdir(parents=True)
-    (stubs / "Part/__init__.pyi").write_text('''from typing import Any, overload, Final
+    (stubs / "Part/__init__.pyi").write_text(
+        '''from typing import Any, overload, Final
 from FreeCAD.Base import Vector as Vector
 Alias = Vector
 def makeBox(length: float, /, *, option: bool = ...) -> Any:
@@ -33,7 +36,9 @@ class Shape(Base):
     def unknown(self, *args: Any, **kwargs: Any) -> Any: ...
     class Mode:
         one: int
-''', encoding="utf-8")
+''',
+        encoding="utf-8",
+    )
     output = root / "api"
     metadata = build(stubs, output, root)
     module = (output / "Part/index.md").read_text(encoding="utf-8")

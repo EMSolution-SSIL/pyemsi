@@ -108,7 +108,8 @@ Restart FreeCAD after you change the addon or pyemsi's Python code. After a chan
 6. **Not yet integrated:** the addon only *bundles* pyemsi. No workbench command opens the editor, converter, viewer, output view or file explorer yet; the smoke test opens the editor from a script.
 7. **Addon code and pyemsi's tooling:**
    - pyemsi's pre-commit hooks (ruff format + ruff check) now also run on `freecad_addon/`.
-   - `pixi run test` only runs `tests/`, so the addon's tests in `freecad_addon/tests/` are not part of it.
+   - The addon's tests are in `tests/freecad_addon/` and run with `pixi run test`.
+   - The GUI smoke test `tests/freecad_addon/gui_smoke.py` passes on stock FreeCAD 1.1.4 but fails its folder-panels check on the pixi env's FreeCAD 1.1.0. The pin may need to move to 1.1.3 or later.
 
 ### From before (spikes in the same session)
 

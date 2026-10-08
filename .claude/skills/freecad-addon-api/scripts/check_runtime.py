@@ -122,20 +122,24 @@ def run(output_directory=None, restore_only=False):
                 doc.commitTransaction()
 
             if check("native_box_units_placement_recompute", native_box):
+
                 def undo_redo():
                     doc.undo()
                     assert doc.getObject("NativeBox") is None
                     doc.redo()
                     doc.recompute()
                     assert doc.getObject("NativeBox").Shape.isValid()
+
                 check("native_box_undo_redo", undo_redo)
 
             def document_observer():
                 class Observer:
                     count = 0
+
                     def slotCreatedObject(self, obj):
                         if obj.Document.Name == doc.Name:
                             self.count += 1
+
                 observer = Observer()
                 App.addDocumentObserver(observer)
                 try:
@@ -145,6 +149,7 @@ def run(output_directory=None, restore_only=False):
                     App.removeDocumentObserver(observer)
                 doc.addObject("App::FeaturePython", "Unobserved")
                 assert observer.count == 1
+
             check("document_observer_cleanup", document_observer)
 
             def persistence():
@@ -160,6 +165,7 @@ def run(output_directory=None, restore_only=False):
                 App.closeDocument(name)
                 owned_documents.discard(name)
                 reopen()
+
             check("proxy_save_reopen", persistence)
 
             if App.GuiUp:
@@ -169,6 +175,7 @@ def run(output_directory=None, restore_only=False):
                     obj = App.activeDocument().getObject("ProxyBox")
                     assert obj is not None and obj.ViewObject is not None
                     assert obj.ViewObject.Proxy.loaded and obj.ViewObject.Proxy.finished
+
                 check("view_proxy_restore", view_proxy_restore)
 
                 def command_bool():
@@ -176,12 +183,16 @@ def run(output_directory=None, restore_only=False):
                         def __init__(self, active):
                             self.active = active
                             self.called = False
+
                         def GetResources(self):
                             return {"MenuText": "Skill smoke", "CmdType": "NoTransaction"}
+
                         def IsActive(self):
                             return self.active
+
                         def Activated(self):
                             self.called = True
+
                     prefix = "SkillSmoke_" + uuid.uuid4().hex
                     yes, integer = Command(True), Command(1)
                     Gui.addCommand(prefix + "_yes", yes)
@@ -190,13 +201,16 @@ def run(output_directory=None, restore_only=False):
                     assert Gui.Command.get(prefix + "_integer").isActive() is False
                     Gui.runCommand(prefix + "_yes")
                     assert yes.called
+
                 check("gui_command_boolean_and_activation", command_bool)
 
                 def selection_observer():
                     class Observer:
                         count = 0
+
                         def addSelection(self, doc_name, obj_name, sub_name, point):
                             self.count += 1
+
                     current = App.activeDocument()
                     obj = current.getObject("ProxyBox")
                     assert obj is not None
@@ -212,9 +226,14 @@ def run(output_directory=None, restore_only=False):
                     Gui.Selection.addSelection(obj)
                     assert observer.count == 1
                     Gui.Selection.clearSelection(current.Name)
+
                 check("gui_selection_observer_cleanup", selection_observer)
             else:
-                for name in ("gui_command_boolean_and_activation", "gui_selection_observer_cleanup", "view_proxy_restore"):
+                for name in (
+                    "gui_command_boolean_and_activation",
+                    "gui_selection_observer_cleanup",
+                    "view_proxy_restore",
+                ):
                     report["checks"].append({"name": name, "status": "skipped", "reason": "App.GuiUp is false"})
     except Exception:
         report["checks"].append({"name": "setup", "status": "failed", "error": traceback.format_exc()})

@@ -27,9 +27,17 @@ with temporary_workspace() as temporary:
     audit = (output / "conversion-review.md").read_text(encoding="utf-8")
     assert "object (ignored)" in audit and "raises NotImplementedError" in audit
     assert "PrimitivePy" in box and "Closest discovered ancestor binding" in box
-    property_rows = sum(line.startswith("| `") for page in output.rglob("*.md") for line in page.read_text(encoding="utf-8").splitlines())
+    property_rows = sum(
+        line.startswith("| `")
+        for page in output.rglob("*.md")
+        for line in page.read_text(encoding="utf-8").splitlines()
+    )
     assert property_rows == metadata["properties"]
-    wrapper_rows = sum(line.startswith("| [") for page in output.glob("*/wrapper-review.md") for line in page.read_text(encoding="utf-8").splitlines())
+    wrapper_rows = sum(
+        line.startswith("| [")
+        for page in output.glob("*/wrapper-review.md")
+        for line in page.read_text(encoding="utf-8").splitlines()
+    )
     assert wrapper_rows == metadata["owners_without_direct_binding"]
     missing_root = Path(temporary) / "missing-evidence-root"
     missing_root.mkdir()

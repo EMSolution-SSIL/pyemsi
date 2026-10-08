@@ -19,16 +19,54 @@ from build_references import SKILL, declaration, module_name, symbol_name, write
 
 # Import paths are relative to each workbench's Python search directory.
 SEEDS = {
-    "Draft": ["Draft.py", "DraftGeomUtils.py", "DraftVecUtils.py", "WorkingPlane.py", "draftmake/*.py", "draftfunctions/*.py", "draftgeoutils/*.py"],
+    "Draft": [
+        "Draft.py",
+        "DraftGeomUtils.py",
+        "DraftVecUtils.py",
+        "WorkingPlane.py",
+        "draftmake/*.py",
+        "draftfunctions/*.py",
+        "draftgeoutils/*.py",
+    ],
     "BIM": ["Arch.py"],
     "Part": ["BasicShapes/*.py", "BOPTools/*.py", "CompoundTools/*.py"],
-    "Fem": ["ObjectsFem.py", "femtools/femutils.py", "femtools/membertools.py", "femtools/objecttools.py", "femtools/geomtools.py", "femmesh/meshtools.py", "femmesh/femmesh2mesh.py", "femresult/resulttools.py"],
+    "Fem": [
+        "ObjectsFem.py",
+        "femtools/femutils.py",
+        "femtools/membertools.py",
+        "femtools/objecttools.py",
+        "femtools/geomtools.py",
+        "femmesh/meshtools.py",
+        "femmesh/femmesh2mesh.py",
+        "femresult/resulttools.py",
+    ],
     "TechDraw": ["TechDrawTools/*.py"],
     "Sketcher": ["ProfileLib/*.py"],
-    "CAM": ["Path/__init__.py", "Path/Geom.py", "Path/Log.py", "Path/Base/Util.py", "Path/Main/Job.py", "Path/Main/Stock.py", "Path/Op/Util.py", "Path/Tool/Controller.py"],
+    "CAM": [
+        "Path/__init__.py",
+        "Path/Geom.py",
+        "Path/Log.py",
+        "Path/Base/Util.py",
+        "Path/Main/Job.py",
+        "Path/Main/Stock.py",
+        "Path/Op/Util.py",
+        "Path/Tool/Controller.py",
+    ],
 }
 FACADES = {"Draft", "DraftGeomUtils", "Arch"}
-METHOD_DUNDERS = {"__init__", "__call__", "__iter__", "__next__", "__getitem__", "__setitem__", "__len__", "__enter__", "__exit__", "__getstate__", "__setstate__"}
+METHOD_DUNDERS = {
+    "__init__",
+    "__call__",
+    "__iter__",
+    "__next__",
+    "__getitem__",
+    "__setitem__",
+    "__len__",
+    "__enter__",
+    "__exit__",
+    "__getstate__",
+    "__setstate__",
+}
 
 
 def scoped(body, guards=()):
@@ -60,7 +98,12 @@ def exports(tree):
     for node, _ in declarations:
         if isinstance(node, ast.AugAssign) and ast.unparse(node.target) == "__all__":
             return None
-        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute) and ast.unparse(node.value.func.value) == "__all__":
+        if (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Attribute)
+            and ast.unparse(node.value.func.value) == "__all__"
+        ):
             return None
     names = []
     for node, _ in assignments:
@@ -78,7 +121,7 @@ def import_target(module, node, is_package=False):
     if not node.level:
         return node.module or ""
     package = module.split(".") if is_package else module.split(".")[:-1]
-    return ".".join(package[:len(package) - node.level + 1] + ([node.module] if node.module else []))
+    return ".".join(package[: len(package) - node.level + 1] + ([node.module] if node.module else []))
 
 
 def source_inventory(root):
@@ -134,7 +177,13 @@ def entries(body, owner, source, all_names=None, class_scope=False):
             continue
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.AnnAssign, ast.Assign)):
             continue
-        if isinstance(node, (ast.Assign, ast.AnnAssign)) and not isinstance(getattr(node, "value", None), (ast.Name, ast.Attribute, ast.Constant, ast.Tuple, ast.List, type(None))) and not class_scope:
+        if (
+            isinstance(node, (ast.Assign, ast.AnnAssign))
+            and not isinstance(
+                getattr(node, "value", None), (ast.Name, ast.Attribute, ast.Constant, ast.Tuple, ast.List, type(None))
+            )
+            and not class_scope
+        ):
             # Keep explicit aliases and constants; large computed runtime state is
             # source evidence, not an inferred exported API contract.
             continue
@@ -144,19 +193,42 @@ def entries(body, owner, source, all_names=None, class_scope=False):
         doc = ast.get_docstring(node) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else None
         if not doc and i + 1 < len(nodes):
             following = nodes[i + 1][0]
-            if isinstance(following, ast.Expr) and isinstance(following.value, ast.Constant) and isinstance(following.value.value, str):
+            if (
+                isinstance(following, ast.Expr)
+                and isinstance(following.value, ast.Constant)
+                and isinstance(following.value.value, str)
+            ):
                 doc = following.value.value
-        status = "listed in literal __all__" if name in (all_names or ()) else "source-defined name; no independently verified stability/export guarantee"
+        status = (
+            "listed in literal __all__"
+            if name in (all_names or ())
+            else "source-defined name; no independently verified stability/export guarantee"
+        )
         section = f"## `{owner}.{name}`\n\nStatus: {status}.\n\n" + notes(guards)
-        section += f"```python\n{code}\n```\n\n" + (doc or "No source docstring; inspect implementation and callers for purpose, return values and side effects.") + "\n\n"
+        section += (
+            f"```python\n{code}\n```\n\n"
+            + (
+                doc
+                or "No source docstring; inspect implementation and callers for purpose, return values and side effects."
+            )
+            + "\n\n"
+        )
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             count += 1
-            if node.returns is None or any(arg.annotation is None for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs if arg.arg not in {"self", "cls"}):
+            if node.returns is None or any(
+                arg.annotation is None
+                for arg in node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+                if arg.arg not in {"self", "cls"}
+            ):
                 section += "Typing limit: missing source annotations are unspecified; no inferred parameter/return types are supplied.\n\n"
         section += f"Evidence: `{source}:{node.lineno}`. Decorators are copied as source expressions and have not been executed.\n\n"
         sections.append(section)
     if private:
-        sections.append("## Internal definitions not expanded\n\n" + ", ".join(f"`{owner}.{name}`" for name in dict.fromkeys(private)) + ". These are source internals unless an explicit export establishes otherwise.\n\n")
+        sections.append(
+            "## Internal definitions not expanded\n\n"
+            + ", ".join(f"`{owner}.{name}`" for name in dict.fromkeys(private))
+            + ". These are source internals unless an explicit export establishes otherwise.\n\n"
+        )
     return sections, count
 
 
@@ -181,15 +253,31 @@ def build(root, out, selected=None):
         header = f"# Python source module `{module}`\n\n[Python catalogue]({relative_link(directory, out / 'index.md')})\n\nEvidence: `{source}`. Import path is source-routed; installed availability is unverified.\n\n"
         if ast.get_docstring(tree):
             header += ast.get_docstring(tree) + "\n\n"
-        header += "Literal `__all__`: " + (", ".join(f"`{name}`" for name in sorted(all_names)) if all_names is not None else "not available; source names do not imply supported public API") + ".\n\n"
+        header += (
+            "Literal `__all__`: "
+            + (
+                ", ".join(f"`{name}`" for name in sorted(all_names))
+                if all_names is not None
+                else "not available; source names do not imply supported public API"
+            )
+            + ".\n\n"
+        )
         imports = []
         for node, guards in scoped(tree.body):
             if not isinstance(node, (ast.Import, ast.ImportFrom)):
                 continue
             import_count += len(node.names)
-            target = import_target(module, node, path.name.startswith("__init__.py")) if isinstance(node, ast.ImportFrom) else ""
+            target = (
+                import_target(module, node, path.name.startswith("__init__.py"))
+                if isinstance(node, ast.ImportFrom)
+                else ""
+            )
             support_import = target.startswith(("typing", "freecad.deprecation", "FreeCAD", "PySide", "collections"))
-            status = "Facade reexport declaration" if module in FACADES and isinstance(node, ast.ImportFrom) and not support_import else "Module-scope import; may be a dependency rather than supported addon API"
+            status = (
+                "Facade reexport declaration"
+                if module in FACADES and isinstance(node, ast.ImportFrom) and not support_import
+                else "Module-scope import; may be a dependency rather than supported addon API"
+            )
             text = "### " + ast.unparse(node).replace("\n", " ") + "\n\n" + status + ".\n\n" + notes(guards)
             for alias in node.names:
                 if alias.name == "*":
@@ -206,30 +294,49 @@ def build(root, out, selected=None):
                 target_path = out / Path(*target.split(".")) / "index.md"
                 text += f"[Source module `{target}`]({relative_link(directory, target_path)}).\n\n"
             else:
-                text += "Target not expanded in this selected Python catalogue; check the binding catalogue or source.\n\n"
+                text += (
+                    "Target not expanded in this selected Python catalogue; check the binding catalogue or source.\n\n"
+                )
             if any(alias.name == "*" for alias in node.names):
                 text += "Wildcard export is retained as a wildcard. Its full runtime member set is not inferred; inspect the target's export declarations and initialization.\n\n"
             text += f"Evidence: `{source}:{node.lineno}`.\n\n"
             imports.append(text)
         definitions, count = entries(tree.body, module, source, all_names)
         functions += count
-        sections = (["## Imports, aliases and conditional reexports\n\n"] + imports if imports else [])
+        sections = ["## Imports, aliases and conditional reexports\n\n"] + imports if imports else []
         for node, guards in scoped(tree.body):
             export_statement = symbol_name(node) == "__all__"
             export_statement |= isinstance(node, ast.AugAssign) and ast.unparse(node.target) == "__all__"
-            export_statement |= isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute) and ast.unparse(node.value.func.value) == "__all__"
+            export_statement |= (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Attribute)
+                and ast.unparse(node.value.func.value) == "__all__"
+            )
             if export_statement:
-                sections.append("## Export declaration evidence\n\n" + notes(guards) + f"```python\n{ast.unparse(node)}\n```\n\nEvidence: `{source}:{node.lineno}`. Conditional/dynamic alternatives have not been evaluated.\n\n")
+                sections.append(
+                    "## Export declaration evidence\n\n"
+                    + notes(guards)
+                    + f"```python\n{ast.unparse(node)}\n```\n\nEvidence: `{source}:{node.lineno}`. Conditional/dynamic alternatives have not been evaluated.\n\n"
+                )
         class_sections = []
         for node, guards in scoped(tree.body):
             if not isinstance(node, ast.ClassDef):
                 continue
             if node.name.startswith("_") and node.name not in (all_names or ()):
-                class_sections.append(f"Internal class `{module}.{node.name}` at `{source}:{node.lineno}` is not expanded.\n\n")
+                class_sections.append(
+                    f"Internal class `{module}.{node.name}` at `{source}:{node.lineno}` is not expanded.\n\n"
+                )
                 continue
             classes_count += 1
             name = module + "." + node.name
-            class_header = f"# `{name}`\n\n[Source module](index.md)\n\n" + notes(guards) + f"```python\n{declaration(node)}\n```\n\n" + (ast.get_docstring(node) or "No class source docstring.") + "\n\n"
+            class_header = (
+                f"# `{name}`\n\n[Source module](index.md)\n\n"
+                + notes(guards)
+                + f"```python\n{declaration(node)}\n```\n\n"
+                + (ast.get_docstring(node) or "No class source docstring.")
+                + "\n\n"
+            )
             class_header += f"Evidence: `{source}:{node.lineno}`. Source-defined class; runtime behavior and support status unverified.\n\n"
             members, count = entries(node.body, name, source, class_scope=True)
             functions += count
@@ -239,11 +346,19 @@ def build(root, out, selected=None):
         written = write_pages(directory, "index", sections, header, links)
         listing.append((module, source, written))
         sources[module] = source
-    revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip() if (root / ".git").exists() else "unavailable"
+    revision = (
+        subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+        if (root / ".git").exists()
+        else "unavailable"
+    )
     index = f"# Python-defined addon API catalogue\n\nCheckout HEAD: `{revision}`; local source changes are not encoded in that identifier. Selected-source SHA-256: `{digest.hexdigest()}`.\n\n{len(selected)} source modules; {classes_count} expanded classes; {functions} function/method declarations; {import_count} module-scope import/alias declarations.\n\n"
     index += "## Scope and limits\n\nThis source-only catalogue supplements the [binding catalogue](../api/index.md). [Selection and usage guide](../python-api-guide.md). It does not import FreeCAD, run decorators, resolve dynamic/conditional `__all__`, expand wildcard imports, or verify installed paths. Signatures, docstrings, guards, aliases and lifecycle decorators are copied from source. Facade reexports, literal export lists, other source-defined names and private internals are distinguished. Imported dependencies and public-looking source names are not automatically supported API.\n\nSelection: Draft facades/factories/operations/geometry plus their direct reexport source modules; all `src/Ext/freecad` modules including the namespace initializer template; Arch facade and direct star-import sources; selected Part shape, FEM creation/geometry/mesh/result, TechDraw, Sketcher profile and CAM Path helpers. Unrelated GUI/test internals and arbitrary transitive dependencies are omitted. Included GUI command modules/reexports still require appropriate GUI availability. Nested classes, function-local definitions, dynamically attached APIs and dynamic runtime property contracts are not inventoried. Unannotated arguments/returns remain unspecified.\n\n## Maintenance\n\n```sh\npython -B contrib/skills/freecad-addon-api/scripts/build_python_api.py --root .\npython -B contrib/skills/freecad-addon-api/scripts/test_build_python_api.py\n```\n\nOnly this script's generated `references/python-api/` pages listed in its manifest are cleaned up. Improve Python source documentation before regenerating; retain curated usage guidance outside the generated tree.\n\n## Modules\n\n"
     for module, source, pages in listing:
-        index += f"- `{module}` ({source}): " + ", ".join(f"[part {i + 1}]({page.relative_to(out).as_posix()})" for i, page in enumerate(pages)) + "\n"
+        index += (
+            f"- `{module}` ({source}): "
+            + ", ".join(f"[part {i + 1}]({page.relative_to(out).as_posix()})" for i, page in enumerate(pages))
+            + "\n"
+        )
     (out / "index.md").write_text(index, encoding="utf-8")
     links.append(out / "index.md")
     manifest_path = out / "manifest.json"
@@ -253,7 +368,16 @@ def build(root, out, selected=None):
         target = (out / obsolete).resolve()
         if target.is_relative_to(out.resolve()) and target.suffix == ".md" and target.is_file():
             target.unlink()
-    result = {"revision": revision, "source_sha256": digest.hexdigest(), "modules": len(selected), "classes": classes_count, "function_declarations": functions, "import_alias_declarations": import_count, "sources": sources, "pages": sorted(current)}
+    result = {
+        "revision": revision,
+        "source_sha256": digest.hexdigest(),
+        "modules": len(selected),
+        "classes": classes_count,
+        "function_declarations": functions,
+        "import_alias_declarations": import_count,
+        "sources": sources,
+        "pages": sorted(current),
+    }
     manifest_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
 
@@ -266,7 +390,9 @@ def main():
     if out.resolve() != out or out.is_symlink():
         parser.error("references/python-api must be an ordinary directory inside this skill")
     result = build(args.root.resolve(), out)
-    print(f"Python catalogue: {result['modules']} modules, {result['classes']} classes, {result['function_declarations']} functions/methods, {len(result['pages'])} pages.")
+    print(
+        f"Python catalogue: {result['modules']} modules, {result['classes']} classes, {result['function_declarations']} functions/methods, {len(result['pages'])} pages."
+    )
 
 
 if __name__ == "__main__":
