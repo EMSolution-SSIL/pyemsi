@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.conda.org/menuinst-1.schema.json",
+  "menu_name": "EMSolution",
+  "menu_items": [
+    {
+      "name": "EMSolution FreeCAD",
+      "description": "FreeCAD with the EMSolution workbench and pyemsi",
+      "command": ["{{ PREFIX }}\\Scripts\\emsolution-freecad.bat"],
+      "icon": "{{ PREFIX }}\\Library\\bin\\freecad.exe",
+      "activate": false,
+      "terminal": false,
+      "platforms": {
+        "win": {
+          "desktop": true
+        }
+      }
+    }
+  ]
+}

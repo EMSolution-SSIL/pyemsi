@@ -1,0 +1,84 @@
+# Native namespace `PartDesign`
+
+[Catalogue index](../index.md)
+
+Native prefixes identify source registrations; they are not necessarily public Python modules. Runtime availability depends on build/module initialization.
+
+[Wrapper association audit](wrapper-review.md) lists every owner in this namespace without a direct association.
+
+- [PartDesign::AdditiveBox](AdditiveBox.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveCone](AdditiveCone.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveCylinder](AdditiveCylinder.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveEllipsoid](AdditiveEllipsoid.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveHelix](AdditiveHelix.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveLoft](AdditiveLoft.md): document; 0 directly discovered properties.
+- [PartDesign::AdditivePipe](AdditivePipe.md): document; 0 directly discovered properties.
+- [PartDesign::AdditivePrism](AdditivePrism.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveSphere](AdditiveSphere.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveTorus](AdditiveTorus.md): document; 0 directly discovered properties.
+- [PartDesign::AdditiveWedge](AdditiveWedge.md): document; 0 directly discovered properties.
+- [PartDesign::Body](Body.md): document; 1 directly discovered properties.
+- [PartDesign::Boolean](Boolean.md): document; 2 directly discovered properties.
+- [PartDesign::Box](Box.md): document; 3 directly discovered properties.
+- [PartDesign::Chamfer](Chamfer.md): document; 6 directly discovered properties.
+- [PartDesign::CircularPattern](CircularPattern.md): document; 0 directly discovered properties.
+- [PartDesign::Cone](Cone.md): document; 4 directly discovered properties.
+- [PartDesign::CoordinateSystem](CoordinateSystem.md): document; 0 directly discovered properties.
+- [PartDesign::Cylinder](Cylinder.md): document; 3 directly discovered properties.
+- [PartDesign::Defeaturing](Defeaturing.md): document; 0 directly discovered properties.
+- [PartDesign::Draft](Draft.md): document; 4 directly discovered properties.
+- [PartDesign::DressUp](DressUp.md): document; 2 directly discovered properties.
+- [PartDesign::Ellipsoid](Ellipsoid.md): document; 6 directly discovered properties.
+- [PartDesign::Feature](Feature.md): document; 2 directly discovered properties.
+- [PartDesign::FeatureAddSub](FeatureAddSub.md): document; 2 directly discovered properties.
+- [PartDesign::FeatureAddSubPython](FeatureAddSubPython.md): document; 0 directly discovered properties.
+- [PartDesign::FeatureAdditivePython](FeatureAdditivePython.md): document; 0 directly discovered properties.
+- [PartDesign::FeatureBase](FeatureBase.md): document; 1 directly discovered properties.
+- [PartDesign::FeatureExtrude](FeatureExtrude.md): document; 1 directly discovered properties.
+- [PartDesign::FeaturePrimitive](FeaturePrimitive.md): document; 0 directly discovered properties.
+- [PartDesign::FeaturePython](FeaturePython.md): document; 0 directly discovered properties.
+- [PartDesign::FeatureRefine](FeatureRefine.md): document; 2 directly discovered properties.
+- [PartDesign::FeatureRefinePython](FeatureRefinePython.md): document; 0 directly discovered properties.
+- [PartDesign::FeatureSubtractivePython](FeatureSubtractivePython.md): document; 0 directly discovered properties.
+- [PartDesign::Fillet](Fillet.md): document; 2 directly discovered properties.
+- [PartDesign::Groove](Groove.md): document; 11 directly discovered properties.
+- [PartDesign::Helix](Helix.md): document; 14 directly discovered properties.
+- [PartDesign::Hole](Hole.md): document; 30 directly discovered properties.
+- [PartDesign::Line](Line.md): document; 2 directly discovered properties.
+- [PartDesign::LinearPattern](LinearPattern.md): document; 0 directly discovered properties.
+- [PartDesign::Loft](Loft.md): document; 3 directly discovered properties.
+- [PartDesign::Mirrored](Mirrored.md): document; 1 directly discovered properties.
+- [PartDesign::MultiTransform](MultiTransform.md): document; 1 directly discovered properties.
+- [PartDesign::Pad](Pad.md): document; 20 directly discovered properties.
+- [PartDesign::PathPattern](PathPattern.md): document; 0 directly discovered properties.
+- [PartDesign::Pipe](Pipe.md): document; 10 directly discovered properties.
+- [PartDesign::Plane](Plane.md): document; 3 directly discovered properties.
+- [PartDesign::Pocket](Pocket.md): document; 20 directly discovered properties.
+- [PartDesign::Point](Point.md): document; 0 directly discovered properties.
+- [PartDesign::PointPattern](PointPattern.md): document; 0 directly discovered properties.
+- [PartDesign::PolarPattern](PolarPattern.md): document; 0 directly discovered properties.
+- [PartDesign::Prism](Prism.md): document; 3 directly discovered properties.
+- [PartDesign::ProfileBased](ProfileBased.md): document; 8 directly discovered properties.
+- [PartDesign::Revolution](Revolution.md): document; 12 directly discovered properties.
+- [PartDesign::Revolved](Revolved.md): document; 3 directly discovered properties.
+- [PartDesign::Scaled](Scaled.md): document; 2 directly discovered properties.
+- [PartDesign::ShapeBinder](ShapeBinder.md): document; 2 directly discovered properties.
+- [PartDesign::Solid](Solid.md): document; 0 directly discovered properties.
+- [PartDesign::Sphere](Sphere.md): document; 4 directly discovered properties.
+- [PartDesign::SubShapeBinder](SubShapeBinder.md): document; 15 directly discovered properties.
+- [PartDesign::SubShapeBinderPython](SubShapeBinderPython.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveBox](SubtractiveBox.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveCone](SubtractiveCone.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveCylinder](SubtractiveCylinder.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveEllipsoid](SubtractiveEllipsoid.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveHelix](SubtractiveHelix.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveLoft](SubtractiveLoft.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractivePipe](SubtractivePipe.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractivePrism](SubtractivePrism.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveSphere](SubtractiveSphere.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveTorus](SubtractiveTorus.md): document; 0 directly discovered properties.
+- [PartDesign::SubtractiveWedge](SubtractiveWedge.md): document; 0 directly discovered properties.
+- [PartDesign::Thickness](Thickness.md): document; 5 directly discovered properties.
+- [PartDesign::Torus](Torus.md): document; 5 directly discovered properties.
+- [PartDesign::Transformed](Transformed.md): document; 3 directly discovered properties.
+- [PartDesign::Wedge](Wedge.md): document; 10 directly discovered properties.

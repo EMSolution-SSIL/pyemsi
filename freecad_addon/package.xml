@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>EMSolution</name>
+  <description>Prepare 3D Gmsh meshes for the EMSolution electromagnetic solver.</description>
+  <version>0.1.0</version>
+  <date>2026-09-30</date>
+  <maintainer email="eskandari.hmd@gmail.com">eskandarih</maintainer>
+  <license>Proprietary</license>
+  <freecadmin>1.1.0</freecadmin>
+  <content>
+    <workbench>
+      <classname>EMSolutionWorkbench</classname>
+      <subdirectory>./</subdirectory>
+      <icon>icons/emsolution.svg</icon>
+    </workbench>
+  </content>
+</package>

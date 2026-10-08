@@ -1,0 +1,27 @@
+context:
+  version: "0.1.0"
+
+package:
+  name: emsolution-freecad
+  version: ${{ version }}
+
+source:
+  path: ../../..
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    - set "MOD=%PREFIX%\Library\Mod\EMSolution"
+    - xcopy /E /I /Q emsolution "%MOD%\emsolution"
+    - xcopy /E /I /Q icons "%MOD%\icons"
+    - copy InitGui.py "%MOD%\"
+    - copy package.xml "%MOD%\"
+    - mkdir "%PREFIX%\Scripts" "%PREFIX%\Menu"
+    - copy "%RECIPE_DIR%\emsolution-freecad.bat" "%PREFIX%\Scripts\"
+    - copy "%RECIPE_DIR%\menu.json" "%PREFIX%\Menu\emsolution-freecad.json"
+
+requirements:
+  run:
+    - freecad ==1.1.0
+    - pyemsi

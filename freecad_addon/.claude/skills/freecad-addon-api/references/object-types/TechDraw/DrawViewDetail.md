@@ -1,0 +1,29 @@
+# `TechDraw::DrawViewDetail`
+
+[Namespace index](index.md) | [Catalogue index](../index.md)
+
+Category: DocumentObject descendant. Registration: `src/Mod/TechDraw/App/DrawViewDetail.cpp:75`. Abstract macro: no.
+
+Native parent: [TechDraw::DrawViewPart](../TechDraw/DrawViewPart.md). Read the parent record for inherited properties.
+
+Python wrapper: unresolved direct binding association. An ancestor wrapper may be used or a handwritten getPyObject override may supply another; inspect implementation/runtime rather than invent a Python class.
+
+[Wrapper association audit](wrapper-review.md).
+
+Closest discovered ancestor binding: `TechDraw::DrawViewPart` -> `TechDraw.DrawViewPart`. This routes base API lookup; it does not establish this descendant's concrete returned wrapper.
+
+Reviewed implementation context at `App::DocumentObject`: This implementation creates DocumentObjectPy. Its binding is FreeCAD.DocumentObject; descendant overrides must be checked before claiming the same returned Python type. Evidence: `src/App/DocumentObject.cpp:1239`, `src/App/DocumentObject.pyi`. Descendant getPyObject overrides and PythonObject replacement can change the returned value.
+
+## Properties registered for this owner
+
+| Name | Native property TypeId | Getter contract | Setter contract | Documentation | Source |
+| --- | --- | --- | --- | --- | --- |
+| `AnchorPoint` | `App::PropertyVector` | `Base.Vector` | `Base.Vector \| tuple[float, float, float]` | Location of detail in BaseView | `src/Mod/TechDraw/App/DrawViewDetail.cpp:84` |
+| `BaseView` | `App::PropertyLink` | `DocumentObject \| None` | `DocumentObject \| None` | 2D View source for this Section | `src/Mod/TechDraw/App/DrawViewDetail.cpp:81` |
+| `Radius` | `App::PropertyFloat` | `float` | `float` | Size of detail area | `src/Mod/TechDraw/App/DrawViewDetail.cpp:86` |
+| `Reference` | `App::PropertyString` | `str` | `str` | An identifier for this detail | `src/Mod/TechDraw/App/DrawViewDetail.cpp:87` |
+| `ShowHighlight` | `App::PropertyBool` | `bool` | `bool \| int` | Show or hide the detail highlight in the source view | `src/Mod/TechDraw/App/DrawViewDetail.cpp:92` |
+| `ShowMatting` | `App::PropertyBool` | `bool` | `bool \| int` | Show or hide the matting around the detail view | `src/Mod/TechDraw/App/DrawViewDetail.cpp:90` |
+
+Getter/setter metadata is resolved through native property inheritance; it is not runtime validation. Omitted setters do not independently prove immutable Python access.
+

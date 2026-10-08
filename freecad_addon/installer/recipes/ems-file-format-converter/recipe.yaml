@@ -1,0 +1,26 @@
+# Repackages the PyPI wheel; not on conda-forge yet.
+context:
+  version: "0.5.1"
+  wheel: ems_file_format_converter-${{ version }}-py3-none-any.whl
+
+package:
+  name: ems-file-format-converter
+  version: ${{ version }}
+
+source:
+  url: https://files.pythonhosted.org/packages/ba/d7/9f36736fd6de9b30511a1e3c74429b707ec0a11867c156ed21e57d68678f/${{ wheel }}
+  sha256: f0376f34942307cb8156ec0ff64e3217b47414ce1d839e13a5066f080f25c393
+  file_name: ${{ wheel }}
+
+build:
+  number: 0
+  noarch: python
+  script: python -m pip install ${{ wheel }} --no-deps -vv
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+  run:
+    - python >=3.10
+    - meshio >=5.0

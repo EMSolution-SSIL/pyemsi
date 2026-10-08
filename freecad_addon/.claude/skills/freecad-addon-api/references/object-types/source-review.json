@@ -1,0 +1,317 @@
+{
+  "review_revision": "3160daf1e2b62b0472854da4848255c6b3ad554c",
+  "source_hashes": {
+    "src/App/Application.cpp": "405b1fd5480dcf9edcf0dca1ea9d625a2d9d53433187dfc53cdfac5b105d0057",
+    "src/App/DocumentObject.cpp": "c5952938af681e47b40241a9792d3deb2a747aae5f93014afcc73815da62b217",
+    "src/App/DocumentObject.pyi": "aed6e11698855f62f22fdc67b8d6087ed759507be15d93a011fda9f587a115aa",
+    "src/App/FeaturePython.cpp": "8e4b9cf16bf4f7f0c28a18bbfa7fb6104caca852406f491f3c5e232f2cfccfe7",
+    "src/App/FeaturePythonPyImp.h": "33ed176bb590ef000b513732f866bd6d2cb111242bdf29e3c21c5d90716e2f9d",
+    "src/App/FeaturePythonPyImp.inl": "3c58ffc2a51ed26e92a82601d0cf56f359d3d956428656a3aa053aaa4c80cea8",
+    "src/App/GeoFeature.cpp": "afbdc2ec56bfcf63cc0f860bb25f390b202c64cb5b8c3af8715ca52e06ec1ccc",
+    "src/App/GeoFeature.pyi": "f79433966b52fbcf6a1d18ba6e6a5e20b7c3ca2f50d530be95b191c756b21346",
+    "src/App/MaterialPyImp.cpp": "25a5e279280c7ebd09134331642c1d577558921d463fb8f2c30786848f552b35",
+    "src/App/Property.cpp": "e7f452e46697fca0673cae6915fbf477cbccdbec31ad6dc0f66a5ab50e5883d6",
+    "src/App/Property.h": "b61269588dcd09b8b33feff18241987e5768cb42d0a917c14b02b46952402917",
+    "src/App/PropertyGeo.cpp": "30823dde7d1cf76002a6bec398c6211c1558df264c145e168f9b20d517a942f4",
+    "src/App/PropertyLinks.cpp": "613958d4a3b208814119fe97cb9fb93ce0f575a023582355dc2a8c3be3c49d72",
+    "src/App/PropertyPythonObject.cpp": "f560a52cc8c4f07fae0411f9153746b79859bc90de6ee96f04b79b019798941c",
+    "src/App/PropertyStandard.cpp": "8b3a8cf09e473a22c2f840105a0069dc963ddf1d804ce272195bcfc65537bdb5",
+    "src/App/PropertyStandard.h": "8b8d4dd9325038a607e978b10034459a9adb736a7583d203b94a14a157b75d3c",
+    "src/Gui/ViewProvider.cpp": "4468edd6e8905fe9fce7bead090085c12d7efcfe9ac2c1a146da90aae9609a01",
+    "src/Gui/ViewProvider.pyi": "d7d32e5fec7890b7953655f7aba78bff5ba77a8eb9c5af2fd87d707d3a75626e",
+    "src/Gui/ViewProviderDocumentObject.cpp": "3eff7831e828f4ccb97027b21f22264864cbf79978aac054fbc592c8643ab3b8",
+    "src/Gui/ViewProviderDocumentObject.pyi": "53479a9e1eedde0d620f3ffc8a894d80f455463b712a0b82c0132e43cd5243ba",
+    "src/Mod/CAM/App/AppPath.cpp": "bdf46d5b6ce4450ac898af8377137aa93fbcc826284f5cd22110e67670bfdcd2",
+    "src/Mod/CAM/App/PropertyPath.cpp": "756c35beaa1656c76c09777d7a17e30bb9968457d9357b7ccf3b68b6d28d6159",
+    "src/Mod/Fem/App/AppFem.cpp": "fdd512d830253c812b2682489bc7e5bfe9c3ce0d8b4fc9688de3e23e886857e6",
+    "src/Mod/Fem/App/FemMeshProperty.cpp": "2c1a1c11d956f137549bba4d600230a96bd02885cd6d262d2fab7859ffbe4b74",
+    "src/Mod/Fem/App/PropertyPostDataObject.cpp": "cfb69b850e94164b8ef483ae7029190561d9c915676bd91f0fbb86663a3c11a2",
+    "src/Mod/Inspection/App/InspectionFeature.cpp": "a91125279f95fc8976b12e95936522640fd3454929de1292207f566cd84962e7",
+    "src/Mod/Mesh/App/MeshProperties.cpp": "d592874d71b8e10ad5acfa13e18374ae8aba1f50820c7c934a8367c1ae4221f2",
+    "src/Mod/Part/App/FeaturePartBox.cpp": "36148a5db46ca4982e0f963950d768c4997cbe2ff32d1d4348017be6138ef6ad",
+    "src/Mod/Part/App/FeaturePartBox.h": "a72a18240fb6f0c6dfc5d13e0c02d9b6c1b5071ab767de88e27afce7d348e2dd",
+    "src/Mod/Part/App/PartFeature.cpp": "f75b38817bac5a46860c956ea78e76d3561815ad6390bb9f521eb86e2e6056fd",
+    "src/Mod/Part/App/PartFeature.pyi": "e1a4ae0030b59c0f26a1eca09dca0893d8465a664ebb648ebb647f857748bdf7",
+    "src/Mod/Part/App/PrimitiveFeature.cpp": "87927d8a7a294326dbf61d29301aa08af935cfcfcac36920870222ce1787a24e",
+    "src/Mod/Part/App/PrimitiveFeature.h": "758ee233bf3f207ffb454c66f7642deabc815f63d307cef8d55a71e627ce0075",
+    "src/Mod/Part/App/PropertyTopoShape.cpp": "da3e5682155e33872c742adeaf6798c376d328239065abe9d16663a191c52ee7",
+    "src/Mod/Points/App/AppPoints.cpp": "b62ec0416166699c4be8c8d160c8d698ba104aef6fe6c269aad3556074c17813",
+    "src/Mod/Points/App/PropertyPointKernel.cpp": "677f7916e005bf3ed8159e5c48e427d84a7c2a692fdaf0e2f7949b8e386438ca",
+    "src/Mod/Robot/App/AppRobot.cpp": "0c882616d328af8174d26b7b93164583ec96849f54f39b44c3d5dd15dc67b670",
+    "src/Mod/Robot/App/PropertyTrajectory.cpp": "bd6970bf4ccabaff2ee826baa132f1a695f69e59d9123e192424d4bffa124d2c",
+    "src/Mod/Sketcher/Gui/PropertyVisualLayerList.cpp": "f81502cd918bd37870dd870b0e90e98e1ffa3af387e088183b9419ca4d1d566b",
+    "src/Mod/Sketcher/Gui/PropertyVisualLayerList.h": "9b9d9b2dd74e16ea1f0cd2ed84c3add29d133f2a92df272f2c6c306c4210f32a"
+  },
+  "property_contracts": {
+    "App::PropertyBoolList": {
+      "getter": "tuple[bool, ...]",
+      "setter": "bool | int | Iterable[bool | int] | dict[int, bool | int] | str",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyStandard.cpp:2440",
+        "src/App/Property.cpp:389",
+        "src/App/Property.h:1077"
+      ],
+      "note": "Getter builds a tuple. Setter accepts binary-digit strings via dynamic_bitset; other inputs follow PropertyListsT conversion. A single bool/int replaces with one item, iterables replace contents, and integer-key dictionaries update/append indexed items. Index -1 or current length appends."
+    },
+    "App::PropertyColorList": {
+      "getter": "list[tuple[float, float, float, float]]",
+      "setter": "_ColorInput | Iterable[_ColorInput] | dict[int, _ColorInput]",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyStandard.cpp:2722",
+        "src/App/PropertyStandard.cpp:2744",
+        "src/App/PropertyStandard.h:1102",
+        "src/App/Property.cpp:389",
+        "src/App/Property.h:1077"
+      ],
+      "note": "Getter builds RGBA tuples. Each setter item is converted by PropertyColor::setPyObject; inherited PropertyListsT also accepts a single color, iterables, and indexed dictionaries. _ColorInput is defined in conversion-aliases.md."
+    },
+    "App::PropertyMaterial": {
+      "getter": "FreeCAD.Material",
+      "setter": "FreeCAD.Material | _ColorInput",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyStandard.cpp:2987",
+        "src/App/MaterialPyImp.cpp:35",
+        "src/App/Application.cpp:489"
+      ],
+      "note": "Getter creates a material copy. Setter accepts legacy App MaterialPy or MaterialPy::toColor inputs: packed integer or homogeneous integer/float RGB/RGBA tuple. FreeCAD.Material is distinct from the modern Materials.Material API."
+    },
+    "App::PropertyMaterialList": {
+      "getter": "tuple[FreeCAD.Material, ...]",
+      "setter": "FreeCAD.Material | Iterable[FreeCAD.Material] | dict[int, FreeCAD.Material]",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyStandard.cpp:3099",
+        "src/App/PropertyStandard.cpp:3547",
+        "src/App/PropertyStandard.h:1221",
+        "src/App/Property.cpp:389",
+        "src/App/Property.h:1077",
+        "src/App/Application.cpp:489"
+      ],
+      "note": "Getter builds a tuple of material copies. Inherited PropertyListsT handles scalar, iterable, and indexed updates; getPyValue accepts only MaterialPy, unlike PropertyMaterial's color shortcut. The native class maintains a minimum list size of one."
+    },
+    "App::PropertyRotation": {
+      "getter": "Base.Rotation",
+      "setter": "Base.Rotation | Base.Matrix",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyGeo.cpp:1220"
+      ],
+      "note": "Getter constructs a copy; Matrix assignment extracts rotation and Rotation assignment copies its value."
+    },
+    "App::PropertyMatrix": {
+      "getter": "Base.Matrix",
+      "setter": "Base.Matrix | tuple[float | int, ...]",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyGeo.cpp:421"
+      ],
+      "note": "Getter copies the matrix. Tuple setter requires exactly 16 numbers and fills cMatrix[x][y] from tuple[x + y*4]; do not assume row-major ordering or accept lists."
+    },
+    "App::PropertyIntegerSet": {
+      "getter": "set[int]",
+      "setter": "int | Sequence[int]",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyStandard.cpp:1049"
+      ],
+      "note": "Getter returns a set; setter accepts a scalar integer or PySequence_Check sequence of integers. A Python set is not accepted merely because it is the getter result; assign list(result) when round-tripping."
+    },
+    "App::PropertyPythonObject": {
+      "getter": "object",
+      "setter": "object",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyPythonObject.cpp:225"
+      ],
+      "note": "Getter returns a new reference to the stored arbitrary Python object, not a copy. Setter stores that object with native change notification. This conversion does not establish that every object is persistable."
+    },
+    "App::PropertyPath": {
+      "getter": "str",
+      "setter": "str",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyStandard.cpp:210"
+      ],
+      "note": "Filesystem path conversion uses a UTF-8 Python string. This is distinct from CAM's Path::PropertyPath toolpath."
+    },
+    "App::PropertyXLinkSubList": {
+      "getter": "list[tuple[FreeCAD.DocumentObject, tuple[str, ...]]]",
+      "setter": "PropertyLinkSub input or list/tuple of PropertyLinkSub inputs",
+      "status": "source-reviewed",
+      "sources": [
+        "src/App/PropertyLinks.cpp:5100",
+        "src/App/PropertyLinks.cpp:5123",
+        "src/App/PropertyLinks.cpp:1500"
+      ],
+      "note": "Getter skips absent/detached linked objects. Setter first tries PropertyLinkSub syntax with external links allowed, then a tuple/list of such inputs; it groups subnames by object. PropertyLinkSub input includes an object, None, or object/subname pair. Cross-document and runtime attachment state remain relevant."
+    },
+    "Inspection::PropertyDistanceList": {
+      "getter": "list[float]",
+      "setter": "float | list[float]",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Inspection/App/InspectionFeature.cpp:592"
+      ],
+      "note": "This setter checks PyList/PyFloat explicitly; integer entries and general iterable/tuple inputs are not accepted by this implementation."
+    },
+    "Part::PropertyFilletEdges": {
+      "getter": "list[tuple[int, float, float]]",
+      "setter": "Sequence[tuple[int, float, float]]",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Part/App/PropertyTopoShape.cpp:979"
+      ],
+      "note": "Canonical setter form is a sequence of edge-id, first-radius, second-radius tuples. C++ PyCXX conversion reads tuple items 0..2; this describes the supported form without promising exact rejection/coercion behavior for every malformed input."
+    },
+    "Part::PropertyShapeHistory": {
+      "getter": "None",
+      "setter": "object (ignored)",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Part/App/PropertyTopoShape.cpp:920"
+      ],
+      "note": "Getter always returns None and setter is empty. Python assignment does not alter the native history; this property is not an exposed shape-history editing API."
+    },
+    "Mesh::PropertyCurvatureList": {
+      "getter": "list[tuple[float, float, tuple[float, float, float], tuple[float, float, float]]]",
+      "setter": "raises AttributeError",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Mesh/App/MeshProperties.cpp:365"
+      ],
+      "note": "Each entry is maximum curvature, minimum curvature, maximum direction xyz, minimum direction xyz. Setter unconditionally raises a read-only AttributeError."
+    },
+    "Points::PropertyPointKernel": {
+      "getter": "Points.Points",
+      "setter": "Points.Points",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Points/App/PropertyPointKernel.cpp:78",
+        "src/Mod/Points/App/AppPoints.cpp:49"
+      ],
+      "note": "Getter wraps the stored point kernel and calls setConst; setter copies an accepted PointsPy kernel. Reassign a separately constructed Points.Points value for edits."
+    },
+    "Path::PropertyPath": {
+      "getter": "Path.Path",
+      "setter": "Path.Path",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/CAM/App/PropertyPath.cpp:59",
+        "src/Mod/CAM/App/AppPath.cpp:72"
+      ],
+      "note": "Getter copies the toolpath into PathPy; setter accepts PathPy and copies its Toolpath. Module initialization exports the wrapper as Path.Path."
+    },
+    "Robot::PropertyTrajectory": {
+      "getter": "Robot.Trajectory",
+      "setter": "Robot.Trajectory",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Robot/App/PropertyTrajectory.cpp:84",
+        "src/Mod/Robot/App/AppRobot.cpp:122"
+      ],
+      "note": "Getter copies the trajectory into TrajectoryPy; setter accepts that wrapper and copies the value. Module initialization exports Robot.Trajectory."
+    },
+    "Fem::PropertyFemMesh": {
+      "getter": "Fem.FemMesh",
+      "setter": "Fem.FemMesh | Base.Placement",
+      "status": "source-reviewed",
+      "sources": [
+        "src/Mod/Fem/App/FemMeshProperty.cpp:96",
+        "src/Mod/Fem/App/AppFem.cpp:132"
+      ],
+      "note": "Getter wraps the stored mesh and calls setConst. A mesh setter copies the mesh; a Placement setter transforms existing mesh geometry, rather than storing placement as the property value."
+    },
+    "Fem::PropertyPostDataObject": {
+      "getter": "VTK Python data-object wrapper when FC_USE_VTK_PYTHON is enabled",
+      "setter": "VTK Python object convertible to vtkDataObject when FC_USE_VTK_PYTHON is enabled",
+      "status": "conditional",
+      "sources": [
+        "src/Mod/Fem/App/PropertyPostDataObject.cpp:172"
+      ],
+      "note": "Getter wraps a deep-copied dataset; setter checks vtkDataObject and deep-copies it. Without FC_USE_VTK_PYTHON, both directions signal NotImplementedError. Actual VTK Python class and supported concrete dataset subtype depend on the build/value; they are intentionally not flattened into one unconditional Python signature."
+    },
+    "SketcherGui::PropertyVisualLayerList": {
+      "getter": "raises NotImplementedError",
+      "setter": "nonempty values raise NotImplementedError; no supported Python counterpart",
+      "status": "unsupported",
+      "sources": [
+        "src/Mod/Sketcher/Gui/PropertyVisualLayerList.cpp:52",
+        "src/Mod/Sketcher/Gui/PropertyVisualLayerList.h",
+        "src/App/Property.h:1077"
+      ],
+      "note": "getPyObject and per-item getPyValue explicitly throw because there is no Python counterpart. Inherited empty-list operations may avoid per-item conversion, but are not a supported visual-layer editing contract. Use the documented Sketcher/view-provider methods instead of inventing a Python VisualLayer value."
+    }
+  },
+  "wrapper_implementations": {
+    "App::DocumentObject": {
+      "sources": [
+        "src/App/DocumentObject.cpp:1239",
+        "src/App/DocumentObject.pyi"
+      ],
+      "note": "This implementation creates DocumentObjectPy. Its binding is FreeCAD.DocumentObject; descendant overrides must be checked before claiming the same returned Python type."
+    },
+    "App::GeoFeature": {
+      "sources": [
+        "src/App/GeoFeature.cpp:82",
+        "src/App/GeoFeature.pyi"
+      ],
+      "note": "This implementation creates GeoFeaturePy. The binding is FreeCAD.GeoFeature; native descendants may override getPyObject."
+    },
+    "Part::Feature": {
+      "sources": [
+        "src/Mod/Part/App/PartFeature.cpp:130",
+        "src/Mod/Part/App/PartFeature.pyi"
+      ],
+      "note": "This implementation creates PartFeaturePy, exposed as Part.Feature. Descendant overrides, including Primitive and FeaturePython, are separate implementations."
+    },
+    "Part::Primitive": {
+      "sources": [
+        "src/Mod/Part/App/PrimitiveFeature.cpp:96",
+        "src/Mod/Part/App/PrimitiveFeature.cpp:104",
+        "src/Mod/Part/App/PrimitiveFeature.h"
+      ],
+      "note": "Handwritten PrimitivePy derives from PartFeaturePy. No independent public Part.Primitive import is established by this review."
+    },
+    "Part::Box": {
+      "sources": [
+        "src/Mod/Part/App/FeaturePartBox.h",
+        "src/Mod/Part/App/FeaturePartBox.cpp",
+        "src/Mod/Part/App/PrimitiveFeature.cpp:104"
+      ],
+      "note": "Box declares no getPyObject override; its native chain reaches Primitive::getPyObject and PrimitivePy. This source-backed inherited wrapper evidence does not establish a public Part.Box class."
+    },
+    "App::FeaturePython": {
+      "sources": [
+        "src/App/FeaturePython.cpp:763",
+        "src/App/FeaturePythonPyImp.h",
+        "src/App/FeaturePythonPyImp.inl"
+      ],
+      "note": "Explicit specialization constructs FeaturePythonPyT<DocumentObjectPy>. A proxy object is distinct from this returned native wrapper; no standalone FreeCAD.FeaturePython import is promised."
+    },
+    "Part::FeaturePython": {
+      "sources": [
+        "src/Mod/Part/App/PartFeature.cpp:2130",
+        "src/App/FeaturePythonPyImp.h",
+        "src/App/FeaturePythonPyImp.inl"
+      ],
+      "note": "Explicit specialization constructs FeaturePythonPyT<Part::PartFeaturePy>. This is a native feature wrapper with a Python Proxy, not the proxy's Python class."
+    },
+    "Gui::ViewProvider": {
+      "sources": [
+        "src/Gui/ViewProvider.cpp:618",
+        "src/Gui/ViewProvider.pyi"
+      ],
+      "note": "This implementation creates ViewProviderPy; the public binding is FreeCADGui.ViewProvider. GUI-only and descendant overrides still apply."
+    },
+    "Gui::ViewProviderDocumentObject": {
+      "sources": [
+        "src/Gui/ViewProviderDocumentObject.cpp:606",
+        "src/Gui/ViewProviderDocumentObject.pyi"
+      ],
+      "note": "This implementation requires the main thread and creates ViewProviderDocumentObjectPy; the binding is FreeCADGui.ViewProviderDocumentObject. It does not prove that every derived view provider returns this exact wrapper."
+    }
+  }
+}
