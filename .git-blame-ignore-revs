@@ -3,3 +3,6 @@
 
 # Apply-ruff-format-to-codebase
 fbfd164cb03c02f11c56926251019154858cf2c1
+
+# Ruff format for jobwriter, mesher, objects and taskpanels
+3be2bfb98d1172897605b7b604b1fe8105ea6552
