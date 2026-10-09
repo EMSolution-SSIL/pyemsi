@@ -118,7 +118,10 @@ def run(job_path):
         gmsh.write(os.path.join(folder, "mesh.unv"))
     finally:
         gmsh.finalize()
-    os.replace(msh, job["mesh_file"])  # only a finished mesh replaces the solver's file
+    try:
+        os.replace(msh, job["mesh_file"])  # only a finished mesh replaces the solver's file
+    except PermissionError:
+        raise JobError(f"Could not replace {job['mesh_file']}: it is read-only or open in another program.") from None
     for item in job["volumes"] + job["surfaces"]:
         print(f"{item['id']:>6}  {item['name']}")
     print(f"Wrote {job['mesh_file']}")

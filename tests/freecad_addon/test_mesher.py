@@ -273,8 +273,19 @@ class MesherTest(unittest.TestCase):
             r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")])
         finally:
             os.chmod(target, stat.S_IREAD | stat.S_IWRITE)  # let the temporary folder be deleted
+        self.assertCannotReplace(r, target)
+
+    def test_mesh_open_in_another_program_fails_cleanly_and_stays(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        target = self.write_old_mesh()
+        with open(target, encoding="ascii"):  # a viewer holding pre_geom.msh open
+            r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")])
+        self.assertCannotReplace(r, target)
+
+    def assertCannotReplace(self, r, target):
         self.assertEqual(r.returncode, 1)
-        self.assertTrue(r.stderr.strip().splitlines()[-1].startswith("ERROR:"), r.stderr)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertEqual(last, f"ERROR: Could not replace {target}: it is read-only or open in another program.")
         self.assertEqual(self.read_text(target), "old")
 
     def test_overlapping_boxes_fail(self):
