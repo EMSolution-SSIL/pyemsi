@@ -8,7 +8,7 @@ channels:
   - conda-forge
 
 specs:
-  - python 3.12.*
+  - python 3.11.*
   - emsolution-freecad
 
 installer_type: exe

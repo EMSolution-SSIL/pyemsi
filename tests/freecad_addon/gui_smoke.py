@@ -4,11 +4,11 @@ Needs the addon linked into a throwaway FreeCAD profile (PowerShell, repo root):
     $h = "$env:TEMP\ems_fc_home"; New-Item -ItemType Directory -Force "$h\Mod" | Out-Null
     if (-not (Test-Path "$h\Mod\EMSolution")) { New-Item -ItemType Junction -Path "$h\Mod\EMSolution" -Target "$PWD\freecad_addon" | Out-Null }
     $env:FREECAD_USER_HOME = $h
-    pixi run freecad tests\freecad_addon\gui_smoke.py
+    Start-Process -Wait "$env:LOCALAPPDATA\Programs\FreeCAD 1.1\bin\FreeCAD.exe" tests\freecad_addon\gui_smoke.py
     Get-Content "$env:TEMP\ems_gui_smoke.txt"
 The last line of the result file is "PASS" or "FAIL". FreeCAD may report a crash on quit after that.
-For stock FreeCAD, replace the pixi line with
-    Start-Process -Wait "$env:LOCALAPPDATA\Programs\FreeCAD 1.1\bin\FreeCAD.exe" tests\freecad_addon\gui_smoke.py
+It passes on stock FreeCAD 1.1.4. On the pixi env's FreeCAD 1.1.0 (`pixi run freecad tests\freecad_addon\gui_smoke.py`)
+the Tasks dock never becomes visible, so the folder panels check fails.
 """
 
 import os
