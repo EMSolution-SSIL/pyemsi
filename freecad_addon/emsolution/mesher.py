@@ -2,6 +2,7 @@
 
 Usage: python mesher.py <job.json>
 """
+
 import json
 import os
 import sys
@@ -19,8 +20,7 @@ FIELD_LISTS = {0: "PointsList", 1: "CurvesList", 2: "SurfacesList", 3: "VolumesL
 def _import_one(path, *dims):
     tags = gmsh.model.occ.importShapes(path, highestDimOnly=True)
     if len(tags) != 1 or tags[0][0] not in dims:
-        raise JobError(f"{os.path.basename(path)}: expected one "
-                       f"{'/'.join(map(str, dims))}D entity, got {tags}")
+        raise JobError(f"{os.path.basename(path)}: expected one {'/'.join(map(str, dims))}D entity, got {tags}")
     return tags[0]
 
 
@@ -42,7 +42,7 @@ def build(job, folder):
     gmsh.model.occ.synchronize()
 
     body_vols = {}  # volume id -> list of final 3D tags
-    owner = {}      # final 3D tag -> body name
+    owner = {}  # final 3D tag -> body name
     for v, dimtags in zip(vols, out_map):
         tags = [t for d, t in dimtags if d == 3]
         for t in tags:
@@ -52,15 +52,20 @@ def build(job, folder):
         body_vols[v["id"]] = tags
 
     surf_tags = {s["id"]: [] for s in surfs}
-    for (s, _), dimtags in zip(surf_files, out_map[len(vols):]):
+    for (s, _), dimtags in zip(surf_files, out_map[len(vols) :]):
         surf_tags[s["id"]] += [t for d, t in dimtags if d == 2]
 
     for s in surfs:
-        boundary = {abs(t) for _, t in gmsh.model.getBoundary(
-            [(3, t) for t in body_vols[s["volume_id"]]], combined=False, oriented=False)}
+        boundary = {
+            abs(t)
+            for _, t in gmsh.model.getBoundary(
+                [(3, t) for t in body_vols[s["volume_id"]]], combined=False, oriented=False
+            )
+        }
         if not surf_tags[s["id"]] or not set(surf_tags[s["id"]]) <= boundary:
-            raise JobError(f"excitation surface {s['name']} does not lie on its body "
-                           f"(face did not merge with the body boundary)")
+            raise JobError(
+                f"excitation surface {s['name']} does not lie on its body (face did not merge with the body boundary)"
+            )
 
     for v in vols:
         gmsh.model.addPhysicalGroup(3, body_vols[v["id"]], v["id"], name=v["name"])
@@ -74,8 +79,7 @@ def build(job, folder):
     for (z, path), dimtags in zip(size_files, out_map[first:]):
         for d, t in dimtags:
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
-                raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} "
-                               f"did not merge with the bodies")
+                raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
             by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
     fields = []
     for size, by_dim in by_size.items():
@@ -88,8 +92,7 @@ def build(job, folder):
     fmin = gmsh.model.mesh.field.add("Min")
     gmsh.model.mesh.field.setNumbers(fmin, "FieldsList", fields)
     gmsh.model.mesh.field.setAsBackgroundMesh(fmin)
-    for opt in ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints",
-                "Mesh.MeshSizeFromCurvature"):
+    for opt in ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints", "Mesh.MeshSizeFromCurvature"):
         gmsh.option.setNumber(opt, 0)
 
 

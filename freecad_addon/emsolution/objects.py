@@ -1,4 +1,5 @@
 """Study tree objects and the ID table. No GUI code here, apart from attaching view providers."""
+
 import re
 
 # Gmsh algorithm numbers; the first entry is the default
@@ -34,6 +35,7 @@ class _Proxy:
 
 class Folder(_Proxy):
     """A study folder with a fixed Label."""
+
     LABEL = ""
 
     def __init__(self, obj):
@@ -53,13 +55,13 @@ class ExcitationsFolder(Folder):
 
 class MeshSizesFolder(Folder):
     """Also holds the mesh settings that apply to the whole study."""
+
     LABEL = "Mesh Sizes"
 
     def __init__(self, obj):
         super().__init__(obj)
         add = obj.addProperty
-        add("App::PropertyLength", "DefaultMeshSize", "Mesh",
-            "Mesh size for bodies without a Mesh Size item")
+        add("App::PropertyLength", "DefaultMeshSize", "Mesh", "Mesh size for bodies without a Mesh Size item")
         obj.DefaultMeshSize = 5.0
         add("App::PropertyEnumeration", "SurfaceAlgorithm", "Mesh", "Gmsh algorithm for the faces")
         obj.SurfaceAlgorithm = list(ALGORITHMS_2D)
@@ -69,29 +71,28 @@ class MeshSizesFolder(Folder):
         obj.SizeFactor = (1.0, 0.01, 100.0, 0.1)
         add("App::PropertyLength", "MinSize", "Mesh", "Smallest element size, 0 = no limit")
         add("App::PropertyLength", "MaxSize", "Mesh", "Largest element size, 0 = no limit")
-        add("App::PropertyIntegerConstraint", "SmoothingSteps", "Mesh",
-            "Smoothing passes over the face meshes")
+        add("App::PropertyIntegerConstraint", "SmoothingSteps", "Mesh", "Smoothing passes over the face meshes")
         obj.SmoothingSteps = (1, 0, 100, 1)
-        add("App::PropertyBool", "OptimizeNetgen", "Mesh",
-            "Improve element quality with Netgen (slower)")
+        add("App::PropertyBool", "OptimizeNetgen", "Mesh", "Improve element quality with Netgen (slower)")
 
 
-FOLDERS = (("MaterialsGroup", MaterialsFolder),
-           ("ExcitationsGroup", ExcitationsFolder),
-           ("MeshSizesGroup", MeshSizesFolder))
+FOLDERS = (
+    ("MaterialsGroup", MaterialsFolder),
+    ("ExcitationsGroup", ExcitationsFolder),
+    ("MeshSizesGroup", MeshSizesFolder),
+)
 
 
 class Study(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
-        obj.addProperty("App::PropertyString", "OutputFolder", "EMSolution",
-                        "Empty = folder <document>_mesh next to the .FCStd")
-        obj.addProperty("App::PropertyEnumeration", "MshVersion", "EMSolution",
-                        "Gmsh file format version (ASCII)")
+        obj.addProperty(
+            "App::PropertyString", "OutputFolder", "EMSolution", "Empty = folder <document>_mesh next to the .FCStd"
+        )
+        obj.addProperty("App::PropertyEnumeration", "MshVersion", "EMSolution", "Gmsh file format version (ASCII)")
         obj.MshVersion = ["4.1", "2.2"]
         obj.addProperty("App::PropertyMap", "VolumeIds", "IDs", "Body Name -> volume ID")
-        obj.addProperty("App::PropertyMap", "SurfaceIds", "IDs",
-                        "'Excitation Name|Body Name' -> surface ID")
+        obj.addProperty("App::PropertyMap", "SurfaceIds", "IDs", "'Excitation Name|Body Name' -> surface ID")
         obj.addProperty("App::PropertyInteger", "NextVolumeId", "IDs", "Next volume ID")
         obj.NextVolumeId = 1
         obj.addProperty("App::PropertyInteger", "NextSurfaceId", "IDs", "Next surface ID")
@@ -144,8 +145,7 @@ class _Named(_Proxy):
     """GroupName holds the typed name: FreeCAD renames a Label that is already taken."""
 
     def add_group_name(self, obj):
-        obj.addProperty("App::PropertyString", "GroupName", "EMSolution",
-                        "Name used in the mesh group names")
+        obj.addProperty("App::PropertyString", "GroupName", "EMSolution", "Name used in the mesh group names")
 
     def onChanged(self, obj, prop):
         if prop == "Label" and hasattr(obj, "GroupName") and not obj.Document.Restoring:
@@ -156,24 +156,26 @@ class Material(_Named):
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
-        obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution",
-                        "Bodies made of this material")
+        obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution", "Bodies made of this material")
 
 
 class Excitation(_Named):
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
-        obj.addProperty("App::PropertyLinkSubListGlobal", "References", "EMSolution",
-                        "Body faces of this excitation")
+        obj.addProperty("App::PropertyLinkSubListGlobal", "References", "EMSolution", "Body faces of this excitation")
 
 
 class MeshSize(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLength", "Size", "EMSolution", "Element size")
-        obj.addProperty("App::PropertyLinkSubListGlobal", "References", "EMSolution",
-                        "Bodies (empty sub-element), faces, edges and vertices meshed with this size")
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "References",
+            "EMSolution",
+            "Bodies (empty sub-element), faces, edges and vertices meshed with this size",
+        )
 
 
 def _make_folder(study, prop, cls):
@@ -184,6 +186,7 @@ def _make_folder(study, prop, cls):
     setattr(study, prop, folder)
     if getattr(folder, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
+
         taskpanels.ViewProviderFolder(folder.ViewObject)
     return folder
 
@@ -307,8 +310,9 @@ def material_rows(study):
     """Rows for the Materials panel: (material, refs, [name, body, volume ID])."""
     rows = []
     for m in materials(study):
-        rows += [(m, [(b, "")], [display_name(m), b.Label, study.VolumeIds.get(b.Name, "–")])
-                 for b in m.References] or [(m, [], [display_name(m), "", ""])]
+        rows += [
+            (m, [(b, "")], [display_name(m), b.Label, study.VolumeIds.get(b.Name, "–")]) for b in m.References
+        ] or [(m, [], [display_name(m), "", ""])]
     return rows
 
 
@@ -316,17 +320,27 @@ def excitation_rows(study):
     """Rows for the Excitations panel: (excitation, refs, [name, body, faces, surface ID])."""
     rows = []
     for e in excitations(study):
-        rows += [(e, [(b, f) for f in faces], [display_name(e), b.Label, ", ".join(faces),
-                                              study.SurfaceIds.get(f"{e.Name}|{b.Name}", "–")])
-                 for b, faces in subs_by_body(e)] or [(e, [], [display_name(e), "", "", ""])]
+        rows += [
+            (
+                e,
+                [(b, f) for f in faces],
+                [display_name(e), b.Label, ", ".join(faces), study.SurfaceIds.get(f"{e.Name}|{b.Name}", "–")],
+            )
+            for b, faces in subs_by_body(e)
+        ] or [(e, [], [display_name(e), "", "", ""])]
     return rows
 
 
 def mesh_size_rows(study):
     """Rows for the Mesh Sizes panel: (mesh size, refs, [name, size, applies to])."""
-    return [(s, item_refs(s), [display_name(s), f"{s.Size.Value:g} mm",
-                               ", ".join(ref_label(b, sub) for b, sub in item_refs(s))])
-            for s in mesh_sizes(study)]
+    return [
+        (
+            s,
+            item_refs(s),
+            [display_name(s), f"{s.Size.Value:g} mm", ", ".join(ref_label(b, sub) for b, sub in item_refs(s))],
+        )
+        for s in mesh_sizes(study)
+    ]
 
 
 def bodies_without_material(study):
@@ -334,6 +348,7 @@ def bodies_without_material(study):
     have = {b.Name for m in materials(study) for b in m.References}
     if study.MainMode != "Materials":
         from . import geometry
+
         return [b for b in geometry.region(study, "Main")[0] if b.Name not in have]
     out = {}
     for item in excitations(study) + mesh_sizes(study):
@@ -346,15 +361,21 @@ def bodies_without_material(study):
 def volume_keys(study):
     if study.MainMode != "Materials":
         from . import geometry
+
         return [b.Name for b in geometry.region(study, "Main")[0]]
     return list(dict.fromkeys(b.Name for m in materials(study) for b in m.References))
 
 
 def surface_keys(study):
     included = set(volume_keys(study)) if study.MainMode != "Materials" else None
-    return list(dict.fromkeys(f"{e.Name}|{b.Name}"
-                              for e in excitations(study) for b, _ in subs_by_body(e)
-                              if included is None or b.Name in included))
+    return list(
+        dict.fromkeys(
+            f"{e.Name}|{b.Name}"
+            for e in excitations(study)
+            for b, _ in subs_by_body(e)
+            if included is None or b.Name in included
+        )
+    )
 
 
 def update_ids(study):
@@ -389,8 +410,9 @@ def set_id(study, table, key, new_id):
         raise ValueError(f"unknown entry {key}")
     if new_id < 1:
         raise ValueError("IDs must be 1 or more")
-    taken = {int(v) for t in ("VolumeIds", "SurfaceIds")
-             for k, v in getattr(study, t).items() if (t, k) != (table, key)}
+    taken = {
+        int(v) for t in ("VolumeIds", "SurfaceIds") for k, v in getattr(study, t).items() if (t, k) != (table, key)
+    }
     if new_id in taken:
         raise ValueError(f"ID {new_id} is already used")
     ids[key] = str(new_id)

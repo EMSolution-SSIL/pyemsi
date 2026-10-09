@@ -1,5 +1,6 @@
 """View providers, the item edit panel, folder watchers, the ID table dialog, the selection
 observer and selection helpers."""
+
 from collections import Counter
 
 import FreeCAD as App
@@ -25,8 +26,11 @@ def active_study():
     doc = App.ActiveDocument
     if doc is None:
         return None
-    owners = {s.Name: s for o in Gui.Selection.getSelection()
-              if o.Document == doc and (s := objects.owner_study(o)) is not None}
+    owners = {
+        s.Name: s
+        for o in Gui.Selection.getSelection()
+        if o.Document == doc and (s := objects.owner_study(o)) is not None
+    }
     if len(owners) > 1:
         _active.pop(doc.Name, None)
         return None
@@ -138,8 +142,7 @@ class MeshSettings:
         self.advanced_form.setVisible(True)
         self.advanced.toggled.connect(self.advanced_form.setVisible)
         self.algorithms = {}
-        for prop, label in (("SurfaceAlgorithm", "Surface algorithm"),
-                            ("VolumeAlgorithm", "Volume algorithm")):
+        for prop, label in (("SurfaceAlgorithm", "Surface algorithm"), ("VolumeAlgorithm", "Volume algorithm")):
             combo = QtWidgets.QComboBox()
             combo.addItems(folder.getEnumerationsOfProperty(prop))
             combo.setCurrentText(getattr(folder, prop))
@@ -171,15 +174,21 @@ class MeshSettings:
 
     def values(self):
         out = {prop: combo.currentText() for prop, combo in self.algorithms.items()}
-        out.update(DefaultMeshSize=self.default.value(), SizeFactor=self.factor.value(),
-                   MinSize=self.min_size.value(), MaxSize=self.max_size.value(),
-                   SmoothingSteps=self.smoothing.value(), OptimizeNetgen=self.netgen.isChecked())
+        out.update(
+            DefaultMeshSize=self.default.value(),
+            SizeFactor=self.factor.value(),
+            MinSize=self.min_size.value(),
+            MaxSize=self.max_size.value(),
+            SmoothingSteps=self.smoothing.value(),
+            OptimizeNetgen=self.netgen.isChecked(),
+        )
         return out
 
     def save(self, *_):
         f = self.folder
-        changed = {p: v for p, v in self.values().items()
-                   if getattr(getattr(f, p), "Value", getattr(f, p)) != v}  # Value: a length
+        changed = {
+            p: v for p, v in self.values().items() if getattr(getattr(f, p), "Value", getattr(f, p)) != v
+        }  # Value: a length
         if not changed:
             return
         f.Document.openTransaction("Edit mesh settings")
@@ -197,8 +206,7 @@ class FolderView:
         self.study = study
         headers, rows = {
             objects.MaterialsFolder: (["Material", "Body", "Volume ID"], objects.material_rows),
-            objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "Surface ID"],
-                                        objects.excitation_rows),
+            objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "Surface ID"], objects.excitation_rows),
             objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
         }[type(folder.Proxy)]
         self.rows = rows(study)
@@ -211,8 +219,9 @@ class FolderView:
             notice.setWordWrap(True)
             layout.addWidget(notice)
         if study.Dimension == "2D":
-            notice = QtWidgets.QLabel("2D material, excitation and local size assignments "
-                                     "will be added with 2D meshing.")
+            notice = QtWidgets.QLabel(
+                "2D material, excitation and local size assignments will be added with 2D meshing."
+            )
             notice.setWordWrap(True)
             layout.addWidget(notice)
         self.settings = None
@@ -237,8 +246,7 @@ class FolderView:
         if isinstance(folder.Proxy, objects.MaterialsFolder):
             bodies = objects.bodies_without_material(study)
             if bodies:
-                missing = QtWidgets.QLabel(
-                    "No material (Run Mesh will stop): " + ", ".join(b.Label for b in bodies))
+                missing = QtWidgets.QLabel("No material (Run Mesh will stop): " + ", ".join(b.Label for b in bodies))
                 missing.setWordWrap(True)
                 missing.setStyleSheet("color: #c00000")
                 layout.addWidget(missing)
@@ -296,7 +304,8 @@ class StudyView:
         self.diagnostics.setWordWrap(True)
         layout.addWidget(self.diagnostics)
         self.sliding_notice = QtWidgets.QLabel(
-            "Sliding-interface configuration will be added with sliding-motion meshing.")
+            "Sliding-interface configuration will be added with sliding-motion meshing."
+        )
         self.sliding_notice.setWordWrap(True)
         layout.addWidget(self.sliding_notice)
         output = QtWidgets.QFormLayout()
@@ -351,8 +360,7 @@ class StudyView:
         labels = Counter(o.Label for o in containers)
         sliding = study.Movement == "Sliding motion"
         for name, (box, combo, count, manual) in self.regions.items():
-            box.setTitle("Moving geometry" if name == "Moving" else
-                         "Fixed geometry" if sliding else "Main geometry")
+            box.setTitle("Moving geometry" if name == "Moving" else "Fixed geometry" if sliding else "Main geometry")
             box.setVisible(name == "Main" or sliding)
             combo.blockSignals(True)
             combo.clear()
@@ -403,6 +411,7 @@ class StudyView:
 
     def update_run_button(self):
         from . import runner
+
         if self.study.Document is not None:
             self.run_button.setEnabled(not geometry.export_unavailable(self.study) and not runner.busy())
 
@@ -433,13 +442,15 @@ class StudyView:
 
     def browse_output(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(
-            Gui.getMainWindow(), "Mesh output folder", self.output.text())
+            Gui.getMainWindow(), "Mesh output folder", self.output.text()
+        )
         if folder:
             self.output.setText(folder)
             self.save_output()
 
     def run_mesh(self):
         from . import runner
+
         runner.start(self.study)
         self.refresh()
 
@@ -449,8 +460,7 @@ class GeometryPanel:
 
     def __init__(self, study, region, editable=False):
         self.study, self.region, self.editable = study, region, editable
-        self.current = (list(getattr(study, region + "Objects")) if editable
-                        else geometry.region(study, region)[0])
+        self.current = list(getattr(study, region + "Objects")) if editable else geometry.region(study, region)[0]
         highlight.clear()
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle("Study geometry")
@@ -477,8 +487,7 @@ class GeometryPanel:
         self.refs.addItems([f"{o.Label} — {o.Name}" for o in self.current])
 
     def add_selection(self):
-        selected = [objects.owning_body(o) for o in Gui.Selection.getSelection()
-                    if o.Document == self.study.Document]
+        selected = [objects.owning_body(o) for o in Gui.Selection.getSelection() if o.Document == self.study.Document]
         added, errors = geometry.collect(selected, self.study.Dimension)
         if errors or not added:
             self.message.setText("\n".join(errors) or "Select filled faces or solid objects first.")
@@ -516,8 +525,11 @@ class GeometryPanel:
         return True
 
     def getStandardButtons(self):
-        return (QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel if self.editable
-                else QtWidgets.QDialogButtonBox.Close)
+        return (
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            if self.editable
+            else QtWidgets.QDialogButtonBox.Close
+        )
 
 
 class StudyWatcher:
