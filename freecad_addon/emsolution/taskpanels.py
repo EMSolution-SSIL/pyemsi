@@ -310,14 +310,6 @@ class StudyView:
         layout.addWidget(self.sliding_notice)
         output = QtWidgets.QFormLayout()
         layout.addLayout(output)
-        folder_row = QtWidgets.QHBoxLayout()
-        self.output = QtWidgets.QLineEdit(study.OutputFolder)
-        self.output.setPlaceholderText("Automatic folder beside the saved document")
-        browse = QtWidgets.QPushButton("Browse…")
-        browse.clicked.connect(self.browse_output)
-        folder_row.addWidget(self.output)
-        folder_row.addWidget(browse)
-        output.addRow("Output folder", folder_row)
         self.version = QtWidgets.QComboBox()
         self.version.addItems(study.getEnumerationsOfProperty("MshVersion"))
         self.version.setCurrentText(study.MshVersion)
@@ -333,7 +325,6 @@ class StudyView:
         self.export_notice.setWordWrap(True)
         layout.addWidget(self.export_notice)
         self.movement.currentTextChanged.connect(self.change_movement)
-        self.output.editingFinished.connect(self.save_output)
         self.version.currentTextChanged.connect(lambda value: self.save("MshVersion", value))
         self.refresh()
         # The background run can finish while this panel stays open.
@@ -434,18 +425,6 @@ class StudyView:
 
     def edit_manual(self, name):
         Gui.Control.showDialog(GeometryPanel(self.study, name, editable=True))
-
-    def save_output(self):
-        self.save("OutputFolder", self.output.text().strip())
-        self.refresh()
-
-    def browse_output(self):
-        folder = QtWidgets.QFileDialog.getExistingDirectory(
-            Gui.getMainWindow(), "Mesh output folder", self.output.text()
-        )
-        if folder:
-            self.output.setText(folder)
-            self.save_output()
 
     def run_mesh(self):
         from . import runner

@@ -169,6 +169,10 @@ class StudyTest(unittest.TestCase):
         self.assertIsInstance(objects.materials(study)[0].Proxy, objects.Material)
         self.assertEqual(study.VolumeIds, {"A": "1"})
 
+    def test_new_study_has_no_output_properties(self):
+        for prop in ("OutputFolder", "LegacyOutput"):
+            self.assertNotIn(prop, self.study.PropertiesList)
+
     def test_folders_keep_their_names(self):
         folder = self.study.MaterialsGroup
         folder.Label = "Stuff"
@@ -584,7 +588,8 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(second.MainSource.Name, "Faces")
         self.assertEqual(second.MeshSizesGroup.DefaultMeshSize.Value, 1.5)
         self.assertEqual(geometry.region(second, "Main")[1], [])
-        self.assertFalse(first.LegacyOutput)
+        self.assertNotIn("LegacyOutput", first.PropertiesList)
+        self.assertNotIn("OutputFolder", first.PropertiesList)
         code = """import sys
 import FreeCAD as App
 from emsolution import geometry, objects
@@ -602,15 +607,13 @@ print('RESTORE PASS')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("RESTORE PASS", result.stdout)
 
-    def test_old_study_upgrade_preserves_settings_ids_and_default_output(self):
+    def test_old_study_upgrade_preserves_settings_ids_and_drops_output_properties(self):
         objects.make_material(self.study, "Iron", [self.box("A")])
         objects.update_ids(self.study)
         self.study.MeshSizesGroup.DefaultMeshSize = 1.25
-        self.study.OutputFolder = ""
         for prop in (
             "Dimension",
             "Movement",
-            "LegacyOutput",
             "MainMode",
             "MovingMode",
             "MainSource",
@@ -619,6 +622,10 @@ print('RESTORE PASS')
             "MovingObjects",
         ):
             self.study.removeProperty(prop)
+        # what a Study saved before the simulation folder change carried
+        self.study.addProperty("App::PropertyString", "OutputFolder", "EMSolution")
+        self.study.OutputFolder = os.path.join(self.tmp.name, "elsewhere")
+        self.study.addProperty("App::PropertyBool", "LegacyOutput", "Setup")
         path = os.path.join(self.tmp.name, "old.FCStd")
         self.doc.saveAs(path)
         App.closeDocument(self.doc.Name)
@@ -627,10 +634,12 @@ print('RESTORE PASS')
         self.study.Proxy.onDocumentRestored(self.study)  # repeat must not reset data
         self.assertEqual(self.study.VolumeIds, {"A": "1"})
         self.assertEqual(self.study.MeshSizesGroup.DefaultMeshSize.Value, 1.25)
-        self.assertEqual(self.study.OutputFolder, "")
-        self.assertTrue(self.study.LegacyOutput)
+        self.assertEqual(self.study.MainMode, "Materials")
+        self.assertNotIn("OutputFolder", self.study.PropertiesList)
+        self.assertNotIn("LegacyOutput", self.study.PropertiesList)
         self.assertEqual(geometry.export_unavailable(self.study), "")
         self.assertTrue(os.path.isfile(jobwriter.write_job(self.study)))
+        self.assertTrue(os.path.samefile(os.path.dirname(jobwriter.mesh_file(self.study)), self.tmp.name))
 
     def test_deferred_export_cannot_change_ids_or_write_files(self):
         objects.make_material(self.study, "Iron", [self.box("A")])

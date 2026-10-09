@@ -86,9 +86,6 @@ FOLDERS = (
 class Study(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
-        obj.addProperty(
-            "App::PropertyString", "OutputFolder", "EMSolution", "Empty = folder <document>_mesh next to the .FCStd"
-        )
         obj.addProperty("App::PropertyEnumeration", "MshVersion", "EMSolution", "Gmsh file format version (ASCII)")
         obj.MshVersion = ["4.1", "2.2"]
         obj.addProperty("App::PropertyMap", "VolumeIds", "IDs", "Body Name -> volume ID")
@@ -132,12 +129,11 @@ class Study(_Proxy):
                 obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
             for prop in (mode, source, refs):
                 obj.setEditorMode(prop, 2)  # edit together in the Study panel
-        if "LegacyOutput" not in obj.PropertiesList:
-            obj.addProperty("App::PropertyBool", "LegacyOutput", "Setup")
-            obj.LegacyOutput = legacy
-        obj.setEditorMode("LegacyOutput", 2)
 
     def onDocumentRestored(self, obj):
+        for prop in ("OutputFolder", "LegacyOutput"):  # replaced by the simulation folder
+            if prop in obj.PropertiesList:
+                obj.removeProperty(prop)
         self.add_setup(obj, legacy=True)
 
 
