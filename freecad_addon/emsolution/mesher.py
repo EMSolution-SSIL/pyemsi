@@ -1,4 +1,5 @@
-"""Job file -> Gmsh .msh + .unv. Runs in its own process. Never import FreeCAD here.
+"""Job file -> Gmsh .msh at job["mesh_file"] + mesh.unv beside the job. Runs in its own process.
+Never import FreeCAD here.
 
 Usage: python mesher.py <job.json>
 """
@@ -100,6 +101,7 @@ def run(job_path):
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
+    msh = os.path.join(folder, "mesh.msh")
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)
@@ -112,14 +114,14 @@ def run(job_path):
         gmsh.model.mesh.generate(3)
         gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))
         gmsh.option.setNumber("Mesh.Binary", 0)
-        base = os.path.join(folder, job["model_name"])
-        gmsh.write(base + ".msh")
-        gmsh.write(base + ".unv")
+        gmsh.write(msh)
+        gmsh.write(os.path.join(folder, "mesh.unv"))
     finally:
         gmsh.finalize()
+    os.replace(msh, job["mesh_file"])  # only a finished mesh replaces the solver's file
     for item in job["volumes"] + job["surfaces"]:
         print(f"{item['id']:>6}  {item['name']}")
-    print(f"Wrote {base}.msh")
+    print(f"Wrote {job['mesh_file']}")
 
 
 def main(argv):

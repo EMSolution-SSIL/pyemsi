@@ -2,6 +2,7 @@
 
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -69,10 +70,11 @@ class MesherTest(unittest.TestCase):
     def geo(self, name):
         return os.path.join(self.dir, "geometry", name)
 
-    def run_job(self, volumes, surfaces=(), version=4.1, sizes=(), options=None):
+    def run_job(self, volumes, surfaces=(), version=4.1, sizes=(), options=None, mesh_file=None):
         job = {
             "model_name": "Model",
             "msh_version": version,
+            "mesh_file": mesh_file or os.path.join(self.dir, "pre_geom.msh"),
             "volumes": list(volumes),
             "surfaces": list(surfaces),
             "sizes": list(sizes),
@@ -87,7 +89,7 @@ class MesherTest(unittest.TestCase):
     def open_msh(self):
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.open(os.path.join(self.dir, "Model.msh"))
+        gmsh.open(os.path.join(self.dir, "pre_geom.msh"))
         self.addCleanup(gmsh.finalize)
 
     def vol(self, id_, name, file, size=0.5):
@@ -98,7 +100,7 @@ class MesherTest(unittest.TestCase):
         write_box(self.geo("vol_2.brep"), 1, 0, 0, 1, 1, 1)
         r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep"), self.vol(2, "Air_Box001", "vol_2.brep")])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(os.path.exists(os.path.join(self.dir, "Model.unv")))
+        self.assertTrue(os.path.exists(os.path.join(self.dir, "mesh.unv")))
         self.open_msh()
         groups = {t: gmsh.model.getPhysicalName(3, t) for _, t in gmsh.model.getPhysicalGroups(3)}
         self.assertEqual(groups, {1: "Copper_Box", 2: "Air_Box001"})
@@ -146,7 +148,7 @@ class MesherTest(unittest.TestCase):
         gmsh.initialize()
         try:
             gmsh.option.setNumber("General.Terminal", 0)
-            gmsh.open(os.path.join(self.dir, "Model.msh"))
+            gmsh.open(os.path.join(self.dir, "pre_geom.msh"))
             c = gmsh.model.mesh.getNodes()[1]
         finally:
             gmsh.finalize()
@@ -195,7 +197,7 @@ class MesherTest(unittest.TestCase):
         gmsh.initialize()
         try:
             gmsh.option.setNumber("General.Terminal", 0)
-            gmsh.open(os.path.join(self.dir, "Model.msh"))
+            gmsh.open(os.path.join(self.dir, "pre_geom.msh"))
             types, tags, _ = gmsh.model.mesh.getElements(3)
         finally:
             gmsh.finalize()
@@ -224,8 +226,56 @@ class MesherTest(unittest.TestCase):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
         r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")], version=2.2)
         self.assertEqual(r.returncode, 0, r.stderr)
-        with open(os.path.join(self.dir, "Model.msh"), encoding="ascii") as fh:
+        with open(os.path.join(self.dir, "pre_geom.msh"), encoding="ascii") as fh:
             self.assertEqual(fh.read().split()[:2], ["$MeshFormat", "2.2"])
+
+    def test_mesh_goes_to_mesh_file_and_unv_beside_the_job(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        target = os.path.join(self.dir, "run dir", "pre_geom.msh")
+        os.mkdir(os.path.dirname(target))
+        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")], mesh_file=target)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isfile(target))
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, "mesh.unv")))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "pre_geom.msh")))
+        self.assertIn(f"Wrote {target}", r.stdout)
+
+    def write_old_mesh(self):
+        path = os.path.join(self.dir, "pre_geom.msh")
+        with open(path, "w", encoding="ascii") as fh:
+            fh.write("old")
+        return path
+
+    def read_text(self, path):
+        with open(path, encoding="ascii") as fh:
+            return fh.read()
+
+    def test_existing_mesh_is_replaced(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        target = self.write_old_mesh()
+        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.read_text(target).startswith("$MeshFormat"))
+
+    def test_failed_run_keeps_the_existing_mesh(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 0.5, 0, 0, 1, 1, 1)  # overlaps vol_1
+        target = self.write_old_mesh()
+        r = self.run_job([self.vol(1, "A_Box", "vol_1.brep"), self.vol(2, "B_Box001", "vol_2.brep")])
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.read_text(target), "old")
+
+    def test_read_only_mesh_fails_cleanly_and_stays(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        target = self.write_old_mesh()
+        os.chmod(target, stat.S_IREAD)
+        try:
+            r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")])
+        finally:
+            os.chmod(target, stat.S_IREAD | stat.S_IWRITE)  # let the temporary folder be deleted
+        self.assertEqual(r.returncode, 1)
+        self.assertTrue(r.stderr.strip().splitlines()[-1].startswith("ERROR:"), r.stderr)
+        self.assertEqual(self.read_text(target), "old")
 
     def test_overlapping_boxes_fail(self):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
@@ -297,7 +347,7 @@ class MesherTest(unittest.TestCase):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
         r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(os.path.exists(os.path.join(self.dir, "Model.msh")))
+        self.assertTrue(os.path.exists(os.path.join(self.dir, "pre_geom.msh")))
 
 
 if __name__ == "__main__":
