@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Python tools EMSolution output visualization"
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11,<3.13"
 authors = [
     {name = "SSIL"}
 ]
@@ -19,6 +19,7 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "vtk>=9.0.0",
@@ -60,10 +61,10 @@ channels = ["conda-forge"]
 platforms = ["win-64"]
 
 [tool.pixi.dependencies]
-python = ">=3.11,<3.12"
-freecad = "==1.1.0"
-qt6-webengine = "==6.10.2"
-qt6-multimedia = "==6.10.2"
+python = ">=3.12,<3.13"
+freecad = "==1.1.3"
+qt6-webengine = "6.11.*"
+qt6-multimedia = "6.11.*"
 vtk = ">=9.0.0"
 numpy = ">=1.21.0"
 networkx = ">=3.0"

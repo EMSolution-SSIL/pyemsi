@@ -15,16 +15,16 @@ build:
 
 requirements:
   host:
-    - python 3.11.*
+    - python 3.12.*
     - pip
     - setuptools >=61
     - wheel
     - cython >=3.0.0
     - numpy
   run:
-    - python 3.11.*
-    - qt6-webengine ==6.10.2
-    - qt6-multimedia ==6.10.2
+    - python 3.12.*
+    - qt6-webengine 6.11.*
+    - qt6-multimedia 6.11.*
     - vtk >=9.0.0
     - numpy >=1.21.0
     - networkx >=3.0

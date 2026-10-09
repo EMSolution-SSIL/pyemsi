@@ -4,7 +4,7 @@ Date: 2026-10-08. The prototype was built in the EMSolution-FreeCAD repo and the
 
 ## Goal
 
-Ship FreeCAD + the EMSolution addon + pyemsi (Femap converter, VTK viewer, input control editor) to customers as one Windows installer. Stock FreeCAD can't run pyemsi's web editors because it has no QtWebEngine (see "From before" under "Open matters"). The prototype therefore bundles conda-forge FreeCAD 1.1.0 with QtWebEngine 6.10.2, which is the stack pyemsi's pixi env already uses.
+Ship FreeCAD + the EMSolution addon + pyemsi (Femap converter, VTK viewer, input control editor) to customers as one Windows installer. Stock FreeCAD can't run pyemsi's web editors because it has no QtWebEngine (see "From before" under "Open matters"). The prototype therefore bundles conda-forge FreeCAD with QtWebEngine, the same stack as pyemsi's pixi env. It was built and tested with FreeCAD 1.1.0, Python 3.11 and Qt 6.10.2; the pins have since moved to FreeCAD 1.1.3, Python 3.12 and Qt 6.11 (see open matter 7), and the installer hasn't been rebuilt since.
 
 ## What was built
 
@@ -30,7 +30,7 @@ Install silently with `EMSolution-FreeCAD-0.1.0-Windows-x86_64.exe /S /D=<prefix
 
 ## Developer mode (no installer)
 
-Day to day you don't need the installer. pyemsi's own pixi env already has FreeCAD 1.1.0 and an editable install of pyemsi. Point FreeCAD's user Mod folder at the addon:
+Day to day you don't need the installer. pyemsi's own pixi env already has FreeCAD 1.1.3 and an editable install of pyemsi. Point FreeCAD's user Mod folder at the addon:
 
 ```
 mklink /J "%APPDATA%\FreeCAD\v1-1\Mod\EMSolution" "<pyemsi checkout>\freecad_addon"
@@ -76,7 +76,7 @@ Restart FreeCAD after you change the addon or pyemsi's Python code. After a chan
 3. **constructor only renders Jinja when the YAML fails to parse.** `construct.yaml` therefore starts with a `{% set %}` line, which is invalid YAML on purpose. That's how it gets an absolute path for the local channel; a bare `output` was treated as an anaconda.org channel name.
 4. **pyemsi's package data leaves out `.ico` files.** `pyemsi/resources/icons/Icon.ico` is tracked in git but isn't installed. The shortcut uses `freecad.exe`'s icon instead.
 5. **The dev pixi env has Mesa's `opengl32.dll` in `Library\bin`** (pulled in by an older `viskores` build); the installed env doesn't. Adding Mesa didn't change the black screenshots, so it wasn't the cause. It's still worth knowing, because the earlier WebEngine spikes may have rendered with Mesa.
-6. **The conda-forge FreeCAD 1.1.0 solve pulls in Qt5:** the Qt5 build of `pivy`, plus `soqt`, `qt-main` 5.15 and `pyqt` 5. The dev env has the same packages.
+6. **The conda-forge FreeCAD 1.1.0 solve pulls in Qt5:** the Qt5 build of `pivy`, plus `soqt`, `qt-main` 5.15 and `pyqt` 5. The dev env has the same packages. With FreeCAD 1.1.3, `pivy` is the Qt6 build and `soqt` is gone, but `qt-main` 5.15 and `pyqt` 5 are still pulled in.
 
 ## Open matters
 
@@ -109,7 +109,9 @@ Restart FreeCAD after you change the addon or pyemsi's Python code. After a chan
 7. **Addon code and pyemsi's tooling:**
    - pyemsi's pre-commit hooks (ruff format + ruff check) now also run on `freecad_addon/`.
    - The addon's tests are in `tests/freecad_addon/` and run with `pixi run test`.
-   - The GUI smoke test `tests/freecad_addon/gui_smoke.py` passes on stock FreeCAD 1.1.4 but fails its folder-panels check on the pixi env's FreeCAD 1.1.0. The pin may need to move to 1.1.3 or later.
+   - The GUI smoke test `tests/freecad_addon/gui_smoke.py` failed its folder-panels check on FreeCAD 1.1.0. The pins moved to FreeCAD 1.1.3 (conda-forge has no Python 3.11 build of it), so Python 3.12 and Qt 6.11. The smoke test now passes on pixi FreeCAD 1.1.3 and stock 1.1.4. `requires-python` is `>=3.11,<3.13`, so CI and the standalone pyemsi runtime stay on 3.11.
+   - The mesher could not start on conda FreeCAD, because `python.exe` is in the env root, not `Library\bin`. `runner.python_exe()` now checks both.
+   - The installer recipes were bumped the same way but not rebuilt or tested.
 
 ### From before (spikes in the same session)
 

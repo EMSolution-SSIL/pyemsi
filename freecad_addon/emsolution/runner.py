@@ -1,6 +1,8 @@
 """Run mesher.py in a background process, stream its output, load the result."""
+
 import json
 import os
+import sys
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -17,7 +19,11 @@ def busy():
 
 
 def python_exe():
-    return os.path.join(App.getHomePath(), "bin", "python.exe")
+    # Stock FreeCAD keeps python.exe in <home>\bin; a conda env (pixi, installer) in its root.
+    for exe in (os.path.join(App.getHomePath(), "bin", "python.exe"), os.path.join(sys.prefix, "python.exe")):
+        if os.path.exists(exe):
+            return exe
+    return exe
 
 
 def start(study):
@@ -56,7 +62,7 @@ class MeshRun:
         App.Console.PrintWarning(text)
         for line in text.splitlines():
             if line.startswith("ERROR:"):
-                self.error = line[len("ERROR:"):].strip()
+                self.error = line[len("ERROR:") :].strip()
 
     def cancel(self):
         self.cancelled = True
@@ -77,7 +83,8 @@ class MeshRun:
             QtWidgets.QMessageBox.information(parent, "EMSolution", "Meshing cancelled.")
         elif code != 0:
             QtWidgets.QMessageBox.critical(
-                parent, "EMSolution", self.error or f"The mesher stopped with exit code {code}.")
+                parent, "EMSolution", self.error or f"The mesher stopped with exit code {code}."
+            )
         else:
             self.load_result()
 
