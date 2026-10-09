@@ -33,6 +33,7 @@ def main():
         Gui.runCommand("Std_DockOverlayAll", 0)
         Gui.updateGui()
     from emsolution import commands, objects, runner, taskpanels
+    from emsolution import jobwriter
 
     commands.ask_text = lambda title, label, default: {"Material": "Copper", "Excitation": "Terminal In"}[title]
     commands.ask_size = lambda default: 3.0
@@ -49,7 +50,7 @@ def main():
     assert study is not None, "no study"
     assert study.MainMode == "Unassigned"
     study.MainMode = "Materials"  # legacy workflow remains supported
-    study.OutputFolder = tempfile.mkdtemp()
+    doc.saveAs(os.path.join(tempfile.mkdtemp(), "Smoke.FCStd"))  # the simulation folder
     log.append("study ok")
 
     Gui.Selection.clearSelection()
@@ -243,6 +244,9 @@ def main():
     assert not runner.busy(), "run did not finish"
     assert run.error == "", run.error
     assert study.MeshResult is not None and study.MeshResult.FemMesh.VolumeCount > 0
+    assert os.path.isfile(jobwriter.mesh_file(study)), "no pre_geom.msh beside the document"
+    assert os.path.isfile(os.path.join(jobwriter.scratch_folder(study), "mesh.unv"))
+    assert not run.replaced
     log.append(f"mesh ok: {study.MeshResult.FemMesh.VolumeCount} volumes")
 
     # Several Studies: ownership, setup controls, bulk selection and undo.
@@ -363,10 +367,12 @@ def main():
     assert view.run_button.isEnabled(), "missing materials disabled generation"
     mat.References = [doc.A, doc.B]
     view.refresh()
+    assert view.export_notice.text() == f"Writes {jobwriter.mesh_file(study)}", view.export_notice.text()
     run = runner.start(study)
     assert run is not None and run.proc.waitForFinished(120000)
     Gui.updateGui()
     assert run.error == "" and not runner.busy()
+    assert run.replaced, "the second run did not replace pre_geom.msh"
     import json
 
     with open(run.job, encoding="utf-8") as fh:

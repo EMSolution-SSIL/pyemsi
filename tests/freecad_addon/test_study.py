@@ -21,7 +21,7 @@ class StudyTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
         self.study.MainMode = "Materials"  # retain coverage of the legacy workflow
-        self.study.OutputFolder = self.tmp.name
+        self.doc.saveAs(os.path.join(self.tmp.name, "T.FCStd"))  # the temporary folder is the simulation folder
 
     def tearDown(self):
         App.closeDocument(self.doc.Name)
@@ -36,6 +36,9 @@ class StudyTest(unittest.TestCase):
 
     def ids(self):
         return dict(self.study.VolumeIds), dict(self.study.SurfaceIds)
+
+    def scratch(self, *parts):
+        return os.path.join(jobwriter.scratch_folder(self.study), *parts)
 
     def assertStudyError(self, text):
         with self.assertRaises(jobwriter.StudyError) as ctx:
@@ -284,21 +287,6 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Copper", [link])
         self.assertStudyError("Link is not a solid body")
 
-    def test_output_folder_with_persian_letters(self):
-        a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
-        self.study.OutputFolder = os.path.join(self.tmp.name, "مدل")
-        path = jobwriter.write_job(self.study)
-        self.assertTrue(os.path.exists(path))
-
-    def test_check_unsaved_document(self):
-        a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
-        self.study.OutputFolder = ""
-        with self.assertRaises(jobwriter.StudyError) as ctx:
-            jobwriter.write_job(self.study)
-        self.assertIn("Save the document", str(ctx.exception))
-
     def test_smallest_mesh_size_wins(self):
         a = self.box("A")
         objects.make_material(self.study, "Copper", [a])
@@ -315,6 +303,73 @@ class StudyTest(unittest.TestCase):
         objects.make_material(self.study, "Cu", [a, b])
         self.assertStudyError("A_")
 
+    # --- simulation folder ----------------------------------------------------
+
+    def test_mesh_file_is_the_emsolution_name_in_the_document_folder(self):
+        folder = jobwriter.simulation_folder(self.study)
+        self.assertTrue(os.path.samefile(folder, self.tmp.name))
+        self.assertEqual(jobwriter.mesh_file(self.study), os.path.join(folder, "pre_geom.msh"))
+        cross = objects.make_study(self.doc, "2D", "Cross-section")
+        self.assertEqual(jobwriter.mesh_file(cross), os.path.join(folder, "pre_geom2D.msh"))
+
+    def test_scratch_folder_is_per_document_and_study_and_survives_rename(self):
+        second = objects.make_study(self.doc)
+        folder = jobwriter.scratch_folder(self.study)
+        rel = os.path.relpath(folder, jobwriter.simulation_folder(self.study))
+        self.assertEqual(rel, os.path.join(".pyemsi", "freecad", "T", self.study.Name))
+        self.study.Label = "Renamed"
+        self.assertEqual(jobwriter.scratch_folder(self.study), folder)
+        self.assertNotEqual(jobwriter.scratch_folder(second), folder)
+
+    def test_save_as_moves_the_mesh_and_scratch_folders(self):
+        other = os.path.join(self.tmp.name, "other")
+        os.mkdir(other)
+        self.doc.saveAs(os.path.join(other, "Moved.FCStd"))
+        self.assertTrue(os.path.samefile(jobwriter.simulation_folder(self.study), other))
+        self.assertEqual(os.path.dirname(jobwriter.mesh_file(self.study)), jobwriter.simulation_folder(self.study))
+        self.assertIn(
+            os.path.join(".pyemsi", "freecad", "Moved", self.study.Name), jobwriter.scratch_folder(self.study)
+        )
+
+    def test_unsaved_document_is_refused_before_ids_or_files_change(self):
+        doc = App.newDocument("Unsaved")
+        self.addCleanup(App.closeDocument, doc.Name)
+        study = objects.make_study(doc)
+        study.MainMode = "Materials"
+        box = doc.addObject("Part::Box", "A")
+        doc.recompute()
+        objects.make_material(study, "Copper", [box])
+        with self.assertRaisesRegex(jobwriter.StudyError, "Save the document in the simulation folder first"):
+            jobwriter.write_job(study)
+        self.assertEqual(study.VolumeIds, {})
+
+    def test_simulation_folder_with_spaces_and_persian_letters(self):
+        objects.make_material(self.study, "Copper", [self.box("A")])
+        folder = os.path.join(self.tmp.name, "my model مدل")
+        os.mkdir(folder)
+        self.doc.saveAs(os.path.join(folder, "موتور.FCStd"))
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isfile(os.path.join(folder, "pre_geom.msh")))
+        self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
+
+    def test_second_study_replaces_the_mesh_and_keeps_its_own_scratch_folder(self):
+        objects.make_material(self.study, "Iron", [self.box("A")])
+        second = objects.make_study(self.doc)
+        second.MainMode = "Materials"
+        objects.make_material(second, "Air", [self.box("B", 10)])
+        for study in (self.study, second):
+            path = jobwriter.write_job(study)
+            r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+            self.assertEqual(r.returncode, 0, r.stderr)
+        with open(os.path.join(self.tmp.name, "pre_geom.msh"), encoding="utf-8") as fh:
+            names = fh.read().split("$PhysicalNames\n", 1)[1].split("$EndPhysicalNames", 1)[0]
+        self.assertIn('"B"', names)
+        self.assertNotIn('"A"', names)
+        self.assertNotEqual(jobwriter.scratch_folder(self.study), jobwriter.scratch_folder(second))
+        self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
+
     # --- geometry and job file ----------------------------------------------
 
     def test_body_in_app_part_is_exported_in_global_coordinates(self):
@@ -328,10 +383,10 @@ class StudyTest(unittest.TestCase):
         objects.make_excitation(self.study, "T", [(a, "Face6")])  # top face, z = 10
         jobwriter.write_job(self.study)
         vol = Part.Shape()
-        vol.read(os.path.join(self.tmp.name, "geometry", "vol_1.brep"))
+        vol.read(self.scratch("geometry", "vol_1.brep"))
         self.assertEqual((vol.BoundBox.XMin, vol.BoundBox.YMin), (100, 50))
         face = Part.Shape()
-        face.read(os.path.join(self.tmp.name, "geometry", "surf_1001_1.brep"))
+        face.read(self.scratch("geometry", "surf_1001_1.brep"))
         self.assertAlmostEqual(face.BoundBox.XMin, 100)
         self.assertAlmostEqual(face.BoundBox.ZMin, 10)
 
@@ -345,6 +400,9 @@ class StudyTest(unittest.TestCase):
         path = jobwriter.write_job(self.study)
         with open(path, encoding="utf-8") as fh:
             job = json.load(fh)
+        mesh_file = job.pop("mesh_file")
+        self.assertEqual(os.path.basename(mesh_file), "pre_geom.msh")
+        self.assertTrue(os.path.samefile(os.path.dirname(mesh_file), self.tmp.name))
         self.assertEqual(
             job,
             {
@@ -373,7 +431,7 @@ class StudyTest(unittest.TestCase):
             },
         )
         for rel in ("vol_1.brep", "vol_2.brep", "surf_1001_1.brep", "surf_1001_2.brep"):
-            self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "geometry", rel)))
+            self.assertTrue(os.path.exists(self.scratch("geometry", rel)))
 
     def test_face_edge_and_vertex_sizes_go_to_the_job(self):
         a, b = self.box("A"), self.box("B", 10)
@@ -393,7 +451,7 @@ class StudyTest(unittest.TestCase):
             ],
         )
         vertex = Part.Shape()
-        vertex.read(os.path.join(self.tmp.name, "geometry", "size_2_1.brep"))
+        vertex.read(self.scratch("geometry", "size_2_1.brep"))
         self.assertEqual(vertex.ShapeType, "Vertex")
         self.assertEqual(vertex.Vertexes[0].Point, b.Shape.Vertex1.Point)
 
@@ -416,7 +474,9 @@ class StudyTest(unittest.TestCase):
         path = jobwriter.write_job(self.study)
         r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "Study.msh")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "pre_geom.msh")))
+        self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
+        self.assertTrue(os.path.isfile(self.scratch("job.json")))
 
     # --- Study setup --------------------------------------------------------
 
@@ -569,27 +629,8 @@ print('RESTORE PASS')
         self.assertEqual(self.study.MeshSizesGroup.DefaultMeshSize.Value, 1.25)
         self.assertEqual(self.study.OutputFolder, "")
         self.assertTrue(self.study.LegacyOutput)
-        self.assertEqual(
-            os.path.normpath(jobwriter.output_folder(self.study)), os.path.normpath(os.path.splitext(path)[0] + "_mesh")
-        )
         self.assertEqual(geometry.export_unavailable(self.study), "")
         self.assertTrue(os.path.isfile(jobwriter.write_job(self.study)))
-
-    def test_new_output_directories_are_independent_and_stable_under_rename(self):
-        second = objects.make_study(self.doc)
-        self.study.OutputFolder = ""
-        path = os.path.join(self.tmp.name, "model.FCStd")
-        self.doc.saveAs(path)
-        folder = jobwriter.output_folder(self.study)
-        self.study.Label = "Renamed"
-        self.assertEqual(folder, jobwriter.output_folder(self.study))
-        self.assertNotEqual(folder, jobwriter.output_folder(second))
-        second.OutputFolder = self.study.OutputFolder = self.tmp.name
-        objects.make_material(self.study, "Iron", [self.box("A")])
-        with self.assertRaisesRegex(jobwriter.StudyError, "also used"):
-            jobwriter.write_job(self.study)
-        self.assertEqual(self.study.VolumeIds, {})
-        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
 
     def test_deferred_export_cannot_change_ids_or_write_files(self):
         objects.make_material(self.study, "Iron", [self.box("A")])
@@ -602,7 +643,7 @@ print('RESTORE PASS')
             with self.assertRaisesRegex(jobwriter.StudyError, message):
                 jobwriter.write_job(self.study)
             self.assertEqual(self.study.VolumeIds, {})
-            self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
+            self.assertFalse(os.path.exists(self.scratch("job.json")))
             setattr(self.study, prop, old)
 
     def test_new_study_requires_geometry_even_when_materials_exist(self):
@@ -634,8 +675,8 @@ print('RESTORE PASS')
         self.assertEqual(self.study.SurfaceIds, {"Excitation|B": "1001"})
         result = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(os.path.isfile(os.path.join(self.tmp.name, "Study.unv")))
-        with open(os.path.join(self.tmp.name, "Study.msh"), encoding="utf-8") as fh:
+        self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
+        with open(os.path.join(self.tmp.name, "pre_geom.msh"), encoding="utf-8") as fh:
             physical_names = fh.read().split("$PhysicalNames\n", 1)[1].split("$EndPhysicalNames", 1)[0]
         self.assertIn('3 1 "B"', physical_names)
         self.assertIn('3 2 "A"', physical_names)
@@ -648,7 +689,7 @@ print('RESTORE PASS')
         with self.assertRaisesRegex(jobwriter.StudyError, r"A \(A\), B \(B\)"):
             jobwriter.write_job(self.study)
         self.assertEqual(self.study.VolumeIds, {})
-        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "job.json")))
+        self.assertFalse(os.path.exists(self.scratch("job.json")))
         self.assertEqual(objects.bodies_without_material(self.study), [a, b])
         objects.make_material(self.study, "Copper", [a])
         self.assertEqual(objects.bodies_without_material(self.study), [b])

@@ -11,13 +11,22 @@ class StudyError(Exception):
     pass
 
 
-def output_folder(study):
-    if study.OutputFolder:
-        return study.OutputFolder
+def simulation_folder(study):
+    """The folder of the saved .FCStd: EMSolution's run folder."""
     if not study.Document.FileName:
-        raise StudyError("Save the document first, or set the study's OutputFolder.")
-    folder = os.path.splitext(study.Document.FileName)[0] + "_mesh"
-    return folder if study.LegacyOutput else os.path.join(folder, study.Name)
+        raise StudyError("Save the document in the simulation folder first.")
+    return os.path.dirname(os.path.abspath(study.Document.FileName))
+
+
+def scratch_folder(study):
+    """Gmsh working files: <simulation folder>/.pyemsi/freecad/<FCStd stem>/<Study Name>."""
+    stem = os.path.splitext(os.path.basename(study.Document.FileName))[0]
+    return os.path.join(simulation_folder(study), ".pyemsi", "freecad", stem, study.Name)
+
+
+def mesh_file(study):
+    """The fixed name EMSolution reads from the run folder."""
+    return os.path.join(simulation_folder(study), "pre_geom2D.msh" if study.Dimension == "2D" else "pre_geom.msh")
 
 
 def _check_subs(kind, item, body, subs):
@@ -144,19 +153,15 @@ def export_subs(folder, body, subs, prefix):
 
 
 def write_job(study):
-    """Run the checks, update the ID table, write job.json and BREPs. Returns the job path."""
+    """Run the checks, update the ID table, write job.json and BREPs to the scratch folder. Returns the job path."""
     volumes, surfaces, elements = check(study)
-    folder = output_folder(study)
-    target = os.path.normcase(os.path.realpath(folder))
-    for other in objects.studies(study.Document):
-        if other != study and (other.OutputFolder or study.Document.FileName):
-            if os.path.normcase(os.path.realpath(output_folder(other))) == target:
-                raise StudyError(f"Output folder is also used by Study {other.Label}. Choose separate output folders.")
+    folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change
     objects.update_ids(study)
     os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
     job = {
         "model_name": objects.clean(study.Label),
         "msh_version": float(study.MshVersion),
+        "mesh_file": mesh_file(study),
         "options": mesh_options(study.MeshSizesGroup),
         "volumes": [],
         "surfaces": [],

@@ -403,8 +403,7 @@ class StudyView:
             self.export_notice.setText(unavailable)
         else:
             try:
-                folder = jobwriter.output_folder(study)
-                self.export_notice.setText(f"Output: {folder}\n{objects.clean(study.Label)}.msh")
+                self.export_notice.setText(f"Writes {jobwriter.mesh_file(study)}")
             except jobwriter.StudyError as exc:
                 self.export_notice.setText(str(exc))
         self.update_run_button()

@@ -42,6 +42,9 @@ class MeshRun:
         self.study, self.job = study, job
         self.cancelled = False
         self.error = ""
+        with open(job, encoding="utf-8") as fh:
+            self.mesh_file = json.load(fh)["mesh_file"]
+        self.replaced = os.path.exists(self.mesh_file)  # before the mesher starts
         self.dialog = QtWidgets.QProgressDialog("Meshing…", "Cancel", 0, 0, Gui.getMainWindow())
         self.dialog.setWindowTitle("EMSolution")
         self.dialog.setWindowModality(QtCore.Qt.WindowModal)
@@ -92,14 +95,17 @@ class MeshRun:
         import Fem
         import FemGui  # noqa: F401  registers the view provider for FEM meshes
 
-        with open(self.job, encoding="utf-8") as fh:
-            base = os.path.join(os.path.dirname(self.job), json.load(fh)["model_name"])
         doc = self.study.Document
         mesh_obj = self.study.MeshResult
         if mesh_obj is None:
             mesh_obj = doc.addObject("Fem::FemMeshObject", "MeshResult")
             self.study.addObject(mesh_obj)
             self.study.MeshResult = mesh_obj
-        mesh_obj.FemMesh = Fem.read(base + ".unv")
+        mesh_obj.FemMesh = Fem.read(os.path.join(os.path.dirname(self.job), "mesh.unv"))
         doc.recompute()
-        App.Console.PrintMessage(f"EMSolution mesh written to {base}.msh\n")
+        folder, name = os.path.split(self.mesh_file)
+        replaced = " (replaced existing file)" if self.replaced else ""
+        App.Console.PrintMessage(
+            f"{name} written to {folder} from Study {self.study.Label}{replaced}\n"
+            'Input files read it with INPUT_MESH_FILE = "GMSH" (11).\n'
+        )
