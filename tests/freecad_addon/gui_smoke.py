@@ -7,8 +7,8 @@ Needs the addon linked into a throwaway FreeCAD profile (PowerShell, repo root):
     Start-Process -Wait "$env:LOCALAPPDATA\Programs\FreeCAD 1.1\bin\FreeCAD.exe" tests\freecad_addon\gui_smoke.py
     Get-Content "$env:TEMP\ems_gui_smoke.txt"
 The last line of the result file is "PASS" or "FAIL". FreeCAD may report a crash on quit after that.
-It passes on stock FreeCAD 1.1.4. On the pixi env's FreeCAD 1.1.0 (`pixi run freecad tests\freecad_addon\gui_smoke.py`)
-the Tasks dock never becomes visible, so the folder panels check fails.
+For the pixi env's FreeCAD 1.1.0, replace the Start-Process line with
+    pixi run freecad tests\freecad_addon\gui_smoke.py
 """
 
 import os
@@ -22,8 +22,16 @@ log = []
 def main():
     import FreeCAD as App
     import FreeCADGui as Gui
+    from PySide import QtWidgets
 
     Gui.activateWorkbench("EMSolutionWorkbench")  # loaded by FreeCAD from the Mod folder
+    # FreeCAD 1.1.0 started from a script keeps the Tasks dock hidden in the overlay (by hand it shows),
+    # so take the docks out of the overlay. 1.1.4 doesn't need it.
+    mw = Gui.getMainWindow()
+    tasks = mw.findChild(QtWidgets.QDockWidget, "Tasks")
+    if App.Version()[:3] == ["1", "1", "0"] and tasks.parent() is not mw:
+        Gui.runCommand("Std_DockOverlayAll", 0)
+        Gui.updateGui()
     from emsolution import commands, objects, runner, taskpanels
 
     commands.ask_text = lambda title, label, default: {"Material": "Copper", "Excitation": "Terminal In"}[title]
@@ -96,8 +104,6 @@ def main():
     assert mat.Label == "Iron" and [b.Name for b in mat.References] == ["A"]
     mat.References = [doc.A, doc.B]
     log.append("panel ok")
-
-    from PySide import QtWidgets
 
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
