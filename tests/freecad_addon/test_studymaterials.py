@@ -20,7 +20,7 @@ from ems_material import (
 from emsolution import objects, studymaterials
 from emsolution.jobwriter import StudyError
 
-from .materialdata import AIR, COPPER, STEEL, record
+from .materialdata import AIR, COPPER, STEEL, STEEL_XYZ, record
 
 
 def material(material_id, name, properties, family="generic"):
@@ -200,6 +200,15 @@ class BuilderTest(unittest.TestCase):
         self.assertEqual(
             [(c["BH_CURVE_ID"], c["BH_CURVE_NAME"]) for c in out["20_BH_Curve"]], [(1, "Steel A"), (2, "Steel B")]
         )
+
+    def test_anisotropic_curves_are_renumbered_after_an_earlier_material(self):
+        steel = material("user:steel", "Steel", STEEL, "electrical_steel")
+        xyz = material("user:xyz", "Aniso", STEEL_XYZ, "electrical_steel")
+        out = studymaterials.material_properties([(1, "A", 0, steel), (2, "B", 0, xyz)])
+        entries = out["16_Material_Properties"]["16_1_3D_Element_Properties"]
+        self.assertEqual(entries[1]["MagneticProperty"]["BH_CURVE_XYZ"]["BH_XYZ_ID"], [2, 3, 4])
+        self.assertEqual([c["BH_CURVE_ID"] for c in out["20_BH_Curve"]], [1, 2, 3, 4])
+        self.assertEqual([c["BH_CURVE_NAME"] for c in out["20_BH_Curve"]], ["Steel", "Aniso_x", "Aniso_y", "Aniso_z"])
 
     def test_material_without_magnetic_data_is_linear(self):
         out = studymaterials.material_properties(

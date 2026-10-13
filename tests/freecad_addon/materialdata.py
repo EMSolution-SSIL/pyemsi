@@ -13,6 +13,11 @@ STEEL = {
         "iron_loss_kh": {"type": "scalar", "value": 0.02, "unit": "W/kg/T^2/Hz"},
     },
 }
+_CURVE = STEEL["electromagnetic"]["BH_curve"]
+STEEL_XYZ = {
+    "general": STEEL["general"],
+    "electromagnetic": {f"BH_curve_{axis}": _CURVE for axis in "xyz"},
+}
 COPPER = {"electromagnetic": {"electrical_conductivity": {"type": "scalar", "value": 5.8e7, "unit": "S/m"}}}
 AIR = {"electromagnetic": {"relative_permeability": {"type": "scalar", "value": 1, "unit": "1"}}}
 
