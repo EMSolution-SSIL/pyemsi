@@ -46,6 +46,15 @@ Start the GUI:
 pixi run gui
 ```
 
+Start FreeCAD with the EMSolution workbench:
+
+```powershell
+pixi run install-addon   # once per clone
+pixi run freecad
+```
+
+`install-addon` links `freecad_addon/` into `%APPDATA%\FreeCAD\v1-1\Mod\EMSolution` as a directory junction, so FreeCAD loads the addon straight from your checkout and code changes take effect on the next FreeCAD start. Re-run it to point FreeCAD at a different clone or worktree.
+
 Run the test suite:
 
 ```powershell

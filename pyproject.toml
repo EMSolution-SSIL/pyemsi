@@ -112,6 +112,9 @@ lint = "ruff check"
 # One-time per clone: git pre-commit hook + skip formatting-only commits in git blame
 install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blame-ignore-revs"
 python = "python"
+freecad = "freecad"
+# One-time per clone: link freecad_addon into FreeCAD's user Mod folder (re-run to repoint it at this clone)
+install-addon = '''powershell -NoProfile -Command '$mod = Join-Path $env:APPDATA FreeCAD\v1-1\Mod; $link = Join-Path $mod EMSolution; New-Item -ItemType Directory -Force $mod | Out-Null; $old = Get-Item -Force -ErrorAction SilentlyContinue $link; if ($old) { $old.Delete() }; New-Item -ItemType Junction -Path $link -Target (Join-Path $env:PIXI_PROJECT_ROOT freecad_addon) | Select-Object FullName, Target' '''
 
 [project.urls]
 Homepage = "https://github.com/EMSolution-SSIL/pyemsi"
