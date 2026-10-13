@@ -235,6 +235,24 @@ def main():
     taskpanels.warn = lambda text: log.append("refused: " + text)
     assert lib.ViewObject.Proxy.onDelete(lib.ViewObject, []) is False, "deleted a used material"
     assert objects.library_materials(study) == [lib]
+    library_view = taskpanels.FolderView(study.MaterialLibraryGroup)
+    dead_view = taskpanels.FolderView(study.MaterialLibraryGroup)
+    from shiboken6 import Shiboken
+
+    Shiboken.delete(dead_view.form)  # its widgets are gone, the Python object is not
+    other_doc = App.newDocument("OtherLibrary")
+    closed_view = taskpanels.FolderView(objects.make_study(other_doc).MaterialLibraryGroup)
+    App.closeDocument(other_doc.Name)
+    App.setActiveDocument(doc.Name)
+    repository = studymaterials.StudyMaterialRepository(study, on_change=taskpanels.refresh_library_views)
+    repository.create(record("user:iron", "Iron"))  # on_change refreshes every open library panel
+    assert library_view.table.rowCount() == 2, library_view.table.rowCount()
+    repository.delete("user:iron")
+    assert library_view.table.rowCount() == 1, library_view.table.rowCount()
+    undo_before = list(doc.UndoNames)
+    library_view.delete_materials()  # nothing selected
+    assert list(doc.UndoNames) == undo_before, doc.UndoNames
+    assert dead_view not in taskpanels._library_views and closed_view not in taskpanels._library_views
     log.append("material library ok")
     log.append("folder panels ok")
 

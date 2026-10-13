@@ -238,7 +238,10 @@ _library_views = weakref.WeakSet()  # open Material Library panels
 
 def refresh_library_views():
     for view in list(_library_views):
-        view.fill()
+        try:
+            view.fill()
+        except (RuntimeError, ReferenceError):  # its widgets or its Study are gone
+            _library_views.discard(view)
 
 
 class FolderView:
@@ -309,8 +312,8 @@ class FolderView:
         highlight.show([ref for r in rows for ref in self.rows[r][1]])
 
     def fill(self):
-        if self.study.Document is None:  # the document was closed
-            return
+        if self.study.Document is None:  # deleted objects raise ReferenceError instead
+            raise ReferenceError("the Study's document was closed")
         self.rows = self.row_source(self.study)
         self.table.setRowCount(len(self.rows))
         for r, (_item, _refs, cells) in enumerate(self.rows):
@@ -335,6 +338,8 @@ class FolderView:
 
     def delete_materials(self):
         selected = self.selected_items()
+        if not selected:
+            return
         used = [lib for lib in selected if objects.material_users(lib)]
         if used:
             return warn("In use, not deleted: " + ", ".join(lib.Label for lib in used))
