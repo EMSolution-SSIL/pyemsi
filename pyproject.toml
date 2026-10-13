@@ -41,6 +41,8 @@ dependencies = [
     "gmsh",
     "ems-file-format-converter",
     "pywinpty; sys_platform == 'win32'",
+    "ems-material-manager>=0.1,<0.2",
+    "qtpy>=2.4",
 ]
 
 [project.optional-dependencies]
@@ -92,6 +94,7 @@ trame = ">=3.13.2,<4"
 pywinpty = "*"
 ruff = ">=0.16.9,<0.17"
 pre-commit = ">=4"
+qtpy = ">=2.4"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
