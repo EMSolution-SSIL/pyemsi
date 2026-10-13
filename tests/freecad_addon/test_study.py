@@ -215,6 +215,16 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(objects.is_item(lib))
         self.assertIsNone(objects.pick_body(lib))
 
+    def test_renaming_a_library_material_renames_its_record(self):
+        lib = self.lib()
+        lib.Label = "Silicon steel"
+        data = json.loads(lib.Record)
+        self.assertEqual(data["identity"]["name"], "Silicon steel")
+        self.assertEqual((data["material_id"], lib.MaterialId), ("user:steel", "user:steel"))
+        record_before = lib.Record
+        lib.Label = "Silicon steel"
+        self.assertEqual(lib.Record, record_before)
+
     def test_material_assignment_links_a_library_material_and_potential(self):
         a = self.box("A")
         lib = self.lib()

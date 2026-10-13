@@ -165,6 +165,11 @@ class LibraryMaterial(_Proxy):
             data = json.loads(obj.Record)
             obj.MaterialId = data["material_id"]
             obj.Family = data["identity"]["family"]
+        elif prop == "Label" and getattr(obj, "Record", "") and not obj.Document.Restoring:
+            data = json.loads(obj.Record)  # the record's name is the source; a tree rename writes it
+            if data["identity"]["name"] != obj.Label:
+                data["identity"]["name"] = obj.Label
+                obj.Record = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
 class Excitation(_Named):
