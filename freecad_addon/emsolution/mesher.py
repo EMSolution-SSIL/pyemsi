@@ -42,7 +42,7 @@ def build(job, folder):
         _, out_map = gmsh.model.occ.fragment(inputs[:1], inputs[1:])
     gmsh.model.occ.synchronize()
 
-    body_vols = {}  # volume id -> list of final 3D tags
+    body_vols = {}  # MAT_ID -> list of final 3D tags
     owner = {}  # final 3D tag -> body name
     for v, dimtags in zip(vols, out_map):
         tags = [t for d, t in dimtags if d == 3]
@@ -50,32 +50,30 @@ def build(job, folder):
             if t in owner:
                 raise JobError(f"bodies {owner[t]} and {v['name']} overlap")
             owner[t] = v["name"]
-        body_vols[v["id"]] = tags
+        body_vols[v["mat_id"]] = tags
 
-    surf_tags = {s["id"]: [] for s in surfs}
+    surf_tags = {s["smat_id"]: [] for s in surfs}
     for (s, _), dimtags in zip(surf_files, out_map[len(vols) :]):
-        surf_tags[s["id"]] += [t for d, t in dimtags if d == 2]
+        surf_tags[s["smat_id"]] += [t for d, t in dimtags if d == 2]
 
     for s in surfs:
         boundary = {
             abs(t)
-            for _, t in gmsh.model.getBoundary(
-                [(3, t) for t in body_vols[s["volume_id"]]], combined=False, oriented=False
-            )
+            for _, t in gmsh.model.getBoundary([(3, t) for t in body_vols[s["mat_id"]]], combined=False, oriented=False)
         }
-        if not surf_tags[s["id"]] or not set(surf_tags[s["id"]]) <= boundary:
+        if not surf_tags[s["smat_id"]] or not set(surf_tags[s["smat_id"]]) <= boundary:
             raise JobError(
                 f"excitation surface {s['name']} does not lie on its body (face did not merge with the body boundary)"
             )
 
     for v in vols:
-        gmsh.model.addPhysicalGroup(3, body_vols[v["id"]], v["id"], name=v["name"])
+        gmsh.model.addPhysicalGroup(3, body_vols[v["mat_id"]], v["mat_id"], name=v["name"])
     for s in surfs:
-        gmsh.model.addPhysicalGroup(2, sorted(set(surf_tags[s["id"]])), s["id"], name=s["name"])
+        gmsh.model.addPhysicalGroup(2, sorted(set(surf_tags[s["smat_id"]])), s["smat_id"], name=s["name"])
 
     by_size = {}  # size -> {dim: [tags]}
     for v in vols:
-        by_size.setdefault(float(v["size"]), {}).setdefault(3, []).extend(body_vols[v["id"]])
+        by_size.setdefault(float(v["size"]), {}).setdefault(3, []).extend(body_vols[v["mat_id"]])
     first = len(vols) + len(surf_files)
     for (z, path), dimtags in zip(size_files, out_map[first:]):
         for d, t in dimtags:
@@ -122,8 +120,10 @@ def run(job_path):
         os.replace(msh, job["mesh_file"])  # only a finished mesh replaces the solver's file
     except PermissionError:
         raise JobError(f"Could not replace {job['mesh_file']}: it is read-only or open in another program.") from None
-    for item in job["volumes"] + job["surfaces"]:
-        print(f"{item['id']:>6}  {item['name']}")
+    for item in job["volumes"]:
+        print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
+    for item in job["surfaces"]:
+        print(f"SMAT_ID {item['smat_id']:>6}  {item['name']}")
     print(f"Wrote {job['mesh_file']}")
 
 

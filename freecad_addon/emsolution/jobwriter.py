@@ -148,18 +148,18 @@ def write_job(study):
         "sizes": [],
     }
     for body, mat, size in volumes:
-        vid = int(study.VolumeIds[body.Name])
-        rel = f"geometry/vol_{vid}.brep"
+        mat_id = int(study.MatIds[body.Name])
+        rel = f"geometry/vol_{mat_id}.brep"
         global_shape(body).exportBrep(os.path.join(folder, rel))
-        job["volumes"].append({"id": vid, "name": objects.item_name(mat, body), "file": rel, "size": size})
+        job["volumes"].append({"mat_id": mat_id, "name": objects.item_name(mat, body), "file": rel, "size": size})
     for exc, body, faces in surfaces:
-        sid = int(study.SurfaceIds[f"{exc.Name}|{body.Name}"])
+        smat_id = int(study.SmatIds[f"{exc.Name}|{body.Name}"])
         job["surfaces"].append(
             {
-                "id": sid,
+                "smat_id": smat_id,
                 "name": objects.item_name(exc, body),
-                "volume_id": int(study.VolumeIds[body.Name]),
-                "files": export_subs(folder, body, faces, f"surf_{sid}"),
+                "mat_id": int(study.MatIds[body.Name]),
+                "files": export_subs(folder, body, faces, f"surf_{smat_id}"),
             }
         )
     for k, (item, body, subs) in enumerate(elements, 1):

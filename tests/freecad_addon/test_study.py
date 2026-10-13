@@ -44,7 +44,7 @@ class StudyTest(unittest.TestCase):
         return objects.make_material(self.study, label, bodies)
 
     def ids(self):
-        return dict(self.study.VolumeIds), dict(self.study.SurfaceIds)
+        return dict(self.study.MatIds), dict(self.study.SmatIds)
 
     def scratch(self, *parts):
         return os.path.join(jobwriter.scratch_folder(self.study), *parts)
@@ -81,7 +81,7 @@ class StudyTest(unittest.TestCase):
         a.Label = "Coil"
         mat.Label = "Iron"
         objects.update_ids(self.study)
-        self.assertEqual(objects.id_rows(self.study), [("VolumeIds", "A", "Coil", 1)])
+        self.assertEqual(objects.id_rows(self.study), [("MatIds", "A", "Coil", 1)])
 
     def test_deleted_body_id_is_not_reused(self):
         a, b = self.box("A"), self.box("B", 10)
@@ -100,27 +100,34 @@ class StudyTest(unittest.TestCase):
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         with self.assertRaises(ValueError):
-            objects.set_id(self.study, "VolumeIds", "A", 2)
+            objects.set_id(self.study, "MatIds", "A", 2)
         with self.assertRaises(ValueError):
-            objects.set_id(self.study, "VolumeIds", "A", 1001)
-        objects.set_id(self.study, "VolumeIds", "A", 50)
-        self.assertEqual(self.study.NextVolumeId, 51)
+            objects.set_id(self.study, "MatIds", "A", 1001)
+        objects.set_id(self.study, "MatIds", "A", 50)
+        self.assertEqual(self.study.NextMatId, 51)
         c = self.box("C", 20)
         self.include(c)
         objects.materials(self.study)[0].References += [c]
         objects.update_ids(self.study)
-        self.assertEqual(self.study.VolumeIds["C"], "51")
+        self.assertEqual(self.study.MatIds["C"], "51")
+
+    def test_study_has_mat_and_smat_tables_only(self):
+        for prop in ("MatIds", "SmatIds", "NextMatId", "NextSmatId"):
+            self.assertIn(prop, self.study.PropertiesList)
+        for prop in ("VolumeIds", "SurfaceIds", "NextVolumeId", "NextSurfaceId"):
+            self.assertNotIn(prop, self.study.PropertiesList)
+        self.assertEqual((self.study.NextMatId, self.study.NextSmatId), (1, 1001))
 
     def test_new_volume_ids_skip_numbers_used_by_surfaces(self):
         a, b = self.box("A"), self.box("B", 10)
         self.mat("Copper", [a])
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
-        objects.set_id(self.study, "SurfaceIds", "Excitation|A", 2)
+        objects.set_id(self.study, "SmatIds", "Excitation|A", 2)
         self.include(b)
         objects.materials(self.study)[0].References += [b]
         objects.update_ids(self.study)
-        self.assertEqual(self.study.VolumeIds["B"], "3")
+        self.assertEqual(self.study.MatIds["B"], "3")
 
     def test_group_names_keep_the_typed_name_when_freecad_renames_the_label(self):
         air, a, b = self.box("Air"), self.box("A", 10), self.box("B", 20)
@@ -184,7 +191,7 @@ class StudyTest(unittest.TestCase):
         study = objects.find_study(self.doc)
         self.assertIsNotNone(study)
         self.assertIsInstance(objects.materials(study)[0].Proxy, objects.Material)
-        self.assertEqual(study.VolumeIds, {"A": "1"})
+        self.assertEqual(study.MatIds, {"A": "1"})
 
     def test_folders_keep_their_names(self):
         folder = self.study.MaterialsGroup
@@ -333,7 +340,7 @@ class StudyTest(unittest.TestCase):
         objects.make_material(study, "Copper", [box])
         with self.assertRaisesRegex(jobwriter.StudyError, "Save the document in the simulation folder first"):
             jobwriter.write_job(study)
-        self.assertEqual(study.VolumeIds, {})
+        self.assertEqual(study.MatIds, {})
 
     def test_simulation_folder_with_spaces_and_persian_letters(self):
         self.mat("Copper", [self.box("A")])
@@ -409,14 +416,14 @@ class StudyTest(unittest.TestCase):
                     "Mesh.OptimizeNetgen": 0,
                 },
                 "volumes": [
-                    {"id": 1, "name": "A", "file": "geometry/vol_1.brep", "size": 2.0},
-                    {"id": 2, "name": "B", "file": "geometry/vol_2.brep", "size": 5.0},
+                    {"mat_id": 1, "name": "A", "file": "geometry/vol_1.brep", "size": 2.0},
+                    {"mat_id": 2, "name": "B", "file": "geometry/vol_2.brep", "size": 5.0},
                 ],
                 "surfaces": [
                     {
-                        "id": 1001,
+                        "smat_id": 1001,
                         "name": "Terminal_In_A",
-                        "volume_id": 1,
+                        "mat_id": 1,
                         "files": ["geometry/surf_1001_1.brep", "geometry/surf_1001_2.brep"],
                     }
                 ],
@@ -490,7 +497,7 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.owner_study(other), second)
         self.assertEqual(objects.owner_study(second.MeshSizesGroup), second)
         self.assertIsNone(objects.owner_study(a))  # a reference does not imply ownership
-        self.assertEqual(second.VolumeIds, {})
+        self.assertEqual(second.MatIds, {})
         self.assertEqual(len(objects.material_rows(second)), 1)
 
     def test_nested_sources_use_body_tip_and_final_boolean_result(self):
@@ -572,7 +579,7 @@ class StudyTest(unittest.TestCase):
         self.doc = App.openDocument(path)
         first, second = objects.studies(self.doc)
         self.study = first
-        self.assertEqual(first.VolumeIds, {"A": "1"})
+        self.assertEqual(first.MatIds, {"A": "1"})
         self.assertEqual(second.Dimension, "2D")
         self.assertEqual(second.MainSource.Name, "Faces")
         self.assertEqual(second.MeshSizesGroup.DefaultMeshSize.Value, 1.5)
@@ -582,7 +589,7 @@ import FreeCAD as App
 from emsolution import geometry, objects
 doc = App.openDocument(sys.argv[1])
 first, second = objects.studies(doc)
-assert first.VolumeIds == {'A': '1'}
+assert first.MatIds == {'A': '1'}
 assert second.Dimension == '2D' and second.MainSource.Name == 'Faces'
 assert geometry.region(second, 'Main')[1] == []
 App.closeDocument(doc.Name)
@@ -604,7 +611,7 @@ print('RESTORE PASS')
             setattr(self.study, prop, value)
             with self.assertRaisesRegex(jobwriter.StudyError, message):
                 jobwriter.write_job(self.study)
-            self.assertEqual(self.study.VolumeIds, {})
+            self.assertEqual(self.study.MatIds, {})
             self.assertFalse(os.path.exists(self.scratch("job.json")))
             setattr(self.study, prop, old)
 
@@ -633,8 +640,8 @@ print('RESTORE PASS')
         self.assertEqual([v["name"] for v in job["volumes"]], ["B", "A"])
         self.assertEqual([s["name"] for s in job["surfaces"]], ["Terminal_B"])
         self.assertEqual(len(job["sizes"]), 1)
-        self.assertEqual(self.study.VolumeIds, {"B": "1", "A": "2"})
-        self.assertEqual(self.study.SurfaceIds, {"Excitation|B": "1001"})
+        self.assertEqual(self.study.MatIds, {"B": "1", "A": "2"})
+        self.assertEqual(self.study.SmatIds, {"Excitation|B": "1001"})
         result = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
@@ -650,7 +657,7 @@ print('RESTORE PASS')
         self.assertEqual(geometry.export_unavailable(self.study), "")
         with self.assertRaisesRegex(jobwriter.StudyError, r"A \(A\), B \(B\)"):
             jobwriter.write_job(self.study)
-        self.assertEqual(self.study.VolumeIds, {})
+        self.assertEqual(self.study.MatIds, {})
         self.assertFalse(os.path.exists(self.scratch("job.json")))
         self.assertEqual(objects.bodies_without_material(self.study), [a, b])
         self.mat("Copper", [a])
@@ -665,16 +672,16 @@ print('RESTORE PASS')
         self.study.MainMode, self.study.MainSource = "Container", source
         mat = objects.make_material(self.study, "Copper", [c, b, a])
         objects.update_ids(self.study)
-        original = dict(self.study.VolumeIds)
+        original = dict(self.study.MatIds)
         mat.References = [c]
         objects.update_ids(self.study)
-        self.assertEqual(self.study.VolumeIds, original)
+        self.assertEqual(self.study.MatIds, original)
         self.assertEqual(len(objects.id_rows(self.study)), 2)
         self.assertIn("No material: A", objects.id_rows(self.study)[0][2])
         source.removeObject(b)
         source.addObject(c)
         objects.update_ids(self.study)
-        self.assertEqual(self.study.VolumeIds, {"A": "1", "C": "3"})
+        self.assertEqual(self.study.MatIds, {"A": "1", "C": "3"})
 
     def test_selected_geometry_rejects_conflicting_materials_and_invalid_sources(self):
         a = self.box("A")

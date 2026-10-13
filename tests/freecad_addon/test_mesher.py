@@ -93,7 +93,7 @@ class MesherTest(unittest.TestCase):
         self.addCleanup(gmsh.finalize)
 
     def vol(self, id_, name, file, size=0.5):
-        return {"id": id_, "name": name, "file": "geometry/" + file, "size": size}
+        return {"mat_id": id_, "name": name, "file": "geometry/" + file, "size": size}
 
     def test_two_touching_boxes_get_ids_names_and_shared_nodes(self):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
@@ -113,7 +113,7 @@ class MesherTest(unittest.TestCase):
         write_rect(self.geo("surf_1001_1.brep"), 0, 0, 1, 1, 1)  # top face
         r = self.run_job(
             [self.vol(1, "Copper_Box", "vol_1.brep")],
-            [{"id": 1001, "name": "Terminal_In_Box", "volume_id": 1, "files": ["geometry/surf_1001_1.brep"]}],
+            [{"smat_id": 1001, "name": "Terminal_In_Box", "mat_id": 1, "files": ["geometry/surf_1001_1.brep"]}],
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.open_msh()
@@ -302,7 +302,7 @@ class MesherTest(unittest.TestCase):
         write_rect(self.geo("surf_1001_1.brep"), 0, 0, 1.5, 1, 1)  # floats above the box
         r = self.run_job(
             [self.vol(1, "Copper_Box", "vol_1.brep")],
-            [{"id": 1001, "name": "Terminal_In_Box", "volume_id": 1, "files": ["geometry/surf_1001_1.brep"]}],
+            [{"smat_id": 1001, "name": "Terminal_In_Box", "mat_id": 1, "files": ["geometry/surf_1001_1.brep"]}],
         )
         self.assertEqual(r.returncode, 1)
         last = r.stderr.strip().splitlines()[-1]
@@ -343,7 +343,7 @@ class MesherTest(unittest.TestCase):
             gmsh.finalize()
         r = self.run_job(
             [self.vol(1, "Coil_A", "vol_1.brep"), self.vol(2, "Lead_B", "vol_2.brep")],
-            [{"id": 1001, "name": "Terminal_A", "volume_id": 1, "files": ["geometry/surf_1001_1.brep"]}],
+            [{"smat_id": 1001, "name": "Terminal_A", "mat_id": 1, "files": ["geometry/surf_1001_1.brep"]}],
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.open_msh()

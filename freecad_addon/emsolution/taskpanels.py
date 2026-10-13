@@ -729,7 +729,7 @@ class IdTableDialog(QtWidgets.QDialog):
         self.table = QtWidgets.QTableWidget(len(self.rows), 3)
         self.table.setHorizontalHeaderLabels(["Type", "Name", "ID"])
         for r, (table, _key, name, id_) in enumerate(self.rows):
-            kind = "Volume" if table == "VolumeIds" else "Surface"
+            kind = "MAT_ID" if table == "MatIds" else "SMAT_ID"
             for c, text in enumerate((kind, name, str(id_))):
                 item = QtWidgets.QTableWidgetItem(text)
                 if c < 2:

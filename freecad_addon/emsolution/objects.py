@@ -88,16 +88,16 @@ class Study(_Proxy):
         obj.Proxy = self
         obj.addProperty("App::PropertyEnumeration", "MshVersion", "EMSolution", "Gmsh file format version (ASCII)")
         obj.MshVersion = ["4.1", "2.2"]
-        obj.addProperty("App::PropertyMap", "VolumeIds", "IDs", "Body Name -> volume ID")
-        obj.addProperty("App::PropertyMap", "SurfaceIds", "IDs", "'Excitation Name|Body Name' -> surface ID")
-        obj.addProperty("App::PropertyInteger", "NextVolumeId", "IDs", "Next volume ID")
-        obj.NextVolumeId = 1
-        obj.addProperty("App::PropertyInteger", "NextSurfaceId", "IDs", "Next surface ID")
-        obj.NextSurfaceId = 1001
+        obj.addProperty("App::PropertyMap", "MatIds", "IDs", "Body Name -> MAT_ID")
+        obj.addProperty("App::PropertyMap", "SmatIds", "IDs", "'Excitation Name|Body Name' -> SMAT_ID")
+        obj.addProperty("App::PropertyInteger", "NextMatId", "IDs", "Next MAT_ID")
+        obj.NextMatId = 1
+        obj.addProperty("App::PropertyInteger", "NextSmatId", "IDs", "Next SMAT_ID")
+        obj.NextSmatId = 1001
         for prop, _ in FOLDERS:
             obj.addProperty("App::PropertyLink", prop, "EMSolution", "")
         obj.addProperty("App::PropertyLink", "MeshResult", "EMSolution", "")
-        for prop in ("VolumeIds", "SurfaceIds", "NextVolumeId", "NextSurfaceId"):
+        for prop in ("MatIds", "SmatIds", "NextMatId", "NextSmatId"):
             obj.setEditorMode(prop, 1)  # read-only: edit through the ID table
         for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
             obj.setEditorMode(prop, 2)  # hidden
@@ -283,21 +283,21 @@ def material_rows(study):
     """Rows for the Materials panel: (material, refs, [name, body, volume ID])."""
     rows = []
     for m in materials(study):
-        rows += [
-            (m, [(b, "")], [display_name(m), b.Label, study.VolumeIds.get(b.Name, "–")]) for b in m.References
-        ] or [(m, [], [display_name(m), "", ""])]
+        rows += [(m, [(b, "")], [display_name(m), b.Label, study.MatIds.get(b.Name, "–")]) for b in m.References] or [
+            (m, [], [display_name(m), "", ""])
+        ]
     return rows
 
 
 def excitation_rows(study):
-    """Rows for the Excitations panel: (excitation, refs, [name, body, faces, surface ID])."""
+    """Rows for the Excitations panel: (excitation, refs, [name, body, faces, SMAT_ID])."""
     rows = []
     for e in excitations(study):
         rows += [
             (
                 e,
                 [(b, f) for f in faces],
-                [display_name(e), b.Label, ", ".join(faces), study.SurfaceIds.get(f"{e.Name}|{b.Name}", "–")],
+                [display_name(e), b.Label, ", ".join(faces), study.SmatIds.get(f"{e.Name}|{b.Name}", "–")],
             )
             for b, faces in subs_by_body(e)
         ] or [(e, [], [display_name(e), "", "", ""])]
@@ -347,8 +347,8 @@ def update_ids(study):
     Counters only grow, so a dropped ID is never handed out again.
     """
     vkeys, skeys = volume_keys(study), surface_keys(study)
-    vol = {k: v for k, v in study.VolumeIds.items() if k in vkeys}
-    surf = {k: v for k, v in study.SurfaceIds.items() if k in skeys}
+    vol = {k: v for k, v in study.MatIds.items() if k in vkeys}
+    surf = {k: v for k, v in study.SmatIds.items() if k in skeys}
     used = {int(v) for v in list(vol.values()) + list(surf.values())}
 
     def give(table, keys, counter):
@@ -361,26 +361,24 @@ def update_ids(study):
                 counter += 1
         return counter
 
-    study.NextVolumeId = give(vol, vkeys, study.NextVolumeId)
-    study.NextSurfaceId = give(surf, skeys, study.NextSurfaceId)
-    study.VolumeIds, study.SurfaceIds = vol, surf
+    study.NextMatId = give(vol, vkeys, study.NextMatId)
+    study.NextSmatId = give(surf, skeys, study.NextSmatId)
+    study.MatIds, study.SmatIds = vol, surf
 
 
 def set_id(study, table, key, new_id):
-    """table: "VolumeIds" or "SurfaceIds". Raises ValueError for a bad or duplicate ID."""
+    """table: "MatIds" or "SmatIds". Raises ValueError for a bad or duplicate ID."""
     ids = dict(getattr(study, table))
     if key not in ids:
         raise ValueError(f"unknown entry {key}")
     if new_id < 1:
         raise ValueError("IDs must be 1 or more")
-    taken = {
-        int(v) for t in ("VolumeIds", "SurfaceIds") for k, v in getattr(study, t).items() if (t, k) != (table, key)
-    }
+    taken = {int(v) for t in ("MatIds", "SmatIds") for k, v in getattr(study, t).items() if (t, k) != (table, key)}
     if new_id in taken:
         raise ValueError(f"ID {new_id} is already used")
     ids[key] = str(new_id)
     setattr(study, table, ids)
-    counter = "NextVolumeId" if table == "VolumeIds" else "NextSurfaceId"
+    counter = "NextMatId" if table == "MatIds" else "NextSmatId"
     top = max(int(v) for v in ids.values())
     setattr(study, counter, max(getattr(study, counter), top + 1))
 
@@ -390,14 +388,14 @@ def id_rows(study):
     rows = []
     material_of = {b.Name: m for m in materials(study) for b in m.References}
     for name in volume_keys(study):
-        if name in study.VolumeIds:
+        if name in study.MatIds:
             body = study.Document.getObject(name)
             mat = material_of.get(name)
             label = item_name(mat, body) if mat else f"No material: {body.Label}"
-            rows.append(("VolumeIds", name, label, int(study.VolumeIds[name])))
+            rows.append(("MatIds", name, label, int(study.MatIds[name])))
     for e in excitations(study):
         for b, _ in subs_by_body(e):
             key = f"{e.Name}|{b.Name}"
-            if key in study.SurfaceIds:
-                rows.append(("SurfaceIds", key, item_name(e, b), int(study.SurfaceIds[key])))
+            if key in study.SmatIds:
+                rows.append(("SmatIds", key, item_name(e, b), int(study.SmatIds[key])))
     return rows

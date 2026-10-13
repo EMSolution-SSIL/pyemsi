@@ -234,7 +234,7 @@ def main():
     dialog = taskpanels.IdTableDialog(study)
     assert [r[2] for r in dialog.rows] == ["A", "B", "Terminal_In_A"], dialog.rows
     dialog.table.item(0, 2).setText("7")
-    assert study.VolumeIds["A"] == "7"
+    assert study.MatIds["A"] == "7"
     log.append("id table ok")
 
     run = runner.start(study)
