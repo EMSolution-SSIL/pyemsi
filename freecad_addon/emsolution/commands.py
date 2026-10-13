@@ -107,7 +107,8 @@ class AddMaterial(_StudyCommand):
             return warn("Select one or more bodies first.")
         name = ask_text("Material", "Material name:", "Material")
         if name:
-            _create(study, "Add Material", lambda: objects.make_material(study, name, bodies))
+            obj = _create(study, "Add Material", lambda: objects.make_material(study, name, bodies))
+            Gui.Control.showDialog(taskpanels.ItemPanel(obj))
 
 
 class AddExcitation(_StudyCommand):

@@ -252,6 +252,10 @@ def make_library_material(study, record_json):
     name = json.loads(record_json)["identity"]["name"]
     obj = _add(study, "MaterialLibraryGroup", LibraryMaterial, name)
     obj.Record = record_json
+    if getattr(obj, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        taskpanels.ViewProviderLibraryMaterial(obj.ViewObject)
     return obj
 
 

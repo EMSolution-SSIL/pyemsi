@@ -2,6 +2,7 @@
 observer and selection helpers."""
 
 from collections import Counter
+import weakref
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -111,6 +112,40 @@ class ViewProviderFolder(_ViewProvider):
         return True
 
 
+def warn(text):
+    QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "EMSolution", text)
+
+
+class ViewProviderLibraryMaterial(_ViewProvider):
+    """A Material Library entry: material icon; double-click edits it; deleting a used one is refused."""
+
+    def attach(self, vobj):
+        super().attach(vobj)
+        vobj.addDisplayMode(coin.SoGroup(), "Default")
+
+    def getDisplayModes(self, vobj):
+        return ["Default"]
+
+    def getDefaultDisplayMode(self):
+        return "Default"
+
+    def getIcon(self):
+        return icon("material")
+
+    def doubleClicked(self, vobj):
+        from . import materialstandins
+
+        materialstandins.open_editor(objects.owner_study(vobj.Object), vobj.Object.MaterialId)
+        return True
+
+    def onDelete(self, vobj, subelements):
+        users = objects.material_users(vobj.Object)
+        if users:
+            warn(f"{vobj.Object.Label} is used by: " + ", ".join(m.Label for m in users))
+            return False
+        return True
+
+
 def _length_box(value, minimum=0.001, no_limit=False):
     box = QtWidgets.QDoubleSpinBox()
     box.setDecimals(3)
@@ -198,6 +233,14 @@ class MeshSettings:
         f.Document.recompute()
 
 
+_library_views = weakref.WeakSet()  # open Material Library panels
+
+
+def refresh_library_views():
+    for view in list(_library_views):
+        view.fill()
+
+
 class FolderView:
     """Assignment overview, plus general settings for the Mesh Sizes folder."""
 
@@ -210,6 +253,7 @@ class FolderView:
             objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "Surface ID"], objects.excitation_rows),
             objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
         }[type(folder.Proxy)]
+        self.row_source = rows
         self.rows = rows(study)
         self.form = QtWidgets.QWidget()  # the watcher's task box shows the folder name
         layout = QtWidgets.QVBoxLayout(self.form)
@@ -236,13 +280,22 @@ class FolderView:
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        for r, (_item, _refs, cells) in enumerate(self.rows):
-            for c, text in enumerate(cells):
-                self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
-        self.table.resizeColumnsToContents()
+        self.fill()
         self.table.itemSelectionChanged.connect(self.highlight_rows)
         self.table.cellDoubleClicked.connect(self.open_item)
         layout.addWidget(self.table)
+        if isinstance(folder.Proxy, objects.MaterialLibraryFolder):
+            buttons = QtWidgets.QHBoxLayout()
+            for text, slot in (
+                ("Import from Material Manager…", self.import_materials),
+                ("Edit…", self.edit_material),
+                ("Delete", self.delete_materials),
+            ):
+                button = QtWidgets.QPushButton(text)
+                button.clicked.connect(slot)
+                buttons.addWidget(button)
+            layout.addLayout(buttons)
+            _library_views.add(self)
         if isinstance(folder.Proxy, objects.MaterialsFolder):
             bodies = objects.bodies_without_material(study)
             if bodies:
@@ -255,9 +308,52 @@ class FolderView:
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
         highlight.show([ref for r in rows for ref in self.rows[r][1]])
 
+    def fill(self):
+        if self.study.Document is None:  # the document was closed
+            return
+        self.rows = self.row_source(self.study)
+        self.table.setRowCount(len(self.rows))
+        for r, (_item, _refs, cells) in enumerate(self.rows):
+            for c, text in enumerate(cells):
+                self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
+        self.table.resizeColumnsToContents()
+
+    def selected_items(self):
+        return [self.rows[r][0] for r in sorted({i.row() for i in self.table.selectedIndexes()})]
+
+    def import_materials(self):
+        from . import materialstandins
+
+        if materialstandins.pick_materials(self.study, self.form):
+            self.fill()
+
+    def edit_material(self):
+        from . import materialstandins
+
+        selected = self.selected_items()
+        materialstandins.open_editor(self.study, selected[0].MaterialId if selected else None)
+
+    def delete_materials(self):
+        selected = self.selected_items()
+        used = [lib for lib in selected if objects.material_users(lib)]
+        if used:
+            return warn("In use, not deleted: " + ", ".join(lib.Label for lib in used))
+        doc = self.study.Document
+        doc.openTransaction("Delete materials")
+        for lib in selected:
+            doc.removeObject(lib.Name)
+        doc.commitTransaction()
+        doc.recompute()
+        self.fill()
+
     def open_item(self, row, _column):
-        if self.study.Dimension == "3D":
-            Gui.Control.showDialog(ItemPanel(self.rows[row][0]))
+        item = self.rows[row][0]
+        if isinstance(item.Proxy, objects.LibraryMaterial):
+            from . import materialstandins
+
+            materialstandins.open_editor(self.study, item.MaterialId)
+        elif self.study.Dimension == "3D":
+            Gui.Control.showDialog(ItemPanel(item))
 
 
 class StudyView:
@@ -666,6 +762,19 @@ class ItemPanel:
         if isinstance(obj.Proxy, objects.MeshSize):
             self.size = _length_box(obj.Size.Value)
             layout.addRow("Size", self.size)
+        self.material = self.potential = None
+        if isinstance(obj.Proxy, objects.Material):
+            self.material = QtWidgets.QComboBox()
+            self.material.addItem(objects.NO_MATERIAL, "")
+            for lib in objects.library_materials(study):
+                self.material.addItem(lib.Label, lib.Name)
+            current = obj.LibraryMaterial.Name if obj.LibraryMaterial else ""
+            self.material.setCurrentIndex(self.material.findData(current))
+            layout.addRow("Material", self.material)
+            self.potential = QtWidgets.QSpinBox()
+            self.potential.setRange(0, 1000000)
+            self.potential.setValue(obj.Potential)
+            layout.addRow("POTENTIAL", self.potential)
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         layout.addRow(label, self.refs)
@@ -704,6 +813,10 @@ class ItemPanel:
                 self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
+        if self.material is not None:
+            name = self.material.currentData()
+            self.obj.LibraryMaterial = doc.getObject(name) if name else None
+            self.obj.Potential = self.potential.value()
         if self.bodies_only:
             self.obj.References = [b for b, _ in self.current]
         else:

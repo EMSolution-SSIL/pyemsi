@@ -58,6 +58,7 @@ def main():
     Gui.Selection.addSelection(doc.Name, "B")
     Gui.Selection.addSelection(doc.Name, study.MaterialsGroup.Name)  # must be ignored
     Gui.runCommand("EMS_Material")
+    Gui.Control.closeDialog()
     Gui.runCommand("EMS_MeshSize")
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A", "Face1")
@@ -117,7 +118,12 @@ def main():
         for _ in range(5):  # the watcher panel and the workbench switch follow the selection
             Gui.updateGui()
 
-    first_column = {"Material": "Materials", "Excitation": "Excitations", "Mesh size": "Mesh Sizes"}
+    first_column = {
+        "Name": "Material Library",
+        "Assignment": "Materials",
+        "Excitation": "Excitations",
+        "Mesh size": "Mesh Sizes",
+    }
 
     def shown_folders():
         """{folder name: table} for the folder panels visible in the Tasks tab."""
@@ -128,8 +134,8 @@ def main():
             if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column
         }
 
-    rows = {"Materials": 2, "Excitations": 1, "Mesh Sizes": 2}
-    for folder in (study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
+    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 2}
+    for folder in (study.MaterialLibraryGroup, study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
         assert isinstance(folder.ViewObject.Proxy, taskpanels.ViewProviderFolder), folder.Name
         folder.Label = "Renamed"
         assert folder.Label == folder.Proxy.LABEL, folder.Label
@@ -175,6 +181,61 @@ def main():
     for _ in range(5):
         Gui.updateGui()
     assert list(shown_folders()) == ["Materials"], "folder panel not back after the edit"
+    from emsolution import materialstandins, studymaterials
+    from ems_material import JsonMaterialRepository, MaterialManager, material_from_dict
+
+    def record(material_id, name):
+        return material_from_dict(
+            {
+                "schema": "ems_material",
+                "schema_version": "1.0",
+                "material_id": material_id,
+                "material_version": "1.0.0",
+                "identity": {
+                    "name": name,
+                    "family": "generic",
+                    "manufacturer": None,
+                    "grade": None,
+                    "description": None,
+                    "aliases": [],
+                    "tags": [],
+                },
+                "properties": {
+                    "electromagnetic": {"relative_permeability": {"type": "scalar", "value": 1, "unit": "1"}}
+                },
+                "provenance": {"source_type": "USER_INPUT", "reference": None, "date": None, "notes": None},
+                "version_metadata": {"author": "smoke", "updated_at": "2026-10-13T00:00:00+00:00", "change_note": "x"},
+            }
+        )
+
+    root = tempfile.mkdtemp()
+    master = JsonMaterialRepository(root)
+    master.create(record("user:air", "Air"))
+    master.create(record("user:iron", "Iron"))
+    (lib,) = studymaterials.import_materials(study, [record("user:air", "Air")])
+    assert isinstance(lib.ViewObject.Proxy, taskpanels.ViewProviderLibraryMaterial)
+    picker = materialstandins.MaterialPicker(MaterialManager(repository=master), {"user:air"})
+    items = [picker.list.item(i) for i in range(picker.list.count())]
+    disabled = [i.text() for i in items if not i.flags() & taskpanels.QtCore.Qt.ItemIsEnabled]
+    assert len(items) == 2 and len(disabled) == 1 and disabled[0].startswith("Air"), [i.text() for i in items]
+    next(i for i in items if i.text().startswith("Iron")).setSelected(True)
+    assert [m.material_id for m in picker.selected()] == ["user:iron"]
+    picker.reject()
+    window = materialstandins.open_editor(study, "user:air")
+    assert window.isVisible() and materialstandins.open_editor(study) is window
+    window.close()
+    panel = taskpanels.ItemPanel(mat)
+    panel.material.setCurrentIndex(panel.material.findData(lib.Name))
+    panel.potential.setValue(2)
+    Gui.Control.showDialog(panel)
+    panel.accept()
+    assert mat.LibraryMaterial == lib and mat.Potential == 2, (mat.LibraryMaterial, mat.Potential)
+    select(study.MaterialLibraryGroup.Name)
+    assert shown_folders()["Material Library"].item(0, 3).text() == mat.Label
+    taskpanels.warn = lambda text: log.append("refused: " + text)
+    assert lib.ViewObject.Proxy.onDelete(lib.ViewObject, []) is False, "deleted a used material"
+    assert objects.library_materials(study) == [lib]
+    log.append("material library ok")
     log.append("folder panels ok")
 
     from emsolution import highlight
