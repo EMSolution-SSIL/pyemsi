@@ -18,6 +18,7 @@ from ems_material import (
     material_from_dict,
 )
 from emsolution import objects, studymaterials
+from emsolution.jobwriter import StudyError
 
 from .materialdata import AIR, COPPER, STEEL, record
 
@@ -159,6 +160,101 @@ class LibraryRootTest(unittest.TestCase):
                         fh,
                     )
                 self.assertTrue(os.path.samefile(studymaterials.library_root(), other))
+
+
+STEEL_ENTRY = {
+    "ElectricProperty": {"conductivity": {"SIGMA": 2e6}},
+    "MagneticProperty": {
+        "MU": 1.0,
+        "BH_CURVE_ID": 1,
+        "IRON_LOSS": {"COORD_ID": 0, "MASS_DENSITY": 7650.0, "KE": 5e-5, "KH": 0.02},
+    },
+}
+STEEL_CURVE = {"H": [0.0, 100.0, 1000.0], "B": [0.0, 1.0, 1.5]}
+
+
+class BuilderTest(unittest.TestCase):
+    def test_three_bodies_share_one_material_and_one_curve(self):
+        steel = material("user:steel", "Steel", STEEL, "electrical_steel")
+        rows = [(1, "Stator", 0, steel), (2, "Rotor", 1, steel), (3, "Shaft", 0, steel)]
+        out = studymaterials.material_properties(rows)
+        entries = out["16_Material_Properties"]["16_1_3D_Element_Properties"]
+        self.assertEqual(
+            entries,
+            [
+                {"MAT_ID": 1, "MAT_NAME": "Stator", "POTENTIAL": 0, **STEEL_ENTRY},
+                {"MAT_ID": 2, "MAT_NAME": "Rotor", "POTENTIAL": 1, **STEEL_ENTRY},
+                {"MAT_ID": 3, "MAT_NAME": "Shaft", "POTENTIAL": 0, **STEEL_ENTRY},
+            ],
+        )
+        self.assertEqual(out["20_BH_Curve"], [{"BH_CURVE_ID": 1, "BH_CURVE_NAME": "Steel", "data": STEEL_CURVE}])
+        entries[0]["MagneticProperty"]["MU"] = 5.0
+        self.assertEqual(entries[1]["MagneticProperty"]["MU"], 1.0, "entries share a dict")
+
+    def test_curve_ids_are_sequential_across_materials(self):
+        a = material("user:a", "Steel A", STEEL, "electrical_steel")
+        b = material("user:b", "Steel B", STEEL, "electrical_steel")
+        out = studymaterials.material_properties([(1, "X", 0, a), (2, "Y", 0, b), (3, "Z", 0, a)])
+        entries = out["16_Material_Properties"]["16_1_3D_Element_Properties"]
+        self.assertEqual([e["MagneticProperty"]["BH_CURVE_ID"] for e in entries], [1, 2, 1])
+        self.assertEqual(
+            [(c["BH_CURVE_ID"], c["BH_CURVE_NAME"]) for c in out["20_BH_Curve"]], [(1, "Steel A"), (2, "Steel B")]
+        )
+
+    def test_material_without_magnetic_data_is_linear(self):
+        out = studymaterials.material_properties(
+            [(4, "Coil", 0, material("user:copper", "Copper", COPPER)), (5, "Gap", 0, material("user:air", "Air", AIR))]
+        )
+        self.assertEqual(
+            out["16_Material_Properties"]["16_1_3D_Element_Properties"],
+            [
+                {
+                    "MAT_ID": 4,
+                    "MAT_NAME": "Coil",
+                    "POTENTIAL": 0,
+                    "ElectricProperty": {"conductivity": {"SIGMA": 5.8e7}},
+                    "MagneticProperty": {"MU": 1.0},
+                },
+                {"MAT_ID": 5, "MAT_NAME": "Gap", "POTENTIAL": 0, "MagneticProperty": {"MU": 1.0}},
+            ],
+        )
+        self.assertEqual(out["20_BH_Curve"], [])
+
+    def test_adapter_errors_name_the_material(self):
+        props = json.loads(json.dumps(STEEL))
+        del props["general"]
+        with self.assertRaisesRegex(StudyError, "Bad steel.*density"):
+            studymaterials.material_properties([(1, "A", 0, material("user:bad", "Bad steel", props))])
+
+
+class StudyRowsTest(StudyCase):
+    def test_rows_follow_mat_ids_with_body_names_and_potential(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.study.MainObjects = [a, b]
+        (lib,) = studymaterials.import_materials(self.study, [material("user:steel", "Steel", STEEL)])
+        mat = objects.make_material(self.study, "Iron", [a, b])
+        mat.LibraryMaterial, mat.Potential = lib, 1
+        rows = studymaterials.study_material_rows(self.study)
+        self.assertEqual(
+            [(r[0], r[1], r[2], r[3].material_id) for r in rows], [(1, "A", 1, "user:steel"), (2, "B", 1, "user:steel")]
+        )
+
+    def test_assignment_without_a_material_is_named(self):
+        a = self.box("A")
+        self.study.MainObjects = [a]
+        objects.make_material(self.study, "Iron", [a])
+        with self.assertRaisesRegex(StudyError, "Iron has no material from the Material Library"):
+            studymaterials.study_material_rows(self.study)
+
+    def test_deleted_library_material_is_reported(self):
+        a = self.box("A")
+        self.study.MainObjects = [a]
+        (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
+        mat = objects.make_material(self.study, "Gap", [a])
+        mat.LibraryMaterial = lib
+        self.doc.removeObject(lib.Name)
+        with self.assertRaisesRegex(StudyError, "Gap has no material from the Material Library"):
+            studymaterials.study_material_rows(self.study)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """Study Material Library <-> EMS Material Manager (ems_material). No GUI code here."""
 
+import copy
 import os
 from dataclasses import replace
 
@@ -15,7 +16,10 @@ from ems_material import (
     save_material,
 )
 
-from . import objects
+from ems_material.adapters import EMSolutionInputAdapter
+
+from . import jobwriter, objects
+from .jobwriter import StudyError
 
 SOURCE = "Study"
 ROOT_ENV = "EMS_MATERIAL_MANAGER_ROOT"
@@ -177,3 +181,53 @@ class StudyMaterialRepository:
 
     def list_sources(self):
         return (SOURCE,)
+
+
+def study_material_rows(study):
+    """[(MAT_ID, MAT_NAME, POTENTIAL, material)] for the Study's bodies, in MAT_ID order."""
+    volumes, _, _ = jobwriter.check(study)
+    objects.update_ids(study)
+    rows = []
+    for body, mat, _size in volumes:
+        if mat.LibraryMaterial is None:
+            raise StudyError(f"{mat.Label} has no material from the Material Library.")
+        rows.append(
+            (
+                int(study.MatIds[body.Name]),
+                objects.item_name(mat, body),
+                mat.Potential,
+                record_material(mat.LibraryMaterial),
+            )
+        )
+    return sorted(rows, key=lambda r: r[0])
+
+
+def material_properties(rows):
+    """16_Material_Properties.16_1_3D_Element_Properties and 20_BH_Curve for rows of study_material_rows().
+
+    One entry per row; B-H curves once per material, numbered from 1 in first-use order.
+    """
+    adapter = EMSolutionInputAdapter()
+    entries, curves, entry_of = [], [], {}
+    for mat_id, mat_name, potential, material in rows:
+        if material.material_id not in entry_of:
+            try:
+                payload = adapter.export_material(material).payload
+            except (ValueError, TypeError) as exc:
+                raise StudyError(f"Material {material.name}: {exc}") from None
+            renumber = {}
+            for curve in payload["bh_curves"]:
+                renumber[curve["BH_CURVE_ID"]] = len(curves) + 1
+                curves.append({**copy.deepcopy(curve), "BH_CURVE_ID": len(curves) + 1})
+            entry = copy.deepcopy(payload["material"])
+            magnetic = entry.get("MagneticProperty", {})
+            if "BH_CURVE_ID" in magnetic:
+                magnetic["BH_CURVE_ID"] = renumber[magnetic["BH_CURVE_ID"]]
+            if "BH_CURVE_XYZ" in magnetic:
+                xyz = magnetic["BH_CURVE_XYZ"]
+                xyz["BH_XYZ_ID"] = [renumber[i] for i in xyz["BH_XYZ_ID"]]
+            entry_of[material.material_id] = entry
+        entry = copy.deepcopy(entry_of[material.material_id])
+        entry.update(MAT_ID=mat_id, MAT_NAME=mat_name, POTENTIAL=potential)
+        entries.append(entry)
+    return {"16_Material_Properties": {"16_1_3D_Element_Properties": entries}, "20_BH_Curve": curves}
