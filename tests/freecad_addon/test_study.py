@@ -12,6 +12,8 @@ import Part
 
 from emsolution import geometry, jobwriter, objects
 
+from .materialdata import STEEL, record
+
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 
 
@@ -197,7 +199,52 @@ class StudyTest(unittest.TestCase):
         folder = self.study.MaterialsGroup
         folder.Label = "Stuff"
         self.assertEqual(folder.Label, "Materials")
-        self.assertEqual([f.Label for f in self.study.Group], ["Materials", "Excitations", "Mesh Sizes"])
+        self.assertEqual(
+            [f.Label for f in self.study.Group], ["Material Library", "Materials", "Excitations", "Mesh Sizes"]
+        )
+
+    def lib(self, material_id="user:steel", name="Steel", family="electrical_steel"):
+        return objects.make_library_material(self.study, json.dumps(record(material_id, name, family, STEEL)))
+
+    def test_library_material_mirrors_its_record(self):
+        lib = self.lib()
+        self.assertEqual((lib.Label, lib.MaterialId, lib.Family), ("Steel", "user:steel", "electrical_steel"))
+        self.assertEqual(lib.getEditorMode("Record"), ["Hidden"])
+        self.assertEqual(lib.getEditorMode("MaterialId"), ["ReadOnly"])
+        self.assertEqual(objects.library_materials(self.study), [lib])
+        self.assertFalse(objects.is_item(lib))
+        self.assertIsNone(objects.pick_body(lib))
+
+    def test_material_assignment_links_a_library_material_and_potential(self):
+        a = self.box("A")
+        lib = self.lib()
+        mat = self.mat("Iron", [a])
+        self.assertIsNone(mat.LibraryMaterial)
+        self.assertEqual(mat.Potential, 0)
+        mat.LibraryMaterial, mat.Potential = lib, 2
+        self.assertEqual(objects.material_users(lib), [mat])
+        objects.update_ids(self.study)
+        self.assertEqual(objects.material_rows(self.study), [(mat, [(a, "")], ["Iron", "Steel", "A", "1", "2"])])
+        self.assertEqual(
+            objects.library_rows(self.study), [(lib, [(a, "")], ["Steel", "electrical_steel", "user:steel", "Iron"])]
+        )
+
+    def test_library_material_survives_save_and_reload(self):
+        lib = objects.make_library_material(
+            self.study, json.dumps(record("user:copper", "銅 مس Copper", "conductor"), ensure_ascii=False)
+        )
+        mat = self.mat("Coil", [self.box("A")])
+        mat.LibraryMaterial, mat.Potential = lib, 3
+        path = os.path.join(self.tmp.name, "lib.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        study = objects.find_study(self.doc)
+        (lib,) = objects.library_materials(study)
+        (mat,) = objects.materials(study)
+        self.assertEqual(json.loads(lib.Record)["identity"]["name"], "銅 مس Copper")
+        self.assertEqual(lib.Label, "銅 مس Copper")
+        self.assertEqual((lib.MaterialId, mat.LibraryMaterial, mat.Potential), ("user:copper", lib, 3))
 
     def test_folder_overview_rows(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
@@ -210,9 +257,9 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(
             objects.material_rows(self.study),
             [
-                (mat, [(a, "")], ["Copper", "A", "1"]),
-                (mat, [(b, "")], ["Copper", "B", "2"]),
-                (empty, [], ["Iron", "", ""]),
+                (mat, [(a, "")], ["Copper", "— none —", "A", "1", "0"]),
+                (mat, [(b, "")], ["Copper", "— none —", "B", "2", "0"]),
+                (empty, [], ["Iron", "— none —", "", "", "0"]),
             ],
         )
         self.assertEqual(
@@ -227,7 +274,7 @@ class StudyTest(unittest.TestCase):
         self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
         d = self.box("D", 30)
         mat.References += [d]
-        self.assertEqual(objects.material_rows(self.study)[2], (mat, [(d, "")], ["Copper", "D", "–"]))
+        self.assertEqual(objects.material_rows(self.study)[2], (mat, [(d, "")], ["Copper", "— none —", "D", "–", "0"]))
 
     def test_mesh_settings_go_to_the_job(self):
         self.mat("Copper", [self.box("A")])

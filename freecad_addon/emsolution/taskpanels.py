@@ -205,7 +205,8 @@ class FolderView:
         study = objects.owner_study(folder)
         self.study = study
         headers, rows = {
-            objects.MaterialsFolder: (["Material", "Body", "Volume ID"], objects.material_rows),
+            objects.MaterialLibraryFolder: (["Name", "Family", "Material ID", "Used by"], objects.library_rows),
+            objects.MaterialsFolder: (["Assignment", "Material", "Body", "MAT_ID", "POTENTIAL"], objects.material_rows),
             objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "Surface ID"], objects.excitation_rows),
             objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
         }[type(folder.Proxy)]

@@ -1,5 +1,6 @@
 """Study tree objects and the ID table. No GUI code here, apart from attaching view providers."""
 
+import json
 import re
 
 # Gmsh algorithm numbers; the first entry is the default
@@ -25,6 +26,9 @@ def ref_label(body, sub):
     return f"{body.Label}.{sub}" if sub else body.Label
 
 
+NO_MATERIAL = "— none —"
+
+
 class _Proxy:
     def dumps(self):
         return None
@@ -43,6 +47,10 @@ class Folder(_Proxy):
 
     def onBeforeChangeLabel(self, obj, new_label):
         return self.LABEL  # FreeCAD uses the returned text instead of the typed one
+
+
+class MaterialLibraryFolder(Folder):
+    LABEL = "Material Library"
 
 
 class MaterialsFolder(Folder):
@@ -77,6 +85,7 @@ class MeshSizesFolder(Folder):
 
 
 FOLDERS = (
+    ("MaterialLibraryGroup", MaterialLibraryFolder),
     ("MaterialsGroup", MaterialsFolder),
     ("ExcitationsGroup", ExcitationsFolder),
     ("MeshSizesGroup", MeshSizesFolder),
@@ -128,10 +137,34 @@ class _Named(_Proxy):
 
 
 class Material(_Named):
+    """An assignment: bodies made of a Material Library entry, with their potential region."""
+
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
         obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution", "Bodies made of this material")
+        obj.addProperty("App::PropertyLink", "LibraryMaterial", "EMSolution", "Material from the Material Library")
+        obj.addProperty("App::PropertyIntegerConstraint", "Potential", "EMSolution", "POTENTIAL: 0 total, 1+ reduced")
+        obj.Potential = (0, 0, 1000000, 1)
+
+
+class LibraryMaterial(_Proxy):
+    """A Study copy of a material: canonical ems_material JSON, edited in the Study."""
+
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty("App::PropertyString", "Record", "EMSolution", "Canonical material JSON")
+        obj.addProperty("App::PropertyString", "MaterialId", "EMSolution", "material_id in the record")
+        obj.addProperty("App::PropertyString", "Family", "EMSolution", "Material family in the record")
+        obj.setEditorMode("Record", 2)  # hidden: edit through the Material Library
+        for prop in ("MaterialId", "Family"):
+            obj.setEditorMode(prop, 1)
+
+    def onChanged(self, obj, prop):
+        if prop == "Record" and obj.Record and not obj.Document.Restoring:
+            data = json.loads(obj.Record)
+            obj.MaterialId = data["material_id"]
+            obj.Family = data["identity"]["family"]
 
 
 class Excitation(_Named):
@@ -214,6 +247,14 @@ def make_material(study, label, bodies):
     return obj
 
 
+def make_library_material(study, record_json):
+    """record_json: canonical ems_material JSON. The Label is the material's name."""
+    name = json.loads(record_json)["identity"]["name"]
+    obj = _add(study, "MaterialLibraryGroup", LibraryMaterial, name)
+    obj.Record = record_json
+    return obj
+
+
 def make_excitation(study, label, faces):
     """faces: list of (body, "FaceN")."""
     obj = _add(study, "ExcitationsGroup", Excitation, label)
@@ -239,6 +280,15 @@ def excitations(study):
 
 def mesh_sizes(study):
     return list(study.MeshSizesGroup.Group)
+
+
+def library_materials(study):
+    return list(study.MaterialLibraryGroup.Group)
+
+
+def material_users(lib):
+    """Assignments of lib's Study that link to it."""
+    return [m for m in materials(owner_study(lib)) if m.LibraryMaterial == lib]
 
 
 def is_study_object(obj):
@@ -280,12 +330,24 @@ def item_refs(item):
 
 
 def material_rows(study):
-    """Rows for the Materials panel: (material, refs, [name, body, volume ID])."""
+    """Rows for the Materials panel: (assignment, refs, [name, material, body, MAT_ID, POTENTIAL])."""
     rows = []
     for m in materials(study):
-        rows += [(m, [(b, "")], [display_name(m), b.Label, study.MatIds.get(b.Name, "–")]) for b in m.References] or [
-            (m, [], [display_name(m), "", ""])
-        ]
+        lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
+        rows += [
+            (m, [(b, "")], [display_name(m), lib, b.Label, study.MatIds.get(b.Name, "–"), str(m.Potential)])
+            for b in m.References
+        ] or [(m, [], [display_name(m), lib, "", "", str(m.Potential)])]
+    return rows
+
+
+def library_rows(study):
+    """Rows for the Material Library panel: (material, refs of its users, [name, family, ID, used by])."""
+    rows = []
+    for lib in library_materials(study):
+        users = material_users(lib)
+        refs = [(b, "") for m in users for b in m.References]
+        rows.append((lib, refs, [lib.Label, lib.Family, lib.MaterialId, ", ".join(m.Label for m in users)]))
     return rows
 
 
