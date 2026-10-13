@@ -29,6 +29,11 @@ def record_material(lib):
     return material_from_json(lib.Record)
 
 
+def is_manager_root(path):
+    """True for a Material Manager root: a folder with manager.config.json."""
+    return bool(path) and os.path.isfile(os.path.join(path, "manager.config.json"))
+
+
 def library_root():
     """The Material Manager root shared with eMotorSolution, or None when none is set."""
     env = os.environ.get(ROOT_ENV)

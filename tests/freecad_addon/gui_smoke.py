@@ -253,6 +253,66 @@ def main():
     library_view.delete_materials()  # nothing selected
     assert list(doc.UndoNames) == undo_before, doc.UndoNames
     assert dead_view not in taskpanels._library_views and closed_view not in taskpanels._library_views
+    labels = [w.text() for w in library_view.form.findChildren(QtWidgets.QLabel)]
+    assert not any(t.startswith("Only assignments") for t in labels), labels
+    excitations_view = taskpanels.FolderView(study.ExcitationsGroup)
+    assert excitations_view.table.horizontalHeaderItem(3).text() == "SMAT_ID"
+    labels = [w.text() for w in excitations_view.form.findChildren(QtWidgets.QLabel)]
+    assert any(t.startswith("Only assignments") for t in labels), labels
+    log.append("folder notices and headers ok")
+
+    # Change Material Manager root: only a folder with manager.config.json is remembered (no real dialogs).
+    os.environ["EMS_MATERIAL_MANAGER_SETTINGS_PATH"] = os.path.join(tempfile.mkdtemp(), "settings.json")
+    os.environ.pop("EMS_MATERIAL_MANAGER_ROOT", None)
+    not_root, manager_root = tempfile.mkdtemp(), tempfile.mkdtemp()
+    with open(os.path.join(manager_root, "manager.config.json"), "w", encoding="utf-8") as fh:
+        fh.write("{}")
+    picked = []
+    real_get_directory = QtWidgets.QFileDialog.getExistingDirectory
+    QtWidgets.QFileDialog.getExistingDirectory = staticmethod(lambda *args, **kwargs: picked.pop(0))
+    try:
+        (change,) = [
+            b for b in library_view.form.findChildren(QtWidgets.QPushButton) if b.text().startswith("Change Material")
+        ]
+        picked.append(not_root)
+        change.click()
+        assert log[-1].startswith("refused: Not a Material Manager root"), log[-1]
+        assert studymaterials.library_root() is None, "remembered a folder without manager.config.json"
+        picked.append(not_root)
+        assert materialstandins.pick_materials(study, library_view.form) == []
+        assert studymaterials.library_root() is None
+        picked.append(manager_root)
+        change.click()
+        assert os.path.samefile(studymaterials.library_root(), manager_root)
+        picked.append(not_root)
+        change.click()  # a wrong pick keeps the good root
+        assert os.path.samefile(studymaterials.library_root(), manager_root)
+        assert picked == [], picked
+    finally:
+        QtWidgets.QFileDialog.getExistingDirectory = real_get_directory
+    log.append("manager root ok")
+
+    # A closed document's Names are reused: the editor must not reuse the old window.
+    reused = App.newDocument("Reused")
+    reused_study = objects.make_study(reused)
+    studymaterials.import_materials(reused_study, [record("user:air", "Air")])
+    old_window = materialstandins.open_editor(reused_study)
+    App.closeDocument(reused.Name)
+    reused = App.newDocument("Reused")
+    assert reused.Name == "Reused", reused.Name
+    reused_study = objects.make_study(reused)
+    studymaterials.import_materials(reused_study, [record("user:iron", "Iron")])
+    new_window = materialstandins.open_editor(reused_study)
+    for _ in range(5):
+        Gui.updateGui()
+    taskpanels.QtCore.QCoreApplication.sendPostedEvents(None, taskpanels.QtCore.QEvent.DeferredDelete)
+    assert new_window is not old_window, "reused a closed document's editor"
+    assert list(new_window._material_items) == ["user:iron"], list(new_window._material_items)
+    assert materialstandins.open_editor(reused_study) is new_window
+    new_window.close()
+    App.closeDocument(reused.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("editor after document reuse ok")
     log.append("material library ok")
     log.append("folder panels ok")
 

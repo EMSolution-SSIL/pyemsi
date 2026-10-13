@@ -51,17 +51,25 @@ class MaterialPicker(QtWidgets.QDialog):
         return [self.manager.get(i.data(QtCore.Qt.UserRole)) for i in self.list.selectedItems()]
 
 
-def _root(parent):
-    root = studymaterials.library_root()
-    if root:
-        return root
+def ask_root(parent=None):
+    """Ask for the Material Manager root; remember and return it only if it has manager.config.json."""
+    from . import taskpanels
+
+    parent = parent or Gui.getMainWindow()
     root = QtWidgets.QFileDialog.getExistingDirectory(parent, "Material Manager root (folder with manager.config.json)")
     if not root:
+        return None
+    if not studymaterials.is_manager_root(root):
+        taskpanels.warn(f"Not a Material Manager root (no manager.config.json): {root}")
         return None
     from ems_material.gui.product_exchange import remember_library_root
 
     remember_library_root(root)  # shared with eMotorSolution
     return root
+
+
+def _root(parent):
+    return studymaterials.library_root() or ask_root(parent)
 
 
 def pick_materials(study, parent=None):
@@ -82,6 +90,15 @@ def pick_materials(study, parent=None):
         return []
 
 
+def _edits(window, study):
+    """True while window is alive and edits this very Study."""
+    try:
+        window.isVisible()  # RuntimeError once Qt deleted it
+        return window.library.repository.study is study and study.Document is not None
+    except (ReferenceError, RuntimeError, AttributeError):
+        return False
+
+
 def open_editor(study, material_id=None):
     """The library's editor window on the Study's Material Library; one per Study."""
     from ems_material.gui import MaterialManagerWindow
@@ -89,12 +106,19 @@ def open_editor(study, material_id=None):
 
     key = (study.Document.Name, study.Name)
     window = _editors.get(key)
+    if window is not None and not _edits(window, study):  # a closed document's Names are reused
+        _editors.pop(key, None)
+        try:
+            window.close()
+        except RuntimeError:  # the Qt window is already gone
+            pass
+        window = None
     if window is None:
         repository = studymaterials.StudyMaterialRepository(study, on_change=taskpanels.refresh_library_views)
         window = MaterialManagerWindow(MaterialManager(repository=repository), Gui.getMainWindow())
         window.setWindowTitle(f"Material Library — {study.Label}")
         window.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        window.destroyed.connect(lambda *_: _editors.pop(key, None))
+        window.destroyed.connect(lambda *_, w=window: _editors.get(key) is w and _editors.pop(key))
         _editors[key] = window
     window.reload_materials(select_id=material_id)
     window.show()

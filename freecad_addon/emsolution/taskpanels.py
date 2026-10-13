@@ -253,7 +253,7 @@ class FolderView:
         headers, rows = {
             objects.MaterialLibraryFolder: (["Name", "Family", "Material ID", "Used by"], objects.library_rows),
             objects.MaterialsFolder: (["Assignment", "Material", "Body", "MAT_ID", "POTENTIAL"], objects.material_rows),
-            objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "Surface ID"], objects.excitation_rows),
+            objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "SMAT_ID"], objects.excitation_rows),
             objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
         }[type(folder.Proxy)]
         self.row_source = rows
@@ -262,9 +262,10 @@ class FolderView:
         layout = QtWidgets.QVBoxLayout(self.form)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QtWidgets.QLabel("Study: " + study.Label))
-        notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
-        notice.setWordWrap(True)
-        layout.addWidget(notice)
+        if not isinstance(folder.Proxy, objects.MaterialLibraryFolder):
+            notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
+            notice.setWordWrap(True)
+            layout.addWidget(notice)
         if study.Dimension == "2D":
             notice = QtWidgets.QLabel(
                 "2D material, excitation and local size assignments will be added with 2D meshing."
@@ -293,6 +294,7 @@ class FolderView:
                 ("Import from Material Manager…", self.import_materials),
                 ("Edit…", self.edit_material),
                 ("Delete", self.delete_materials),
+                ("Change Material Manager root…", self.change_root),
             ):
                 button = QtWidgets.QPushButton(text)
                 button.clicked.connect(slot)
@@ -329,6 +331,11 @@ class FolderView:
 
         if materialstandins.pick_materials(self.study, self.form):
             self.fill()
+
+    def change_root(self):
+        from . import materialstandins
+
+        return materialstandins.ask_root(self.form)
 
     def edit_material(self):
         from . import materialstandins

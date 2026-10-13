@@ -161,6 +161,15 @@ class LibraryRootTest(unittest.TestCase):
                     )
                 self.assertTrue(os.path.samefile(studymaterials.library_root(), other))
 
+    def test_manager_root_needs_manager_config(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertFalse(studymaterials.is_manager_root(root))
+            self.assertFalse(studymaterials.is_manager_root(os.path.join(root, "missing")))
+            self.assertFalse(studymaterials.is_manager_root(""))
+            with open(os.path.join(root, "manager.config.json"), "w", encoding="utf-8") as fh:
+                fh.write("{}")
+            self.assertTrue(studymaterials.is_manager_root(root))
+
 
 STEEL_ENTRY = {
     "ElectricProperty": {"conductivity": {"SIGMA": 2e6}},
