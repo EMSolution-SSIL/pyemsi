@@ -49,7 +49,7 @@ def main():
     study = objects.find_study(doc)
     assert study is not None, "no study"
     assert study.MainMode == "Unassigned"
-    study.MainMode = "Materials"  # legacy workflow remains supported
+    study.MainMode, study.MainObjects = "Manual", [doc.A, doc.B]
     doc.saveAs(os.path.join(tempfile.mkdtemp(), "Smoke.FCStd"))  # the simulation folder
     log.append("study ok")
 
@@ -313,7 +313,7 @@ def main():
     assert second.MainMode == "Container" and second.MainObjects == []
     doc.redo()
     assert second.MainMode == "Manual" and second.MainObjects == [section]
-    assert study.MainMode == "Materials"
+    assert study.MainMode == "Manual"
     select(second.Name)
     assert second.ViewObject.Proxy.doubleClicked(second.ViewObject)
     assert not Gui.Control.activeDialog(), "double-click Study opened the ID dialog"

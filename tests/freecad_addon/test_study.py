@@ -20,7 +20,7 @@ class StudyTest(unittest.TestCase):
         self.doc = App.newDocument("T")
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
-        self.study.MainMode = "Materials"  # retain coverage of the legacy workflow
+        self.study.MainMode = "Manual"  # bodies join the main geometry through self.mat()
         self.doc.saveAs(os.path.join(self.tmp.name, "T.FCStd"))  # the temporary folder is the simulation folder
 
     def tearDown(self):
@@ -33,6 +33,15 @@ class StudyTest(unittest.TestCase):
         b.Placement.Base = App.Vector(x, 0, 0)
         self.doc.recompute()
         return b
+
+    def include(self, *bodies):
+        """Add bodies to the Study's main geometry (Manual mode)."""
+        self.study.MainObjects = list(dict.fromkeys([*self.study.MainObjects, *bodies]))
+
+    def mat(self, label, bodies):
+        """A material on bodies that are also in the main geometry."""
+        self.include(*bodies)
+        return objects.make_material(self.study, label, bodies)
 
     def ids(self):
         return dict(self.study.VolumeIds), dict(self.study.SurfaceIds)
@@ -49,25 +58,25 @@ class StudyTest(unittest.TestCase):
 
     def test_ids_follow_tree_order_and_stay_after_adding_a_body(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
-        objects.make_material(self.study, "Copper", [b, a])
-        objects.make_material(self.study, "Iron", [c])
+        self.mat("Copper", [b, a])
+        self.mat("Iron", [c])
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"B": "1", "A": "2", "C": "3"})
         d = self.box("D", 30)
-        objects.make_material(self.study, "Air", [d])
+        self.mat("Air", [d])
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"B": "1", "A": "2", "C": "3", "D": "4"})
 
     def test_surface_ids_one_per_excitation_and_body(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a, b])
+        self.mat("Copper", [a, b])
         objects.make_excitation(self.study, "Terminal", [(a, "Face1"), (a, "Face2"), (b, "Face1")])
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[1], {"Excitation|A": "1001", "Excitation|B": "1002"})
 
     def test_rename_keeps_id_and_changes_name(self):
         a = self.box("A")
-        mat = objects.make_material(self.study, "Copper", [a])
+        mat = self.mat("Copper", [a])
         objects.update_ids(self.study)
         a.Label = "Coil"
         mat.Label = "Iron"
@@ -76,17 +85,18 @@ class StudyTest(unittest.TestCase):
 
     def test_deleted_body_id_is_not_reused(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a, b])
+        self.mat("Copper", [a, b])
         objects.update_ids(self.study)
         self.doc.removeObject("B")
         c = self.box("C", 20)
+        self.include(c)
         objects.materials(self.study)[0].References += [c]
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"A": "1", "C": "3"})
 
     def test_set_id_refuses_duplicates_and_raises_counter(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a, b])
+        self.mat("Copper", [a, b])
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         with self.assertRaises(ValueError):
@@ -96,25 +106,27 @@ class StudyTest(unittest.TestCase):
         objects.set_id(self.study, "VolumeIds", "A", 50)
         self.assertEqual(self.study.NextVolumeId, 51)
         c = self.box("C", 20)
+        self.include(c)
         objects.materials(self.study)[0].References += [c]
         objects.update_ids(self.study)
         self.assertEqual(self.study.VolumeIds["C"], "51")
 
     def test_new_volume_ids_skip_numbers_used_by_surfaces(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         objects.set_id(self.study, "SurfaceIds", "Excitation|A", 2)
+        self.include(b)
         objects.materials(self.study)[0].References += [b]
         objects.update_ids(self.study)
         self.assertEqual(self.study.VolumeIds["B"], "3")
 
     def test_group_names_keep_the_typed_name_when_freecad_renames_the_label(self):
         air, a, b = self.box("Air"), self.box("A", 10), self.box("B", 20)
-        objects.make_material(self.study, "Air", [air])  # label taken by the body: Air001
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_material(self.study, "Copper", [b])  # label taken: Copper001
+        self.mat("Air", [air])  # label taken by the body: Air001
+        self.mat("Copper", [a])
+        self.mat("Copper", [b])  # label taken: Copper001
         objects.update_ids(self.study)
         names = ["Air", "A", "B"]
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], names)
@@ -127,6 +139,11 @@ class StudyTest(unittest.TestCase):
 
     # --- tree objects ------------------------------------------------------
 
+    def test_main_geometry_has_no_materials_mode(self):
+        for prop in ("MainMode", "MovingMode"):
+            self.assertEqual(self.study.getEnumerationsOfProperty(prop), ["Unassigned", "Container", "Manual"])
+        self.assertFalse(hasattr(self.study.Proxy, "onDocumentRestored"))
+
     def test_pad_face_resolves_to_body(self):
         body = self.doc.addObject("PartDesign::Body", "Body")
         cube = body.newObject("PartDesign::AdditiveBox", "Cube")
@@ -138,7 +155,7 @@ class StudyTest(unittest.TestCase):
         body = self.doc.addObject("PartDesign::Body", "Body")
         cube = body.newObject("PartDesign::AdditiveBox", "Cube")
         box = self.box("A")
-        mat = objects.make_material(self.study, "Copper", [box])
+        mat = self.mat("Copper", [box])
         part = self.doc.addObject("App::Part", "Part")
         self.assertEqual(objects.pick_body(cube).Name, "Body")
         self.assertEqual(objects.pick_body(box).Name, "A")
@@ -158,7 +175,7 @@ class StudyTest(unittest.TestCase):
 
     def test_study_survives_save_and_reload(self):
         a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.update_ids(self.study)
         path = os.path.join(self.tmp.name, "t.FCStd")
         self.doc.saveAs(path)
@@ -169,10 +186,6 @@ class StudyTest(unittest.TestCase):
         self.assertIsInstance(objects.materials(study)[0].Proxy, objects.Material)
         self.assertEqual(study.VolumeIds, {"A": "1"})
 
-    def test_new_study_has_no_output_properties(self):
-        for prop in ("OutputFolder", "LegacyOutput"):
-            self.assertNotIn(prop, self.study.PropertiesList)
-
     def test_folders_keep_their_names(self):
         folder = self.study.MaterialsGroup
         folder.Label = "Stuff"
@@ -181,10 +194,11 @@ class StudyTest(unittest.TestCase):
 
     def test_folder_overview_rows(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
-        mat = objects.make_material(self.study, "Copper", [a, b])
-        empty = objects.make_material(self.study, "Iron", [])
+        mat = self.mat("Copper", [a, b])
+        empty = self.mat("Iron", [])
         exc = objects.make_excitation(self.study, "In", [(a, "Face1"), (a, "Face2")])
         size = objects.make_mesh_size(self.study, 1.5, [(a, ""), (c, "Edge1")])
+        self.include(c)
         objects.update_ids(self.study)
         self.assertEqual(
             objects.material_rows(self.study),
@@ -209,7 +223,7 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.material_rows(self.study)[2], (mat, [(d, "")], ["Copper", "D", "–"]))
 
     def test_mesh_settings_go_to_the_job(self):
-        objects.make_material(self.study, "Copper", [self.box("A")])
+        self.mat("Copper", [self.box("A")])
         settings = self.study.MeshSizesGroup
         settings.SurfaceAlgorithm = "Delaunay"
         settings.VolumeAlgorithm = "HXT"
@@ -235,65 +249,38 @@ class StudyTest(unittest.TestCase):
     # --- checks ------------------------------------------------------------
 
     def test_check_min_size_above_max_size(self):
-        objects.make_material(self.study, "Copper", [self.box("A")])
+        self.mat("Copper", [self.box("A")])
         self.study.MeshSizesGroup.MinSize = 3.0
         self.study.MeshSizesGroup.MaxSize = 2.0
         self.assertStudyError("larger than the maximum")
 
-    def test_check_no_materials(self):
-        self.assertStudyError("no materials")
-
     def test_check_two_materials(self):
         a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_material(self.study, "Iron", [a])
+        self.mat("Copper", [a])
+        self.mat("Iron", [a])
         self.assertStudyError("more than one material")
 
     def test_check_not_one_solid(self):
         two = self.doc.addObject("Part::Feature", "Two")
         two.Shape = Part.makeCompound([Part.makeBox(1, 1, 1), Part.makeBox(1, 1, 1, App.Vector(5, 0, 0))])
-        objects.make_material(self.study, "Copper", [two])
+        self.mat("Copper", [two])
         self.assertStudyError("exactly one solid")
-
-    def test_check_excitation_on_body_without_material(self):
-        a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_excitation(self.study, "T", [(b, "Face1")])
-        self.assertStudyError("which has no material")
-
-    def test_check_mesh_size_on_body_without_material(self):
-        a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_mesh_size(self.study, 1.0, [(b, "")])
-        self.assertStudyError("mesh size but no material")
 
     def test_check_zero_size(self):
         a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.make_mesh_size(self.study, 0.0, [(a, "")])
         self.assertStudyError("greater than 0")
 
     def test_check_missing_face(self):
         a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.make_excitation(self.study, "T", [(a, "Face60")])  # a box has 6 faces
         self.assertStudyError("has no Face60")
 
-    def test_check_part_container_is_refused(self):
-        part = self.doc.addObject("App::Part", "Part")
-        part.addObject(self.box("A"))
-        objects.make_material(self.study, "Copper", [part])
-        self.assertStudyError("Part is not a solid body")
-
-    def test_check_link_is_refused(self):
-        link = self.doc.addObject("App::Link", "Link")
-        link.LinkedObject = self.box("A")
-        objects.make_material(self.study, "Copper", [link])
-        self.assertStudyError("Link is not a solid body")
-
     def test_smallest_mesh_size_wins(self):
         a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.make_mesh_size(self.study, 3.0, [(a, "")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         volumes = jobwriter.check(self.study)[0]
@@ -304,7 +291,7 @@ class StudyTest(unittest.TestCase):
         b = self.box("B", 10)
         b.Label = "A!"  # cleans to "A_"
         a.Label = "A?"  # cleans to "A_" too
-        objects.make_material(self.study, "Cu", [a, b])
+        self.mat("Cu", [a, b])
         self.assertStudyError("A_")
 
     # --- simulation folder ----------------------------------------------------
@@ -339,16 +326,17 @@ class StudyTest(unittest.TestCase):
         doc = App.newDocument("Unsaved")
         self.addCleanup(App.closeDocument, doc.Name)
         study = objects.make_study(doc)
-        study.MainMode = "Materials"
+        study.MainMode = "Manual"
         box = doc.addObject("Part::Box", "A")
         doc.recompute()
+        study.MainObjects = [box]
         objects.make_material(study, "Copper", [box])
         with self.assertRaisesRegex(jobwriter.StudyError, "Save the document in the simulation folder first"):
             jobwriter.write_job(study)
         self.assertEqual(study.VolumeIds, {})
 
     def test_simulation_folder_with_spaces_and_persian_letters(self):
-        objects.make_material(self.study, "Copper", [self.box("A")])
+        self.mat("Copper", [self.box("A")])
         folder = os.path.join(self.tmp.name, "my model مدل")
         os.mkdir(folder)
         self.doc.saveAs(os.path.join(folder, "موتور.FCStd"))
@@ -359,10 +347,11 @@ class StudyTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
 
     def test_second_study_replaces_the_mesh_and_keeps_its_own_scratch_folder(self):
-        objects.make_material(self.study, "Iron", [self.box("A")])
+        self.mat("Iron", [self.box("A")])
         second = objects.make_study(self.doc)
-        second.MainMode = "Materials"
-        objects.make_material(second, "Air", [self.box("B", 10)])
+        b = self.box("B", 10)
+        second.MainMode, second.MainObjects = "Manual", [b]
+        objects.make_material(second, "Air", [b])
         for study in (self.study, second):
             path = jobwriter.write_job(study)
             r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
@@ -383,7 +372,7 @@ class StudyTest(unittest.TestCase):
         a.Placement.Base = App.Vector(0, 50, 0)
         part.addObject(a)
         self.doc.recompute()
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.make_excitation(self.study, "T", [(a, "Face6")])  # top face, z = 10
         jobwriter.write_job(self.study)
         vol = Part.Shape()
@@ -396,8 +385,8 @@ class StudyTest(unittest.TestCase):
 
     def test_job_json_contents(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_material(self.study, "Air", [b])
+        self.mat("Copper", [a])
+        self.mat("Air", [b])
         objects.make_excitation(self.study, "Terminal In", [(a, "Face1"), (a, "Face2")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         self.study.Label = "My Study"
@@ -439,7 +428,7 @@ class StudyTest(unittest.TestCase):
 
     def test_face_edge_and_vertex_sizes_go_to_the_job(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a, b])
+        self.mat("Copper", [a, b])
         objects.make_mesh_size(self.study, 1.0, [(a, "Face6"), (a, "Edge1"), (b, "Vertex1")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         path = jobwriter.write_job(self.study)
@@ -461,14 +450,14 @@ class StudyTest(unittest.TestCase):
 
     def test_check_missing_edge(self):
         a = self.box("A")
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         objects.make_mesh_size(self.study, 1.0, [(a, "Edge99")])  # a box has 12 edges
         self.assertStudyError("has no Edge99")
 
     def test_written_job_meshes(self):
         a, b = self.box("A"), self.box("B", 10)
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_material(self.study, "Air", [b])
+        self.mat("Copper", [a])
+        self.mat("Air", [b])
         objects.make_excitation(self.study, "T", [(a, "Face1")])  # x = 0 face
         objects.make_mesh_size(self.study, 1.0, [(a, "Face1"), (a, "Edge1"), (b, "Vertex8")])
         settings = self.study.MeshSizesGroup
@@ -493,7 +482,7 @@ class StudyTest(unittest.TestCase):
     def test_multiple_studies_have_independent_ownership_and_ids(self):
         second = objects.make_study(self.doc, "2D", "Cross-section")
         a = self.box("A")
-        material = objects.make_material(self.study, "Iron", [a])
+        material = self.mat("Iron", [a])
         other = objects.make_material(second, "Copper", [a])
         objects.update_ids(self.study)
         self.assertIsNone(objects.find_study(self.doc))
@@ -575,7 +564,7 @@ class StudyTest(unittest.TestCase):
         source.addObject(self.face("Section"))
         second.MainMode, second.MainSource = "Container", source
         second.MeshSizesGroup.DefaultMeshSize = 1.5
-        objects.make_material(self.study, "Iron", [self.box("A")])
+        self.mat("Iron", [self.box("A")])
         objects.update_ids(self.study)
         path = os.path.join(self.tmp.name, "setup.FCStd")
         self.doc.saveAs(path)
@@ -588,8 +577,6 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(second.MainSource.Name, "Faces")
         self.assertEqual(second.MeshSizesGroup.DefaultMeshSize.Value, 1.5)
         self.assertEqual(geometry.region(second, "Main")[1], [])
-        self.assertNotIn("LegacyOutput", first.PropertiesList)
-        self.assertNotIn("OutputFolder", first.PropertiesList)
         code = """import sys
 import FreeCAD as App
 from emsolution import geometry, objects
@@ -607,42 +594,8 @@ print('RESTORE PASS')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("RESTORE PASS", result.stdout)
 
-    def test_old_study_upgrade_preserves_settings_ids_and_drops_output_properties(self):
-        objects.make_material(self.study, "Iron", [self.box("A")])
-        objects.update_ids(self.study)
-        self.study.MeshSizesGroup.DefaultMeshSize = 1.25
-        for prop in (
-            "Dimension",
-            "Movement",
-            "MainMode",
-            "MovingMode",
-            "MainSource",
-            "MovingSource",
-            "MainObjects",
-            "MovingObjects",
-        ):
-            self.study.removeProperty(prop)
-        # what a Study saved before the simulation folder change carried
-        self.study.addProperty("App::PropertyString", "OutputFolder", "EMSolution")
-        self.study.OutputFolder = os.path.join(self.tmp.name, "elsewhere")
-        self.study.addProperty("App::PropertyBool", "LegacyOutput", "Setup")
-        path = os.path.join(self.tmp.name, "old.FCStd")
-        self.doc.saveAs(path)
-        App.closeDocument(self.doc.Name)
-        self.doc = App.openDocument(path)
-        self.study = objects.find_study(self.doc)
-        self.study.Proxy.onDocumentRestored(self.study)  # repeat must not reset data
-        self.assertEqual(self.study.VolumeIds, {"A": "1"})
-        self.assertEqual(self.study.MeshSizesGroup.DefaultMeshSize.Value, 1.25)
-        self.assertEqual(self.study.MainMode, "Materials")
-        self.assertNotIn("OutputFolder", self.study.PropertiesList)
-        self.assertNotIn("LegacyOutput", self.study.PropertiesList)
-        self.assertEqual(geometry.export_unavailable(self.study), "")
-        self.assertTrue(os.path.isfile(jobwriter.write_job(self.study)))
-        self.assertTrue(os.path.samefile(os.path.dirname(jobwriter.mesh_file(self.study)), self.tmp.name))
-
     def test_deferred_export_cannot_change_ids_or_write_files(self):
-        objects.make_material(self.study, "Iron", [self.box("A")])
+        self.mat("Iron", [self.box("A")])
         for prop, value, message in (
             ("Dimension", "2D", "2D mesh generation"),
             ("Movement", "Sliding motion", "Sliding-motion"),
@@ -700,7 +653,7 @@ print('RESTORE PASS')
         self.assertEqual(self.study.VolumeIds, {})
         self.assertFalse(os.path.exists(self.scratch("job.json")))
         self.assertEqual(objects.bodies_without_material(self.study), [a, b])
-        objects.make_material(self.study, "Copper", [a])
+        self.mat("Copper", [a])
         self.assertEqual(objects.bodies_without_material(self.study), [b])
         self.assertStudyError("B (B)")
 
@@ -726,8 +679,8 @@ print('RESTORE PASS')
     def test_selected_geometry_rejects_conflicting_materials_and_invalid_sources(self):
         a = self.box("A")
         self.study.MainMode, self.study.MainObjects = "Manual", [a]
-        objects.make_material(self.study, "Copper", [a])
-        objects.make_material(self.study, "Iron", [a])
+        self.mat("Copper", [a])
+        self.mat("Iron", [a])
         self.assertStudyError("more than one material")
         self.study.MainMode = "Container"
         self.assertStudyError("Selected container is missing")

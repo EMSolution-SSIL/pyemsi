@@ -46,53 +46,33 @@ def check(study):
     unavailable = geometry.export_unavailable(study)
     if unavailable:
         raise StudyError(unavailable)
-    selected = study.MainMode != "Materials"
-    bodies = None
-    if selected:
-        bodies, _, errors = geometry.setup(study)
-        if errors:
-            raise StudyError("\n".join(errors))
-    mats = objects.materials(study)
-    if not mats and not selected:
-        raise StudyError("The study has no materials.")
-    material_of = {}
-    for m in mats:
+    bodies, _, errors = geometry.setup(study)
+    if errors:
+        raise StudyError("\n".join(errors))
+    material_of = {b.Name: (b, []) for b in bodies}  # main geometry order
+    for m in objects.materials(study):
         for b in m.References:
-            material_of.setdefault(b.Name, (b, []))[1].append(m)
-    if selected:
-        missing = [b for b in bodies if b.Name not in material_of]
-        if missing:
-            raise StudyError(
-                "Main geometry has bodies with no material: "
-                + ", ".join(f"{b.Label} ({b.Name})" for b in missing)
-                + ". Assign one material to each body."
-            )
-        material_of = {b.Name: (b, material_of[b.Name][1]) for b in bodies}
+            if b.Name in material_of:
+                material_of[b.Name][1].append(m)
+    missing = [b for b, ms in material_of.values() if not ms]
+    if missing:
+        raise StudyError(
+            "Main geometry has bodies with no material: "
+            + ", ".join(f"{b.Label} ({b.Name})" for b in missing)
+            + ". Assign one material to each body."
+        )
+    for b, ms in material_of.values():
+        if len(ms) > 1:
+            raise StudyError(f"Body {b.Label} has more than one material: " + ", ".join(m.Label for m in ms))
     surfaces = [
         (e, b, faces)
         for e in objects.excitations(study)
         for b, faces in objects.subs_by_body(e)
-        if not selected or b.Name in material_of
+        if b.Name in material_of
     ]
-    for e, b, _ in surfaces:
-        if b.Name not in material_of:
-            raise StudyError(f"Excitation {e.Label} is on body {b.Label}, which has no material.")
     sized = [
-        (s, b, subs)
-        for s in objects.mesh_sizes(study)
-        for b, subs in objects.subs_by_body(s)
-        if not selected or b.Name in material_of
+        (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in material_of
     ]
-    for _, b, _ in sized:
-        if b.Name not in material_of:
-            raise StudyError(f"Body {b.Label} has a mesh size but no material.")
-    for b, ms in material_of.values():
-        if not b.isDerivedFrom("Part::Feature"):
-            raise StudyError(f"{b.Label} is not a solid body (links and containers are not supported).")
-        if len(ms) > 1:
-            raise StudyError(f"Body {b.Label} has more than one material: " + ", ".join(m.Label for m in ms))
-        if len(b.Shape.Solids) != 1:
-            raise StudyError(f"Body {b.Label} must be exactly one solid (it has {len(b.Shape.Solids)}).")
     for e, b, faces in surfaces:
         _check_subs("Excitation", e, b, faces)
     elements = [(s, b, [n for n in subs if n]) for s, b, subs in sized]
@@ -104,7 +84,7 @@ def check(study):
         raise StudyError("The default mesh size must be greater than 0.")
     if 0 < settings.MaxSize.Value < settings.MinSize.Value:
         raise StudyError("The minimum mesh size is larger than the maximum.")
-    size_items = dict.fromkeys(s for s, _, _ in sized) if selected else objects.mesh_sizes(study)
+    size_items = dict.fromkeys(s for s, _, _ in sized)
     for s in size_items:
         if s.Size.Value <= 0:
             raise StudyError(f"Mesh size {s.Label} must be greater than 0.")

@@ -87,9 +87,7 @@ def collect(roots, dimension):
 def region(study, name):
     """Resolve a live source; a deleted container never falls back to the document."""
     mode = getattr(study, name + "Mode")
-    if mode == "Materials":
-        roots = [b for m in objects.materials(study) for b in m.References]
-    elif mode == "Container":
+    if mode == "Container":
         source = getattr(study, name + "Source")
         if source is None:
             return [], ["Selected container is missing. Choose a Part or Group."]

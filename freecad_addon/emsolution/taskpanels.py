@@ -214,10 +214,9 @@ class FolderView:
         layout = QtWidgets.QVBoxLayout(self.form)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QtWidgets.QLabel("Study: " + study.Label))
-        if study.MainMode != "Materials":
-            notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
-            notice.setWordWrap(True)
-            layout.addWidget(notice)
+        notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
+        notice.setWordWrap(True)
+        layout.addWidget(notice)
         if study.Dimension == "2D":
             notice = QtWidgets.QLabel(
                 "2D material, excitation and local size assignments will be added with 2D meshing."
@@ -357,8 +356,6 @@ class StudyView:
             combo.clear()
             combo.addItem("Choose a Part or Group…", "mode:Unassigned")
             combo.addItem("Manual selection", "mode:Manual")
-            if name == "Main" and study.Dimension == "3D":
-                combo.addItem("Material assignments (existing 3D workflow)", "mode:Materials")
             for obj in containers:
                 kind = "Part" if obj.isDerivedFrom("App::Part") else "Group"
                 label = f"{obj.Label} ({kind})"

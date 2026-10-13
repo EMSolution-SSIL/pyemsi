@@ -101,40 +101,19 @@ class Study(_Proxy):
             obj.setEditorMode(prop, 1)  # read-only: edit through the ID table
         for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
             obj.setEditorMode(prop, 2)  # hidden
-        self.add_setup(obj)
-
-    @staticmethod
-    def add_setup(obj, legacy=False):
-        """Add missing properties only; restoring an old file must not reset its settings."""
-        if "Dimension" not in obj.PropertiesList:
-            obj.addProperty("App::PropertyEnumeration", "Dimension", "Setup")
-            obj.Dimension = ["3D", "2D"]
+        obj.addProperty("App::PropertyEnumeration", "Dimension", "Setup")
+        obj.Dimension = ["3D", "2D"]
         obj.setEditorMode("Dimension", 1)  # choose at creation; assignments depend on it
-        if "Movement" not in obj.PropertiesList:
-            obj.addProperty("App::PropertyEnumeration", "Movement", "Setup")
-            obj.Movement = ["No movement", "Sliding motion"]
+        obj.addProperty("App::PropertyEnumeration", "Movement", "Setup")
+        obj.Movement = ["No movement", "Sliding motion"]
         for region in ("Main", "Moving"):
             mode, source, refs = region + "Mode", region + "Source", region + "Objects"
-            if mode not in obj.PropertiesList:
-                obj.addProperty("App::PropertyEnumeration", mode, "Geometry")
-                choices = ["Unassigned", "Container", "Manual"]
-                if region == "Main":
-                    choices.append("Materials")
-                setattr(obj, mode, choices)
-                if region == "Main" and legacy:
-                    setattr(obj, mode, "Materials")
-            if source not in obj.PropertiesList:
-                obj.addProperty("App::PropertyLinkGlobal", source, "Geometry")
-            if refs not in obj.PropertiesList:
-                obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
+            obj.addProperty("App::PropertyEnumeration", mode, "Geometry")
+            setattr(obj, mode, ["Unassigned", "Container", "Manual"])
+            obj.addProperty("App::PropertyLinkGlobal", source, "Geometry")
+            obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
             for prop in (mode, source, refs):
                 obj.setEditorMode(prop, 2)  # edit together in the Study panel
-
-    def onDocumentRestored(self, obj):
-        for prop in ("OutputFolder", "LegacyOutput"):  # replaced by the simulation folder
-            if prop in obj.PropertiesList:
-                obj.removeProperty(prop)
-        self.add_setup(obj, legacy=True)
 
 
 class _Named(_Proxy):
@@ -193,8 +172,6 @@ def make_study(doc, dimension="3D", label=None):
     study = doc.addObject("App::DocumentObjectGroupPython", "Study")
     Study(study)
     study.Dimension = dimension
-    if dimension == "2D":
-        study.MainMode = "Unassigned"
     if label:
         study.Label = label
     for prop, cls in FOLDERS:
@@ -340,36 +317,26 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Selected bodies without materials, or referenced bodies in the legacy workflow."""
+    """Main-geometry bodies without a material."""
     have = {b.Name for m in materials(study) for b in m.References}
-    if study.MainMode != "Materials":
-        from . import geometry
+    return [b for b in _main_bodies(study) if b.Name not in have]
 
-        return [b for b in geometry.region(study, "Main")[0] if b.Name not in have]
-    out = {}
-    for item in excitations(study) + mesh_sizes(study):
-        for b, _ in subs_by_body(item):
-            if b.Name not in have:
-                out.setdefault(b.Name, b)
-    return list(out.values())
+
+def _main_bodies(study):
+    from . import geometry
+
+    return geometry.region(study, "Main")[0]
 
 
 def volume_keys(study):
-    if study.MainMode != "Materials":
-        from . import geometry
-
-        return [b.Name for b in geometry.region(study, "Main")[0]]
-    return list(dict.fromkeys(b.Name for m in materials(study) for b in m.References))
+    return [b.Name for b in _main_bodies(study)]
 
 
 def surface_keys(study):
-    included = set(volume_keys(study)) if study.MainMode != "Materials" else None
+    included = set(volume_keys(study))
     return list(
         dict.fromkeys(
-            f"{e.Name}|{b.Name}"
-            for e in excitations(study)
-            for b, _ in subs_by_body(e)
-            if included is None or b.Name in included
+            f"{e.Name}|{b.Name}" for e in excitations(study) for b, _ in subs_by_body(e) if b.Name in included
         )
     )
 
@@ -421,18 +388,13 @@ def set_id(study, table, key, new_id):
 def id_rows(study):
     """Rows for the ID table dialog: (table, key, name, id), volumes first."""
     rows = []
-    if study.MainMode != "Materials":
-        material_of = {b.Name: m for m in materials(study) for b in m.References}
-        for name in volume_keys(study):
-            if name in study.VolumeIds:
-                body = study.Document.getObject(name)
-                mat = material_of.get(name)
-                label = item_name(mat, body) if mat else f"No material: {body.Label}"
-                rows.append(("VolumeIds", name, label, int(study.VolumeIds[name])))
-    for m in materials(study):
-        for b in m.References:
-            if study.MainMode == "Materials" and b.Name in study.VolumeIds:
-                rows.append(("VolumeIds", b.Name, item_name(m, b), int(study.VolumeIds[b.Name])))
+    material_of = {b.Name: m for m in materials(study) for b in m.References}
+    for name in volume_keys(study):
+        if name in study.VolumeIds:
+            body = study.Document.getObject(name)
+            mat = material_of.get(name)
+            label = item_name(mat, body) if mat else f"No material: {body.Label}"
+            rows.append(("VolumeIds", name, label, int(study.VolumeIds[name])))
     for e in excitations(study):
         for b, _ in subs_by_body(e):
             key = f"{e.Name}|{b.Name}"
