@@ -570,6 +570,38 @@ def main():
     assert study.MeshResult.FemMesh.VolumeCount > 0
     log.append("selected geometry mesh without materials ok")
     log.append("Study isolation and lifecycle ok")
+
+    # Deleting: a leftover library material can go; a folder alone cannot; the Study takes all it owns.
+    lone = objects.make_study(doc)
+    stray = objects.make_library_material(lone, json.dumps(json.loads(lib.Record)))
+    doc.removeObject(lone.Name)  # a script delete leaves the folders and the library material behind
+    stray_name = stray.Name
+    select(stray_name)
+    Gui.runCommand("Std_Delete")
+    assert doc.getObject(stray_name) is None, "a library material without a Study could not be deleted"
+    study_name, folder_name = study.Name, study.MaterialsGroup.Name
+    owned = [o.Name for o in objects.study_contents(study)]
+    select(folder_name)
+    Gui.runCommand("Std_Delete")
+    assert doc.getObject(folder_name) is not None, "a Study folder was deleted on its own"
+    assert log[-1].startswith("refused: "), log[-1]
+    select(study_name)
+    Gui.runCommand("Std_Delete")
+    for _ in range(3):
+        Gui.updateGui()
+    left = [n for n in owned + [study_name] if doc.getObject(n) is not None]
+    assert left == [], ("left after deleting the Study", left)
+    assert doc.UndoNames[0] == "Delete", doc.UndoNames
+    doc.undo()
+    assert all(doc.getObject(n) is not None for n in owned + [study_name]), "undo did not bring the Study back"
+    restored = doc.getObject(study_name)
+    select(study_name, folder_name, objects.materials(restored)[0].Name)  # a mixed selection must not crash
+    Gui.runCommand("Std_Delete")
+    for _ in range(3):
+        Gui.updateGui()
+    left = [n for n in owned + [study_name] if doc.getObject(n) is not None]
+    assert left == [], ("left after deleting a mixed selection", left)
+    log.append("study delete ok")
     App.closeDocument(doc.Name)
 
 

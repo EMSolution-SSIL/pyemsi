@@ -166,12 +166,26 @@ class ViewProviderStudy(_ViewProvider):
             Gui.Selection.addSelection(vobj.Object)
         return True
 
+    def onDelete(self, vobj, subelements):
+        """Take everything the Study owns along, inside the Delete command's undo step."""
+        objects.delete_contents(vobj.Object)
+        return True
+
 
 class ViewProviderFolder(_ViewProvider):
     """No getIcon: the standard folder icon. Its panel shows in the Tasks tab when the folder
     is selected (FolderWatcher). Double-click does nothing, so it does not start a rename."""
 
     def doubleClicked(self, vobj):
+        return True
+
+    def onDelete(self, vobj, subelements):
+        folder = vobj.Object
+        if objects.owner_study(folder) is not None:
+            warn(f"{folder.Label} is part of its Study. Delete the Study to remove it.")
+            return False
+        for child in list(folder.Group):  # left behind without a Study: take its items along
+            folder.Document.removeObject(child.Name)
         return True
 
 
