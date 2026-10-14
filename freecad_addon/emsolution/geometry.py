@@ -1,4 +1,5 @@
 """Geometry sources and setup validation. No GUI or mesh generation here."""
+
 import FreeCAD as App
 
 from . import objects
@@ -12,9 +13,9 @@ def global_shape(obj):
 
 
 def is_container(obj):
-    return (not objects.is_study_object(obj)
-            and (obj.isDerivedFrom("App::Part")
-                 or obj.isDerivedFrom("App::DocumentObjectGroup")))
+    return not objects.is_study_object(obj) and (
+        obj.isDerivedFrom("App::Part") or obj.isDerivedFrom("App::DocumentObjectGroup")
+    )
 
 
 def is_source(obj):
@@ -51,8 +52,7 @@ def collect(roots, dimension):
 
     for obj in roots:
         visit(obj)
-    consumed = {dep.Name for obj in candidates for dep in obj.OutListRecursive
-                if dep.Document == obj.Document}
+    consumed = {dep.Name for obj in candidates for dep in obj.OutListRecursive if dep.Document == obj.Document}
     result, plane = [], None
     for obj in candidates:
         if obj.Name in consumed:
@@ -114,8 +114,10 @@ def setup(study):
         errors += ["Moving geometry: " + e for e in other_errors]
         duplicates = {o.Name for o in main} & {o.Name for o in moving}
         if duplicates:
-            errors.append("Assigned to both fixed and moving geometry: "
-                          + ", ".join(o.Label for o in main if o.Name in duplicates))
+            errors.append(
+                "Assigned to both fixed and moving geometry: "
+                + ", ".join(o.Label for o in main if o.Name in duplicates)
+            )
         if study.Dimension == "2D":
             _, plane_errors = collect(main + moving, "2D")
             errors += plane_errors
