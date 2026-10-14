@@ -224,6 +224,32 @@ shows stale values until the window's Refresh.
 - ID table dialog headers: **MAT_ID** / **SMAT_ID**; volume rows are named by
   body label only.
 
+### 7.5 Main geometry first (added 2026-10-14)
+
+The order is: choose the Study's main geometry, then assign. It applies to
+Materials, Excitations and Mesh Sizes alike.
+
+- `objects.assignment_problem(study, bodies) -> str` says why the bodies
+  cannot get assignments, or `""`: `objects.NO_MAIN_GEOMETRY` when the main
+  geometry resolves to no bodies; "Not in the Study's main geometry: …" naming
+  the bodies outside it otherwise.
+- **Assign Material**, **Excitation** and **Mesh Size** check it after reading
+  the selection and before asking anything. With no main geometry they warn
+  and select the Study so its panel opens; with bodies outside it they warn
+  and change nothing.
+- The Assign dialog checks it on OK when assigning (not when removing with
+  "— none —"), so panel rows and tree double-clicks follow the same rule.
+- The item panel's **Add selection** (Excitations, Mesh Sizes) skips picks
+  outside the main geometry and warns with the same message.
+- Materials, Excitations and Mesh Sizes folder panels show
+  `NO_MAIN_GEOMETRY` in red instead of the "Only assignments on the selected
+  geometry are exported." notice while no main geometry is chosen.
+- Existing assignments are never removed when the main geometry changes.
+  Materials rows of bodies outside it read "<body> (not in main geometry)" so
+  they can be found and removed.
+- Run Mesh's message for an empty region becomes "No geometry chosen. Select
+  the Study and pick a Part or Group, or add bodies to Manual selection."
+
 ## 8. The 16.1 builder
 
 `material_properties(rows) -> dict`, a pure function (no FreeCAD).
