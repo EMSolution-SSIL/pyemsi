@@ -400,7 +400,8 @@ def material_rows(study):
     for b in main + [m.Body for m in have.values() if m.Body.Name not in inside]:
         m = have.get(b.Name)
         lib = m.LibraryMaterial.Label if m and m.LibraryMaterial else NO_MATERIAL
-        rows.append((b, [(b, "")], [b.Label, lib, study.MatIds.get(b.Name, "–"), str(m.Potential) if m else ""]))
+        name = b.Label if b.Name in inside else f"{b.Label} (not in main geometry)"
+        rows.append((b, [(b, "")], [name, lib, study.MatIds.get(b.Name, "–"), str(m.Potential) if m else ""]))
     return rows
 
 
@@ -451,6 +452,24 @@ def _main_bodies(study):
     from . import geometry
 
     return geometry.region(study, "Main")[0]
+
+
+NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: a Part, a Group or Manual selection in the Study panel."
+
+
+def assignment_problem(study, bodies):
+    """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
+    main = {b.Name for b in _main_bodies(study)}
+    if not main:
+        return NO_MAIN_GEOMETRY
+    outside = list(dict.fromkeys(b.Label for b in bodies if b.Name not in main))
+    if outside:
+        return (
+            "Not in the Study's main geometry: "
+            + ", ".join(outside)
+            + ". Add them to it in the Study panel or select other bodies."
+        )
+    return ""
 
 
 def volume_keys(study):

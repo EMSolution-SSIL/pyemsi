@@ -268,10 +268,23 @@ class StudyTest(unittest.TestCase):
             objects.material_rows(self.study),
             [
                 (a, [(a, "")], ["A", "— none —", "1", ""]),
-                (outside, [(outside, "")], ["Outside", "Steel", "–", "1"]),
+                (outside, [(outside, "")], ["Outside (not in main geometry)", "Steel", "–", "1"]),
             ],
         )
         self.assertEqual(objects.bodies_without_material(self.study), [a])
+
+    def test_assignments_need_bodies_in_the_main_geometry(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.study.MainMode = "Unassigned"
+        self.assertEqual(objects.assignment_problem(self.study, [a]), objects.NO_MAIN_GEOMETRY)
+        self.study.MainMode = "Manual"  # with an empty manual list
+        self.assertEqual(objects.assignment_problem(self.study, [a]), objects.NO_MAIN_GEOMETRY)
+        self.include(a)
+        self.assertEqual(objects.assignment_problem(self.study, [a, a]), "")
+        self.assertEqual(
+            objects.assignment_problem(self.study, [a, b, b]),
+            "Not in the Study's main geometry: B. Add them to it in the Study panel or select other bodies.",
+        )
 
     def test_library_material_survives_save_and_reload(self):
         lib = objects.make_library_material(
@@ -316,7 +329,9 @@ class StudyTest(unittest.TestCase):
         self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
         d = self.box("D", 30)
         objects.assign(self.study, [d], ma.LibraryMaterial, 4)
-        self.assertEqual(objects.material_rows(self.study)[3], (d, [(d, "")], ["D", "Steel", "–", "4"]))
+        self.assertEqual(
+            objects.material_rows(self.study)[3], (d, [(d, "")], ["D (not in main geometry)", "Steel", "–", "4"])
+        )
 
     def test_mesh_settings_go_to_the_job(self):
         self.include(self.box("A"))
@@ -705,7 +720,7 @@ print('RESTORE PASS')
             study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL))
         )
         objects.assign(study, [self.box("A")], steel, 0)
-        with self.assertRaisesRegex(jobwriter.StudyError, "No geometry assigned"):
+        with self.assertRaisesRegex(jobwriter.StudyError, "No geometry chosen. Select the Study"):
             jobwriter.check(study)
 
     def test_selected_geometry_controls_export_and_filters_other_assignments(self):

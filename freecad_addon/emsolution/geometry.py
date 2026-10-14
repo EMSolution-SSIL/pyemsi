@@ -100,7 +100,9 @@ def region(study, name):
         roots = []
     resolved, errors = collect(roots, study.Dimension)
     if not resolved and not errors:
-        errors.append("No geometry assigned.")
+        errors.append(
+            "No geometry chosen. Select the Study and pick a Part or Group, or add bodies to Manual selection."
+        )
     return resolved, errors
 
 
