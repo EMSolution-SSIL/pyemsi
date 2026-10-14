@@ -98,9 +98,13 @@ class NewStudy:
         Gui.Selection.addSelection(study)
 
 
-class AddMaterial(_StudyCommand):
+class AssignMaterial(_StudyCommand):
     def GetResources(self):
-        return {"Pixmap": icon("material"), "MenuText": "Material", "ToolTip": "Give the selected bodies a material"}
+        return {
+            "Pixmap": icon("material"),
+            "MenuText": "Assign Material",
+            "ToolTip": "Give the selected bodies a material from the Material Library",
+        }
 
     def Activated(self):
         study = assignment_study()
@@ -109,10 +113,7 @@ class AddMaterial(_StudyCommand):
         bodies = taskpanels.selected_bodies()
         if not bodies:
             return warn("Select one or more bodies first.")
-        name = ask_text("Material", "Material name:", "Material")
-        if name:
-            obj = _create(study, "Add Material", lambda: objects.make_material(study, name, bodies))
-            Gui.Control.showDialog(taskpanels.ItemPanel(obj))
+        taskpanels.ask_assignment(study, bodies)
 
 
 class AddExcitation(_StudyCommand):
@@ -177,7 +178,7 @@ class RunMesh(_StudyCommand):
 
 COMMANDS = {
     "EMS_NewStudy": NewStudy(),
-    "EMS_Material": AddMaterial(),
+    "EMS_Material": AssignMaterial(),
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
     "EMS_RunMesh": RunMesh(),

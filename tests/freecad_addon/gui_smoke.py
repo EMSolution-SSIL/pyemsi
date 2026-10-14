@@ -35,7 +35,9 @@ def main():
     from emsolution import commands, objects, runner, taskpanels
     from emsolution import jobwriter
 
-    commands.ask_text = lambda title, label, default: {"Material": "Copper", "Excitation": "Terminal In"}[title]
+    commands.ask_text = lambda title, label, default: {"Excitation": "Terminal In"}[title]
+    asked = []  # bodies the Assign dialog was opened for; the modal dialog is driven directly below
+    taskpanels.ask_assignment = lambda study, bodies: asked.append([b.Name for b in bodies])
     commands.ask_size = lambda default: 3.0
     commands.ask_study = lambda: ("Study", "3D")
 
@@ -58,7 +60,6 @@ def main():
     Gui.Selection.addSelection(doc.Name, "B")
     Gui.Selection.addSelection(doc.Name, study.MaterialsGroup.Name)  # must be ignored
     Gui.runCommand("EMS_Material")
-    Gui.Control.closeDialog()
     Gui.runCommand("EMS_MeshSize")
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A", "Face1")
@@ -67,22 +68,22 @@ def main():
     Gui.Selection.addSelection(doc.Name, "A", "Edge1")
     Gui.Selection.addSelection(doc.Name, "B", "Vertex8")
     Gui.runCommand("EMS_MeshSize")
-    (mat,) = objects.materials(study)
+    assert asked == [["A", "B"]], asked
+    assert objects.materials(study) == [], "the command assigned before the dialog"
     (exc,) = objects.excitations(study)
     size, fine = objects.mesh_sizes(study)
-    assert [b.Name for b in mat.References] == ["A", "B"], mat.References
     assert exc.References == [(doc.A, ("Face1",))], exc.References
     assert size.Size.Value == 3.0
     assert size.References == [(doc.A, ("",)), (doc.B, ("",))], size.References
     assert fine.References == [(doc.A, ("Edge1",)), (doc.B, ("Vertex8",))], fine.References
-    for item in (mat, exc, size, fine):  # the tree would grey them out as hidden
+    for item in (exc, size, fine):  # the tree would grey them out as hidden
         assert item.ViewObject.isVisible(), item.Name
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, mat.Name)
+    Gui.Selection.addSelection(doc.Name, exc.Name)
     Gui.runCommand("Std_ToggleVisibility")
     for _ in range(3):  # shown again from a timer
         Gui.updateGui()
-    assert mat.ViewObject.isVisible(), "the eye hid an item"
+    assert exc.ViewObject.isVisible(), "the eye hid an item"
     log.append("commands ok")
 
     panel = taskpanels.ItemPanel(fine)
@@ -97,16 +98,6 @@ def main():
     fine.References = [(doc.A, "Edge1"), (doc.B, "Vertex8"), (doc.B, "Face2")]
     log.append("mesh size panel ok")
 
-    panel = taskpanels.ItemPanel(mat)
-    panel.name.setText("Iron")
-    panel.refs.item(1).setSelected(True)
-    panel.remove()
-    Gui.Control.showDialog(panel)
-    panel.accept()
-    assert mat.Label == "Iron" and [b.Name for b in mat.References] == ["A"]
-    mat.References = [doc.A, doc.B]
-    log.append("panel ok")
-
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
         return sorted(b.text().replace("&", "") for box in boxes if box.isVisible() for b in box.buttons())
@@ -120,7 +111,7 @@ def main():
 
     first_column = {
         "Name": "Material Library",
-        "Assignment": "Materials",
+        "Body": "Materials",
         "Excitation": "Excitations",
         "Mesh size": "Mesh Sizes",
     }
@@ -173,6 +164,9 @@ def main():
 
     select(study.MaterialsGroup.Name)
     shown_folders()["Materials"].cellDoubleClicked.emit(1, 0)
+    assert asked[-1] == ["B"], ("Assign dialog not asked for the row's body", asked)
+    select(study.ExcitationsGroup.Name)
+    shown_folders()["Excitations"].cellDoubleClicked.emit(0, 0)
     for _ in range(5):
         Gui.updateGui()
     assert task_buttons() == ["Cancel", "OK"], ("item panel did not open from the row", task_buttons())
@@ -180,7 +174,7 @@ def main():
     Gui.Control.closeDialog()
     for _ in range(5):
         Gui.updateGui()
-    assert list(shown_folders()) == ["Materials"], "folder panel not back after the edit"
+    assert list(shown_folders()) == ["Excitations"], "folder panel not back after the edit"
     from emsolution import materialstandins, studymaterials
     from ems_material import JsonMaterialRepository, MaterialManager, material_from_dict
 
@@ -224,14 +218,36 @@ def main():
     window = materialstandins.open_editor(study, "user:air")
     assert window.isVisible() and materialstandins.open_editor(study) is window
     window.close()
-    panel = taskpanels.ItemPanel(mat)
-    panel.material.setCurrentIndex(panel.material.findData(lib.Name))
-    panel.potential.setValue(2)
-    Gui.Control.showDialog(panel)
-    panel.accept()
-    assert mat.LibraryMaterial == lib and mat.Potential == 2, (mat.LibraryMaterial, mat.Potential)
+    dialog = taskpanels.AssignDialog(study, [doc.A, doc.B])
+    assert dialog.material.currentData() == lib.Name, "an unassigned body did not default to the first material"
+    dialog.potential.setValue(2)
+    dialog.accept()
+    mat, mat_b = objects.materials(study)
+    assert (mat.Body, mat.LibraryMaterial, mat.Potential, mat.Label) == (doc.A, lib, 2, "A: Air"), mat.Label
+    assert doc.UndoNames[0] == "Assign material", doc.UndoNames
+    dialog = taskpanels.AssignDialog(study, [doc.B])
+    assert (dialog.material.currentData(), dialog.potential.value()) == (lib.Name, 2)
+    dialog.material.setCurrentIndex(dialog.material.findData(""))
+    dialog.accept()
+    assert objects.materials(study) == [mat] and doc.UndoNames[0] == "Remove material", doc.UndoNames
+    doc.undo()
+    assert [m.Body for m in objects.materials(study)] == [doc.A, doc.B], "undo did not bring the assignment back"
+    select(study.MaterialsGroup.Name)
+    shown_folders()["Materials"].selectAll()
+    (assign_button,) = [
+        b for b in Gui.getMainWindow().findChildren(QtWidgets.QPushButton) if b.isVisible() and b.text() == "Assign…"
+    ]
+    assign_button.click()
+    assert asked[-1] == ["A", "B"], asked
+    extra = doc.addObject("Part::Box", "Extra")
+    doc.recompute()
+    dialog = taskpanels.AssignDialog(study, [extra])
+    dialog.material.setCurrentIndex(dialog.material.findData(""))
+    dialog.accept()
+    assert objects.assignment_of(study).get("Extra") is None
+    doc.removeObject("Extra")
     select(study.MaterialLibraryGroup.Name)
-    assert shown_folders()["Material Library"].item(0, 3).text() == mat.Label
+    assert shown_folders()["Material Library"].item(0, 3).text() == "A, B"
     taskpanels.warn = lambda text: log.append("refused: " + text)
     assert lib.ViewObject.Proxy.onDelete(lib.ViewObject, []) is False, "deleted a used material"
     assert objects.library_materials(study) == [lib]
@@ -336,7 +352,7 @@ def main():
         return [n.getChild(i).getChild(2).getTypeId().getName().getString() for i in range(2, n.getNumChildren())]
 
     select(mat.Name)
-    assert shown_refs[-1] == [("A", ""), ("B", "")], shown_refs
+    assert shown_refs[-1] == [("A", "")], shown_refs
     assert drawn() == ["IndexedFaceSet"], drawn()
     select(fine.Name)
     assert shown_refs[-1] == [("A", "Edge1"), ("B", "Face2"), ("B", "Vertex8")], shown_refs
@@ -350,18 +366,13 @@ def main():
     select(study.MaterialsGroup.Name)
     shown_folders()["Materials"].selectRow(1)
     assert shown_refs[-1] == [("B", "")], shown_refs
-    shown_folders()["Materials"].cellDoubleClicked.emit(1, 0)
-    for _ in range(5):
-        Gui.updateGui()
-    assert drawn() == [], "highlight kept during an edit"
-    Gui.Control.closeDialog()
     highlight.show = real_show
     log.append("highlight ok")
 
     Gui.activateWorkbench("PartWorkbench")
     select("A")
     assert Gui.activeWorkbench().name() == "PartWorkbench", "a body switched the workbench"
-    Gui.Control.showDialog(taskpanels.ItemPanel(mat))
+    Gui.Control.showDialog(taskpanels.ItemPanel(exc))
     select(study.ExcitationsGroup.Name)
     assert Gui.activeWorkbench().name() == "PartWorkbench", "switched during an edit"
     Gui.Control.closeDialog()
@@ -500,12 +511,10 @@ def main():
     view = taskpanels.StudyView(study)
     assert commands.COMMANDS["EMS_RunMesh"].IsActive()
     assert view.run_button.isEnabled()
-    mat.References = [doc.B]
+    taskpanels.apply_assignment(study, [doc.A], None, 0)
     view.refresh()
-    assert "A (A)" in view.diagnostics.text()
-    assert view.run_button.isEnabled(), "missing materials disabled generation"
-    mat.References = [doc.A, doc.B]
-    view.refresh()
+    assert view.diagnostics.text() == "", view.diagnostics.text()  # meshing does not need materials
+    assert view.run_button.isEnabled(), "a body without a material disabled generation"
     assert view.export_notice.text() == f"Writes {jobwriter.mesh_file(study)}", view.export_notice.text()
     run = runner.start(study)
     assert run is not None and run.proc.waitForFinished(120000)
@@ -518,7 +527,7 @@ def main():
         selected_job = json.load(fh)
     assert [v["name"] for v in selected_job["volumes"]] == ["A"]
     assert study.MeshResult.FemMesh.VolumeCount > 0
-    log.append("selected geometry mesh and missing-material validation ok")
+    log.append("selected geometry mesh without materials ok")
     log.append("Study isolation and lifecycle ok")
     App.closeDocument(doc.Name)
 

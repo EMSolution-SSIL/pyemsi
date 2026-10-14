@@ -79,6 +79,66 @@ def selected_mesh_refs():
     return selected_subs(("Face", "Edge", "Vertex"), whole_bodies=True)
 
 
+def apply_assignment(study, bodies, lib, potential):
+    """Assign lib and potential to bodies, or remove their assignments when lib is None; one undo step."""
+    doc = study.Document
+    doc.openTransaction("Remove material" if lib is None else "Assign material")
+    if lib is None:
+        objects.unassign(study, bodies)
+    else:
+        objects.assign(study, bodies, lib, potential)
+    doc.commitTransaction()
+    doc.recompute()
+
+
+class AssignDialog(QtWidgets.QDialog):
+    """Material and POTENTIAL for bodies; "— none —" removes their assignments."""
+
+    def __init__(self, study, bodies, parent=None):
+        super().__init__(parent or Gui.getMainWindow())
+        self.study, self.bodies = study, list(bodies)
+        self.setWindowTitle("Assign Material")
+        layout = QtWidgets.QFormLayout(self)
+        names = ", ".join(b.Label for b in self.bodies[:5])
+        if len(self.bodies) > 5:
+            names += f" and {len(self.bodies) - 5} more"
+        shown = QtWidgets.QLabel(names)
+        shown.setWordWrap(True)
+        layout.addRow("Bodies", shown)
+        libraries = objects.library_materials(study)
+        self.material = QtWidgets.QComboBox()
+        for lib in libraries:
+            self.material.addItem(lib.Label, lib.Name)
+        self.material.addItem(objects.NO_MATERIAL, "")
+        self.potential = QtWidgets.QSpinBox()
+        self.potential.setRange(0, 1000000)
+        current = objects.assignment_of(study).get(self.bodies[0].Name)
+        if current is not None:
+            lib = current.LibraryMaterial
+            self.material.setCurrentIndex(self.material.findData(lib.Name if lib else ""))
+            self.potential.setValue(current.Potential)
+        layout.addRow("Material", self.material)
+        layout.addRow("POTENTIAL", self.potential)
+        if not libraries:
+            note = QtWidgets.QLabel("The Material Library is empty: import materials from its folder first.")
+            note.setWordWrap(True)
+            layout.addRow(note)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+    def accept(self):
+        name = self.material.currentData()
+        lib = self.study.Document.getObject(name) if name else None
+        apply_assignment(self.study, self.bodies, lib, self.potential.value())
+        super().accept()
+
+
+def ask_assignment(study, bodies):
+    AssignDialog(study, bodies).exec()
+
+
 class _ViewProvider:
     def __init__(self, vobj):
         vobj.Proxy = self
@@ -141,7 +201,7 @@ class ViewProviderLibraryMaterial(_ViewProvider):
     def onDelete(self, vobj, subelements):
         users = objects.material_users(vobj.Object)
         if users:
-            warn(f"{vobj.Object.Label} is used by: " + ", ".join(m.Label for m in users))
+            warn(f"{vobj.Object.Label} is used by: " + ", ".join(objects.user_labels(vobj.Object)))
             return False
         return True
 
@@ -250,9 +310,12 @@ class FolderView:
     def __init__(self, folder):
         study = objects.owner_study(folder)
         self.study = study
+        self.folder_proxy = folder.Proxy
+        if isinstance(folder.Proxy, objects.MaterialsFolder):
+            objects.sync_labels(study)  # the tree shows "<body>: <material>"
         headers, rows = {
             objects.MaterialLibraryFolder: (["Name", "Family", "Material ID", "Used by"], objects.library_rows),
-            objects.MaterialsFolder: (["Assignment", "Material", "Body", "MAT_ID", "POTENTIAL"], objects.material_rows),
+            objects.MaterialsFolder: (["Body", "Material", "MAT_ID", "POTENTIAL"], objects.material_rows),
             objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "SMAT_ID"], objects.excitation_rows),
             objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
         }[type(folder.Proxy)]
@@ -302,9 +365,15 @@ class FolderView:
             layout.addLayout(buttons)
             _library_views.add(self)
         if isinstance(folder.Proxy, objects.MaterialsFolder):
+            assign = QtWidgets.QPushButton("Assign…")
+            assign.setToolTip("Give the selected rows' bodies a material (Ctrl/Shift to select several rows)")
+            assign.clicked.connect(self.assign_rows)
+            layout.addWidget(assign)
             bodies = objects.bodies_without_material(study)
             if bodies:
-                missing = QtWidgets.QLabel("No material (Run Mesh will stop): " + ", ".join(b.Label for b in bodies))
+                missing = QtWidgets.QLabel(
+                    "No material (the input file needs one for every body): " + ", ".join(b.Label for b in bodies)
+                )
                 missing.setWordWrap(True)
                 missing.setStyleSheet("color: #c00000")
                 layout.addWidget(missing)
@@ -325,6 +394,13 @@ class FolderView:
 
     def selected_items(self):
         return [self.rows[r][0] for r in sorted({i.row() for i in self.table.selectedIndexes()})]
+
+    def assign_rows(self):
+        bodies = self.selected_items()
+        if not bodies:
+            return warn("Select one or more rows first.")
+        ask_assignment(self.study, bodies)
+        self.fill()
 
     def import_materials(self):
         from . import materialstandins
@@ -360,11 +436,16 @@ class FolderView:
 
     def open_item(self, row, _column):
         item = self.rows[row][0]
-        if isinstance(item.Proxy, objects.LibraryMaterial):
+        if isinstance(getattr(item, "Proxy", None), objects.LibraryMaterial):
             from . import materialstandins
 
             materialstandins.open_editor(self.study, item.MaterialId)
-        elif self.study.Dimension == "3D":
+        elif self.study.Dimension != "3D":
+            return
+        elif isinstance(self.folder_proxy, objects.MaterialsFolder):
+            ask_assignment(self.study, [item])
+            self.fill()
+        else:
             Gui.Control.showDialog(ItemPanel(item))
 
 
@@ -745,21 +826,23 @@ class ViewProviderItem(_ViewProvider):
         return icon(type(obj.Proxy).__name__.lower()) if obj else icon("emsolution")
 
     def doubleClicked(self, vobj):
-        Gui.Control.showDialog(ItemPanel(vobj.Object))
+        obj = vobj.Object
+        if isinstance(obj.Proxy, objects.Material):
+            if obj.Body is not None:
+                ask_assignment(objects.owner_study(obj), [obj.Body])
+        else:
+            Gui.Control.showDialog(ItemPanel(obj))
         return True
 
 
 class ItemPanel:
-    """Edit name, size (Mesh Size only) and references of a tree item."""
+    """Edit name, size (Mesh Size only) and references of an Excitation or Mesh Size."""
 
     def __init__(self, obj):
         self.obj = obj
         study = objects.owner_study(obj)
         highlight.clear()  # it would not follow the edits
-        self.bodies_only = isinstance(obj.Proxy, objects.Material)
-        if self.bodies_only:
-            self.pick, label = (lambda: [(b, "") for b in selected_bodies()]), "Bodies"
-        elif isinstance(obj.Proxy, objects.Excitation):
+        if isinstance(obj.Proxy, objects.Excitation):
             self.pick, label = selected_faces, "Faces"
         else:
             self.pick, label = selected_mesh_refs, "Bodies, faces,\nedges, vertices"
@@ -774,19 +857,6 @@ class ItemPanel:
         if isinstance(obj.Proxy, objects.MeshSize):
             self.size = _length_box(obj.Size.Value)
             layout.addRow("Size", self.size)
-        self.material = self.potential = None
-        if isinstance(obj.Proxy, objects.Material):
-            self.material = QtWidgets.QComboBox()
-            self.material.addItem(objects.NO_MATERIAL, "")
-            for lib in objects.library_materials(study):
-                self.material.addItem(lib.Label, lib.Name)
-            current = obj.LibraryMaterial.Name if obj.LibraryMaterial else ""
-            self.material.setCurrentIndex(self.material.findData(current))
-            layout.addRow("Material", self.material)
-            self.potential = QtWidgets.QSpinBox()
-            self.potential.setRange(0, 1000000)
-            self.potential.setValue(obj.Potential)
-            layout.addRow("POTENTIAL", self.potential)
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         layout.addRow(label, self.refs)
@@ -825,14 +895,7 @@ class ItemPanel:
                 self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
-        if self.material is not None:
-            name = self.material.currentData()
-            self.obj.LibraryMaterial = doc.getObject(name) if name else None
-            self.obj.Potential = self.potential.value()
-        if self.bodies_only:
-            self.obj.References = [b for b, _ in self.current]
-        else:
-            self.obj.References = list(self.current)
+        self.obj.References = list(self.current)
         doc.commitTransaction()
         doc.recompute()
         Gui.Control.closeDialog()
