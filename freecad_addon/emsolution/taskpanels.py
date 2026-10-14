@@ -131,6 +131,9 @@ class AssignDialog(QtWidgets.QDialog):
     def accept(self):
         name = self.material.currentData()
         lib = self.study.Document.getObject(name) if name else None
+        problem = objects.assignment_problem(self.study, self.bodies) if lib else ""  # removing is always allowed
+        if problem:
+            return warn(problem)
         apply_assignment(self.study, self.bodies, lib, self.potential.value())
         super().accept()
 
@@ -326,7 +329,11 @@ class FolderView:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QtWidgets.QLabel("Study: " + study.Label))
         if not isinstance(folder.Proxy, objects.MaterialLibraryFolder):
-            notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
+            if objects.assignment_problem(study, []) == objects.NO_MAIN_GEOMETRY:
+                notice = QtWidgets.QLabel(objects.NO_MAIN_GEOMETRY)
+                notice.setStyleSheet("color: #c00000")
+            else:
+                notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
             notice.setWordWrap(True)
             layout.addWidget(notice)
         if study.Dimension == "2D":
@@ -883,6 +890,10 @@ class ItemPanel:
 
     def add_selection(self):
         new = self.pick()
+        problem = objects.assignment_problem(objects.owner_study(self.obj), [b for b, _ in new])
+        if problem:
+            warn(problem)
+            new = [(b, f) for b, f in new if not objects.assignment_problem(objects.owner_study(self.obj), [b])]
         have = {(b.Name, f) for b, f in self.current}
         self.current += [(b, f) for b, f in new if (b.Name, f) not in have]
         self.refresh()

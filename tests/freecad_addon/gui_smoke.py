@@ -38,11 +38,14 @@ def main():
     commands.ask_text = lambda title, label, default: {"Excitation": "Terminal In"}[title]
     asked = []  # bodies the Assign dialog was opened for; the modal dialog is driven directly below
     taskpanels.ask_assignment = lambda study, bodies: asked.append([b.Name for b in bodies])
+    warned = []  # commands' warnings; panels' warnings go to the log as "refused: ..."
+    commands.warn = lambda text: warned.append(text)
+    taskpanels.warn = lambda text: log.append("refused: " + text)
     commands.ask_size = lambda default: 3.0
     commands.ask_study = lambda: ("Study", "3D")
 
     doc = App.newDocument("Smoke")
-    for name, x in (("A", 0), ("B", 10)):
+    for name, x in (("A", 0), ("B", 10), ("Outside", 40)):  # Outside never joins the main geometry
         box = doc.addObject("Part::Box", name)
         box.Placement.Base = App.Vector(x, 0, 0)
     doc.recompute()
@@ -51,7 +54,29 @@ def main():
     study = objects.find_study(doc)
     assert study is not None, "no study"
     assert study.MainMode == "Unassigned"
+    for folder in (study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
+        view = taskpanels.FolderView(folder)  # keep it: its widgets go with it
+        texts = [w.text() for w in view.form.findChildren(QtWidgets.QLabel)]
+        assert objects.NO_MAIN_GEOMETRY in texts and not any(t.startswith("Only assignments") for t in texts), texts
+    for name, sub in (("EMS_Material", ""), ("EMS_Excitation", "Face1"), ("EMS_MeshSize", "Face1")):
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, "A", sub)
+        Gui.runCommand(name)
+        assert warned[-1:] == [objects.NO_MAIN_GEOMETRY], (name, warned)
+        assert [o.Name for o in Gui.Selection.getSelection()] == [study.Name], (name, "the Study was not selected")
+    assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), "assigned without geometry"
     study.MainMode, study.MainObjects = "Manual", [doc.A, doc.B]
+    outside_message = (
+        "Not in the Study's main geometry: Outside. Add them to it in the Study panel or select other bodies."
+    )
+    for name, sub in (("EMS_Material", ""), ("EMS_Excitation", "Face1"), ("EMS_MeshSize", "")):
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, "A", sub)
+        Gui.Selection.addSelection(doc.Name, "Outside", sub)
+        Gui.runCommand(name)
+        assert warned[-1:] == [outside_message], (name, warned)
+    assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), "assigned outside geometry"
+    log.append("main geometry gate ok")
     doc.saveAs(os.path.join(tempfile.mkdtemp(), "Smoke.FCStd"))  # the simulation folder
     log.append("study ok")
 
@@ -90,7 +115,9 @@ def main():
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "B", "Face2")
     Gui.Selection.addSelection(doc.Name, "A")
+    Gui.Selection.addSelection(doc.Name, "Outside")
     panel.add_selection()
+    assert log[-1] == "refused: " + outside_message, log[-1]
     Gui.Control.showDialog(panel)
     panel.accept()
     refs = {(b.Name, s) for b, subs in fine.References for s in subs}
@@ -254,6 +281,11 @@ def main():
     dialog.material.setCurrentIndex(dialog.material.findData(""))
     dialog.accept()
     assert objects.assignment_of(study).get("Extra") is None
+    dialog = taskpanels.AssignDialog(study, [extra])  # the first library material
+    dialog.accept()
+    assert objects.assignment_of(study).get("Extra") is None, "assigned a body outside the main geometry"
+    assert log[-1].startswith("refused: Not in the Study's main geometry: Extra"), log[-1]
+    dialog.reject()
     doc.removeObject("Extra")
     select(study.MaterialLibraryGroup.Name)
     assert shown_folders()["Material Library"].item(0, 3).text() == "A, B"

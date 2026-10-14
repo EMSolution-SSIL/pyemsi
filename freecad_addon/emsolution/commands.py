@@ -65,6 +65,17 @@ def _create(study, title, make):
     return obj
 
 
+def gate(study, bodies):
+    """Warn and return False unless bodies can get assignments; with no main geometry, select the Study."""
+    problem = objects.assignment_problem(study, bodies)
+    if problem == objects.NO_MAIN_GEOMETRY:
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(study)  # its panel shows the main geometry choice
+    if problem:
+        warn(problem)
+    return not problem
+
+
 class _StudyCommand:
     def IsActive(self):
         study = active_study()
@@ -113,7 +124,8 @@ class AssignMaterial(_StudyCommand):
         bodies = taskpanels.selected_bodies()
         if not bodies:
             return warn("Select one or more bodies first.")
-        taskpanels.ask_assignment(study, bodies)
+        if gate(study, bodies):
+            taskpanels.ask_assignment(study, bodies)
 
 
 class AddExcitation(_StudyCommand):
@@ -131,6 +143,8 @@ class AddExcitation(_StudyCommand):
         faces = taskpanels.selected_faces()
         if not faces:
             return warn("Select one or more faces first.")
+        if not gate(study, [b for b, _ in faces]):
+            return
         name = ask_text("Excitation", "Excitation name:", "Excitation")
         if name:
             _create(study, "Add Excitation", lambda: objects.make_excitation(study, name, faces))
@@ -151,6 +165,8 @@ class AddMeshSize(_StudyCommand):
         refs = taskpanels.selected_mesh_refs()
         if not refs:
             return warn("Select one or more bodies, faces, edges or vertices first.")
+        if not gate(study, [b for b, _ in refs]):
+            return
         size = ask_size(study.MeshSizesGroup.DefaultMeshSize.Value)
         if size:
             _create(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
