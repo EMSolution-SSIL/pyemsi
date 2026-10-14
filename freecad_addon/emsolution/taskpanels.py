@@ -369,14 +369,19 @@ class FolderView:
             assign.setToolTip("Give the selected rows' bodies a material (Ctrl/Shift to select several rows)")
             assign.clicked.connect(self.assign_rows)
             layout.addWidget(assign)
-            bodies = objects.bodies_without_material(study)
-            if bodies:
-                missing = QtWidgets.QLabel(
-                    "No material (the input file needs one for every body): " + ", ".join(b.Label for b in bodies)
-                )
-                missing.setWordWrap(True)
-                missing.setStyleSheet("color: #c00000")
-                layout.addWidget(missing)
+            self.missing = QtWidgets.QLabel()
+            self.missing.setWordWrap(True)
+            self.missing.setStyleSheet("color: #c00000")
+            layout.addWidget(self.missing)
+            self.show_missing()
+
+    def show_missing(self):
+        """The red line naming bodies without a material; hidden when there are none."""
+        bodies = objects.bodies_without_material(self.study)
+        self.missing.setText(
+            "No material (the input file needs one for every body): " + ", ".join(b.Label for b in bodies)
+        )
+        self.missing.setVisible(bool(bodies))
 
     def highlight_rows(self):
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
@@ -391,6 +396,8 @@ class FolderView:
             for c, text in enumerate(cells):
                 self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
         self.table.resizeColumnsToContents()
+        if getattr(self, "missing", None) is not None:  # Materials panel; fill() runs once before it exists
+            self.show_missing()
 
     def selected_items(self):
         return [self.rows[r][0] for r in sorted({i.row() for i in self.table.selectedIndexes()})]

@@ -232,6 +232,15 @@ def main():
     assert objects.materials(study) == [mat] and doc.UndoNames[0] == "Remove material", doc.UndoNames
     doc.undo()
     assert [m.Body for m in objects.materials(study)] == [doc.A, doc.B], "undo did not bring the assignment back"
+    materials_view = taskpanels.FolderView(study.MaterialsGroup)
+    assert materials_view.missing.isHidden(), materials_view.missing.text()
+    taskpanels.apply_assignment(study, [doc.B], None, 0)
+    materials_view.fill()
+    missing = materials_view.missing
+    assert not missing.isHidden() and missing.text().endswith(": B"), (missing.isHidden(), missing.text())
+    doc.undo()
+    materials_view.fill()
+    assert materials_view.missing.isHidden(), "stale No material line after assigning"
     select(study.MaterialsGroup.Name)
     shown_folders()["Materials"].selectAll()
     (assign_button,) = [
