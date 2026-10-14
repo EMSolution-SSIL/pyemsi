@@ -1,4 +1,5 @@
 """Toolbar and menu commands."""
+
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
@@ -31,7 +32,8 @@ def ask_text(title, label, default):
 
 def ask_size(default):
     value, ok = QtWidgets.QInputDialog.getDouble(
-        Gui.getMainWindow(), "Mesh Size", "Element size (mm):", default, 0.001, 1e6, 3)
+        Gui.getMainWindow(), "Mesh Size", "Element size (mm):", default, 0.001, 1e6, 3
+    )
     return value if ok else None
 
 
@@ -71,8 +73,11 @@ class _StudyCommand:
 
 class NewStudy:
     def GetResources(self):
-        return {"Pixmap": icon("study"), "MenuText": "New Study",
-                "ToolTip": "Create an EMSolution study in this document"}
+        return {
+            "Pixmap": icon("study"),
+            "MenuText": "New Study",
+            "ToolTip": "Create an EMSolution study in this document",
+        }
 
     def IsActive(self):
         return App.ActiveDocument is not None and not Gui.Control.activeDialog()
@@ -95,8 +100,7 @@ class NewStudy:
 
 class AddMaterial(_StudyCommand):
     def GetResources(self):
-        return {"Pixmap": icon("material"), "MenuText": "Material",
-                "ToolTip": "Give the selected bodies a material"}
+        return {"Pixmap": icon("material"), "MenuText": "Material", "ToolTip": "Give the selected bodies a material"}
 
     def Activated(self):
         study = assignment_study()
@@ -113,8 +117,11 @@ class AddMaterial(_StudyCommand):
 
 class AddExcitation(_StudyCommand):
     def GetResources(self):
-        return {"Pixmap": icon("excitation"), "MenuText": "Excitation",
-                "ToolTip": "Make the selected faces an excitation surface"}
+        return {
+            "Pixmap": icon("excitation"),
+            "MenuText": "Excitation",
+            "ToolTip": "Make the selected faces an excitation surface",
+        }
 
     def Activated(self):
         study = assignment_study()
@@ -130,8 +137,11 @@ class AddExcitation(_StudyCommand):
 
 class AddMeshSize(_StudyCommand):
     def GetResources(self):
-        return {"Pixmap": icon("meshsize"), "MenuText": "Mesh Size",
-                "ToolTip": "Set the mesh size of the selected bodies, faces, edges or vertices"}
+        return {
+            "Pixmap": icon("meshsize"),
+            "MenuText": "Mesh Size",
+            "ToolTip": "Set the mesh size of the selected bodies, faces, edges or vertices",
+        }
 
     def Activated(self):
         study = assignment_study()
@@ -147,13 +157,16 @@ class AddMeshSize(_StudyCommand):
 
 class RunMesh(_StudyCommand):
     def GetResources(self):
-        return {"Pixmap": icon("runmesh"), "MenuText": "Run Mesh",
-                "ToolTip": "Write the .msh file with Gmsh"}
+        return {"Pixmap": icon("runmesh"), "MenuText": "Run Mesh", "ToolTip": "Write the .msh file with Gmsh"}
 
     def IsActive(self):
         study = active_study()
-        return (study is not None and not geometry.export_unavailable(study)
-                and not runner.busy() and not Gui.Control.activeDialog())
+        return (
+            study is not None
+            and not geometry.export_unavailable(study)
+            and not runner.busy()
+            and not Gui.Control.activeDialog()
+        )
 
     def Activated(self):
         study = active_study()
@@ -162,9 +175,13 @@ class RunMesh(_StudyCommand):
         runner.start(study)
 
 
-COMMANDS = {"EMS_NewStudy": NewStudy(), "EMS_Material": AddMaterial(),
-            "EMS_Excitation": AddExcitation(), "EMS_MeshSize": AddMeshSize(),
-            "EMS_RunMesh": RunMesh()}
+COMMANDS = {
+    "EMS_NewStudy": NewStudy(),
+    "EMS_Material": AddMaterial(),
+    "EMS_Excitation": AddExcitation(),
+    "EMS_MeshSize": AddMeshSize(),
+    "EMS_RunMesh": RunMesh(),
+}
 for _name, _cmd in COMMANDS.items():
     Gui.addCommand(_name, _cmd)
 NAMES = list(COMMANDS)
