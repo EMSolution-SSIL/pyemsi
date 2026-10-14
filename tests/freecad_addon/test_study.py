@@ -318,12 +318,6 @@ class StudyTest(unittest.TestCase):
         self.study.MeshSizesGroup.MaxSize = 2.0
         self.assertStudyError("larger than the maximum")
 
-    def test_check_two_materials(self):
-        a = self.box("A")
-        self.mat("Copper", [a])
-        self.mat("Iron", [a])
-        self.assertStudyError("more than one material")
-
     def test_check_not_one_solid(self):
         two = self.doc.addObject("Part::Feature", "Two")
         two.Shape = Part.makeCompound([Part.makeBox(1, 1, 1), Part.makeBox(1, 1, 1, App.Vector(5, 0, 0))])
@@ -348,7 +342,7 @@ class StudyTest(unittest.TestCase):
         objects.make_mesh_size(self.study, 3.0, [(a, "")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         volumes = jobwriter.check(self.study)[0]
-        self.assertEqual(volumes[0][2], 2.0)
+        self.assertEqual(volumes[0][1], 2.0)
 
     def test_names_equal_after_cleanup_are_refused(self):
         a = self.box("A")
@@ -708,44 +702,31 @@ print('RESTORE PASS')
         self.assertIn('3 2 "A"', physical_names)
         self.assertNotIn("Copper", physical_names)
 
-    def test_missing_selected_materials_are_named_before_ids_or_files_change(self):
+    def test_bodies_without_materials_are_meshed_and_listed(self):
         a, b = self.box("A"), self.box("B", 10)
         self.study.MainMode, self.study.MainObjects = "Manual", [a, b]
         self.assertEqual(geometry.export_unavailable(self.study), "")
-        with self.assertRaisesRegex(jobwriter.StudyError, r"A \(A\), B \(B\)"):
-            jobwriter.write_job(self.study)
-        self.assertEqual(self.study.MatIds, {})
-        self.assertFalse(os.path.exists(self.scratch("job.json")))
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual([(v["mat_id"], v["name"]) for v in job["volumes"]], [(1, "A"), (2, "B")])
         self.assertEqual(objects.bodies_without_material(self.study), [a, b])
-        self.mat("Copper", [a])
-        self.assertEqual(objects.bodies_without_material(self.study), [b])
-        self.assertStudyError("B (B)")
 
-    def test_selection_ids_survive_material_changes_and_follow_live_membership(self):
+    def test_ids_follow_live_membership_of_the_selected_geometry(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
         source = self.doc.addObject("App::DocumentObjectGroup", "Stator")
         source.addObject(a)
         source.addObject(b)
         self.study.MainMode, self.study.MainSource = "Container", source
-        mat = objects.make_material(self.study, "Copper", [c, b, a])
         objects.update_ids(self.study)
-        original = dict(self.study.MatIds)
-        mat.References = [c]
-        objects.update_ids(self.study)
-        self.assertEqual(self.study.MatIds, original)
-        self.assertEqual(len(objects.id_rows(self.study)), 2)
-        self.assertIn("No material: A", objects.id_rows(self.study)[0][2])
+        self.assertEqual(self.study.MatIds, {"A": "1", "B": "2"})
+        self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "B"])
         source.removeObject(b)
         source.addObject(c)
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds, {"A": "1", "C": "3"})
 
-    def test_selected_geometry_rejects_conflicting_materials_and_invalid_sources(self):
-        a = self.box("A")
-        self.study.MainMode, self.study.MainObjects = "Manual", [a]
-        self.mat("Copper", [a])
-        self.mat("Iron", [a])
-        self.assertStudyError("more than one material")
+    def test_selected_geometry_rejects_a_missing_container(self):
+        self.study.MainMode, self.study.MainObjects = "Manual", [self.box("A")]
         self.study.MainMode = "Container"
         self.assertStudyError("Selected container is missing")
 

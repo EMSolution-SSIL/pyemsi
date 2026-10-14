@@ -39,7 +39,7 @@ def _check_subs(kind, item, body, subs):
 
 def check(study):
     """Checks before meshing. Returns (volumes, surfaces, elements):
-    volumes  = [(body, material, size_mm)] in tree order
+    volumes  = [(body, size_mm)] in main geometry order
     surfaces = [(excitation, body, [face names])] in tree order
     elements = [(mesh size, body, [face, edge and vertex names])] in tree order
     """
@@ -49,29 +49,13 @@ def check(study):
     bodies, _, errors = geometry.setup(study)
     if errors:
         raise StudyError("\n".join(errors))
-    material_of = {b.Name: (b, []) for b in bodies}  # main geometry order
-    for m in objects.materials(study):
-        for b in m.References:
-            if b.Name in material_of:
-                material_of[b.Name][1].append(m)
-    missing = [b for b, ms in material_of.values() if not ms]
-    if missing:
-        raise StudyError(
-            "Main geometry has bodies with no material: "
-            + ", ".join(f"{b.Label} ({b.Name})" for b in missing)
-            + ". Assign one material to each body."
-        )
-    for b, ms in material_of.values():
-        if len(ms) > 1:
-            raise StudyError(f"Body {b.Label} has more than one material: " + ", ".join(m.Label for m in ms))
+    bodies = list({b.Name: b for b in bodies}.values())  # main geometry order
+    included = {b.Name for b in bodies}
     surfaces = [
-        (e, b, faces)
-        for e in objects.excitations(study)
-        for b, faces in objects.subs_by_body(e)
-        if b.Name in material_of
+        (e, b, faces) for e in objects.excitations(study) for b, faces in objects.subs_by_body(e) if b.Name in included
     ]
     sized = [
-        (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in material_of
+        (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in included
     ]
     for e, b, faces in surfaces:
         _check_subs("Excitation", e, b, faces)
@@ -92,8 +76,8 @@ def check(study):
     for s, b, subs in sized:
         if "" in subs:  # the whole body
             size[b.Name] = min(size.get(b.Name, s.Size.Value), s.Size.Value)
-    volumes = [(b, ms[0], size.get(b.Name, settings.DefaultMeshSize.Value)) for b, ms in material_of.values()]
-    names = [objects.item_name(m, b) for b, m, _ in volumes]
+    volumes = [(b, size.get(b.Name, settings.DefaultMeshSize.Value)) for b in bodies]
+    names = [objects.volume_name(b) for b, _ in volumes]
     names += [objects.item_name(e, b) for e, b, _ in surfaces]
     dups = sorted({n for n in names if names.count(n) > 1})
     if dups:
@@ -147,11 +131,11 @@ def write_job(study):
         "surfaces": [],
         "sizes": [],
     }
-    for body, mat, size in volumes:
+    for body, size in volumes:
         mat_id = int(study.MatIds[body.Name])
         rel = f"geometry/vol_{mat_id}.brep"
         global_shape(body).exportBrep(os.path.join(folder, rel))
-        job["volumes"].append({"mat_id": mat_id, "name": objects.item_name(mat, body), "file": rel, "size": size})
+        job["volumes"].append({"mat_id": mat_id, "name": objects.volume_name(body), "file": rel, "size": size})
     for exc, body, faces in surfaces:
         smat_id = int(study.SmatIds[f"{exc.Name}|{body.Name}"])
         job["surfaces"].append(

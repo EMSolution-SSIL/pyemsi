@@ -16,9 +16,13 @@ def display_name(item):
     return getattr(item, "GroupName", "") or item.Label
 
 
+def volume_name(body):
+    """MAT_NAME and the volume's mesh group name."""
+    return clean(body.Label)
+
+
 def item_name(item, body):
-    if isinstance(item.Proxy, Material):
-        return clean(body.Label)
+    """An excitation's surface group name on one body."""
     return f"{clean(display_name(item))}_{clean(body.Label)}"
 
 
@@ -457,13 +461,10 @@ def set_id(study, table, key, new_id):
 def id_rows(study):
     """Rows for the ID table dialog: (table, key, name, id), volumes first."""
     rows = []
-    material_of = {b.Name: m for m in materials(study) for b in m.References}
     for name in volume_keys(study):
         if name in study.MatIds:
             body = study.Document.getObject(name)
-            mat = material_of.get(name)
-            label = item_name(mat, body) if mat else f"No material: {body.Label}"
-            rows.append(("MatIds", name, label, int(study.MatIds[name])))
+            rows.append(("MatIds", name, volume_name(body), int(study.MatIds[name])))
     for e in excitations(study):
         for b, _ in subs_by_body(e):
             key = f"{e.Name}|{b.Name}"

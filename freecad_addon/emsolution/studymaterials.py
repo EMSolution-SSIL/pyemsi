@@ -192,18 +192,19 @@ def study_material_rows(study):
     """[(MAT_ID, MAT_NAME, POTENTIAL, material)] for the Study's bodies, in MAT_ID order."""
     volumes, _, _ = jobwriter.check(study)
     objects.update_ids(study)
-    rows = []
-    for body, mat, _size in volumes:
-        if mat.LibraryMaterial is None:
-            raise StudyError(f"{mat.Label} has no material from the Material Library.")
-        rows.append(
-            (
-                int(study.MatIds[body.Name]),
-                objects.item_name(mat, body),
-                mat.Potential,
-                record_material(mat.LibraryMaterial),
-            )
+    have = {b.Name: m for m in objects.materials(study) for b in m.References}
+    missing = [b.Label for b, _ in volumes if b.Name not in have or have[b.Name].LibraryMaterial is None]
+    if missing:
+        raise StudyError("These bodies have no material from the Material Library: " + ", ".join(missing))
+    rows = [
+        (
+            int(study.MatIds[b.Name]),
+            objects.volume_name(b),
+            have[b.Name].Potential,
+            record_material(have[b.Name].LibraryMaterial),
         )
+        for b, _ in volumes
+    ]
     return sorted(rows, key=lambda r: r[0])
 
 

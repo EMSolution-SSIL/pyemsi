@@ -257,21 +257,28 @@ class StudyRowsTest(StudyCase):
             [(r[0], r[1], r[2], r[3].material_id) for r in rows], [(1, "A", 1, "user:steel"), (2, "B", 1, "user:steel")]
         )
 
+    def test_body_without_an_assignment_is_named(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.study.MainObjects = [a, b]
+        (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
+        objects.make_material(self.study, "Gap", [a]).LibraryMaterial = lib
+        with self.assertRaisesRegex(StudyError, "no material from the Material Library: B$"):
+            studymaterials.study_material_rows(self.study)
+
     def test_assignment_without_a_material_is_named(self):
         a = self.box("A")
         self.study.MainObjects = [a]
         objects.make_material(self.study, "Iron", [a])
-        with self.assertRaisesRegex(StudyError, "Iron has no material from the Material Library"):
+        with self.assertRaisesRegex(StudyError, "no material from the Material Library: A$"):
             studymaterials.study_material_rows(self.study)
 
     def test_deleted_library_material_is_reported(self):
         a = self.box("A")
         self.study.MainObjects = [a]
         (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
-        mat = objects.make_material(self.study, "Gap", [a])
-        mat.LibraryMaterial = lib
+        objects.make_material(self.study, "Gap", [a]).LibraryMaterial = lib
         self.doc.removeObject(lib.Name)
-        with self.assertRaisesRegex(StudyError, "Gap has no material from the Material Library"):
+        with self.assertRaisesRegex(StudyError, "no material from the Material Library: A$"):
             studymaterials.study_material_rows(self.study)
 
 
