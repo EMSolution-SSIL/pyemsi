@@ -145,7 +145,7 @@ class StudyMaterialRepository:
         obj = self._object(material_id)
         users = objects.material_users(obj)
         if users:
-            raise ReadOnlyMaterialError(f"{obj.Label} is used by: " + ", ".join(m.Label for m in users))
+            raise ReadOnlyMaterialError(f"{obj.Label} is used by: " + ", ".join(objects.user_labels(obj)))
         self._write("Delete material", lambda: self.study.Document.removeObject(obj.Name))
 
     def search(self, *, family=None, text=None, manufacturer=None, tags=()):
@@ -192,7 +192,7 @@ def study_material_rows(study):
     """[(MAT_ID, MAT_NAME, POTENTIAL, material)] for the Study's bodies, in MAT_ID order."""
     volumes, _, _ = jobwriter.check(study)
     objects.update_ids(study)
-    have = {b.Name: m for m in objects.materials(study) for b in m.References}
+    have = objects.assignment_of(study)
     missing = [b.Label for b, _ in volumes if b.Name not in have or have[b.Name].LibraryMaterial is None]
     if missing:
         raise StudyError("These bodies have no material from the Material Library: " + ", ".join(missing))

@@ -22,7 +22,7 @@ class StudyTest(unittest.TestCase):
         self.doc = App.newDocument("T")
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
-        self.study.MainMode = "Manual"  # bodies join the main geometry through self.mat()
+        self.study.MainMode = "Manual"  # bodies join the main geometry through self.include()
         self.doc.saveAs(os.path.join(self.tmp.name, "T.FCStd"))  # the temporary folder is the simulation folder
 
     def tearDown(self):
@@ -40,10 +40,15 @@ class StudyTest(unittest.TestCase):
         """Add bodies to the Study's main geometry (Manual mode)."""
         self.study.MainObjects = list(dict.fromkeys([*self.study.MainObjects, *bodies]))
 
-    def mat(self, label, bodies):
-        """A material on bodies that are also in the main geometry."""
+    def steel(self):
+        """The Study's Steel library material, made on first use."""
+        found = [o for o in objects.library_materials(self.study) if o.MaterialId == "user:steel"]
+        return found[0] if found else self.lib()
+
+    def assign(self, bodies, potential=0, lib=None):
+        """Assignments on bodies that are also in the main geometry; lib defaults to Steel."""
         self.include(*bodies)
-        return objects.make_material(self.study, label, bodies)
+        return objects.assign(self.study, bodies, lib or self.steel(), potential)
 
     def ids(self):
         return dict(self.study.MatIds), dict(self.study.SmatIds)
@@ -60,45 +65,43 @@ class StudyTest(unittest.TestCase):
 
     def test_ids_follow_tree_order_and_stay_after_adding_a_body(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
-        self.mat("Copper", [b, a])
-        self.mat("Iron", [c])
+        self.include(b, a)
+        self.include(c)
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"B": "1", "A": "2", "C": "3"})
         d = self.box("D", 30)
-        self.mat("Air", [d])
+        self.include(d)
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"B": "1", "A": "2", "C": "3", "D": "4"})
 
     def test_surface_ids_one_per_excitation_and_body(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a, b])
+        self.include(a, b)
         objects.make_excitation(self.study, "Terminal", [(a, "Face1"), (a, "Face2"), (b, "Face1")])
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[1], {"Excitation|A": "1001", "Excitation|B": "1002"})
 
     def test_rename_keeps_id_and_changes_name(self):
         a = self.box("A")
-        mat = self.mat("Copper", [a])
+        self.include(a)
         objects.update_ids(self.study)
         a.Label = "Coil"
-        mat.Label = "Iron"
         objects.update_ids(self.study)
         self.assertEqual(objects.id_rows(self.study), [("MatIds", "A", "Coil", 1)])
 
     def test_deleted_body_id_is_not_reused(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a, b])
+        self.include(a, b)
         objects.update_ids(self.study)
         self.doc.removeObject("B")
         c = self.box("C", 20)
         self.include(c)
-        objects.materials(self.study)[0].References += [c]
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"A": "1", "C": "3"})
 
     def test_set_id_refuses_duplicates_and_raises_counter(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a, b])
+        self.include(a, b)
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         with self.assertRaises(ValueError):
@@ -109,7 +112,6 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(self.study.NextMatId, 51)
         c = self.box("C", 20)
         self.include(c)
-        objects.materials(self.study)[0].References += [c]
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds["C"], "51")
 
@@ -122,20 +124,17 @@ class StudyTest(unittest.TestCase):
 
     def test_new_volume_ids_skip_numbers_used_by_surfaces(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a])
+        self.include(a)
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         objects.set_id(self.study, "SmatIds", "Excitation|A", 2)
         self.include(b)
-        objects.materials(self.study)[0].References += [b]
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds["B"], "3")
 
-    def test_group_names_keep_the_typed_name_when_freecad_renames_the_label(self):
+    def test_volume_names_are_body_labels_and_survive_reload(self):
         air, a, b = self.box("Air"), self.box("A", 10), self.box("B", 20)
-        self.mat("Air", [air])  # label taken by the body: Air001
-        self.mat("Copper", [a])
-        self.mat("Copper", [b])  # label taken: Copper001
+        self.include(air, a, b)
         objects.update_ids(self.study)
         names = ["Air", "A", "B"]
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], names)
@@ -164,7 +163,7 @@ class StudyTest(unittest.TestCase):
         body = self.doc.addObject("PartDesign::Body", "Body")
         cube = body.newObject("PartDesign::AdditiveBox", "Cube")
         box = self.box("A")
-        mat = self.mat("Copper", [box])
+        (mat,) = self.assign([box])
         part = self.doc.addObject("App::Part", "Part")
         self.assertEqual(objects.pick_body(cube).Name, "Body")
         self.assertEqual(objects.pick_body(box).Name, "A")
@@ -174,17 +173,14 @@ class StudyTest(unittest.TestCase):
 
     def test_items_may_link_to_bodies_inside_a_part(self):
         # plain links may not reach into an App::Part; FreeCAD warns on every recompute
-        items = [
-            objects.make_material(self.study, "Copper", []),
-            objects.make_excitation(self.study, "In", []),
-            objects.make_mesh_size(self.study, 1.0, []),
-        ]
-        for item in items:
+        (mat,) = self.assign([self.box("A")])
+        self.assertEqual(mat.getTypeIdOfProperty("Body"), "App::PropertyLinkGlobal")
+        for item in (objects.make_excitation(self.study, "In", []), objects.make_mesh_size(self.study, 1.0, [])):
             self.assertTrue(item.getTypeIdOfProperty("References").endswith("Global"), item.Name)
 
     def test_study_survives_save_and_reload(self):
         a = self.box("A")
-        self.mat("Copper", [a])
+        self.assign([a])
         objects.update_ids(self.study)
         path = os.path.join(self.tmp.name, "t.FCStd")
         self.doc.saveAs(path)
@@ -193,6 +189,7 @@ class StudyTest(unittest.TestCase):
         study = objects.find_study(self.doc)
         self.assertIsNotNone(study)
         self.assertIsInstance(objects.materials(study)[0].Proxy, objects.Material)
+        self.assertEqual(objects.materials(study)[0].Body.Name, "A")
         self.assertEqual(study.MatIds, {"A": "1"})
 
     def test_folders_keep_their_names(self):
@@ -225,26 +222,62 @@ class StudyTest(unittest.TestCase):
         lib.Label = "Silicon steel"
         self.assertEqual(lib.Record, record_before)
 
-    def test_material_assignment_links_a_library_material_and_potential(self):
+    def test_assign_makes_one_assignment_per_body(self):
+        a, b = self.box("A"), self.box("B", 10)
+        steel, air = self.lib(), self.lib("user:air", "Air", "generic")
+        first = self.assign([a, b], 2, steel)
+        self.assertEqual([(m.Body, m.LibraryMaterial, m.Potential) for m in first], [(a, steel, 2), (b, steel, 2)])
+        self.assertEqual([m.Label for m in first], ["A: Steel", "B: Steel"])
+        self.assertFalse(hasattr(first[0], "GroupName") or hasattr(first[0], "References"))
+        again = objects.assign(self.study, [b, b], air, 0)
+        self.assertEqual(again, [first[1], first[1]])
+        self.assertEqual(objects.materials(self.study), first)
+        self.assertEqual((first[1].LibraryMaterial, first[1].Potential, first[1].Label), (air, 0, "B: Air"))
+        self.assertEqual(objects.material_users(steel), [first[0]])
+        self.assertEqual(objects.user_labels(steel), ["A"])
+        self.assertEqual(objects.assignment_of(self.study), {"A": first[0], "B": first[1]})
+        objects.unassign(self.study, [a, self.box("C", 20)])
+        self.assertEqual(objects.materials(self.study), [first[1]])
+        self.assertEqual(objects.library_rows(self.study)[1], (air, [(b, "")], ["Air", "generic", "user:air", "B"]))
+
+    def test_assignment_label_follows_renamed_body_and_material(self):
         a = self.box("A")
-        lib = self.lib()
-        mat = self.mat("Iron", [a])
-        self.assertIsNone(mat.LibraryMaterial)
-        self.assertEqual(mat.Potential, 0)
-        mat.LibraryMaterial, mat.Potential = lib, 2
-        self.assertEqual(objects.material_users(lib), [mat])
+        (m,) = self.assign([a])
+        a.Label = "Core"
+        m.LibraryMaterial.Label = "M330"
+        objects.sync_labels(self.study)
+        self.assertEqual(m.Label, "Core: M330")
+
+    def test_assignment_of_a_deleted_body_is_ignored(self):
+        a, b = self.box("A"), self.box("B", 10)
+        lib = self.steel()
+        self.assign([a, b], lib=lib)
+        self.doc.removeObject("B")
+        self.assertEqual(list(objects.assignment_of(self.study)), ["A"])
+        self.assertEqual([r[2][0] for r in objects.material_rows(self.study)], ["A"])
+        self.assertEqual(objects.bodies_without_material(self.study), [])
+        self.assertEqual(objects.user_labels(lib), ["A", "B: Steel"])
+        objects.sync_labels(self.study)  # must not fail on the orphan
+
+    def test_body_outside_the_main_geometry_keeps_its_row(self):
+        a, outside = self.box("A"), self.box("Outside", 20)
+        self.include(a)
+        objects.assign(self.study, [outside], self.steel(), 1)
         objects.update_ids(self.study)
-        self.assertEqual(objects.material_rows(self.study), [(mat, [(a, "")], ["Iron", "Steel", "A", "1", "2"])])
         self.assertEqual(
-            objects.library_rows(self.study), [(lib, [(a, "")], ["Steel", "electrical_steel", "user:steel", "Iron"])]
+            objects.material_rows(self.study),
+            [
+                (a, [(a, "")], ["A", "— none —", "1", ""]),
+                (outside, [(outside, "")], ["Outside", "Steel", "–", "1"]),
+            ],
         )
+        self.assertEqual(objects.bodies_without_material(self.study), [a])
 
     def test_library_material_survives_save_and_reload(self):
         lib = objects.make_library_material(
             self.study, json.dumps(record("user:copper", "銅 مس Copper", "conductor"), ensure_ascii=False)
         )
-        mat = self.mat("Coil", [self.box("A")])
-        mat.LibraryMaterial, mat.Potential = lib, 3
+        self.assign([self.box("A")], 3, lib)
         path = os.path.join(self.tmp.name, "lib.FCStd")
         self.doc.saveAs(path)
         App.closeDocument(self.doc.Name)
@@ -258,8 +291,7 @@ class StudyTest(unittest.TestCase):
 
     def test_folder_overview_rows(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
-        mat = self.mat("Copper", [a, b])
-        empty = self.mat("Iron", [])
+        ma, _mb = self.assign([a, b])
         exc = objects.make_excitation(self.study, "In", [(a, "Face1"), (a, "Face2")])
         size = objects.make_mesh_size(self.study, 1.5, [(a, ""), (c, "Edge1")])
         self.include(c)
@@ -267,9 +299,9 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(
             objects.material_rows(self.study),
             [
-                (mat, [(a, "")], ["Copper", "— none —", "A", "1", "0"]),
-                (mat, [(b, "")], ["Copper", "— none —", "B", "2", "0"]),
-                (empty, [], ["Iron", "— none —", "", "", "0"]),
+                (a, [(a, "")], ["A", "Steel", "1", "0"]),
+                (b, [(b, "")], ["B", "Steel", "2", "0"]),
+                (c, [(c, "")], ["C", "— none —", "3", ""]),
             ],
         )
         self.assertEqual(
@@ -279,15 +311,15 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(
             objects.mesh_size_rows(self.study), [(size, [(a, ""), (c, "Edge1")], ["MeshSize", "1.5 mm", "A, C.Edge1"])]
         )
-        self.assertEqual(objects.item_refs(mat), [(a, ""), (b, "")])
+        self.assertEqual(objects.item_refs(ma), [(a, "")])
         self.assertTrue(objects.is_item(size) and not objects.is_item(self.study.MeshSizesGroup))
         self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
         d = self.box("D", 30)
-        mat.References += [d]
-        self.assertEqual(objects.material_rows(self.study)[2], (mat, [(d, "")], ["Copper", "— none —", "D", "–", "0"]))
+        objects.assign(self.study, [d], ma.LibraryMaterial, 4)
+        self.assertEqual(objects.material_rows(self.study)[3], (d, [(d, "")], ["D", "Steel", "–", "4"]))
 
     def test_mesh_settings_go_to_the_job(self):
-        self.mat("Copper", [self.box("A")])
+        self.include(self.box("A"))
         settings = self.study.MeshSizesGroup
         settings.SurfaceAlgorithm = "Delaunay"
         settings.VolumeAlgorithm = "HXT"
@@ -313,7 +345,7 @@ class StudyTest(unittest.TestCase):
     # --- checks ------------------------------------------------------------
 
     def test_check_min_size_above_max_size(self):
-        self.mat("Copper", [self.box("A")])
+        self.include(self.box("A"))
         self.study.MeshSizesGroup.MinSize = 3.0
         self.study.MeshSizesGroup.MaxSize = 2.0
         self.assertStudyError("larger than the maximum")
@@ -321,24 +353,24 @@ class StudyTest(unittest.TestCase):
     def test_check_not_one_solid(self):
         two = self.doc.addObject("Part::Feature", "Two")
         two.Shape = Part.makeCompound([Part.makeBox(1, 1, 1), Part.makeBox(1, 1, 1, App.Vector(5, 0, 0))])
-        self.mat("Copper", [two])
+        self.include(two)
         self.assertStudyError("exactly one solid")
 
     def test_check_zero_size(self):
         a = self.box("A")
-        self.mat("Copper", [a])
+        self.include(a)
         objects.make_mesh_size(self.study, 0.0, [(a, "")])
         self.assertStudyError("greater than 0")
 
     def test_check_missing_face(self):
         a = self.box("A")
-        self.mat("Copper", [a])
+        self.include(a)
         objects.make_excitation(self.study, "T", [(a, "Face60")])  # a box has 6 faces
         self.assertStudyError("has no Face60")
 
     def test_smallest_mesh_size_wins(self):
         a = self.box("A")
-        self.mat("Copper", [a])
+        self.include(a)
         objects.make_mesh_size(self.study, 3.0, [(a, "")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         volumes = jobwriter.check(self.study)[0]
@@ -349,7 +381,7 @@ class StudyTest(unittest.TestCase):
         b = self.box("B", 10)
         b.Label = "A!"  # cleans to "A_"
         a.Label = "A?"  # cleans to "A_" too
-        self.mat("Cu", [a, b])
+        self.include(a, b)
         self.assertStudyError("A_")
 
     # --- simulation folder ----------------------------------------------------
@@ -388,13 +420,12 @@ class StudyTest(unittest.TestCase):
         box = doc.addObject("Part::Box", "A")
         doc.recompute()
         study.MainObjects = [box]
-        objects.make_material(study, "Copper", [box])
         with self.assertRaisesRegex(jobwriter.StudyError, "Save the document in the simulation folder first"):
             jobwriter.write_job(study)
         self.assertEqual(study.MatIds, {})
 
     def test_simulation_folder_with_spaces_and_persian_letters(self):
-        self.mat("Copper", [self.box("A")])
+        self.include(self.box("A"))
         folder = os.path.join(self.tmp.name, "my model مدل")
         os.mkdir(folder)
         self.doc.saveAs(os.path.join(folder, "موتور.FCStd"))
@@ -405,11 +436,10 @@ class StudyTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
 
     def test_second_study_replaces_the_mesh_and_keeps_its_own_scratch_folder(self):
-        self.mat("Iron", [self.box("A")])
+        self.include(self.box("A"))
         second = objects.make_study(self.doc)
         b = self.box("B", 10)
         second.MainMode, second.MainObjects = "Manual", [b]
-        objects.make_material(second, "Air", [b])
         for study in (self.study, second):
             path = jobwriter.write_job(study)
             r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
@@ -430,7 +460,7 @@ class StudyTest(unittest.TestCase):
         a.Placement.Base = App.Vector(0, 50, 0)
         part.addObject(a)
         self.doc.recompute()
-        self.mat("Copper", [a])
+        self.include(a)
         objects.make_excitation(self.study, "T", [(a, "Face6")])  # top face, z = 10
         jobwriter.write_job(self.study)
         vol = Part.Shape()
@@ -443,8 +473,8 @@ class StudyTest(unittest.TestCase):
 
     def test_job_json_contents(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a])
-        self.mat("Air", [b])
+        self.include(a)
+        self.include(b)
         objects.make_excitation(self.study, "Terminal In", [(a, "Face1"), (a, "Face2")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         self.study.Label = "My Study"
@@ -486,7 +516,7 @@ class StudyTest(unittest.TestCase):
 
     def test_face_edge_and_vertex_sizes_go_to_the_job(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a, b])
+        self.include(a, b)
         objects.make_mesh_size(self.study, 1.0, [(a, "Face6"), (a, "Edge1"), (b, "Vertex1")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         path = jobwriter.write_job(self.study)
@@ -508,14 +538,14 @@ class StudyTest(unittest.TestCase):
 
     def test_check_missing_edge(self):
         a = self.box("A")
-        self.mat("Copper", [a])
+        self.include(a)
         objects.make_mesh_size(self.study, 1.0, [(a, "Edge99")])  # a box has 12 edges
         self.assertStudyError("has no Edge99")
 
     def test_written_job_meshes(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.mat("Copper", [a])
-        self.mat("Air", [b])
+        self.include(a)
+        self.include(b)
         objects.make_excitation(self.study, "T", [(a, "Face1")])  # x = 0 face
         objects.make_mesh_size(self.study, 1.0, [(a, "Face1"), (a, "Edge1"), (b, "Vertex8")])
         settings = self.study.MeshSizesGroup
@@ -540,8 +570,9 @@ class StudyTest(unittest.TestCase):
     def test_multiple_studies_have_independent_ownership_and_ids(self):
         second = objects.make_study(self.doc, "2D", "Cross-section")
         a = self.box("A")
-        material = self.mat("Iron", [a])
-        other = objects.make_material(second, "Copper", [a])
+        (material,) = self.assign([a])
+        copper = objects.make_library_material(second, json.dumps(record("user:copper", "Copper", "conductor")))
+        (other,) = objects.assign(second, [a], copper, 0)
         objects.update_ids(self.study)
         self.assertIsNone(objects.find_study(self.doc))
         self.assertEqual(objects.owner_study(material), self.study)
@@ -549,6 +580,7 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.owner_study(second.MeshSizesGroup), second)
         self.assertIsNone(objects.owner_study(a))  # a reference does not imply ownership
         self.assertEqual(second.MatIds, {})
+        self.assertEqual(objects.assignment_of(second), {"A": other})
         self.assertEqual(len(objects.material_rows(second)), 1)
 
     def test_nested_sources_use_body_tip_and_final_boolean_result(self):
@@ -622,7 +654,7 @@ class StudyTest(unittest.TestCase):
         source.addObject(self.face("Section"))
         second.MainMode, second.MainSource = "Container", source
         second.MeshSizesGroup.DefaultMeshSize = 1.5
-        self.mat("Iron", [self.box("A")])
+        self.include(self.box("A"))
         objects.update_ids(self.study)
         path = os.path.join(self.tmp.name, "setup.FCStd")
         self.doc.saveAs(path)
@@ -653,7 +685,7 @@ print('RESTORE PASS')
         self.assertIn("RESTORE PASS", result.stdout)
 
     def test_deferred_export_cannot_change_ids_or_write_files(self):
-        self.mat("Iron", [self.box("A")])
+        self.include(self.box("A"))
         for prop, value, message in (
             ("Dimension", "2D", "2D mesh generation"),
             ("Movement", "Sliding motion", "Sliding-motion"),
@@ -669,7 +701,10 @@ print('RESTORE PASS')
     def test_new_study_requires_geometry_even_when_materials_exist(self):
         study = objects.make_study(self.doc)
         self.assertEqual(study.MainMode, "Unassigned")
-        objects.make_material(study, "Iron", [self.box("A")])
+        steel = objects.make_library_material(
+            study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL))
+        )
+        objects.assign(study, [self.box("A")], steel, 0)
         with self.assertRaisesRegex(jobwriter.StudyError, "No geometry assigned"):
             jobwriter.check(study)
 
@@ -679,9 +714,7 @@ print('RESTORE PASS')
         source.addObject(b)
         source.addObject(a)
         self.study.MainMode, self.study.MainSource = "Container", source
-        objects.make_material(self.study, "Copper", [outside, a, b])
-        # Conflicting/invalid assignments outside the source must not affect its mesh.
-        objects.make_material(self.study, "Unused", [outside])
+        # Invalid assignments outside the source must not affect its mesh.
         objects.make_excitation(self.study, "Terminal", [(outside, "Face60"), (b, "Face1")])
         objects.make_mesh_size(self.study, 0.5, [(outside, "Face60"), (a, "Face1")])
         objects.make_mesh_size(self.study, 0.0, [(outside, "")])
@@ -710,6 +743,8 @@ print('RESTORE PASS')
             job = json.load(fh)
         self.assertEqual([(v["mat_id"], v["name"]) for v in job["volumes"]], [(1, "A"), (2, "B")])
         self.assertEqual(objects.bodies_without_material(self.study), [a, b])
+        self.assign([a])
+        self.assertEqual(objects.bodies_without_material(self.study), [b])
 
     def test_ids_follow_live_membership_of_the_selected_geometry(self):
         a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)

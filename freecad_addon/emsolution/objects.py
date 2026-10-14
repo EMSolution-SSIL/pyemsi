@@ -140,13 +140,12 @@ class _Named(_Proxy):
             obj.GroupName = obj.Label
 
 
-class Material(_Named):
-    """An assignment: bodies made of a Material Library entry, with their potential region."""
+class Material(_Proxy):
+    """An assignment: one body, its Material Library entry and its potential region. Made by assign()."""
 
     def __init__(self, obj):
         obj.Proxy = self
-        self.add_group_name(obj)
-        obj.addProperty("App::PropertyLinkListGlobal", "References", "EMSolution", "Bodies made of this material")
+        obj.addProperty("App::PropertyLinkGlobal", "Body", "EMSolution", "Body made of this material")
         obj.addProperty("App::PropertyLink", "LibraryMaterial", "EMSolution", "Material from the Material Library")
         obj.addProperty("App::PropertyIntegerConstraint", "Potential", "EMSolution", "POTENTIAL: 0 total, 1+ reduced")
         obj.Potential = (0, 0, 1000000, 1)
@@ -250,12 +249,6 @@ def _add(study, group_prop, proxy_cls, label):
     return obj
 
 
-def make_material(study, label, bodies):
-    obj = _add(study, "MaterialsGroup", Material, label)
-    obj.References = bodies
-    return obj
-
-
 def make_library_material(study, record_json):
     """record_json: canonical ems_material JSON. The Label is the material's name."""
     name = json.loads(record_json)["identity"]["name"]
@@ -266,6 +259,54 @@ def make_library_material(study, record_json):
 
         taskpanels.ViewProviderLibraryMaterial(obj.ViewObject)
     return obj
+
+
+def assignment_of(study):
+    """{body Name: assignment} for the Study's assignments whose body still exists."""
+    return {m.Body.Name: m for m in materials(study) if m.Body is not None}
+
+
+def assignment_label(m):
+    """The tree label "<body>: <material>"; FreeCAD keeps labels unique, so it cannot be the body's label."""
+    lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
+    return f"{m.Body.Label}: {lib}" if m.Body else m.Label
+
+
+def assign(study, bodies, lib, potential):
+    """Give each body lib and potential, updating its assignment or adding one. Returns them in body order."""
+    have = assignment_of(study)
+    out = []
+    for body in bodies:
+        m = have.get(body.Name)
+        if m is None:
+            m = _add(study, "MaterialsGroup", Material, body.Label)
+            m.Body = body
+            if getattr(m, "ViewObject", None) is not None:  # GUI running
+                from . import taskpanels
+
+                taskpanels.ViewProviderItem(m.ViewObject)
+            have[body.Name] = m
+        m.LibraryMaterial, m.Potential = lib, potential
+        m.Label = assignment_label(m)
+        out.append(m)
+    return out
+
+
+def unassign(study, bodies):
+    """Remove the assignments of bodies; bodies without one are skipped."""
+    have = assignment_of(study)
+    for body in bodies:
+        m = have.pop(body.Name, None)
+        if m is not None:
+            study.Document.removeObject(m.Name)
+
+
+def sync_labels(study):
+    """Rewrite assignment labels after a body or material was renamed."""
+    for m in materials(study):
+        label = assignment_label(m)
+        if m.Label != label:
+            m.Label = label
 
 
 def make_excitation(study, label, faces):
@@ -304,6 +345,11 @@ def material_users(lib):
     return [m for m in materials(owner_study(lib)) if m.LibraryMaterial == lib]
 
 
+def user_labels(lib):
+    """For messages: the body label of each assignment using lib, or the assignment label if the body is gone."""
+    return [m.Body.Label if m.Body else m.Label for m in material_users(lib)]
+
+
 def is_study_object(obj):
     """The Study, a folder or an item made by this addon."""
     return isinstance(getattr(obj, "Proxy", None), _Proxy)
@@ -338,19 +384,23 @@ def is_item(obj):
 def item_refs(item):
     """[(body, sub)] of a Material, Excitation or Mesh Size; sub "" = the whole body."""
     if isinstance(item.Proxy, Material):
-        return [(b, "") for b in item.References]
+        return [(item.Body, "")] if item.Body else []
     return [(b, s) for b, subs in item.References for s in subs]
 
 
 def material_rows(study):
-    """Rows for the Materials panel: (assignment, refs, [name, material, body, MAT_ID, POTENTIAL])."""
+    """Rows for the Materials panel: (body, refs, [body, material, MAT_ID, POTENTIAL]).
+
+    Every main-geometry body, then bodies outside it that still have an assignment.
+    """
+    have = assignment_of(study)
+    main = _main_bodies(study)
+    inside = {b.Name for b in main}
     rows = []
-    for m in materials(study):
-        lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
-        rows += [
-            (m, [(b, "")], [display_name(m), lib, b.Label, study.MatIds.get(b.Name, "–"), str(m.Potential)])
-            for b in m.References
-        ] or [(m, [], [display_name(m), lib, "", "", str(m.Potential)])]
+    for b in main + [m.Body for m in have.values() if m.Body.Name not in inside]:
+        m = have.get(b.Name)
+        lib = m.LibraryMaterial.Label if m and m.LibraryMaterial else NO_MATERIAL
+        rows.append((b, [(b, "")], [b.Label, lib, study.MatIds.get(b.Name, "–"), str(m.Potential) if m else ""]))
     return rows
 
 
@@ -359,8 +409,8 @@ def library_rows(study):
     rows = []
     for lib in library_materials(study):
         users = material_users(lib)
-        refs = [(b, "") for m in users for b in m.References]
-        rows.append((lib, refs, [lib.Label, lib.Family, lib.MaterialId, ", ".join(m.Label for m in users)]))
+        refs = [(m.Body, "") for m in users if m.Body]
+        rows.append((lib, refs, [lib.Label, lib.Family, lib.MaterialId, ", ".join(user_labels(lib))]))
     return rows
 
 
@@ -392,8 +442,8 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Main-geometry bodies without a material."""
-    have = {b.Name for m in materials(study) for b in m.References}
+    """Main-geometry bodies without an assignment."""
+    have = assignment_of(study)
     return [b for b in _main_bodies(study) if b.Name not in have]
 
 

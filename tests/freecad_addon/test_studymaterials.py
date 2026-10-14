@@ -92,12 +92,12 @@ class RepositoryTest(StudyCase):
     def test_delete_is_refused_while_an_assignment_uses_the_material(self):
         self.repo.create(material("user:air", "Air", AIR))
         (lib,) = objects.library_materials(self.study)
-        mat = objects.make_material(self.study, "Gap", [self.box("A")])
-        mat.LibraryMaterial = lib
+        a = self.box("A")
+        objects.assign(self.study, [a], lib, 0)
         self.assertFalse(self.repo.is_deletable("user:air"))
-        with self.assertRaisesRegex(ReadOnlyMaterialError, "Gap"):
+        with self.assertRaisesRegex(ReadOnlyMaterialError, "used by: A$"):
             self.repo.delete("user:air")
-        mat.LibraryMaterial = None
+        objects.unassign(self.study, [a])
         self.repo.delete("user:air")
         self.assertEqual(objects.library_materials(self.study), [])
 
@@ -250,8 +250,7 @@ class StudyRowsTest(StudyCase):
         a, b = self.box("A"), self.box("B", 10)
         self.study.MainObjects = [a, b]
         (lib,) = studymaterials.import_materials(self.study, [material("user:steel", "Steel", STEEL)])
-        mat = objects.make_material(self.study, "Iron", [a, b])
-        mat.LibraryMaterial, mat.Potential = lib, 1
+        objects.assign(self.study, [a, b], lib, 1)
         rows = studymaterials.study_material_rows(self.study)
         self.assertEqual(
             [(r[0], r[1], r[2], r[3].material_id) for r in rows], [(1, "A", 1, "user:steel"), (2, "B", 1, "user:steel")]
@@ -261,14 +260,15 @@ class StudyRowsTest(StudyCase):
         a, b = self.box("A"), self.box("B", 10)
         self.study.MainObjects = [a, b]
         (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
-        objects.make_material(self.study, "Gap", [a]).LibraryMaterial = lib
+        objects.assign(self.study, [a], lib, 0)
         with self.assertRaisesRegex(StudyError, "no material from the Material Library: B$"):
             studymaterials.study_material_rows(self.study)
 
     def test_assignment_without_a_material_is_named(self):
         a = self.box("A")
         self.study.MainObjects = [a]
-        objects.make_material(self.study, "Iron", [a])
+        (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
+        objects.assign(self.study, [a], lib, 0)[0].LibraryMaterial = None
         with self.assertRaisesRegex(StudyError, "no material from the Material Library: A$"):
             studymaterials.study_material_rows(self.study)
 
@@ -276,7 +276,7 @@ class StudyRowsTest(StudyCase):
         a = self.box("A")
         self.study.MainObjects = [a]
         (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
-        objects.make_material(self.study, "Gap", [a]).LibraryMaterial = lib
+        objects.assign(self.study, [a], lib, 0)
         self.doc.removeObject(lib.Name)
         with self.assertRaisesRegex(StudyError, "no material from the Material Library: A$"):
             studymaterials.study_material_rows(self.study)
