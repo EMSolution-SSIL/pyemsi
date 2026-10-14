@@ -1,7 +1,7 @@
 # Study Material Library and 16.1 Material Assignments: Design
 
 Date: 2026-10-13
-Status: approved in conversation, waiting for spec review
+Status: implemented; revised 2026-10-14 (per-body assignments, sections 3, 4.3, 5, 6, 7.4, 10)
 Branch: `feature/freecad-addon`
 Companion: [EMS Material Manager widgets PRD](2026-10-13-ems-material-manager-widgets-prd.md)
 
@@ -38,20 +38,30 @@ to call one function.
 ## 3. Decisions
 
 1. **Two folders.** A new **Material Library** folder holds the Study's own
-   copies of materials. The **Materials** folder holds *assignments* that
-   link a Material Library entry to bodies.
+   copies of materials. The **Materials** folder holds *assignments*: one
+   per body, linking that body to a Material Library entry.
 2. **Copies are independent.** Importing copies the library record into the
    Study. The copy keeps no origin, no link and no status relative to the
    Material Manager. It is edited in the Study and travels with the `.FCStd`,
    so a shared document works on any machine.
 3. **Physics only from the Material Library** (no inline values on
    assignments). Air, copper and so on are ordinary materials.
-4. **Per-body `MAT_ID`.** Each body with an assignment gets its own `MAT_ID`;
-   `MAT_NAME` is the cleaned body label. One assignment over three bodies
-   writes three 16.1 entries.
-5. **An assignment carries only `POTENTIAL`** besides its material and bodies.
+4. **Per-body `MAT_ID`.** Each main-geometry body gets its own `MAT_ID`;
+   `MAT_NAME` is the cleaned body label. Three bodies on one material write
+   three 16.1 entries.
+5. **An assignment is per body** and carries only its body, its material and
+   `POTENTIAL`. It has no name of its own: nothing an assignment could be
+   called reaches the input file or the mesh, and the Material Library entry
+   already groups the bodies made of it. A body has at most one assignment
+   in a Study, so "two materials on one body" cannot happen. Links (not name
+   maps) keep FreeCAD's dependency tracking: deleting a body warns, renames
+   are safe, and a material's users are its `InList`.
    Permeability form and iron-loss form follow the library adapter's `auto`
    rules; a user who needs another form edits or duplicates the Study copy.
+5a. **Meshing does not need materials.** Physical group names are body
+   labels and tags are `MAT_ID`s, so Run Mesh works on bodies without an
+   assignment. Only the 16.1 builder requires every main-geometry body to have
+   a material.
 6. **Mesh tags are the IDs.** In 3D, volume physical groups are tagged with
    `MAT_ID`, excitation surface groups with `SMAT_ID`. (In a future 2D Study,
    surfaces take `MAT_ID` and lines `SMAT_ID`; nothing 2D is built now.)
@@ -96,28 +106,36 @@ to call one function.
 
 - `material_id` is unique within a Study.
 - Deleting a `LibraryMaterial` that an assignment links to is refused; the
-  message names the assignments.
+  message names the bodies that use it.
 
-### 4.3 `Material` (assignment, in Materials)
+### 4.3 `Material` (assignment, in Materials, one per body)
 
 | Property | Type | Default |
 |---|---|---|
-| `GroupName` | String | as today |
-| `References` | LinkListGlobal (bodies) | as today |
-| `LibraryMaterial` | `App::PropertyLink` | empty |
+| `Body` | `App::PropertyLinkGlobal` | the body (may sit inside an `App::Part`) |
+| `LibraryMaterial` | `App::PropertyLink` | the chosen Material Library entry |
 | `Potential` | `App::PropertyIntegerConstraint` (≥ 0) | 0 |
 
-An empty `LibraryMaterial` is allowed for meshing. Only the 16.1 builder
-rejects it.
+- No `GroupName`, no `References`.
+- The tree `Label` is `"<body label>: <material label>"`, for reading only.
+  FreeCAD keeps labels unique, so it cannot be the body label itself. It is
+  rewritten on every assignment and when the Materials panel opens; nothing
+  reads it.
+- Only `objects.assign` creates assignments. Assigning to a body that already
+  has one in the Study updates that object; `objects.unassign` deletes it.
+- `LibraryMaterial` is set by `assign`. It can still become empty if the
+  library object is deleted from Python; the 16.1 builder reports that body.
+- An assignment whose `Body` was deleted is ignored by rows, IDs and the
+  builder; the user deletes it from the tree.
 
 ## 5. IDs and meshing
 
-- `update_ids` keeps its rules on the renamed tables: every body with an
-  assignment gets a `MAT_ID`, every (excitation, body) an `SMAT_ID`; counters
-  only grow; dropped IDs are not reused; `set_id` still edits single IDs.
+- `update_ids` keeps its rules on the renamed tables: every main-geometry body
+  gets a `MAT_ID`, every (excitation, body) an `SMAT_ID`; counters only grow;
+  dropped IDs are not reused; `set_id` still edits single IDs.
 - With the Materials mode gone, the set of volumes is the main region from
-  `geometry.region(study, "Main")`. Every body in it must have exactly one
-  assignment (existing `jobwriter.check` rules).
+  `geometry.region(study, "Main")`. Bodies need no assignment to be meshed
+  (decision 5a); `check` returns `volumes = [(body, size_mm)]`.
 - `job.json` volume entries: `{"mat_id", "name" (MAT_NAME), "file", "size"}`.
   Surface entries: `{"smat_id", "name", "mat_id" (owning body), "files"}`.
 - `mesher.py` tags each volume physical group with `mat_id`, each surface group
@@ -128,7 +146,8 @@ rejects it.
 ## 6. Modules
 
 - `objects.py`: folders, `LibraryMaterial`, `Material`, ID tables, row
-  helpers. No `ems_material` import.
+  helpers, `assign(study, bodies, lib, potential)`, `unassign(study, bodies)`,
+  `assignment_of(study)` (body Name → `Material`). No `ems_material` import.
 - `studymaterials.py` (new, no GUI, imports `ems_material`):
   - `StudyMaterialRepository(study)`: the library's `MaterialRepository`
     protocol over `LibraryMaterial` objects: `list`, `get`, `search`,
@@ -144,8 +163,8 @@ rejects it.
     with a folder dialog and calls `remember_library_root`).
   - `material_properties(rows)`: the 16.1 builder (section 8).
   - `study_material_rows(study)`: `[(mat_id, mat_name, potential, Material)]`
-    in `MAT_ID` order; raises `StudyError` for an assignment without a
-    `LibraryMaterial`.
+    in `MAT_ID` order; raises `StudyError` naming every main-geometry body
+    without an assignment or whose assignment has no `LibraryMaterial`.
 - `materialpicker.py` (new, temporary): the stand-in picker dialog.
 - `taskpanels.py` / `commands.py`: panels and commands (section 7).
 - `jobwriter.py`, `geometry.py`, `mesher.py`: renamed IDs, Materials mode
@@ -159,7 +178,7 @@ if the import fails.
 
 ### 7.1 Material Library folder panel
 
-- Table: **Name**, **Family**, **Material ID**, **Used by** (assignment labels).
+- Table: **Name**, **Family**, **Material ID**, **Used by** (body labels).
 - **Import from Material Manager…** resolves the root (asks with a folder
   dialog and remembers it if needed) and opens the picker.
 - **Edit…** opens the stand-in editor with the selected row preselected.
@@ -183,13 +202,27 @@ shows stale values until the window's Refresh.
 
 ### 7.4 Materials (assignments)
 
-- **Add Material** asks for a name, takes the selected bodies, then opens the
-  item panel.
-- Item panel: the existing body list, plus a **Material** combo (Material
-  Library entries, or "— none —") and a **POTENTIAL** spin box (≥ 0).
-- Materials folder table: **Assignment**, **Material**, **Body**, **MAT_ID**,
-  **POTENTIAL**.
-- ID table dialog headers: **MAT_ID** / **SMAT_ID**.
+- **Assign dialog** (`AssignDialog`): a **Material** combo (Material Library
+  entries, then "— none —") and a **POTENTIAL** spin box (≥ 0), pre-filled
+  from the first body's assignment (else the first library entry and 0). An
+  empty library shows a note to import materials first. OK assigns the material to every given
+  body, or removes their assignments for "— none —", in one transaction.
+- **Assign Material** command (toolbar, replaces Add Material): takes the
+  bodies selected in the 3D view or tree (any number) and opens the dialog.
+  It warns when nothing usable is selected.
+- Materials folder table: one row per main-geometry body, then one row per
+  assignment whose body is outside the main geometry. Columns **Body**,
+  **Material**, **MAT_ID**, **POTENTIAL**; "— none —" for a body without an
+  assignment. Multi-select rows (Ctrl/Shift) highlights their bodies;
+  **Assign…** opens the dialog for the selected rows; double-click opens it
+  for one row. The red "No material" line stays, reworded to say the input
+  file needs a material for every body.
+- Double-clicking an assignment in the tree opens the dialog for its body.
+  The generic item panel no longer handles Materials.
+- The folder panel only shows while the folder is selected, so 3D picks do
+  not select rows; selecting in 3D is the job of the Assign Material command.
+- ID table dialog headers: **MAT_ID** / **SMAT_ID**; volume rows are named by
+  body label only.
 
 ## 8. The 16.1 builder
 
@@ -242,8 +275,13 @@ environment, so the add-on can import it.
   main mode instead of the removed Materials mode; legacy-restore tests removed.
 - `test_mesher.py`: physical group tags and names equal the job's `mat_id` /
   `smat_id` / `name`.
-- `gui_smoke.py`: opens the Material Library panel and the Material item panel;
-  constructs the picker and the editor window without driving them.
+- Per-body assignments (`test_study.py`): assign creates one object per body,
+  re-assigning updates it, `unassign` removes it; `Body` link is global; label follows body and material; meshing works
+  without assignments; deleted bodies are ignored; rows list every main body.
+- `gui_smoke.py`: opens the Material Library panel, the Assign dialog from the
+  command and from the Materials panel with two rows selected, one undo step
+  per OK, "— none —" removes; constructs the
+  picker and the editor window without driving them.
 
 ## 11. Later
 
