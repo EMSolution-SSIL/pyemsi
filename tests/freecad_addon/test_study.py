@@ -212,6 +212,29 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(objects.is_item(lib))
         self.assertIsNone(objects.pick_body(lib))
 
+    def test_deleting_a_study_takes_everything_it_owns(self):
+        a = self.box("A")
+        self.assign([a])
+        objects.make_excitation(self.study, "In", [(a, "Face1")])
+        objects.make_mesh_size(self.study, 1.0, [(a, "")])
+        result = self.doc.addObject("App::FeaturePython", "MeshResult")  # stands in for the Fem mesh
+        self.study.addObject(result)
+        self.study.MeshResult = result
+        second = objects.make_study(self.doc)
+        objects.make_library_material(second, json.dumps(record("user:air", "Air")))
+        keep = {"A", second.Name} | {o.Name for o in objects.study_contents(second)}
+        owned = objects.study_contents(self.study)
+        self.assertEqual(len(owned), 4 + 5)  # four folders; assignment, library material, excitation, size, result
+        objects.delete_contents(self.study)
+        self.doc.removeObject(self.study.Name)
+        self.assertEqual({o.Name for o in self.doc.Objects}, keep)
+
+    def test_library_material_left_without_a_study_has_no_users(self):
+        lib = self.lib()
+        self.doc.removeObject(self.study.Name)  # its folders and items stay behind
+        self.assertEqual(objects.material_users(lib), [])
+        self.assertEqual(objects.user_labels(lib), [])
+
     def test_renaming_a_library_material_renames_its_record(self):
         lib = self.lib()
         lib.Label = "Silicon steel"

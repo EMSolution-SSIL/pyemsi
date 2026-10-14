@@ -239,6 +239,21 @@ def owner_study(obj):
     return None
 
 
+def study_contents(study):
+    """Everything the Study owns: folders after their items, Materials before the Material Library."""
+    out = []
+    for obj in reversed(study.Group):
+        out += list(getattr(obj, "Group", []))
+        out.append(obj)
+    return out
+
+
+def delete_contents(study):
+    """Remove everything the Study owns, but not the Study itself. No transaction."""
+    for obj in study_contents(study):
+        study.Document.removeObject(obj.Name)
+
+
 def _add(study, group_prop, proxy_cls, label):
     obj = study.Document.addObject("App::FeaturePython", proxy_cls.__name__)
     proxy_cls(obj)
@@ -341,8 +356,9 @@ def library_materials(study):
 
 
 def material_users(lib):
-    """Assignments of lib's Study that link to it."""
-    return [m for m in materials(owner_study(lib)) if m.LibraryMaterial == lib]
+    """Assignments of lib's Study that link to it; none once its Study is gone."""
+    study = owner_study(lib)
+    return [m for m in materials(study) if m.LibraryMaterial == lib] if study else []
 
 
 def user_labels(lib):
