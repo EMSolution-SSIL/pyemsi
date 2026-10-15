@@ -49,9 +49,6 @@ def assignment_study():
     study = active_study()
     if study is None:
         warn("Select the Study you want to edit first.")
-    elif study.Dimension != "3D":
-        warn("2D assignments will be added with 2D mesh generation.")
-        study = None
     return study
 
 
@@ -78,8 +75,7 @@ def gate(study, bodies):
 
 class _StudyCommand:
     def IsActive(self):
-        study = active_study()
-        return study is not None and study.Dimension == "3D" and not Gui.Control.activeDialog()
+        return active_study() is not None and not Gui.Control.activeDialog()
 
 
 class NewStudy:
@@ -135,6 +131,10 @@ class AddExcitation(_StudyCommand):
             "MenuText": "Excitation",
             "ToolTip": "Make the selected faces an excitation surface",
         }
+
+    def IsActive(self):  # 2D Studies get field sources later
+        study = active_study()
+        return study is not None and study.Dimension == "3D" and not Gui.Control.activeDialog()
 
     def Activated(self):
         study = assignment_study()

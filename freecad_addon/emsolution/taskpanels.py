@@ -350,19 +350,10 @@ class FolderView:
                 notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
             notice.setWordWrap(True)
             layout.addWidget(notice)
-        if study.Dimension == "2D":
-            notice = QtWidgets.QLabel(
-                "2D material, excitation and local size assignments will be added with 2D meshing."
-            )
-            notice.setWordWrap(True)
-            layout.addWidget(notice)
         self.settings = None
         if isinstance(folder.Proxy, objects.MeshSizesFolder):
             self.settings = MeshSettings(folder)
             layout.addWidget(self.settings.box)
-            if study.Dimension == "2D":
-                self.settings.box.setEnabled(False)
-                self.settings.box.setToolTip("2D mesh settings will be enabled with 2D generation.")
         self.table = QtWidgets.QTableWidget(len(self.rows), len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.verticalHeader().hide()
@@ -468,8 +459,6 @@ class FolderView:
             from . import materialstandins
 
             materialstandins.open_editor(self.study, item.MaterialId)
-        elif self.study.Dimension != "3D":
-            return
         elif isinstance(self.folder_proxy, objects.MaterialsFolder):
             ask_assignment(self.study, [item])
             self.fill()
@@ -532,7 +521,6 @@ class StudyView:
         self.version.setCurrentText(study.MshVersion)
         output.addRow("MSH version", self.version)
         self.id_button = QtWidgets.QPushButton("Edit IDs…")
-        self.id_button.setEnabled(study.Dimension == "3D")
         self.id_button.clicked.connect(lambda: IdTableDialog(study).exec())
         layout.addWidget(self.id_button)
         self.run_button = QtWidgets.QPushButton("Generate mesh")

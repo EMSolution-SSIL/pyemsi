@@ -451,8 +451,9 @@ def main():
     first, second = objects.studies(doc)
     assert first == study and second.Dimension == "2D"
     assert commands.active_study() == second
-    assert not commands.COMMANDS["EMS_Material"].IsActive()
-    assert not commands.COMMANDS["EMS_RunMesh"].IsActive()
+    assert commands.COMMANDS["EMS_Material"].IsActive() and commands.COMMANDS["EMS_MeshSize"].IsActive()
+    assert not commands.COMMANDS["EMS_Excitation"].IsActive(), "excitations are 3D-only for now"
+    assert commands.COMMANDS["EMS_RunMesh"].IsActive()
     assert taskpanels.FolderView(second.MaterialsGroup).rows == []
     source = doc.addObject("App::DocumentObjectGroup", "FaceGroup")
     section = doc.addObject("Part::Feature", "Section")
@@ -464,6 +465,18 @@ def main():
     view = taskpanels.StudyView(second)
     combo = view.regions["Main"][1]
     assert combo.findData("source:" + source.Name) >= 0 and combo.findData("source:" + part.Name) >= 0
+    second.MainMode, second.MainSource = "Container", source
+    view.refresh()
+    assert view.diagnostics.text() == "", view.diagnostics.text()
+    assert view.run_button.isEnabled()
+    assert view.export_notice.text() == f"Writes {jobwriter.mesh_file(second)}", view.export_notice.text()
+    run2d = runner.start(second)
+    assert run2d is not None and run2d.proc.waitForFinished(120000)
+    Gui.updateGui()
+    assert run2d.error == "" and not runner.busy(), run2d.error
+    assert os.path.basename(run2d.mesh_file) == "pre_geom2D.msh" and os.path.isfile(run2d.mesh_file)
+    assert second.MeshResult.FemMesh.NodeCount > 0
+    log.append("2D mesh ok")
     named_manual = doc.addObject("App::DocumentObjectGroup", "Manual")
     view.refresh()
     combo.setCurrentIndex(combo.findData("source:" + named_manual.Name))
@@ -474,7 +487,7 @@ def main():
     combo.setCurrentIndex(combo.findData("source:" + source.Name))
     assert second.MainSource == source and second.MainMode == "Container"
     assert "1 face region" in view.regions["Main"][2].text()
-    assert not view.run_button.isEnabled()
+    assert view.run_button.isEnabled(), "a 2D Study with a main geometry can mesh"
     view.movement.setCurrentText("Sliding motion")
     assert second.Movement == "Sliding motion" and study.Movement == "No movement"
     assert view.regions["Moving"][0].isHidden() is False
@@ -516,7 +529,7 @@ def main():
     assert study.MeshSizesGroup.SizeFactor == 0.7
     assert second.MeshSizesGroup.SizeFactor == 1.0
     second_settings = taskpanels.FolderView(second.MeshSizesGroup)
-    assert not second_settings.settings.box.isEnabled()
+    assert second_settings.settings.box.isEnabled()
     inspect = taskpanels.GeometryPanel(second, "Main")
     Gui.Control.showDialog(inspect)
     inspect.refs.item(0).setSelected(True)
