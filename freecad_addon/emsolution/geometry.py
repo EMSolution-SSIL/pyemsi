@@ -23,6 +23,19 @@ def is_source(obj):
     return is_container(obj) and not any(objects.is_study_object(o) for o in obj.OutListRecursive)
 
 
+PLANE_TOL = 1e-6
+
+
+def plane_of(face):
+    """ "XY" for a face in the plane z = 0, "ZX" for a face in the plane y = 0, else None."""
+    box = face.BoundBox
+    if max(abs(box.ZMin), abs(box.ZMax)) < PLANE_TOL:
+        return "XY"
+    if max(abs(box.YMin), abs(box.YMax)) < PLANE_TOL:
+        return "ZX"
+    return None
+
+
 def collect(roots, dimension):
     """Return final geometry objects and diagnostics, in source order.
 
@@ -72,9 +85,14 @@ def collect(roots, dimension):
                     errors.append(f"{obj.Label}: 2D faces must be planar.")
                     valid = False
                     break
+                found = plane_of(face)
+                if found is None:
+                    errors.append(f"{obj.Label}: 2D faces must lie in the XY plane (z = 0) or the ZX plane (y = 0).")
+                    valid = False
+                    break
                 if plane is None:
-                    plane = face
-                elif not plane.isCoplanar(face, 1e-7):
+                    plane = found
+                elif found != plane:
                     errors.append(f"{obj.Label}: 2D faces must share one plane.")
                     valid = False
                     break
@@ -127,8 +145,6 @@ def setup(study):
 
 
 def export_unavailable(study):
-    if study.Dimension != "3D":
-        return "2D mesh generation is planned for a later phase. You can save this setup now."
     if study.Movement != "No movement":
         return "Sliding-motion mesh generation and interface setup are planned for a later phase."
     return ""

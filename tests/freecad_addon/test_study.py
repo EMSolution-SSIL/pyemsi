@@ -640,19 +640,32 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_planar_sources_are_checked_in_global_coordinates(self):
-        a, b = self.face("A"), self.face("B", 5)
+        a, b = self.face("A"), self.face("B", 5)  # b is lifted to z = 5
         part = self.doc.addObject("App::Part", "Part")
         part.addObject(a)
-        part.Placement.Base = App.Vector(0, 0, 5)
+        part.Placement.Base = App.Vector(0, 0, 5)  # and so is a, by its Part
         self.doc.recompute()
-        self.assertEqual(geometry.collect([a, b], "2D"), ([a, b], []))
-        part.Placement.Base.z = 10
+        for lifted in (a, b):
+            found, errors = geometry.collect([lifted], "2D")
+            self.assertEqual(found, [])
+            self.assertIn("XY plane", errors[0])
+            self.assertIn(lifted.Label, errors[0])
+        part.Placement = App.Placement()
         self.doc.recompute()
-        found, errors = geometry.collect([a, b], "2D")
-        self.assertEqual(found, [a])
-        self.assertIn("share one plane", errors[0])
+        self.assertEqual(geometry.collect([a], "2D"), ([a], []))
         self.assertIn("exactly one solid", geometry.collect([b], "3D")[1][0])
         self.assertIn("without solids", geometry.collect([self.box("Solid")], "2D")[1][0])
+
+    def test_2d_faces_may_be_in_the_zx_plane_but_not_in_both(self):
+        xy, zx = self.face("XY"), self.face("ZX")
+        zx.Placement = App.Placement(
+            App.Vector(0, 0, 0), App.Rotation(App.Vector(1, 0, 0), 90)
+        )  # (x, y, 0) -> (x, 0, y)
+        self.doc.recompute()
+        self.assertEqual(geometry.collect([zx], "2D"), ([zx], []))
+        found, errors = geometry.collect([xy, zx], "2D")
+        self.assertEqual(found, [xy])
+        self.assertIn("share one plane", errors[0])
 
     def test_sources_update_after_rename_addition_and_deletion(self):
         source = self.doc.addObject("App::DocumentObjectGroup", "Geometry")
@@ -724,17 +737,17 @@ print('RESTORE PASS')
 
     def test_deferred_export_cannot_change_ids_or_write_files(self):
         self.include(self.box("A"))
-        for prop, value, message in (
-            ("Dimension", "2D", "2D mesh generation"),
-            ("Movement", "Sliding motion", "Sliding-motion"),
-        ):
-            old = getattr(self.study, prop)
-            setattr(self.study, prop, value)
-            with self.assertRaisesRegex(jobwriter.StudyError, message):
-                jobwriter.write_job(self.study)
-            self.assertEqual(self.study.MatIds, {})
-            self.assertFalse(os.path.exists(self.scratch("job.json")))
-            setattr(self.study, prop, old)
+        self.study.Movement = "Sliding motion"
+        with self.assertRaisesRegex(jobwriter.StudyError, "Sliding-motion"):
+            jobwriter.write_job(self.study)
+        self.assertEqual(self.study.MatIds, {})
+        self.assertFalse(os.path.exists(self.scratch("job.json")))
+
+    def test_2d_study_is_not_blocked_but_sliding_motion_still_is(self):
+        study = objects.make_study(self.doc, "2D", "Section")
+        self.assertEqual(geometry.export_unavailable(study), "")
+        study.Movement = "Sliding motion"
+        self.assertIn("Sliding-motion", geometry.export_unavailable(study))
 
     def test_new_study_requires_geometry_even_when_materials_exist(self):
         study = objects.make_study(self.doc)
