@@ -4,18 +4,12 @@ Never import FreeCAD here.
 Usage: python mesher.py <job.json>
 """
 
-import json
 import os
 import sys
 
 import gmsh
 
-
-class JobError(Exception):
-    pass
-
-
-FIELD_LISTS = {0: "PointsList", 1: "CurvesList", 2: "SurfacesList", 3: "VolumesList"}
+from meshcommon import JobError, apply_size_fields, main, run
 
 
 def _import_one(path, *dims):
@@ -80,46 +74,11 @@ def build(job, folder):
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
                 raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
             by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
-    fields = []
-    for size, by_dim in by_size.items():
-        f = gmsh.model.mesh.field.add("Constant")
-        gmsh.model.mesh.field.setNumber(f, "VIn", size)
-        for d, tags in by_dim.items():
-            gmsh.model.mesh.field.setNumbers(f, FIELD_LISTS[d], tags)
-        gmsh.model.mesh.field.setNumber(f, "IncludeBoundary", 1)
-        fields.append(f)
-    fmin = gmsh.model.mesh.field.add("Min")
-    gmsh.model.mesh.field.setNumbers(fmin, "FieldsList", fields)
-    gmsh.model.mesh.field.setAsBackgroundMesh(fmin)
-    for opt in ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints", "Mesh.MeshSizeFromCurvature"):
-        gmsh.option.setNumber(opt, 0)
+    apply_size_fields(by_size)
 
 
-def run(job_path):
-    folder = os.path.dirname(os.path.abspath(job_path))
-    with open(job_path, encoding="utf-8") as fh:
-        job = json.load(fh)
-    msh = os.path.join(folder, "mesh.msh")
-    gmsh.initialize()
-    try:
-        gmsh.option.setNumber("General.Terminal", 1)
-        gmsh.model.add(job["model_name"])
-        build(job, folder)
-        for name, value in job.get("options", {}).items():  # the user's mesh settings
-            gmsh.option.setNumber(name, value)
-        gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
-        gmsh.option.setNumber("Mesh.Optimize", 1)
-        gmsh.model.mesh.generate(3)
-        gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))
-        gmsh.option.setNumber("Mesh.Binary", 0)
-        gmsh.write(msh)
-        gmsh.write(os.path.join(folder, "mesh.unv"))
-    finally:
-        gmsh.finalize()
-    try:
-        os.replace(msh, job["mesh_file"])  # only a finished mesh replaces the solver's file
-    except PermissionError:
-        raise JobError(f"Could not replace {job['mesh_file']}: it is read-only or open in another program.") from None
+def run_job(job_path):
+    job = run(job_path, build, 3)
     for item in job["volumes"]:
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in job["surfaces"]:
@@ -127,19 +86,5 @@ def run(job_path):
     print(f"Wrote {job['mesh_file']}")
 
 
-def main(argv):
-    for stream in (sys.stdout, sys.stderr):  # the runner reads UTF-8, whatever the console code page
-        stream.reconfigure(encoding="utf-8", errors="replace")
-    if len(argv) != 2:
-        print("ERROR: usage: mesher.py <job.json>", file=sys.stderr)
-        return 1
-    try:
-        run(argv[1])
-    except Exception as exc:  # anything -> one clean ERROR line for the runner
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
-    return 0
-
-
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main(sys.argv, "mesher.py", run_job))
