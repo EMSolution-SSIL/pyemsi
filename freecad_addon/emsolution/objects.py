@@ -493,6 +493,8 @@ def volume_keys(study):
 
 
 def surface_keys(study):
+    if study.Dimension == "2D":
+        return []  # 2D Studies have no excitations yet
     included = set(volume_keys(study))
     return list(
         dict.fromkeys(

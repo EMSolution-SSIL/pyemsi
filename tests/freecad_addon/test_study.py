@@ -15,6 +15,7 @@ from emsolution import geometry, jobwriter, objects
 from .materialdata import STEEL, record
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
+MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
 
 
 class StudyTest(unittest.TestCase):
@@ -785,6 +786,58 @@ print('RESTORE PASS')
         self.assertIn('3 1 "B"', physical_names)
         self.assertIn('3 2 "A"', physical_names)
         self.assertNotIn("Copper", physical_names)
+
+    def make_2d_study(self, *faces):
+        study = objects.make_study(self.doc, "2D", "Section")
+        study.MainMode, study.MainObjects = "Manual", list(faces)
+        study.MeshSizesGroup.DefaultMeshSize = 5
+        return study
+
+    def test_2d_study_writes_a_2d_job_and_meshes_it(self):
+        a, b = self.face("A"), self.face("B")
+        b.Placement.Base = App.Vector(10, 0, 0)  # touches A along x = 10
+        study = self.make_2d_study(a, b)
+        objects.make_mesh_size(study, 1.0, [(a, "Edge1")])
+        path = jobwriter.write_job(study)
+        with open(path, encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual(job["dimension"], "2D")
+        self.assertEqual([(v["mat_id"], v["name"]) for v in job["bodies"]], [(1, "A"), (2, "B")])
+        self.assertNotIn("volumes", job)
+        self.assertNotIn("surfaces", job)
+        self.assertEqual(len(job["sizes"]), 1)
+        self.assertNotIn("Mesh.Algorithm3D", job["options"])
+        self.assertEqual(job["mesh_file"], os.path.join(self.tmp.name, "pre_geom2D.msh"))
+        result = subprocess.run(
+            [sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace"
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with open(job["mesh_file"], encoding="utf-8") as fh:
+            names = fh.read().split("$PhysicalNames\n", 1)[1].split("$EndPhysicalNames", 1)[0]
+        self.assertIn('2 1 "A"', names)
+        self.assertIn('2 2 "B"', names)
+
+    def test_3d_job_keeps_its_old_shape(self):
+        self.include(self.box("A"))
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertNotIn("dimension", job)
+        self.assertEqual([v["name"] for v in job["volumes"]], ["A"])
+        self.assertIn("Mesh.Algorithm3D", job["options"])
+
+    def test_2d_study_ignores_excitation_items(self):
+        a = self.face("A")
+        study = self.make_2d_study(a)
+        objects.make_excitation(study, "Terminal", [(a, "Face1")])
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertNotIn("surfaces", job)
+        self.assertEqual(study.SmatIds, {})
+
+    def test_2d_body_outside_the_planes_is_a_study_error(self):
+        study = self.make_2d_study(self.face("Lifted", 5))
+        with self.assertRaisesRegex(jobwriter.StudyError, "XY plane"):
+            jobwriter.check(study)
 
     def test_bodies_without_materials_are_meshed_and_listed(self):
         a, b = self.box("A"), self.box("B", 10)

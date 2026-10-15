@@ -1,4 +1,4 @@
-"""Run mesher.py in a background process, stream its output, load the result."""
+"""Run mesher.py or mesher2d.py in a background process, stream its output, load the result."""
 
 import json
 import os
@@ -11,6 +11,7 @@ from PySide import QtCore, QtWidgets
 from . import jobwriter
 
 MESHER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesher.py")
+MESHER_2D = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesher2d.py")
 _run = None  # the active MeshRun; the reference also keeps it alive
 
 
@@ -43,7 +44,9 @@ class MeshRun:
         self.cancelled = False
         self.error = ""
         with open(job, encoding="utf-8") as fh:
-            self.mesh_file = json.load(fh)["mesh_file"]
+            data = json.load(fh)
+        self.mesh_file = data["mesh_file"]
+        script = MESHER_2D if data.get("dimension") == "2D" else MESHER
         self.replaced = os.path.exists(self.mesh_file)  # before the mesher starts
         self.dialog = QtWidgets.QProgressDialog("Meshing…", "Cancel", 0, 0, Gui.getMainWindow())
         self.dialog.setWindowTitle("EMSolution")
@@ -54,7 +57,7 @@ class MeshRun:
         self.proc.readyReadStandardError.connect(self._stderr)
         self.proc.finished.connect(self._finished)
         self.proc.errorOccurred.connect(self._failed_to_start)
-        self.proc.start(python_exe(), [MESHER, job])
+        self.proc.start(python_exe(), [script, job])
         self.dialog.show()
 
     def _stdout(self):

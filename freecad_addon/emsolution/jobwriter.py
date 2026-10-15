@@ -1,4 +1,4 @@
-"""Study -> checks -> job.json + BREP files for mesher.py."""
+"""Study -> checks -> job.json + BREP files for mesher.py / mesher2d.py."""
 
 import json
 import os
@@ -51,9 +51,8 @@ def check(study):
         raise StudyError("\n".join(errors))
     bodies = list({b.Name: b for b in bodies}.values())  # main geometry order
     included = {b.Name for b in bodies}
-    surfaces = [
-        (e, b, faces) for e in objects.excitations(study) for b, faces in objects.subs_by_body(e) if b.Name in included
-    ]
+    excitation_items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: none yet
+    surfaces = [(e, b, faces) for e in excitation_items for b, faces in objects.subs_by_body(e) if b.Name in included]
     sized = [
         (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in included
     ]
@@ -89,15 +88,16 @@ def check(study):
     return volumes, surfaces, elements
 
 
-def mesh_options(settings):
+def mesh_options(settings, dimension="3D"):
     """Gmsh options from the Mesh Sizes folder; a min or max size of 0 keeps Gmsh's default."""
     opts = {
         "Mesh.Algorithm": objects.ALGORITHMS_2D[settings.SurfaceAlgorithm],
-        "Mesh.Algorithm3D": objects.ALGORITHMS_3D[settings.VolumeAlgorithm],
         "Mesh.MeshSizeFactor": settings.SizeFactor,
         "Mesh.Smoothing": settings.SmoothingSteps,
-        "Mesh.OptimizeNetgen": int(settings.OptimizeNetgen),
     }
+    if dimension == "3D":
+        opts["Mesh.Algorithm3D"] = objects.ALGORITHMS_3D[settings.VolumeAlgorithm]
+        opts["Mesh.OptimizeNetgen"] = int(settings.OptimizeNetgen)
     if settings.MinSize.Value > 0:
         opts["Mesh.MeshSizeMin"] = settings.MinSize.Value
     if settings.MaxSize.Value > 0:
@@ -122,20 +122,27 @@ def write_job(study):
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change
     objects.update_ids(study)
     os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
+    two_d = study.Dimension == "2D"
     job = {
         "model_name": objects.clean(study.Label),
         "msh_version": float(study.MshVersion),
         "mesh_file": mesh_file(study),
-        "options": mesh_options(study.MeshSizesGroup),
-        "volumes": [],
-        "surfaces": [],
-        "sizes": [],
+        "options": mesh_options(study.MeshSizesGroup, study.Dimension),
     }
+    if two_d:
+        job["dimension"] = "2D"
+        job["bodies"] = []
+    else:
+        job["volumes"] = []
+        job["surfaces"] = []
+    job["sizes"] = []
     for body, size in volumes:
         mat_id = int(study.MatIds[body.Name])
         rel = f"geometry/vol_{mat_id}.brep"
         global_shape(body).exportBrep(os.path.join(folder, rel))
-        job["volumes"].append({"mat_id": mat_id, "name": objects.volume_name(body), "file": rel, "size": size})
+        job["bodies" if two_d else "volumes"].append(
+            {"mat_id": mat_id, "name": objects.volume_name(body), "file": rel, "size": size}
+        )
     for exc, body, faces in surfaces:
         smat_id = int(study.SmatIds[f"{exc.Name}|{body.Name}"])
         job["surfaces"].append(
