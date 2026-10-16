@@ -240,3 +240,5 @@ remotion/build/
 # runtime (only TypeScript source is vendored otherwise) -- unignore them.
 !pyemsi/widgets/xterm/xterm-js/*/lib/
 !pyemsi/widgets/xterm/xterm-js/*/lib/**
+# ...but not their source maps, which only help debug the JavaScript
+pyemsi/widgets/xterm/xterm-js/*/lib/*.js.map
