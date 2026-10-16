@@ -37,6 +37,13 @@ def ask_size(default):
     return value if ok else None
 
 
+def ask_elements():
+    value, ok = QtWidgets.QInputDialog.getInt(
+        Gui.getMainWindow(), "Transfinite Edges", "Elements per edge:", 10, 1, 100000
+    )
+    return value if ok else None
+
+
 def warn(text):
     QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "EMSolution", text)
 
@@ -172,6 +179,67 @@ class AddMeshSize(_StudyCommand):
             _create(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
 
 
+class AddTransfiniteBody(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("transfinitebody"),
+            "MenuText": "Transfinite Body",
+            "ToolTip": "Mesh the selected bodies as a structured grid; selected vertices become face corners",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        bodies = taskpanels.selected_bodies()
+        if not bodies:
+            return warn("Select one or more bodies first.")
+        if gate(study, bodies):
+            corners = taskpanels.selected_subs(("Vertex",))
+            _create(study, "Add Transfinite Body", lambda: objects.make_transfinite_body(study, bodies, corners))
+
+
+class AddTransfiniteEdges(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("transfiniteedges"),
+            "MenuText": "Transfinite Edges",
+            "ToolTip": "Give the selected edges a fixed number of elements",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        edges = taskpanels.selected_subs(("Edge",))
+        if not edges:
+            return warn("Select one or more edges first.")
+        if not gate(study, [b for b, _ in edges]):
+            return
+        elements = ask_elements()
+        if elements:
+            _create(study, "Add Transfinite Edges", lambda: objects.make_transfinite_edges(study, elements, edges))
+
+
+class AddRecombine(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("recombine"),
+            "MenuText": "Recombine",
+            "ToolTip": "Mesh the selected bodies with quads (2D) or quad faces and hexahedra (3D)",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        bodies = taskpanels.selected_bodies()
+        if not bodies:
+            return warn("Select one or more bodies first.")
+        if gate(study, bodies):
+            _create(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
+
+
 class RunMesh(_StudyCommand):
     def GetResources(self):
         return {"Pixmap": icon("runmesh"), "MenuText": "Run Mesh", "ToolTip": "Write the .msh file with Gmsh"}
@@ -197,6 +265,9 @@ COMMANDS = {
     "EMS_Material": AssignMaterial(),
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
+    "EMS_TransfiniteBody": AddTransfiniteBody(),
+    "EMS_TransfiniteEdges": AddTransfiniteEdges(),
+    "EMS_Recombine": AddRecombine(),
     "EMS_RunMesh": RunMesh(),
 }
 for _name, _cmd in COMMANDS.items():

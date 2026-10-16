@@ -58,6 +58,12 @@ def write_point(path, p):
         gmsh.finalize()
 
 
+def box_lines(x=0.0):
+    """The 12 edges of the unit box at x as point pairs."""
+    pts = [(x + i, j, k) for i in (0, 1) for j in (0, 1) for k in (0, 1)]
+    return [(p, q) for a, p in enumerate(pts) for q in pts[a + 1 :] if sum(abs(u - v) for u, v in zip(p, q)) == 1]
+
+
 class MesherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -70,7 +76,17 @@ class MesherTest(unittest.TestCase):
     def geo(self, name):
         return os.path.join(self.dir, "geometry", name)
 
-    def run_job(self, volumes, surfaces=(), version=4.1, sizes=(), options=None, mesh_file=None):
+    def run_job(
+        self,
+        volumes,
+        surfaces=(),
+        version=4.1,
+        sizes=(),
+        options=None,
+        mesh_file=None,
+        transfinite=None,
+        recombine=None,
+    ):
         job = {
             "model_name": "Model",
             "msh_version": version,
@@ -81,10 +97,42 @@ class MesherTest(unittest.TestCase):
         }
         if options is not None:
             job["options"] = options
+        if transfinite is not None:
+            job["transfinite"] = transfinite
+        if recombine is not None:
+            job["recombine"] = recombine
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
         return subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+
+    def edge_item(self, name, lines, n):
+        files = []
+        for k, (p, q) in enumerate(lines, 1):
+            write_line(self.geo(f"{name}_{k}.brep"), p, q)
+            files.append(f"geometry/{name}_{k}.brep")
+        return {"name": name, "nodes": n + 1, "distribution": "Uniform", "coef": 1.0, "files": files}
+
+    def element_counts(self, group, dim=3):
+        out = {}
+        for e in gmsh.model.getEntitiesForPhysicalGroup(dim, group):
+            types, tags = gmsh.model.mesh.getElements(dim, e)[:2]
+            for t, ts in zip(types, tags):
+                name = gmsh.model.mesh.getElementProperties(t)[0]
+                out[name] = out.get(name, 0) + len(ts)
+        return out
+
+    def structured_box(self, n=3):
+        return {
+            "bodies": [{"name": "Core", "mat_id": 1, "corner_files": []}],
+            "edges": [self.edge_item("tedge_1", box_lines(), n)],
+        }
+
+    def structured_boxes(self, *names_ids_x):
+        return {
+            "bodies": [{"name": n, "mat_id": m, "corner_files": []} for n, m, _ in names_ids_x],
+            "edges": [self.edge_item(f"tedge_{i}", box_lines(x), 3) for i, (_, _, x) in enumerate(names_ids_x, 1)],
+        }
 
     def open_msh(self):
         gmsh.initialize()
@@ -351,6 +399,178 @@ class MesherTest(unittest.TestCase):
         self.assertTrue(len(coords) > 0)
         for x in coords[0::3]:
             self.assertAlmostEqual(x, 1.0, places=6)
+
+    def test_structured_box_with_recombine_has_only_hexahedra(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job([self.vol(1, "Core", "vol_1.brep")], transfinite=self.structured_box(), recombine=[1])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 27})
+
+    def test_structured_box_without_recombine_has_six_tetrahedra_per_cell(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job([self.vol(1, "Core", "vol_1.brep")], transfinite=self.structured_box())
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Tetrahedron 4": 162})
+
+    def test_structured_box_next_to_unstructured_box_gets_pyramids(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 1, 0, 0, 1, 1, 1)
+        r = self.run_job(
+            [self.vol(1, "Core", "vol_1.brep"), self.vol(2, "Air", "vol_2.brep", size=0.3)],
+            options={"Mesh.Algorithm3D": 1},
+            transfinite=self.structured_box(),
+            recombine=[1],
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 27})
+        self.assertIn("Pyramid 5", self.element_counts(2))
+
+    def three_boxes(self):
+        for i, x in enumerate((0, 1, 2), 1):
+            write_box(self.geo(f"vol_{i}.brep"), x, 0, 0, 1, 1, 1)
+        return [self.vol(1, "Core", "vol_1.brep"), self.vol(2, "Air", "vol_2.brep"), self.vol(3, "Coil", "vol_3.brep")]
+
+    def test_faces_between_two_tet_bodies_stay_triangles_with_a_note(self):
+        r = self.run_job(
+            self.three_boxes(),
+            options={"Mesh.Algorithm3D": 1},
+            transfinite=self.structured_box(),
+            recombine=[1, 2, 3],
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: recombine: faces between Air and Coil stay triangles", r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 27})
+        self.assertIn("Pyramid 5", self.element_counts(2))
+        self.assertIn("Pyramid 5", self.element_counts(3))  # Coil's outside faces are quads
+
+    def test_only_the_structured_body_chosen_next_to_two_tet_bodies(self):
+        r = self.run_job(self.three_boxes(), transfinite=self.structured_box(), recombine=[1])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("NOTE: recombine", r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 27})
+        self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4"})
+
+    def test_unstructured_box_alone_gets_pyramids(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job([self.vol(1, "Air", "vol_1.brep", 0.3)], recombine=[1])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertIn("Pyramid 5", self.element_counts(1))
+
+    def test_body_inside_a_tet_body_stays_tetrahedra_with_a_note(self):
+        # Coil is the middle cube of a 3x3x3 block; six Air slabs touch each of its faces (bodies cannot overlap)
+        slabs = [(0, 0, 0, 3, 3, 1), (0, 0, 2, 3, 3, 1), (0, 0, 1, 1, 3, 1), (2, 0, 1, 1, 3, 1)]
+        slabs += [(1, 0, 1, 1, 1, 1), (1, 2, 1, 1, 1, 1)]
+        vols = []
+        for i, box in enumerate(slabs, 1):
+            write_box(self.geo(f"vol_{i}.brep"), *box)
+            vols.append(self.vol(i, f"Air{i}", f"vol_{i}.brep"))
+        write_box(self.geo("vol_7.brep"), 1, 1, 1, 1, 1, 1)
+        vols.append(self.vol(7, "Coil", "vol_7.brep", 0.3))
+        r = self.run_job(vols, recombine=[7])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: recombine: Coil has no face that can be recombined", r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(7)), {"Tetrahedron 4"})
+
+    def test_structured_body_not_chosen_next_to_a_chosen_structured_body_is_an_error(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 1, 0, 0, 1, 1, 1)
+        tf = self.structured_boxes(("Core", 1, 0), ("Yoke", 2, 1))
+        vols = [self.vol(1, "Core", "vol_1.brep"), self.vol(2, "Yoke", "vol_2.brep")]
+        r = self.run_job(vols, transfinite=tf, recombine=[1])
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("ERROR: recombine: Yoke is structured"), last)
+        self.assertIn("Core", last)
+
+    def test_quads_next_to_tets_need_delaunay(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 1, 0, 0, 1, 1, 1)
+        r = self.run_job(
+            [self.vol(1, "Core", "vol_1.brep"), self.vol(2, "Air", "vol_2.brep")],
+            options={"Mesh.Algorithm3D": 10},
+            transfinite=self.structured_box(),
+            recombine=[1],
+        )
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertIn("Delaunay", last)
+        self.assertIn("Core", last)
+        self.assertIn("Air", last)
+
+    def full_quad_core_and_air(self, n):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 1, 0, 0, 1, 1, 1)
+        return self.run_job(
+            [self.vol(1, "Core", "vol_1.brep"), self.vol(2, "Air", "vol_2.brep", size=0.3)],
+            options={"Mesh.RecombinationAlgorithm": 3},
+            transfinite=self.structured_box(n),
+            recombine=[1, 2],
+        )
+
+    def test_full_quad_with_an_odd_transfinite_count_next_to_a_recombined_body_is_an_error(self):
+        r = self.full_quad_core_and_air(3)
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("ERROR: recombine: full-quad"), last)
+        self.assertIn("Air", last)
+        self.assertIn("tedge_1", last)
+
+    def test_full_quad_with_an_even_transfinite_count_meshes(self):
+        r = self.full_quad_core_and_air(4)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 64})
+
+    def test_structured_and_two_unstructured_bodies_all_chosen(self):
+        r = self.run_job(
+            self.three_boxes(),
+            options={"Mesh.Algorithm3D": 1},
+            transfinite=self.structured_box(),
+            recombine=[1, 2],
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: recombine: faces between Air and Coil stay triangles", r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 27})
+        self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4"})
+
+    def test_structured_box_alone_meshes_with_hxt(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job(
+            [self.vol(1, "Core", "vol_1.brep")],
+            options={"Mesh.Algorithm3D": 10},
+            transfinite=self.structured_box(),
+            recombine=[1],
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Hexahedron 8": 27})
+
+    def test_structured_box_edge_without_item_is_an_error(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        tf = self.structured_box()
+        tf["edges"] = [self.edge_item("tedge_1", box_lines()[:11], 3)]
+        r = self.run_job([self.vol(1, "Core", "vol_1.brep")], transfinite=tf)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("without Transfinite Edges", r.stderr.strip().splitlines()[-1])
+
+    def test_structured_volume_with_seven_faces_is_an_error(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 1, 0.25, 0.25, 1, 0.5, 0.5)  # touches the middle of Core's x = 1 face
+        r = self.run_job(
+            [self.vol(1, "Core", "vol_1.brep"), self.vol(2, "Air", "vol_2.brep")], transfinite=self.structured_box()
+        )
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("ERROR:"), last)
+        self.assertIn("7 faces, needs 5 or 6", last)
 
     def test_folder_with_spaces_and_persian_letters(self):
         self.dir = os.path.join(self.tmp.name, "my model \u0645\u062f\u0644")

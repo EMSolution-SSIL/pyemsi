@@ -477,6 +477,32 @@ def main():
     assert os.path.basename(run2d.mesh_file) == "pre_geom2D.msh" and os.path.isfile(run2d.mesh_file)
     assert second.MeshResult.FemMesh.NodeCount > 0
     log.append("2D mesh ok")
+    commands.ask_elements = lambda: 4
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, section.Name)
+    Gui.runCommand("EMS_TransfiniteBody")
+    Gui.Selection.clearSelection()
+    for k in range(1, 5):
+        Gui.Selection.addSelection(doc.Name, section.Name, f"Edge{k}")
+    Gui.runCommand("EMS_TransfiniteEdges")
+    (tb,) = objects.transfinite_bodies(second)
+    (te,) = objects.transfinite_edges(second)
+    assert tb.References == [(section, ("",))], tb.References
+    assert te.Elements == 4 and len(te.References[0][1]) == 4, te.References
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, section.Name)
+    Gui.runCommand("EMS_Recombine")
+    (rc,) = objects.recombine_items(second)
+    assert rc.References == [(section, ("",))], rc.References
+    second.MeshSizesGroup.RecombinationAlgorithm = "Blossom full-quad"
+    run_tf = runner.start(second)
+    assert run_tf is not None and run_tf.proc.waitForFinished(120000)
+    Gui.updateGui()
+    assert run_tf.error == "" and not runner.busy(), run_tf.error
+    log.append("2D transfinite mesh ok")
+    for item in (tb, te, rc):  # leave the Study as the rest of the smoke test expects it
+        doc.removeObject(item.Name)
+    second.MeshSizesGroup.RecombinationAlgorithm = "Blossom"
     named_manual = doc.addObject("App::DocumentObjectGroup", "Manual")
     view.refresh()
     combo.setCurrentIndex(combo.findData("source:" + named_manual.Name))
@@ -530,6 +556,7 @@ def main():
     assert second.MeshSizesGroup.SizeFactor == 1.0
     second_settings = taskpanels.FolderView(second.MeshSizesGroup)
     assert second_settings.settings.box.isEnabled()
+    assert "RecombinationAlgorithm" in second_settings.settings.algorithms
     inspect = taskpanels.GeometryPanel(second, "Main")
     Gui.Control.showDialog(inspect)
     inspect.refs.item(0).setSelected(True)

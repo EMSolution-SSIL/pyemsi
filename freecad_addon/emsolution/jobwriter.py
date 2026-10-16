@@ -67,6 +67,7 @@ def check(study):
         raise StudyError("The default mesh size must be greater than 0.")
     if 0 < settings.MaxSize.Value < settings.MinSize.Value:
         raise StudyError("The minimum mesh size is larger than the maximum.")
+    transfinite_items(study, bodies)
     size_items = dict.fromkeys(s for s, _, _ in sized)
     for s in size_items:
         if s.Size.Value <= 0:
@@ -88,12 +89,58 @@ def check(study):
     return volumes, surfaces, elements
 
 
+def transfinite_items(study, bodies):
+    """R1 to R3 for the Study's transfinite items on bodies. Returns (structured, edges):
+    structured = [(body, [corner vertex names])] in tree order
+    edges      = [(item, body, [edge names])] in tree order
+    """
+    included = {b.Name for b in bodies}
+    structured, owner = [], {}
+    for t in objects.transfinite_bodies(study):
+        refs = [b for b, _ in objects.subs_by_body(t)]
+        corners = {}
+        for b, subs in t.Corners:
+            if b.Name not in {r.Name for r in refs}:
+                raise StudyError(f"Transfinite Body {t.Label}: corner {b.Label}.{subs[0]} is not on one of its bodies.")
+            corners.setdefault(b.Name, []).extend(subs)
+        for b in refs:
+            if b.Name not in included:
+                continue
+            if b.Name in owner:
+                raise StudyError(f"Body {b.Label} is in Transfinite Body {owner[b.Name].Label} and {t.Label}.")
+            owner[b.Name] = t
+            _check_subs("Transfinite Body", t, b, corners.get(b.Name, []))
+            structured.append((b, corners.get(b.Name, [])))
+    edges, seen = [], {}
+    for e in objects.transfinite_edges(study):
+        if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
+            raise StudyError(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.")
+        for b, subs in objects.subs_by_body(e):
+            if b.Name not in included:
+                continue
+            _check_subs("Transfinite Edges", e, b, subs)
+            for s in subs:
+                if (b.Name, s) in seen:
+                    raise StudyError(f"{b.Label}.{s} is in Transfinite Edges {seen[(b.Name, s)].Label} and {e.Label}.")
+                seen[(b.Name, s)] = e
+            edges.append((e, b, list(subs)))
+    for b, _ in structured:
+        missing = [f"Edge{i}" for i in range(1, len(b.Shape.Edges) + 1) if (b.Name, f"Edge{i}") not in seen]
+        if missing:
+            raise StudyError(
+                f"Transfinite Body {owner[b.Name].Label}: {b.Label} has edges without Transfinite Edges: "
+                + ", ".join(missing)
+            )
+    return structured, edges
+
+
 def mesh_options(settings, dimension="3D"):
     """Gmsh options from the Mesh Sizes folder; a min or max size of 0 keeps Gmsh's default."""
     opts = {
         "Mesh.Algorithm": objects.ALGORITHMS_2D[settings.SurfaceAlgorithm],
         "Mesh.MeshSizeFactor": settings.SizeFactor,
         "Mesh.Smoothing": settings.SmoothingSteps,
+        "Mesh.RecombinationAlgorithm": objects.RECOMBINATION_ALGORITHMS[settings.RecombinationAlgorithm],
     }
     if dimension == "3D":
         opts["Mesh.Algorithm3D"] = objects.ALGORITHMS_3D[settings.VolumeAlgorithm]
@@ -157,6 +204,30 @@ def write_job(study):
         job["sizes"].append(
             {"name": item.Label, "size": item.Size.Value, "files": export_subs(folder, body, subs, f"size_{k}")}
         )
+    structured, tf_edges = transfinite_items(study, [b for b, _ in volumes])
+    if structured or tf_edges:
+        tf_bodies = []
+        for body, corners in structured:
+            mat_id = int(study.MatIds[body.Name])
+            files = export_subs(folder, body, corners, f"corner_{mat_id}")
+            tf_bodies.append({"name": objects.volume_name(body), "mat_id": mat_id, "corner_files": files})
+        job["transfinite"] = {
+            "bodies": tf_bodies,
+            "edges": [
+                {
+                    "name": item.Label,
+                    "nodes": item.Elements + 1,
+                    "distribution": item.Distribution,
+                    "coef": item.BumpCoefficient if item.Distribution == "Bump" else 1.0,  # Uniform ignores it
+                    "files": export_subs(folder, body, subs, f"tedge_{k}"),
+                }
+                for k, (item, body, subs) in enumerate(tf_edges, 1)
+            ],
+        }
+    recombine_names = {body.Name for item in objects.recombine_items(study) for body, _ in objects.subs_by_body(item)}
+    recombine = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in recombine_names]
+    if recombine:
+        job["recombine"] = recombine
     path = os.path.join(folder, "job.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(job, fh, indent=2)

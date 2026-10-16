@@ -6,6 +6,7 @@ import re
 # Gmsh algorithm numbers; the first entry is the default
 ALGORITHMS_2D = {"Frontal-Delaunay": 6, "Delaunay": 5, "MeshAdapt": 1, "Automatic": 2}
 ALGORITHMS_3D = {"Delaunay": 1, "Frontal": 4, "HXT": 10}
+RECOMBINATION_ALGORITHMS = {"Blossom": 1, "Simple": 0, "Blossom full-quad": 3, "Simple full-quad": 2}
 
 
 def clean(text):
@@ -86,6 +87,24 @@ class MeshSizesFolder(Folder):
         add("App::PropertyIntegerConstraint", "SmoothingSteps", "Mesh", "Smoothing passes over the face meshes")
         obj.SmoothingSteps = (1, 0, 100, 1)
         add("App::PropertyBool", "OptimizeNetgen", "Mesh", "Improve element quality with Netgen (slower)")
+        add_recombination_algorithm(obj)
+
+    def onDocumentRestored(self, obj):
+        add_recombination_algorithm(obj)  # documents saved before the Recombine item existed
+
+
+def add_recombination_algorithm(folder):
+    """Adds the algorithm setting if missing; drops the old global Recombine switch."""
+    if not hasattr(folder, "RecombinationAlgorithm"):
+        folder.addProperty(
+            "App::PropertyEnumeration",
+            "RecombinationAlgorithm",
+            "Mesh",
+            "Gmsh recombination algorithm for bodies in Recombine items",
+        )
+        folder.RecombinationAlgorithm = list(RECOMBINATION_ALGORITHMS)
+    if hasattr(folder, "Recombine"):
+        folder.removeProperty("Recombine")
 
 
 FOLDERS = (
@@ -191,6 +210,47 @@ class MeshSize(_Proxy):
             "References",
             "EMSolution",
             "Bodies (empty sub-element), faces, edges and vertices meshed with this size",
+        )
+
+
+class TransfiniteBody(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "Bodies meshed as a structured grid"
+        )
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "Corners",
+            "EMSolution",
+            "Vertices used as corners of faces with more than 4 boundary points",
+        )
+
+
+class TransfiniteEdges(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "Edges with a fixed element count"
+        )
+        obj.addProperty("App::PropertyIntegerConstraint", "Elements", "EMSolution", "Elements on each edge")
+        obj.Elements = (10, 1, 100000, 1)
+        obj.addProperty("App::PropertyEnumeration", "Distribution", "EMSolution", "Node spacing along the edge")
+        obj.Distribution = ["Uniform", "Bump"]
+        obj.addProperty(
+            "App::PropertyFloat", "BumpCoefficient", "EMSolution", "Gmsh Bump coefficient; below 1 refines both ends"
+        )
+        obj.BumpCoefficient = 0.5
+
+
+class Recombine(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "References",
+            "EMSolution",
+            "Bodies meshed with quads (2D) or quad faces and hexahedra (3D)",
         )
 
 
@@ -339,6 +399,28 @@ def make_mesh_size(study, size, refs):
     return obj
 
 
+def make_transfinite_body(study, bodies, corners=()):
+    """bodies: list of bodies; corners: list of (body, "VertexN")."""
+    obj = _add(study, "MeshSizesGroup", TransfiniteBody, "TransfiniteBody")
+    obj.References = [(b, "") for b in bodies]
+    obj.Corners = list(corners)
+    return obj
+
+
+def make_transfinite_edges(study, elements, edges, distribution="Uniform", coef=0.5):
+    """edges: list of (body, "EdgeN")."""
+    obj = _add(study, "MeshSizesGroup", TransfiniteEdges, "TransfiniteEdges")
+    obj.Elements, obj.Distribution, obj.BumpCoefficient = elements, distribution, coef
+    obj.References = list(edges)
+    return obj
+
+
+def make_recombine(study, bodies):
+    obj = _add(study, "MeshSizesGroup", Recombine, "Recombine")
+    obj.References = [(b, "") for b in bodies]
+    return obj
+
+
 def materials(study):
     return list(study.MaterialsGroup.Group)
 
@@ -348,7 +430,19 @@ def excitations(study):
 
 
 def mesh_sizes(study):
-    return list(study.MeshSizesGroup.Group)
+    return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, MeshSize)]
+
+
+def transfinite_bodies(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, TransfiniteBody)]
+
+
+def transfinite_edges(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, TransfiniteEdges)]
+
+
+def recombine_items(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, Recombine)]
 
 
 def library_materials(study):
@@ -394,14 +488,18 @@ def subs_by_body(item):
 
 
 def is_item(obj):
-    return isinstance(getattr(obj, "Proxy", None), (Material, Excitation, MeshSize))
+    proxies = (Material, Excitation, MeshSize, TransfiniteBody, TransfiniteEdges, Recombine)
+    return isinstance(getattr(obj, "Proxy", None), proxies)
 
 
 def item_refs(item):
-    """[(body, sub)] of a Material, Excitation or Mesh Size; sub "" = the whole body."""
+    """[(body, sub)] of a Material, Excitation, Mesh Size, Recombine or transfinite item; sub "" = the whole body."""
     if isinstance(item.Proxy, Material):
         return [(item.Body, "")] if item.Body else []
-    return [(b, s) for b, subs in item.References for s in subs]
+    refs = [(b, s) for b, subs in item.References for s in subs]
+    if isinstance(item.Proxy, TransfiniteBody):
+        refs += [(b, s) for b, subs in item.Corners for s in subs]
+    return refs
 
 
 def material_rows(study):
@@ -446,15 +544,22 @@ def excitation_rows(study):
     return rows
 
 
+def _size_text(item):
+    if isinstance(item.Proxy, MeshSize):
+        return f"{item.Size.Value:g} mm"
+    if isinstance(item.Proxy, TransfiniteBody):
+        return "structured"
+    if isinstance(item.Proxy, Recombine):
+        return "recombine"
+    bump = f" {item.BumpCoefficient:g}" if item.Distribution == "Bump" else ""
+    return f"{item.Elements} el, {item.Distribution}{bump}"
+
+
 def mesh_size_rows(study):
-    """Rows for the Mesh Sizes panel: (mesh size, refs, [name, size, applies to])."""
+    """Rows for the Mesh Sizes panel: (item, refs, [name, size, applies to])."""
     return [
-        (
-            s,
-            item_refs(s),
-            [display_name(s), f"{s.Size.Value:g} mm", ", ".join(ref_label(b, sub) for b, sub in item_refs(s))],
-        )
-        for s in mesh_sizes(study)
+        (s, item_refs(s), [display_name(s), _size_text(s), ", ".join(ref_label(b, sub) for b, sub in item_refs(s))])
+        for s in study.MeshSizesGroup.Group
     ]
 
 

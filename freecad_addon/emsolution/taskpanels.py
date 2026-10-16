@@ -254,8 +254,17 @@ class MeshSettings:
         self.advanced_form.setVisible(True)
         self.advanced.toggled.connect(self.advanced_form.setVisible)
         self.algorithms = {}
-        for prop, label in (("SurfaceAlgorithm", "Surface algorithm"), ("VolumeAlgorithm", "Volume algorithm")):
+        for prop, label in (
+            ("SurfaceAlgorithm", "Surface algorithm"),
+            ("VolumeAlgorithm", "Volume algorithm"),
+            ("RecombinationAlgorithm", "Recombination algorithm"),
+        ):
             combo = QtWidgets.QComboBox()
+            if prop == "RecombinationAlgorithm":
+                combo.setToolTip(
+                    "Gmsh algorithm for bodies in Recombine items. Full-quad gives only quads but more of them."
+                    " Full-quad needs an even number of elements on Transfinite Edges next to recombined bodies."
+                )
             combo.addItems(folder.getEnumerationsOfProperty(prop))
             combo.setCurrentText(getattr(folder, prop))
             form.addRow(label, combo)
@@ -852,7 +861,7 @@ class ViewProviderItem(_ViewProvider):
 
 
 class ItemPanel:
-    """Edit name, size (Mesh Size only) and references of an Excitation or Mesh Size."""
+    """Edit name, settings and references of an Excitation, Mesh Size, Recombine or transfinite item."""
 
     def __init__(self, obj):
         self.obj = obj
@@ -860,6 +869,12 @@ class ItemPanel:
         highlight.clear()  # it would not follow the edits
         if isinstance(obj.Proxy, objects.Excitation):
             self.pick, label = selected_faces, "Faces"
+        elif isinstance(obj.Proxy, objects.TransfiniteBody):
+            self.pick, label = lambda: selected_subs(("Vertex",), whole_bodies=True), "Bodies,\ncorner vertices"
+        elif isinstance(obj.Proxy, objects.Recombine):
+            self.pick, label = lambda: [(b, "") for b in selected_bodies()], "Bodies"
+        elif isinstance(obj.Proxy, objects.TransfiniteEdges):
+            self.pick, label = lambda: selected_subs(("Edge",)), "Edges"
         else:
             self.pick, label = selected_mesh_refs, "Bodies, faces,\nedges, vertices"
         self.current = objects.item_refs(obj)
@@ -873,6 +888,23 @@ class ItemPanel:
         if isinstance(obj.Proxy, objects.MeshSize):
             self.size = _length_box(obj.Size.Value)
             layout.addRow("Size", self.size)
+        self.elements = self.distribution = self.bump = None
+        if isinstance(obj.Proxy, objects.TransfiniteEdges):
+            self.elements = QtWidgets.QSpinBox()
+            self.elements.setRange(1, 100000)
+            self.elements.setValue(obj.Elements)
+            layout.addRow("Elements", self.elements)
+            self.distribution = QtWidgets.QComboBox()
+            self.distribution.addItems(obj.getEnumerationsOfProperty("Distribution"))
+            self.distribution.setCurrentText(obj.Distribution)
+            layout.addRow("Distribution", self.distribution)
+            self.bump = QtWidgets.QDoubleSpinBox()
+            self.bump.setDecimals(3)
+            self.bump.setRange(0.001, 1000.0)
+            self.bump.setValue(obj.BumpCoefficient)
+            self.bump.setEnabled(obj.Distribution == "Bump")
+            layout.addRow("Bump coefficient", self.bump)
+            self.distribution.currentTextChanged.connect(lambda text: self.bump.setEnabled(text == "Bump"))
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         layout.addRow(label, self.refs)
@@ -915,7 +947,15 @@ class ItemPanel:
                 self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
-        self.obj.References = list(self.current)
+        if self.elements is not None:
+            self.obj.Elements = self.elements.value()
+            self.obj.Distribution = self.distribution.currentText()
+            self.obj.BumpCoefficient = self.bump.value()
+        if isinstance(self.obj.Proxy, objects.TransfiniteBody):
+            self.obj.References = [(b, s) for b, s in self.current if not s]
+            self.obj.Corners = [(b, s) for b, s in self.current if s]
+        else:
+            self.obj.References = list(self.current)
         doc.commitTransaction()
         doc.recompute()
         Gui.Control.closeDialog()

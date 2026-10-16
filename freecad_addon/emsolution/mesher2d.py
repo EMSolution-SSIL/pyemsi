@@ -9,7 +9,7 @@ import sys
 
 import gmsh
 
-from meshcommon import JobError, apply_size_fields, main, run
+from meshcommon import JobError, apply_size_fields, apply_transfinite, main, run, transfinite_files, apply_recombine
 
 
 def _import(path, *dims):
@@ -46,6 +46,12 @@ def build(job, folder):
         start = len(inputs)
         inputs += _import(path, 0, 1, 2)
         size_spans.append((start, len(inputs)))
+    tf_files = transfinite_files(job, folder)
+    tf_spans = []
+    for kind, _, path in tf_files:
+        start = len(inputs)
+        inputs += _import(path, 1 if kind == "edge" else 0)
+        tf_spans.append((start, len(inputs)))
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
         out_map = [inputs]
@@ -76,12 +82,23 @@ def build(job, folder):
                     raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
                 by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
     apply_size_fields(by_size)
+    mapped = [
+        (kind, item, os.path.basename(path), [dt for dimtags in out_map[start:end] for dt in dimtags])
+        for (kind, item, path), (start, end) in zip(tf_files, tf_spans)
+    ]
+    tf_curves = apply_transfinite(job, mapped, body_faces, 2)
+    apply_recombine(job, body_faces, 2, tf_curves)
 
 
 def run_job(job_path):
     job = run(job_path, build, 2)
     for item in job["bodies"]:
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
+    for item in (job.get("transfinite") or {}).get("bodies", []):
+        print(f"Structured      {item['name']}")
+    for item in job["bodies"]:
+        if item["mat_id"] in job.get("recombine", []):
+            print(f"Recombined      {item['name']}")
     print(f"Wrote {job['mesh_file']}")
 
 

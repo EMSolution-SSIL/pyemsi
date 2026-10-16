@@ -18,6 +18,19 @@ MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "e
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
 
 
+def msh_element_types(path, dim):
+    """Gmsh element type numbers of the dim-D entity blocks in an ASCII msh 4.1 file."""
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("$Elements\n", 1)[1].split("$EndElements", 1)[0].splitlines()
+    types, k = set(), 1  # line 0: numEntityBlocks numElements minTag maxTag
+    while k < len(lines):
+        d, _, t, n = map(int, lines[k].split())  # block header: entityDim entityTag elementType numElements
+        if d == dim:
+            types.add(t)
+        k += n + 1
+    return types
+
+
 class StudyTest(unittest.TestCase):
     def setUp(self):
         self.doc = App.newDocument("T")
@@ -357,6 +370,86 @@ class StudyTest(unittest.TestCase):
             objects.material_rows(self.study)[3], (d, [(d, "")], ["D (not in main geometry)", "Steel", "–", "4"])
         )
 
+    def test_transfinite_items_are_listed_with_mesh_sizes(self):
+        a = self.box("A")
+        self.include(a)
+        size = objects.make_mesh_size(self.study, 1.5, [(a, "")])
+        body = objects.make_transfinite_body(self.study, [a], [(a, "Vertex1")])
+        edges = objects.make_transfinite_edges(self.study, 4, [(a, "Edge1"), (a, "Edge2")], "Bump", 0.2)
+        self.assertEqual(objects.mesh_sizes(self.study), [size])
+        self.assertEqual(objects.transfinite_bodies(self.study), [body])
+        self.assertEqual(objects.transfinite_edges(self.study), [edges])
+        self.assertTrue(objects.is_item(body) and objects.is_item(edges))
+        self.assertEqual(objects.item_refs(body), [(a, ""), (a, "Vertex1")])
+        self.assertEqual(
+            objects.mesh_size_rows(self.study),
+            [
+                (size, [(a, "")], ["MeshSize", "1.5 mm", "A"]),
+                (body, [(a, ""), (a, "Vertex1")], ["TransfiniteBody", "structured", "A, A.Vertex1"]),
+                (edges, [(a, "Edge1"), (a, "Edge2")], ["TransfiniteEdges", "4 el, Bump 0.2", "A.Edge1, A.Edge2"]),
+            ],
+        )
+        self.assertEqual(self.study.MeshSizesGroup.RecombinationAlgorithm, "Blossom")
+        self.assertFalse(hasattr(self.study.MeshSizesGroup, "Recombine"))
+
+    def test_recombine_item_is_listed_with_mesh_sizes(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        item = objects.make_recombine(self.study, [a, b])
+        self.assertEqual(objects.recombine_items(self.study), [item])
+        self.assertEqual(objects.mesh_sizes(self.study), [])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.item_refs(item), [(a, ""), (b, "")])
+        self.assertEqual(
+            objects.mesh_size_rows(self.study), [(item, [(a, ""), (b, "")], ["Recombine", "recombine", "A, B"])]
+        )
+
+    def test_recombination_algorithms_are_the_gmsh_values(self):
+        self.assertEqual(
+            self.study.MeshSizesGroup.getEnumerationsOfProperty("RecombinationAlgorithm"),
+            ["Blossom", "Simple", "Blossom full-quad", "Simple full-quad"],
+        )
+        self.assertEqual(
+            objects.RECOMBINATION_ALGORITHMS, {"Blossom": 1, "Simple": 0, "Blossom full-quad": 3, "Simple full-quad": 2}
+        )
+
+    def test_transfinite_items_survive_save_and_reload(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_body(self.study, [a])
+        objects.make_transfinite_edges(self.study, 7, [(a, "Edge1")], "Bump", 0.3)
+        objects.make_recombine(self.study, [a])
+        path = os.path.join(self.tmp.name, "t.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        study = objects.find_study(self.doc)
+        (body,) = objects.transfinite_bodies(study)
+        (edges,) = objects.transfinite_edges(study)
+        self.assertIsInstance(body.Proxy, objects.TransfiniteBody)
+        self.assertEqual((edges.Elements, edges.Distribution, edges.BumpCoefficient), (7, "Bump", 0.3))
+        (rec,) = objects.recombine_items(study)
+        self.assertIsInstance(rec.Proxy, objects.Recombine)
+
+    def test_folder_saved_with_the_old_recombine_switch_loads_without_it(self):
+        folder = self.study.MeshSizesGroup
+        folder.removeProperty("RecombinationAlgorithm")
+        folder.addProperty("App::PropertyBool", "Recombine", "Mesh", "")  # as saved by the global switch
+        folder.Recombine = True
+        path = os.path.join(self.tmp.name, "t.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        folder = objects.find_study(self.doc).MeshSizesGroup
+        self.assertFalse(hasattr(folder, "Recombine"))
+        self.assertEqual(folder.RecombinationAlgorithm, "Blossom")
+        self.study = objects.find_study(self.doc)
+        self.include(self.box("A"))
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            options = json.load(fh)["options"]
+        self.assertNotIn("Mesh.RecombineAll", options)
+        self.assertEqual(options["Mesh.RecombinationAlgorithm"], 1)
+
     def test_mesh_settings_go_to_the_job(self):
         self.include(self.box("A"))
         settings = self.study.MeshSizesGroup
@@ -367,10 +460,12 @@ class StudyTest(unittest.TestCase):
         settings.MaxSize = 2.0
         settings.SmoothingSteps = 3
         settings.OptimizeNetgen = True
+        settings.RecombinationAlgorithm = "Simple full-quad"
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             self.assertEqual(
                 json.load(fh)["options"],
                 {
+                    "Mesh.RecombinationAlgorithm": 2,
                     "Mesh.Algorithm": 5,
                     "Mesh.Algorithm3D": 10,
                     "Mesh.MeshSizeFactor": 0.5,
@@ -529,6 +624,7 @@ class StudyTest(unittest.TestCase):
                 "model_name": "My_Study",
                 "msh_version": 4.1,
                 "options": {
+                    "Mesh.RecombinationAlgorithm": 1,
                     "Mesh.Algorithm": 6,
                     "Mesh.Algorithm3D": 1,
                     "Mesh.MeshSizeFactor": 1.0,
@@ -580,6 +676,131 @@ class StudyTest(unittest.TestCase):
         self.include(a)
         objects.make_mesh_size(self.study, 1.0, [(a, "Edge99")])  # a box has 12 edges
         self.assertStudyError("has no Edge99")
+
+    def all_edges(self, body):
+        return [(body, f"Edge{i}") for i in range(1, len(body.Shape.Edges) + 1)]
+
+    def test_transfinite_items_go_to_the_job(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_body(self.study, [a], [(a, "Vertex1")])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a), "Bump", 0.4)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        tf = job["transfinite"]
+        self.assertEqual(tf["bodies"], [{"name": "A", "mat_id": 1, "corner_files": ["geometry/corner_1_1.brep"]}])
+        (edges,) = tf["edges"]
+        self.assertEqual(
+            (edges["name"], edges["nodes"], edges["distribution"], edges["coef"]), ("TransfiniteEdges", 4, "Bump", 0.4)
+        )
+        self.assertEqual(len(edges["files"]), 12)
+        edge = Part.Shape()
+        edge.read(self.scratch("geometry", "tedge_1_1.brep"))
+        self.assertEqual(edge.ShapeType, "Edge")
+        self.assertNotIn("Mesh.RecombineAll", job["options"])
+
+    def test_job_without_transfinite_items_has_no_transfinite_key(self):
+        self.include(self.box("A"))
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("transfinite", json.load(fh))
+
+    def test_structured_body_edge_without_item_is_refused(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_body(self.study, [a])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a)[:11])
+        self.assertStudyError("edges without Transfinite Edges: Edge12")
+
+    def test_edge_in_two_transfinite_edges_is_refused(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_edges(self.study, 3, [(a, "Edge1")])
+        objects.make_transfinite_edges(self.study, 4, [(a, "Edge1")])
+        self.assertStudyError("A.Edge1 is in Transfinite Edges")
+
+    def test_body_in_two_transfinite_bodies_is_refused(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
+        objects.make_transfinite_body(self.study, [a])
+        objects.make_transfinite_body(self.study, [a])
+        self.assertStudyError("Body A is in Transfinite Body")
+
+    def test_corner_on_another_body_is_refused(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
+        objects.make_transfinite_body(self.study, [a], [(b, "Vertex1")])
+        self.assertStudyError("is not on one of its bodies")
+
+    def test_structured_box_job_meshes_to_hexahedra(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_body(self.study, [a])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
+        objects.make_recombine(self.study, [a])
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Structured      A", r.stdout)
+        self.assertEqual(msh_element_types(os.path.join(self.tmp.name, "pre_geom.msh"), 3), {5}, "only hexahedra")
+
+    def test_2d_structured_face_job_meshes_to_quads(self):
+        a = self.face("A")
+        study = self.make_2d_study(a)
+        objects.make_transfinite_body(study, [a])
+        objects.make_transfinite_edges(study, 4, self.all_edges(a))
+        objects.make_recombine(study, [a])
+        path = jobwriter.write_job(study)
+        r = subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(msh_element_types(os.path.join(self.tmp.name, "pre_geom2D.msh"), 2), {3}, "only quadrangles")
+
+    def test_recombine_items_go_to_the_job(self):
+        a, b, c, d = self.box("A"), self.box("B", 10), self.box("C", 20), self.box("D", 40)
+        self.include(a, b, c)  # D is outside the main geometry: skipped
+        objects.make_recombine(self.study, [c, a, d])
+        objects.make_recombine(self.study, [a])  # twice: listed once
+        self.study.MeshSizesGroup.VolumeAlgorithm = "HXT"  # no longer refused here
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        ids = {v["name"]: v["mat_id"] for v in job["volumes"]}
+        self.assertEqual(job["recombine"], [ids["A"], ids["C"]])
+        self.assertEqual(job["options"]["Mesh.RecombinationAlgorithm"], 1)
+        self.assertNotIn("Mesh.RecombineAll", job["options"])
+
+    def test_job_without_recombine_items_has_no_recombine_key(self):
+        self.include(self.box("A"))
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("recombine", json.load(fh))
+
+    def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
+        a, b = self.face("A"), self.face("B")
+        b.Placement.Base = App.Vector(10, 0, 0)
+        study = self.make_2d_study(a, b)
+        study.MeshSizesGroup.RecombinationAlgorithm = "Blossom full-quad"
+        objects.make_recombine(study, [a])
+        path = jobwriter.write_job(study)
+        r = subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Recombined      A", r.stdout)
+        self.assertEqual(
+            msh_element_types(os.path.join(self.tmp.name, "pre_geom2D.msh"), 2), {2, 3}, "triangles and quads"
+        )
+
+    def test_uniform_items_on_a_shared_edge_ignore_their_bump_coefficient(self):
+        a, b = self.face("A"), self.face("B")
+        b.Placement.Base = App.Vector(10, 0, 0)  # touches A along x = 10
+        study = self.make_2d_study(a, b)
+        objects.make_transfinite_body(study, [a, b])
+        objects.make_transfinite_edges(study, 4, self.all_edges(a), "Uniform", 0.5)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b), "Uniform", 0.3)  # e.g. Bump tried, then undone
+        path = jobwriter.write_job(study)
+        with open(path, encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual([e["coef"] for e in job["transfinite"]["edges"]], [1.0, 1.0])
+        r = subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_written_job_meshes(self):
         a, b = self.box("A"), self.box("B", 10)

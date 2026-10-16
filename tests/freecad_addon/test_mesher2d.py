@@ -41,6 +41,29 @@ def write_box(path):
         gmsh.finalize()
 
 
+def write_polygons(path, loops):
+    """One BREP holding one plane face in z = 0 bounded by the point loops (first = outer, rest = holes)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        curve_loops = []
+        for pts in loops:
+            tags = [gmsh.model.occ.addPoint(x, y, 0) for x, y in pts]
+            lines = [gmsh.model.occ.addLine(tags[k], tags[(k + 1) % len(tags)]) for k in range(len(tags))]
+            curve_loops.append(gmsh.model.occ.addCurveLoop(lines))
+        gmsh.model.occ.addPlaneSurface(curve_loops)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def square_lines(x=0.0, y=0.0, w=1.0, h=1.0):
+    """Bottom, right, top, left edges of a rectangle in z = 0 as point pairs."""
+    c = [(x, y, 0), (x + w, y, 0), (x + w, y + h, 0), (x, y + h, 0)]
+    return [(c[k], c[(k + 1) % 4]) for k in range(4)]
+
+
 class Mesher2DTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -56,7 +79,7 @@ class Mesher2DTest(unittest.TestCase):
     def body(self, id_, name, file, size=0.5):
         return {"mat_id": id_, "name": name, "file": "geometry/" + file, "size": size}
 
-    def run_job(self, bodies, sizes=(), version=4.1, options=None, mesh_file=None):
+    def run_job(self, bodies, sizes=(), version=4.1, options=None, mesh_file=None, transfinite=None, recombine=None):
         job = {
             "dimension": "2D",
             "model_name": "Model",
@@ -67,6 +90,10 @@ class Mesher2DTest(unittest.TestCase):
         }
         if options is not None:
             job["options"] = options
+        if transfinite is not None:
+            job["transfinite"] = transfinite
+        if recombine is not None:
+            job["recombine"] = list(recombine)
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -87,6 +114,31 @@ class Mesher2DTest(unittest.TestCase):
         last = r.stderr.strip().splitlines()[-1]
         self.assertTrue(last.startswith("ERROR:"), last)
         return last
+
+    def edge_item(self, name, lines, n, distribution="Uniform", coef=1.0):
+        """Write each (p, q) line as geometry/<name>_<k>.brep; returns the job's Transfinite Edges entry."""
+        files = []
+        for k, (p, q) in enumerate(lines, 1):
+            write_line(self.geo(f"{name}_{k}.brep"), p, q)
+            files.append(f"geometry/{name}_{k}.brep")
+        return {"name": name, "nodes": n + 1, "distribution": distribution, "coef": coef, "files": files}
+
+    def corner_files(self, name, points):
+        files = []
+        for k, p in enumerate(points, 1):
+            write_point(self.geo(f"{name}_{k}.brep"), p)
+            files.append(f"geometry/{name}_{k}.brep")
+        return files
+
+    def element_counts(self, group, dim=2):
+        """{element name: count} in a physical group of the open mesh."""
+        out = {}
+        for e in gmsh.model.getEntitiesForPhysicalGroup(dim, group):
+            types, tags = gmsh.model.mesh.getElements(dim, e)[:2]
+            for t, ts in zip(types, tags):
+                name = gmsh.model.mesh.getElementProperties(t)[0]
+                out[name] = out.get(name, 0) + len(ts)
+        return out
 
     def test_two_touching_squares_get_ids_names_triangles_and_shared_nodes(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
@@ -276,6 +328,261 @@ class Mesher2DTest(unittest.TestCase):
 
     def test_missing_geometry_file_fails_cleanly(self):
         self.last_error(self.run_job([self.body(1, "Copper_Sq", "vol_1.brep")]))
+
+    def structured(self, *names_ids, corners=None):
+        return [{"name": n, "mat_id": i, "corner_files": (corners or {}).get(n, [])} for n, i in names_ids]
+
+    def test_structured_square_with_recombine_has_only_quads(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", square_lines(), 4)]}
+        r = self.run_job([self.body(1, "Core", "vol_1.brep")], recombine=[1], transfinite=tf)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Quadrilateral 4": 16})
+
+    def test_structured_square_without_recombine_has_structured_triangles(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", square_lines(), 4)]}
+        r = self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Triangle 3": 32})
+
+    def test_bump_below_one_refines_the_edge_ends(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        edges = self.edge_item("tedge_1", square_lines(), 10, "Bump", 0.2)
+        r = self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite={"bodies": [], "edges": [edges]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        c = gmsh.model.mesh.getNodes()[1]
+        xs = sorted(c[i] for i in range(0, len(c), 3) if abs(c[i + 1]) < 1e-9)  # nodes on the bottom edge
+        gaps = [b - a for a, b in zip(xs, xs[1:])]
+        self.assertEqual(len(gaps), 10)
+        self.assertLess(gaps[0] * 2, gaps[5])
+
+    def test_structured_square_next_to_an_unstructured_one_shares_nodes(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)])
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", square_lines(), 4)]}
+        r = self.run_job(
+            [self.body(1, "Core", "vol_1.brep"), self.body(2, "Air", "vol_2.brep", size=0.1)], transfinite=tf
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Triangle 3": 32})
+        nodes1 = set(gmsh.model.mesh.getNodesForPhysicalGroup(2, 1)[0])
+        nodes2 = set(gmsh.model.mesh.getNodesForPhysicalGroup(2, 2)[0])
+        self.assertEqual(len(nodes1 & nodes2), 5, "the shared edge has 4 elements, so 5 shared nodes")
+
+    def test_five_point_face_with_chosen_corners(self):
+        write_polygons(self.geo("vol_1.brep"), [[(0, 0), (0.5, 0), (1, 0), (1, 1), (0, 1)]])
+        bottom = self.edge_item("tedge_1", [((0, 0, 0), (0.5, 0, 0)), ((0.5, 0, 0), (1, 0, 0))], 2)
+        sides = self.edge_item("tedge_2", square_lines()[1:], 4)  # right, top, left
+        corners = {"Core": self.corner_files("corner_1", [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)])}
+        tf = {"bodies": self.structured(("Core", 1), corners=corners), "edges": [bottom, sides]}
+        r = self.run_job([self.body(1, "Core", "vol_1.brep")], recombine=[1], transfinite=tf)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Quadrilateral 4": 16})
+
+    def test_five_point_face_finds_corners_where_the_boundary_turns(self):
+        write_polygons(self.geo("vol_1.brep"), [[(0, 0), (0.5, 0), (1, 0), (1, 1), (0, 1)]])
+        bottom = self.edge_item("tedge_1", [((0, 0, 0), (0.5, 0, 0)), ((0.5, 0, 0), (1, 0, 0))], 2)
+        sides = self.edge_item("tedge_2", square_lines()[1:], 4)
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [bottom, sides]}
+        r = self.run_job([self.body(1, "Core", "vol_1.brep")], recombine=[1], transfinite=tf)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: structured body Core", r.stderr)
+        self.assertIn("5 boundary points; using the 4 where the boundary turns", r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Quadrilateral 4": 16})
+
+    def test_pentagon_without_corners_is_an_error(self):
+        pts = [(0, 0), (1, 0), (1, 1), (0.5, 1.5), (0, 1)]
+        write_polygons(self.geo("vol_1.brep"), [pts])
+        lines = [((*pts[k], 0), (*pts[(k + 1) % 5], 0)) for k in range(5)]
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", lines, 2)]}
+        last = self.last_error(self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf))
+        self.assertIn("structured body Core", last)
+        self.assertIn("5 boundary points and 5 corners", last)
+
+    def test_opposite_sides_with_different_counts_are_an_error(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        b, r_, t, l_ = square_lines()
+        tf = {
+            "bodies": self.structured(("Core", 1)),
+            "edges": [self.edge_item("tedge_1", [b, t, l_], 4), self.edge_item("tedge_2", [r_], 6)],
+        }
+        last = self.last_error(self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf))
+        self.assertIn("opposite sides", last)
+
+    def test_structured_face_edge_without_item_is_an_error(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", square_lines()[:3], 4)]}
+        last = self.last_error(self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf))
+        self.assertIn("without Transfinite Edges", last)
+
+    def test_edge_that_did_not_merge_is_an_error(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        far = self.edge_item("tedge_1", [((5, 5, 0), (6, 5, 0))], 4)
+        last = self.last_error(
+            self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite={"bodies": [], "edges": [far]})
+        )
+        self.assertIn("Transfinite Edges tedge_1", last)
+        self.assertIn("did not merge", last)
+
+    def test_shared_edge_with_two_settings_is_an_error(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)])
+        tf = {
+            "bodies": self.structured(("A", 1), ("B", 2)),
+            "edges": [self.edge_item("tedge_1", square_lines(), 4), self.edge_item("tedge_2", square_lines(1), 6)],
+        }
+        last = self.last_error(
+            self.run_job([self.body(1, "A", "vol_1.brep"), self.body(2, "B", "vol_2.brep")], transfinite=tf)
+        )
+        self.assertIn("different settings", last)
+
+    def test_edge_split_by_a_touching_body_shares_its_elements(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 0.5)])  # its corner (1, 0.5) splits Core's right edge
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", square_lines(), 4)]}
+        r = self.run_job(
+            [self.body(1, "Core", "vol_1.brep"), self.body(2, "Air", "vol_2.brep")],
+            recombine=[1],
+            transfinite=tf,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: Transfinite Edges tedge_1: tedge_1_2.brep was split into 2 pieces", r.stderr)
+        self.assertIn("elements 2 + 2", r.stderr)
+        self.assertIn("where the boundary turns", r.stderr)  # the split adds a 5th point to Core's face
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Quadrilateral 4": 16}, "the total stays 4 per side")
+
+    def test_split_bump_edge_is_an_error(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 0.5)])
+        edges = self.edge_item("tedge_1", square_lines(), 4, "Bump", 0.5)
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [edges]}
+        last = self.last_error(
+            self.run_job([self.body(1, "Core", "vol_1.brep"), self.body(2, "Air", "vol_2.brep")], transfinite=tf)
+        )
+        self.assertIn("split into 2 pieces", last)
+        self.assertIn("Bump", last)
+
+    def test_structured_face_with_a_hole_is_an_error(self):
+        outer, inner = [(0, 0), (3, 0), (3, 3), (0, 3)], [(1, 1), (2, 1), (2, 2), (1, 2)]
+        write_polygons(self.geo("vol_1.brep"), [outer, inner])
+        lines = square_lines(0, 0, 3, 3) + square_lines(1, 1, 1, 1)
+        corners = {"Frame": self.corner_files("corner_1", [(x, y, 0) for x, y in outer])}
+        tf = {"bodies": self.structured(("Frame", 1), corners=corners), "edges": [self.edge_item("tedge_1", lines, 3)]}
+        last = self.last_error(self.run_job([self.body(1, "Frame", "vol_1.brep")], transfinite=tf))
+        self.assertIn("not one loop", last)
+
+    def test_face_with_a_hole_and_no_corners_says_not_one_loop(self):
+        outer, inner = [(0, 0), (3, 0), (3, 3), (0, 3)], [(1, 1), (2, 1), (2, 2), (1, 2)]
+        write_polygons(self.geo("vol_1.brep"), [outer, inner])
+        lines = square_lines(0, 0, 3, 3) + square_lines(1, 1, 1, 1)
+        tf = {"bodies": self.structured(("Frame", 1)), "edges": [self.edge_item("tedge_1", lines, 3)]}
+        last = self.last_error(self.run_job([self.body(1, "Frame", "vol_1.brep")], transfinite=tf))
+        self.assertIn("structured body Frame", last)
+        self.assertIn("not one loop", last)
+
+    def triangle_job(self, bottom, slope, left, recombine=0):
+        """Triangle (0, 0), (2, 0), (0, 1): structured, with these element counts on its three edges."""
+        pts = [(0, 0), (2, 0), (0, 1)]
+        write_polygons(self.geo("vol_1.brep"), [pts])
+        p = [(x, y, 0) for x, y in pts]
+        edges = [
+            self.edge_item("tedge_1", [(p[0], p[1])], bottom),
+            self.edge_item("tedge_2", [(p[1], p[2])], slope),
+            self.edge_item("tedge_3", [(p[2], p[0])], left),
+        ]
+        tf = {"bodies": self.structured(("Tri", 1)), "edges": edges}
+        return self.run_job([self.body(1, "Tri", "vol_1.brep")], recombine=[1] if recombine else None, transfinite=tf)
+
+    def test_triangle_with_two_equal_sides_is_structured(self):
+        for counts in ((4, 6, 4), (6, 4, 4), (4, 4, 6)):  # the equal sides meet at each of the three points
+            with self.subTest(counts=counts):
+                r = self.triangle_job(*counts, recombine=1)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertNotIn("cannot be meshed", r.stdout + r.stderr)
+                gmsh.initialize()
+                try:
+                    gmsh.option.setNumber("General.Terminal", 0)
+                    gmsh.open(os.path.join(self.dir, "pre_geom2D.msh"))
+                    self.assertEqual(self.element_counts(1), {"Triangle 3": 6, "Quadrilateral 4": 18})
+                finally:
+                    gmsh.finalize()
+
+    def test_triangle_without_two_equal_sides_is_an_error(self):
+        last = self.last_error(self.triangle_job(2, 4, 6))
+        self.assertIn("structured body Tri", last)
+        self.assertIn("2/4/6", last)
+
+    def test_recombine_gives_quads_only_in_the_chosen_body(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)])
+        r = self.run_job(
+            [self.body(1, "A", "vol_1.brep", 0.2), self.body(2, "B", "vol_2.brep", 0.2)],
+            options={"Mesh.RecombinationAlgorithm": 3},
+            recombine=[1],
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Recombined      A", r.stdout)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Quadrilateral 4"})
+        self.assertEqual(set(self.element_counts(2)), {"Triangle 3"})
+
+    def test_full_quad_algorithm_reaches_gmsh(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        counts = {}
+        for alg in (1, 3):
+            r = self.run_job(
+                [self.body(1, "A", "vol_1.brep", 0.2)], options={"Mesh.RecombinationAlgorithm": alg}, recombine=[1]
+            )
+            self.assertEqual(r.returncode, 0, r.stderr)
+            gmsh.initialize()
+            try:
+                gmsh.option.setNumber("General.Terminal", 0)
+                gmsh.open(os.path.join(self.dir, "pre_geom2D.msh"))
+                counts[alg] = self.element_counts(1)
+            finally:
+                gmsh.finalize()
+        self.assertEqual(set(counts[3]), {"Quadrilateral 4"})
+        self.assertGreater(counts[3]["Quadrilateral 4"], sum(counts[1].values()), "full-quad splits into more quads")
+
+    def full_quad_core_and_air(self, n, recombine):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)])
+        tf = {"bodies": self.structured(("Core", 1)), "edges": [self.edge_item("tedge_1", square_lines(), n)]}
+        return self.run_job(
+            [self.body(1, "Core", "vol_1.brep"), self.body(2, "Air", "vol_2.brep", 0.3)],
+            options={"Mesh.RecombinationAlgorithm": 3},
+            transfinite=tf,
+            recombine=recombine,
+        )
+
+    def test_full_quad_with_an_odd_transfinite_count_next_to_a_recombined_body_is_an_error(self):
+        for recombine in ([1, 2], [2]):
+            with self.subTest(recombine=recombine):
+                last = self.last_error(self.full_quad_core_and_air(3, recombine))
+                self.assertTrue(last.startswith("ERROR: recombine: full-quad"), last)
+                self.assertIn("Air", last)
+                self.assertIn("tedge_1", last)
+
+    def test_full_quad_with_an_even_transfinite_count_meshes(self):
+        r = self.full_quad_core_and_air(4, [1, 2])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(2)), {"Quadrilateral 4"})
+
+    def test_job_without_recombine_key_has_only_triangles(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        r = self.run_job([self.body(1, "A", "vol_1.brep", 0.2)], options={"Mesh.RecombinationAlgorithm": 1})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Triangle 3"})
 
 
 if __name__ == "__main__":
