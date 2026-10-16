@@ -49,12 +49,8 @@ def _boundary(dim, tag):
     return list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary([(dim, tag)], combined=False, oriented=False)))
 
 
-def _share(n, lengths, label, name):
-    """n elements over the pieces of a split edge, by length: each at least 1, the total stays n."""
-    if n < len(lengths):
-        raise JobError(
-            f"{label}: {name} was split into {len(lengths)} pieces by a touching body but has only {n} elements"
-        )
+def _share(n, lengths):
+    """n >= len(lengths) elements over the pieces of a split edge, by length: each at least 1, the total stays n."""
     raw = [n * x / sum(lengths) for x in lengths]
     counts = [max(1, round(r)) for r in raw]
     while sum(counts) < n:
@@ -150,7 +146,13 @@ def apply_transfinite(job, mapped, body_tags, dim):
     mapped: [(kind, item, file name, final dimtags)] in transfinite_files order, from the fragment map.
     body_tags: {mat_id: the body's final entity tags of dimension dim}.
     """
-    curve_set, corners = {}, {}  # final curve -> (nodes, distribution, coef, item name); body name -> points
+    curve_set, corners, edges = {}, {}, []  # final curve -> (nodes, distribution, coef, item name); body -> points
+
+    def put(t, setting, owner):
+        old = curve_set.setdefault(t, (*setting, owner))
+        if old[:3] != setting:
+            raise JobError(f"Transfinite Edges {old[3]} and {owner} give one edge different settings")
+
     for kind, item, name, dimtags in mapped:
         want = 1 if kind == "edge" else 0
         label = f"Transfinite Edges {item['name']}" if kind == "edge" else f"structured body {item['name']}"
@@ -160,23 +162,32 @@ def apply_transfinite(job, mapped, body_tags, dim):
         if kind == "corner":
             corners.setdefault(item["name"], set()).update(tags)
             continue
-        counts = [item["nodes"] - 1]
-        if len(tags) > 1:  # a touching body's vertex lies on the edge
-            if item["distribution"] == "Bump":
-                raise JobError(
-                    f"{label}: {name} was split into {len(tags)} pieces by a touching body;"
-                    " a Bump edge cannot be shared out (use Uniform, or make the bodies match)"
-                )
-            counts = _share(item["nodes"] - 1, [gmsh.model.occ.getMass(1, t) for t in tags], label, name)
-            _note(
-                f"{label}: {name} was split into {len(tags)} pieces by a touching body;"
-                " elements " + " + ".join(map(str, counts))
+        if len(tags) == 1:  # whole edges first: the user set exactly these
+            put(tags[0], (item["nodes"], item["distribution"], item["coef"]), item["name"])
+        else:
+            edges.append((label, item, name, tags))
+    whole = dict(curve_set)
+    for label, item, name, tags in edges:  # a touching body's vertex lies on the edge: share what is left
+        split = f"{label}: {name} was split into {len(tags)} pieces by a touching body"
+        if item["distribution"] == "Bump":
+            raise JobError(f"{split}; a Bump edge cannot be shared out (use Uniform, or make the bodies match)")
+        n, free = item["nodes"] - 1, [t for t in tags if t not in whole]
+        fixed = {t: whole[t][0] - 1 for t in tags if t in whole}
+        owners = ", ".join(dict.fromkeys(whole[t][3] for t in fixed))
+        left = n - sum(fixed.values())
+        if not free and left:
+            raise JobError(
+                f"{split}; it has {n} elements but all its pieces are set by other Transfinite Edges"
+                f" ({sum(fixed.values())} elements: {owners})"
             )
-        for t, n in zip(tags, counts):
-            setting = (n + 1, item["distribution"], item["coef"])
-            old = curve_set.setdefault(t, (*setting, item["name"]))
-            if old[:3] != setting:
-                raise JobError(f"Transfinite Edges {old[3]} and {item['name']} give one edge different settings")
+        if len(free) > left:
+            set_by = f", {n - left} of them set by {owners}" if fixed else ""
+            raise JobError(f"{split}; it has {n} elements{set_by}: {left} left for {len(free)} pieces")
+        counts = dict(zip(free, _share(left, [gmsh.model.occ.getMass(1, t) for t in free]))) if free else {}
+        for t, c in counts.items():
+            put(t, (c + 1, item["distribution"], item["coef"]), item["name"])
+        parts = [f"{fixed[t]} (set by {whole[t][3]})" if t in fixed else str(counts[t]) for t in tags]
+        _note(f"{split}; elements " + " + ".join(parts))
     for t, (nodes, distribution, coef, _) in curve_set.items():
         bump = distribution == "Bump"
         gmsh.model.mesh.setTransfiniteCurve(t, nodes, "Bump" if bump else "Progression", coef if bump else 1.0)

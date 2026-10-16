@@ -459,6 +459,49 @@ class Mesher2DTest(unittest.TestCase):
         self.open_msh()
         self.assertEqual(self.element_counts(1), {"Quadrilateral 4": 16}, "the total stays 4 per side")
 
+    def on_top(self, core_top, top_n, tops=((1, 1),)):
+        """Core 4 x 1 with 2 elements up and core_top along x; each (x, w) in tops is a w x 1 body on Core's
+        top edge with top_n elements on every edge. All structured and recombined."""
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 4, 1)])
+        b, r_, t, l_ = square_lines(0, 0, 4, 1)
+        edges = [self.edge_item("tedge_1", [b, t], core_top), self.edge_item("tedge_2", [r_, l_], 2)]
+        bodies = [self.body(1, "Core", "vol_1.brep")]
+        for k, (x, w) in enumerate(tops, 2):
+            write_rects(self.geo(f"vol_{k}.brep"), [(x, 1, w, 1)])
+            edges.append(self.edge_item(f"tedge_{k + 1}", square_lines(x, 1, w, 1), top_n))
+            bodies.append(self.body(k, f"Top{k}", f"vol_{k}.brep"))
+        ids = [(b_["name"], b_["mat_id"]) for b_ in bodies]
+        tf = {"bodies": self.structured(*ids), "edges": edges}
+        return self.run_job(bodies, recombine=[i for _, i in ids], transfinite=tf)
+
+    def test_split_edge_keeps_the_piece_another_item_sets_and_shares_the_rest(self):
+        r = self.on_top(8, 2)  # Core's top: 1 | 1 set to 2 by Top | 2 -> the other 6 shared by length: 2 + 4
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("split into 3 pieces", r.stderr)
+        self.assertIn("(set by tedge_3)", r.stderr)
+        self.open_msh()
+        self.assertEqual(self.element_counts(1), {"Quadrilateral 4": 16}, "8 along x stays 8")
+        self.assertEqual(self.element_counts(2), {"Quadrilateral 4": 4})
+        c = gmsh.model.mesh.getNodes()[1]
+        top = [c[i] for i in range(0, len(c), 3) if abs(c[i + 1] - 1) < 1e-9]
+        self.assertEqual(len([x for x in top if 0 < x < 1]), 1, "first piece: 2 elements")
+        self.assertEqual(len([x for x in top if 2 < x < 4]), 3, "last piece: 4 elements")
+
+    def test_split_edge_with_too_few_elements_left_is_an_error(self):
+        last = self.last_error(self.on_top(3, 2))  # 3 - 2 leaves 1 for 2 pieces
+        self.assertIn("Transfinite Edges tedge_1", last)
+        self.assertIn("2 of them set by tedge_3", last)
+        self.assertIn("1 left for 2 pieces", last)
+
+    def test_split_edge_set_fully_by_others_must_add_up(self):
+        last = self.last_error(self.on_top(5, 2, tops=((0, 2), (2, 2))))  # 2 + 2 set, but 5 asked
+        self.assertIn("Transfinite Edges tedge_1", last)
+        self.assertIn("all its pieces are set by other Transfinite Edges (4 elements:", last)
+
+    def test_split_edge_set_fully_by_others_that_add_up_meshes(self):
+        r = self.on_top(4, 2, tops=((0, 2), (2, 2)))
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_split_bump_edge_is_an_error(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
         write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 0.5)])
