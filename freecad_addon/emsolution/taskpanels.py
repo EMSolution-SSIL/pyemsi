@@ -471,7 +471,7 @@ class FolderView:
         elif isinstance(self.folder_proxy, objects.MaterialsFolder):
             ask_assignment(self.study, [item])
             self.fill()
-        else:
+        elif not Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             Gui.Control.showDialog(ItemPanel(item))
 
 
@@ -808,7 +808,9 @@ class SelectionObserver:
         editing = Gui.Control.activeDialog()
         if not editing:
             active_study()  # remember a Study when its tree item is selected
-        if len(sel) == 1 and objects.is_item(sel[0]) and not editing:
+        if editing:
+            pass  # an open item panel highlights its own selected rows
+        elif len(sel) == 1 and objects.is_item(sel[0]):
             highlight.show(objects.item_refs(sel[0]))
         else:
             highlight.clear()
@@ -855,33 +857,93 @@ class ViewProviderItem(_ViewProvider):
         if isinstance(obj.Proxy, objects.Material):
             if obj.Body is not None:
                 ask_assignment(objects.owner_study(obj), [obj.Body])
-        else:
+        elif not Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             Gui.Control.showDialog(ItemPanel(obj))
         return True
 
 
-class ItemPanel:
-    """Edit name, settings and references of an Excitation, Mesh Size, Recombine or transfinite item."""
+class ItemGate:
+    """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
 
-    def __init__(self, obj):
+    def __init__(self, study, kinds, whole):
+        self.main = set(objects.volume_keys(study))
+        self.kinds, self.whole = kinds, whole
+
+    def allow(self, doc, obj, sub):
+        if not Gui.Control.activeDialog():  # the panel was closed without OK or Cancel
+            return True
+        body = objects.pick_body(obj)
+        if body is None or body.Name not in self.main:
+            return False
+        return sub.startswith(self.kinds) if sub else self.whole
+
+
+def _whole_bodies():
+    return [(b, "") for b in selected_bodies()]  # a click anywhere on a body picks it
+
+
+ANY_SUB = ("Face", "Edge", "Vertex")
+# proxy: (pick, list label, sub-elements the gate lets through, whole bodies too?, hint for 3D, hint for 2D)
+ITEM_PICKS = {
+    objects.Excitation: (selected_faces, "Faces", ("Face",), False, "Click faces in the 3D view.", "3D only"),
+    objects.TransfiniteBody: (
+        lambda: _whole_bodies() + selected_subs(("Vertex",)),
+        "Bodies,\ncorner vertices",
+        ANY_SUB,
+        True,
+        "Click a solid to add it. Clicked vertices become face corners.",
+        "Click a region to add it. Clicked vertices become its corners.",
+    ),
+    objects.Recombine: (
+        _whole_bodies,
+        "Bodies",
+        ANY_SUB,
+        True,
+        "Click solids in the 3D view.",
+        "Click regions in the 3D view.",
+    ),
+    objects.TransfiniteEdges: (
+        lambda: selected_subs(("Edge",)),
+        "Edges",
+        ("Edge",),
+        False,
+        "Click edges in the 3D view.",
+        "Click edges in the 3D view.",
+    ),
+    objects.MeshSize: (
+        selected_mesh_refs,
+        "Bodies, faces,\nedges, vertices",
+        ANY_SUB,
+        True,
+        "Click faces, edges or vertices in the 3D view, or a solid in the tree.",
+        "Click regions, edges or vertices in the 3D view.",
+    ),
+}
+
+
+class ItemPanel:
+    """Edit name, settings and references of an Excitation, Mesh Size, Recombine or transfinite item.
+    new: obj was just made inside an open transaction; OK commits it, Cancel undoes it.
+    While open, a selection gate limits picks to what the item takes; closing removes it."""
+
+    def __init__(self, obj, new=False):
         self.obj = obj
+        self.new = new
         study = objects.owner_study(obj)
-        highlight.clear()  # it would not follow the edits
-        if isinstance(obj.Proxy, objects.Excitation):
-            self.pick, label = selected_faces, "Faces"
-        elif isinstance(obj.Proxy, objects.TransfiniteBody):
-            self.pick, label = lambda: selected_subs(("Vertex",), whole_bodies=True), "Bodies,\ncorner vertices"
-        elif isinstance(obj.Proxy, objects.Recombine):
-            self.pick, label = lambda: [(b, "") for b in selected_bodies()], "Bodies"
-        elif isinstance(obj.Proxy, objects.TransfiniteEdges):
-            self.pick, label = lambda: selected_subs(("Edge",)), "Edges"
-        else:
-            self.pick, label = selected_mesh_refs, "Bodies, faces,\nedges, vertices"
+        highlight.clear()  # the list's selected rows are highlighted instead
+        self.pick, label, kinds, whole, hint3d, hint2d = ITEM_PICKS[type(obj.Proxy)]
+        self.takes = label.replace("\n", " ").lower()
+        Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole))  # replaces any filter the user set
         self.current = objects.item_refs(obj)
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
         layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
+        hint = QtWidgets.QLabel(
+            (hint2d if study.Dimension == "2D" else hint3d) + " Only the Study's main geometry can be picked."
+        )
+        hint.setWordWrap(True)
+        layout.addRow(hint)
         self.name = QtWidgets.QLineEdit(objects.display_name(obj))
         layout.addRow("Name", self.name)
         self.size = None
@@ -907,6 +969,7 @@ class ItemPanel:
             self.distribution.currentTextChanged.connect(lambda text: self.bump.setEnabled(text == "Bump"))
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.refs.itemSelectionChanged.connect(self.highlight_rows)
         layout.addRow(label, self.refs)
         add = QtWidgets.QPushButton("Add selection")
         remove = QtWidgets.QPushButton("Remove")
@@ -922,6 +985,17 @@ class ItemPanel:
         self.refs.clear()
         self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
 
+    def highlight_rows(self):
+        highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
+
+    def close(self):
+        """Undo what the open panel changed outside itself."""
+        Gui.Selection.removeSelectionGate()
+        highlight.clear()
+
+    def autoClosedOnDeletedDocument(self):  # FreeCAD closed the panel with its document
+        self.close()
+
     def add_selection(self):
         new = self.pick()
         problem = objects.assignment_problem(objects.owner_study(self.obj), [b for b, _ in new])
@@ -929,8 +1003,20 @@ class ItemPanel:
             warn(problem)
             new = [(b, f) for b, f in new if not objects.assignment_problem(objects.owner_study(self.obj), [b])]
         have = {(b.Name, f) for b, f in self.current}
-        self.current += [(b, f) for b, f in new if (b.Name, f) not in have]
+        added = [(b, f) for b, f in new if (b.Name, f) not in have]
+        if not added and not problem:
+            warn(self.nothing_added())
+        self.current += added
         self.refresh()
+
+    def nothing_added(self):
+        sel = Gui.Selection.getSelectionEx()
+        if not sel:
+            return "Nothing is selected. Pick geometry in the 3D view first."
+        other = [s.Object.Label for s in sel if objects.pick_body(s.Object) is None]
+        if other:
+            return "Not geometry: " + ", ".join(other) + ". If a mesh result covers the bodies, hide it and pick again."
+        return f"Nothing new to add: the selection is already in the list, or not {self.takes}."
 
     def remove(self):
         rows = {i.row() for i in self.refs.selectedIndexes()}
@@ -938,8 +1024,12 @@ class ItemPanel:
         self.refresh()
 
     def accept(self):
+        if self.new and not self.current:
+            warn("Select geometry in the 3D view and click Add selection.")
+            return False
         doc = self.obj.Document
-        doc.openTransaction("Edit " + self.obj.Label)
+        if not self.new:  # a new item's transaction is already open
+            doc.openTransaction("Edit " + self.obj.Label)
         name = self.name.text().strip()
         if name:
             self.obj.Label = name
@@ -958,10 +1048,16 @@ class ItemPanel:
             self.obj.References = list(self.current)
         doc.commitTransaction()
         doc.recompute()
+        self.close()
         Gui.Control.closeDialog()
         return True
 
     def reject(self):
+        if self.new:
+            doc = self.obj.Document
+            doc.abortTransaction()  # removes the new item
+            doc.recompute()
+        self.close()
         Gui.Control.closeDialog()
         return True
 

@@ -34,6 +34,7 @@ def main():
         Gui.updateGui()
     from emsolution import commands, objects, runner, taskpanels
     from emsolution import jobwriter
+    from emsolution import highlight
 
     commands.ask_text = lambda title, label, default: {"Excitation": "Terminal In"}[title]
     asked = []  # bodies the Assign dialog was opened for; the modal dialog is driven directly below
@@ -41,7 +42,24 @@ def main():
     warned = []  # commands' warnings; panels' warnings go to the log as "refused: ..."
     commands.warn = lambda text: warned.append(text)
     taskpanels.warn = lambda text: log.append("refused: " + text)
-    commands.ask_size = lambda default: 3.0
+    opened = []  # panels the mesh commands opened for their new item
+
+    class RecordedPanel(taskpanels.ItemPanel):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            opened.append(self)
+
+    taskpanels.ItemPanel = RecordedPanel
+
+    def ok(size=None, elements=None):
+        panel = opened.pop()
+        assert panel.new and Gui.Control.activeDialog()
+        if size is not None:
+            panel.size.setValue(size)
+        if elements is not None:
+            panel.elements.setValue(elements)
+        assert panel.accept()
+
     commands.ask_study = lambda: ("Study", "3D")
 
     doc = App.newDocument("Smoke")
@@ -86,6 +104,7 @@ def main():
     Gui.Selection.addSelection(doc.Name, study.MaterialsGroup.Name)  # must be ignored
     Gui.runCommand("EMS_Material")
     Gui.runCommand("EMS_MeshSize")
+    ok(size=3.0)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A", "Face1")
     Gui.runCommand("EMS_Excitation")
@@ -93,6 +112,33 @@ def main():
     Gui.Selection.addSelection(doc.Name, "A", "Edge1")
     Gui.Selection.addSelection(doc.Name, "B", "Vertex8")
     Gui.runCommand("EMS_MeshSize")
+    ok(size=3.0)
+    Gui.Selection.clearSelection()
+    Gui.runCommand("EMS_MeshSize")  # nothing selected: the panel opens empty
+    panel = opened.pop()
+    assert panel.refs.count() == 0 and not panel.accept(), "an empty item was made"
+    assert log[-1].startswith("refused: Select geometry"), log[-1]
+    panel.add_selection()
+    assert log[-1].startswith("refused: Nothing is selected"), log[-1]
+    hint = "Click faces, edges or vertices in the 3D view, or a solid in the tree."
+    assert any(w.text().startswith(hint) for w in panel.form.findChildren(QtWidgets.QLabel)), "no 3D hint"
+    for name in (study.Name, "Outside"):  # the gate: not geometry, not main geometry
+        Gui.Selection.addSelection(doc.Name, name)
+    assert Gui.Selection.getSelection() == [], "the gate let a pick through"
+    Gui.Selection.addSelection(doc.Name, "A", "Face1")
+    panel.add_selection()
+    panel.add_selection()
+    assert log[-1].startswith("refused: Nothing new to add"), log[-1]
+    assert panel.refs.count() == 1, panel.refs.count()
+    panel.refs.item(0).setSelected(True)
+    assert highlight.shown() is not None, "the selected row is not highlighted"
+    panel.reject()
+    assert highlight.shown() is None, "Cancel kept the highlight"
+    assert len(objects.mesh_sizes(study)) == 2, "Cancel kept the new item"
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "Outside")
+    assert [o.Name for o in Gui.Selection.getSelection()] == ["Outside"], "Cancel kept the gate"
+    Gui.Selection.clearSelection()
     assert asked == [["A", "B"]], asked
     assert objects.materials(study) == [], "the command assigned before the dialog"
     (exc,) = objects.excitations(study)
@@ -111,15 +157,17 @@ def main():
     assert exc.ViewObject.isVisible(), "the eye hid an item"
     log.append("commands ok")
 
+    Gui.Selection.addSelection(doc.Name, "Outside")  # selected before the panel: the gate does not drop it
     panel = taskpanels.ItemPanel(fine)
-    Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "B", "Face2")
     Gui.Selection.addSelection(doc.Name, "A")
-    Gui.Selection.addSelection(doc.Name, "Outside")
     panel.add_selection()
     assert log[-1] == "refused: " + outside_message, log[-1]
     Gui.Control.showDialog(panel)
     panel.accept()
+    Gui.Selection.addSelection(doc.Name, study.Name)
+    assert study in Gui.Selection.getSelection(), "OK kept the gate"
+    Gui.Selection.clearSelection()
     refs = {(b.Name, s) for b, subs in fine.References for s in subs}
     assert refs == {("A", "Edge1"), ("A", ""), ("B", "Vertex8"), ("B", "Face2")}, refs
     fine.References = [(doc.A, "Edge1"), (doc.B, "Vertex8"), (doc.B, "Face2")]
@@ -413,10 +461,11 @@ def main():
     Gui.activateWorkbench("PartWorkbench")
     select("A")
     assert Gui.activeWorkbench().name() == "PartWorkbench", "a body switched the workbench"
-    Gui.Control.showDialog(taskpanels.ItemPanel(exc))
+    exc_panel = taskpanels.ItemPanel(exc)
+    Gui.Control.showDialog(exc_panel)
     select(study.ExcitationsGroup.Name)
     assert Gui.activeWorkbench().name() == "PartWorkbench", "switched during an edit"
-    Gui.Control.closeDialog()
+    exc_panel.reject()
     select(study.ExcitationsGroup.Name)
     assert Gui.activeWorkbench().name() == "EMSolutionWorkbench", Gui.activeWorkbench().name()
     assert list(shown_folders()) == ["Excitations"], list(shown_folders())
@@ -477,14 +526,19 @@ def main():
     assert os.path.basename(run2d.mesh_file) == "pre_geom2D.msh" and os.path.isfile(run2d.mesh_file)
     assert second.MeshResult.FemMesh.NodeCount > 0
     log.append("2D mesh ok")
-    commands.ask_elements = lambda: 4
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, section.Name)
     Gui.runCommand("EMS_TransfiniteBody")
+    texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
+    assert any(t.startswith("Click a region") for t in texts), texts
+    ok()
     Gui.Selection.clearSelection()
     for k in range(1, 5):
         Gui.Selection.addSelection(doc.Name, section.Name, f"Edge{k}")
     Gui.runCommand("EMS_TransfiniteEdges")
+    Gui.Selection.addSelection(doc.Name, section.Name, "Face1")
+    assert "Face1" not in Gui.Selection.getSelectionEx()[0].SubElementNames, "the edge gate let a face through"
+    ok(elements=4)
     (tb,) = objects.transfinite_bodies(second)
     (te,) = objects.transfinite_edges(second)
     assert tb.References == [(section, ("",))], tb.References
@@ -492,6 +546,7 @@ def main():
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, section.Name)
     Gui.runCommand("EMS_Recombine")
+    ok()
     (rc,) = objects.recombine_items(second)
     assert rc.References == [(section, ("",))], rc.References
     second.MeshSizesGroup.RecombinationAlgorithm = "Blossom full-quad"

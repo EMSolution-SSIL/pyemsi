@@ -30,20 +30,6 @@ def ask_text(title, label, default):
     return text.strip() if ok and text.strip() else None
 
 
-def ask_size(default):
-    value, ok = QtWidgets.QInputDialog.getDouble(
-        Gui.getMainWindow(), "Mesh Size", "Element size (mm):", default, 0.001, 1e6, 3
-    )
-    return value if ok else None
-
-
-def ask_elements():
-    value, ok = QtWidgets.QInputDialog.getInt(
-        Gui.getMainWindow(), "Transfinite Edges", "Elements per edge:", 10, 1, 100000
-    )
-    return value if ok else None
-
-
 def warn(text):
     QtWidgets.QMessageBox.warning(Gui.getMainWindow(), "EMSolution", text)
 
@@ -67,6 +53,16 @@ def _create(study, title, make):
     doc.commitTransaction()
     doc.recompute()
     return obj
+
+
+def _create_and_edit(study, title, make):
+    """Make the item and open its panel; the transaction stays open until OK or Cancel."""
+    doc = study.Document
+    doc.openTransaction(title)
+    obj = make()
+    taskpanels.ViewProviderItem(obj.ViewObject)
+    doc.recompute()
+    Gui.Control.showDialog(taskpanels.ItemPanel(obj, new=True))
 
 
 def gate(study, bodies):
@@ -170,13 +166,9 @@ class AddMeshSize(_StudyCommand):
         if study is None:
             return
         refs = taskpanels.selected_mesh_refs()
-        if not refs:
-            return warn("Select one or more bodies, faces, edges or vertices first.")
-        if not gate(study, [b for b, _ in refs]):
-            return
-        size = ask_size(study.MeshSizesGroup.DefaultMeshSize.Value)
-        if size:
-            _create(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
+        if gate(study, [b for b, _ in refs]):
+            size = study.MeshSizesGroup.DefaultMeshSize.Value
+            _create_and_edit(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
 
 
 class AddTransfiniteBody(_StudyCommand):
@@ -192,11 +184,11 @@ class AddTransfiniteBody(_StudyCommand):
         if study is None:
             return
         bodies = taskpanels.selected_bodies()
-        if not bodies:
-            return warn("Select one or more bodies first.")
         if gate(study, bodies):
             corners = taskpanels.selected_subs(("Vertex",))
-            _create(study, "Add Transfinite Body", lambda: objects.make_transfinite_body(study, bodies, corners))
+            _create_and_edit(
+                study, "Add Transfinite Body", lambda: objects.make_transfinite_body(study, bodies, corners)
+            )
 
 
 class AddTransfiniteEdges(_StudyCommand):
@@ -212,13 +204,8 @@ class AddTransfiniteEdges(_StudyCommand):
         if study is None:
             return
         edges = taskpanels.selected_subs(("Edge",))
-        if not edges:
-            return warn("Select one or more edges first.")
-        if not gate(study, [b for b, _ in edges]):
-            return
-        elements = ask_elements()
-        if elements:
-            _create(study, "Add Transfinite Edges", lambda: objects.make_transfinite_edges(study, elements, edges))
+        if gate(study, [b for b, _ in edges]):
+            _create_and_edit(study, "Add Transfinite Edges", lambda: objects.make_transfinite_edges(study, 10, edges))
 
 
 class AddRecombine(_StudyCommand):
@@ -234,10 +221,8 @@ class AddRecombine(_StudyCommand):
         if study is None:
             return
         bodies = taskpanels.selected_bodies()
-        if not bodies:
-            return warn("Select one or more bodies first.")
         if gate(study, bodies):
-            _create(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
+            _create_and_edit(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
 
 
 class RunMesh(_StudyCommand):
