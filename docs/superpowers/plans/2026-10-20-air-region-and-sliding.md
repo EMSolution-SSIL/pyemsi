@@ -96,7 +96,7 @@ Each line has its test in the owning task (Tasks 1, 2, 9, 9, 9).
 **Interfaces:**
 - Consumes: Task 1 `air_regions`.
 - Produces:
-  - `objects.air_keys(study) -> list[str]`: no movement: `[air.Name]`; sliding: `[f"{air.Name}#fixed", f"{air.Name}#moving"]`. (Interface keys are added in Task 7.)
+  - `objects.air_keys(study) -> list[str]`: no movement: `[air.Name]`; sliding: `[f"{air.Name}#fixed", f"{air.Name}#moving"]`. (Interface keys are added to `volume_keys` in Task 8.)
   - `volume_keys(study)` = body names (Task 7 widens bodies to moving ones) + `air_keys(study)`.
   - `_owner(study, key)` resolves the objects of `key.split("#")[0].split("|")`.
   - `objects.key_name(study, key) -> str`: body → `volume_name(body)`; `X` → `clean(air.Label)`; `X#fixed` / `X#moving` → `clean(air.Label) + "_fixed"` / `"_moving"`.
@@ -219,13 +219,13 @@ Each line has its test in the owning task (Tasks 1, 2, 9, 9, 9).
 - Modify: `freecad_addon/emsolution/geometry.py` (`export_unavailable` no longer refuses "Sliding motion")
 - Modify: `freecad_addon/emsolution/jobwriter.py` (`check`'s `volumes` also hold the moving bodies, after the main ones — take them from `geometry.setup`'s second value; job lists `"moving": [mat_id, ...]`)
 - Modify: `freecad_addon/emsolution/taskpanels.py` (remove the "Sliding-interface configuration will be added…" text)
-- Test: `tests/freecad_addon/test_air.py`, `tests/freecad_addon/test_study.py` (update `sliding motion still blocked` tests: they now expect the Task 9 error "needs a Sliding Interface")
+- Test: `tests/freecad_addon/test_air.py`, `tests/freecad_addon/test_study.py` (update the `sliding motion still blocked` tests: they now assert that sliding is no longer refused as "planned for a later phase"; the "needs a Sliding Interface" error comes in Task 9)
 
 **Interfaces:**
 - Produces:
   - `objects.study_bodies(study) -> list`: main bodies, then moving bodies when `Movement == "Sliding motion"`, no duplicates. Replaces `_main_bodies` inside `assignable` and `volume_keys`.
   - Job key `"moving": [int]`: MAT_IDs of the moving bodies (absent when static).
-- [ ] **Step 1: Write the failing tests:** `test_moving_bodies_get_ids_after_main_bodies`, `test_moving_body_can_get_a_material`, `test_job_lists_moving_mat_ids`, and change the two "sliding still blocked" assertions in `test_study.py`.
+- [ ] **Step 1: Write the failing tests:** `test_moving_bodies_get_ids_after_main_bodies`, `test_moving_body_can_get_a_material`, `test_job_lists_moving_mat_ids`, and change the "sliding still blocked" assertions in `test_study.py` as above.
 - [ ] **Step 2: Run** — fail.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** `pixi run pytest tests/freecad_addon` — pass.
@@ -234,7 +234,7 @@ Each line has its test in the owning task (Tasks 1, 2, 9, 9, 9).
 ### Task 8: Sliding Interface item, slide shapes and air cells
 
 **Files:**
-- Modify: `freecad_addon/emsolution/objects.py` (`SlidingInterface`, `make_sliding_interface`, `sliding_interfaces`; `air_keys` gains interface keys)
+- Modify: `freecad_addon/emsolution/objects.py` (`SlidingInterface`, `make_sliding_interface`, `sliding_interfaces`; `volume_keys` gains interface keys)
 - Modify: `freecad_addon/emsolution/airshapes.py` (`slide_surface`, `slide_marker`, `cells`, `cell_of`, `period`)
 - Test: `tests/freecad_addon/test_air.py`
 
