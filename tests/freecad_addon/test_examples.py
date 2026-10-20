@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from .cases import CASES, run_case
+from .cases import CASES, Case, rect_2d, run_case
 
 ROW = re.compile(r"^MAT_ID\s+(\d+)\s+(\S+)\s+(\d+)$", re.MULTILINE)
 
@@ -27,3 +27,10 @@ def test_case(case, tmp_path):
     assert set(rows) == expected and len(expected) >= 3
     assert all(count > 0 for count in rows.values())
     assert "Warning" not in text
+
+
+def test_error_case_without_an_error_fails(tmp_path):
+    # the checklist mentions the expected word too: only a real error may satisfy an E-case
+    case = Case("X_fine", rect_2d, ["the bodies overlap"], "overlap")
+    with pytest.raises(RuntimeError, match="expected an error"):
+        run_case(case, str(tmp_path))

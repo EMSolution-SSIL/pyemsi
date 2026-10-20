@@ -204,6 +204,7 @@ def bodies_overlap(doc):
     return finish(study, bodies, fit_air(study, bodies))
 
 
+AIR_PRIORITY = "air priority: the bodies keep their own elements where they lie inside the hexagon"
 NO_AIR_IN_BODIES = "no element inside a body carries the air's MAT_ID"
 
 CASES = [
@@ -212,7 +213,11 @@ CASES = [
     Case("03_half_circle_2d", half_circle_2d, ["straight symmetry edge on the y axis (x = 0)", NO_AIR_IN_BODIES]),
     Case("04_quarter_circle_2d", quarter_circle_2d, ["two straight symmetry edges, on the x and y axes"]),
     Case("05_crescent_2d", crescent_2d, ["hollow inside: no air nor elements for r < 20", NO_AIR_IN_BODIES]),
-    Case("06_custom_2d", custom_2d, ["outer boundary is the hexagon, which is not meshed as a body"]),
+    Case(
+        "06_custom_2d",
+        custom_2d,
+        ["outer boundary is the hexagon, which is not meshed as a body", AIR_PRIORITY, NO_AIR_IN_BODIES],
+    ),
     Case("07_half_disc_zx", half_disc_zx, ["air has x >= 0 only, its straight edge lies on the Z axis"]),
     Case("08_rect_zx", rect_zx, ["air rectangle starts on the Z axis (x = 0)"]),
     Case("09_box_3d", box_3d, ["air box around the core and the coil: the old problem is solved"]),
@@ -234,7 +239,8 @@ CASES = [
 
 def run_case(case, out_dir):
     """Build the case in a new document saved in out_dir/<name>/, validate, mesh and write report.txt there.
-    Returns the report text; for an E-case the error text instead. Anything unexpected raises."""
+    Returns the report text; for an E-case the error text instead. Anything unexpected raises, among it an
+    E-case that validates and meshes without an error."""
     case_dir = os.path.join(out_dir, case.name)
     os.makedirs(case_dir, exist_ok=True)
     doc = App.newDocument(case.name)
@@ -268,6 +274,8 @@ def _validate_and_mesh(case, study, case_dir):
         if case.expect_error:
             return text
         raise RuntimeError(text)
+    if case.expect_error:
+        raise RuntimeError(f"expected an error with '{case.expect_error}', got none: the model validated and meshed")
     text = meshreport.report(case_dir, job, case.checklist)
     warnings = [p.text for p in problems if p.severity == validation.WARNING]
     return text + "".join(f"Warning: {w}\n" for w in warnings)
