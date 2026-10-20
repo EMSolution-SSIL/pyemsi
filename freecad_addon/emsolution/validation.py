@@ -3,7 +3,7 @@ Errors stop the mesh; warnings do not. No GUI code here."""
 
 from dataclasses import dataclass, field
 
-from . import geometry, objects
+from . import airshapes, geometry, objects
 
 ERROR, WARNING = "error", "warning"
 
@@ -61,6 +61,7 @@ def validate(study):
     _skipped_picks(study, r)
     _links(study, included, r)
     _settings(study, included, r)
+    _air(study, bodies, r)
     _transfinite(study, bodies, r)
     _names(study, bodies, included, r)
     _materials(study, r)
@@ -153,6 +154,32 @@ def _settings(study, included, r):
     for e in objects.transfinite_edges(study):
         if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
+
+
+def _air(study, bodies, r):
+    """One Air Region, a shape the Study's plane allows, and every body inside it."""
+    airs = objects.air_regions(study)
+    if not airs:
+        return
+    if len(airs) > 1:
+        r.error("Only one Air Region per Study: " + ", ".join(a.Label for a in airs) + ". Delete the others.", airs[1])
+    air, plane = airs[0], airshapes.study_plane(study)
+    prefix = f"Air Region {air.Label}: "
+    off_axis = air.AirShape == "Box" and air.Center.x - air.Length.Value / 2 < -airshapes.TOL
+    if plane == "ZX" and (air.AirShape == "Custom" or off_axis):
+        r.error(prefix + "in a ZX (axisymmetric) Study use a half disc or a rectangle starting on the Z axis.", air)
+        return
+    try:
+        shape = airshapes.air_shape(air, plane)
+    except ValueError as e:
+        text = str(e)
+        r.error(text if text.startswith(prefix) else prefix + text, air)
+        return
+    for body in bodies:
+        body_shape = geometry.global_shape(body)
+        measure = body_shape.Volume if plane == "3D" else body_shape.Area
+        if airshapes.outside(body_shape, shape, plane) > 1e-6 * measure:
+            r.error(f"{body.Label} is not fully inside Air Region {air.Label}.", air, [(body, "")])
 
 
 def _transfinite(study, bodies, r):

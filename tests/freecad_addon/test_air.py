@@ -10,7 +10,7 @@ import FreeCAD as App
 import Part
 import pytest
 
-from emsolution import airshapes, objects
+from emsolution import airshapes, objects, validation
 
 from .materialdata import STEEL, record
 
@@ -232,3 +232,78 @@ class AirTest(unittest.TestCase):
         self.assertEqual(objects.air_keys(self.study), [f"{air.Name}#fixed", f"{air.Name}#moving"])
         self.assertEqual(objects.key_name(self.study, f"{air.Name}#fixed"), "Air_gap_fixed")
         self.assertEqual(objects.key_name(self.study, f"{air.Name}#moving"), "Air_gap_moving")
+
+    def air_errors(self):
+        return [p.text for p in validation.errors(validation.validate(self.study))]
+
+    def air_problems(self):
+        return [t for t in self.air_errors() if "Air Region" in t]
+
+    def test_two_air_regions_is_an_error(self):
+        self.bodies("A")
+        first = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5))
+        second = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5))
+        problems = validation.validate(self.study)
+        text = f"Only one Air Region per Study: {first.Label}, {second.Label}. Delete the others."
+        self.assertIn(text, [p.text for p in validation.errors(problems)])
+        (problem,) = [p for p in problems if p.text == text]
+        self.assertIs(problem.item, second)
+
+    def test_body_outside_air_is_an_error_naming_it(self):
+        (a,) = self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=4, Width=4, Height=4)
+        problems = validation.validate(self.study)
+        text = f"{a.Label} is not fully inside Air Region {air.Label}."
+        self.assertIn(text, [p.text for p in validation.errors(problems)])
+        (problem,) = [p for p in problems if p.text == text]
+        self.assertIs(problem.item, air)
+        self.assertEqual(problem.refs, [(a, "")])
+
+    def test_body_inside_air_passes(self):
+        self.bodies("A")
+        objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.assertEqual(self.air_problems(), [])
+
+    def test_body_outside_air_2d_is_an_error(self):
+        body = self.study_2d(App.Vector(0, 0, 1))
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 0), Length=4, Width=4)
+        self.assertIn(f"{body.Label} is not fully inside Air Region {air.Label}.", self.air_errors())
+        air.Length = air.Width = 30
+        self.assertEqual(self.air_problems(), [])
+
+    def test_zx_box_left_of_axis_is_an_error(self):
+        self.study_2d(App.Vector(0, 1, 0))
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(0, 0, 5), Length=40, Width=30)
+        text = f"Air Region {air.Label}: in a ZX (axisymmetric) Study use a half disc or a rectangle starting on the Z axis."
+        self.assertIn(text, self.air_errors())
+        air.Center = App.Vector(15, 0, 5)
+        air.Length = 30
+        self.assertEqual(self.air_problems(), [])
+
+    def test_zx_custom_is_an_error(self):
+        self.study_2d(App.Vector(0, 1, 0))
+        source = self.doc.addObject("Part::Feature", "Outer")
+        source.Shape = Part.makePlane(30, 30, App.Vector(0, 0, 0), App.Vector(0, 1, 0))
+        air = objects.make_air_region(self.study, "Custom", Source=source)
+        text = f"Air Region {air.Label}: in a ZX (axisymmetric) Study use a half disc or a rectangle starting on the Z axis."
+        self.assertIn(text, self.air_errors())
+
+    def test_zx_half_disc_passes(self):
+        self.study_2d(App.Vector(0, 1, 0))
+        objects.make_air_region(self.study, "Sector", OuterRadius=30)
+        self.assertEqual(self.air_problems(), [])
+
+    def test_custom_without_source_is_an_error(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Custom")
+        self.assertEqual(self.air_problems(), [f"Air Region {air.Label}: choose a body for the Custom shape"])
+
+    def test_bad_radii_and_angles_are_errors(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Sector", InnerRadius=20, OuterRadius=10)
+        text = f"Air Region {air.Label}: the outer radius must be larger than the inner radius."
+        self.assertEqual(self.air_problems(), [text])
+        air.InnerRadius = 0
+        air.StartAngle, air.EndAngle = 90, 30
+        text = f"Air Region {air.Label}: the end angle must be larger than the start angle (at most 360\N{DEGREE SIGN} more)."
+        self.assertEqual(self.air_problems(), [text])

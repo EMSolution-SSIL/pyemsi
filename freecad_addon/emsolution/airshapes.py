@@ -76,7 +76,7 @@ def _bottom_face(solid, z):
 def _sector(air, plane):
     inner, outer = air.InnerRadius.Value, air.OuterRadius.Value
     if outer <= inner:
-        raise ValueError(f"Air Region {air.Label}: the outer radius must be larger than the inner radius")
+        raise ValueError(f"Air Region {air.Label}: the outer radius must be larger than the inner radius.")
     if plane == "ZX":  # half ring in the XY plane, x >= 0, stood up into y = 0
         face = _bottom_face(_ring_sector(inner, outer, -90, 180, 0, 1), 0)
         face.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 90)
@@ -84,7 +84,9 @@ def _sector(air, plane):
         return face
     start, sweep = air.StartAngle.Value, air.EndAngle.Value - air.StartAngle.Value
     if not 0 < sweep <= 360:
-        raise ValueError(f"Air Region {air.Label}: the end angle must be 0 to 360 degrees above the start angle")
+        raise ValueError(
+            f"Air Region {air.Label}: the end angle must be larger than the start angle (at most 360° more)."
+        )
     if plane == "3D":
         return _ring_sector(inner, outer, start, sweep, air.ZMin.Value, air.Height.Value)
     return _bottom_face(_ring_sector(inner, outer, start, sweep, 0, 1), 0)
@@ -105,3 +107,9 @@ def fit_box(bodies, padding, plane):
     if plane == "XY":
         return App.Vector(box.Center.x, box.Center.y, 0), length, depth, 0.0
     return App.Vector(box.Center), length, depth, height
+
+
+def outside(body_shape, air_shape, plane):
+    """Volume ("3D") or area (2D) of the part of body_shape that lies outside air_shape."""
+    rest = body_shape.cut(air_shape)
+    return rest.Volume if plane == "3D" else rest.Area
