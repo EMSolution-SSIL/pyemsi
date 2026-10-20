@@ -9,7 +9,7 @@ import FreeCADGui as Gui
 from pivy import coin
 from PySide import QtCore, QtWidgets
 
-from . import geometry, highlight, icon, jobwriter, objects, validation
+from . import airshapes, geometry, highlight, icon, jobwriter, objects, validation
 
 _active = {}  # document name -> (document instance, Study Name); GUI state only
 
@@ -71,8 +71,13 @@ def selected_subs(kinds, whole_bodies=False):
     return out
 
 
+def is_air(body):
+    return isinstance(getattr(body, "Proxy", None), objects.AirRegion)
+
+
 def selected_faces():
-    return selected_subs(("Face",))
+    """Faces of bodies; an Excitation never goes on an Air Region."""
+    return [(b, s) for b, s in selected_subs(("Face",)) if not is_air(b)]
 
 
 def selected_mesh_refs():
@@ -223,6 +228,23 @@ class ViewProviderLibraryMaterial(_ViewProvider):
         return True
 
 
+class ViewProviderAir(_ViewProvider):
+    """The Air Region's shape, mostly see-through; double-click edits it."""
+
+    def __init__(self, vobj):
+        super().__init__(vobj)
+        vobj.Transparency = 80
+        vobj.DisplayMode = "Flat Lines" if objects.owner_study(vobj.Object).Dimension == "3D" else "Wireframe"
+
+    def getIcon(self):
+        return icon("airregion")
+
+    def doubleClicked(self, vobj):
+        if not Gui.Control.activeDialog():  # the panel's selection must not outlive it
+            Gui.Control.showDialog(AirRegionPanel(vobj.Object))
+        return True
+
+
 def _length_box(value, minimum=0.001, no_limit=False):
     box = QtWidgets.QDoubleSpinBox()
     box.setDecimals(3)
@@ -344,6 +366,7 @@ class FolderView:
             objects.MaterialsFolder: (["Body", "Material", "MAT_ID", "POTENTIAL"], objects.material_rows),
             objects.ExcitationsFolder: (["Excitation", "Body", "Faces", "SMAT_ID"], objects.excitation_rows),
             objects.MeshSizesFolder: (["Mesh size", "Size", "Applies to"], objects.mesh_size_rows),
+            objects.AirRegionsFolder: (["Air region", "Shape", "MAT_ID"], objects.air_region_rows),
         }[type(folder.Proxy)]
         self.row_source = rows
         self.rows = rows(study)
@@ -351,7 +374,7 @@ class FolderView:
         layout = QtWidgets.QVBoxLayout(self.form)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QtWidgets.QLabel("Study: " + study.Label))
-        if not isinstance(folder.Proxy, objects.MaterialLibraryFolder):
+        if not isinstance(folder.Proxy, (objects.MaterialLibraryFolder, objects.AirRegionsFolder)):
             if objects.assignment_problem(study, []) == objects.NO_MAIN_GEOMETRY:
                 notice = QtWidgets.QLabel(objects.NO_MAIN_GEOMETRY)
                 notice.setStyleSheet("color: #c00000")
@@ -471,7 +494,11 @@ class FolderView:
         elif isinstance(self.folder_proxy, objects.MaterialsFolder):
             ask_assignment(self.study, [item])
             self.fill()
-        elif not Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
+        elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
+            pass
+        elif isinstance(item.Proxy, objects.AirRegion):
+            Gui.Control.showDialog(AirRegionPanel(item))
+        else:
             Gui.Control.showDialog(ItemPanel(item))
 
 
@@ -867,8 +894,9 @@ class ViewProviderItem(_ViewProvider):
 class ItemGate:
     """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
 
-    def __init__(self, study, kinds, whole):
-        self.main = set(objects.volume_keys(study))
+    def __init__(self, study, kinds, whole, air=True):
+        bodies = objects.assignable(study) if air else geometry.region(study, "Main")[0]
+        self.main = {b.Name for b in bodies}
         self.kinds, self.whole = kinds, whole
 
     def allow(self, doc, obj, sub):
@@ -935,7 +963,8 @@ class ItemPanel:
         highlight.clear()  # the list's selected rows are highlighted instead
         self.pick, label, kinds, whole, hint3d, hint2d = ITEM_PICKS[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
-        Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole))  # replaces any filter the user set
+        air = not isinstance(obj.Proxy, objects.Excitation)  # an Excitation never goes on the air
+        Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole, air))  # replaces any filter the user set
         self.current = objects.item_refs(obj)
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
@@ -1060,6 +1089,187 @@ class ItemPanel:
             doc.abortTransaction()  # removes the new item
             doc.recompute()
         self.close()
+        Gui.Control.closeDialog()
+        return True
+
+
+def _number_box(value, low, high, suffix):
+    box = QtWidgets.QDoubleSpinBox()
+    box.setDecimals(3)
+    box.setRange(low, high)
+    box.setSuffix(suffix)
+    box.setValue(value)
+    return box
+
+
+class AirRegionPanel:
+    """Edit an Air Region: its outer shape and the numbers that size it. Changes apply on OK.
+    new: obj was just made inside an open transaction; OK commits it, Cancel undoes it."""
+
+    # plane -> [(AirShape, name shown)]; a 2D box is a rectangle and a ZX sector is a half disc
+    SHAPES = {
+        "3D": [("Box", "Box"), ("Sector", "Sector"), ("Custom", "Custom")],
+        "XY": [("Box", "Rectangle"), ("Sector", "Sector"), ("Custom", "Custom")],
+        "ZX": [("Box", "Rectangle"), ("Sector", "Half disc")],
+    }
+    CENTER_AXES = {"3D": "xyz", "XY": "xy", "ZX": "xz"}
+
+    def __init__(self, obj, new=False):
+        self.obj, self.new = obj, new
+        self.study = objects.owner_study(obj)
+        self.plane = airshapes.study_plane(self.study)
+        self.source = obj.Source
+        highlight.clear()
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle(obj.Label)
+        layout = QtWidgets.QVBoxLayout(self.form)
+        top = QtWidgets.QFormLayout()
+        layout.addLayout(top)
+        top.addRow(QtWidgets.QLabel("Study: " + self.study.Label))
+        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
+        top.addRow("Name", self.name)
+        self.shape = QtWidgets.QComboBox()
+        for key, text in self.SHAPES[self.plane]:
+            self.shape.addItem(text, key)
+        self.shape.setCurrentIndex(max(self.shape.findData(obj.AirShape), 0))
+        top.addRow("Shape", self.shape)
+        self.groups = {"Box": self.box_group(), "Sector": self.sector_group(), "Custom": self.custom_group()}
+        for group in self.groups.values():
+            layout.addWidget(group)
+        self.shape.currentIndexChanged.connect(self.show_shape)
+        self.show_shape()
+
+    def box_group(self):
+        obj, plane = self.obj, self.plane
+        group = QtWidgets.QGroupBox("Box" if plane == "3D" else "Rectangle")
+        form = QtWidgets.QFormLayout(group)
+        self.center = {}
+        for axis in self.CENTER_AXES[plane]:
+            self.center[axis] = _number_box(getattr(obj.Center, axis), -1e6, 1e6, " mm")
+            form.addRow(f"Centre {axis}", self.center[axis])
+        labels = {
+            "Length": "Length (x)",
+            "Width": "Width (z)" if plane == "ZX" else "Width (y)",
+            "Height": "Height (z)",
+        }
+        self.size = {}
+        for prop in ("Length", "Width") + (("Height",) if plane == "3D" else ()):
+            self.size[prop] = _length_box(getattr(obj, prop).Value)
+            form.addRow(labels[prop], self.size[prop])
+        self.padding = _number_box(50, 0, 1000, " %")
+        self.padding.setDecimals(0)
+        fit = QtWidgets.QPushButton("Fit to bodies")
+        fit.setToolTip("Size the box around the main geometry, with this padding on each side")
+        fit.clicked.connect(self.fit)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.padding)
+        row.addWidget(fit)
+        form.addRow("Padding", row)
+        return group
+
+    def sector_group(self):
+        obj, plane = self.obj, self.plane
+        group = QtWidgets.QGroupBox("Half disc" if plane == "ZX" else "Sector")
+        form = QtWidgets.QFormLayout(group)
+        self.inner = _length_box(obj.InnerRadius.Value, minimum=0.0)
+        self.outer = _length_box(obj.OuterRadius.Value)
+        form.addRow("Inner radius", self.inner)
+        form.addRow("Outer radius", self.outer)
+        self.angles = self.z_min = self.sector_height = self.sector_z = None
+        if plane == "ZX":
+            self.sector_z = _number_box(obj.Center.z, -1e6, 1e6, " mm")
+            form.addRow("Centre z", self.sector_z)
+        else:
+            start = _number_box(obj.StartAngle.Value, -360, 720, " deg")
+            end = _number_box(obj.EndAngle.Value, -360, 720, " deg")
+            self.angles = (start, end)
+            form.addRow("Start angle", start)
+            form.addRow("End angle", end)
+        if plane == "3D":
+            self.z_min = _number_box(obj.ZMin.Value, -1e6, 1e6, " mm")
+            self.sector_height = _length_box(obj.Height.Value)
+            form.addRow("Z min", self.z_min)
+            form.addRow("Height", self.sector_height)
+        return group
+
+    def custom_group(self):
+        group = QtWidgets.QGroupBox("Custom")
+        form = QtWidgets.QFormLayout(group)
+        self.source_label = QtWidgets.QLabel()
+        self.source_label.setWordWrap(True)
+        form.addRow("Body", self.source_label)
+        pick = QtWidgets.QPushButton("Use selected body")
+        pick.setToolTip("The air takes the shape of the body selected in the 3D view or the tree")
+        pick.clicked.connect(self.pick_source)
+        form.addRow(pick)
+        self.show_source()
+        return group
+
+    def show_shape(self):
+        for key, group in self.groups.items():
+            group.setVisible(key == self.shape.currentData())
+
+    def show_source(self):
+        self.source_label.setText(self.source.Label if self.source is not None else "none picked yet")
+
+    def pick_source(self):
+        picked = [b for b in selected_bodies() if b != self.obj]
+        if not picked:
+            return warn("Select a body in the 3D view or the tree first.")
+        self.source = picked[0]
+        self.show_source()
+
+    def fit(self):
+        bodies = geometry.region(self.study, "Main")[0]
+        if not bodies:
+            return warn(objects.NO_MAIN_GEOMETRY)
+        center, length, width, height = airshapes.fit_box(bodies, self.padding.value(), self.plane)
+        for axis, box in self.center.items():
+            box.setValue(getattr(center, axis))
+        values = {"Length": length, "Width": width, "Height": height}
+        for prop, box in self.size.items():
+            box.setValue(values[prop])
+
+    def accept(self):
+        obj, doc = self.obj, self.obj.Document
+        shape = self.shape.currentData()
+        if shape == "Custom" and self.source is None:
+            warn("Select a body and click Use selected body.")
+            return False
+        if not self.new:  # a new item's transaction is already open
+            doc.openTransaction("Edit " + obj.Label)
+        name = self.name.text().strip()
+        if name:
+            obj.Label = name
+            obj.GroupName = name  # FreeCAD may have suffixed the Label
+        obj.AirShape = shape
+        if shape == "Box":
+            center = App.Vector(obj.Center)
+            for axis, box in self.center.items():
+                setattr(center, axis, box.value())
+            obj.Center = center
+            for prop, box in self.size.items():
+                setattr(obj, prop, box.value())
+        elif shape == "Sector":
+            obj.InnerRadius, obj.OuterRadius = self.inner.value(), self.outer.value()
+            if self.angles is not None:
+                obj.StartAngle, obj.EndAngle = self.angles[0].value(), self.angles[1].value()
+            if self.z_min is not None:
+                obj.ZMin, obj.Height = self.z_min.value(), self.sector_height.value()
+            if self.sector_z is not None:
+                obj.Center = App.Vector(obj.Center.x, obj.Center.y, self.sector_z.value())
+        else:
+            obj.Source = self.source
+        doc.commitTransaction()
+        doc.recompute()
+        Gui.Control.closeDialog()
+        return True
+
+    def reject(self):
+        if self.new:
+            doc = self.obj.Document
+            doc.abortTransaction()  # removes the new Air Region
+            doc.recompute()
         Gui.Control.closeDialog()
         return True
 

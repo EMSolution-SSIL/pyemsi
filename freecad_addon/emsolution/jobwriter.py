@@ -124,6 +124,9 @@ def export_subs(folder, body, subs, prefix):
 
 def write_job(study):
     """Run the checks, update the ID table, write job.json and BREPs to the scratch folder. Returns the job path."""
+    stale = [a for a in objects.air_regions(study) if "Touched" in a.State or a.Shape.isNull()]
+    if stale:  # the job must get the air as its properties describe it now
+        study.Document.recompute(stale)
     volumes, surfaces, elements = check(study)
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change
     objects.update_ids(study)

@@ -321,6 +321,23 @@ class AirTest(unittest.TestCase):
         self.assertEqual(job["air"], {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 5.0})
         self.assertTrue(os.path.exists(os.path.join(jobwriter.scratch_folder(self.study), "geometry", "air.brep")))
 
+    def test_job_air_is_current_without_a_recompute(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        air.Length = 50  # touched, not recomputed
+        jobwriter.write_job(self.study)
+        self.assertAlmostEqual(self.exported_air().XLength, 50)
+        self.doc.removeObject(air.Name)
+        fresh = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.assertTrue(fresh.Shape.isNull())  # never recomputed
+        jobwriter.write_job(self.study)
+        self.assertAlmostEqual(self.exported_air().XLength, 30)
+
+    def exported_air(self):
+        """Bound box of the air BREP the last job wrote."""
+        return Part.read(os.path.join(jobwriter.scratch_folder(self.study), "geometry", "air.brep")).BoundBox
+
     def test_job_without_air_has_no_air_key(self):
         self.bodies("A")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:

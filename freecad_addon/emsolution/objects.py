@@ -627,6 +627,11 @@ def excitation_rows(study):
     return rows
 
 
+def air_region_rows(study):
+    """Rows for the Air Regions panel: (air region, refs, [name, shape, MAT_ID])."""
+    return [(a, [(a, "")], [display_name(a), a.AirShape, study.MatIds.get(a.Name, "–")]) for a in air_regions(study)]
+
+
 def _size_text(item):
     if isinstance(item.Proxy, MeshSize):
         return f"{item.Size.Value:g} mm"

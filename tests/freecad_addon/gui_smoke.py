@@ -189,6 +189,7 @@ def main():
         "Body": "Materials",
         "Excitation": "Excitations",
         "Mesh size": "Mesh Sizes",
+        "Air region": "Air Regions",
     }
 
     def shown_folders():
@@ -200,8 +201,14 @@ def main():
             if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column
         }
 
-    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 2}
-    for folder in (study.MaterialLibraryGroup, study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
+    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 2, "Air Regions": 0}
+    for folder in (
+        study.MaterialLibraryGroup,
+        study.MaterialsGroup,
+        study.ExcitationsGroup,
+        study.MeshSizesGroup,
+        study.AirRegionsGroup,
+    ):
         assert isinstance(folder.ViewObject.Proxy, taskpanels.ViewProviderFolder), folder.Name
         folder.Label = "Renamed"
         assert folder.Label == folder.Proxy.LABEL, folder.Label
@@ -512,6 +519,148 @@ def main():
     App.Gui.updateGui()
     assert not Gui.Control.activeDialog()
     log.append(f"validate ok: {len(rows)} rows")
+
+    # Air Region: command, panel, view, folder, picks and mesh.
+    import json
+
+    console = []
+    real_print = App.Console.PrintMessage
+    App.Console.PrintMessage = lambda text: (console.append(text), real_print(text))
+    air_panels = []  # panels the Air Region command and its double-click opened
+
+    class RecordedAirPanel(taskpanels.AirRegionPanel):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            air_panels.append(self)
+
+    taskpanels.AirRegionPanel = RecordedAirPanel
+    select(study.Name)
+    assert commands.COMMANDS["EMS_AddAirRegion"].IsActive()
+    Gui.runCommand("EMS_AddAirRegion")
+    panel = air_panels.pop()
+    assert panel.new and Gui.Control.activeDialog(), "the Air Region panel did not open"
+    (air,) = objects.air_regions(study)
+    assert isinstance(air.ViewObject.Proxy, taskpanels.ViewProviderAir)
+    assert (air.ViewObject.Transparency, air.ViewObject.DisplayMode) == (80, "Flat Lines")
+    for body in (doc.A, doc.B):
+        assert air.Shape.BoundBox.isInside(body.Shape.BoundBox), "the Air Region does not enclose " + body.Name
+    assert [panel.shape.itemText(i) for i in range(panel.shape.count())] == ["Box", "Sector", "Custom"]
+    assert panel.groups["Sector"].isHidden() and not panel.groups["Box"].isHidden()
+    panel.shape.setCurrentIndex(panel.shape.findData("Sector"))
+    assert not panel.groups["Sector"].isHidden() and panel.groups["Box"].isHidden()
+    panel.shape.setCurrentIndex(panel.shape.findData("Box"))
+    assert panel.reject()
+    assert objects.air_regions(study) == [] and not Gui.Control.activeDialog(), "Cancel kept the new Air Region"
+    Gui.runCommand("EMS_AddAirRegion")
+    panel = air_panels.pop()
+    panel.padding.setValue(100)
+    panel.fit()
+    assert abs(panel.size["Length"].value() - 60) < 1e-6, panel.size["Length"].value()  # 20 mm of bodies, +100 % a side
+    assert panel.accept() and not Gui.Control.activeDialog()
+    (air,) = objects.air_regions(study)
+    assert abs(air.Length.Value - 60) < 1e-6 and air.Shape.BoundBox.isInside(doc.B.Shape.BoundBox)
+    assert air.ViewObject.Proxy.doubleClicked(air.ViewObject)
+    panel = air_panels.pop()
+    assert not panel.new and Gui.Control.activeDialog()
+    panel.size["Length"].setValue(70)
+    assert panel.accept() and abs(air.Length.Value - 70) < 1e-6 and doc.UndoNames[0].startswith("Edit Air"), (
+        doc.UndoNames
+    )
+    Gui.runCommand("EMS_AddAirRegion")
+    assert warned[-1] == "This Study already has an Air Region." and not air_panels, warned
+    select(study.AirRegionsGroup.Name)
+    assert shown_folders()["Air Regions"].rowCount() == 1
+    shown_folders()["Air Regions"].cellDoubleClicked.emit(0, 0)
+    assert air_panels.pop().reject() and not Gui.Control.activeDialog()
+    # Air is not an Excitation pick; Mesh Size picks of it and its faces stay allowed.
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, air.Name, "Face1")
+    Gui.runCommand("EMS_Excitation")
+    assert warned[-1].startswith("An Air Region cannot") and len(objects.excitations(study)) == 1, warned[-1]
+    panel = taskpanels.ItemPanel(exc)
+    opened.pop()
+    Gui.Control.showDialog(panel)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, air.Name, "Face1")
+    assert Gui.Selection.getSelection() == [], "the Excitation gate let the Air Region through"
+    panel.reject()
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, air.Name)
+    Gui.runCommand("EMS_MeshSize")
+    assert opened[-1].current == [(air, "")], opened[-1].current
+    Gui.Selection.addSelection(doc.Name, air.Name, "Face1")
+    assert Gui.Selection.getSelection() == [air], "the Mesh Size gate refused the Air Region"
+    ok(size=4.0)
+    air_size = objects.mesh_sizes(study)[-1]
+    run = runner.start(study)
+    assert run is not None and run.proc.waitForFinished(120000), "mesher timed out"
+    Gui.updateGui()
+    assert run.error == "" and not runner.busy(), run.error
+    air_id = int(study.MatIds[air.Name])
+    assert any(f"MAT_ID  {air_id:>6}  {objects.volume_name(air)}" in line for line in console), (
+        "no Air MAT_ID line in the log"
+    )
+    with open(run.job, encoding="utf-8") as fh:
+        air_job = json.load(fh)["air"]
+    assert (air_job["mat_id"], air_job["size"]) == (air_id, 4.0), air_job
+    App.Console.PrintMessage = real_print
+    doc.removeObject(air_size.Name)
+    doc.removeObject(air.Name)
+    log.append("air region ok")
+
+    # A Study saved before the Air Regions folder existed gets it back when the document opens in the GUI.
+    old = App.newDocument("OldAir")
+    old_study = objects.make_study(old)
+    old.removeObject(old_study.AirRegionsGroup.Name)
+    old_study.removeProperty("AirRegionsGroup")
+    old_path = os.path.join(tempfile.mkdtemp(), "OldAir.FCStd")
+    old.saveAs(old_path)
+    App.closeDocument(old.Name)
+    old = App.openDocument(old_path)
+    for _ in range(3):
+        Gui.updateGui()
+    old_study = objects.find_study(old)
+    folder = old_study.AirRegionsGroup
+    assert folder is not None and folder.Label == "Air Regions" and folder in old_study.Group
+    assert isinstance(folder.ViewObject.Proxy, taskpanels.ViewProviderFolder), "no folder view in the reopened document"
+    assert folder.ViewObject.Proxy.doubleClicked(folder.ViewObject)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(old.Name, folder.Name)
+    for _ in range(5):
+        Gui.updateGui()
+    assert list(shown_folders()) == ["Air Regions"], list(shown_folders())
+    old_air = objects.make_air_region(old_study, "Box")
+    old.recompute()
+    assert not old_air.Shape.isNull() and isinstance(old_air.ViewObject.Proxy, taskpanels.ViewProviderAir)
+    App.closeDocument(old.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("old document gets the Air Regions folder ok")
+
+    # 2D panels: a rectangle or a sector in XY; only a rectangle or a half disc in ZX.
+    import Part
+
+    flat = App.newDocument("Air2D")
+    for normal, shapes in (
+        (App.Vector(0, 0, 1), ["Rectangle", "Sector", "Custom"]),
+        (App.Vector(0, 1, 0), ["Rectangle", "Half disc"]),
+    ):
+        flat_study = objects.make_study(flat, "2D")
+        flat_study.MainMode = "Manual"
+        face = flat.addObject("Part::Feature", "Face")
+        face.Shape = Part.makePlane(10, 10, App.Vector(0, 0, 0), normal)
+        flat_study.MainObjects = [face]
+        flat.recompute()
+        flat_air = objects.make_air_region(flat_study, "Sector", OuterRadius=50)
+        flat.recompute()
+        flat_panel = taskpanels.AirRegionPanel(flat_air)
+        assert [flat_panel.shape.itemText(i) for i in range(flat_panel.shape.count())] == shapes
+        flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Box"))
+        flat_panel.fit()
+        assert flat_panel.accept() and not flat_air.Shape.isNull() and flat_air.AirShape == "Box"
+        flat.removeObject(flat_study.Name)
+    App.closeDocument(flat.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("2D air panels ok")
 
     # Several Studies: ownership, setup controls, bulk selection and undo.
     import Part

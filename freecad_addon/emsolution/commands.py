@@ -4,7 +4,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
 
-from . import geometry, icon, objects, runner, taskpanels
+from . import airshapes, geometry, icon, objects, runner, taskpanels
 
 
 def ask_study():
@@ -145,6 +145,8 @@ class AddExcitation(_StudyCommand):
             return
         faces = taskpanels.selected_faces()
         if not faces:
+            if any(taskpanels.is_air(b) for b, _ in taskpanels.selected_subs(("Face",))):
+                return warn("An Air Region cannot be an Excitation: pick the faces of a body.")
             return warn("Select one or more faces first.")
         if not gate(study, [b for b, _ in faces]):
             return
@@ -169,6 +171,34 @@ class AddMeshSize(_StudyCommand):
         if gate(study, [b for b, _ in refs]):
             size = study.MeshSizesGroup.DefaultMeshSize.Value
             _create_and_edit(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
+
+
+class AddAirRegion(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("airregion"),
+            "MenuText": "Air Region",
+            "ToolTip": "Add the air around the model: a box that fits the bodies, a sector or a body of your own",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        if objects.air_regions(study):
+            return warn("This Study already has an Air Region.")
+        bodies = geometry.region(study, "Main")[0]
+        plane = airshapes.study_plane(study)
+        doc = study.Document
+        doc.openTransaction("Add Air Region")  # stays open until OK or Cancel
+        air = objects.make_air_region(study, "Box")
+        if bodies:
+            center, air.Length, air.Width, height = airshapes.fit_box(bodies, 50, plane)
+            air.Center = center
+            if plane == "3D":
+                air.Height = height
+        doc.recompute()
+        Gui.Control.showDialog(taskpanels.AirRegionPanel(air, new=True))
 
 
 class AddTransfiniteBody(_StudyCommand):
@@ -268,6 +298,7 @@ COMMANDS = {
     "EMS_Material": AssignMaterial(),
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
+    "EMS_AddAirRegion": AddAirRegion(),
     "EMS_TransfiniteBody": AddTransfiniteBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
