@@ -41,6 +41,20 @@ def claim_air(air_tags, owner):
     return tags
 
 
+def air_items(job):
+    """The air's {"mat_id", "name"} entries: the air of a static job, or its fixed and moving side (sliding)."""
+    air = job.get("air")
+    if not air:
+        return []
+    return [air["sides"]["fixed"], air["sides"]["moving"]] if "sides" in air else [air]
+
+
+def split_air(air_tags, moving_cell_tags):
+    """The air's tags (from claim_air) on the fixed and on the moving side: a piece inside a moving cell is moving."""
+    moving = set(moving_cell_tags)
+    return [t for t in air_tags if t not in moving], [t for t in air_tags if t in moving]
+
+
 def _note(text):
     """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view."""
     print(f"NOTE: {text}", file=sys.stderr)
@@ -264,7 +278,7 @@ def _recombine_3d(job, body_tags, tf_curves):
     """Quad faces on the boundary of the chosen bodies, except where Gmsh could not build the pyramids."""
     chosen = set(job.get("recombine", []))
     structured = {b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])}
-    names = {v["mat_id"]: v["name"] for v in job["volumes"] + ([job["air"]] if "air" in job else [])}
+    names = {v["mat_id"]: v["name"] for v in job["volumes"] + air_items(job)}
     mat_of = {t: m for m, tags in body_tags.items() for t in tags}
 
     def kind(vol):
@@ -315,18 +329,184 @@ def _recombine_3d(job, body_tags, tf_curves):
         gmsh.model.mesh.setRecombine(2, face)
 
 
+def apply_slides(slides, mapped, dim):
+    """The same uniform division on both sides of every slide surface. Returns {slide_mat_id: the marker's final tags}.
+
+    mapped: per slide, ([(file name, final dimtags)] of its pieces, (marker file name, final dimtags)).
+    A full turn is built in two halves of divisions / 2 each; a sector or a line gets divisions. A piece that a
+    touching body split further shares its count out by length.
+    """
+    if dim != 2:
+        raise JobError("sliding motion cannot be meshed in 3D yet")
+    markers = {}
+    for slide, (pieces, (marker, marker_tags)) in zip(slides, mapped):
+        name = f"sliding interface {slide['name']}"
+        n = slide["divisions"] // 2 if slide["full"] else slide["divisions"]
+        for file, dimtags in pieces:
+            tags = [t for d, t in dimtags if d == dim - 1]
+            if not tags or any(len(gmsh.model.getAdjacencies(dim - 1, t)[0]) == 0 for t in tags):
+                raise JobError(f"{name}: {file} did not merge with the model")
+            if len(tags) > n:
+                raise JobError(f"{name}: {file} was split into {len(tags)} pieces by touching bodies, more than {n}")
+            counts = _share(n, [gmsh.model.occ.getMass(dim - 1, t) for t in tags])
+            if len(tags) > 1:
+                parts = " + ".join(map(str, counts))
+                _note(f"{name}: {file} was split into {len(tags)} pieces by a touching body; elements {parts}")
+            for t, c in zip(tags, counts):
+                gmsh.model.mesh.setTransfiniteCurve(t, c + 1)
+        points = [t for d, t in marker_tags if d == 0]
+        if not points or any(len(gmsh.model.getAdjacencies(0, t)[0]) == 0 for t in points):
+            raise JobError(f"{name}: {marker} did not merge with the model")
+        markers[slide["slide_mat_id"]] = points
+    return markers
+
+
+def _transform(periodic):
+    """The affine matrix of one period (4 x 4, by rows) and a function that moves a point by it."""
+    if periodic["kind"] == "rotation":
+        a = math.radians(periodic["angle"])
+        c, s = math.cos(a), math.sin(a)
+        matrix = [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    else:
+        vx, vy, vz = periodic["vector"]
+        matrix = [1, 0, 0, vx, 0, 1, 0, vy, 0, 0, 1, vz, 0, 0, 0, 1]
+    return matrix, lambda p: [sum(m * x for m, x in zip(matrix[4 * i : 4 * i + 4], (*p, 1))) for i in range(3)]
+
+
+def _on_plane(periodic, side, tol):
+    """f(point) -> True on the first (side 0) or second (side 1) periodic boundary: the half-plane from the Z axis at
+    the angle start (+ angle), or the plane where the motion-axis coordinate is start (+ the period length)."""
+    if periodic["kind"] == "rotation":
+        a = math.radians(periodic["start"] + side * periodic["angle"])
+        c, s = math.cos(a), math.sin(a)
+        return lambda p: abs(p[0] * s - p[1] * c) < tol and p[0] * c + p[1] * s > -tol
+    length = math.hypot(*periodic["vector"])
+    n = [x / length for x in periodic["vector"]]
+    at = periodic["start"] + side * length
+    return lambda p: abs(sum(a * b for a, b in zip(n, p)) - at) < tol
+
+
+def _samples(dim, tag):
+    """Points of an entity to test it against a plane: its centre of mass, its corners and points inside it."""
+    pts = [gmsh.model.occ.getCenterOfMass(dim, tag)]
+    corners = gmsh.model.getBoundary([(dim, tag)], combined=False, oriented=False, recursive=True)
+    pts += [gmsh.model.getValue(0, t, []) for _, t in corners]
+    lo, hi = gmsh.model.getParametrizationBounds(dim, tag)
+    steps = [k / 4 for k in range(1, 4)]
+    for g in [[u] for u in steps] if dim == 1 else [[u, v] for u in steps for v in steps]:
+        pts.append(gmsh.model.getValue(dim, tag, [a + (b - a) * x for a, b, x in zip(lo, hi, g)]))
+    return pts
+
+
+def apply_periodic(periodic, dim):
+    """Matching meshes on the two periodic boundaries: each boundary piece of dimension dim - 1 on the first one is
+    linked to the piece one period on, which must have the same centre (after the move) and size."""
+    box = gmsh.model.getBoundingBox(-1, -1)
+    tol = 1e-6 * math.dist(box[:3], box[3:])
+    matrix, move = _transform(periodic)
+    whole = gmsh.model.getBoundary(gmsh.model.getEntities(dim), combined=True, oriented=False)
+    boundary = list(dict.fromkeys(abs(t) for _, t in whole))
+    sides = []
+    for side in (0, 1):
+        on = _on_plane(periodic, side, tol)
+        sides.append([t for t in boundary if all(on(p) for p in _samples(dim - 1, t))])
+    if not sides[0]:
+        raise JobError("periodic boundaries do not match: no piece of the model boundary lies on the first one")
+    occ = gmsh.model.occ
+    targets = {t: (occ.getCenterOfMass(dim - 1, t), occ.getMass(dim - 1, t)) for t in sides[1]}
+    for s in sides[0]:
+        centre, size = move(occ.getCenterOfMass(dim - 1, s)), occ.getMass(dim - 1, s)
+        partner = next(
+            (t for t, (c, m) in targets.items() if math.dist(centre, c) < tol and abs(size - m) <= 1e-6 * max(size, m)),
+            None,
+        )
+        if partner is None:
+            raise JobError(
+                f"periodic boundaries do not match: the piece at {_at(dim - 1, s)} has no partner on the other side"
+            )
+        del targets[partner]
+        gmsh.model.mesh.setPeriodic(dim - 1, [partner], [s], matrix)
+    if targets:  # left over on the second boundary
+        at = _at(dim - 1, next(iter(targets)))
+        raise JobError(f"periodic boundaries do not match: the piece at {at} has no partner on the other side")
+
+
+def write_split(groups, path, version):
+    """Write the elements of groups [(dim, entity tags, id, name)] of the meshed model to path as a model of its own:
+    one discrete entity and physical group per group, nodes and elements numbered from 1."""
+    all_tags, all_coords = gmsh.model.mesh.getNodes()[:2]
+    where = {int(t): k for k, t in enumerate(all_tags)}
+    blocks = []  # (dim, id, name, {element type: node tags})
+    for dim, tags, id_, name in sorted(groups, key=lambda g: g[0]):  # points first: they own their node
+        conn = {}
+        for t in tags:
+            for typ, nodes in zip(*gmsh.model.mesh.getElements(dim, t)[::2]):
+                conn.setdefault(int(typ), []).extend(int(n) for n in nodes)
+        blocks.append((dim, id_, name, conn))
+    used = sorted({n for *_, conn in blocks for nodes in conn.values() for n in nodes})
+    new = {old: k for k, old in enumerate(used, 1)}
+    model = gmsh.model.getCurrent()
+    gmsh.model.add(model + "_part")
+    try:
+        owned, element = set(), 1
+        for dim, id_, name, conn in blocks:
+            gmsh.model.addDiscreteEntity(dim, id_)
+            mine = sorted({n for nodes in conn.values() for n in nodes} - owned)
+            owned.update(mine)
+            xyz = [x for n in mine for x in all_coords[3 * where[n] : 3 * where[n] + 3]]
+            gmsh.model.mesh.addNodes(dim, id_, [new[n] for n in mine], xyz)
+            for typ, nodes in conn.items():
+                count = len(nodes) // gmsh.model.mesh.getElementProperties(typ)[3]
+                gmsh.model.mesh.addElementsByType(id_, typ, range(element, element + count), [new[n] for n in nodes])
+                element += count
+            gmsh.model.addPhysicalGroup(dim, [id_], id_, name=name)
+        gmsh.option.setNumber("Mesh.MshFileVersion", float(version))
+        gmsh.write(path)
+    finally:
+        gmsh.model.remove()
+        gmsh.model.setCurrent(model)
+
+
+def slide_report(job):
+    """The solver input values for the slides, to paste by hand: the add-on does not write the input file yet."""
+    period = job.get("periodic")
+    lines = []
+    for s in job["slides"]:
+        lines += [f"Sliding interface {s['name']}", f"SLIDE_NDIV {s['divisions']}", f"SLIDE_MAT_ID {s['slide_mat_id']}"]
+    if period and period["kind"] == "translation":
+        dxyz = [x / 1000 + 0.0 for x in period["vector"]]  # mm -> m
+        lines.append("DXYZ " + " ".join(f"{x:g}" for x in dxyz))
+        condition = {"CYCLIC": 1, "SYMMETRY": 1, "DXYZ": dxyz}
+    else:  # a full turn is periodic over 360°
+        angle = period["angle"] if period else 360.0
+        lines.append(f"ANGLE {angle:g}")
+        condition = {"CYCLIC": 2, "SYMMETRY": 1 if period else 0, "ANGLE": angle}
+    condition["SLIDE_CONDITION"] = [
+        {"SLIDE_NDIV": s["divisions"], "SLIDE_MAT_ID": s["slide_mat_id"], "FITNESS": 0.01} for s in job["slides"]
+    ]
+    block = json.dumps({"14_Periodic_Boundary_Conditions": {"PERIODIC_CONDITION": [condition]}}, indent=4)
+    lines.append("set SYMMETRY to 0 for a periodic, 1 for an anti-periodic model")
+    lines += [line[4:] for line in block.splitlines()[1:-1]]  # the key and its value, without the outer braces
+    lines.append("Meshes are in mm: use UNIT = 1 in 10_1_Input_Files.")
+    return lines
+
+
 def run(job_path, build, dim):
     """Read the job, call build(job, folder) on a fresh model, mesh to dimension dim, write mesh.unv and
-    replace job["mesh_file"] with the finished .msh. Returns the job."""
+    replace job["mesh_file"] with the finished .msh. Returns the job.
+
+    build may return split = {"fixed": groups, "moving": groups} (see write_split): the fixed side then goes to
+    job["mesh_file"] and the moving side to job["rotor_file"]."""
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
     msh = os.path.join(folder, "mesh.msh")
+    outputs = [(msh, job["mesh_file"])]
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
-        build(job, folder)
+        split = build(job, folder)
         for name, value in job.get("options", {}).items():  # the user's mesh settings
             gmsh.option.setNumber(name, value)
         gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
@@ -341,14 +521,20 @@ def run(job_path, build, dim):
             raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
         gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))
         gmsh.option.setNumber("Mesh.Binary", 0)
-        gmsh.write(msh)
+        if split:
+            outputs.append((os.path.join(folder, "rotor.msh"), job["rotor_file"]))
+            for side, (path, _) in zip(("fixed", "moving"), outputs):
+                write_split(split[side], path, job["msh_version"])
+        else:
+            gmsh.write(msh)
         gmsh.write(os.path.join(folder, "mesh.unv"))
     finally:
         gmsh.finalize()
-    try:
-        os.replace(msh, job["mesh_file"])  # only a finished mesh replaces the solver's file
-    except PermissionError:
-        raise JobError(f"Could not replace {job['mesh_file']}: it is read-only or open in another program.") from None
+    for path, target in outputs:
+        try:
+            os.replace(path, target)  # only a finished mesh replaces the solver's file
+        except PermissionError:
+            raise JobError(f"Could not replace {target}: it is read-only or open in another program.") from None
     return job
 
 

@@ -18,6 +18,7 @@ from meshcommon import (
     transfinite_files,
     apply_recombine,
     claim_air,
+    air_items,
 )
 
 
@@ -44,6 +45,8 @@ def build(job, folder):
     pieces = [_import_solids(os.path.join(folder, v["file"])) for v in vols]
     inputs = [t for p in pieces for t in p]
     air = job.get("air")
+    if air and "sides" in air:
+        raise JobError("sliding motion cannot be meshed in 3D yet")
     if air:  # after the bodies, so the fragment keeps the bodies' pieces whole
         air_pieces = _import_solids(os.path.join(folder, air["file"]))
         inputs += air_pieces
@@ -114,7 +117,7 @@ def build(job, folder):
 
 def run_job(job_path):
     job = run(job_path, build, 3)
-    for item in job["volumes"] + ([job["air"]] if "air" in job else []):
+    for item in job["volumes"] + air_items(job):
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in job["surfaces"]:
         print(f"SMAT_ID {item['smat_id']:>6}  {item['name']}")

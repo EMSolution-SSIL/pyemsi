@@ -191,6 +191,55 @@ def hollow_sector_3d(doc):
     return air_study(doc, "3D", shapes, "Sector", **props)
 
 
+# ---- sliding motion (2D XY)
+
+
+def slide_study(doc, fixed, moving, shape, air_props, interfaces):
+    """A sliding-motion Study: fixed and moving (name, face) bodies, an Air Region of shape with air_props and the
+    Sliding Interfaces [(kind, properties)]."""
+    study, bodies = new_study(doc, "2D", fixed + moving)
+    study.MainObjects = bodies[: len(fixed)]
+    study.MovingMode = "Manual"
+    study.MovingObjects = bodies[len(fixed) :]
+    study.Movement = "Sliding motion"
+    air = objects.make_air_region(study, shape, **air_props)
+    for kind, props in interfaces:
+        objects.make_sliding_interface(study, kind, **props)
+    return finish(study, bodies, air)
+
+
+def full_motor_2d(doc, rotor=40):
+    fixed, moving = [("Stator", ring_face(45, 80, 0, 360))], [("Rotor", ring_face(0, rotor, 0, 360))]
+    interface = ("Rotational", {"Radius": 42.5, "Divisions": 72})
+    return slide_study(doc, fixed, moving, "Sector", {"OuterRadius": 100}, [interface])
+
+
+def sector_motor_2d(doc):
+    """The 45° machine of the user's working sample (in mm): slide circle r 80.575, 90 divisions."""
+    fixed = [("Stator", ring_face(82, 149, 0, 45))]
+    moving = [("Shaft", ring_face(0, 30, 0, 45)), ("Rotor", ring_face(30, 78, 0, 45))]
+    air = {"OuterRadius": 200, "EndAngle": 45}
+    return slide_study(doc, fixed, moving, "Sector", air, [("Rotational", {"Radius": 80.575, "Divisions": 90})])
+
+
+def linear_props(y, name="Sliding Interface"):
+    return {"NormalAxis": "Y", "Position": y, "MotionAxis": "X", "Divisions": 32, "GroupName": name}
+
+
+def linear_2d(doc):
+    fixed, moving = [("Stator", face(rect(0, 0, 80, 20)))], [("Mover", face(rect(0, 24, 80, 40)))]
+    air = {"Center": App.Vector(40, 25, 0), "Length": 80, "Width": 50}
+    return slide_study(doc, fixed, moving, "Box", air, [("Linear", linear_props(22))])
+
+
+def linear_two_2d(doc):
+    fixed = [("Bottom", face(rect(0, 0, 80, 20))), ("Top", face(rect(0, 40, 80, 60)))]
+    moving = [("Mover", face(rect(0, 24, 80, 36)))]
+    air = {"Center": App.Vector(40, 30, 0), "Length": 80, "Width": 60}
+    gaps = [("Linear", linear_props(22, "Lower gap")), ("Linear", linear_props(38, "Upper gap"))]
+    return slide_study(doc, fixed, moving, "Box", air, gaps)
+
+
 # ---- error cases
 
 
@@ -202,6 +251,23 @@ def body_outside_air(doc):
 def bodies_overlap(doc):
     study, bodies = new_study(doc, "2D", [("Left", face(rect(0, 0, 20, 20))), ("Right", face(rect(10, 0, 30, 20)))])
     return finish(study, bodies, fit_air(study, bodies))
+
+
+def body_crosses_slide(doc):
+    return full_motor_2d(doc, rotor=44)  # the rotor reaches across the slide circle at 42.5
+
+
+def sliding_zx(doc):
+    fixed, moving = zx_bodies()[1:], zx_bodies()[:1]  # the plunger moves
+    air = {"OuterRadius": 80, "Center": App.Vector(0, 0, 25)}
+    return slide_study(doc, fixed, moving, "Sector", air, [("Rotational", {"Radius": 12})])
+
+
+def moving_on_fixed_side(doc):
+    fixed = [("Shaft", ring_face(0, 40, 0, 360)), ("Stator", ring_face(45, 60, 0, 360))]
+    moving = [("Rotor", ring_face(65, 80, 0, 360))]  # outside the slide circle, next to the stator
+    interface = ("Rotational", {"Radius": 42.5, "Divisions": 72})
+    return slide_study(doc, fixed, moving, "Sector", {"OuterRadius": 100}, [interface])
 
 
 AIR_PRIORITY = "air priority: the bodies keep their own elements where they lie inside the hexagon"
@@ -225,10 +291,55 @@ CASES = [
     Case("11_quarter_cylinder_3d", quarter_cylinder_3d, ["two symmetry faces, on the xz and yz planes"]),
     Case("12_hollow_sector_3d", hollow_sector_3d, ["hollow inside: no air nor elements for r < 20"]),
     Case(
+        "13_full_motor_2d",
+        full_motor_2d,
+        [
+            "72 slide nodes every 5° on the circle r = 42.5, the same in both files",
+            "pre_geom2D.msh: the stator and the fixed air",
+            "rotor_mesh2D.msh: the rotor, the moving air and the slide point at (42.5, 0)",
+        ],
+    ),
+    Case(
+        "14_sector_motor_2d",
+        sector_motor_2d,
+        [
+            "91 slide nodes every 0.5° on the arc r = 80.575 in both files; the arc ends on the 0° and 45° edges",
+            "in each file the 0° and 45° edges have nodes at the same radii",
+            "the slide point is at (80.575, 0) in rotor_mesh2D.msh only",
+        ],
+    ),
+    Case(
+        "15_linear_2d",
+        linear_2d,
+        ["33 slide nodes on the line y = 22 in both files", "DXYZ = 0.08 m: the 80 mm air box length along x"],
+    ),
+    Case(
+        "16_linear_two_2d",
+        linear_two_2d,
+        [
+            "33 slide nodes on each of the lines y = 22 and y = 38, the same in both files",
+            "the mover and the air between the lines are in rotor_mesh2D.msh, with a slide point on each line at x = 0",
+            "the nodes at x = 0 and x = 80 match in each file",
+        ],
+    ),
+    Case(
         "E1_body_outside_air",
         body_outside_air,
         ["Validate refuses: the coil sticks out of the air"],
         "not fully inside",
+    ),
+    Case(
+        "E2_body_crosses_slide",
+        body_crosses_slide,
+        ["Validate refuses: the rotor reaches across the slide circle"],
+        "crosses a Sliding Interface",
+    ),
+    Case("E4_sliding_zx", sliding_zx, ["Validate refuses: no sliding motion in a ZX Study"], "not supported in a ZX"),
+    Case(
+        "E5_moving_on_fixed_side",
+        moving_on_fixed_side,
+        ["Validate refuses: the moving rotor is on the stator's side of the slide circle"],
+        "on the same side of the Sliding Interfaces",
     ),
     Case("E6_bodies_overlap", bodies_overlap, ["Run Mesh refuses: the two bodies overlap"], "overlap"),
 ]

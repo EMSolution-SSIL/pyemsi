@@ -17,12 +17,23 @@ sys.path[:0] = [REPO, ADDON]
 os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (ADDON, os.environ.get("PYTHONPATH")) if p)
 
 from tests.freecad_addon.cases import CASES, run_case  # noqa: E402 - needs the paths above
+from tests.freecad_addon.meshreport import compare_sample  # noqa: E402 - needs the paths above
 
 DEFAULT_OUT = r"C:\Users\hamed\Desktop\delme\air_examples"
+SAMPLE_CASE = "14_sector_motor_2d"  # the user's working 45° model, rebuilt: --sample compares the two
 
 
 def one_line(text):
     return " | ".join(line for line in text.strip().splitlines() if line)
+
+
+def sample_lines(case_dir, sample_dir):
+    """Compare the case with the reference model in sample_dir and add the result to its report."""
+    (job,) = [os.path.join(d, "job.json") for d, _, files in os.walk(case_dir) if "job.json" in files]
+    lines = compare_sample(job, sample_dir)
+    with open(os.path.join(case_dir, "report.txt"), "a", encoding="utf-8") as fh:
+        fh.write("\n" + "\n".join(lines) + "\n")
+    return lines
 
 
 def main(argv=None):
@@ -45,6 +56,9 @@ def main(argv=None):
             continue
         if not case.expect_error:
             print(f"OK {case.name}", flush=True)
+            if args.sample and case.name == SAMPLE_CASE:
+                for line in sample_lines(os.path.join(args.out_dir, case.name), args.sample):
+                    print("  " + line, flush=True)
         elif case.expect_error in text:
             print(f"ERROR {case.name}: {one_line(text)}", flush=True)
         else:

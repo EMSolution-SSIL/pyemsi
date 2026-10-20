@@ -826,3 +826,37 @@ class AirTest(unittest.TestCase):
         self.assertAlmostEqual(Part.read(os.path.join(folder, cell)).Area, math.pi * 80.575**2 / 8)
         for rel in [cell, *slide["files"], slide["marker"]]:
             self.assertTrue(os.path.exists(os.path.join(folder, rel)), rel)
+
+    def slide_job(self):
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        (slide,) = job["slides"]
+        marker = Part.read(os.path.join(jobwriter.scratch_folder(self.study), slide["marker"]))
+        return job, slide, marker
+
+    def test_slide_job_2d_full_turn(self):
+        """A full turn: two half arcs, no period; the slide point is one vertex at 0° on the slide circle."""
+        self.motor()
+        job, slide, marker = self.slide_job()
+        self.assertIs(slide["full"], True)
+        self.assertEqual(len(slide["files"]), 2)
+        self.assertNotIn("periodic", job)
+        self.assertEqual((len(marker.Vertexes), len(marker.Edges)), (1, 0))
+        (v,) = marker.Vertexes
+        self.assertEqual((v.X, v.Y, v.Z), (pytest.approx(42.5), pytest.approx(0), pytest.approx(0)))
+
+    def test_slide_job_2d_marker_at_start_angle(self):
+        """A sector from 30° to 75°: the slide point is one vertex at 30° on the slide circle."""
+        stator, rotor = self.motor()
+        stator.Shape = airshapes._bottom_face(airshapes._ring_sector(45, 80, 30, 45, 0, 1), 0)
+        rotor.Shape = airshapes._bottom_face(airshapes._ring_sector(0, 40, 30, 45, 0, 1), 0)
+        air = objects.air_regions(self.study)[0]
+        air.StartAngle, air.EndAngle = 30, 75
+        self.doc.recompute()
+        job, slide, marker = self.slide_job()
+        self.assertIs(slide["full"], False)
+        self.assertEqual(job["periodic"], {"kind": "rotation", "angle": 45.0, "start": 30.0})
+        self.assertEqual((len(marker.Vertexes), len(marker.Edges)), (1, 0))
+        (v,) = marker.Vertexes
+        a = math.radians(30)
+        self.assertEqual((v.X, v.Y, v.Z), (pytest.approx(42.5 * math.cos(a)), pytest.approx(42.5 * math.sin(a)), 0))

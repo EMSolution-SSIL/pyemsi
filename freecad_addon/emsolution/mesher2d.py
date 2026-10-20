@@ -1,4 +1,5 @@
 """2D job file -> Gmsh .msh at job["mesh_file"] + mesh.unv beside the job. Runs in its own process.
+Sliding motion: the fixed side goes to job["mesh_file"], the moving side to job["rotor_file"].
 Never import FreeCAD here.
 
 Usage: python mesher2d.py <job.json> [--check]   (--check: geometry checks only, nothing written)
@@ -18,6 +19,11 @@ from meshcommon import (
     transfinite_files,
     apply_recombine,
     claim_air,
+    air_items,
+    split_air,
+    apply_slides,
+    apply_periodic,
+    slide_report,
 )
 
 
@@ -40,7 +46,8 @@ def _on_bodies(dim, tag, faces):
 
 
 def build(job, folder):
-    """Import, fragment, check, tag and size the model. Gmsh must be initialized."""
+    """Import, fragment, check, tag and size the model. Gmsh must be initialized.
+    Sliding motion: returns the split of the model into the fixed and the moving side (see meshcommon.run)."""
     bodies = job["bodies"]
     if not bodies:
         raise JobError("job has no bodies")
@@ -54,6 +61,15 @@ def build(job, folder):
         air_start = len(inputs)
         inputs += _import(os.path.join(folder, air["file"]), 2)
         air_span = (air_start, len(inputs))
+
+    def add(file, *dims):
+        start = len(inputs)
+        inputs.extend(_import(os.path.join(folder, file), *dims))
+        return start, len(inputs)
+
+    cell_spans = [add(f, 2) for f in job.get("moving_cells", [])]  # sliding: the air there is moving air
+    slides = job.get("slides", [])
+    slide_spans = [([(f, add(f, 1)) for f in s["files"]], (s["marker"], add(s["marker"], 0))) for s in slides]
     size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
     size_spans = []
     for _, path in size_files:
@@ -83,18 +99,31 @@ def build(job, folder):
             owner[t] = b["name"]
         body_faces[b["mat_id"]] = tags
 
-    placed = dict(owner)  # what a Mesh Size can merge with: the bodies and the air
-    if air:
-        air_tags = [t for dimtags in out_map[air_span[0] : air_span[1]] for d, t in dimtags if d == 2]
-        body_faces[air["mat_id"]] = claim_air(air_tags, owner)
-        placed.update(dict.fromkeys(body_faces[air["mat_id"]], air["name"]))
+    def at(span):  # the final dimtags of inputs[span]
+        return [dt for dimtags in out_map[span[0] : span[1]] for dt in dimtags]
 
-    for b in bodies + ([air] if air else []):
-        gmsh.model.addPhysicalGroup(2, body_faces[b["mat_id"]], b["mat_id"], name=b["name"])
+    def final(span, dim):
+        return [t for d, t in at(span) if d == dim]
+
+    placed = dict(owner)  # what a Mesh Size can merge with: the bodies and the air
+    airs = air_items(job)
+    if air:
+        air_tags = claim_air(final(air_span, 2), owner)
+        if "sides" in air:
+            pieces = split_air(air_tags, {t for span in cell_spans for t in final(span, 2)})
+        else:
+            pieces = [air_tags]
+        for a, tags in zip(airs, pieces):
+            body_faces[a["mat_id"]] = tags
+            placed.update(dict.fromkeys(tags, a["name"]))
+
+    for b in bodies + airs:
+        if body_faces[b["mat_id"]]:  # a side of the air may be all bodies
+            gmsh.model.addPhysicalGroup(2, body_faces[b["mat_id"]], b["mat_id"], name=b["name"])
 
     by_size = {}  # size -> {dim: [tags]}
-    for b in bodies + ([air] if air else []):
-        by_size.setdefault(float(b["size"]), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
+    for b, size in [(b, b["size"]) for b in bodies] + [(a, air["size"]) for a in airs]:
+        by_size.setdefault(float(size), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
     for (z, path), (start, end) in zip(size_files, size_spans):
         for dimtags in out_map[start:end]:
             for d, t in dimtags:
@@ -108,18 +137,39 @@ def build(job, folder):
     ]
     tf_curves = apply_transfinite(job, mapped, body_faces, 2)
     apply_recombine(job, body_faces, 2, tf_curves)
+    if job.get("periodic"):
+        apply_periodic(job["periodic"], 2)
+    if not slides:
+        return None
+    base = os.path.basename
+    mapped = [([(base(f), at(span)) for f, span in files], (base(m), at(span))) for files, (m, span) in slide_spans]
+    markers = apply_slides(slides, mapped, 2)
+    moving = set(job["moving"])
+    split = {"fixed": [], "moving": []}
+    sides = ["moving" if b["mat_id"] in moving else "fixed" for b in bodies] + ["fixed", "moving"]
+    for b, side in zip(bodies + airs, sides):
+        if body_faces[b["mat_id"]]:
+            split[side].append((2, body_faces[b["mat_id"]], b["mat_id"], b["name"]))
+    for s in slides:  # the slide point goes to the moving side only
+        gmsh.model.addPhysicalGroup(0, markers[s["slide_mat_id"]], s["slide_mat_id"], name=s["name"])
+        split["moving"].append((0, markers[s["slide_mat_id"]], s["slide_mat_id"], s["name"]))
+    return split
 
 
 def run_job(job_path):
     job = run(job_path, build, 2)
-    for item in job["bodies"] + ([job["air"]] if "air" in job else []):
+    for item in job["bodies"] + air_items(job):
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in (job.get("transfinite") or {}).get("bodies", []):
         print(f"Structured      {item['name']}")
     for item in job["bodies"]:
         if item["mat_id"] in job.get("recombine", []):
             print(f"Recombined      {item['name']}")
+    if job.get("slides"):
+        print("\n".join(slide_report(job)))
     print(f"Wrote {job['mesh_file']}")
+    if job.get("slides"):
+        print(f"Wrote {job['rotor_file']}")
 
 
 if __name__ == "__main__":

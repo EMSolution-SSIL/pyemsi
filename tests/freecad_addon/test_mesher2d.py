@@ -58,6 +58,59 @@ def write_polygons(path, loops):
         gmsh.finalize()
 
 
+def add_sector(inner, outer, a0=0.0, a1=360.0):
+    """OCC face(s) of the ring (a disc when inner is 0) between the radii from angle a0 to a1 (degrees; under 180
+    apart unless a full turn). Gmsh must be initialized."""
+    occ = gmsh.model.occ
+    face = [(2, occ.addDisk(0, 0, 0, outer, outer))]
+    if inner:
+        face = occ.cut(face, [(2, occ.addDisk(0, 0, 0, inner, inner))])[0]
+    if a1 - a0 < 360:
+        far = 4 * outer
+        rays = [math.radians(a) for a in (a0, (a0 + a1) / 2, a1)]
+        pts = [occ.addPoint(0, 0, 0)] + [occ.addPoint(far * math.cos(a), far * math.sin(a), 0) for a in rays]
+        wedge = occ.addPlaneSurface([occ.addCurveLoop([occ.addLine(pts[k], pts[(k + 1) % 4]) for k in range(4)])])
+        face = occ.intersect(face, [(2, wedge)])[0]
+    return face
+
+
+def write_sectors(path, *sectors):
+    """One BREP holding the faces add_sector(*s) for each s."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for s in sectors:
+            add_sector(*s)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_arc(path, r, a0, a1):
+    """A circle arc about the origin in z = 0 from angle a0 to a1 (degrees)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.occ.addCircle(0, 0, 0, r, angle1=math.radians(a0), angle2=math.radians(a1))
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def read_nodes(path):
+    """{node tag: (x, y, z)} of a mesh file."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+    finally:
+        gmsh.finalize()
+    return {int(t): tuple(coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
+
+
 def square_lines(x=0.0, y=0.0, w=1.0, h=1.0):
     """Bottom, right, top, left edges of a rectangle in z = 0 as point pairs."""
     c = [(x, y, 0), (x + w, y, 0), (x + w, y + h, 0), (x, y + h, 0)]
@@ -80,7 +133,16 @@ class Mesher2DTest(unittest.TestCase):
         return {"mat_id": id_, "name": name, "file": "geometry/" + file, "size": size}
 
     def run_job(
-        self, bodies, sizes=(), version=4.1, options=None, mesh_file=None, transfinite=None, recombine=None, air=None
+        self,
+        bodies,
+        sizes=(),
+        version=4.1,
+        options=None,
+        mesh_file=None,
+        transfinite=None,
+        recombine=None,
+        air=None,
+        extra=None,
     ):
         job = {
             "dimension": "2D",
@@ -98,6 +160,7 @@ class Mesher2DTest(unittest.TestCase):
             job["recombine"] = list(recombine)
         if air is not None:
             job["air"] = air
+        job.update(extra or {})  # e.g. the slide keys
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -675,6 +738,195 @@ class Mesher2DTest(unittest.TestCase):
         sizes = [{"name": "Fine", "size": 0.2, "files": ["geometry/size_1.brep"]}]
         r = self.run_job([self.body(1, "Body", "vol_1.brep")], sizes=sizes, air=air)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+    # ---- sliding motion: the fixed side goes to pre_geom2D.msh, the moving side to rotor_mesh2D.msh
+
+    def files(self):
+        return os.path.join(self.dir, "pre_geom2D.msh"), os.path.join(self.dir, "rotor_mesh2D.msh")
+
+    def slide(self, name, id_, files, n, full=False, kind="rotational"):
+        """A slide entry; its marker is geometry/marker_<id_>.brep."""
+        return {
+            "name": name,
+            "kind": kind,
+            "files": ["geometry/" + f for f in files],
+            "marker": f"geometry/marker_{id_}.brep",
+            "divisions": n,
+            "slide_mat_id": id_,
+            "full": full,
+        }
+
+    def slide_job(self, bodies, moving, slides, periodic=None, fine=None):
+        """Run a slide job: air from geometry/air.brep (fixed ID 10, moving 11), moving cell geometry/cell_1.brep.
+        fine: (p, q), a line on the second periodic boundary meshed at size 1; the period must undo it."""
+        sides = {"fixed": {"mat_id": 10, "name": "Air_fixed"}, "moving": {"mat_id": 11, "name": "Air_moving"}}
+        air = {"sides": sides, "file": "geometry/air.brep", "size": 5.0}
+        extra = {
+            "rotor_file": self.files()[1],
+            "moving": moving,
+            "moving_cells": ["geometry/cell_1.brep"],
+            "slides": slides,
+        }
+        if periodic:
+            extra["periodic"] = periodic
+        sizes = []
+        if fine:
+            write_line(self.geo("size_1.brep"), *fine)
+            sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
+        return self.run_job(bodies, sizes=sizes, air=air, extra=extra)
+
+    def motor_job(self, tooth=False):
+        """Full turn: stator ring 45..80 fixed (tooth: plus a tooth 42.5..45 from 10° to 20°), rotor disc r 40
+        moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0)."""
+        write_sectors(self.geo("vol_1.brep"), (45, 80), *([(42.5, 45, 10, 20)] if tooth else []))
+        write_sectors(self.geo("vol_2.brep"), (0, 40))
+        write_sectors(self.geo("air.brep"), (0, 100))
+        write_sectors(self.geo("cell_1.brep"), (0, 42.5))
+        write_arc(self.geo("slide_20_1.brep"), 42.5, 0, 180)
+        write_arc(self.geo("slide_20_2.brep"), 42.5, 180, 360)
+        write_point(self.geo("marker_20.brep"), (42.5, 0, 0))
+        bodies = [self.body(1, "Stator", "vol_1.brep", 5), self.body(2, "Rotor", "vol_2.brep", 5)]
+        return self.slide_job(bodies, [2], [self.slide("Slide", 20, ["slide_20_1.brep", "slide_20_2.brep"], 72, True)])
+
+    def sector_job(self, stator=(82, 149, 0, 45)):
+        """The 45° machine: shaft r < 30 and rotor 30..78 moving, stator fixed, air sector r 200, slide arc
+        r 80.575 with 90 divisions, rotation period 45°."""
+        write_sectors(self.geo("vol_1.brep"), stator)
+        write_sectors(self.geo("vol_2.brep"), (0, 30, 0, 45))
+        write_sectors(self.geo("vol_3.brep"), (30, 78, 0, 45))
+        write_sectors(self.geo("air.brep"), (0, 200, 0, 45))
+        write_sectors(self.geo("cell_1.brep"), (0, 80.575, 0, 45))
+        write_arc(self.geo("slide_20_1.brep"), 80.575, 0, 45)
+        write_point(self.geo("marker_20.brep"), (80.575, 0, 0))
+        bodies = [self.body(k, n, f"vol_{k}.brep", 5) for k, n in ((1, "Stator"), (2, "Shaft"), (3, "Rotor"))]
+        c = math.cos(math.pi / 4)
+        fine = ((149 * c, 149 * c, 0), (200 * c, 200 * c, 0))  # the air edge at 45°
+        period = {"kind": "rotation", "angle": 45.0, "start": 0.0}
+        return self.slide_job(bodies, [2, 3], [self.slide("Slide", 20, ["slide_20_1.brep"], 90)], period, fine=fine)
+
+    def on_circle(self, path, r):
+        return sorted(
+            tuple(round(x, 9) for x in p) for p in read_nodes(path).values() if abs(math.hypot(*p) - r) < 1e-6
+        )
+
+    def angles(self, points):
+        return sorted(round(math.degrees(math.atan2(y, x)), 6) % 360 for x, y, _ in points)
+
+    def test_full_circle_slide_has_n_nodes_on_both_sides(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (self.on_circle(f, 42.5) for f in self.files())
+        self.assertEqual(len(fixed), 72)
+        self.assertEqual(fixed, moving)
+        for got, want in zip(self.angles(fixed), range(0, 360, 5)):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_rotor_file_has_slide_point_at_start_angle(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.files()
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(rotor)
+        self.assertEqual(gmsh.model.getPhysicalGroups(0), [(0, 20)])
+        self.assertEqual(gmsh.model.getPhysicalName(0, 20), "Slide")
+        (point,) = gmsh.model.getEntitiesForPhysicalGroup(0, 20)
+        types, _, nodes = gmsh.model.mesh.getElements(0, point)
+        self.assertEqual((list(types), len(nodes[0])), ([15], 1))
+        x, y, z = gmsh.model.mesh.getNode(nodes[0][0])[0]
+        self.assertEqual((round(x, 9), round(y, 9) + 0.0, z), (42.5, 0, 0))
+        gmsh.open(fixed)
+        self.assertEqual(gmsh.model.getPhysicalGroups(0), [])
+
+    def test_each_file_numbers_nodes_from_one(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for path in self.files():
+            tags = read_nodes(path)
+            self.assertEqual((min(tags), max(tags)), (1, len(tags)), path)
+
+    def test_air_split_by_side(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("MAT_ID      10  Air_fixed", r.stdout)
+        self.assertIn("MAT_ID      11  Air_moving", r.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "mesh.msh")))
+        self.assertTrue(os.path.exists(os.path.join(self.dir, "mesh.unv")))
+        found = []
+        for path in self.files():
+            gmsh.initialize()
+            try:
+                gmsh.option.setNumber("General.Terminal", 0)
+                gmsh.open(path)
+                found.append({t: gmsh.model.getPhysicalName(2, t) for _, t in gmsh.model.getPhysicalGroups(2)})
+                self.assertTrue(all(self.triangles(t) for t in found[-1]))
+            finally:
+                gmsh.finalize()
+        self.assertEqual(found, [{1: "Stator", 10: "Air_fixed"}, {2: "Rotor", 11: "Air_moving"}])
+
+    def test_sector_slide_and_periodic_edges_match(self):
+        r = self.sector_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (self.on_circle(f, 80.575) for f in self.files())
+        self.assertEqual(len(fixed), 91)
+        self.assertEqual(fixed, moving)
+        for got, want in zip(self.angles(fixed), [k / 2 for k in range(91)]):
+            self.assertAlmostEqual(got, want, places=6)
+        for path in self.files():
+            pts = read_nodes(path).values()
+            start = sorted(round(x, 6) for x, y, _ in pts if abs(y) < 1e-9)
+            end = sorted(round(math.hypot(x, y), 6) for x, y, _ in pts if abs(x - y) < 1e-7)
+            self.assertGreater(len(start), 10)
+            self.assertEqual(start, end, path)
+
+    def test_body_vertex_on_slide_circle_keeps_n_nodes(self):
+        r = self.motor_job(tooth=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (self.on_circle(f, 42.5) for f in self.files())
+        self.assertEqual(len(fixed), 72)
+        self.assertEqual(fixed, moving)
+        for got, want in zip(self.angles(fixed), range(0, 360, 5)):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_nonperiodic_geometry_fails_cleanly(self):
+        r = self.sector_job(stator=(82, 149, 0, 30))  # cut by 0° but not by 45°
+        self.assertTrue(self.last_error(r).startswith("ERROR: periodic boundaries do not match"), r.stderr)
+
+    def test_linear_two_slides_and_translation_period(self):
+        """Case 16: a mover between two stators, two slide lines, the period is the 80 mm air box length."""
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 80, 20)])
+        write_rects(self.geo("vol_2.brep"), [(0, 40, 80, 20)])
+        write_rects(self.geo("vol_3.brep"), [(0, 24, 80, 12)])
+        write_rects(self.geo("air.brep"), [(0, 0, 80, 60)])
+        write_rects(self.geo("cell_1.brep"), [(0, 22, 80, 16)])
+        slides = []
+        for id_, y in ((20, 22), (21, 38)):
+            write_line(self.geo(f"slide_{id_}_1.brep"), (0, y, 0), (80, y, 0))
+            write_point(self.geo(f"marker_{id_}.brep"), (0, y, 0))
+            slides.append(self.slide(f"Slide_{y}", id_, [f"slide_{id_}_1.brep"], 32, kind="linear"))
+        bodies = [self.body(k, n, f"vol_{k}.brep", 5) for k, n in ((1, "Bottom"), (2, "Top"), (3, "Mover"))]
+        period = {"kind": "translation", "vector": [80.0, 0.0, 0.0], "start": 0.0}
+        r = self.slide_job(bodies, [3], slides, period, fine=((80, 0, 0), (80, 20, 0)))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = []
+        for path in self.files():
+            pts = [tuple(round(x, 9) for x in p) for p in read_nodes(path).values()]
+            lines.append([sorted(p for p in pts if abs(p[1] - y) < 1e-9) for y in (22, 38)])
+            self.assertEqual([len(line) for line in lines[-1]], [33, 33], path)
+            left = sorted(round(y, 6) for x, y, _ in pts if abs(x) < 1e-9)
+            right = sorted(round(y, 6) for x, y, _ in pts if abs(x - 80) < 1e-9)
+            self.assertGreater(len(left), 4)
+            self.assertEqual(left, right, path)
+        self.assertEqual(lines[0], lines[1])
+        self.assertIn("DXYZ 0.08 0 0", r.stdout)
+
+    def test_slide_report_lines(self):
+        r = self.sector_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for text in ("SLIDE_NDIV 90", "SLIDE_MAT_ID 20", "ANGLE 45", '"CYCLIC": 2', "UNIT = 1"):
+            self.assertIn(text, r.stdout)
+        self.assertLess(r.stdout.index("MAT_ID      10  Air_fixed"), r.stdout.index("SLIDE_NDIV 90"))
 
 
 if __name__ == "__main__":
