@@ -708,7 +708,9 @@ class AirTest(unittest.TestCase):
     def test_body_crossing_an_interface_is_an_error(self):
         _, rotor = self.motor(rotor_radius=44)
         hint = " Rotation is about the global Z axis; put the machine axis on Z."
-        self.assertIn(f"{rotor.Label} crosses a Sliding Interface." + hint, self.air_errors())
+        errors = self.air_errors()
+        self.assertIn(f"{rotor.Label} crosses a Sliding Interface." + hint, errors)
+        self.assertFalse([t for t in errors if "holds no body" in t])
 
     def test_crossing_a_linear_interface_has_no_axis_hint(self):
         self.box_slide(moving_x=10)  # M spans x = 10..20 across the plane at x = 15
@@ -719,6 +721,7 @@ class AirTest(unittest.TestCase):
         errors = self.air_errors()
         self.assertIn(f"{rotor.Label} is not fully inside Air Region Air.", errors)
         self.assertFalse([t for t in errors if "crosses" in t])
+        self.assertFalse([t for t in errors if "holds no body" in t or "same side" in t])
 
     def test_moving_and_fixed_body_on_the_same_side_is_an_error(self):
         stator, rotor = self.motor()

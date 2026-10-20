@@ -211,7 +211,7 @@ def _slides(study, main, moving, r):
     cells = airshapes.cells(air_shape, surfaces)  # once: the bodies are sorted into them below
     moving_names = {b.Name for b in moving}
     fixed = [b for b in main if b.Name not in moving_names]
-    held = {}  # cell index -> ([moving bodies], [fixed bodies])
+    held, unplaced = {}, False  # cell index -> ([moving bodies], [fixed bodies]); a body not in one cell
     hint = ""
     if any(i.Kind != "Linear" for i in interfaces):
         hint = " Rotation is about the global Z axis; put the machine axis on Z."
@@ -220,12 +220,16 @@ def _slides(study, main, moving, r):
             shape = geometry.global_shape(body)
             measure = shape.Volume if plane == "3D" else shape.Area
             if airshapes.outside(shape, air_shape, plane) > 1e-6 * measure:
+                unplaced = True
                 continue  # _air reports a body outside the air
             k = airshapes.cell_of(shape, cells)
             if k is None:
+                unplaced = True
                 r.error(f"{body.Label} crosses a Sliding Interface." + hint, body, [(body, "")])
             else:
                 held.setdefault(k, ([], []))[side].append(body)
+    if unplaced:
+        return  # the sides cannot be judged until those bodies are fixed
     for k in range(len(cells)):
         moving_here, fixed_here = held.get(k, ([], []))
         if moving_here and fixed_here:
