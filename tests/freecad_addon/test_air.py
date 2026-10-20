@@ -439,9 +439,11 @@ class AirTest(unittest.TestCase):
         self.study.MainObjects = [*self.study.MainObjects, m]  # both: setup reports it, the list stays unique
         self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A", "M"])
 
-    @unittest.skip("a sliding Study needs an Air Region now and its job is not written yet; Task 10 enables this")
     def test_job_lists_moving_mat_ids(self):
         self.sliding(["A", "B"], ["M"])
+        objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=15, MotionAxis="Y")
+        self.doc.recompute()
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             job = json.load(fh)
         self.assertEqual([v["mat_id"] for v in job["volumes"]], [1, 2, 3])
@@ -480,10 +482,33 @@ class AirTest(unittest.TestCase):
         rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
         self.assertEqual(rows["Air"][2], self.study.MatIds[air.Name])
 
-    def test_sliding_with_air_is_not_written_yet(self):
+    def test_sliding_with_air_writes_the_slide_job(self):
         self.box_slide()
-        with self.assertRaisesRegex(jobwriter.StudyError, "Sliding-motion meshing with an Air Region is not complete"):
-            jobwriter.write_job(self.study)
+        iface = objects.sliding_interfaces(self.study)[0]
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        folder = jobwriter.scratch_folder(self.study)
+        air = objects.air_regions(self.study)[0]
+        ids = self.study.MatIds
+        self.assertEqual(job["rotor_file"], os.path.join(jobwriter.simulation_folder(self.study), "rotor_mesh.msh"))
+        self.assertEqual(
+            job["air"]["sides"],
+            {
+                "fixed": {"mat_id": int(ids[f"{air.Name}#fixed"]), "name": "Air_fixed"},
+                "moving": {"mat_id": int(ids[f"{air.Name}#moving"]), "name": "Air_moving"},
+            },
+        )
+        self.assertNotIn("mat_id", job["air"])
+        self.assertNotIn("name", job["air"])
+        self.assertEqual(len(job["moving_cells"]), 1)
+        (slide,) = job["slides"]
+        self.assertEqual(
+            (slide["kind"], slide["divisions"], slide["cross_divisions"], slide["full"]), ("linear", 90, 10, False)
+        )
+        self.assertEqual(slide["slide_mat_id"], int(ids[iface.Name]))
+        self.assertEqual(job["periodic"], {"kind": "translation", "vector": [0.0, 30.0, 0.0], "start": -10.0})
+        for rel in [*job["moving_cells"], *slide["files"], slide["marker"]]:
+            self.assertTrue(os.path.exists(os.path.join(folder, rel)), rel)
 
     def interface(self, plane, air_shape, air_props, kind, **props):
         """A sliding Study in plane ("XY" or "3D") with an Air Region and one Sliding Interface, recomputed."""
@@ -771,3 +796,33 @@ class AirTest(unittest.TestCase):
         self.assertIn(text, self.air_errors())
         iface.Divisions = 90
         self.assertEqual([t for t in self.air_errors() if "Sliding Interface" in t], [])
+
+    def test_slide_job_2d_sector(self):
+        """The 45 degree machine: shaft and rotor move, the stator is fixed, one interface in the gap."""
+        self.doc.removeObject(self.study.Name)
+        self.study = objects.make_study(self.doc, "2D")
+        self.study.MainMode = self.study.MovingMode = "Manual"
+        parts = {}
+        for name, inner, outer in (("Shaft", 0, 30), ("Rotor", 30, 78), ("Stator", 82, 149)):
+            parts[name] = self.doc.addObject("Part::Feature", name)
+            parts[name].Shape = airshapes._bottom_face(airshapes._ring_sector(inner, outer, 0, 45, 0, 1), 0)
+        self.study.MainObjects = [parts["Stator"]]
+        self.study.MovingObjects = [parts["Shaft"], parts["Rotor"]]
+        self.study.Movement = "Sliding motion"
+        objects.make_air_region(self.study, "Sector", OuterRadius=200, EndAngle=45)
+        objects.make_sliding_interface(self.study, "Rotational", Radius=80.575, Divisions=90)
+        self.doc.recompute()
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        folder = jobwriter.scratch_folder(self.study)
+        self.assertEqual(job["rotor_file"], os.path.join(jobwriter.simulation_folder(self.study), "rotor_mesh2D.msh"))
+        self.assertEqual(jobwriter.rotor_file(self.study), job["rotor_file"])
+        (slide,) = job["slides"]
+        self.assertEqual((slide["divisions"], slide["full"], slide["kind"]), (90, False, "rotational"))
+        self.assertNotIn("cross_divisions", slide)
+        self.assertEqual(job["periodic"], {"kind": "rotation", "angle": 45.0, "start": 0.0})
+        self.assertEqual(job["moving"], [2, 3])  # the stator is 1
+        (cell,) = job["moving_cells"]
+        self.assertAlmostEqual(Part.read(os.path.join(folder, cell)).Area, math.pi * 80.575**2 / 8)
+        for rel in [cell, *slide["files"], slide["marker"]]:
+            self.assertTrue(os.path.exists(os.path.join(folder, rel)), rel)

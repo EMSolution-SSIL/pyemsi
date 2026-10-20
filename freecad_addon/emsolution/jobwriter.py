@@ -3,8 +3,11 @@
 import json
 import os
 
-from . import geometry, objects, validation
+from . import airshapes, geometry, objects, validation
 from .geometry import global_shape
+
+
+SLIDE_KINDS = {"Rotational": "rotational", "Axial gap": "axial", "Linear": "linear"}
 
 
 class StudyError(Exception):
@@ -27,6 +30,11 @@ def scratch_folder(study):
 def mesh_file(study):
     """The fixed name EMSolution reads from the run folder."""
     return os.path.join(simulation_folder(study), "pre_geom2D.msh" if study.Dimension == "2D" else "pre_geom.msh")
+
+
+def rotor_file(study):
+    """The moving part's mesh, written by the slide job next to the mesh file."""
+    return os.path.join(simulation_folder(study), "rotor_mesh2D.msh" if study.Dimension == "2D" else "rotor_mesh.msh")
 
 
 def check(study):
@@ -122,14 +130,53 @@ def export_subs(folder, body, subs, prefix):
     return files
 
 
+def write_slides(study, folder, job):
+    """Add the slide keys to job and write their BREPs: the moving cells, each interface's surface and slide marker."""
+    plane = airshapes.study_plane(study)
+    air = airshapes.air_shape(objects.air_regions(study)[0], plane)
+    interfaces = objects.sliding_interfaces(study)
+    surfaces = [airshapes.slide_surface(i, air, plane) for i in interfaces]
+    cells = airshapes.cells(air, surfaces)
+    moving = {airshapes.cell_of(global_shape(b), cells) for b in geometry.setup(study)[1]}
+    job["rotor_file"] = rotor_file(study)
+    job["moving_cells"] = []
+    for k in sorted(moving):
+        rel = f"geometry/cell_{k + 1}.brep"
+        cells[k].exportBrep(os.path.join(folder, rel))
+        job["moving_cells"].append(rel)
+    job["slides"] = []
+    for iface, surface in zip(interfaces, surfaces):
+        slide_id = int(study.MatIds[iface.Name])
+        pieces = surface.Faces if plane == "3D" else surface.Edges
+        files = []
+        for n, piece in enumerate(pieces, 1):
+            files.append(f"geometry/slide_{slide_id}_{n}.brep")
+            piece.exportBrep(os.path.join(folder, files[-1]))
+        marker = f"geometry/marker_{slide_id}.brep"
+        airshapes.slide_marker(iface, surface, plane).exportBrep(os.path.join(folder, marker))
+        slide = {
+            "name": objects.volume_name(iface),
+            "kind": SLIDE_KINDS[iface.Kind],
+            "files": files,
+            "marker": marker,
+            "divisions": iface.Divisions,
+        }
+        if plane == "3D":
+            slide["cross_divisions"] = iface.CrossDivisions
+        slide["slide_mat_id"] = slide_id
+        slide["full"] = airshapes.full_turn(iface, air, plane)
+        job["slides"].append(slide)
+    period = airshapes.period(study)
+    if period:
+        job["periodic"] = period
+
+
 def write_job(study):
     """Run the checks, update the ID table, write job.json and BREPs to the scratch folder. Returns the job path."""
     stale = [a for a in objects.air_regions(study) if "Touched" in a.State or a.Shape.isNull()]
     if stale:  # the job must get the air as its properties describe it now
         study.Document.recompute(stale)
     volumes, surfaces, elements = check(study)
-    if study.Movement == "Sliding motion" and objects.air_regions(study):
-        raise StudyError("Sliding-motion meshing with an Air Region is not complete yet.")
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change
     objects.update_ids(study)
     os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
@@ -168,15 +215,26 @@ def write_job(study):
         job["sizes"].append(
             {"name": item.Label, "size": item.Size.Value, "files": export_subs(folder, body, subs, f"size_{k}")}
         )
+    sliding = study.Movement == "Sliding motion"
     for air in objects.air_regions(study):  # validation allows one
         rel = "geometry/air.brep"
         global_shape(air).exportBrep(os.path.join(folder, rel))
-        job["air"] = {
-            "name": objects.key_name(study, air.Name),
-            "mat_id": int(study.MatIds[air.Name]),
-            "file": rel,
-            "size": air_size(study),
-        }
+        if sliding:  # the two sides get their own IDs and names
+            sides = {
+                half: {
+                    "mat_id": int(study.MatIds[f"{air.Name}#{half}"]),
+                    "name": objects.key_name(study, f"{air.Name}#{half}"),
+                }
+                for half in ("fixed", "moving")
+            }
+            job["air"] = {"sides": sides, "file": rel, "size": air_size(study)}
+        else:
+            job["air"] = {
+                "name": objects.key_name(study, air.Name),
+                "mat_id": int(study.MatIds[air.Name]),
+                "file": rel,
+                "size": air_size(study),
+            }
     structured, tf_edges = transfinite_items(study, [b for b, _ in volumes])
     if structured or tf_edges:
         tf_bodies = []
@@ -197,8 +255,9 @@ def write_job(study):
                 for k, (item, body, subs) in enumerate(tf_edges, 1)
             ],
         }
-    if study.Movement == "Sliding motion":
+    if sliding:
         job["moving"] = [int(study.MatIds[b.Name]) for b in geometry.setup(study)[1]]
+        write_slides(study, folder, job)
     recombine_names = {body.Name for item in objects.recombine_items(study) for body, _ in objects.subs_by_body(item)}
     recombine = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in recombine_names]
     if recombine:
