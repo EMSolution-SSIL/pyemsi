@@ -12,7 +12,7 @@ import Part
 import gmsh
 from BOPTools import SplitAPI
 
-from emsolution import geometry, jobwriter, objects
+from emsolution import geometry, jobwriter, objects, validation
 
 from .materialdata import STEEL, record
 
@@ -1239,6 +1239,134 @@ print('RESTORE PASS')
         with self.assertRaises(jobwriter.StudyError) as ctx:
             jobwriter.check(study)
         self.assertIn("the faces of Coil touch without sharing edges. Make it with Part Slice", str(ctx.exception))
+
+    # --- Validation -----------------------------------------------------------
+
+    def problems(self, severity):
+        return [p.text for p in validation.validate(self.study) if p.severity == severity]
+
+    def test_deleting_a_body_leaves_empty_items_that_refuse_the_mesh(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.assign([a, b])
+        objects.make_excitation(self.study, "OnlyA", [(a, "Face1")])
+        objects.make_excitation(self.study, "Both", [(a, "Face1"), (b, "Face2")])
+        objects.make_mesh_size(self.study, 1.0, [(a, "")])
+        objects.make_transfinite_body(self.study, [a], [(a, "Vertex1")])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
+        objects.make_recombine(self.study, [a])
+        self.doc.removeObject("A")
+        self.doc.recompute()
+        errors = self.problems(validation.ERROR)
+        for kind in ("Excitation OnlyA", "Mesh Size MeshSize", "Transfinite Body", "Transfinite Edges", "Recombine"):
+            self.assertTrue(any(e.startswith(kind) and "refers to nothing" in e for e in errors), (kind, errors))
+        self.assertFalse(any("Both" in e for e in errors), "an item that keeps a body is fine")
+        self.assertIn("Material assignment A: Steel has no body", self.problems(validation.WARNING)[0])
+        with self.assertRaises(jobwriter.StudyError) as ctx:
+            jobwriter.check(self.study)
+        self.assertEqual(str(ctx.exception).count("refers to nothing"), 5, "every problem, not only the first")
+
+    def test_items_on_bodies_outside_the_main_geometry_are_a_warning(self):
+        a, outside = self.box("A"), self.box("Outside", 20)
+        self.include(a)
+        objects.make_recombine(self.study, [a, outside])
+        self.assertEqual(self.problems(validation.ERROR), [])
+        self.assertIn(
+            "Recombine Recombine is not used for Outside: not in the main geometry.", self.problems("warning")
+        )
+        jobwriter.check(self.study)
+
+    def test_validation_lists_every_error(self):
+        a = self.box("A")
+        self.include(a)
+        self.study.MeshSizesGroup.DefaultMeshSize = 0
+        objects.make_mesh_size(self.study, 0.0, [(a, "Face1")])
+        objects.make_excitation(self.study, "Gone", [])
+        errors = self.problems(validation.ERROR)
+        self.assertEqual(len(errors), 3, errors)
+
+    def test_body_picked_together_with_a_cut_made_from_it_is_a_warning(self):
+        air, coil = self.box("AirBox", 0, 30), self.box("Coil", 10)
+        cut = self.doc.addObject("Part::Cut", "Air")
+        cut.Base, cut.Tool = air, coil
+        self.doc.recompute()
+        self.include(cut, coil)
+        (warning,) = [w for w in self.problems(validation.WARNING) if "not meshed on its own" in w]
+        self.assertTrue(warning.startswith("Coil is not meshed on its own: Air is made from it."), warning)
+
+    def test_bodies_without_material_are_a_warning(self):
+        self.include(self.box("A"))
+        self.assertEqual(
+            self.problems(validation.WARNING), ["No material (the input file needs one for every body): A"]
+        )
+
+    def test_ids_come_back_after_undo_but_not_to_a_new_object_with_the_same_name(self):
+        self.doc.UndoMode = 1
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        objects.make_excitation(self.study, "T", [(a, "Face1")])
+        objects.update_ids(self.study)
+        before = self.ids()
+        self.doc.openTransaction("Delete A")
+        self.doc.removeObject("A")
+        self.doc.commitTransaction()
+        objects.update_ids(self.study)  # e.g. a mesh run in between
+        self.assertEqual(self.ids(), ({"B": "2"}, {}))
+        self.doc.undo()
+        objects.update_ids(self.study)
+        self.assertEqual(self.ids(), before)
+        self.doc.openTransaction("Delete A")
+        self.doc.removeObject("A")
+        self.doc.commitTransaction()
+        objects.update_ids(self.study)
+        new = self.box("A", 20)  # FreeCAD gives the free name A again
+        self.assertEqual(new.Name, "A")
+        self.include(new)
+        objects.update_ids(self.study)
+        self.assertEqual(self.ids()[0], {"B": "2", "A": "3"})
+
+    def test_id_comes_back_when_a_body_returns_to_the_main_geometry(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        objects.update_ids(self.study)
+        self.study.MainObjects = [b]
+        objects.update_ids(self.study)
+        c = self.box("C", 20)
+        self.study.MainObjects = [b, c, a]
+        objects.update_ids(self.study)
+        self.assertEqual(self.ids()[0], {"B": "2", "C": "3", "A": "1"})
+
+    def test_mesher_check_only_writes_nothing(self):
+        coil = self.sliced_coil()
+        self.include(coil)
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run(
+            [sys.executable, MESHER, path, "--check"], capture_output=True, encoding="utf-8", errors="replace"
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("CHECK OK", r.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "pre_geom.msh")))
+        self.assertFalse(os.path.exists(self.scratch("mesh.unv")))
+
+    def test_mesher_check_only_finds_a_piece_that_cannot_be_structured(self):
+        for two_d, script, shape in (
+            (False, MESHER, lambda: Part.makeBox(20, 10, 10).fuse(Part.makeBox(10, 20, 10)).removeSplitter()),
+            (True, MESHER2D, lambda: Part.makePlane(20, 10).fuse(Part.makePlane(10, 20)).removeSplitter()),
+        ):
+            with self.subTest(two_d=two_d):
+                body = self.doc.addObject("Part::Feature", "L2" if two_d else "L")
+                body.Shape = shape()
+                self.doc.recompute()
+                study = self.make_2d_study(body) if two_d else self.study
+                if not two_d:
+                    self.include(body)
+                objects.make_transfinite_body(study, [body])
+                objects.make_transfinite_edges(study, 3, self.all_edges(body))
+                path = jobwriter.write_job(study)
+                r = subprocess.run(
+                    [sys.executable, script, path, "--check"], capture_output=True, encoding="utf-8", errors="replace"
+                )
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("ERROR: structured body", r.stderr)
 
 
 if __name__ == "__main__":

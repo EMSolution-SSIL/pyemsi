@@ -1,7 +1,7 @@
 """2D job file -> Gmsh .msh at job["mesh_file"] + mesh.unv beside the job. Runs in its own process.
 Never import FreeCAD here.
 
-Usage: python mesher2d.py <job.json>
+Usage: python mesher2d.py <job.json> [--check]   (--check: geometry checks only, nothing written)
 """
 
 import os
@@ -103,4 +103,4 @@ def run_job(job_path):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv, "mesher2d.py", run_job))
+    sys.exit(main(sys.argv, "mesher2d.py", run_job, build))

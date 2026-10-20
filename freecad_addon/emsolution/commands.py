@@ -225,6 +225,24 @@ class AddRecombine(_StudyCommand):
             _create_and_edit(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
 
 
+class ValidateStudy(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("validate"),
+            "MenuText": "Validate Study",
+            "ToolTip": "List every problem of the Study, then run the mesher's geometry checks without meshing",
+        }
+
+    def IsActive(self):
+        return active_study() is not None and not runner.busy() and not Gui.Control.activeDialog()
+
+    def Activated(self):
+        study = active_study()
+        if study is None:
+            return warn("Select the Study you want to validate first.")
+        Gui.Control.showDialog(taskpanels.ValidationPanel(study))
+
+
 class RunMesh(_StudyCommand):
     def GetResources(self):
         return {"Pixmap": icon("runmesh"), "MenuText": "Run Mesh", "ToolTip": "Write the .msh file with Gmsh"}
@@ -253,6 +271,7 @@ COMMANDS = {
     "EMS_TransfiniteBody": AddTransfiniteBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
+    "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),
 }
 for _name, _cmd in COMMANDS.items():

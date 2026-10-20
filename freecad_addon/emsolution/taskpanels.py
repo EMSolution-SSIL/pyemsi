@@ -9,7 +9,7 @@ import FreeCADGui as Gui
 from pivy import coin
 from PySide import QtCore, QtWidgets
 
-from . import geometry, highlight, icon, jobwriter, objects
+from . import geometry, highlight, icon, jobwriter, objects, validation
 
 _active = {}  # document name -> (document instance, Study Name); GUI state only
 
@@ -532,6 +532,9 @@ class StudyView:
         self.id_button = QtWidgets.QPushButton("Edit IDs…")
         self.id_button.clicked.connect(lambda: IdTableDialog(study).exec())
         layout.addWidget(self.id_button)
+        self.validate_button = QtWidgets.QPushButton("Validate…")
+        self.validate_button.clicked.connect(lambda: Gui.Control.showDialog(ValidationPanel(study)))
+        layout.addWidget(self.validate_button)
         self.run_button = QtWidgets.QPushButton("Generate mesh")
         self.run_button.clicked.connect(self.run_mesh)
         layout.addWidget(self.run_button)
@@ -594,13 +597,11 @@ class StudyView:
                 text = f"Included: {number} solid{'s' if number != 1 else ''} "
             text += f"({len(resolved)} object{'s' if len(resolved) != 1 else ''})"
             count.setText(text)
-        _, _, errors = geometry.setup(study)
-        if not errors and not geometry.export_unavailable(study):
-            try:
-                jobwriter.check(study)
-            except jobwriter.StudyError as exc:
-                errors.append(str(exc))
-        self.diagnostics.setText("\n".join(errors))
+        if geometry.export_unavailable(study):
+            lines = geometry.setup(study)[2]
+        else:  # every problem that stops the mesh; Validate Study also lists the warnings
+            lines = [p.text for p in validation.errors(validation.validate(study))]
+        self.diagnostics.setText("\n".join(lines))
         self.sliding_notice.setVisible(sliding)
         unavailable = geometry.export_unavailable(study)
         if unavailable:
@@ -1101,3 +1102,94 @@ class IdTableDialog(QtWidgets.QDialog):
             self.table.blockSignals(False)
             return
         self.rows[item.row()] = (table, key, name, new)
+
+
+class ValidationPanel:
+    """Every problem of a Study at once, then the mesher's geometry checks (without meshing).
+    Selecting a row selects the item it is about and highlights its bodies, faces, edges and vertices."""
+
+    ICONS = {
+        validation.ERROR: QtWidgets.QStyle.SP_MessageBoxCritical,
+        validation.WARNING: QtWidgets.QStyle.SP_MessageBoxWarning,
+        "info": QtWidgets.QStyle.SP_MessageBoxInformation,
+        "ok": QtWidgets.QStyle.SP_DialogApplyButton,
+    }
+
+    def __init__(self, study):
+        self.study = study
+        highlight.clear()
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("Validate Study")
+        layout = QtWidgets.QVBoxLayout(self.form)
+        layout.addWidget(QtWidgets.QLabel(f"Study: {study.Label} ({study.Dimension})"))
+        self.list = QtWidgets.QListWidget()
+        self.list.setWordWrap(True)
+        self.list.itemSelectionChanged.connect(self.show_row)
+        layout.addWidget(self.list)
+        self.again = QtWidgets.QPushButton("Check again")
+        self.again.clicked.connect(self.run)
+        layout.addWidget(self.again)
+        self.rows, self.pending = [], None
+        self.run()
+
+    def getStandardButtons(self):
+        return QtWidgets.QDialogButtonBox.Close
+
+    def reject(self):
+        highlight.clear()
+        Gui.Control.closeDialog()
+        return True
+
+    def add(self, severity, text, item=None, refs=()):
+        style = self.form.style()
+        self.list.addItem(QtWidgets.QListWidgetItem(style.standardIcon(self.ICONS[severity]), text))
+        self.rows.append((item, list(refs)))
+
+    def run(self):
+        from . import runner
+
+        self.list.clear()
+        self.rows = []
+        highlight.clear()
+        problems = validation.validate(self.study)
+        for p in problems:
+            self.add(p.severity, p.text, p.item, p.refs)
+        if not problems:
+            self.add("ok", "Study setup: no problems found.")
+        if validation.errors(problems):
+            self.add("info", "The mesher's geometry check runs once the errors above are fixed.")
+            return
+        if runner.busy():
+            self.add("info", "A mesh run is going on: check again when it ends.")
+            return
+        self.again.setEnabled(False)
+        self.pending = self.list.count()
+        self.add("info", "Checking the geometry with the mesher…")
+        runner.check(self.study, self.checked)
+
+    def checked(self, error, notes):
+        """runner.check() result: replaces the "Checking…" row."""
+        if self.pending is not None:
+            self.list.takeItem(self.pending)
+            self.rows.pop(self.pending)
+            self.pending = None
+        if error is None:
+            self.add("info", "Geometry check cancelled.")
+        elif error:
+            self.add(validation.ERROR, "Mesher: " + error)
+        else:
+            self.add("ok", "The mesher's geometry checks passed (no mesh was made).")
+        for note in notes:
+            self.add("info", "Mesher note: " + note)
+        self.again.setEnabled(True)
+
+    def show_row(self):
+        rows = sorted(self.list.row(i) for i in self.list.selectedItems())
+        if not rows:
+            highlight.clear()
+            return
+        item, refs = self.rows[rows[0]]
+        highlight.show(refs or (objects.item_refs(item) if item is not None and objects.is_item(item) else []))
+        if item is not None and getattr(item, "Document", None) is not None:
+            Gui.Selection.clearSelection()
+            Gui.Selection.addSelection(item)

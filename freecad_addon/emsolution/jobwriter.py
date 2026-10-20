@@ -3,7 +3,7 @@
 import json
 import os
 
-from . import geometry, objects
+from . import geometry, objects, validation
 from .geometry import global_shape
 
 
@@ -29,26 +29,16 @@ def mesh_file(study):
     return os.path.join(simulation_folder(study), "pre_geom2D.msh" if study.Dimension == "2D" else "pre_geom.msh")
 
 
-def _check_subs(kind, item, body, subs):
-    for sub in subs:
-        try:
-            body.Shape.getElement(sub)
-        except Exception:
-            raise StudyError(f"{kind} {item.Label}: body {body.Label} has no {sub}. Reselect it.") from None
-
-
 def check(study):
-    """Checks before meshing. Returns (volumes, surfaces, elements):
+    """Refuse the Study if validation finds an error. Returns (volumes, surfaces, elements):
     volumes  = [(body, size_mm)] in main geometry order
     surfaces = [(excitation, body, [face names])] in tree order
     elements = [(mesh size, body, [face, edge and vertex names])] in tree order
     """
-    unavailable = geometry.export_unavailable(study)
-    if unavailable:
-        raise StudyError(unavailable)
-    bodies, _, errors = geometry.setup(study)
-    if errors:
-        raise StudyError("\n".join(errors))
+    found = validation.errors(validation.validate(study))
+    if found:
+        raise StudyError("\n".join(p.text for p in found))
+    bodies, _, _ = geometry.setup(study)
     bodies = list({b.Name: b for b in bodies}.values())  # main geometry order
     included = {b.Name for b in bodies}
     excitation_items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: none yet
@@ -56,94 +46,37 @@ def check(study):
     sized = [
         (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in included
     ]
-    for e, b, faces in surfaces:
-        _check_subs("Excitation", e, b, faces)
     elements = [(s, b, [n for n in subs if n]) for s, b, subs in sized]
     elements = [el for el in elements if el[2]]
-    for s, b, subs in elements:
-        _check_subs("Mesh size", s, b, subs)
-    settings = study.MeshSizesGroup
-    if settings.DefaultMeshSize.Value <= 0:
-        raise StudyError("The default mesh size must be greater than 0.")
-    if 0 < settings.MaxSize.Value < settings.MinSize.Value:
-        raise StudyError("The minimum mesh size is larger than the maximum.")
-    transfinite_items(study, bodies)
-    size_items = dict.fromkeys(s for s, _, _ in sized)
-    for s in size_items:
-        if s.Size.Value <= 0:
-            raise StudyError(f"Mesh size {s.Label} must be greater than 0.")
     size = {}
     for s, b, subs in sized:
         if "" in subs:  # the whole body
             size[b.Name] = min(size.get(b.Name, s.Size.Value), s.Size.Value)
-    volumes = [(b, size.get(b.Name, settings.DefaultMeshSize.Value)) for b in bodies]
-    names = [objects.volume_name(b) for b, _ in volumes]
-    names += [objects.item_name(e, b) for e, b, _ in surfaces]
-    dups = sorted({n for n in names if names.count(n) > 1})
-    if dups:
-        raise StudyError(
-            "These group names are the same after removing special characters: "
-            + ", ".join(dups)
-            + ". Rename the items or bodies."
-        )
+    default = study.MeshSizesGroup.DefaultMeshSize.Value
+    volumes = [(b, size.get(b.Name, default)) for b in bodies]
     return volumes, surfaces, elements
 
 
-def _loose_pieces(shape):
-    """True when two vertices of shape coincide: its solids or faces touch but are not joined (a plain
-    compound), so every shared edge appears twice. A Slice or Boolean Fragments result shares them once."""
-    points = [v.Point for v in shape.Vertexes]
-    return any(p.distanceToPoint(q) < 1e-6 for i, p in enumerate(points) for q in points[i + 1 :])
-
-
 def transfinite_items(study, bodies):
-    """R1 to R3 for the Study's transfinite items on bodies. Returns (structured, edges):
+    """The Study's transfinite items on bodies, after check(). Returns (structured, edges):
     structured = [(body, [corner vertex names])] in tree order
     edges      = [(item, body, [edge names])] in tree order
     """
     included = {b.Name for b in bodies}
-    structured, owner = [], {}
+    structured = []
     for t in objects.transfinite_bodies(study):
-        refs = [b for b, _ in objects.subs_by_body(t)]
         corners = {}
         for b, subs in t.Corners:
-            if b.Name not in {r.Name for r in refs}:
-                raise StudyError(f"Transfinite Body {t.Label}: corner {b.Label}.{subs[0]} is not on one of its bodies.")
             corners.setdefault(b.Name, []).extend(subs)
-        for b in refs:
-            if b.Name not in included:
-                continue
-            if b.Name in owner:
-                raise StudyError(f"Body {b.Label} is in Transfinite Body {owner[b.Name].Label} and {t.Label}.")
-            owner[b.Name] = t
-            _check_subs("Transfinite Body", t, b, corners.get(b.Name, []))
-            structured.append((b, corners.get(b.Name, [])))
-    edges, seen = [], {}
-    for e in objects.transfinite_edges(study):
-        if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
-            raise StudyError(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.")
-        for b, subs in objects.subs_by_body(e):
-            if b.Name not in included:
-                continue
-            _check_subs("Transfinite Edges", e, b, subs)
-            for s in subs:
-                if (b.Name, s) in seen:
-                    raise StudyError(f"{b.Label}.{s} is in Transfinite Edges {seen[(b.Name, s)].Label} and {e.Label}.")
-                seen[(b.Name, s)] = e
-            edges.append((e, b, list(subs)))
-    pieces, shared = ("faces", "edges") if study.Dimension == "2D" else ("solids", "faces")
-    for b, _ in structured:
-        if _loose_pieces(b.Shape):
-            raise StudyError(
-                f"Transfinite Body {owner[b.Name].Label}: the {pieces} of {b.Label} touch without sharing {shared}."
-                " Make it with Part Slice or Boolean Fragments instead of a compound."
-            )
-        missing = [f"Edge{i}" for i in range(1, len(b.Shape.Edges) + 1) if (b.Name, f"Edge{i}") not in seen]
-        if missing:
-            raise StudyError(
-                f"Transfinite Body {owner[b.Name].Label}: {b.Label} has edges without Transfinite Edges: "
-                + ", ".join(missing)
-            )
+        for b, _ in objects.subs_by_body(t):
+            if b.Name in included:
+                structured.append((b, corners.get(b.Name, [])))
+    edges = [
+        (e, b, list(subs))
+        for e in objects.transfinite_edges(study)
+        for b, subs in objects.subs_by_body(e)
+        if b.Name in included
+    ]
     return structured, edges
 
 

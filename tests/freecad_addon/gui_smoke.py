@@ -489,6 +489,30 @@ def main():
     assert not run.replaced
     log.append(f"mesh ok: {study.MeshResult.FemMesh.VolumeCount} volumes")
 
+    validations = []  # panels the Validate command opened
+
+    class RecordedValidation(taskpanels.ValidationPanel):
+        def __init__(self, *args, **kwargs):
+            validations.append(self)  # before run(), which starts the geometry check
+            super().__init__(*args, **kwargs)
+
+    taskpanels.ValidationPanel = RecordedValidation
+    assert commands.COMMANDS["EMS_Validate"].IsActive()
+    Gui.runCommand("EMS_Validate")
+    (checking,) = validations
+    check = runner._run
+    assert check is not None and check.proc.waitForFinished(120000), "geometry check timed out"
+    App.Gui.updateGui()
+    assert not runner.busy(), "geometry check did not finish"
+    rows = [checking.list.item(i).text() for i in range(checking.list.count())]
+    assert any(r.startswith("The mesher's geometry checks passed") for r in rows), rows
+    checking.list.setCurrentRow(0)  # selecting a row must not crash
+    App.Gui.updateGui()
+    checking.reject()
+    App.Gui.updateGui()
+    assert not Gui.Control.activeDialog()
+    log.append(f"validate ok: {len(rows)} rows")
+
     # Several Studies: ownership, setup controls, bulk selection and undo.
     import Part
     from emsolution import geometry

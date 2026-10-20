@@ -343,14 +343,34 @@ def run(job_path, build, dim):
     return job
 
 
-def main(argv, script, run_job):
+def check(job_path, build):
+    """The geometry checks of a run without meshing: build(job, folder) on a fresh model, nothing written."""
+    folder = os.path.dirname(os.path.abspath(job_path))
+    with open(job_path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add(job["model_name"])
+        build(job, folder)
+    finally:
+        gmsh.finalize()
+    print("CHECK OK")
+
+
+def main(argv, script, run_job, build=None):
+    """argv: [script, job.json] meshes; [script, job.json, "--check"] only checks (needs build)."""
     for stream in (sys.stdout, sys.stderr):  # the runner reads UTF-8, whatever the console code page
         stream.reconfigure(encoding="utf-8", errors="replace")
-    if len(argv) != 2:
-        print(f"ERROR: usage: {script} <job.json>", file=sys.stderr)
+    checking = len(argv) == 3 and argv[2] == "--check" and build is not None
+    if len(argv) != 2 and not checking:
+        print(f"ERROR: usage: {script} <job.json> [--check]", file=sys.stderr)
         return 1
     try:
-        run_job(argv[1])
+        if checking:
+            check(argv[1], build)
+        else:
+            run_job(argv[1])
     except Exception as exc:  # anything -> one clean ERROR line for the runner
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

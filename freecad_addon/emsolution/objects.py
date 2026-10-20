@@ -129,6 +129,7 @@ class Study(_Proxy):
         for prop, _ in FOLDERS:
             obj.addProperty("App::PropertyLink", prop, "EMSolution", "")
         obj.addProperty("App::PropertyLink", "MeshResult", "EMSolution", "")
+        add_id_memory(obj)
         for prop in ("MatIds", "SmatIds", "NextMatId", "NextSmatId"):
             obj.setEditorMode(prop, 1)  # read-only: edit through the ID table
         for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
@@ -146,6 +147,13 @@ class Study(_Proxy):
             obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
             for prop in (mode, source, refs):
                 obj.setEditorMode(prop, 2)  # edit together in the Study panel
+
+
+def add_id_memory(study):
+    """Added on first use, also to Studies saved before IDs were remembered."""
+    if not hasattr(study, "IdOwners"):
+        study.addProperty("App::PropertyMap", "IdOwners", "IDs", "'table:key' -> 'object IDs:ID', also after removal")
+        study.setEditorMode("IdOwners", 2)  # hidden
 
 
 class _Named(_Proxy):
@@ -611,26 +619,53 @@ def surface_keys(study):
 def update_ids(study):
     """Give every body and (excitation, body) pair an ID; drop entries that are gone.
 
-    Counters only grow, so a dropped ID is never handed out again.
+    Counters only grow, so a dropped ID is never handed out again. It comes back with its own object:
+    a body that returns to the main geometry, or is restored by undo, gets its old ID if it is still free.
     """
+    add_id_memory(study)
     vkeys, skeys = volume_keys(study), surface_keys(study)
     vol = {k: v for k, v in study.MatIds.items() if k in vkeys}
     surf = {k: v for k, v in study.SmatIds.items() if k in skeys}
     used = {int(v) for v in list(vol.values()) + list(surf.values())}
+    memory = study.IdOwners
 
-    def give(table, keys, counter):
+    def give(name, table, keys, counter):
         for key in keys:
-            if key not in table:
-                while counter in used:
-                    counter += 1
-                table[key] = str(counter)
-                used.add(counter)
+            if key in table:
+                continue
+            owner, _, old = memory.get(f"{name}:{key}", "").rpartition(":")
+            if owner and owner == _owner(study, key) and int(old) not in used:
+                table[key] = old
+                used.add(int(old))
+                continue
+            while counter in used:
                 counter += 1
+            table[key] = str(counter)
+            used.add(counter)
+            counter += 1
         return counter
 
-    study.NextMatId = give(vol, vkeys, study.NextMatId)
-    study.NextSmatId = give(surf, skeys, study.NextSmatId)
+    study.NextMatId = give("MatIds", vol, vkeys, study.NextMatId)
+    study.NextSmatId = give("SmatIds", surf, skeys, study.NextSmatId)
     study.MatIds, study.SmatIds = vol, surf
+    _remember(study)
+
+
+def _owner(study, key):
+    """The FreeCAD object IDs behind an ID table key. A new object that reuses a deleted one's Name has
+    another object ID, so it never inherits the old MAT_ID; undo and reload keep the object ID."""
+    found = [study.Document.getObject(n) for n in key.split("|")]
+    return ",".join(str(o.ID) for o in found) if all(found) else ""
+
+
+def _remember(study):
+    """Record who owns each current ID; entries of removed keys stay, so the ID can come back."""
+    memory = dict(study.IdOwners)
+    for name in ("MatIds", "SmatIds"):
+        for key, value in getattr(study, name).items():
+            memory[f"{name}:{key}"] = f"{_owner(study, key)}:{value}"
+    if memory != study.IdOwners:
+        study.IdOwners = memory
 
 
 def set_id(study, table, key, new_id):
@@ -648,6 +683,8 @@ def set_id(study, table, key, new_id):
     counter = "NextMatId" if table == "MatIds" else "NextSmatId"
     top = max(int(v) for v in ids.values())
     setattr(study, counter, max(getattr(study, counter), top + 1))
+    add_id_memory(study)
+    _remember(study)
 
 
 def id_rows(study):

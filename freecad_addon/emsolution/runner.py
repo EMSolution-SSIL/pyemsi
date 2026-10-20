@@ -38,17 +38,34 @@ def start(study):
     return _run
 
 
+def check(study, done):
+    """The mesher's geometry checks in the background, without meshing. Calls done(error, notes) at the end:
+    error "" when the checks pass, None when cancelled; notes are what the mesher fixed by itself."""
+    global _run
+    try:
+        job = jobwriter.write_job(study)
+    except Exception as exc:  # StudyError, or anything the geometry export trips on
+        done(str(exc), [])
+        return None
+    _run = CheckRun(study, job, done)
+    return _run
+
+
 class MeshRun:
+    ARGS = []
+    TEXT = "Meshing…"
+
     def __init__(self, study, job):
         self.study, self.job = study, job
         self.cancelled = False
         self.error = ""
+        self.notes = []
         with open(job, encoding="utf-8") as fh:
             data = json.load(fh)
         self.mesh_file = data["mesh_file"]
         script = MESHER_2D if data.get("dimension") == "2D" else MESHER
         self.replaced = os.path.exists(self.mesh_file)  # before the mesher starts
-        self.dialog = QtWidgets.QProgressDialog("Meshing…", "Cancel", 0, 0, Gui.getMainWindow())
+        self.dialog = QtWidgets.QProgressDialog(self.TEXT, "Cancel", 0, 0, Gui.getMainWindow())
         self.dialog.setWindowTitle("EMSolution")
         self.dialog.setWindowModality(QtCore.Qt.WindowModal)
         self.dialog.canceled.connect(self.cancel)
@@ -57,7 +74,7 @@ class MeshRun:
         self.proc.readyReadStandardError.connect(self._stderr)
         self.proc.finished.connect(self._finished)
         self.proc.errorOccurred.connect(self._failed_to_start)
-        self.proc.start(python_exe(), [script, job])
+        self.proc.start(python_exe(), [script, job] + self.ARGS)
         self.dialog.show()
 
     def _stdout(self):
@@ -69,6 +86,8 @@ class MeshRun:
         for line in text.splitlines():
             if line.startswith("ERROR:"):
                 self.error = line[len("ERROR:") :].strip()
+            elif line.startswith("NOTE:"):
+                self.notes.append(line[len("NOTE:") :].strip())
 
     def cancel(self):
         self.cancelled = True
@@ -79,11 +98,14 @@ class MeshRun:
             self.error = f"Could not start {python_exe()}"
             self._finished(-1, None)
 
-    def _finished(self, code, _status):
+    def _close(self):
         global _run
         _run = None
         self.dialog.canceled.disconnect(self.cancel)  # closing the dialog emits canceled
         self.dialog.close()
+
+    def _finished(self, code, _status):
+        self._close()
         parent = Gui.getMainWindow()
         if self.cancelled:
             QtWidgets.QMessageBox.information(parent, "EMSolution", "Meshing cancelled.")
@@ -112,3 +134,23 @@ class MeshRun:
             f"{name} written to {folder} from Study {self.study.Label}{replaced}\n"
             'Input files read it with INPUT_MESH_FILE = "GMSH" (11).\n'
         )
+
+
+class CheckRun(MeshRun):
+    """runner.check(): the mesher with --check; the result goes to done(), nothing is loaded."""
+
+    ARGS = ["--check"]
+    TEXT = "Checking the geometry…"
+
+    def __init__(self, study, job, done):
+        self.done = done
+        super().__init__(study, job)
+
+    def _finished(self, code, _status):
+        self._close()
+        if self.cancelled:
+            self.done(None, self.notes)
+        elif code != 0:
+            self.done(self.error or f"The mesher stopped with exit code {code}.", self.notes)
+        else:
+            self.done("", self.notes)
