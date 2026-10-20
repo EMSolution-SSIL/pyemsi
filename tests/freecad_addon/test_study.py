@@ -971,7 +971,9 @@ print('RESTORE PASS')
         self.assertEqual(geometry.export_unavailable(study), "")
         study.Movement = "Sliding motion"
         self.assertEqual(geometry.export_unavailable(study), "")
-        self.assertNotIn("later phase", " ".join(p.text for p in validation.validate(study)))
+        texts = [p.text for p in validation.validate(study)]
+        self.assertNotIn("later phase", " ".join(texts))
+        self.assertIn("Sliding motion needs an Air Region and at least one Sliding Interface.", texts)
 
     def test_new_study_requires_geometry_even_when_materials_exist(self):
         study = objects.make_study(self.doc)

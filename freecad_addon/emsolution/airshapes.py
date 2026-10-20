@@ -206,6 +206,15 @@ def slide_surface(iface, air_shape, plane):
     return _baked(Part.makeCompound(pieces))
 
 
+def full_turn(iface, air_shape, plane):
+    """True if a Rotational or Axial gap interface goes all the way round the Z axis inside air_shape (slide_surface
+    then builds it in two halves)."""
+    if iface.Kind == "Linear":
+        return False
+    whole = _round_tool(iface, _far(air_shape), plane, _start(iface), 360).common(air_shape)
+    return _goes_round(iface, _pieces(whole, plane))
+
+
 def slide_marker(iface, surface, plane):
     """Where the motion starts on surface: the slide point (2D, a Vertex) or slide edge (3D, the generatrix Edge).
 
@@ -231,6 +240,10 @@ def slide_marker(iface, surface, plane):
         else:
             ends = [out * iface.Radius.Value + App.Vector(0, 0, z) for z in (-far, far)]
     edges = Part.makeLine(*ends).common(surface).Edges
+    if not edges:
+        raise ValueError(
+            f"Sliding Interface {objects.display_name(iface)}: the slide edge does not lie on its surface."
+        )
     return edges[0] if len(edges) == 1 else Part.makeCompound(edges)
 
 

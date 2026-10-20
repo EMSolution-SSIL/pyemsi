@@ -439,6 +439,7 @@ class AirTest(unittest.TestCase):
         self.study.MainObjects = [*self.study.MainObjects, m]  # both: setup reports it, the list stays unique
         self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A", "M"])
 
+    @unittest.skip("a sliding Study needs an Air Region now and its job is not written yet; Task 10 enables this")
     def test_job_lists_moving_mat_ids(self):
         self.sliding(["A", "B"], ["M"])
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
@@ -480,8 +481,7 @@ class AirTest(unittest.TestCase):
         self.assertEqual(rows["Air"][2], self.study.MatIds[air.Name])
 
     def test_sliding_with_air_is_not_written_yet(self):
-        self.sliding(["A"], ["M"])
-        objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        self.box_slide()
         with self.assertRaisesRegex(jobwriter.StudyError, "Sliding-motion meshing with an Air Region is not complete"):
             jobwriter.write_job(self.study)
 
@@ -596,3 +596,175 @@ class AirTest(unittest.TestCase):
         self.study.Movement = "No movement"
         objects.update_ids(self.study)
         self.assertNotIn(iface.Name, self.study.MatIds)
+
+    def test_axial_gap_interface_is_two_half_discs(self):
+        air = {"OuterRadius": 100, "Height": 100, "ZMin": -50}
+        iface = self.interface("3D", "Sector", air, "Axial gap", Position=20)
+        self.assertEqual(len(iface.Shape.Faces), 2)
+        self.assertAlmostEqual(iface.Shape.Area, math.pi * 100**2)
+        for face in iface.Shape.Faces:
+            self.assertAlmostEqual(face.BoundBox.ZMin, 20)
+            self.assertAlmostEqual(face.BoundBox.ZMax, 20)
+        marker = airshapes.slide_marker(iface, iface.Shape, "3D")
+        self.assertIsInstance(marker, Part.Edge)
+        ends = sorted((round(v.X, 6), round(v.Y, 6), round(v.Z, 6)) for v in marker.Vertexes)
+        self.assertEqual(ends, [(0, 0, 20), (100, 0, 20)])  # radial, at the start angle
+
+    def test_linear_interface_3d_is_a_plane_across_the_box(self):
+        air = {"Center": App.Vector(40, 0, 0), "Length": 80, "Width": 40, "Height": 30}
+        iface = self.interface("3D", "Box", air, "Linear", NormalAxis="Y", Position=11, MotionAxis="X")
+        (face,) = iface.Shape.Faces
+        self.assertAlmostEqual(face.Area, 80 * 30)
+        box = face.BoundBox
+        self.assertEqual((box.XMin, box.XMax), (pytest.approx(0), pytest.approx(80)))
+        self.assertEqual((box.YMin, box.YMax), (pytest.approx(11), pytest.approx(11)))
+        marker = airshapes.slide_marker(iface, iface.Shape, "3D")
+        ends = sorted((round(v.X, 6), round(v.Y, 6), round(v.Z, 6)) for v in marker.Vertexes)
+        self.assertEqual(ends, [(0, 11, -15), (0, 11, 15)])  # across the motion, at its minimum
+
+    def motor(self, rotor_radius=40, extra=()):
+        """A 2D sliding Study: a ring stator (45..80) fixed, a disc rotor moving, a Sector air of radius 100
+        with a Rotational interface at 42.5 and more at the radii in extra."""
+        self.doc.removeObject(self.study.Name)
+        self.study = objects.make_study(self.doc, "2D")
+        self.study.MainMode = self.study.MovingMode = "Manual"
+        stator, rotor = self.doc.addObject("Part::Feature", "Stator"), self.doc.addObject("Part::Feature", "Rotor")
+        stator.Shape = self.disc(80, 45)
+        rotor.Shape = self.disc(rotor_radius)
+        self.study.MainObjects, self.study.MovingObjects = [stator], [rotor]
+        self.study.Movement = "Sliding motion"
+        objects.make_air_region(self.study, "Sector", OuterRadius=100)
+        for radius in (42.5, *extra):
+            objects.make_sliding_interface(self.study, "Rotational", Radius=radius)
+        self.doc.recompute()
+        return stator, rotor
+
+    def box_slide(self, moving_x=20):
+        """A 3D sliding Study: box A fixed at x = 0..10, box M moving, a Linear interface at x = 15."""
+        self.sliding(["A"], ["M"])
+        self.study.MovingObjects[0].Placement.Base = App.Vector(moving_x, 0, 0)
+        objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        iface = objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=15, MotionAxis="Y")
+        self.doc.recompute()
+        return iface
+
+    def test_valid_2d_motor_has_no_slide_problems(self):
+        self.motor()
+        self.assertEqual(self.air_errors(), [])
+        self.assertEqual([p.text for p in validation.validate(self.study) if "Sliding" in p.text], [])
+
+    def test_valid_3d_linear_slide_has_no_slide_problems(self):
+        self.box_slide()
+        self.assertEqual(self.air_errors(), [])
+
+    def test_sliding_needs_an_air_region_and_an_interface(self):
+        text = "Sliding motion needs an Air Region and at least one Sliding Interface."
+        self.sliding(["A"], ["M"])
+        self.assertIn(text, self.air_errors())
+        objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        self.assertIn(text, self.air_errors())
+        objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=15, MotionAxis="Y")
+        self.assertNotIn(text, self.air_errors())
+
+    def test_interface_without_movement_is_a_warning(self):
+        iface = self.box_slide()
+        self.study.Movement = "No movement"
+        problems = validation.validate(self.study)
+        text = f"Sliding Interface {iface.Label} is not used: the Study has no movement."
+        self.assertEqual([p.severity for p in problems if p.text == text], [validation.WARNING])
+
+    def test_sliding_in_a_zx_study_is_an_error(self):
+        self.study_2d(App.Vector(0, 1, 0))
+        self.study.Movement = "Sliding motion"
+        objects.make_air_region(self.study, "Sector", OuterRadius=30)
+        objects.make_sliding_interface(self.study, "Rotational", Radius=5)
+        self.assertIn("Sliding motion is not supported in a ZX (axisymmetric) Study.", self.air_errors())
+
+    def test_linear_interface_needs_a_box_air(self):
+        self.motor()
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.Kind, iface.NormalAxis, iface.MotionAxis = "Linear", "Y", "X"
+        self.assertIn(f"Sliding Interface {iface.Label}: a Linear interface needs a Box Air Region.", self.air_errors())
+
+    def test_odd_divisions_of_a_full_turn_is_an_error(self):
+        self.motor()
+        (iface,) = objects.sliding_interfaces(self.study)
+        text = (
+            f"Sliding Interface {iface.Label}: Divisions must be even for a full 360° interface"
+            " (it is meshed in two halves)."
+        )
+        self.assertNotIn(text, self.air_errors())
+        iface.Divisions = 91
+        self.assertIn(text, self.air_errors())
+        objects.air_regions(self.study)[0].EndAngle = 90  # not a full turn: any count is fine
+        self.assertNotIn(text, self.air_errors())
+
+    def test_interface_missing_the_air_is_an_error(self):
+        self.motor()
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.Radius = 200
+        self.assertIn(f"Sliding Interface {iface.Label} does not cut the Air Region.", self.air_errors())
+
+    def test_body_crossing_an_interface_is_an_error(self):
+        _, rotor = self.motor(rotor_radius=44)
+        hint = " Rotation is about the global Z axis; put the machine axis on Z."
+        self.assertIn(f"{rotor.Label} crosses a Sliding Interface." + hint, self.air_errors())
+
+    def test_crossing_a_linear_interface_has_no_axis_hint(self):
+        self.box_slide(moving_x=10)  # M spans x = 10..20 across the plane at x = 15
+        self.assertIn("M crosses a Sliding Interface.", self.air_errors())
+
+    def test_body_outside_the_air_is_not_reported_as_crossing(self):
+        _, rotor = self.motor(rotor_radius=120)
+        errors = self.air_errors()
+        self.assertIn(f"{rotor.Label} is not fully inside Air Region Air.", errors)
+        self.assertFalse([t for t in errors if "crosses" in t])
+
+    def test_moving_and_fixed_body_on_the_same_side_is_an_error(self):
+        stator, rotor = self.motor()
+        stator.Shape = self.disc(30)
+        rotor.Shape = self.disc(20)
+        names = f"Moving body {rotor.Label} and fixed body {stator.Label}"
+        self.assertIn(f"{names} are on the same side of the Sliding Interfaces.", self.air_errors())
+
+    def test_air_cell_without_a_body_is_an_error(self):
+        stator, _ = self.motor(extra=(60,))  # three cells; the ring between 42.5 and 60 holds nothing
+        stator.Shape = self.disc(90, 65)
+        text = "Part of the air between Sliding Interfaces holds no body; its side is unknown."
+        self.assertIn(text + " Move an interface or add the body.", self.air_errors())
+
+    def test_no_body_in_the_moving_geometry_is_an_error(self):
+        self.motor()
+        self.study.MovingObjects = []
+        self.assertIn("No body is in the moving geometry.", self.air_errors())
+
+    def does_not_span(self, iface):
+        text = f"Sliding Interface {iface.Label} does not span the Air Region: its surface is cut into pieces by the air boundary."
+        return [t for t in self.air_errors() if "does not span" in t], text
+
+    def test_interface_cut_into_pieces_by_the_air_is_an_error(self):
+        self.motor()
+        air = objects.air_regions(self.study)[0]
+        air.AirShape, air.Center, air.Length, air.Width = "Box", App.Vector(0, 0, 0), 100, 100
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.Radius = 60  # four arcs inside the square
+        found, text = self.does_not_span(iface)
+        self.assertEqual(found, [text])
+
+    def test_2d_slide_point_off_the_surface_is_an_error(self):
+        self.motor()
+        air = objects.air_regions(self.study)[0]
+        air.AirShape, air.Center, air.Length, air.Width = "Box", App.Vector(-40, 0, 0), 40, 100
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.Radius = 40  # one arc around 180 degrees; the slide point at 0 degrees is outside the air
+        found, text = self.does_not_span(iface)
+        self.assertEqual(found, [text])
+
+    def test_axial_gap_full_turn_needs_even_divisions_and_two_halves(self):
+        air = {"OuterRadius": 100, "Height": 100, "ZMin": -50}
+        iface = self.interface("3D", "Sector", air, "Axial gap", Position=20)
+        text = f"Sliding Interface {iface.Label}: Divisions must be even for a full 360° interface (it is meshed in two halves)."
+        iface.Divisions = 91
+        self.assertIn(text, self.air_errors())
+        iface.Divisions = 90
+        self.assertEqual([t for t in self.air_errors() if "Sliding Interface" in t], [])

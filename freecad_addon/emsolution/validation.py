@@ -62,6 +62,7 @@ def validate(study):
     _links(study, included, r)
     _settings(study, included, r)
     _air(study, bodies, r)
+    _slides(study, main, moving, r)
     _transfinite(study, bodies, r)
     _names(study, bodies, included, r)
     _materials(study, r)
@@ -180,6 +181,107 @@ def _air(study, bodies, r):
         measure = body_shape.Volume if plane == "3D" else body_shape.Area
         if airshapes.outside(body_shape, shape, plane) > 1e-6 * measure:
             r.error(f"{body.Label} is not fully inside Air Region {objects.display_name(air)}.", air, [(body, "")])
+
+
+def _slides(study, main, moving, r):
+    """Sliding: an Air Region and Sliding Interfaces that cut it, every body on one side, both sides in use."""
+    interfaces = objects.sliding_interfaces(study)
+    if study.Movement != "Sliding motion":
+        for i in interfaces:
+            r.warning(f"Sliding Interface {i.Label} is not used: the Study has no movement.", i)
+        return
+    airs = objects.air_regions(study)
+    if not airs or not interfaces:
+        r.error("Sliding motion needs an Air Region and at least one Sliding Interface.")
+        return
+    plane = airshapes.study_plane(study)
+    if plane == "ZX":
+        r.error("Sliding motion is not supported in a ZX (axisymmetric) Study.")
+        return
+    try:
+        air_shape = airshapes.air_shape(airs[0], plane)
+    except ValueError:
+        return  # _air reports it
+    surfaces = _surfaces(interfaces, airs[0], air_shape, plane, r)
+    if surfaces is None:
+        return
+    if not moving:
+        r.error("No body is in the moving geometry.")
+        return
+    cells = airshapes.cells(air_shape, surfaces)  # once: the bodies are sorted into them below
+    moving_names = {b.Name for b in moving}
+    fixed = [b for b in main if b.Name not in moving_names]
+    held = {}  # cell index -> ([moving bodies], [fixed bodies])
+    hint = ""
+    if any(i.Kind != "Linear" for i in interfaces):
+        hint = " Rotation is about the global Z axis; put the machine axis on Z."
+    for side, group in enumerate((moving, fixed)):
+        for body in group:
+            shape = geometry.global_shape(body)
+            measure = shape.Volume if plane == "3D" else shape.Area
+            if airshapes.outside(shape, air_shape, plane) > 1e-6 * measure:
+                continue  # _air reports a body outside the air
+            k = airshapes.cell_of(shape, cells)
+            if k is None:
+                r.error(f"{body.Label} crosses a Sliding Interface." + hint, body, [(body, "")])
+            else:
+                held.setdefault(k, ([], []))[side].append(body)
+    for k in range(len(cells)):
+        moving_here, fixed_here = held.get(k, ([], []))
+        if moving_here and fixed_here:
+            m, f = moving_here[0], fixed_here[0]
+            refs = [(m, ""), (f, "")]
+            r.error(
+                f"Moving body {m.Label} and fixed body {f.Label} are on the same side of the Sliding Interfaces.",
+                m,
+                refs,
+            )
+    if any(not any(held.get(k, ([], []))) for k in range(len(cells))):
+        r.error(
+            "Part of the air between Sliding Interfaces holds no body; its side is unknown."
+            " Move an interface or add the body."
+        )
+
+
+def _surfaces(interfaces, air, air_shape, plane, r):
+    """The slide surface of every interface, or None after reporting an interface that cannot be used."""
+    surfaces, ok = [], True
+    for i in interfaces:
+        name = f"Sliding Interface {i.Label}"
+        if i.Kind == "Linear" and air.AirShape != "Box":
+            r.error(f"{name}: a Linear interface needs a Box Air Region.", i)
+            ok = False
+            continue
+        try:
+            surface = airshapes.slide_surface(i, air_shape, plane)
+        except ValueError as e:
+            r.error(str(e), i)
+            ok = False
+            continue
+        if not surface.Edges:
+            r.error(f"{name} does not cut the Air Region.", i)
+            ok = False
+            continue
+        full = airshapes.full_turn(i, air_shape, plane)
+        if full and i.Divisions % 2:
+            r.error(f"{name}: Divisions must be even for a full 360° interface (it is meshed in two halves).", i)
+            ok = False
+        pieces = len(surface.Faces if plane == "3D" else surface.Edges)
+        if pieces != (2 if full else 1) or not _marked(i, surface, plane):
+            r.error(f"{name} does not span the Air Region: its surface is cut into pieces by the air boundary.", i)
+            ok = False
+            continue
+        surfaces.append(surface)
+    return surfaces if ok else None
+
+
+def _marked(iface, surface, plane):
+    """True if the slide point (2D) or slide edge (3D) exists and lies on the slide surface."""
+    try:
+        marker = airshapes.slide_marker(iface, surface, plane)
+    except ValueError:
+        return False
+    return plane == "3D" or surface.distToShape(marker)[0] < airshapes.TOL
 
 
 def _transfinite(study, bodies, r):
