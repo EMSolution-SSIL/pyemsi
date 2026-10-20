@@ -315,6 +315,43 @@ class AirRegion(_Named):
         obj.Shape = airshapes.air_shape(obj, airshapes.study_plane(study) if study else "3D")
 
 
+AXES = ["X", "Y", "Z"]
+
+
+class SlidingInterface(_Named):
+    """The surface between the fixed and the moving air; it spans its Air Region. Shape is the slide surface."""
+
+    def __init__(self, obj):
+        obj.Proxy = self
+        self.add_group_name(obj)
+        add = obj.addProperty
+        add("App::PropertyEnumeration", "Kind", "Sliding", "Rotational about the Z axis, Axial gap (3D) or Linear")
+        obj.Kind = ["Rotational", "Axial gap", "Linear"]
+        add("App::PropertyLink", "AirRegion", "Sliding", "Air Region the surface spans")
+        add("App::PropertyLength", "Radius", "Sliding", "Radius of a Rotational interface")
+        obj.Radius = 50.0
+        add("App::PropertyDistance", "Position", "Sliding", "Normal-axis coordinate of an Axial gap or Linear plane")
+        add("App::PropertyEnumeration", "NormalAxis", "Sliding", "Normal of a Linear interface")
+        obj.NormalAxis = AXES
+        obj.NormalAxis = "Y"
+        add("App::PropertyEnumeration", "MotionAxis", "Sliding", "Motion direction of a Linear interface")
+        obj.MotionAxis = AXES
+        obj.MotionAxis = "X"
+        add("App::PropertyIntegerConstraint", "Divisions", "Sliding", "SLIDE_NDIV: divisions along the motion")
+        obj.Divisions = (90, 2, 100000, 2)
+        add("App::PropertyIntegerConstraint", "CrossDivisions", "Sliding", "Divisions across the motion (3D)")
+        obj.CrossDivisions = (10, 1, 100000, 1)
+
+    def execute(self, obj):
+        from . import airshapes
+
+        if obj.AirRegion is None:
+            raise ValueError(f"Sliding Interface {display_name(obj)}: it needs an Air Region")
+        study = owner_study(obj)
+        plane = airshapes.study_plane(study) if study else "3D"
+        obj.Shape = airshapes.slide_surface(obj, airshapes.air_shape(obj.AirRegion, plane), plane)
+
+
 def _make_folder(study, prop, cls):
     folder = study.Document.addObject("App::DocumentObjectGroupPython", prop.replace("Group", ""))
     cls(folder)
@@ -400,6 +437,26 @@ def make_air_region(study, shape="Box", **props):
 
         if hasattr(taskpanels, "ViewProviderAir"):
             taskpanels.ViewProviderAir(obj.ViewObject)
+    return obj
+
+
+def make_sliding_interface(study, kind, **props):
+    """Adds a Sliding Interface of kind on the Study's Air Region (see SlidingInterface)."""
+    obj = study.Document.addObject("Part::FeaturePython", "SlidingInterface")
+    SlidingInterface(obj)
+    obj.Label = "Sliding Interface"
+    obj.GroupName = "Sliding Interface"
+    obj.Kind = kind
+    airs = air_regions(study)
+    obj.AirRegion = airs[0] if airs else None
+    for name, value in props.items():
+        setattr(obj, name, value)
+    study.AirRegionsGroup.addObject(obj)
+    if getattr(obj, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        if hasattr(taskpanels, "ViewProviderSlidingInterface"):
+            taskpanels.ViewProviderSlidingInterface(obj.ViewObject)
     return obj
 
 
@@ -525,7 +582,11 @@ def recombine_items(study):
 
 
 def air_regions(study):
-    return list(study.AirRegionsGroup.Group)
+    return [o for o in study.AirRegionsGroup.Group if isinstance(getattr(o, "Proxy", None), AirRegion)]
+
+
+def sliding_interfaces(study):
+    return [o for o in study.AirRegionsGroup.Group if isinstance(getattr(o, "Proxy", None), SlidingInterface)]
 
 
 def library_materials(study):
@@ -711,11 +772,16 @@ def air_keys(study):
 
 
 def volume_keys(study):
-    return [b.Name for b in study_bodies(study)] + air_keys(study)
+    """MAT_ID keys: bodies, Air Regions (or their halves), then the Sliding Interfaces' SLIDE_MAT_IDs when sliding."""
+    keys = [b.Name for b in study_bodies(study)] + air_keys(study)
+    if study.Movement == "Sliding motion":
+        keys += [i.Name for i in sliding_interfaces(study)]
+    return keys
 
 
 def key_name(study, key):
-    """The volume name of a volume key: a body's or Air Region's name, with _fixed or _moving for an air half."""
+    """The volume name of a volume key: a body's, Air Region's or Sliding Interface's name, with _fixed or _moving
+    for an air half."""
     name, _, half = key.partition("#")
     return volume_name(study.Document.getObject(name)) + (f"_{half}" if half else "")
 

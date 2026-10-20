@@ -1,7 +1,10 @@
-"""Outer shapes of Air Regions. No GUI code here."""
+"""Outer shapes of Air Regions, slide surfaces of Sliding Interfaces and the air cells between them. No GUI code."""
+
+import math
 
 import FreeCAD as App
 import Part
+from BOPTools import SplitAPI
 
 from . import geometry, objects
 
@@ -115,3 +118,162 @@ def outside(body_shape, air_shape, plane):
     """Volume ("3D") or area (2D) of the part of body_shape that lies outside air_shape."""
     rest = body_shape.cut(air_shape)
     return rest.Volume if plane == "3D" else rest.Area
+
+
+def _start(iface):
+    """Start angle of the motion in degrees: the StartAngle of a Sector Air Region, else 0."""
+    air = iface.AirRegion
+    return air.StartAngle.Value if air is not None and air.AirShape == "Sector" else 0.0
+
+
+def _far(shape):
+    """A length from the origin that reaches past shape (1 for an empty shape)."""
+    box = shape.BoundBox
+    return 2 * (box.DiagonalLength + box.Center.Length) + 1 if box.isValid() else 1.0
+
+
+def _at(values):
+    """A Vector from {"X": x, "Y": y, "Z": z}; missing axes are 0."""
+    return App.Vector(*(values.get(a, 0.0) for a in objects.AXES))
+
+
+def _linear_tool(iface, far, plane):
+    """A large plane (3D) or line (2D) where the NormalAxis coordinate is Position."""
+    normal, pos = iface.NormalAxis, iface.Position.Value
+    name = f"Sliding Interface {objects.display_name(iface)}: "
+    if iface.MotionAxis == normal:
+        raise ValueError(name + "the motion axis must differ from the normal axis.")
+    if plane == "3D":
+        a, b = [x for x in objects.AXES if x != normal]
+        corners = [_at({normal: pos, a: sa * far, b: sb * far}) for sa, sb in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        return Part.Face(Part.makePolygon(corners + corners[:1]))
+    if normal == "Z":
+        raise ValueError(name + "in a 2D Study the normal axis is X or Y.")
+    along = "Y" if normal == "X" else "X"
+    return Part.makeLine(_at({normal: pos, along: -far}), _at({normal: pos, along: far}))
+
+
+def _round_tool(iface, far, plane, start, sweep):
+    """The part from start over sweep degrees about Z of a circle (2D), cylinder face or large disc (Axial gap)."""
+    r = iface.Radius.Value
+    if plane != "3D":
+        return Part.makeCircle(r, App.Vector(0, 0, 0), App.Vector(0, 0, 1), start, start + sweep)
+    if iface.Kind == "Axial gap":
+        z = iface.Position.Value
+        return _bottom_face(_ring_sector(0, far, start, sweep, z, 1), z)
+    solid = _ring_sector(0, r, start, sweep, -far, 2 * far)
+    return next(f for f in solid.Faces if isinstance(f.Surface, Part.Cylinder))
+
+
+def _pieces(shape, plane):
+    return shape.Faces if plane == "3D" else shape.Edges
+
+
+def _goes_round(iface, pieces):
+    """True if the pieces of a rotational slide surface go all the way round the Z axis."""
+    if iface.Kind == "Axial gap":  # a disc or ring: the axis lies inside its outer boundary
+        p = Part.Vertex(0, 0, iface.Position.Value)
+        return any(Part.Face(f.OuterWire).distToShape(p)[0] < TOL < f.OuterWire.distToShape(p)[0] for f in pieces)
+    spans = []  # angle ranges of the circle arcs or cylinder faces, folded into [0, 2 pi]
+    for piece in pieces:
+        lo, hi = piece.ParameterRange[:2]
+        lo, hi = lo % math.tau, lo % math.tau + hi - lo
+        spans += [(lo, min(hi, math.tau)), (0.0, max(hi - math.tau, 0.0))]
+    covered = end = 0.0
+    for lo, hi in sorted(spans):
+        covered += max(hi - max(lo, end), 0.0)
+        end = max(end, hi)
+    return covered > math.tau - TOL
+
+
+def slide_surface(iface, air_shape, plane):
+    """The slide curves (2D) or faces (3D) of a Sliding Interface inside air_shape, as a compound; empty if it misses
+    the air. One that goes all the way round is built in two halves, split at the start angle and 180° from it.
+    """
+    if plane == "ZX":
+        raise ValueError(f"Sliding Interface {objects.display_name(iface)}: no sliding motion in a ZX Study.")
+    if iface.Kind == "Axial gap" and plane != "3D":
+        raise ValueError(f"Sliding Interface {objects.display_name(iface)}: an Axial gap needs a 3D Study.")
+    far = _far(air_shape)
+    if iface.Kind == "Linear":
+        pieces = _pieces(_linear_tool(iface, far, plane).common(air_shape), plane)
+    else:
+        start = _start(iface)
+        pieces = _pieces(_round_tool(iface, far, plane, start, 360).common(air_shape), plane)
+        if _goes_round(iface, pieces):
+            halves = [_round_tool(iface, far, plane, a, 180).common(air_shape) for a in (start, start + 180)]
+            pieces = [p for half in halves for p in _pieces(half, plane)]
+    return _baked(Part.makeCompound(pieces))
+
+
+def slide_marker(iface, surface, plane):
+    """Where the motion starts on surface: the slide point (2D, a Vertex) or slide edge (3D, the generatrix Edge).
+
+    Rotational and Axial gap: at the start angle. Linear: at the smallest motion-axis coordinate.
+    """
+    far = _far(surface)
+    if iface.Kind == "Linear":
+        axis = objects.AXES.index(iface.MotionAxis)
+        if plane != "3D":
+            return min(surface.Vertexes, key=lambda v: v.Point[axis])
+        box = surface.BoundBox
+        at, pos = (box.XMin, box.YMin, box.ZMin)[axis], iface.Position.Value
+        across = next(a for a in objects.AXES if a not in (iface.NormalAxis, iface.MotionAxis))
+        ends = [_at({iface.MotionAxis: at, iface.NormalAxis: pos, across: s * far}) for s in (-1, 1)]
+    else:
+        a = math.radians(_start(iface))
+        out = App.Vector(math.cos(a), math.sin(a), 0)
+        if plane != "3D":
+            return Part.Vertex(out * iface.Radius.Value)
+        if iface.Kind == "Axial gap":
+            base = App.Vector(0, 0, iface.Position.Value)
+            ends = [base, base + out * far]
+        else:
+            ends = [out * iface.Radius.Value + App.Vector(0, 0, z) for z in (-far, far)]
+    edges = Part.makeLine(*ends).common(surface).Edges
+    return edges[0] if len(edges) == 1 else Part.makeCompound(edges)
+
+
+def cells(air_shape, surfaces):
+    """The pieces the slide surfaces cut air_shape into: solids for a 3D air, faces for a 2D one."""
+    tools = [p for s in surfaces for p in (s.Faces or s.Edges)]  # slice does not split by a compound tool
+    if not tools:
+        return [air_shape]
+    split = SplitAPI.slice(air_shape, tools, "Split")
+    return list(split.Solids if air_shape.Solids else split.Faces)
+
+
+def _measure(shape):
+    return shape.Volume if shape.Solids else shape.Area
+
+
+def cell_of(body_shape, cells):
+    """Index of the cell that holds body_shape (all but 1e-6 of its volume or area); None if it crosses a surface."""
+    whole = _measure(body_shape)
+    for k, cell in enumerate(cells):
+        if _measure(body_shape.common(cell)) >= (1 - 1e-6) * whole:
+            return k
+    return None
+
+
+def period(study):
+    """The motion period the Air Region gives, or None.
+
+    A Sector under 360°: rotation about Z by its angle. A Box with a Linear interface: translation by the Box size
+    along the motion axis. "start" is where the period begins: the start angle, or the Box minimum on that axis.
+    """
+    airs = objects.air_regions(study)
+    if not airs:
+        return None
+    air = airs[0]
+    if air.AirShape == "Sector":
+        start, angle = air.StartAngle.Value, air.EndAngle.Value - air.StartAngle.Value
+        return {"kind": "rotation", "angle": angle, "start": start} if angle < 360 - TOL else None
+    linear = [i for i in objects.sliding_interfaces(study) if i.Kind == "Linear"]
+    if air.AirShape != "Box" or not linear:
+        return None
+    axis = objects.AXES.index(linear[0].MotionAxis)
+    length = (air.Length, air.Width, air.Height)[axis].Value
+    vector = [0.0, 0.0, 0.0]
+    vector[axis] = length
+    return {"kind": "translation", "vector": vector, "start": air.Center[axis] - length / 2}

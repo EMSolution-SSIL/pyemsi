@@ -484,3 +484,115 @@ class AirTest(unittest.TestCase):
         objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
         with self.assertRaisesRegex(jobwriter.StudyError, "Sliding-motion meshing with an Air Region is not complete"):
             jobwriter.write_job(self.study)
+
+    def interface(self, plane, air_shape, air_props, kind, **props):
+        """A sliding Study in plane ("XY" or "3D") with an Air Region and one Sliding Interface, recomputed."""
+        if plane == "XY":
+            self.study_2d(App.Vector(0, 0, 1))
+        self.study.Movement = "Sliding motion"
+        objects.make_air_region(self.study, air_shape, **air_props)
+        iface = objects.make_sliding_interface(self.study, kind, **props)
+        self.doc.recompute()
+        return iface
+
+    def test_full_circle_interface_is_two_half_arcs(self):
+        iface = self.interface("XY", "Sector", {"OuterRadius": 100}, "Rotational", Radius=42.5)
+        self.assertEqual(len(iface.Shape.Edges), 2)
+        self.assertAlmostEqual(iface.Shape.Length, 2 * math.pi * 42.5)
+        ends = sorted((round(v.X, 6), round(v.Y, 6)) for e in iface.Shape.Edges for v in e.Vertexes)
+        self.assertEqual(ends, [(-42.5, 0), (-42.5, 0), (42.5, 0), (42.5, 0)])  # split at 0 and 180 degrees
+
+    def test_sector_interface_spans_the_sector(self):
+        air = {"OuterRadius": 100, "EndAngle": 45}
+        iface = self.interface("XY", "Sector", air, "Rotational", Radius=80.575)
+        self.assertEqual(len(iface.Shape.Edges), 1)
+        self.assertAlmostEqual(iface.Shape.Length, math.pi / 4 * 80.575)
+
+    def test_linear_interface_spans_box(self):
+        air = {"Center": App.Vector(40, 0, 0), "Length": 80, "Width": 40}
+        iface = self.interface("XY", "Box", air, "Linear", NormalAxis="Y", Position=11, MotionAxis="X")
+        (edge,) = iface.Shape.Edges
+        ends = sorted((round(v.X, 6), round(v.Y, 6), round(v.Z, 6)) for v in edge.Vertexes)
+        self.assertEqual(ends, [(0, 11, 0), (80, 11, 0)])
+
+    def test_cylinder_interface_3d_halves(self):
+        air = {"OuterRadius": 100, "Height": 100, "ZMin": -50}
+        iface = self.interface("3D", "Sector", air, "Rotational", Radius=42.5)
+        self.assertEqual(len(iface.Shape.Faces), 2)
+        self.assertAlmostEqual(iface.Shape.Area, 2 * math.pi * 42.5 * 100)
+        (air,) = objects.air_regions(self.study)
+        self.assertEqual(len(airshapes.cells(air.Shape, [iface.Shape])), 2)
+
+    def test_marker_2d_is_point_at_start_angle(self):
+        air = {"OuterRadius": 100, "StartAngle": 30, "EndAngle": 75}
+        iface = self.interface("XY", "Sector", air, "Rotational", Radius=42.5)
+        marker = airshapes.slide_marker(iface, iface.Shape, "XY")
+        self.assertIsInstance(marker, Part.Vertex)
+        a = math.radians(30)
+        self.assertEqual(
+            (marker.X, marker.Y, marker.Z), (pytest.approx(42.5 * math.cos(a)), pytest.approx(42.5 * math.sin(a)), 0)
+        )
+
+    def test_marker_2d_linear_is_the_start_end(self):
+        air = {"Center": App.Vector(40, 0, 0), "Length": 80, "Width": 40}
+        iface = self.interface("XY", "Box", air, "Linear", NormalAxis="Y", Position=11, MotionAxis="X")
+        marker = airshapes.slide_marker(iface, iface.Shape, "XY")
+        self.assertEqual((marker.X, marker.Y), (pytest.approx(0), pytest.approx(11)))
+
+    def test_marker_3d_is_vertical_generatrix(self):
+        air = {"OuterRadius": 100, "EndAngle": 90, "Height": 100, "ZMin": -50}
+        iface = self.interface("3D", "Sector", air, "Rotational", Radius=42.5)
+        marker = airshapes.slide_marker(iface, iface.Shape, "3D")
+        self.assertIsInstance(marker, Part.Edge)
+        ends = sorted((round(v.X, 6), round(v.Y, 6), round(v.Z, 6)) for v in marker.Vertexes)
+        self.assertEqual(ends, [(42.5, 0, -50), (42.5, 0, 50)])
+
+    def disc(self, outer, inner=0):
+        face = Part.Face(Part.Wire(Part.makeCircle(outer)))
+        return face.cut(Part.Face(Part.Wire(Part.makeCircle(inner)))) if inner else face
+
+    def motor_cells(self, radius=42.5):
+        iface = self.interface("XY", "Sector", {"OuterRadius": 100}, "Rotational", Radius=radius)
+        (air,) = objects.air_regions(self.study)
+        return airshapes.cells(air.Shape, [iface.Shape])
+
+    def test_cells_and_cell_of(self):
+        cells = self.motor_cells()
+        self.assertEqual(len(cells), 2)
+        inner = min(range(2), key=lambda k: cells[k].Area)
+        self.assertAlmostEqual(cells[inner].Area, math.pi * 42.5**2)
+        self.assertEqual(airshapes.cell_of(self.disc(40), cells), inner)
+        self.assertEqual(airshapes.cell_of(self.disc(80, 45), cells), 1 - inner)
+        self.assertIsNone(airshapes.cell_of(self.disc(44), cells))
+
+    def test_body_on_slide_surface_is_not_crossing(self):
+        cells = self.motor_cells()
+        inner = min(range(2), key=lambda k: cells[k].Area)
+        self.assertEqual(airshapes.cell_of(self.disc(42.5), cells), inner)
+        self.assertEqual(airshapes.cell_of(self.disc(80, 42.5), cells), 1 - inner)
+
+    def test_period_sector_and_linear(self):
+        self.interface("XY", "Sector", {"OuterRadius": 100, "EndAngle": 45}, "Rotational", Radius=42.5)
+        self.assertEqual(airshapes.period(self.study), {"kind": "rotation", "angle": 45.0, "start": 0.0})
+        (air,) = objects.air_regions(self.study)
+        air.EndAngle = 360
+        self.assertIsNone(airshapes.period(self.study))
+        air.AirShape, air.Center, air.Length, air.Width = "Box", App.Vector(40, 0, 0), 80, 40
+        self.assertIsNone(airshapes.period(self.study))  # a Rotational interface in a Box: no period
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.Kind, iface.NormalAxis, iface.MotionAxis = "Linear", "Y", "X"
+        self.assertEqual(airshapes.period(self.study), {"kind": "translation", "vector": [80, 0, 0], "start": 0.0})
+
+    def test_interface_gets_slide_mat_id(self):
+        self.sliding(["A"], ["M"])
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        iface = objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=15, MotionAxis="Y")
+        self.assertIs(iface.AirRegion, air)
+        self.assertEqual(objects.air_regions(self.study), [air])
+        self.assertEqual(objects.sliding_interfaces(self.study), [iface])
+        objects.update_ids(self.study)
+        self.assertEqual(self.study.MatIds[iface.Name], "5")
+        self.assertEqual([r[2] for r in objects.id_rows(self.study)][-1], "Sliding_Interface")
+        self.study.Movement = "No movement"
+        objects.update_ids(self.study)
+        self.assertNotIn(iface.Name, self.study.MatIds)
