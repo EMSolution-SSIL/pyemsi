@@ -193,17 +193,22 @@ def study_material_rows(study):
     volumes, _, _ = jobwriter.check(study)
     objects.update_ids(study)
     have = objects.assignment_of(study)
-    missing = [b.Label for b, _ in volumes if b.Name not in have or have[b.Name].LibraryMaterial is None]
+    air = {a.Name: a for a in objects.air_regions(study)}
+    owners = [(b.Name, b) for b, _ in volumes]  # (MatIds key, the item that holds its Material)
+    owners += [(k, air[k.partition("#")[0]]) for k in objects.air_keys(study)]
+    missing = [o.Label for _, o in owners if o.Name not in have or have[o.Name].LibraryMaterial is None]
     if missing:
-        raise StudyError("These bodies have no material from the Material Library: " + ", ".join(missing))
+        raise StudyError(
+            "These bodies have no material from the Material Library: " + ", ".join(dict.fromkeys(missing))
+        )
     rows = [
         (
-            int(study.MatIds[b.Name]),
-            objects.volume_name(b),
-            have[b.Name].Potential,
-            record_material(have[b.Name].LibraryMaterial),
+            int(study.MatIds[key]),
+            objects.key_name(study, key),
+            have[o.Name].Potential,
+            record_material(have[o.Name].LibraryMaterial),
         )
-        for b, _ in volumes
+        for key, o in owners
     ]
     return sorted(rows, key=lambda r: r[0])
 

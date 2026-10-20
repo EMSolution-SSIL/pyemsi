@@ -43,8 +43,9 @@ def check(study):
     included = {b.Name for b in bodies}
     excitation_items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: none yet
     surfaces = [(e, b, faces) for e in excitation_items for b, faces in objects.subs_by_body(e) if b.Name in included]
+    with_air = included | {a.Name for a in objects.air_regions(study)}  # the air takes Mesh Sizes like a body
     sized = [
-        (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in included
+        (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in with_air
     ]
     elements = [(s, b, [n for n in subs if n]) for s, b, subs in sized]
     elements = [el for el in elements if el[2]]
@@ -55,6 +56,18 @@ def check(study):
     default = study.MeshSizesGroup.DefaultMeshSize.Value
     volumes = [(b, size.get(b.Name, default)) for b in bodies]
     return volumes, surfaces, elements
+
+
+def air_size(study):
+    """The smallest whole-body Mesh Size on the Air Region, else the default size."""
+    air = {a.Name for a in objects.air_regions(study)}
+    sizes = [
+        s.Size.Value
+        for s in objects.mesh_sizes(study)
+        for b, subs in objects.subs_by_body(s)
+        if b.Name in air and "" in subs
+    ]
+    return min(sizes, default=study.MeshSizesGroup.DefaultMeshSize.Value)
 
 
 def transfinite_items(study, bodies):
@@ -150,6 +163,15 @@ def write_job(study):
         job["sizes"].append(
             {"name": item.Label, "size": item.Size.Value, "files": export_subs(folder, body, subs, f"size_{k}")}
         )
+    for air in objects.air_regions(study):  # validation allows one
+        rel = "geometry/air.brep"
+        global_shape(air).exportBrep(os.path.join(folder, rel))
+        job["air"] = {
+            "name": objects.key_name(study, air.Name),
+            "mat_id": int(study.MatIds[air.Name]),
+            "file": rel,
+            "size": air_size(study),
+        }
     structured, tf_edges = transfinite_items(study, [b for b, _ in volumes])
     if structured or tf_edges:
         tf_bodies = []

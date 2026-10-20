@@ -9,7 +9,16 @@ import sys
 
 import gmsh
 
-from meshcommon import JobError, apply_size_fields, apply_transfinite, main, run, transfinite_files, apply_recombine
+from meshcommon import (
+    JobError,
+    apply_size_fields,
+    apply_transfinite,
+    main,
+    run,
+    transfinite_files,
+    apply_recombine,
+    claim_air,
+)
 
 
 def _import(path, *dims):
@@ -40,6 +49,11 @@ def build(job, folder):
         start = len(inputs)
         inputs += _import(os.path.join(folder, b["file"]), 2)
         body_spans.append((start, len(inputs)))
+    air = job.get("air")
+    if air:  # after the bodies, so the fragment keeps the bodies' pieces whole
+        air_start = len(inputs)
+        inputs += _import(os.path.join(folder, air["file"]), 2)
+        air_span = (air_start, len(inputs))
     size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
     size_spans = []
     for _, path in size_files:
@@ -69,16 +83,22 @@ def build(job, folder):
             owner[t] = b["name"]
         body_faces[b["mat_id"]] = tags
 
-    for b in bodies:
+    placed = dict(owner)  # what a Mesh Size can merge with: the bodies and the air
+    if air:
+        air_tags = [t for dimtags in out_map[air_span[0] : air_span[1]] for d, t in dimtags if d == 2]
+        body_faces[air["mat_id"]] = claim_air(air_tags, owner)
+        placed.update(dict.fromkeys(body_faces[air["mat_id"]], air["name"]))
+
+    for b in bodies + ([air] if air else []):
         gmsh.model.addPhysicalGroup(2, body_faces[b["mat_id"]], b["mat_id"], name=b["name"])
 
     by_size = {}  # size -> {dim: [tags]}
-    for b in bodies:
+    for b in bodies + ([air] if air else []):
         by_size.setdefault(float(b["size"]), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
     for (z, path), (start, end) in zip(size_files, size_spans):
         for dimtags in out_map[start:end]:
             for d, t in dimtags:
-                if not _on_bodies(d, t, owner):
+                if not _on_bodies(d, t, placed):
                     raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
                 by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
     apply_size_fields(by_size)
@@ -92,7 +112,7 @@ def build(job, folder):
 
 def run_job(job_path):
     job = run(job_path, build, 2)
-    for item in job["bodies"]:
+    for item in job["bodies"] + ([job["air"]] if "air" in job else []):
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in (job.get("transfinite") or {}).get("bodies", []):
         print(f"Structured      {item['name']}")

@@ -79,7 +79,9 @@ class Mesher2DTest(unittest.TestCase):
     def body(self, id_, name, file, size=0.5):
         return {"mat_id": id_, "name": name, "file": "geometry/" + file, "size": size}
 
-    def run_job(self, bodies, sizes=(), version=4.1, options=None, mesh_file=None, transfinite=None, recombine=None):
+    def run_job(
+        self, bodies, sizes=(), version=4.1, options=None, mesh_file=None, transfinite=None, recombine=None, air=None
+    ):
         job = {
             "dimension": "2D",
             "model_name": "Model",
@@ -94,6 +96,8 @@ class Mesher2DTest(unittest.TestCase):
             job["transfinite"] = transfinite
         if recombine is not None:
             job["recombine"] = list(recombine)
+        if air is not None:
+            job["air"] = air
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -626,6 +630,51 @@ class Mesher2DTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.open_msh()
         self.assertEqual(set(self.element_counts(1)), {"Triangle 3"})
+
+    def air_area_and_nodes(self, group):
+        """Total triangle area of a physical group, and its triangle corner points."""
+        area, pts = 0.0, []
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, group):
+            _, tags, nodes = gmsh.model.mesh.getElements(2, e)
+            coords = {n: gmsh.model.mesh.getNode(n)[0] for n in nodes[0]}
+            for k in range(0, len(nodes[0]), 3):
+                (x1, y1, _), (x2, y2, _), (x3, y3, _) = (coords[n] for n in nodes[0][k : k + 3])
+                area += abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) / 2
+                pts += [(x1, y1), (x2, y2), (x3, y3)]
+        return area, pts
+
+    def test_air_fills_around_body_and_body_wins(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("air.brep"), [(-1, -1, 3, 3)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.5}
+        r = self.run_job([self.body(1, "Body", "vol_1.brep")], air=air)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("MAT_ID       2  Air", r.stdout)
+        self.open_msh()
+        groups = {t: gmsh.model.getPhysicalName(2, t) for _, t in gmsh.model.getPhysicalGroups(2)}
+        self.assertEqual(groups, {1: "Body", 2: "Air"})
+        self.assertGreater(self.triangles(1), 0)
+        self.assertGreater(self.triangles(2), 0)
+        area, pts = self.air_area_and_nodes(2)
+        self.assertAlmostEqual(area, 9 - 1, delta=1e-6)
+        eps = 1e-9
+        self.assertFalse([p for p in pts if eps < p[0] < 1 - eps and eps < p[1] < 1 - eps])
+
+    def test_air_covered_by_bodies_fails_cleanly(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("air.brep"), [(0, 0, 1, 1)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.5}
+        r = self.run_job([self.body(1, "Body", "vol_1.brep")], air=air)
+        self.assertEqual(self.last_error(r), "ERROR: the air region is fully covered by bodies")
+
+    def test_face_size_inside_the_air_merges(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
+        write_rects(self.geo("air.brep"), [(-1, -1, 3, 3)])
+        write_rects(self.geo("size_1.brep"), [(1, 0, 1, 1)])  # a face inside the air only
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.5}
+        sizes = [{"name": "Fine", "size": 0.2, "files": ["geometry/size_1.brep"]}]
+        r = self.run_job([self.body(1, "Body", "vol_1.brep")], sizes=sizes, air=air)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ import FreeCAD as App
 import Part
 import pytest
 
-from emsolution import airshapes, objects, validation
+from emsolution import airshapes, objects, validation, jobwriter, studymaterials
 
 from .materialdata import STEEL, record
 
@@ -307,3 +307,63 @@ class AirTest(unittest.TestCase):
         air.StartAngle, air.EndAngle = 90, 30
         text = f"Air Region {air.Label}: the end angle must be larger than the start angle (at most 360\N{DEGREE SIGN} more)."
         self.assertEqual(self.air_problems(), [text])
+
+    def air_job(self):
+        """Write the job of one 10 mm box inside an Air Region; returns the job."""
+        self.bodies("A")
+        objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_job_has_air_with_default_size(self):
+        job = self.air_job()
+        self.assertEqual(job["air"], {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 5.0})
+        self.assertTrue(os.path.exists(os.path.join(jobwriter.scratch_folder(self.study), "geometry", "air.brep")))
+
+    def test_job_without_air_has_no_air_key(self):
+        self.bodies("A")
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("air", json.load(fh))
+
+    def test_air_mesh_size_item_applies(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        objects.make_mesh_size(self.study, 2, [(air, "")])
+        self.assertEqual(jobwriter.air_size(self.study), 2.0)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["air"]["size"], 2.0)
+
+    def test_air_face_mesh_size_is_exported(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        objects.make_mesh_size(self.study, 1, [(air, "Face1")])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        (item,) = job["sizes"]
+        self.assertEqual((item["size"], len(item["files"])), (1.0, 1))
+        self.assertEqual(job["air"]["size"], 5.0)  # a face size does not change the air's size
+
+    def test_air_is_a_material_row_after_the_bodies(self):
+        (a,) = self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        air.Label = "Air gap"
+        steel = self.steel()
+        objects.assign(self.study, [a, air], steel, 1)
+        rows = studymaterials.study_material_rows(self.study)
+        self.assertEqual(
+            [(r[0], r[1], r[2], r[3].material_id) for r in rows],
+            [(1, "A", 1, "user:steel"), (2, "Air_gap", 1, "user:steel")],
+        )
+
+    def test_air_without_a_material_joins_the_missing_error(self):
+        (a,) = self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        air.Label = "Air gap"
+        objects.assign(self.study, [a], self.steel(), 0)
+        with self.assertRaisesRegex(jobwriter.StudyError, "no material from the Material Library: Air gap$"):
+            studymaterials.study_material_rows(self.study)

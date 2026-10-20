@@ -32,6 +32,15 @@ def apply_size_fields(by_size):
         gmsh.option.setNumber(opt, 0)
 
 
+def claim_air(air_tags, owner):
+    """The air's final top-dimension tags that no body owns, sorted. air_tags: all the air's final tags.
+    owner: {final tag: body name}. A body wins where it overlaps the air."""
+    tags = sorted(t for t in set(air_tags) if t not in owner)
+    if not tags:
+        raise JobError("the air region is fully covered by bodies")
+    return tags
+
+
 def _note(text):
     """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view."""
     print(f"NOTE: {text}", file=sys.stderr)
@@ -255,7 +264,7 @@ def _recombine_3d(job, body_tags, tf_curves):
     """Quad faces on the boundary of the chosen bodies, except where Gmsh could not build the pyramids."""
     chosen = set(job.get("recombine", []))
     structured = {b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])}
-    names = {v["mat_id"]: v["name"] for v in job["volumes"]}
+    names = {v["mat_id"]: v["name"] for v in job["volumes"] + ([job["air"]] if "air" in job else [])}
     mat_of = {t: m for m, tags in body_tags.items() for t in tags}
 
     def kind(vol):

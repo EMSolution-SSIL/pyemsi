@@ -86,6 +86,7 @@ class MesherTest(unittest.TestCase):
         mesh_file=None,
         transfinite=None,
         recombine=None,
+        air=None,
     ):
         job = {
             "model_name": "Model",
@@ -101,6 +102,8 @@ class MesherTest(unittest.TestCase):
             job["transfinite"] = transfinite
         if recombine is not None:
             job["recombine"] = recombine
+        if air is not None:
+            job["air"] = air
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -579,6 +582,46 @@ class MesherTest(unittest.TestCase):
         r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.exists(os.path.join(self.dir, "pre_geom.msh")))
+
+    def test_air_fills_around_box(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("air.brep"), -1, -1, -1, 3, 3, 3)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.8}
+        r = self.run_job([self.vol(1, "Body", "vol_1.brep", size=0.8)], air=air)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("MAT_ID       2  Air", r.stdout)
+        self.open_msh()
+        groups = {t: gmsh.model.getPhysicalName(3, t) for _, t in gmsh.model.getPhysicalGroups(3)}
+        self.assertEqual(groups, {1: "Body", 2: "Air"})
+        volume = 0.0
+        for e in gmsh.model.getEntitiesForPhysicalGroup(3, 2):
+            volume += sum(gmsh.model.mesh.getElementQualities(gmsh.model.mesh.getElements(3, e)[1][0], "volume"))
+        self.assertAlmostEqual(volume, 27 - 1, delta=1e-6)
+
+    def test_air_covered_by_bodies_fails_cleanly(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("air.brep"), 0, 0, 0, 1, 1, 1)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.8}
+        r = self.run_job([self.vol(1, "Body", "vol_1.brep")], air=air)
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(r.stderr.strip().splitlines()[-1], "ERROR: the air region is fully covered by bodies")
+
+    def test_recombined_body_inside_air_meshes(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("air.brep"), -1, -1, -1, 3, 3, 3)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.8}
+        r = self.run_job([self.vol(1, "Body", "vol_1.brep", size=0.8)], recombine=[1], air=air)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("faces between Air and Body stay triangles", r.stderr)
+
+    def test_face_size_on_the_air_merges(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("air.brep"), -1, -1, -1, 3, 3, 3)
+        write_rect(self.geo("size_1.brep"), -1, -1, -1, 3, 3)  # the air's bottom face
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.8}
+        sizes = [{"name": "Fine", "size": 0.4, "files": ["geometry/size_1.brep"]}]
+        r = self.run_job([self.vol(1, "Body", "vol_1.brep", size=0.8)], sizes=sizes, air=air)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":

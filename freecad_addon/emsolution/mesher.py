@@ -9,7 +9,16 @@ import sys
 
 import gmsh
 
-from meshcommon import JobError, apply_size_fields, apply_transfinite, main, run, transfinite_files, apply_recombine
+from meshcommon import (
+    JobError,
+    apply_size_fields,
+    apply_transfinite,
+    main,
+    run,
+    transfinite_files,
+    apply_recombine,
+    claim_air,
+)
 
 
 def _import_one(path, *dims):
@@ -34,6 +43,10 @@ def build(job, folder):
         raise JobError("job has no volumes")
     pieces = [_import_solids(os.path.join(folder, v["file"])) for v in vols]
     inputs = [t for p in pieces for t in p]
+    air = job.get("air")
+    if air:  # after the bodies, so the fragment keeps the bodies' pieces whole
+        air_pieces = _import_solids(os.path.join(folder, air["file"]))
+        inputs += air_pieces
     surf_files = [(s, os.path.join(folder, f)) for s in surfs for f in s["files"]]
     inputs += [_import_one(path, 2) for _, path in surf_files]
     size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
@@ -58,6 +71,10 @@ def build(job, folder):
                 raise JobError(f"bodies {owner[t]} and {v['name']} overlap")
             owner[t] = v["name"]
         body_vols[v["mat_id"]] = tags
+    if air:
+        air_tags = [t for dimtags in out_map[start : start + len(air_pieces)] for d, t in dimtags if d == 3]
+        start += len(air_pieces)
+        body_vols[air["mat_id"]] = claim_air(air_tags, owner)
     rest = out_map[start:]  # surface, size and transfinite files, one entity each
 
     surf_tags = {s["smat_id"]: [] for s in surfs}
@@ -74,13 +91,13 @@ def build(job, folder):
                 f"excitation surface {s['name']} does not lie on its body (face did not merge with the body boundary)"
             )
 
-    for v in vols:
+    for v in vols + ([air] if air else []):
         gmsh.model.addPhysicalGroup(3, body_vols[v["mat_id"]], v["mat_id"], name=v["name"])
     for s in surfs:
         gmsh.model.addPhysicalGroup(2, sorted(set(surf_tags[s["smat_id"]])), s["smat_id"], name=s["name"])
 
     by_size = {}  # size -> {dim: [tags]}
-    for v in vols:
+    for v in vols + ([air] if air else []):
         by_size.setdefault(float(v["size"]), {}).setdefault(3, []).extend(body_vols[v["mat_id"]])
     first = len(surf_files)
     for (z, path), dimtags in zip(size_files, rest[first:]):
@@ -97,7 +114,7 @@ def build(job, folder):
 
 def run_job(job_path):
     job = run(job_path, build, 3)
-    for item in job["volumes"]:
+    for item in job["volumes"] + ([job["air"]] if "air" in job else []):
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in job["surfaces"]:
         print(f"SMAT_ID {item['smat_id']:>6}  {item['name']}")
