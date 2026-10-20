@@ -49,6 +49,11 @@ def _boundary(dim, tag):
     return list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary([(dim, tag)], combined=False, oriented=False)))
 
 
+def _at(dim, tag):
+    """Where an entity is, for messages: Gmsh tags mean nothing to the user."""
+    return "({:g}, {:g}, {:g})".format(*(round(x, 6) + 0.0 for x in gmsh.model.occ.getCenterOfMass(dim, tag)))
+
+
 def _share(n, lengths):
     """n >= len(lengths) elements over the pieces of a split edge, by length: each at least 1, the total stays n."""
     raw = [n * x / sum(lengths) for x in lengths]
@@ -86,7 +91,7 @@ def _loop(face, curves, ends, at, start, body):
         c = next((x for x in at[p] if x != c), c)
     if p != start or len(loop) != len(curves):
         raise JobError(
-            f"structured body {body}: face {face} boundary is not one loop (a hole?); it cannot be structured"
+            f"structured body {body}: face at {_at(2, face)} boundary is not one loop (a hole?); it cannot be structured"
         )
     return loop
 
@@ -95,10 +100,12 @@ def _set_face(face, chosen, curve_set, body):
     """Check one face of a structured body (R4, R6) and make it transfinite. curve_set: curve -> (nodes, ...)."""
     curves = _boundary(2, face)
     if any(c not in curve_set for c in curves):
-        raise JobError(f"structured body {body}: face {face} has edges without Transfinite Edges")
+        raise JobError(f"structured body {body}: face at {_at(2, face)} has edges without Transfinite Edges")
     ends = {c: _boundary(1, c) for c in curves}
     if any(len(e) != 2 for e in ends.values()):
-        raise JobError(f"structured body {body}: face {face} has a closed edge (circle?); it cannot be structured")
+        raise JobError(
+            f"structured body {body}: face at {_at(2, face)} has a closed edge (circle?); it cannot be structured"
+        )
     at = {}  # point -> the curves meeting there
     for c in curves:
         for p in ends[c]:
@@ -110,12 +117,12 @@ def _set_face(face, chosen, curve_set, body):
         corners = {p for p in points if len(at[p]) == 2 and _turns(p, *at[p])}
         if len(corners) in (3, 4):
             _note(
-                f"structured body {body}: face {face} has {len(points)} boundary points;"
+                f"structured body {body}: face at {_at(2, face)} has {len(points)} boundary points;"
                 f" using the {len(corners)} where the boundary turns as corners"
             )
     if len(corners) not in (3, 4):
         raise JobError(
-            f"structured body {body}: face {face} has {len(points)} boundary points and {len(corners)} corners"
+            f"structured body {body}: face at {_at(2, face)} has {len(points)} boundary points and {len(corners)} corners"
             " on it; it needs 3 or 4 (choose Corners in the Transfinite Body)"
         )
     for start in sorted(corners):  # 3 corners: Gmsh collapses the first one; its two sides must match
@@ -129,12 +136,12 @@ def _set_face(face, chosen, curve_set, body):
             break
     else:
         raise JobError(
-            f"structured body {body}: face {face} has 3 corners and its sides have {'/'.join(map(str, sorted(sides)))}"
+            f"structured body {body}: face at {_at(2, face)} has 3 corners and its sides have {'/'.join(map(str, sorted(sides)))}"
             " elements; two of them must match"
         )
     if len(sides) == 4 and (sides[0] != sides[2] or sides[1] != sides[3]):
         raise JobError(
-            f"structured body {body}: face {face} opposite sides have {sides[0]}/{sides[2]} and"
+            f"structured body {body}: face at {_at(2, face)} opposite sides have {sides[0]}/{sides[2]} and"
             f" {sides[1]}/{sides[3]} elements; they must match"
         )
     gmsh.model.mesh.setTransfiniteSurface(face, cornerTags=[p for _, p in loop if p in corners])
@@ -197,9 +204,12 @@ def apply_transfinite(job, mapped, body_tags, dim):
         for v in tags if dim == 3 else []:
             vfaces = _boundary(3, v)
             if len(vfaces) not in (5, 6):
+                where = "volume"
+                if len(tags) > 1:  # name the piece of a sliced body by where it is
+                    where = f"piece at {_at(3, v)}"
                 raise JobError(
-                    f"structured body {b['name']}: volume has {len(vfaces)} faces, needs 5 or 6"
-                    " (split by a touching body?)"
+                    f"structured body {b['name']}: {where} has {len(vfaces)} faces, needs 5 or 6"
+                    " (split by a touching body, or slice it further)"
                 )
             faces += vfaces
         for f in dict.fromkeys(faces):

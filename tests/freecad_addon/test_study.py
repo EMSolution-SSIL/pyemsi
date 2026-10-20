@@ -9,6 +9,8 @@ import unittest
 
 import FreeCAD as App
 import Part
+import gmsh
+from BOPTools import SplitAPI
 
 from emsolution import geometry, jobwriter, objects
 
@@ -484,11 +486,9 @@ class StudyTest(unittest.TestCase):
         self.study.MeshSizesGroup.MaxSize = 2.0
         self.assertStudyError("larger than the maximum")
 
-    def test_check_not_one_solid(self):
-        two = self.doc.addObject("Part::Feature", "Two")
-        two.Shape = Part.makeCompound([Part.makeBox(1, 1, 1), Part.makeBox(1, 1, 1, App.Vector(5, 0, 0))])
-        self.include(two)
-        self.assertStudyError("exactly one solid")
+    def test_check_no_solid(self):
+        self.include(self.face("Sheet"))
+        self.assertStudyError("at least one solid")
 
     def test_check_zero_size(self):
         a = self.box("A")
@@ -875,7 +875,7 @@ class StudyTest(unittest.TestCase):
         part.Placement = App.Placement()
         self.doc.recompute()
         self.assertEqual(geometry.collect([a], "2D"), ([a], []))
-        self.assertIn("exactly one solid", geometry.collect([b], "3D")[1][0])
+        self.assertIn("at least one solid", geometry.collect([b], "3D")[1][0])
         self.assertIn("without solids", geometry.collect([self.box("Solid")], "2D")[1][0])
 
     def test_2d_faces_may_be_in_the_zx_plane_but_not_in_both(self):
@@ -1089,6 +1089,156 @@ print('RESTORE PASS')
         self.study.MainMode, self.study.MainObjects = "Manual", [self.box("A")]
         self.study.MainMode = "Container"
         self.assertStudyError("Selected container is missing")
+
+    # --- Bodies of several solids -------------------------------------------
+
+    def sliced_coil(self, name="Coil", two_d=False):
+        """An L of three 10 mm cubes (or squares at z = 0), one body: sliced like Part Slice, so the pieces
+        share their faces (edges)."""
+        if two_d:
+            ell = Part.makePlane(20, 10).fuse(Part.makePlane(10, 20)).removeSplitter()
+        else:
+            ell = Part.makeBox(20, 10, 10).fuse(Part.makeBox(10, 20, 10)).removeSplitter()
+        cuts = [
+            [(10, -5, -5), (10, 25, -5), (10, 25, 15), (10, -5, 15)],
+            [(-5, 10, -5), (25, 10, -5), (25, 10, 15), (-5, 10, 15)],
+        ]
+        tools = [Part.Face(Part.makePolygon([App.Vector(*p) for p in c + c[:1]])) for c in cuts]
+        obj = self.doc.addObject("Part::Feature", name)
+        obj.Shape = SplitAPI.slice(ell, tools, "Split")
+        self.doc.recompute()
+        return obj
+
+    def face_at(self, body, x, y, z):
+        """Name of the face of body whose center is at (x, y, z)."""
+        for i, f in enumerate(body.Shape.Faces, 1):
+            if f.CenterOfMass.distanceToPoint(App.Vector(x, y, z)) < 1e-6:
+                return f"Face{i}"
+        raise AssertionError(f"no face at {(x, y, z)}")
+
+    def run_mesher(self):
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh), r
+
+    def test_body_of_three_solids_is_one_mat_id(self):
+        coil = self.sliced_coil()
+        self.assertEqual(len(coil.Shape.Solids), 3)
+        self.include(coil, self.box("Iron", 40))
+        job, r = self.run_mesher()
+        self.assertEqual(self.study.MatIds, {"Coil": "1", "Iron": "2"})
+        self.assertEqual([v["name"] for v in job["volumes"]], ["Coil", "Iron"])
+        self.assertIn("MAT_ID       1  Coil", r.stdout)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(os.path.join(self.tmp.name, "pre_geom.msh"))
+            self.assertEqual(sorted(t for d, t in gmsh.model.getPhysicalGroups() if d == 3), [1, 2])
+            self.assertEqual(len(gmsh.model.getEntitiesForPhysicalGroup(3, 1)), 3, "every piece")
+        finally:
+            gmsh.finalize()
+
+    def test_transfinite_body_of_three_solids_meshes_to_hexahedra(self):
+        coil = self.sliced_coil()
+        self.include(coil)
+        objects.make_transfinite_body(self.study, [coil])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(coil))
+        objects.make_recombine(self.study, [coil])
+        self.run_mesher()
+        msh = os.path.join(self.tmp.name, "pre_geom.msh")
+        self.assertEqual(msh_element_types(msh, 3), {5}, "only hexahedra, also on the faces between the pieces")
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(msh)
+            hexes = sum(
+                len(gmsh.model.mesh.getElements(3, v)[1][0]) for v in gmsh.model.getEntitiesForPhysicalGroup(3, 1)
+            )
+            self.assertEqual(hexes, 3 * 27)
+        finally:
+            gmsh.finalize()
+
+    def test_unsliced_piece_of_a_transfinite_body_is_named(self):
+        ell = Part.makeBox(20, 10, 10).fuse(Part.makeBox(10, 20, 10)).removeSplitter()
+        body = self.doc.addObject("Part::Feature", "Coil")
+        body.Shape = ell.generalFuse([Part.makeBox(10, 10, 10, App.Vector(20, 0, 0))])[0]  # 8 faces + 6 faces
+        self.doc.recompute()
+        self.include(body)
+        objects.make_transfinite_body(self.study, [body])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(body))
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("structured body Coil: piece at (", r.stderr)
+        self.assertIn("has 8 faces, needs 5 or 6", r.stderr)
+
+    def test_excitation_faces_on_two_pieces_are_one_smat_id(self):
+        coil = self.sliced_coil()
+        self.include(coil)
+        ends = [(coil, self.face_at(coil, 20, 5, 5)), (coil, self.face_at(coil, 5, 20, 5))]
+        objects.make_excitation(self.study, "T", ends)
+        job, r = self.run_mesher()
+        (surface,) = job["surfaces"]
+        self.assertEqual((surface["name"], len(surface["files"])), ("T_Coil", 2))
+        self.assertEqual(len(self.study.SmatIds), 1)
+        self.assertIn("SMAT_ID", r.stdout)
+
+    def test_transfinite_compound_of_touching_solids_is_refused(self):
+        coil = self.doc.addObject("Part::Feature", "Coil")
+        coil.Shape = Part.makeCompound([Part.makeBox(10, 10, 10), Part.makeBox(10, 10, 10, App.Vector(10, 0, 0))])
+        self.include(coil)
+        objects.make_transfinite_body(self.study, [coil])
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(coil))
+        self.assertStudyError("touch without sharing faces. Make it with Part Slice or Boolean Fragments")
+
+    def test_2d_body_of_three_faces_is_one_mat_id_and_meshes_to_quads(self):
+        coil = self.sliced_coil(two_d=True)
+        self.assertEqual((len(coil.Shape.Faces), len(coil.Shape.Solids)), (3, 0))
+        study = self.make_2d_study(coil)
+        objects.make_transfinite_body(study, [coil])
+        objects.make_transfinite_edges(study, 3, self.all_edges(coil))
+        objects.make_recombine(study, [coil])
+        path = jobwriter.write_job(study)
+        r = subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(study.MatIds, {"Coil": "1"})
+        msh = os.path.join(self.tmp.name, "pre_geom2D.msh")
+        self.assertEqual(msh_element_types(msh, 2), {3}, "only quadrangles, also along the edges between the pieces")
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(msh)
+            faces = gmsh.model.getEntitiesForPhysicalGroup(2, 1)
+            self.assertEqual(len(faces), 3, "every piece")
+            self.assertEqual(sum(len(gmsh.model.mesh.getElements(2, f)[1][0]) for f in faces), 3 * 9)
+        finally:
+            gmsh.finalize()
+
+    def test_2d_unsliced_piece_of_a_transfinite_body_is_named(self):
+        ell = Part.makePlane(20, 10).fuse(Part.makePlane(10, 20)).removeSplitter()
+        body = self.doc.addObject("Part::Feature", "Coil")
+        body.Shape = ell.generalFuse([Part.makePlane(10, 10, App.Vector(20, 0, 0))])[0]  # 6 corners + 4 corners
+        self.doc.recompute()
+        study = self.make_2d_study(body)
+        objects.make_transfinite_body(study, [body])
+        objects.make_transfinite_edges(study, 3, self.all_edges(body))
+        path = jobwriter.write_job(study)
+        r = subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("structured body Coil: face at (", r.stderr)
+        self.assertIn("it needs 3 or 4", r.stderr)
+
+    def test_2d_transfinite_compound_of_touching_faces_is_refused(self):
+        coil = self.doc.addObject("Part::Feature", "Coil")
+        coil.Shape = Part.makeCompound([Part.makePlane(10, 10), Part.makePlane(10, 10, App.Vector(10, 0, 0))])
+        study = self.make_2d_study(coil)
+        objects.make_transfinite_body(study, [coil])
+        objects.make_transfinite_edges(study, 3, self.all_edges(coil))
+        with self.assertRaises(jobwriter.StudyError) as ctx:
+            jobwriter.check(study)
+        self.assertIn("the faces of Coil touch without sharing edges. Make it with Part Slice", str(ctx.exception))
 
 
 if __name__ == "__main__":

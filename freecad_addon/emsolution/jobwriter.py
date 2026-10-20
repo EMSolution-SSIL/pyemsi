@@ -89,6 +89,13 @@ def check(study):
     return volumes, surfaces, elements
 
 
+def _loose_pieces(shape):
+    """True when two vertices of shape coincide: its solids or faces touch but are not joined (a plain
+    compound), so every shared edge appears twice. A Slice or Boolean Fragments result shares them once."""
+    points = [v.Point for v in shape.Vertexes]
+    return any(p.distanceToPoint(q) < 1e-6 for i, p in enumerate(points) for q in points[i + 1 :])
+
+
 def transfinite_items(study, bodies):
     """R1 to R3 for the Study's transfinite items on bodies. Returns (structured, edges):
     structured = [(body, [corner vertex names])] in tree order
@@ -124,7 +131,13 @@ def transfinite_items(study, bodies):
                     raise StudyError(f"{b.Label}.{s} is in Transfinite Edges {seen[(b.Name, s)].Label} and {e.Label}.")
                 seen[(b.Name, s)] = e
             edges.append((e, b, list(subs)))
+    pieces, shared = ("faces", "edges") if study.Dimension == "2D" else ("solids", "faces")
     for b, _ in structured:
+        if _loose_pieces(b.Shape):
+            raise StudyError(
+                f"Transfinite Body {owner[b.Name].Label}: the {pieces} of {b.Label} touch without sharing {shared}."
+                " Make it with Part Slice or Boolean Fragments instead of a compound."
+            )
         missing = [f"Edge{i}" for i in range(1, len(b.Shape.Edges) + 1) if (b.Name, f"Edge{i}") not in seen]
         if missing:
             raise StudyError(

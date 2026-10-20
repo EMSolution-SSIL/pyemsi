@@ -72,8 +72,8 @@ def collect(roots, dimension):
             continue
         shape = global_shape(obj)
         if dimension == "3D":
-            if len(shape.Solids) != 1:
-                errors.append(f"{obj.Label}: 3D geometry must contain exactly one solid.")
+            if not shape.Solids:
+                errors.append(f"{obj.Label}: 3D geometry must contain at least one solid.")
                 continue
         else:
             if shape.Solids or not shape.Faces:

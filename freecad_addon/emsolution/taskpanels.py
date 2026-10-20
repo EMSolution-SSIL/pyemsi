@@ -589,9 +589,10 @@ class StudyView:
             if study.Dimension == "2D":
                 number = sum(len(obj.Shape.Faces) for obj in resolved)
                 text = f"Included: {number} face region{'s' if number != 1 else ''} "
-                text += f"({len(resolved)} object{'s' if len(resolved) != 1 else ''})"
             else:
-                text = f"Included: {len(resolved)} solid object{'s' if len(resolved) != 1 else ''}"
+                number = sum(len(obj.Shape.Solids) for obj in resolved)
+                text = f"Included: {number} solid{'s' if number != 1 else ''} "
+            text += f"({len(resolved)} object{'s' if len(resolved) != 1 else ''})"
             count.setText(text)
         _, _, errors = geometry.setup(study)
         if not errors and not geometry.export_unavailable(study):

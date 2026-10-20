@@ -19,12 +19,21 @@ def _import_one(path, *dims):
     return tags[0]
 
 
+def _import_solids(path):
+    """A body file holds one or more solids, e.g. the pieces of a Part Slice."""
+    tags = gmsh.model.occ.importShapes(path, highestDimOnly=True)
+    if not tags or any(d != 3 for d, _ in tags):
+        raise JobError(f"{os.path.basename(path)}: expected 3D entities, got {tags}")
+    return tags
+
+
 def build(job, folder):
     """Import, fragment, check, tag and size the model. Gmsh must be initialized."""
     vols, surfs = job["volumes"], job["surfaces"]
     if not vols:
         raise JobError("job has no volumes")
-    inputs = [_import_one(os.path.join(folder, v["file"]), 3) for v in vols]
+    pieces = [_import_solids(os.path.join(folder, v["file"])) for v in vols]
+    inputs = [t for p in pieces for t in p]
     surf_files = [(s, os.path.join(folder, f)) for s in surfs for f in s["files"]]
     inputs += [_import_one(path, 2) for _, path in surf_files]
     size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
@@ -38,18 +47,21 @@ def build(job, folder):
         _, out_map = gmsh.model.occ.fragment(inputs[:1], inputs[1:])
     gmsh.model.occ.synchronize()
 
-    body_vols = {}  # MAT_ID -> list of final 3D tags
+    body_vols = {}  # MAT_ID -> list of final 3D tags of all its pieces
     owner = {}  # final 3D tag -> body name
-    for v, dimtags in zip(vols, out_map):
-        tags = [t for d, t in dimtags if d == 3]
+    start = 0
+    for v, p in zip(vols, pieces):
+        tags = list(dict.fromkeys(t for dimtags in out_map[start : start + len(p)] for d, t in dimtags if d == 3))
+        start += len(p)
         for t in tags:
-            if t in owner:
+            if owner.get(t, v["name"]) != v["name"]:  # pieces of one body may share a volume
                 raise JobError(f"bodies {owner[t]} and {v['name']} overlap")
             owner[t] = v["name"]
         body_vols[v["mat_id"]] = tags
+    rest = out_map[start:]  # surface, size and transfinite files, one entity each
 
     surf_tags = {s["smat_id"]: [] for s in surfs}
-    for (s, _), dimtags in zip(surf_files, out_map[len(vols) :]):
+    for (s, _), dimtags in zip(surf_files, rest):
         surf_tags[s["smat_id"]] += [t for d, t in dimtags if d == 2]
 
     for s in surfs:
@@ -70,14 +82,14 @@ def build(job, folder):
     by_size = {}  # size -> {dim: [tags]}
     for v in vols:
         by_size.setdefault(float(v["size"]), {}).setdefault(3, []).extend(body_vols[v["mat_id"]])
-    first = len(vols) + len(surf_files)
-    for (z, path), dimtags in zip(size_files, out_map[first:]):
+    first = len(surf_files)
+    for (z, path), dimtags in zip(size_files, rest[first:]):
         for d, t in dimtags:
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
                 raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
             by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
     apply_size_fields(by_size)
-    tf_maps = out_map[first + len(size_files) :]
+    tf_maps = rest[first + len(size_files) :]
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
     tf_curves = apply_transfinite(job, mapped, body_vols, 3)
     apply_recombine(job, body_vols, 3, tf_curves)
