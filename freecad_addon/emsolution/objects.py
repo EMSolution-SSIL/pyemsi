@@ -588,10 +588,10 @@ def item_refs(item):
 def material_rows(study):
     """Rows for the Materials panel: (body, refs, [body, material, MAT_ID, POTENTIAL]).
 
-    Every main-geometry body, then bodies outside it that still have an assignment.
+    Every main-geometry body and Air Region, then bodies outside it that still have an assignment.
     """
     have = assignment_of(study)
-    main = _main_bodies(study)
+    main = assignable(study)
     inside = {b.Name for b in main}
     rows = []
     for b in main + [m.Body for m in have.values() if m.Body.Name not in inside]:
@@ -647,9 +647,9 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Main-geometry bodies without an assignment."""
+    """Main-geometry bodies and Air Regions without an assignment."""
     have = assignment_of(study)
-    return [b for b in _main_bodies(study) if b.Name not in have]
+    return [b for b in assignable(study) if b.Name not in have]
 
 
 def _main_bodies(study):
@@ -658,14 +658,19 @@ def _main_bodies(study):
     return geometry.region(study, "Main")[0]
 
 
+def assignable(study):
+    """What can get a Material: the main-geometry bodies, then the Air Regions."""
+    return _main_bodies(study) + air_regions(study)
+
+
 NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: a Part, a Group or Manual selection in the Study panel."
 
 
 def assignment_problem(study, bodies):
     """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
-    main = {b.Name for b in _main_bodies(study)}
-    if not main:
+    if not _main_bodies(study):
         return NO_MAIN_GEOMETRY
+    main = {b.Name for b in assignable(study)}
     outside = list(dict.fromkeys(b.Label for b in bodies if b.Name not in main))
     if outside:
         return (
@@ -676,8 +681,21 @@ def assignment_problem(study, bodies):
     return ""
 
 
+def air_keys(study):
+    """ID table keys of the Air Regions: one each, or a fixed and a moving half when the Study slides."""
+    if study.Movement == "Sliding motion":
+        return [f"{a.Name}#{half}" for a in air_regions(study) for half in ("fixed", "moving")]
+    return [a.Name for a in air_regions(study)]
+
+
 def volume_keys(study):
-    return [b.Name for b in _main_bodies(study)]
+    return [b.Name for b in _main_bodies(study)] + air_keys(study)
+
+
+def key_name(study, key):
+    """The volume name of a volume key: a body's or Air Region's name, with _fixed or _moving for an air half."""
+    name, _, half = key.partition("#")
+    return volume_name(study.Document.getObject(name)) + (f"_{half}" if half else "")
 
 
 def surface_keys(study):
@@ -729,7 +747,7 @@ def update_ids(study):
 def _owner(study, key):
     """The FreeCAD object IDs behind an ID table key. A new object that reuses a deleted one's Name has
     another object ID, so it never inherits the old MAT_ID; undo and reload keep the object ID."""
-    found = [study.Document.getObject(n) for n in key.split("|")]
+    found = [study.Document.getObject(n) for n in key.split("#")[0].split("|")]
     return ",".join(str(o.ID) for o in found) if all(found) else ""
 
 
@@ -767,8 +785,7 @@ def id_rows(study):
     rows = []
     for name in volume_keys(study):
         if name in study.MatIds:
-            body = study.Document.getObject(name)
-            rows.append(("MatIds", name, volume_name(body), int(study.MatIds[name])))
+            rows.append(("MatIds", name, key_name(study, name), int(study.MatIds[name])))
     for e in excitations(study):
         for b, _ in subs_by_body(e):
             key = f"{e.Name}|{b.Name}"

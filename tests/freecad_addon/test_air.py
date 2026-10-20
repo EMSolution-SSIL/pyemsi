@@ -1,5 +1,6 @@
 """Air Region item and its shapes. Run from the repo root: pixi run pytest tests/freecad_addon/test_air.py"""
 
+import json
 import math
 import os
 import tempfile
@@ -10,6 +11,8 @@ import Part
 import pytest
 
 from emsolution import airshapes, objects
+
+from .materialdata import STEEL, record
 
 
 class AirTest(unittest.TestCase):
@@ -170,3 +173,62 @@ class AirTest(unittest.TestCase):
         center, length, width, height = airshapes.fit_box([body], 10, "ZX")
         self.assertEqual((center.x, center.y, center.z), tuple(pytest.approx(v) for v in (5, 0, 5)))
         self.assertEqual((length, width, height), tuple(pytest.approx(v) for v in (12, 12, 0)))
+
+    def bodies(self, *names):
+        boxes = [self.doc.addObject("Part::Box", n) for n in names]
+        self.study.MainObjects = boxes
+        self.doc.recompute()
+        return boxes
+
+    def steel(self):
+        return objects.make_library_material(self.study, json.dumps(record("user:steel", "Steel", "Steel", STEEL)))
+
+    def test_air_gets_mat_id_after_bodies(self):
+        self.bodies("A", "B")
+        air = objects.make_air_region(self.study, "Box")
+        objects.update_ids(self.study)
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2", air.Name: "3"})
+        self.assertEqual(objects.id_rows(self.study)[-1][2], "Air")
+
+    def test_air_id_survives_rename_and_is_not_reused_after_delete(self):
+        self.bodies("A", "B")
+        air = objects.make_air_region(self.study, "Box")
+        objects.update_ids(self.study)
+        air.Label = "Surroundings"
+        objects.update_ids(self.study)
+        self.assertEqual(self.study.MatIds[air.Name], "3")
+        self.assertEqual(objects.id_rows(self.study)[-1][2], "Surroundings")
+        self.doc.removeObject(air.Name)
+        c = self.doc.addObject("Part::Box", "C")
+        self.study.MainObjects = [*self.study.MainObjects, c]
+        self.doc.recompute()
+        objects.update_ids(self.study)
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2", "C": "4"})
+
+    def test_air_region_can_get_a_material(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Box")
+        self.assertEqual(objects.assignment_problem(self.study, [air]), "")
+        objects.assign(self.study, [air], self.steel(), 0)
+        objects.update_ids(self.study)
+        rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
+        self.assertEqual(rows["Air"][1:3], ["Steel", self.study.MatIds[air.Name]])
+
+    def test_missing_air_material_is_warned(self):
+        (a,) = self.bodies("A")
+        air = objects.make_air_region(self.study, "Box")
+        self.assertEqual(objects.bodies_without_material(self.study), [a, air])
+        objects.assign(self.study, [air], self.steel(), 0)
+        self.assertEqual(objects.bodies_without_material(self.study), [a])
+
+    def test_air_keys_and_key_names(self):
+        (a,) = self.bodies("A")
+        air = objects.make_air_region(self.study, "Box")
+        air.Label = "Air gap"
+        self.assertEqual(objects.air_keys(self.study), [air.Name])
+        self.assertEqual(objects.key_name(self.study, a.Name), "A")
+        self.assertEqual(objects.key_name(self.study, air.Name), "Air_gap")
+        self.study.Movement = "Sliding motion"
+        self.assertEqual(objects.air_keys(self.study), [f"{air.Name}#fixed", f"{air.Name}#moving"])
+        self.assertEqual(objects.key_name(self.study, f"{air.Name}#fixed"), "Air_gap_fixed")
+        self.assertEqual(objects.key_name(self.study, f"{air.Name}#moving"), "Air_gap_moving")
