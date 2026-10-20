@@ -164,7 +164,7 @@ def _air(study, bodies, r):
     if len(airs) > 1:
         r.error("Only one Air Region per Study: " + ", ".join(a.Label for a in airs) + ". Delete the others.", airs[1])
     air, plane = airs[0], airshapes.study_plane(study)
-    prefix = f"Air Region {air.Label}: "
+    prefix = f"Air Region {objects.display_name(air)}: "
     off_axis = air.AirShape == "Box" and air.Center.x - air.Length.Value / 2 < -airshapes.TOL
     if plane == "ZX" and (air.AirShape == "Custom" or off_axis):
         r.error(prefix + "in a ZX (axisymmetric) Study use a half disc or a rectangle starting on the Z axis.", air)
@@ -179,7 +179,7 @@ def _air(study, bodies, r):
         body_shape = geometry.global_shape(body)
         measure = body_shape.Volume if plane == "3D" else body_shape.Area
         if airshapes.outside(body_shape, shape, plane) > 1e-6 * measure:
-            r.error(f"{body.Label} is not fully inside Air Region {air.Label}.", air, [(body, "")])
+            r.error(f"{body.Label} is not fully inside Air Region {objects.display_name(air)}.", air, [(body, "")])
 
 
 def _transfinite(study, bodies, r):
@@ -251,7 +251,8 @@ def _materials(study, r):
     bodies = objects.bodies_without_material(study)
     if bodies:
         r.warning(
-            "No material (the input file needs one for every body): " + ", ".join(b.Label for b in bodies),
+            "No material (the input file needs one for every body): "
+            + ", ".join(objects.display_name(b) for b in bodies),
             None,
             [(b, "") for b in bodies],
         )

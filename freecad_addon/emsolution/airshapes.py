@@ -3,7 +3,7 @@
 import FreeCAD as App
 import Part
 
-from . import geometry
+from . import geometry, objects
 
 TOL = 1e-6
 
@@ -24,7 +24,7 @@ def air_shape(air, plane):
     """The Air Region's outer shape: a solid for "3D", else a face in z = 0 ("XY") or y = 0 ("ZX")."""
     if air.AirShape == "Custom":
         if air.Source is None:
-            raise ValueError(f"Air Region {air.Label}: choose a body for the Custom shape")
+            raise ValueError(f"Air Region {objects.display_name(air)}: choose a body for the Custom shape")
         shape = geometry.global_shape(air.Source)
     elif air.AirShape == "Sector":
         shape = _sector(air, plane)
@@ -76,7 +76,9 @@ def _bottom_face(solid, z):
 def _sector(air, plane):
     inner, outer = air.InnerRadius.Value, air.OuterRadius.Value
     if outer <= inner:
-        raise ValueError(f"Air Region {air.Label}: the outer radius must be larger than the inner radius.")
+        raise ValueError(
+            f"Air Region {objects.display_name(air)}: the outer radius must be larger than the inner radius."
+        )
     if plane == "ZX":  # half ring in the XY plane, x >= 0, stood up into y = 0
         face = _bottom_face(_ring_sector(inner, outer, -90, 180, 0, 1), 0)
         face.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 90)
@@ -85,7 +87,7 @@ def _sector(air, plane):
     start, sweep = air.StartAngle.Value, air.EndAngle.Value - air.StartAngle.Value
     if not 0 < sweep <= 360:
         raise ValueError(
-            f"Air Region {air.Label}: the end angle must be larger than the start angle (at most 360° more)."
+            f"Air Region {objects.display_name(air)}: the end angle must be larger than the start angle (at most 360° more)."
         )
     if plane == "3D":
         return _ring_sector(inner, outer, start, sweep, air.ZMin.Value, air.Height.Value)

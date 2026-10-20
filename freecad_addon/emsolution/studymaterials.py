@@ -196,7 +196,7 @@ def study_material_rows(study):
     air = {a.Name: a for a in objects.air_regions(study)}
     owners = [(b.Name, b) for b, _ in volumes]  # (MatIds key, the item that holds its Material)
     owners += [(k, air[k.partition("#")[0]]) for k in objects.air_keys(study)]
-    missing = [o.Label for _, o in owners if o.Name not in have or have[o.Name].LibraryMaterial is None]
+    missing = [objects.display_name(o) for _, o in owners if o.Name not in have or have[o.Name].LibraryMaterial is None]
     if missing:
         raise StudyError(
             "These bodies have no material from the Material Library: " + ", ".join(dict.fromkeys(missing))

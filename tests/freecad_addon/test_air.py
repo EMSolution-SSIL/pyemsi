@@ -12,7 +12,7 @@ import pytest
 
 from emsolution import airshapes, objects, validation, jobwriter, studymaterials
 
-from .materialdata import STEEL, record
+from .materialdata import AIR, STEEL, record
 
 
 class AirTest(unittest.TestCase):
@@ -375,6 +375,23 @@ class AirTest(unittest.TestCase):
             [(r[0], r[1], r[2], r[3].material_id) for r in rows],
             [(1, "A", 1, "user:steel"), (2, "Air_gap", 1, "user:steel")],
         )
+
+    def test_air_name_ignores_a_taken_label(self):
+        (a,) = self.bodies("A")
+        lib = objects.make_library_material(self.study, json.dumps(record("user:air", "Air", "generic", AIR)))
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        self.assertNotEqual(air.Label, "Air")  # the library material has it
+        objects.assign(self.study, [a, air], lib, 0)
+        rows = studymaterials.study_material_rows(self.study)
+        self.assertEqual([r[1] for r in rows], ["A", "Air"])
+        self.assertEqual(objects.key_name(self.study, air.Name), "Air")
+        self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "Air"])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["air"]["name"], "Air")
+        self.study.Movement = "Sliding motion"
+        self.assertEqual(objects.key_name(self.study, f"{air.Name}#fixed"), "Air_fixed")
+        self.assertEqual(objects.key_name(self.study, f"{air.Name}#moving"), "Air_moving")
 
     def test_air_without_a_material_joins_the_missing_error(self):
         (a,) = self.bodies("A")

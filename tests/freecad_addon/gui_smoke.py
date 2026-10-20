@@ -597,9 +597,7 @@ def main():
     Gui.updateGui()
     assert run.error == "" and not runner.busy(), run.error
     air_id = int(study.MatIds[air.Name])
-    assert any(f"MAT_ID  {air_id:>6}  {objects.volume_name(air)}" in line for line in console), (
-        "no Air MAT_ID line in the log"
-    )
+    assert any(f"MAT_ID  {air_id:>6}  Air" in line for line in console), "no Air MAT_ID line in the log"
     with open(run.job, encoding="utf-8") as fh:
         air_job = json.load(fh)["air"]
     assert (air_job["mat_id"], air_job["size"]) == (air_id, 4.0), air_job

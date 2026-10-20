@@ -18,8 +18,8 @@ def display_name(item):
 
 
 def volume_name(body):
-    """MAT_NAME and the volume's mesh group name."""
-    return clean(body.Label)
+    """MAT_NAME and the volume's mesh group name: a body's Label, an Air Region's typed name."""
+    return clean(display_name(body))
 
 
 def item_name(item, body):
@@ -28,7 +28,7 @@ def item_name(item, body):
 
 
 def ref_label(body, sub):
-    return f"{body.Label}.{sub}" if sub else body.Label
+    return f"{display_name(body)}.{sub}" if sub else display_name(body)
 
 
 NO_MATERIAL = "— none —"
@@ -423,7 +423,7 @@ def assignment_of(study):
 def assignment_label(m):
     """The tree label "<body>: <material>"; FreeCAD keeps labels unique, so it cannot be the body's label."""
     lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
-    return f"{m.Body.Label}: {lib}" if m.Body else m.Label
+    return f"{display_name(m.Body)}: {lib}" if m.Body else m.Label
 
 
 def assign(study, bodies, lib, potential):
@@ -433,7 +433,7 @@ def assign(study, bodies, lib, potential):
     for body in bodies:
         m = have.get(body.Name)
         if m is None:
-            m = _add(study, "MaterialsGroup", Material, body.Label)
+            m = _add(study, "MaterialsGroup", Material, display_name(body))
             m.Body = body
             if getattr(m, "ViewObject", None) is not None:  # GUI running
                 from . import taskpanels
@@ -540,7 +540,7 @@ def material_users(lib):
 
 def user_labels(lib):
     """For messages: the body label of each assignment using lib, or the assignment label if the body is gone."""
-    return [m.Body.Label if m.Body else m.Label for m in material_users(lib)]
+    return [display_name(m.Body) if m.Body else m.Label for m in material_users(lib)]
 
 
 def is_study_object(obj):
@@ -597,7 +597,7 @@ def material_rows(study):
     for b in main + [m.Body for m in have.values() if m.Body.Name not in inside]:
         m = have.get(b.Name)
         lib = m.LibraryMaterial.Label if m and m.LibraryMaterial else NO_MATERIAL
-        name = b.Label if b.Name in inside else f"{b.Label} (not in main geometry)"
+        name = display_name(b) if b.Name in inside else f"{display_name(b)} (not in main geometry)"
         rows.append((b, [(b, "")], [name, lib, study.MatIds.get(b.Name, "–"), str(m.Potential) if m else ""]))
     return rows
 
@@ -676,7 +676,7 @@ def assignment_problem(study, bodies):
     if not _main_bodies(study):
         return NO_MAIN_GEOMETRY
     main = {b.Name for b in assignable(study)}
-    outside = list(dict.fromkeys(b.Label for b in bodies if b.Name not in main))
+    outside = list(dict.fromkeys(display_name(b) for b in bodies if b.Name not in main))
     if outside:
         return (
             "Not in the Study's main geometry: "

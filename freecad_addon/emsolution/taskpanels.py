@@ -423,7 +423,8 @@ class FolderView:
         """The red line naming bodies without a material; hidden when there are none."""
         bodies = objects.bodies_without_material(self.study)
         self.missing.setText(
-            "No material (the input file needs one for every body): " + ", ".join(b.Label for b in bodies)
+            "No material (the input file needs one for every body): "
+            + ", ".join(objects.display_name(b) for b in bodies)
         )
         self.missing.setVisible(bool(bodies))
 
