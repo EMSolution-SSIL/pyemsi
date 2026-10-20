@@ -473,6 +473,7 @@ class AirTest(unittest.TestCase):
         objects.update_ids(self.study)
         rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
         self.assertEqual(rows["Air"][2], "3 / 4")
+        self.assertEqual(objects.air_region_rows(self.study)[0][2], ["Air", "Box", "3 / 4"])
         self.study.Movement = "No movement"
         objects.update_ids(self.study)
         rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}

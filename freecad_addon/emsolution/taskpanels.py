@@ -890,7 +890,7 @@ class ItemGate:
     """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
 
     def __init__(self, study, kinds, whole, air=True):
-        bodies = objects.assignable(study) if air else geometry.region(study, "Main")[0]
+        bodies = objects.assignable(study) if air else objects.study_bodies(study)
         self.main = {b.Name for b in bodies}
         self.kinds, self.whole = kinds, whole
 
@@ -965,8 +965,9 @@ class ItemPanel:
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
         layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
+        region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"
         hint = QtWidgets.QLabel(
-            (hint2d if study.Dimension == "2D" else hint3d) + " Only the Study's main geometry can be picked."
+            (hint2d if study.Dimension == "2D" else hint3d) + f" Only the Study's {region} can be picked."
         )
         hint.setWordWrap(True)
         layout.addRow(hint)

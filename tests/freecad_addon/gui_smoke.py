@@ -584,6 +584,14 @@ def main():
     Gui.Selection.addSelection(doc.Name, air.Name, "Face1")
     assert Gui.Selection.getSelection() == [], "the Excitation gate let the Air Region through"
     panel.reject()
+    moving = doc.addObject("Part::Box", "MovingBox")  # sliding: the Excitation gate takes the moving geometry too
+    doc.recompute()
+    study.MovingMode, study.MovingObjects, study.Movement = "Manual", [moving], "Sliding motion"
+    assert moving.Name in taskpanels.ItemGate(study, taskpanels.ANY_SUB, True, False).main, "gate: moving body"
+    study.Movement = "No movement"
+    assert moving.Name not in taskpanels.ItemGate(study, taskpanels.ANY_SUB, True, False).main, "gate: static"
+    study.MovingMode, study.MovingObjects = "Unassigned", []
+    doc.removeObject(moving.Name)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, air.Name)
     Gui.runCommand("EMS_MeshSize")
