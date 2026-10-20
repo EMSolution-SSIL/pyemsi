@@ -145,6 +145,5 @@ def setup(study):
 
 
 def export_unavailable(study):
-    if study.Movement != "No movement":
-        return "Sliding-motion mesh generation and interface setup are planned for a later phase."
+    """Why the Study cannot be meshed at all, or "". Nothing blocks it now; kept for the callers that ask."""
     return ""

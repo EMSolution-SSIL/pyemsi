@@ -53,10 +53,10 @@ def validate(study):
     if unavailable:
         r.error(unavailable)
         return r.problems
-    bodies, _, setup_errors = geometry.setup(study)
+    main, moving, setup_errors = geometry.setup(study)
     for text in setup_errors:
         r.error(text)
-    bodies = list({b.Name: b for b in bodies}.values())  # main geometry order
+    bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
     included = {b.Name for b in bodies}
     _skipped_picks(study, r)
     _links(study, included, r)

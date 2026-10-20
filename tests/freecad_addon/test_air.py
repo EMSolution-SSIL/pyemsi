@@ -401,3 +401,85 @@ class AirTest(unittest.TestCase):
         objects.assign(self.study, [a], self.steel(), 0)
         with self.assertRaisesRegex(jobwriter.StudyError, "no material from the Material Library: Air gap$"):
             studymaterials.study_material_rows(self.study)
+
+    def sliding(self, fixed, moving):
+        """Slide: fixed and moving are lists of box names."""
+        self.bodies(*fixed)
+        boxes = [self.doc.addObject("Part::Box", n) for n in moving]
+        for k, box in enumerate(boxes):
+            box.Placement.Base = App.Vector(20 + 20 * k, 0, 0)
+        self.study.MovingMode, self.study.MovingObjects = "Manual", boxes
+        self.study.Movement = "Sliding motion"
+        self.doc.recompute()
+        return boxes
+
+    def test_moving_bodies_get_ids_after_main_bodies(self):
+        self.sliding(["A", "B"], ["M"])
+        objects.update_ids(self.study)
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2", "M": "3"})
+        self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "B", "M"])
+        self.study.Movement = "No movement"
+        objects.update_ids(self.study)
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2"})
+
+    def test_moving_body_can_get_a_material(self):
+        (m,) = self.sliding(["A"], ["M"])
+        self.assertEqual(objects.assignment_problem(self.study, [m]), "")
+        objects.assign(self.study, [m], self.steel(), 0)
+        objects.update_ids(self.study)
+        rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
+        self.assertEqual(rows["M"][1:3], ["Steel", self.study.MatIds[m.Name]])
+        self.assertEqual(objects.bodies_without_material(self.study), [self.study.MainObjects[0]])
+        self.study.Movement = "No movement"
+        self.assertIn("Not in the Study's main geometry: M", objects.assignment_problem(self.study, [m]))
+
+    def test_study_bodies_have_no_duplicates(self):
+        (m,) = self.sliding(["A"], ["M"])
+        self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A", "M"])
+        self.study.MainObjects = [*self.study.MainObjects, m]  # both: setup reports it, the list stays unique
+        self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A", "M"])
+
+    def test_job_lists_moving_mat_ids(self):
+        self.sliding(["A", "B"], ["M"])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual([v["mat_id"] for v in job["volumes"]], [1, 2, 3])
+        self.assertEqual(job["moving"], [3])
+
+    def test_static_job_has_no_moving_key(self):
+        self.bodies("A")
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("moving", json.load(fh))
+
+    def test_sliding_air_gets_a_fixed_and_a_moving_id(self):
+        self.sliding(["A"], ["M"])
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        objects.update_ids(self.study)
+        fixed, moving = f"{air.Name}#fixed", f"{air.Name}#moving"
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "M": "2", fixed: "3", moving: "4"})
+        self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "M", "Air_fixed", "Air_moving"])
+        self.study.Movement = "No movement"
+        objects.update_ids(self.study)
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", air.Name: "5"})
+        self.study.Movement = "Sliding motion"
+        objects.update_ids(self.study)
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "M": "2", fixed: "3", moving: "4"})
+
+    def test_sliding_air_row_shows_both_ids(self):
+        self.sliding(["A"], ["M"])
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
+        self.assertEqual(rows["Air"][2], "–")  # no IDs yet
+        objects.update_ids(self.study)
+        rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
+        self.assertEqual(rows["Air"][2], "3 / 4")
+        self.study.Movement = "No movement"
+        objects.update_ids(self.study)
+        rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
+        self.assertEqual(rows["Air"][2], self.study.MatIds[air.Name])
+
+    def test_sliding_with_air_is_not_written_yet(self):
+        self.sliding(["A"], ["M"])
+        objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
+        with self.assertRaisesRegex(jobwriter.StudyError, "Sliding-motion meshing with an Air Region is not complete"):
+            jobwriter.write_job(self.study)

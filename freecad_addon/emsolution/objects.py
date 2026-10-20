@@ -588,7 +588,7 @@ def item_refs(item):
 def material_rows(study):
     """Rows for the Materials panel: (body, refs, [body, material, MAT_ID, POTENTIAL]).
 
-    Every main-geometry body and Air Region, then bodies outside it that still have an assignment.
+    Every main- and moving-geometry body and Air Region, then bodies outside them that still have an assignment.
     """
     have = assignment_of(study)
     main = assignable(study)
@@ -598,8 +598,15 @@ def material_rows(study):
         m = have.get(b.Name)
         lib = m.LibraryMaterial.Label if m and m.LibraryMaterial else NO_MATERIAL
         name = display_name(b) if b.Name in inside else f"{display_name(b)} (not in main geometry)"
-        rows.append((b, [(b, "")], [name, lib, study.MatIds.get(b.Name, "–"), str(m.Potential) if m else ""]))
+        rows.append((b, [(b, "")], [name, lib, _id_text(study, b), str(m.Potential) if m else ""]))
     return rows
+
+
+def _id_text(study, body):
+    """The MAT_ID of a body or Air Region for the Materials panel: "fixed / moving" for a sliding air, "–" if none."""
+    keys = [k for k in air_keys(study) if k.partition("#")[0] == body.Name] or [body.Name]
+    ids = [study.MatIds.get(k) for k in keys]
+    return " / ".join(ids) if all(ids) else "–"
 
 
 def library_rows(study):
@@ -663,9 +670,19 @@ def _main_bodies(study):
     return geometry.region(study, "Main")[0]
 
 
+def study_bodies(study):
+    """The Study's meshed bodies: the main geometry, then the moving geometry when the Study slides."""
+    from . import geometry
+
+    bodies = _main_bodies(study)
+    if study.Movement == "Sliding motion":
+        bodies = bodies + geometry.region(study, "Moving")[0]
+    return list({b.Name: b for b in bodies}.values())
+
+
 def assignable(study):
-    """What can get a Material: the main-geometry bodies, then the Air Regions."""
-    return _main_bodies(study) + air_regions(study)
+    """What can get a Material: the main- and moving-geometry bodies, then the Air Regions."""
+    return study_bodies(study) + air_regions(study)
 
 
 NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: a Part, a Group or Manual selection in the Study panel."
@@ -694,7 +711,7 @@ def air_keys(study):
 
 
 def volume_keys(study):
-    return [b.Name for b in _main_bodies(study)] + air_keys(study)
+    return [b.Name for b in study_bodies(study)] + air_keys(study)
 
 
 def key_name(study, key):

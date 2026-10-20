@@ -957,19 +957,21 @@ print('RESTORE PASS')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("RESTORE PASS", result.stdout)
 
-    def test_deferred_export_cannot_change_ids_or_write_files(self):
+    def test_sliding_without_moving_geometry_cannot_change_ids_or_write_files(self):
         self.include(self.box("A"))
         self.study.Movement = "Sliding motion"
-        with self.assertRaisesRegex(jobwriter.StudyError, "Sliding-motion"):
+        self.assertEqual(geometry.export_unavailable(self.study), "")
+        with self.assertRaisesRegex(jobwriter.StudyError, "Moving geometry: No geometry chosen"):
             jobwriter.write_job(self.study)
         self.assertEqual(self.study.MatIds, {})
         self.assertFalse(os.path.exists(self.scratch("job.json")))
 
-    def test_2d_study_is_not_blocked_but_sliding_motion_still_is(self):
+    def test_sliding_motion_is_no_longer_refused_as_a_later_phase(self):
         study = objects.make_study(self.doc, "2D", "Section")
         self.assertEqual(geometry.export_unavailable(study), "")
         study.Movement = "Sliding motion"
-        self.assertIn("Sliding-motion", geometry.export_unavailable(study))
+        self.assertEqual(geometry.export_unavailable(study), "")
+        self.assertNotIn("later phase", " ".join(p.text for p in validation.validate(study)))
 
     def test_new_study_requires_geometry_even_when_materials_exist(self):
         study = objects.make_study(self.doc)

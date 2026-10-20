@@ -546,11 +546,6 @@ class StudyView:
         self.diagnostics = QtWidgets.QLabel()
         self.diagnostics.setWordWrap(True)
         layout.addWidget(self.diagnostics)
-        self.sliding_notice = QtWidgets.QLabel(
-            "Sliding-interface configuration will be added with sliding-motion meshing."
-        )
-        self.sliding_notice.setWordWrap(True)
-        layout.addWidget(self.sliding_notice)
         output = QtWidgets.QFormLayout()
         layout.addLayout(output)
         self.version = QtWidgets.QComboBox()
@@ -630,7 +625,6 @@ class StudyView:
         else:  # every problem that stops the mesh; Validate Study also lists the warnings
             lines = [p.text for p in validation.errors(validation.validate(study))]
         self.diagnostics.setText("\n".join(lines))
-        self.sliding_notice.setVisible(sliding)
         unavailable = geometry.export_unavailable(study)
         if unavailable:
             self.export_notice.setText(unavailable)

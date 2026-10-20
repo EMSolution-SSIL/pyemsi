@@ -31,15 +31,15 @@ def mesh_file(study):
 
 def check(study):
     """Refuse the Study if validation finds an error. Returns (volumes, surfaces, elements):
-    volumes  = [(body, size_mm)] in main geometry order
+    volumes  = [(body, size_mm)] in main geometry order, then the moving geometry's
     surfaces = [(excitation, body, [face names])] in tree order
     elements = [(mesh size, body, [face, edge and vertex names])] in tree order
     """
     found = validation.errors(validation.validate(study))
     if found:
         raise StudyError("\n".join(p.text for p in found))
-    bodies, _, _ = geometry.setup(study)
-    bodies = list({b.Name: b for b in bodies}.values())  # main geometry order
+    main, moving, _ = geometry.setup(study)
+    bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
     included = {b.Name for b in bodies}
     excitation_items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: none yet
     surfaces = [(e, b, faces) for e in excitation_items for b, faces in objects.subs_by_body(e) if b.Name in included]
@@ -128,6 +128,8 @@ def write_job(study):
     if stale:  # the job must get the air as its properties describe it now
         study.Document.recompute(stale)
     volumes, surfaces, elements = check(study)
+    if study.Movement == "Sliding motion" and objects.air_regions(study):
+        raise StudyError("Sliding-motion meshing with an Air Region is not complete yet.")
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change
     objects.update_ids(study)
     os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
@@ -195,6 +197,8 @@ def write_job(study):
                 for k, (item, body, subs) in enumerate(tf_edges, 1)
             ],
         }
+    if study.Movement == "Sliding motion":
+        job["moving"] = [int(study.MatIds[b.Name]) for b in geometry.setup(study)[1]]
     recombine_names = {body.Name for item in objects.recombine_items(study) for body, _ in objects.subs_by_body(item)}
     recombine = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in recombine_names]
     if recombine:
