@@ -724,6 +724,21 @@ class AirTest(unittest.TestCase):
         objects.air_regions(self.study)[0].EndAngle = 90  # not a full turn: any count is fine
         self.assertNotIn(text, self.air_errors())
 
+    def test_interfaces_with_the_same_name_are_an_error(self):
+        self.motor(extra=(60,))  # both keep the default Label, so both become Sliding_Interface
+        text = "These group names are the same after removing special characters: Sliding_Interface."
+        self.assertIn(text + " Rename the items or bodies.", self.air_errors())
+        objects.sliding_interfaces(self.study)[1].GroupName = "Second"
+        self.assertNotIn(text + " Rename the items or bodies.", self.air_errors())
+
+    def test_body_named_like_an_air_side_is_an_error(self):
+        _, rotor = self.motor()
+        rotor.Label = "Air moving"
+        self.assertIn(
+            "These group names are the same after removing special characters: Air_moving. Rename the items or bodies.",
+            self.air_errors(),
+        )
+
     def test_interface_missing_the_air_is_an_error(self):
         self.motor()
         (iface,) = objects.sliding_interfaces(self.study)

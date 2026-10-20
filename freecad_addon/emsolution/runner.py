@@ -63,6 +63,7 @@ class MeshRun:
         with open(job, encoding="utf-8") as fh:
             data = json.load(fh)
         self.mesh_file = data["mesh_file"]
+        self.rotor_file = data.get("rotor_file")  # sliding motion: the moving side's file
         script = MESHER_2D if data.get("dimension") == "2D" else MESHER
         self.replaced = os.path.exists(self.mesh_file)  # before the mesher starts
         self.dialog = QtWidgets.QProgressDialog(self.TEXT, "Cancel", 0, 0, Gui.getMainWindow())
@@ -129,6 +130,8 @@ class MeshRun:
         mesh_obj.FemMesh = Fem.read(os.path.join(os.path.dirname(self.job), "mesh.unv"))
         doc.recompute()
         folder, name = os.path.split(self.mesh_file)
+        if self.rotor_file:
+            name += " and " + os.path.basename(self.rotor_file)
         replaced = " (replaced existing file)" if self.replaced else ""
         App.Console.PrintMessage(
             f"{name} written to {folder} from Study {self.study.Label}{replaced}\n"

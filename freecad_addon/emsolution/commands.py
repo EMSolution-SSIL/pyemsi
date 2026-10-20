@@ -201,6 +201,32 @@ class AddAirRegion(_StudyCommand):
         Gui.Control.showDialog(taskpanels.AirRegionPanel(air, new=True))
 
 
+class AddSlidingInterface(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("slidinginterface"),
+            "MenuText": "Sliding Interface",
+            "ToolTip": "Add the surface between the fixed and the moving air (Study with sliding motion)",
+        }
+
+    def IsActive(self):
+        study = active_study()
+        return study is not None and study.Movement == "Sliding motion" and not Gui.Control.activeDialog()
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        airs = objects.air_regions(study)
+        if not airs:
+            return warn("Add an Air Region first.")
+        doc = study.Document
+        doc.openTransaction("Add Sliding Interface")  # stays open until OK or Cancel
+        iface = objects.make_sliding_interface(study, "Rotational" if airs[0].AirShape == "Sector" else "Linear")
+        doc.recompute()
+        Gui.Control.showDialog(taskpanels.SlidingInterfacePanel(iface, new=True))
+
+
 class AddTransfiniteBody(_StudyCommand):
     def GetResources(self):
         return {
@@ -299,6 +325,7 @@ COMMANDS = {
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
     "EMS_AddAirRegion": AddAirRegion(),
+    "EMS_AddSlidingInterface": AddSlidingInterface(),
     "EMS_TransfiniteBody": AddTransfiniteBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),

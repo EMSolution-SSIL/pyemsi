@@ -336,6 +336,9 @@ def _transfinite(study, bodies, r):
 
 def _names(study, bodies, included, r):
     names = [objects.volume_name(b) for b in bodies]
+    names += [objects.key_name(study, k) for k in objects.air_keys(study)]  # Air, or Air_fixed and Air_moving
+    if study.Movement == "Sliding motion":
+        names += [objects.key_name(study, i.Name) for i in objects.sliding_interfaces(study)]
     if study.Dimension == "3D":
         names += [
             objects.item_name(e, b)

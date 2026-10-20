@@ -117,8 +117,9 @@ def build(job, folder):
             body_faces[a["mat_id"]] = tags
             placed.update(dict.fromkeys(tags, a["name"]))
 
+    job["unwritten"] = [a["mat_id"] for a in airs if not body_faces[a["mat_id"]]]  # run_job lists only the others
     for b in bodies + airs:
-        if body_faces[b["mat_id"]]:  # a side of the air may be all bodies
+        if body_faces[b["mat_id"]]:  # a side of the air may be all bodies, or hold no air at all
             gmsh.model.addPhysicalGroup(2, body_faces[b["mat_id"]], b["mat_id"], name=b["name"])
 
     by_size = {}  # size -> {dim: [tags]}
@@ -159,6 +160,8 @@ def build(job, folder):
 def run_job(job_path):
     job = run(job_path, build, 2)
     for item in job["bodies"] + air_items(job):
+        if item["mat_id"] in job["unwritten"]:
+            continue
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in (job.get("transfinite") or {}).get("bodies", []):
         print(f"Structured      {item['name']}")

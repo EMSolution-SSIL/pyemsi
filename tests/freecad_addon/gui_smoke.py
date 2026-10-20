@@ -668,6 +668,84 @@ def main():
     App.setActiveDocument(doc.Name)
     log.append("2D air panels ok")
 
+    # Sliding Interface: command, panel, hint in the Study panel, and a 2D sliding mesh.
+    from emsolution import validation
+
+    App.Console.PrintMessage = lambda text: (console.append(text), real_print(text))
+    slide_doc = App.newDocument("Slide2D")
+    slide_study = objects.make_study(slide_doc, "2D")
+    taskpanels.ViewProviderStudy(slide_study.ViewObject)
+    disc = lambda r: Part.Face(Part.Wire(Part.makeCircle(r)))  # noqa: E731 - a face in z = 0
+    stator, rotor = (slide_doc.addObject("Part::Feature", n) for n in ("Stator", "Rotor"))
+    stator.Shape, rotor.Shape = disc(80).cut(disc(45)), disc(40)
+    slide_study.MainMode = slide_study.MovingMode = "Manual"
+    slide_study.MainObjects, slide_study.MovingObjects = [stator], [rotor]
+    slide_doc.recompute()
+    slide_doc.saveAs(os.path.join(tempfile.mkdtemp(), "Slide2D.FCStd"))
+    App.setActiveDocument(slide_doc.Name)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(slide_doc.Name, slide_study.Name)
+    slide_panels = []  # panels the Sliding Interface command and its double-click opened
+
+    class RecordedSlidePanel(taskpanels.SlidingInterfacePanel):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            slide_panels.append(self)
+
+    taskpanels.SlidingInterfacePanel = RecordedSlidePanel
+    add_slide = commands.COMMANDS["EMS_AddSlidingInterface"]
+    assert not add_slide.IsActive(), "Sliding Interface is active without sliding motion"
+    slide_study.Movement = "Sliding motion"
+    assert add_slide.IsActive()
+    hint_text = "Add an Air Region and a Sliding Interface"
+    study_view = taskpanels.StudyView(slide_study)
+    assert study_view.slide_hint.text() == hint_text and study_view.slide_hint.isVisibleTo(study_view.form), "no hint"
+    Gui.runCommand("EMS_AddSlidingInterface")
+    assert warned[-1] == "Add an Air Region first." and not slide_panels, warned
+    slide_air = objects.make_air_region(slide_study, "Sector", OuterRadius=100)
+    slide_doc.recompute()
+    Gui.runCommand("EMS_AddSlidingInterface")
+    panel = slide_panels.pop()
+    assert panel.new and Gui.Control.activeDialog(), "the Sliding Interface panel did not open"
+    (iface,) = objects.sliding_interfaces(slide_study)
+    assert iface.Kind == "Rotational" and iface.AirRegion == slide_air
+    assert isinstance(iface.ViewObject.Proxy, taskpanels.ViewProviderSlidingInterface)
+    assert [panel.kind.itemText(i) for i in range(panel.kind.count())] == ["Rotational", "Linear"]
+    assert panel.cross is None, "Cross divisions in a 2D Study"
+    panel.divisions.setValue(72)
+    assert "5" in panel.step_label.text() and "deg" in panel.step_label.text(), panel.step_label.text()
+    assert panel.reject() and objects.sliding_interfaces(slide_study) == [], "Cancel kept the new Sliding Interface"
+    assert not Gui.Control.activeDialog()
+    Gui.runCommand("EMS_AddSlidingInterface")
+    panel = slide_panels.pop()
+    panel.radius.setValue(42.5)
+    panel.divisions.setValue(72)
+    assert panel.accept() and not Gui.Control.activeDialog()
+    (iface,) = objects.sliding_interfaces(slide_study)
+    assert (iface.Radius.Value, iface.Divisions) == (42.5, 72), (iface.Radius, iface.Divisions)
+    assert len(iface.Shape.Edges) == 2, "a full turn is two half circles"
+    study_view.refresh()
+    assert not study_view.slide_hint.isVisibleTo(study_view.form), "the hint stayed with an Air Region and an interface"
+    assert iface.ViewObject.Proxy.doubleClicked(iface.ViewObject)
+    panel = slide_panels.pop()
+    assert not panel.new and panel.divisions.value() == 72
+    assert panel.reject() and objects.sliding_interfaces(slide_study) == [iface], "Cancel of an edit removed it"
+    slide_errors = [p.text for p in validation.errors(validation.validate(slide_study))]
+    assert not slide_errors, slide_errors
+    slide_run = runner.start(slide_study)
+    assert slide_run is not None and slide_run.proc.waitForFinished(120000), "the sliding mesher timed out"
+    Gui.updateGui()
+    assert slide_run.error == "" and not runner.busy(), slide_run.error
+    slide_dir = os.path.dirname(slide_run.mesh_file)
+    for name in ("pre_geom2D.msh", "rotor_mesh2D.msh"):
+        assert os.path.isfile(os.path.join(slide_dir, name)), "no " + name
+    assert any("SLIDE_NDIV 72" in line for line in console), "no SLIDE_NDIV line in the log"
+    assert any("rotor_mesh2D.msh" in line and "written" in line for line in console), "no rotor file message"
+    App.Console.PrintMessage = real_print
+    App.closeDocument(slide_doc.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("sliding interface ok")
+
     # Several Studies: ownership, setup controls, bulk selection and undo.
     import Part
     from emsolution import geometry

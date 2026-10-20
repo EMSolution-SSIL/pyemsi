@@ -12,6 +12,7 @@ import unittest
 import gmsh
 
 from .test_mesher import write_line, write_point
+from .meshreport import report
 
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
 
@@ -775,11 +776,11 @@ class Mesher2DTest(unittest.TestCase):
             sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
         return self.run_job(bodies, sizes=sizes, air=air, extra=extra)
 
-    def motor_job(self, tooth=False):
+    def motor_job(self, tooth=False, rotor=40):
         """Full turn: stator ring 45..80 fixed (tooth: plus a tooth 42.5..45 from 10° to 20°), rotor disc r 40
-        moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0)."""
+        (rotor) moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0)."""
         write_sectors(self.geo("vol_1.brep"), (45, 80), *([(42.5, 45, 10, 20)] if tooth else []))
-        write_sectors(self.geo("vol_2.brep"), (0, 40))
+        write_sectors(self.geo("vol_2.brep"), (0, rotor))
         write_sectors(self.geo("air.brep"), (0, 100))
         write_sectors(self.geo("cell_1.brep"), (0, 42.5))
         write_arc(self.geo("slide_20_1.brep"), 42.5, 0, 180)
@@ -864,6 +865,17 @@ class Mesher2DTest(unittest.TestCase):
             finally:
                 gmsh.finalize()
         self.assertEqual(found, [{1: "Stator", 10: "Air_fixed"}, {2: "Rotor", 11: "Air_moving"}])
+
+    def test_air_side_without_elements_is_not_listed(self):
+        r = self.motor_job(rotor=42.5)  # the rotor fills the moving cell: no moving air
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("MAT_ID      10  Air_fixed", r.stdout)
+        self.assertNotIn("Air_moving", r.stdout)
+        fixed, moving = (self.on_circle(f, 42.5) for f in self.files())
+        self.assertEqual(len(fixed), 72)
+        self.assertEqual(fixed, moving)
+        text = report(self.dir, os.path.join(self.dir, "job.json"))  # must not raise "has no elements"
+        self.assertIn("no Air_moving", text)
 
     def test_sector_slide_and_periodic_edges_match(self):
         r = self.sector_job()

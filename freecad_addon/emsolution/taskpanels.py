@@ -245,6 +245,23 @@ class ViewProviderAir(_ViewProvider):
         return True
 
 
+class ViewProviderSlidingInterface(_ViewProvider):
+    """The slide surface, drawn thick; double-click edits it."""
+
+    def __init__(self, vobj):
+        super().__init__(vobj)
+        vobj.LineWidth = 3
+        vobj.LineColor = (0.75, 0.22, 0.17)
+
+    def getIcon(self):
+        return icon("slidinginterface")
+
+    def doubleClicked(self, vobj):
+        if not Gui.Control.activeDialog():  # the panel's selection must not outlive it
+            Gui.Control.showDialog(SlidingInterfacePanel(vobj.Object))
+        return True
+
+
 def _length_box(value, minimum=0.001, no_limit=False):
     box = QtWidgets.QDoubleSpinBox()
     box.setDecimals(3)
@@ -499,6 +516,8 @@ class FolderView:
             pass
         elif isinstance(item.Proxy, objects.AirRegion):
             Gui.Control.showDialog(AirRegionPanel(item))
+        elif isinstance(item.Proxy, objects.SlidingInterface):
+            Gui.Control.showDialog(SlidingInterfacePanel(item))
         else:
             Gui.Control.showDialog(ItemPanel(item))
 
@@ -519,6 +538,9 @@ class StudyView:
         self.movement.addItems(study.getEnumerationsOfProperty("Movement"))
         self.movement.setCurrentText(study.Movement)
         form.addRow("Movement", self.movement)
+        self.slide_hint = QtWidgets.QLabel("Add an Air Region and a Sliding Interface")
+        self.slide_hint.setStyleSheet("color: #c00000")
+        layout.addWidget(self.slide_hint)
         self.regions = {}
         for name in ("Main", "Moving"):
             box = QtWidgets.QGroupBox()
@@ -590,6 +612,7 @@ class StudyView:
         containers = [o for o in study.Document.Objects if geometry.is_source(o)]
         labels = Counter(o.Label for o in containers)
         sliding = study.Movement == "Sliding motion"
+        self.slide_hint.setVisible(sliding and not (objects.air_regions(study) and objects.sliding_interfaces(study)))
         for name, (box, combo, count, manual) in self.regions.items():
             box.setTitle("Moving geometry" if name == "Moving" else "Fixed geometry" if sliding else "Main geometry")
             box.setVisible(name == "Main" or sliding)
@@ -1265,6 +1288,124 @@ class AirRegionPanel:
         if self.new:
             doc = self.obj.Document
             doc.abortTransaction()  # removes the new Air Region
+            doc.recompute()
+        Gui.Control.closeDialog()
+        return True
+
+
+class SlidingInterfacePanel:
+    """Edit a Sliding Interface: its kind, where its surface lies and how many divisions the motion has.
+    Changes apply on OK. new: obj was just made inside an open transaction; OK commits it, Cancel undoes it."""
+
+    def __init__(self, obj, new=False):
+        self.obj, self.new = obj, new
+        self.study = objects.owner_study(obj)
+        self.three_d = self.study.Dimension == "3D"
+        highlight.clear()
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle(obj.Label)
+        layout = QtWidgets.QVBoxLayout(self.form)
+        self.fields = QtWidgets.QFormLayout()
+        self.rows = []  # (kinds, label, widget) of the rows only some kinds show
+        layout.addLayout(self.fields)
+        self.fields.addRow(QtWidgets.QLabel("Study: " + self.study.Label))
+        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
+        self.fields.addRow("Name", self.name)
+        self.kind = QtWidgets.QComboBox()
+        for kind in ("Rotational", "Axial gap", "Linear"):
+            if self.three_d or kind != "Axial gap":
+                self.kind.addItem(kind, kind)
+        self.kind.setCurrentIndex(max(self.kind.findData(obj.Kind), 0))
+        self.fields.addRow("Kind", self.kind)
+        axes = objects.AXES if self.three_d else objects.AXES[:2]  # a 2D motion lies in the XY plane
+        self.radius = _length_box(obj.Radius.Value)
+        self.add_field("Radius", self.radius, "Rotational")
+        self.position = _number_box(obj.Position.Value, -1e6, 1e6, " mm")
+        self.position_text = self.add_field("Position", self.position, "Axial gap", "Linear")
+        self.normal = QtWidgets.QComboBox()
+        self.normal.addItems(axes)
+        self.normal.setCurrentText(obj.NormalAxis if obj.NormalAxis in axes else axes[-1])
+        self.add_field("Normal axis", self.normal, "Linear")
+        self.motion = QtWidgets.QComboBox()
+        self.motion.addItems(axes)
+        self.motion.setCurrentText(obj.MotionAxis if obj.MotionAxis in axes else axes[0])
+        self.add_field("Motion axis", self.motion, "Linear")
+        self.divisions = QtWidgets.QSpinBox()
+        self.divisions.setRange(2, 100000)
+        self.divisions.setValue(obj.Divisions)
+        self.fields.addRow("Divisions", self.divisions)
+        self.cross = None  # 3D only
+        if self.three_d:
+            self.cross = QtWidgets.QSpinBox()
+            self.cross.setRange(1, 100000)
+            self.cross.setValue(obj.CrossDivisions)
+            self.fields.addRow("Cross divisions", self.cross)
+        self.step_label = QtWidgets.QLabel()
+        self.fields.addRow("Step", self.step_label)
+        self.kind.currentIndexChanged.connect(self.show_kind)
+        self.divisions.valueChanged.connect(self.show_step)
+        self.motion.currentIndexChanged.connect(self.show_step)
+        self.show_kind()
+
+    def add_field(self, label, widget, *kinds):
+        """A row shown only for the kinds; returns its label (the widget is the caller's)."""
+        text = QtWidgets.QLabel(label)
+        self.fields.addRow(text, widget)
+        self.rows.append((kinds, text, widget))
+        return text
+
+    def show_kind(self):
+        kind = self.kind.currentData()
+        for kinds, text, widget in self.rows:
+            text.setVisible(kind in kinds)
+            widget.setVisible(kind in kinds)
+        self.position_text.setText("Z position" if kind == "Axial gap" else "Position")
+        self.show_step()
+
+    def show_step(self):
+        """The motion of one division: an angle about Z, or a length along the motion axis of a Linear interface."""
+        n, air = self.divisions.value(), self.obj.AirRegion
+        if self.kind.currentData() == "Linear":
+            if air is None or air.AirShape != "Box":
+                return self.step_label.setText("")
+            length = (air.Length, air.Width, air.Height)[objects.AXES.index(self.motion.currentText())].Value
+            return self.step_label.setText(f"{length / n:g} mm per division")
+        span = 360.0
+        if air is not None and air.AirShape == "Sector":
+            span = min(air.EndAngle.Value - air.StartAngle.Value, 360.0)
+        self.step_label.setText(f"{span / n:g} deg per division")
+
+    def accept(self):
+        obj, doc = self.obj, self.obj.Document
+        kind = self.kind.currentData()
+        if kind == "Linear" and self.normal.currentText() == self.motion.currentText():
+            warn("The motion axis must differ from the normal axis.")
+            return False
+        if not self.new:  # a new item's transaction is already open
+            doc.openTransaction("Edit " + obj.Label)
+        name = self.name.text().strip()
+        if name:
+            obj.Label = name
+            obj.GroupName = name  # FreeCAD may have suffixed the Label
+        obj.Kind = kind
+        if kind == "Rotational":
+            obj.Radius = self.radius.value()
+        else:
+            obj.Position = self.position.value()
+        if kind == "Linear":
+            obj.NormalAxis, obj.MotionAxis = self.normal.currentText(), self.motion.currentText()
+        obj.Divisions = self.divisions.value()
+        if self.cross is not None:
+            obj.CrossDivisions = self.cross.value()
+        doc.commitTransaction()
+        doc.recompute()
+        Gui.Control.closeDialog()
+        return True
+
+    def reject(self):
+        if self.new:
+            doc = self.obj.Document
+            doc.abortTransaction()  # removes the new Sliding Interface
             doc.recompute()
         Gui.Control.closeDialog()
         return True

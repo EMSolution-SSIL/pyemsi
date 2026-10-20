@@ -160,7 +160,8 @@ def report(case_dir, job, checklist=()):
     bodies = data.get("bodies") or data.get("volumes") or []
     air = data.get("air")
     lines = [f"Case {os.path.basename(os.path.normpath(case_dir))}"]
-    if air and "sides" in air:  # sliding: the fixed side in the mesh file, the moving side in the rotor file
+    sides = list(air["sides"].values()) if air and "sides" in air else []
+    if sides:  # sliding: the fixed side in the mesh file, the moving side in the rotor file
         moving = set(data["moving"])
         fixed_bodies = [b for b in bodies if b["mat_id"] not in moving]
         moving_bodies = [b for b in bodies if b["mat_id"] in moving]
@@ -175,6 +176,9 @@ def report(case_dir, job, checklist=()):
         lines += ["", f"{title}: {os.path.basename(path)}", f"Nodes {_nodes(path)}", "MAT_ID  name  elements"]
         for item in expected:
             name, count = found.get(item["mat_id"], (item["name"], 0))
+            if count == 0 and item in sides:  # a sliding air side holds no air when a body fills its cell
+                lines.append(f"(no {item['name']}: that side has no air)")
+                continue
             if count == 0:
                 raise RuntimeError(
                     f"{item['name']} (MAT_ID {item['mat_id']}) has no elements in {os.path.basename(path)}"
