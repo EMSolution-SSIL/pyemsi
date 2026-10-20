@@ -1,0 +1,273 @@
+"""Example models for the Air Region (and later the sliding motion): built from Part primitives, meshed by the
+real mesher in a subprocess, described by a report. Shared by test_examples.py and build_examples.py. Lengths in mm."""
+
+import json
+import math
+import os
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from typing import Callable
+
+import FreeCAD as App
+import Part
+
+from emsolution import airshapes, jobwriter, objects, validation
+
+from . import meshreport
+from .materialdata import STEEL, record
+
+ADDON = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution"))
+MESHERS = {"2D": os.path.join(ADDON, "mesher2d.py"), "3D": os.path.join(ADDON, "mesher.py")}
+
+
+@dataclass
+class Case:
+    name: str
+    build: Callable[[App.Document], object]  # builds the Study (bodies, material, air) in a new document
+    checklist: list = field(default_factory=list)
+    expect_error: str = ""  # E-cases: part of the error text Validate (or the mesher) must give
+
+
+# ---- shapes
+
+C_CORE = [(0, 0), (60, 0), (60, 10), (20, 10), (20, 40), (60, 40), (60, 50), (0, 50)]  # opens to +x
+C_COIL = [(20, 10), (40, 10), (40, 40), (20, 40)]  # fills the window next to the left leg
+CORE = [(0, 0), (20, 0), (20, 20), (0, 20)]  # in the first quadrant, touching both axes
+COIL = [(22, 0), (32, 0), (32, 20), (22, 20)]
+
+
+def rect(x0, y0, x1, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+
+def face(points, plane="XY"):
+    """A face from (u, v) points: (x, y) in z = 0 ("XY") or (x, z) in y = 0 ("ZX")."""
+    vectors = [App.Vector(u, 0, v) if plane == "ZX" else App.Vector(u, v, 0) for u, v in points]
+    return Part.Face(Part.makePolygon(vectors + vectors[:1]))
+
+
+def solid(points, height):
+    """The XY polygon pulled up from z = 0 to height."""
+    return face(points).extrude(App.Vector(0, 0, height))
+
+
+def ring_sector(inner, outer, start, end, z0=0.0, height=1.0):
+    """Solid ring sector about the Z axis from angle start to end (degrees), from z0 up by height."""
+    sweep = end - start
+    shape = Part.makeCylinder(outer, height, App.Vector(0, 0, z0), App.Vector(0, 0, 1), sweep)
+    if inner > 0:
+        shape = shape.cut(Part.makeCylinder(inner, height + 2, App.Vector(0, 0, z0 - 1), App.Vector(0, 0, 1), sweep))
+    shape.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), start)
+    return shape
+
+
+def ring_face(inner, outer, start, end):
+    """The same in the XY plane, as a face in z = 0."""
+    flat = [
+        f for f in ring_sector(inner, outer, start, end).Faces if abs(f.BoundBox.ZMin) + abs(f.BoundBox.ZMax) < 1e-9
+    ]
+    return flat[0]
+
+
+# ---- Study helpers
+
+
+def new_study(doc, dimension, shapes):
+    """A Manual Study of dimension with one body per (name, shape). Returns (study, bodies)."""
+    study = objects.make_study(doc, dimension, doc.Name)
+    study.MainMode = "Manual"
+    bodies = []
+    for name, shape in shapes:
+        body = doc.addObject("Part::Feature", name)
+        body.Shape = shape
+        bodies.append(body)
+    study.MainObjects = bodies
+    doc.recompute()
+    return study, bodies
+
+
+def fit_air(study, bodies, padding=50):
+    """A Box Air Region fitted around the bodies."""
+    center, length, width, height = airshapes.fit_box(bodies, padding, airshapes.study_plane(study))
+    props = {"Center": center, "Length": length, "Width": width}
+    if study.Dimension == "3D":
+        props["Height"] = height
+    return objects.make_air_region(study, "Box", **props)
+
+
+def finish(study, bodies, air):
+    """One library material for every body and the air, so validation has nothing to warn about."""
+    lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "Steel", STEEL)))
+    objects.assign(study, [*bodies, air], lib, 0)
+    study.Document.recompute()
+    return study
+
+
+def air_study(doc, dimension, shapes, shape="Box", **props):
+    """A Study with the given bodies and an Air Region: a Box fitted to them, or another shape with these properties."""
+    study, bodies = new_study(doc, dimension, shapes)
+    if shape == "Box" and not props:
+        air = fit_air(study, bodies)
+    else:
+        air = objects.make_air_region(study, shape, **props)
+    return finish(study, bodies, air)
+
+
+# ---- 2D XY
+
+
+def rect_2d(doc):
+    return air_study(doc, "2D", [("Core", face(C_CORE)), ("Coil", face(C_COIL))])
+
+
+def simple_2d(doc, **air):
+    return air_study(doc, "2D", [("Core", face(CORE)), ("Coil", face(COIL))], "Sector", **air)
+
+
+def full_circle_2d(doc):
+    return simple_2d(doc, OuterRadius=60)
+
+
+def half_circle_2d(doc):
+    return simple_2d(doc, OuterRadius=60, StartAngle=-90, EndAngle=90)
+
+
+def quarter_circle_2d(doc):
+    return simple_2d(doc, OuterRadius=60, StartAngle=0, EndAngle=90)
+
+
+def crescent_2d(doc):
+    shapes = [("Yoke", ring_face(30, 40, 20, 160)), ("Coil", ring_face(40, 48, 20, 160))]
+    return air_study(doc, "2D", shapes, "Sector", InnerRadius=20, OuterRadius=60, StartAngle=0, EndAngle=180)
+
+
+def custom_2d(doc):
+    study, bodies = new_study(doc, "2D", [("Core", face(CORE)), ("Coil", face(COIL))])
+    hexagon = [(16 + 50 * math.cos(math.radians(a)), 10 + 50 * math.sin(math.radians(a))) for a in range(0, 360, 60)]
+    source = doc.addObject("Part::Feature", "Outline")  # not part of the Study: only gives the air its shape
+    source.Shape = face(hexagon)
+    air = objects.make_air_region(study, "Custom", Source=source)
+    return finish(study, bodies, air)
+
+
+# ---- 2D ZX (axisymmetric: x is the radius, z the axis)
+
+
+def zx_bodies():
+    return [("Plunger", face(rect(0, 5, 10, 45), "ZX")), ("Coil", face(rect(15, 0, 25, 50), "ZX"))]
+
+
+def half_disc_zx(doc):
+    return air_study(doc, "2D", zx_bodies(), "Sector", OuterRadius=80, Center=App.Vector(0, 0, 25))
+
+
+def rect_zx(doc):
+    return air_study(doc, "2D", zx_bodies(), "Box", Center=App.Vector(50, 0, 25), Length=100, Width=100)
+
+
+# ---- 3D
+
+
+def c_bodies():
+    return [("Core", solid(C_CORE, 30)), ("Coil", solid(C_COIL, 30))]
+
+
+def box_3d(doc):
+    return air_study(doc, "3D", c_bodies())
+
+
+def cylinder_3d(doc):
+    return air_study(doc, "3D", c_bodies(), "Sector", OuterRadius=90, ZMin=-25, Height=80)
+
+
+def quarter_cylinder_3d(doc):
+    return air_study(doc, "3D", c_bodies(), "Sector", OuterRadius=90, StartAngle=0, EndAngle=90, ZMin=-25, Height=80)
+
+
+def hollow_sector_3d(doc):
+    shapes = [("Yoke", ring_sector(30, 40, 20, 160, 0, 20)), ("Coil", ring_sector(40, 48, 20, 160, 0, 20))]
+    props = {"InnerRadius": 20, "OuterRadius": 60, "StartAngle": 0, "EndAngle": 180, "ZMin": -20, "Height": 60}
+    return air_study(doc, "3D", shapes, "Sector", **props)
+
+
+# ---- error cases
+
+
+def body_outside_air(doc):
+    shapes = [("Core", face(CORE)), ("Coil", face(COIL))]
+    return air_study(doc, "2D", shapes, "Box", Center=App.Vector(10, 10, 0), Length=30, Width=30)
+
+
+def bodies_overlap(doc):
+    study, bodies = new_study(doc, "2D", [("Left", face(rect(0, 0, 20, 20))), ("Right", face(rect(10, 0, 30, 20)))])
+    return finish(study, bodies, fit_air(study, bodies))
+
+
+NO_AIR_IN_BODIES = "no element inside a body carries the air's MAT_ID"
+
+CASES = [
+    Case("01_rect_2d", rect_2d, ["air all around the C core and the coil", "no overlap", NO_AIR_IN_BODIES]),
+    Case("02_circle_2d", full_circle_2d, ["round outer boundary", NO_AIR_IN_BODIES]),
+    Case("03_half_circle_2d", half_circle_2d, ["straight symmetry edge on the y axis (x = 0)", NO_AIR_IN_BODIES]),
+    Case("04_quarter_circle_2d", quarter_circle_2d, ["two straight symmetry edges, on the x and y axes"]),
+    Case("05_crescent_2d", crescent_2d, ["hollow inside: no air nor elements for r < 20", NO_AIR_IN_BODIES]),
+    Case("06_custom_2d", custom_2d, ["outer boundary is the hexagon, which is not meshed as a body"]),
+    Case("07_half_disc_zx", half_disc_zx, ["air has x >= 0 only, its straight edge lies on the Z axis"]),
+    Case("08_rect_zx", rect_zx, ["air rectangle starts on the Z axis (x = 0)"]),
+    Case("09_box_3d", box_3d, ["air box around the core and the coil: the old problem is solved"]),
+    Case("10_cylinder_3d", cylinder_3d, ["round outer boundary, flat top and bottom"]),
+    Case("11_quarter_cylinder_3d", quarter_cylinder_3d, ["two symmetry faces, on the xz and yz planes"]),
+    Case("12_hollow_sector_3d", hollow_sector_3d, ["hollow inside: no air nor elements for r < 20"]),
+    Case(
+        "E1_body_outside_air",
+        body_outside_air,
+        ["Validate refuses: the coil sticks out of the air"],
+        "not fully inside",
+    ),
+    Case("E6_bodies_overlap", bodies_overlap, ["Run Mesh refuses: the two bodies overlap"], "overlap"),
+]
+
+
+# ---- running
+
+
+def run_case(case, out_dir):
+    """Build the case in a new document saved in out_dir/<name>/, validate, mesh and write report.txt there.
+    Returns the report text; for an E-case the error text instead. Anything unexpected raises."""
+    case_dir = os.path.join(out_dir, case.name)
+    os.makedirs(case_dir, exist_ok=True)
+    doc = App.newDocument(case.name)
+    try:
+        doc.saveAs(os.path.join(case_dir, case.name + ".FCStd"))
+        study = case.build(doc)
+        text = _validate_and_mesh(case, study, case_dir)
+        doc.save()  # again, now with the IDs the job wrote
+    finally:
+        App.closeDocument(doc.Name)
+    for name in os.listdir(case_dir):
+        if name.endswith(".FCBak"):  # the backup that saving twice leaves
+            os.remove(os.path.join(case_dir, name))
+    with open(os.path.join(case_dir, "report.txt"), "w", encoding="utf-8") as fh:
+        fh.write(text + (meshreport.checklist_text(case.checklist) if case.expect_error else ""))
+    return text
+
+
+def _validate_and_mesh(case, study, case_dir):
+    problems = validation.validate(study)
+    found = validation.errors(problems)
+    if found:
+        text = "\n".join(p.text for p in found) + "\n"
+        if case.expect_error:
+            return text
+        raise RuntimeError(text)
+    job = jobwriter.write_job(study)
+    run = subprocess.run([sys.executable, MESHERS[study.Dimension], job], capture_output=True, encoding="utf-8")
+    if run.returncode != 0:
+        text = run.stderr.strip().splitlines()[-1] + "\n"
+        if case.expect_error:
+            return text
+        raise RuntimeError(text)
+    text = meshreport.report(case_dir, job, case.checklist)
+    warnings = [p.text for p in problems if p.severity == validation.WARNING]
+    return text + "".join(f"Warning: {w}\n" for w in warnings)
