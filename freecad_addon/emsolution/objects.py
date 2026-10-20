@@ -107,11 +107,16 @@ def add_recombination_algorithm(folder):
         folder.removeProperty("Recombine")
 
 
+class AirRegionsFolder(Folder):
+    LABEL = "Air Regions"
+
+
 FOLDERS = (
     ("MaterialLibraryGroup", MaterialLibraryFolder),
     ("MaterialsGroup", MaterialsFolder),
     ("ExcitationsGroup", ExcitationsFolder),
     ("MeshSizesGroup", MeshSizesFolder),
+    ("AirRegionsGroup", AirRegionsFolder),
 )
 
 
@@ -127,13 +132,12 @@ class Study(_Proxy):
         obj.addProperty("App::PropertyInteger", "NextSmatId", "IDs", "Next SMAT_ID")
         obj.NextSmatId = 1001
         for prop, _ in FOLDERS:
-            obj.addProperty("App::PropertyLink", prop, "EMSolution", "")
+            add_folder_property(obj, prop)
         obj.addProperty("App::PropertyLink", "MeshResult", "EMSolution", "")
         add_id_memory(obj)
         for prop in ("MatIds", "SmatIds", "NextMatId", "NextSmatId"):
             obj.setEditorMode(prop, 1)  # read-only: edit through the ID table
-        for prop in [g for g, _ in FOLDERS] + ["MeshResult"]:
-            obj.setEditorMode(prop, 2)  # hidden
+        obj.setEditorMode("MeshResult", 2)  # hidden
         obj.addProperty("App::PropertyEnumeration", "Dimension", "Setup")
         obj.Dimension = ["3D", "2D"]
         obj.setEditorMode("Dimension", 1)  # choose at creation; assignments depend on it
@@ -147,6 +151,23 @@ class Study(_Proxy):
             obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
             for prop in (mode, source, refs):
                 obj.setEditorMode(prop, 2)  # edit together in the Study panel
+
+    def onDocumentRestored(self, obj):
+        ensure_folders(obj)  # Studies saved before a folder existed
+
+
+def add_folder_property(study, prop):
+    study.addProperty("App::PropertyLink", prop, "EMSolution", "")
+    study.setEditorMode(prop, 2)  # hidden
+
+
+def ensure_folders(study):
+    """Adds the folders the Study lacks, also to Studies saved before they existed."""
+    for prop, cls in FOLDERS:
+        if not hasattr(study, prop):
+            add_folder_property(study, prop)
+        if getattr(study, prop) is None:
+            _make_folder(study, prop, cls)
 
 
 def add_id_memory(study):
@@ -262,6 +283,38 @@ class Recombine(_Proxy):
         )
 
 
+class AirRegion(_Named):
+    """The outer shape of the air around the model; the mesher fills it. Shape is built from the properties."""
+
+    def __init__(self, obj):
+        obj.Proxy = self
+        self.add_group_name(obj)
+        add = obj.addProperty
+        add("App::PropertyEnumeration", "AirShape", "Air", "Outer shape of the air")
+        obj.AirShape = ["Box", "Sector", "Custom"]
+        add("App::PropertyVector", "Center", "Air", "Centre of a Box")
+        add("App::PropertyLength", "Length", "Air", "Box size along x")
+        add("App::PropertyLength", "Width", "Air", "Box size along y (z in a ZX plane study)")
+        add("App::PropertyLength", "Height", "Air", "Box size along z; height of a 3D Sector")
+        for prop in ("Length", "Width", "Height"):
+            setattr(obj, prop, 100.0)
+        add("App::PropertyLength", "InnerRadius", "Air", "Inner radius of a Sector")
+        add("App::PropertyLength", "OuterRadius", "Air", "Outer radius of a Sector")
+        obj.OuterRadius = 100.0
+        add("App::PropertyAngle", "StartAngle", "Air", "Sector start angle about the Z axis")
+        add("App::PropertyAngle", "EndAngle", "Air", "Sector end angle about the Z axis")
+        obj.EndAngle = 360.0
+        add("App::PropertyDistance", "ZMin", "Air", "Bottom of a 3D Sector")
+        obj.ZMin = -50.0
+        add("App::PropertyLinkGlobal", "Source", "Air", "Body that gives a Custom shape")
+
+    def execute(self, obj):
+        from . import airshapes
+
+        study = owner_study(obj)
+        obj.Shape = airshapes.air_shape(obj, airshapes.study_plane(study) if study else "3D")
+
+
 def _make_folder(study, prop, cls):
     folder = study.Document.addObject("App::DocumentObjectGroupPython", prop.replace("Group", ""))
     cls(folder)
@@ -329,6 +382,24 @@ def _add(study, group_prop, proxy_cls, label):
     if hasattr(obj, "GroupName"):
         obj.GroupName = label
     getattr(study, group_prop).addObject(obj)
+    return obj
+
+
+def make_air_region(study, shape="Box", **props):
+    """Adds an Air Region: its outer shape and the properties that size it (see AirRegion)."""
+    obj = study.Document.addObject("Part::FeaturePython", "AirRegion")
+    AirRegion(obj)
+    obj.Label = "Air"
+    obj.GroupName = "Air"
+    obj.AirShape = shape
+    for name, value in props.items():
+        setattr(obj, name, value)
+    study.AirRegionsGroup.addObject(obj)
+    if getattr(obj, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        if hasattr(taskpanels, "ViewProviderAir"):
+            taskpanels.ViewProviderAir(obj.ViewObject)
     return obj
 
 
@@ -451,6 +522,10 @@ def transfinite_edges(study):
 
 def recombine_items(study):
     return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, Recombine)]
+
+
+def air_regions(study):
+    return list(study.AirRegionsGroup.Group)
 
 
 def library_materials(study):

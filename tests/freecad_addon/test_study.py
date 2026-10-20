@@ -166,7 +166,6 @@ class StudyTest(unittest.TestCase):
     def test_main_geometry_has_no_materials_mode(self):
         for prop in ("MainMode", "MovingMode"):
             self.assertEqual(self.study.getEnumerationsOfProperty(prop), ["Unassigned", "Container", "Manual"])
-        self.assertFalse(hasattr(self.study.Proxy, "onDocumentRestored"))
 
     def test_pad_face_resolves_to_body(self):
         body = self.doc.addObject("PartDesign::Body", "Body")
@@ -213,7 +212,8 @@ class StudyTest(unittest.TestCase):
         folder.Label = "Stuff"
         self.assertEqual(folder.Label, "Materials")
         self.assertEqual(
-            [f.Label for f in self.study.Group], ["Material Library", "Materials", "Excitations", "Mesh Sizes"]
+            [f.Label for f in self.study.Group],
+            ["Material Library", "Materials", "Excitations", "Mesh Sizes", "Air Regions"],
         )
 
     def lib(self, material_id="user:steel", name="Steel", family="electrical_steel"):
@@ -240,7 +240,7 @@ class StudyTest(unittest.TestCase):
         objects.make_library_material(second, json.dumps(record("user:air", "Air")))
         keep = {"A", second.Name} | {o.Name for o in objects.study_contents(second)}
         owned = objects.study_contents(self.study)
-        self.assertEqual(len(owned), 4 + 5)  # four folders; assignment, library material, excitation, size, result
+        self.assertEqual(len(owned), 5 + 5)  # five folders; assignment, library material, excitation, size, result
         objects.delete_contents(self.study)
         self.doc.removeObject(self.study.Name)
         self.assertEqual({o.Name for o in self.doc.Objects}, keep)
