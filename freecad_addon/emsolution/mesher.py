@@ -36,25 +36,17 @@ def _import_one(path, *dims):
     return tags[0]
 
 
-def _import_solids(path):
-    """A body file holds one or more solids, e.g. the pieces of a Part Slice."""
-    tags = gmsh.model.occ.importShapes(path, highestDimOnly=True)
-    if not tags or any(d != 3 for d, _ in tags):
-        raise JobError(f"{os.path.basename(path)}: expected 3D entities, got {tags}")
-    return tags
-
-
 def build(job, folder):
     """Import, fragment, check, tag and size the model. Gmsh must be initialized.
     Sliding motion: returns the split of the model into the fixed and the moving side (see meshcommon.run)."""
     vols, surfs = job["volumes"], job["surfaces"]
     if not vols:
         raise JobError("job has no volumes")
-    pieces = [_import_solids(os.path.join(folder, v["file"])) for v in vols]
+    pieces = [import_brep(os.path.join(folder, v["file"]), 3) for v in vols]  # a body may be several solids
     inputs = [t for p in pieces for t in p]
     air = job.get("air")
     if air:  # after the bodies, so the fragment keeps the bodies' pieces whole
-        air_pieces = _import_solids(os.path.join(folder, air["file"]))
+        air_pieces = import_brep(os.path.join(folder, air["file"]), 3)
         inputs += air_pieces
     surf_files = [(s, os.path.join(folder, f)) for s in surfs for f in s["files"]]
     inputs += [_import_one(path, 2) for _, path in surf_files]

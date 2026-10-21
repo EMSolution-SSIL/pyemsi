@@ -342,8 +342,8 @@ def apply_slides(slides, mapped, dim):
 
     mapped: per slide, ([(file name, final dimtags)] of its pieces, (marker file name, final dimtags)).
     A full turn is built in two halves of divisions / 2 each; a sector or a line gets divisions. A piece that a
-    touching body split further shares its count out by length. In 3D the pieces are faces (see _slide_face) and the
-    marker is the slide edge, a generatrix of the surface.
+    touching body split further shares its count out by length. In 3D the pieces are faces (see _slide_faces) and
+    the marker is the slide edge, a generatrix of the surface.
     """
     markers = {}
     for slide, (pieces, (marker, marker_tags)) in zip(slides, mapped):
@@ -359,7 +359,7 @@ def apply_slides(slides, mapped, dim):
             if not tags or any(len(gmsh.model.getAdjacencies(dim - 1, t)[0]) == 0 for t in tags):
                 raise JobError(f"{name}: {file} did not merge with the model")
             if dim == 3:
-                _slide_face(slide, f"{name}: {file}", tags, n, found[0], done)
+                _slide_faces(slide, f"{name}: {file}", tags, n, found[0], done)
                 continue
             if len(tags) > n:
                 raise JobError(f"{name}: {file} was split into {len(tags)} pieces by touching bodies, more than {n}")
@@ -397,30 +397,21 @@ def _unit(v):
     return [sign * x / size for x in v]
 
 
-def _slide_face(slide, label, faces, n, edge, done):
-    """3D: make one slide face transfinite with "Left" triangles and its corners in the same order on every face, so
-    that the mesh of the surface is the same after a shift of one division.
+def _slide_faces(slide, label, faces, n, edge, done):
+    """3D: make the faces of one slide surface file transfinite with "Left" triangles and their corners in the same
+    order on every face, so that the mesh of the surface is the same after a shift of one division.
 
-    Its sides along the motion (arcs about Z at one radius and height; lines at one position across a linear plane)
-    get n elements, the sides across it cross_divisions; a side split by a touching body shares its count by length.
-    The corners are where a side along the motion meets one across, plus a point on the Z axis: a half disc that
-    reaches the axis has 3 corners, and Gmsh collapses the first one, the axis point. edge: a line of the slide edge,
-    which runs across the motion. done: {curve: elements} so far for this interface.
+    A body that lies on the surface splits it into faces: bands across the motion where its edges run along the
+    motion, pieces along the motion where they run across it. Every curve gets its elements from a grid over the
+    file: n divisions along the motion (arcs about Z at one radius and height; lines at one position across a linear
+    plane) and cross_divisions along the slide edge, so the pieces fit together and a body edge on a grid line keeps
+    the division uniform. A body on only part of it (a notch or a hole in a face) is an error: such a face has no
+    4 corners. The corners of a face are where a side along the motion meets one across, plus a point on
+    the Z axis: a half disc that reaches the axis has 3 corners, and Gmsh collapses the first one, the axis point.
+    edge: a line of the slide edge, which runs across the motion. done: {curve: elements} so far for this interface.
     """
-    if len(faces) > 1:
-        raise JobError(f"{label} was split into {len(faces)} faces by touching bodies; keep the bodies off it")
-    face = faces[0]
     box = gmsh.model.getBoundingBox(-1, -1)
     tol = 1e-6 * math.dist(box[:3], box[3:])
-    curves = _boundary(2, face)
-    ends = {c: _boundary(1, c) for c in curves}
-    if any(len(e) != 2 for e in ends.values()):
-        raise JobError(f"{label}: the face at {_at(2, face)} has a closed edge; it cannot be structured")
-    at = {}  # point -> the curves meeting there
-    for c in curves:
-        for p in ends[c]:
-            at.setdefault(p, []).append(c)
-    xyz = {p: gmsh.model.getValue(0, p, []) for p in at}
     rotational = slide["kind"] != "linear"
     if not rotational:
         across = _unit([y - x for x, y in zip(*(gmsh.model.getValue(0, p, []) for p in _boundary(1, edge)))])
@@ -429,58 +420,82 @@ def _slide_face(slide, label, faces, n, edge, done):
         """What stays the same along the motion: radius and height, or the position across a linear motion."""
         return (math.hypot(p[0], p[1]), p[2]) if rotational else (sum(x * g for x, g in zip(p, across)),)
 
-    along = {}
-    for c in curves:
-        lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, c))
-        pts = [level(gmsh.model.getValue(1, c, [lo + (hi - lo) * k / 4])) for k in range(5)]
-        along[c] = all(abs(x - y) < tol for p in pts for x, y in zip(p, pts[0]))
-    axis = [p for p in at if rotational and math.hypot(*xyz[p][:2]) < tol]
-    corners = [p for p in at if p in axis or len({along[c] for c in at[p]}) == 2]
-    if (len(corners), len(axis)) not in ((4, 0), (3, 1)):
-        raise JobError(
-            f"{label}: the face at {_at(2, face)} has {len(corners)} corners; it needs 4 (or 3, one on the Z axis)"
-        )
-    # u: the corner's coordinate along the motion; v: along the slide edge
+    loops, along, xyz = {}, {}, {}  # face -> (curves, ends, at); curve -> runs along the motion; point -> (x, y, z)
+    for face in faces:
+        curves = _boundary(2, face)
+        ends = {c: _boundary(1, c) for c in curves}
+        if any(len(e) != 2 for e in ends.values()):
+            raise JobError(f"{label}: the face at {_at(2, face)} has a closed edge; it cannot be structured")
+        at = {}  # point -> the curves meeting there
+        for c in curves:
+            for p in ends[c]:
+                at.setdefault(p, []).append(c)
+                xyz.setdefault(p, gmsh.model.getValue(0, p, []))
+            if c not in along:
+                lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, c))
+                pts = [level(gmsh.model.getValue(1, c, [lo + (hi - lo) * k / 4])) for k in range(5)]
+                along[c] = all(abs(x - y) < tol for p in pts for x, y in zip(p, pts[0]))
+        loops[face] = curves, ends, at
+    axis = {p for p, q in xyz.items() if rotational and math.hypot(*q[:2]) < tol}
+    # u: a point's coordinate along the motion; v: along the slide edge
     if rotational:
-        cx, cy, _ = gmsh.model.occ.getCenterOfMass(2, face)
-        mid = math.atan2(cy, cx)
-        u = {p: math.remainder(math.atan2(xyz[p][1], xyz[p][0]) - mid, math.tau) for p in corners if p not in axis}
-        v = {p: xyz[p][2] if slide["kind"] == "rotational" else math.hypot(*xyz[p][:2]) for p in u}
+        weighted = [(gmsh.model.occ.getMass(2, f), gmsh.model.occ.getCenterOfMass(2, f)) for f in faces]
+        mid = math.atan2(sum(m * c[1] for m, c in weighted), sum(m * c[0] for m, c in weighted))
+        u = {p: math.remainder(math.atan2(q[1], q[0]) - mid, math.tau) for p, q in xyz.items() if p not in axis}
+        v = {p: q[2] if slide["kind"] == "rotational" else math.hypot(*q[:2]) for p, q in xyz.items()}
     else:
-        a, b = (xyz[p] for p in ends[next(c for c in curves if along[c])])
+        a, b = (xyz[p] for p in _boundary(1, next(c for c in along if along[c])))
         motion = _unit([y - x for x, y in zip(a, b)])
-        u = {p: sum(x * m for x, m in zip(xyz[p], motion)) for p in corners}
-        v = {p: level(xyz[p])[0] for p in corners}
-    if axis:
-        order = axis + sorted(u, key=u.get)
-    else:
-        mu, mv = sum(u.values()) / 4, sum(v.values()) / 4
-        quarter = {(u[p] > mu, v[p] > mv): p for p in corners}
-        order = [quarter.get(k) for k in ((False, False), (True, False), (True, True), (False, True))]
-        if None in order:
-            raise JobError(f"{label}: the corners of the face at {_at(2, face)} do not make a quadrangle")
-    sides = []
-    for c, p in _loop(face, curves, ends, at, order[0], label):
-        if p in corners:
-            sides.append([])
-        sides[-1].append(c)
-    kinds = [{along[c] for c in side} for side in sides]
-    fits = kinds == [{False}, {True}, {False}] if axis else kinds in ([{True}, {False}] * 2, [{False}, {True}] * 2)
-    if not fits:
-        raise JobError(f"{label}: the face at {_at(2, face)} does not have sides along the motion and across it")
-    for side, (is_along,) in zip(sides, kinds):
-        total = n if is_along else slide["cross_divisions"]
-        if len(side) > total:
-            raise JobError(f"{label}: a side was split into {len(side)} pieces by touching bodies, more than {total}")
-        counts = _share(total, [gmsh.model.occ.getMass(1, c) for c in side])
-        if len(side) > 1:
-            parts = " + ".join(map(str, counts))
-            _note(f"{label}: a side was split into {len(side)} pieces by a touching body; elements {parts}")
-        for c, k in zip(side, counts):
+        u = {p: sum(x * m for x, m in zip(q, motion)) for p, q in xyz.items()}
+        v = {p: level(q)[0] for p, q in xyz.items()}
+    grids = []  # (coordinate, divisions, {point: grid index})
+    for coord, count in ((u, n), (v, slide["cross_divisions"])):
+        lo, hi = min(coord.values()), max(coord.values())
+        exact = {p: count * (x - lo) / (hi - lo) for p, x in coord.items()}
+        grids.append({p: math.floor(x + 0.5) for p, x in exact.items()})
+        if any(abs(x - grids[-1][p]) > 1e-6 for p, x in exact.items()):
+            _note(f"{label}: a touching body meets it between two divisions; the elements next to it are uneven")
+    for face, (curves, ends, at) in loops.items():
+        corners = [p for p in at if p in axis or len({along[c] for c in at[p]}) == 2]
+        apex = [p for p in corners if p in axis]
+        if (len(corners), len(apex)) not in ((4, 0), (3, 1)) and len(faces) > 1:  # a notch or a hole in a face
+            raise JobError(
+                f"{label}: a body lies on only part of it, at the face at {_at(2, face)}; a body on the slide surface"
+                " must reach from edge to edge (all the way along the motion, or all the way across it)"
+            )
+        if (len(corners), len(apex)) not in ((4, 0), (3, 1)):
+            raise JobError(
+                f"{label}: the face at {_at(2, face)} has {len(corners)} corners; it needs 4 (or 3, one on the Z axis)"
+            )
+        if apex:
+            order = apex + sorted((p for p in corners if p not in axis), key=u.get)
+        else:
+            mu, mv = sum(u[p] for p in corners) / 4, sum(v[p] for p in corners) / 4
+            quarter = {(u[p] > mu, v[p] > mv): p for p in corners}
+            order = [quarter.get(k) for k in ((False, False), (True, False), (True, True), (False, True))]
+            if None in order:
+                raise JobError(f"{label}: the corners of the face at {_at(2, face)} do not make a quadrangle")
+        sides = []
+        for c, p in _loop(face, curves, ends, at, order[0], label):
+            if p in corners:
+                sides.append([])
+            sides[-1].append(c)
+        kinds = [{along[c] for c in side} for side in sides]
+        fits = kinds == [{False}, {True}, {False}] if apex else kinds in ([{True}, {False}] * 2, [{False}, {True}] * 2)
+        if not fits:
+            raise JobError(f"{label}: the face at {_at(2, face)} does not have sides along the motion and across it")
+        for c in curves:
+            grid = grids[0 if along[c] else 1]
+            k = abs(grid[ends[c][0]] - grid[ends[c][1]])
+            if not k:
+                raise JobError(
+                    f"{label}: a touching body cuts it less than one division from another edge, at {_at(1, c)};"
+                    " move the body or change the divisions"
+                )
             if done.setdefault(c, k) != k:
                 raise JobError(f"{label}: an edge between two slide faces gets {done[c]} and {k} elements")
             gmsh.model.mesh.setTransfiniteCurve(c, k + 1)
-    gmsh.model.mesh.setTransfiniteSurface(face, "Left", order)
+        gmsh.model.mesh.setTransfiniteSurface(face, "Left", order)
 
 
 def _transform(periodic):

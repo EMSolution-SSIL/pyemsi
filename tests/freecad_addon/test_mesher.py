@@ -706,12 +706,12 @@ class MesherTest(unittest.TestCase):
             extra["periodic"] = periodic
         return self.run_job(volumes, surfaces, air=air, extra=extra)
 
-    def motor_job(self, tooth=False, surfaces=()):
-        """Case 17: stator ring 45..80 fixed, rotor r 40 moving, both z 0..50, air cylinder r 100 from z -25 to 75,
-        slide cylinder r 42.5 in two halves, 72 divisions round and 10 up, slide edge at (42.5, 0).
-        tooth: the stator also has a tooth 42.5..45 from 10° to 20° that touches the slide cylinder."""
-        write_rings(self.geo("vol_1.brep"), (45, 80, 0, 50), *([(42.5, 45, 0, 50, 10, 20)] if tooth else []))
-        write_rings(self.geo("vol_2.brep"), (0, 40, 0, 50))
+    def motor_job(self, tooth=None, surfaces=(), rotor=40):
+        """Case 17: stator ring 45..80 fixed, rotor (radius rotor) moving, both z 0..50, air cylinder r 100 from z -25
+        to 75, slide cylinder r 42.5 in two halves, 72 divisions round and 10 up, slide edge at (42.5, 0).
+        tooth: (z0, height) of a stator tooth 42.5..45 from 10° to 20° that touches the slide cylinder."""
+        write_rings(self.geo("vol_1.brep"), (45, 80, 0, 50), *([(42.5, 45, *tooth, 10, 20)] if tooth else []))
+        write_rings(self.geo("vol_2.brep"), (0, rotor, 0, 50))
         write_rings(self.geo("air.brep"), (0, 100, -25, 100))
         write_rings(self.geo("cell_1.brep"), (0, 42.5, -25, 100))
         for k, a in enumerate((0, 180), 1):
@@ -738,6 +738,32 @@ class MesherTest(unittest.TestCase):
         self.assertIn("MAT_ID      11  Air_moving", r.stdout)
         self.assertIn("SLIDE_NDIV 72", r.stdout)
         self.assertIn(f"Wrote {self.files()[1]}", r.stdout)
+        for path in self.files():  # each file numbers its nodes from 1
+            tags = self.node_tags(path)
+            self.assertEqual(tags, list(range(1, len(tags) + 1)), path)
+
+    def node_tags(self, path):
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(path)
+            return sorted(int(t) for t in gmsh.model.mesh.getNodes()[0])
+        finally:
+            gmsh.finalize()
+
+    def cylinder_nodes(self, r=42.5):
+        """The nodes on the slide cylinder in each file."""
+        return [sorted(p for p in read_nodes(f) if abs(math.hypot(p[0], p[1]) - r) < 1e-6) for f in self.files()]
+
+    def test_rotor_on_the_slide_cylinder_matches(self):
+        """The rotor's outer face is part of the slide cylinder: its end circles cut each half into three bands."""
+        r = self.motor_job(rotor=42.5)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = self.cylinder_nodes()
+        self.assertEqual(len(fixed), 72 * 11)
+        self.assertEqual(fixed, moving)
+        self.assertEqual(len({p[2] for p in fixed}), 11)
+        self.assertEqual(len({round(math.degrees(math.atan2(p[1], p[0])), 6) % 360 for p in fixed}), 72)
 
     def test_excitation_surface_goes_to_the_file_of_its_body(self):
         write_revolved(self.geo("surf_1001_1.brep"), (45, 0, 50), (80, 0, 50), 0, 360)  # the stator's top face
@@ -758,11 +784,26 @@ class MesherTest(unittest.TestCase):
                 gmsh.finalize()
         self.assertEqual(found, [[(2, 1001)], []])
 
-    def test_body_touching_the_slide_cylinder_fails_cleanly(self):
-        r = self.motor_job(tooth=True)
+    def test_tooth_on_the_slide_cylinder_keeps_the_grid(self):
+        """A tooth face from 10° to 20° over the whole height splits a half along the motion, on the 5° grid."""
+        r = self.motor_job(tooth=(-25, 100))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = self.cylinder_nodes()
+        self.assertEqual(len(fixed), 72 * 11)
+        self.assertEqual(fixed, moving)
+        angles = sorted({round(math.degrees(math.atan2(p[1], p[0])), 6) % 360 for p in fixed})
+        for got, want in zip(angles, range(0, 360, 5)):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_tooth_on_part_of_the_slide_cylinder_fails_cleanly(self):
+        """A tooth face from 10° to 20° and z 0..50 is a hole in the half cylinder face: it cannot be structured."""
+        r = self.motor_job(tooth=(0, 50))
         self.assertEqual(r.returncode, 1)
         last = r.stderr.strip().splitlines()[-1]
-        self.assertTrue(last.startswith("ERROR: sliding interface Slide: slide_20_1.brep was split"), last)
+        self.assertTrue(
+            last.startswith("ERROR: sliding interface Slide: slide_20_1.brep: a body lies on only part"), last
+        )
+        self.assertIn("must reach from edge to edge", last)
 
     def line_group(self, path, group):
         """(element count, node coordinates) of the dim-1 physical group in a mesh file; None if it has none."""
@@ -820,10 +861,11 @@ class MesherTest(unittest.TestCase):
         turned = {frozenset(((k + 1) % 72, z) for k, z in tri) for tri in tris}
         self.assertEqual(turned, tris)
 
-    def test_axial_gap_disc_reaching_axis(self):
-        """Case 19: rotor disc z 0..10 moving, stator disc z 12..22 fixed, slide disc z 11 over the whole air."""
+    def axial_job(self, rotor_z=0):
+        """Case 19: rotor disc r 50 from z rotor_z, 10 high, moving; stator disc z 12..22 fixed; slide disc z 11 over
+        the whole air r 80, 36 divisions round and 8 out."""
         write_rings(self.geo("vol_1.brep"), (0, 50, 12, 10))
-        write_rings(self.geo("vol_2.brep"), (0, 50, 0, 10))
+        write_rings(self.geo("vol_2.brep"), (0, 50, rotor_z, 10))
         write_rings(self.geo("air.brep"), (0, 80, -10, 42))
         write_rings(self.geo("cell_1.brep"), (0, 80, -10, 21))
         for k, a in enumerate((0, 180), 1):
@@ -831,7 +873,10 @@ class MesherTest(unittest.TestCase):
         write_line(self.geo("marker_20.brep"), (0, 0, 11), (80, 0, 11))
         vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Rotor", "vol_2.brep", 10)]
         slide = self.slide("axial", ["slide_20_1.brep", "slide_20_2.brep"], 36, 8, True)
-        r = self.slide_job(vols, [2], [slide])
+        return self.slide_job(vols, [2], [slide])
+
+    def test_axial_gap_disc_reaching_axis(self):
+        r = self.axial_job()
         self.assertEqual(r.returncode, 0, r.stderr)
         fixed, moving = (sorted(p for p in read_nodes(f) if abs(p[2] - 11) < 1e-9) for f in self.files())
         self.assertEqual(len(fixed), 36 * 8 + 1)
@@ -840,18 +885,38 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(count, 8)
         self.assertEqual(sorted(nodes), [(x, 0, 11) for x in range(0, 81, 10)])
 
-    def test_linear_3d_plane_and_period(self):
-        """Case 20: stator box below z 20 fixed, mover z 24..40 moving, slide plane z 22 moving along x, the period is
-        the 80 mm air box length."""
+    def test_rotor_disc_on_the_axial_gap_plane_matches(self):
+        """The rotor's top face lies on the slide disc: each half is a half disc r < 50 and a half ring around it."""
+        r = self.axial_job(rotor_z=1)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (sorted(p for p in read_nodes(f) if abs(p[2] - 11) < 1e-9) for f in self.files())
+        self.assertEqual(len(fixed), 36 * 8 + 1)
+        self.assertEqual(fixed, moving)
+
+    def linear_job(self, mover=(0, 0, 24, 80, 40, 16)):
+        """Case 20: stator box below z 20 fixed, mover box (x, y, z, dx, dy, dz) moving, slide plane z 22 moving along
+        x with 32 divisions and 8 across, the period is the 80 mm air box length."""
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 80, 40, 20)
-        write_box(self.geo("vol_2.brep"), 0, 0, 24, 80, 40, 16)
+        write_box(self.geo("vol_2.brep"), *mover)
         write_box(self.geo("air.brep"), 0, 0, -5, 80, 40, 50)
         write_box(self.geo("cell_1.brep"), 0, 0, 22, 80, 40, 23)
         write_rect(self.geo("slide_20_1.brep"), 0, 0, 22, 80, 40)
         write_line(self.geo("marker_20.brep"), (0, 0, 22), (0, 40, 22))
         vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Mover", "vol_2.brep", 10)]
         period = {"kind": "translation", "vector": [80.0, 0.0, 0.0], "start": 0.0}
-        r = self.slide_job(vols, [2], [self.slide("linear", ["slide_20_1.brep"], 32, 8)], period)
+        return self.slide_job(vols, [2], [self.slide("linear", ["slide_20_1.brep"], 32, 8)], period)
+
+    def test_mover_on_the_linear_plane_matches(self):
+        """The mover's bottom face (y 10..30) lies on the slide plane: it cuts it into three bands across the motion."""
+        r = self.linear_job(mover=(0, 10, 22, 80, 20, 18))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (sorted(p for p in read_nodes(f) if abs(p[2] - 22) < 1e-9) for f in self.files())
+        self.assertEqual(len(fixed), 33 * 9)
+        self.assertEqual(fixed, moving)
+        self.assertEqual(sorted({p[1] for p in fixed}), list(range(0, 41, 5)))
+
+    def test_linear_3d_plane_and_period(self):
+        r = self.linear_job()
         self.assertEqual(r.returncode, 0, r.stderr)
         planes = []
         for path in self.files():
