@@ -342,8 +342,9 @@ def apply_slides(slides, mapped, dim):
 
     mapped: per slide, ([(file name, final dimtags)] of its pieces, (marker file name, final dimtags)).
     A full turn is built in two halves of divisions / 2 each; a sector or a line gets divisions. A piece that a
-    touching body split further shares its count out by length. In 3D the pieces are faces (see _slide_faces) and
-    the marker is the slide edge, a generatrix of the surface.
+    touching body split further gets the divisions between its ends; every cut must lie on a division (see
+    _along_grid). In 3D the pieces are faces (see _slide_faces) and the marker is the slide edge, a generatrix of the
+    surface.
     """
     markers = {}
     for slide, (pieces, (marker, marker_tags)) in zip(slides, mapped):
@@ -361,9 +362,18 @@ def apply_slides(slides, mapped, dim):
             if dim == 3:
                 _slide_faces(slide, f"{name}: {file}", tags, n, found[0], done)
                 continue
-            if len(tags) > n:
-                raise JobError(f"{name}: {file} was split into {len(tags)} pieces by touching bodies, more than {n}")
-            counts = _share(n, [gmsh.model.occ.getMass(dim - 1, t) for t in tags])
+            ends = {t: _boundary(1, t) for t in tags}
+            xyz = {p: gmsh.model.getValue(0, p, []) for e in ends.values() for p in e}
+            rotational = slide["kind"] != "linear"
+            if rotational:
+                mid = _mid_angle(1, tags)
+                u = {p: math.remainder(math.atan2(q[1], q[0]) - mid, math.tau) for p, q in xyz.items()}
+            else:
+                a, b = (xyz[p] for p in ends[tags[0]])
+                motion = _unit([y - x for x, y in zip(a, b)])
+                u = {p: sum(x * m for x, m in zip(q, motion)) for p, q in xyz.items()}
+            grid = _along_grid(f"{name}: {file}", u, xyz, n, rotational)
+            counts = [abs(grid[a] - grid[b]) for a, b in (ends[t] for t in tags)]
             if len(tags) > 1:
                 parts = " + ".join(map(str, counts))
                 _note(f"{name}: {file} was split into {len(tags)} pieces by a touching body; elements {parts}")
@@ -389,6 +399,46 @@ def slide_split(job, bodies, tags, markers, dim):
     return split
 
 
+def _mid_angle(dim, tags):
+    """Angle about Z of the centre of mass of the entities together: the middle of an arc, or of a cylinder piece."""
+    weighted = [(gmsh.model.occ.getMass(dim, t), gmsh.model.occ.getCenterOfMass(dim, t)) for t in tags]
+    return math.atan2(sum(m * c[1] for m, c in weighted), sum(m * c[0] for m, c in weighted))
+
+
+def _levels(exact, gap=1e-6):
+    """{key: grid index} from {key: position on the grid}: positions closer than gap are one level and get the index
+    of its first one, so float noise cannot round two points of one level apart."""
+    out, index, last = {}, 0, None
+    for key, x in sorted(exact.items(), key=lambda item: item[1]):
+        if last is None or x - last > gap:
+            index = math.floor(x + 0.5)
+        out[key], last = index, x
+    return out
+
+
+def _along_grid(label, u, xyz, n, rotational):
+    """{point: division index} along the motion: u {point: angle (rad) or position (mm)}, n divisions over its range.
+    Every point must lie on a division (the same uniform division on both sides); a point between two is an error."""
+    lo, hi = min(u.values()), max(u.values())
+    exact = {p: n * (x - lo) / (hi - lo) for p, x in u.items()}
+    grid = _levels(exact)
+    for p, x in sorted(exact.items(), key=lambda item: item[1]):
+        if abs(x - grid[p]) > 1e-6:
+            q = xyz[p]
+            where = "({:g}, {:g}, {:g})".format(*(round(c, 6) + 0.0 for c in q))
+            if rotational:
+                where += f", at {round(math.degrees(math.atan2(q[1], q[0])), 6) % 360 + 0.0:g}°"
+                every, other = f"{round(math.degrees(hi - lo) / n, 6):g}°", "the start angle"
+            else:
+                every, other = f"{round((hi - lo) / n, 6):g} mm", "the Air Region length"
+            raise JobError(
+                f"{label}: the point at {where} lies between two divisions along the motion; it may be a body edge"
+                f" or the seam of a round body face. Put it on a multiple of the division step from the slide start"
+                f" (every {every}), or change Divisions or {other}"
+            )
+    return grid
+
+
 def _unit(v):
     """v scaled to length 1 and turned so that its largest component is positive: one direction for a line,
     whichever way it runs."""
@@ -404,10 +454,11 @@ def _slide_faces(slide, label, faces, n, edge, done):
     A body that lies on the surface splits it into faces: bands across the motion where its edges run along the
     motion, pieces along the motion where they run across it. Every curve gets its elements from a grid over the
     file: n divisions along the motion (arcs about Z at one radius and height; lines at one position across a linear
-    plane) and cross_divisions along the slide edge, so the pieces fit together and a body edge on a grid line keeps
-    the division uniform. A body on only part of it (a notch or a hole in a face) is an error: such a face has no
-    4 corners. The corners of a face are where a side along the motion meets one across, plus a point on
-    the Z axis: a half disc that reaches the axis has 3 corners, and Gmsh collapses the first one, the axis point.
+    plane) and cross_divisions along the slide edge, so the pieces fit together. Along the motion every cut must lie
+    on a division (the same uniform division on both sides); across it a cut between two divisions only makes the
+    elements there uneven (a NOTE). A body on only part of it (a notch or a hole in a face) is an error: such a face
+    has no 4 corners. The corners of a face are where a side along the motion meets one across, plus a point on the
+    Z axis: a half disc that reaches the axis has 3 corners, and Gmsh collapses the first one, the axis point.
     edge: a line of the slide edge, which runs across the motion. done: {curve: elements} so far for this interface.
     """
     box = gmsh.model.getBoundingBox(-1, -1)
@@ -439,8 +490,7 @@ def _slide_faces(slide, label, faces, n, edge, done):
     axis = {p for p, q in xyz.items() if rotational and math.hypot(*q[:2]) < tol}
     # u: a point's coordinate along the motion; v: along the slide edge
     if rotational:
-        weighted = [(gmsh.model.occ.getMass(2, f), gmsh.model.occ.getCenterOfMass(2, f)) for f in faces]
-        mid = math.atan2(sum(m * c[1] for m, c in weighted), sum(m * c[0] for m, c in weighted))
+        mid = _mid_angle(2, faces)
         u = {p: math.remainder(math.atan2(q[1], q[0]) - mid, math.tau) for p, q in xyz.items() if p not in axis}
         v = {p: q[2] if slide["kind"] == "rotational" else math.hypot(*q[:2]) for p, q in xyz.items()}
     else:
@@ -448,13 +498,11 @@ def _slide_faces(slide, label, faces, n, edge, done):
         motion = _unit([y - x for x, y in zip(a, b)])
         u = {p: sum(x * m for x, m in zip(q, motion)) for p, q in xyz.items()}
         v = {p: level(q)[0] for p, q in xyz.items()}
-    grids = []  # (coordinate, divisions, {point: grid index})
-    for coord, count in ((u, n), (v, slide["cross_divisions"])):
-        lo, hi = min(coord.values()), max(coord.values())
-        exact = {p: count * (x - lo) / (hi - lo) for p, x in coord.items()}
-        grids.append({p: math.floor(x + 0.5) for p, x in exact.items()})
-        if any(abs(x - grids[-1][p]) > 1e-6 for p, x in exact.items()):
-            _note(f"{label}: a touching body meets it between two divisions; the elements next to it are uneven")
+    lo, hi, count = min(v.values()), max(v.values()), slide["cross_divisions"]
+    exact = {p: count * (x - lo) / (hi - lo) for p, x in v.items()}
+    grids = [_along_grid(label, u, xyz, n, rotational), _levels(exact)]  # {point: division index} along, across
+    if any(abs(x - grids[1][p]) > 1e-6 for p, x in exact.items()):
+        _note(f"{label}: a body lying on it has an edge between two divisions across the motion; uneven elements there")
     for face, (curves, ends, at) in loops.items():
         corners = [p for p in at if p in axis or len({along[c] for c in at[p]}) == 2]
         apex = [p for p in corners if p in axis]
@@ -487,10 +535,10 @@ def _slide_faces(slide, label, faces, n, edge, done):
         for c in curves:
             grid = grids[0 if along[c] else 1]
             k = abs(grid[ends[c][0]] - grid[ends[c][1]])
-            if not k:
+            if not k:  # across the motion only: along it every point is on its own division
                 raise JobError(
-                    f"{label}: a touching body cuts it less than one division from another edge, at {_at(1, c)};"
-                    " move the body or change the divisions"
+                    f"{label}: two edges across the motion lie within one division of each other, at {_at(1, c)}"
+                    " (edges of a body lying on it); move the body or change the cross divisions"
                 )
             if done.setdefault(c, k) != k:
                 raise JobError(f"{label}: an edge between two slide faces gets {done[c]} and {k} elements")

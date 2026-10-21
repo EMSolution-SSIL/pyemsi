@@ -706,17 +706,18 @@ class MesherTest(unittest.TestCase):
             extra["periodic"] = periodic
         return self.run_job(volumes, surfaces, air=air, extra=extra)
 
-    def motor_job(self, tooth=None, surfaces=(), rotor=40):
+    def motor_job(self, tooth=None, surfaces=(), rotor=40, start=0):
         """Case 17: stator ring 45..80 fixed, rotor (radius rotor) moving, both z 0..50, air cylinder r 100 from z -25
-        to 75, slide cylinder r 42.5 in two halves, 72 divisions round and 10 up, slide edge at (42.5, 0).
-        tooth: (z0, height) of a stator tooth 42.5..45 from 10° to 20° that touches the slide cylinder."""
-        write_rings(self.geo("vol_1.brep"), (45, 80, 0, 50), *([(42.5, 45, *tooth, 10, 20)] if tooth else []))
+        to 75, slide cylinder r 42.5 in two halves from angle start, 72 divisions round and 10 up, slide edge at start.
+        tooth: (z0, height, a0, a1) of a stator tooth 42.5..45 that touches the slide cylinder."""
+        write_rings(self.geo("vol_1.brep"), (45, 80, 0, 50), *([(42.5, 45, *tooth)] if tooth else []))
         write_rings(self.geo("vol_2.brep"), (0, rotor, 0, 50))
         write_rings(self.geo("air.brep"), (0, 100, -25, 100))
         write_rings(self.geo("cell_1.brep"), (0, 42.5, -25, 100))
-        for k, a in enumerate((0, 180), 1):
+        for k, a in enumerate((start, start + 180), 1):
             write_revolved(self.geo(f"slide_20_{k}.brep"), (42.5, 0, -25), (42.5, 0, 75), a, a + 180)
-        write_line(self.geo("marker_20.brep"), (42.5, 0, -25), (42.5, 0, 75))
+        x, y = 42.5 * math.cos(math.radians(start)), 42.5 * math.sin(math.radians(start))
+        write_line(self.geo("marker_20.brep"), (x, y, -25), (x, y, 75))
         vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Rotor", "vol_2.brep", 10)]
         slide = self.slide("rotational", ["slide_20_1.brep", "slide_20_2.brep"], 72, 10, True)
         return self.slide_job(vols, [2], [slide], surfaces=surfaces)
@@ -786,7 +787,7 @@ class MesherTest(unittest.TestCase):
 
     def test_tooth_on_the_slide_cylinder_keeps_the_grid(self):
         """A tooth face from 10° to 20° over the whole height splits a half along the motion, on the 5° grid."""
-        r = self.motor_job(tooth=(-25, 100))
+        r = self.motor_job(tooth=(-25, 100, 10, 20))
         self.assertEqual(r.returncode, 0, r.stderr)
         fixed, moving = self.cylinder_nodes()
         self.assertEqual(len(fixed), 72 * 11)
@@ -797,13 +798,39 @@ class MesherTest(unittest.TestCase):
 
     def test_tooth_on_part_of_the_slide_cylinder_fails_cleanly(self):
         """A tooth face from 10° to 20° and z 0..50 is a hole in the half cylinder face: it cannot be structured."""
-        r = self.motor_job(tooth=(0, 50))
+        r = self.motor_job(tooth=(0, 50, 10, 20))
         self.assertEqual(r.returncode, 1)
         last = r.stderr.strip().splitlines()[-1]
         self.assertTrue(
             last.startswith("ERROR: sliding interface Slide: slide_20_1.brep: a body lies on only part"), last
         )
         self.assertIn("must reach from edge to edge", last)
+
+    def test_tooth_between_two_divisions_fails_cleanly(self):
+        last = self.last_error(self.motor_job(tooth=(-25, 100, 12, 20)))
+        self.assertIn("sliding interface Slide: slide_20_1.brep: the point at (41.571", last)
+        self.assertIn("at 12° lies between two divisions along the motion", last)
+        self.assertIn("(every 5°)", last)
+
+    def test_rotor_seam_between_two_divisions_fails_cleanly(self):
+        """The slide starts at 3°: the seam of the rotor's cylinder face at 0° cuts the slide cylinder off the grid."""
+        last = self.last_error(self.motor_job(rotor=42.5, start=3))
+        self.assertIn("at 0° lies between two divisions along the motion", last)
+        self.assertIn("it may be a body edge or the seam of a round body face", last)
+        self.assertIn("(every 5°), or change Divisions or the start angle", last)
+
+    def test_rotor_on_the_slide_cylinder_with_its_seam_on_the_grid_matches(self):
+        r = self.motor_job(rotor=42.5, start=-30)  # the seam at 0° lies on the 5° grid from -30°
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = self.cylinder_nodes()
+        self.assertEqual(len(fixed), 72 * 11)
+        self.assertEqual(fixed, moving)
+
+    def last_error(self, r):
+        self.assertEqual(r.returncode, 1, r.stderr)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("ERROR:"), last)
+        return last
 
     def line_group(self, path, group):
         """(element count, node coordinates) of the dim-1 physical group in a mesh file; None if it has none."""

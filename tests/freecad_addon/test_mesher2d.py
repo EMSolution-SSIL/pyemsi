@@ -776,10 +776,10 @@ class Mesher2DTest(unittest.TestCase):
             sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
         return self.run_job(bodies, sizes=sizes, air=air, extra=extra)
 
-    def motor_job(self, tooth=False, rotor=40):
-        """Full turn: stator ring 45..80 fixed (tooth: plus a tooth 42.5..45 from 10° to 20°), rotor disc r 40
+    def motor_job(self, tooth=None, rotor=40):
+        """Full turn: stator ring 45..80 fixed (tooth: plus a tooth 42.5..45 between these two angles), rotor disc r 40
         (rotor) moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0)."""
-        write_sectors(self.geo("vol_1.brep"), (45, 80), *([(42.5, 45, 10, 20)] if tooth else []))
+        write_sectors(self.geo("vol_1.brep"), (45, 80), *([(42.5, 45, *tooth)] if tooth else []))
         write_sectors(self.geo("vol_2.brep"), (0, rotor))
         write_sectors(self.geo("air.brep"), (0, 100))
         write_sectors(self.geo("cell_1.brep"), (0, 42.5))
@@ -893,13 +893,20 @@ class Mesher2DTest(unittest.TestCase):
             self.assertEqual(start, end, path)
 
     def test_body_vertex_on_slide_circle_keeps_n_nodes(self):
-        r = self.motor_job(tooth=True)
+        r = self.motor_job(tooth=(10, 20))  # on the 5° grid
         self.assertEqual(r.returncode, 0, r.stderr)
         fixed, moving = (self.on_circle(f, 42.5) for f in self.files())
         self.assertEqual(len(fixed), 72)
         self.assertEqual(fixed, moving)
         for got, want in zip(self.angles(fixed), range(0, 360, 5)):
             self.assertAlmostEqual(got, want, places=6)
+
+    def test_body_vertex_between_two_divisions_fails_cleanly(self):
+        last = self.last_error(self.motor_job(tooth=(12, 20)))
+        self.assertIn("sliding interface Slide: slide_20_1.brep: the point at (41.571", last)
+        self.assertIn("at 12° lies between two divisions along the motion", last)
+        self.assertIn("seam of a round body face", last)
+        self.assertIn("(every 5°)", last)
 
     def test_nonperiodic_geometry_fails_cleanly(self):
         r = self.sector_job(stator=(82, 149, 0, 30))  # cut by 0° but not by 45°
