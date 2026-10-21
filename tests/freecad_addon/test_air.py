@@ -1335,3 +1335,36 @@ class AirTest(unittest.TestCase):
         self.doc.recompute()
         self.assertEqual(self.air_problems(), [])
         self.assertEqual([o.Name for o in air.SizedBy], ["B", "Other"])
+
+    def test_padding_sides_by_shape_and_plane(self):
+        def keys(shape, plane):
+            return [key for key, _ in airshapes.padding_sides(shape, plane)]
+
+        self.assertEqual(keys("Box", "3D"), ["XPlus", "XMinus", "YPlus", "YMinus", "ZPlus", "ZMinus"])
+        self.assertEqual(keys("Box", "XY"), ["XPlus", "XMinus", "YPlus", "YMinus"])
+        self.assertEqual(keys("Box", "ZX"), ["XPlus", "ZPlus", "ZMinus"])
+        self.assertEqual(keys("Sector", "3D"), ["Outer", "Inner", "ZPlus", "ZMinus"])
+        self.assertEqual(keys("Sector", "XY"), ["Outer", "Inner"])
+        self.assertEqual(keys("Sector", "ZX"), ["Outer"])
+        self.assertEqual(keys("Custom", "3D"), [])
+        air = objects.make_air_region(self.study, "Box")
+        for shape, plane in (("Box", "3D"), ("Sector", "3D"), ("Sector", "ZX")):
+            for key in keys(shape, plane):
+                self.assertTrue(hasattr(air, f"Pad{key}Percent") and hasattr(air, f"Pad{key}"), key)
+
+    def test_padding_air_made_before_a_body_is_recomputed(self):
+        fresh = self.doc.addObject("Part::Box", "Fresh")  # not recomputed: no shape yet
+        self.study.MainObjects = [fresh]
+        with mock.patch.object(App.Console, "PrintWarning") as warning:
+            air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+            self.assertTrue(warning.called, "the failure was swallowed silently")
+            self.assertIn(air, objects.air_regions(self.study))  # the Air Region is not left half made
+            self.assertEqual((air.SizeMode, air.SizedBy), ("Padding", []))
+            warning.reset_mock()
+            air.SizeMode = "Manual"
+            self.assertFalse(warning.called)
+            air.SizeMode = "Padding"  # the SizeMode change does not raise either
+            self.assertTrue(warning.called)
+        self.doc.recompute()
+        self.assertEqual(self.air_problems(), [])  # Validate refreshes again
+        self.assertEqual([o.Name for o in air.SizedBy], ["Fresh"])

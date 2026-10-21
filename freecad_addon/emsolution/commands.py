@@ -188,14 +188,18 @@ class AddAirRegion(_StudyCommand):
             return
         if objects.air_regions(study):
             return warn("This Study already has an Air Region.")
-        fit = airshapes.fit_study(study, 50)  # main and moving geometry
         doc = study.Document
+        try:
+            bodies = objects.study_bodies(study)  # main and moving geometry
+        except Exception as exc:  # a body not recomputed yet has no shape: start with the manual defaults
+            App.Console.PrintWarning(f"EMSolution: the Air Region starts Manual, the bodies are not ready ({exc}).\n")
+            bodies = []
         doc.openTransaction("Add Air Region")  # stays open until OK or Cancel
         air = objects.make_air_region(study, "Box")
-        if fit:
-            air.Center, air.Length, air.Width, height = fit
-            if airshapes.study_plane(study) == "3D":
-                air.Height = height
+        if bodies:  # padding of 20 % on every side the shape offers, following the bodies
+            for key, _ in airshapes.padding_sides("Box", airshapes.study_plane(study)):
+                setattr(air, f"Pad{key}Percent", 20)
+            air.SizeMode = "Padding"
         doc.recompute()
         Gui.Control.showDialog(taskpanels.AirRegionPanel(air, new=True))
 

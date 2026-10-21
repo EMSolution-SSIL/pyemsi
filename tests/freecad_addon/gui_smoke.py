@@ -542,30 +542,117 @@ def main():
     (air,) = objects.air_regions(study)
     assert isinstance(air.ViewObject.Proxy, taskpanels.ViewProviderAir)
     assert (air.ViewObject.Transparency, air.ViewObject.DisplayMode) == (80, "Flat Lines")
+    sides = ("XPlus", "XMinus", "YPlus", "YMinus", "ZPlus", "ZMinus")
+    assert air.SizeMode == "Padding" and panel.mode_padding.isChecked(), "a new Air Region does not start in Padding"
+    assert all(getattr(air, f"Pad{s}Percent") == 20 for s in sides), "not 20 % on every side"
+    assert sorted(o.Name for o in air.SizedBy) == ["A", "B"], air.SizedBy
     for body in (doc.A, doc.B):
         assert air.Shape.BoundBox.isInside(body.Shape.BoundBox), "the Air Region does not enclose " + body.Name
+    assert abs(air.Length.Value - 28) < 1e-6, air.Length  # 20 mm of bodies, +20 % on each side
+    assert not [b for b in panel.form.findChildren(QtWidgets.QPushButton) if b.text() == "Fit to bodies"]
     assert [panel.shape.itemText(i) for i in range(panel.shape.count())] == ["Box", "Sector", "Custom"]
-    assert panel.groups["Sector"].isHidden() and not panel.groups["Box"].isHidden()
+    assert panel.groups["Box"].isHidden() and not panel.tables["Box"].isHidden(), "Padding shows its table"
+    assert panel.groups["Sector"].isHidden() and panel.tables["Sector"].isHidden()
+    assert list(panel.pad["Box"]) == list(sides), list(panel.pad["Box"])
+    assert panel.result.text().startswith("Result: centre (10, 5, 5)") and "28 ×" in panel.result.text(), (
+        panel.result.text()
+    )
     panel.shape.setCurrentIndex(panel.shape.findData("Sector"))
-    assert not panel.groups["Sector"].isHidden() and panel.groups["Box"].isHidden()
+    assert air.AirShape == "Sector", "the shape was not written while editing"
+    assert not panel.tables["Sector"].isHidden() and panel.tables["Box"].isHidden()
+    assert list(panel.pad["Sector"]) == ["Outer", "Inner", "ZPlus", "ZMinus"], list(panel.pad["Sector"])
+    assert not panel.groups["Sector"].isHidden(), "the Sector angles stay manual in Padding"
+    shown = [
+        a.text()
+        for a in panel.groups["Sector"].findChildren(QtWidgets.QLabel)
+        if a.text() and a.isVisibleTo(panel.form)
+    ]
+    assert shown == ["Start angle", "End angle"], shown
+    assert not panel.pad["Sector"]["Inner"][0].isEnabled(), "the inner padding is on for a full disc"
+    panel.ring.setChecked(True)
+    assert air.InnerFromBodies and panel.pad["Sector"]["Inner"][0].isEnabled(), "the ring switch"
+    panel.ring.setChecked(False)
+    # An angle field (Gui::QuantitySpinBox, deg) follows a formula; the f(x) dialog cannot be driven from a script.
+    air.setExpression("EndAngle", "45 deg * 2")
+    for _ in range(5):
+        Gui.updateGui()
+    assert air.EndAngle.Value == 90 and taskpanels.field_value(panel.angles[1]) == 90, "the angle formula"
+    air.setExpression("EndAngle", None)
+    taskpanels.set_field_value(panel.angles[1], 360)
     panel.shape.setCurrentIndex(panel.shape.findData("Box"))
+    assert air.AirShape == "Box" and not panel.tables["Box"].isHidden() and panel.groups["Box"].isHidden()
     assert panel.reject()
     assert objects.air_regions(study) == [] and not Gui.Control.activeDialog(), "Cancel kept the new Air Region"
     Gui.runCommand("EMS_AddAirRegion")
     panel = air_panels.pop()
-    panel.padding.setValue(100)
-    panel.fit()
-    assert abs(panel.size["Length"].value() - 60) < 1e-6, panel.size["Length"].value()  # 20 mm of bodies, +100 % a side
+    (air,) = objects.air_regions(study)
+    plus, minus = panel.pad["Box"]["XPlus"], panel.pad["Box"]["XMinus"]
+    panel.symmetric.setChecked(True)
+    assert not minus[0].isEnabled() and plus[0].isEnabled(), "Symmetric leaves the - side editable"
+    taskpanels.set_field_value(plus[0], 5)
+    for _ in range(5):
+        Gui.updateGui()
+    assert air.PadXPlusPercent == 5 and air.PadXMinusPercent == 5, "Symmetric: - does not follow a typed +"
+    # A percent field (Gui::DoubleSpinBox) follows a formula, and the - side takes the same formula.
+    air.setExpression("PadXPlusPercent", "10 + 10")
+    for _ in range(5):
+        Gui.updateGui()
+    assert taskpanels.field_value(plus[0]) == 20 and air.PadXPlusPercent == 20, "the percent formula"
+    assert ("PadXMinusPercent", "10 + 10") in air.ExpressionEngine, air.ExpressionEngine
+    assert air.PadXMinusPercent == 20 and taskpanels.field_value(minus[0]) == 20, "Symmetric: - does not follow"
+    assert plus[0].metaObject().className() == "Gui::DoubleSpinBox", plus[0].metaObject().className()
+    assert abs(air.Length.Value - 28) < 1e-6 and "28 ×" in panel.result.text(), panel.result.text()
+    # A length field (Gui::QuantitySpinBox, mm) in the padding column follows a formula too.
+    air.setExpression("PadXPlus", "2 mm + 1 mm")
+    for _ in range(5):
+        Gui.updateGui()
+    assert taskpanels.field_value(plus[1]) == 3 and air.PadXMinus.Value == 3, "the length formula"
+    assert abs(air.Length.Value - 34) < 1e-6 and "34 ×" in panel.result.text(), panel.result.text()
+    assert plus[1].metaObject().className() == "Gui::QuantitySpinBox", plus[1].metaObject().className()
+    air.setExpression("PadXPlus", None)
+    air.setExpression("PadXMinus", None)
+    taskpanels.set_field_value(plus[1], 0)
+    for _ in range(5):
+        Gui.updateGui()
+    assert abs(air.Length.Value - 28) < 1e-6, air.Length
+    panel.symmetric.setChecked(False)
+    assert minus[0].isEnabled()
+    air.setExpression("PadXMinusPercent", None)  # the - side held the copied formula
+    taskpanels.set_field_value(minus[0], 0)
+    assert air.PadXMinusPercent == 0 and air.PadXPlusPercent == 20, "unchecked Symmetric ties the sides"
+    taskpanels.set_field_value(minus[0], 20)
+    # Convert to Manual keeps the computed sizes and shows the manual fields, which take formulas.
+    sizes = (air.Center, air.Length.Value, air.Width.Value, air.Height.Value)
+    panel.convert.click()
+    assert air.SizeMode == "Manual" and panel.mode_manual.isChecked(), "Convert to Manual"
+    assert (air.Center, air.Length.Value, air.Width.Value, air.Height.Value) == sizes, "Convert changed the sizes"
+    assert not panel.groups["Box"].isHidden() and panel.tables["Box"].isHidden() and panel.foot.isHidden()
+    assert abs(taskpanels.field_value(panel.size["Length"]) - 28) < 1e-6, "the Length field does not show the size"
+    air.setExpression("Center.x", "5 mm + 6 mm")
+    air.setExpression("Length", "20 mm + 10 mm")
+    for _ in range(5):
+        Gui.updateGui()
+    assert air.Center.x == 11 and taskpanels.field_value(panel.center["x"]) == 11, "the Centre formula"
+    assert air.Length.Value == 30 and taskpanels.field_value(panel.size["Length"]) == 30, "the Length formula"
+    air.setExpression("Center.x", None)
+    air.setExpression("Length", None)
+    taskpanels.set_field_value(panel.center["x"], 10)
     assert panel.accept() and not Gui.Control.activeDialog()
     (air,) = objects.air_regions(study)
-    assert abs(air.Length.Value - 60) < 1e-6 and air.Shape.BoundBox.isInside(doc.B.Shape.BoundBox)
+    assert air.SizeMode == "Manual" and air.Shape.BoundBox.isInside(doc.B.Shape.BoundBox)
     assert air.ViewObject.Proxy.doubleClicked(air.ViewObject)
     panel = air_panels.pop()
     assert not panel.new and Gui.Control.activeDialog()
-    panel.size["Length"].setValue(70)
+    taskpanels.set_field_value(panel.size["Length"], 70)
+    assert abs(air.Length.Value - 70) < 1e-6, "the Length field did not write while editing"
     assert panel.accept() and abs(air.Length.Value - 70) < 1e-6 and doc.UndoNames[0].startswith("Edit Air"), (
         doc.UndoNames
     )
+    air.ViewObject.Proxy.doubleClicked(air.ViewObject)
+    panel = air_panels.pop()
+    taskpanels.set_field_value(panel.size["Length"], 90)
+    assert abs(air.Length.Value - 90) < 1e-6
+    assert panel.reject() and abs(air.Length.Value - 70) < 1e-6, "Cancel of an edit kept the change"
     Gui.runCommand("EMS_AddAirRegion")
     assert warned[-1] == "This Study already has an Air Region." and not air_panels, warned
     select(study.AirRegionsGroup.Name)
@@ -663,9 +750,14 @@ def main():
     import Part
 
     flat = App.newDocument("Air2D")
-    for normal, shapes in (
-        (App.Vector(0, 0, 1), ["Rectangle", "Sector", "Custom"]),
-        (App.Vector(0, 1, 0), ["Rectangle", "Half disc"]),
+    for normal, shapes, rows, half_rows in (
+        (
+            App.Vector(0, 0, 1),
+            ["Rectangle", "Sector", "Custom"],
+            ["XPlus", "XMinus", "YPlus", "YMinus"],
+            ["Outer", "Inner"],
+        ),
+        (App.Vector(0, 1, 0), ["Rectangle", "Half disc"], ["XPlus", "ZPlus", "ZMinus"], ["Outer"]),
     ):
         flat_study = objects.make_study(flat, "2D")
         flat_study.MainMode = "Manual"
@@ -678,8 +770,20 @@ def main():
         flat_panel = taskpanels.AirRegionPanel(flat_air)
         assert [flat_panel.shape.itemText(i) for i in range(flat_panel.shape.count())] == shapes
         flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Box"))
-        flat_panel.fit()
+        assert flat_air.AirShape == "Box" and flat_air.SizeMode == "Manual"
+        flat_panel.mode_padding.setChecked(True)
+        assert flat_air.SizeMode == "Padding" and list(flat_panel.pad["Box"]) == rows, list(flat_panel.pad["Box"])
+        assert not flat_air.Shape.isNull() and flat_air.Shape.BoundBox.isInside(face.Shape.BoundBox)
+        flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Sector"))
+        assert list(flat_panel.pad["Sector"]) == half_rows, list(flat_panel.pad["Sector"])
+        if "Custom" in shapes:  # a Custom shape has no Padding
+            flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Custom"))
+            assert flat_panel.mode_box.isHidden() and flat_air.SizeMode == "Manual"
+        flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Box"))
+        flat_panel.mode_padding.setChecked(True)
+        flat_panel.convert.click()
         assert flat_panel.accept() and not flat_air.Shape.isNull() and flat_air.AirShape == "Box"
+        assert flat_air.SizeMode == "Manual", "Convert to Manual in a 2D Study"
         flat.removeObject(flat_study.Name)
     App.closeDocument(flat.Name)
     App.setActiveDocument(doc.Name)

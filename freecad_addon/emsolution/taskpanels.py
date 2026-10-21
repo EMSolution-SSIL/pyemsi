@@ -1117,15 +1117,6 @@ class ItemPanel:
         return True
 
 
-def _number_box(value, low, high, suffix):
-    box = QtWidgets.QDoubleSpinBox()
-    box.setDecimals(3)
-    box.setRange(low, high)
-    box.setSuffix(suffix)
-    box.setValue(value)
-    return box
-
-
 def field_value(box):
     """The number a formula_box shows."""
     return box.property("rawValue" if box.metaObject().className() == "Gui::QuantitySpinBox" else "value")
@@ -1136,14 +1127,31 @@ def set_field_value(box, value):
     box.setProperty("rawValue" if box.metaObject().className() == "Gui::QuantitySpinBox" else "value", value)
 
 
+def show_field_value(box, value):
+    """Show a number in a formula_box without writing it: the property already holds it."""
+    box.blockSignals(True)
+    set_field_value(box, value)
+    box.blockSignals(False)
+
+
+def property_number(obj, prop):
+    """The number in obj.prop: mm or degrees for a quantity. prop may name one component of a vector, "Center.x"."""
+    name, _, part = prop.partition(".")
+    value = getattr(obj, name)
+    value = getattr(value, part) if part else value
+    return float(getattr(value, "Value", value))
+
+
 def formula_box(obj, prop, minimum=None, maximum=None):
     """A number field bound to obj.prop, in FreeCAD's own style: it shows the unit, takes a formula through its f(x)
     button, writes each edit to the property and recomputes. A formula is stored on the property and the field
     follows it. Length, Distance and Angle give a Gui::QuantitySpinBox; Float a Gui::DoubleSpinBox; Integer and
-    IntegerConstraint a Gui::IntSpinBox (no decimals). minimum and maximum are in mm, degrees or plain numbers."""
-    kind = obj.getTypeIdOfProperty(prop)
+    IntegerConstraint a Gui::IntSpinBox (no decimals). prop may be one component of a Vector property ("Center.x":
+    a length). minimum and maximum are in mm, degrees or plain numbers."""
+    name, _, part = prop.partition(".")
+    kind = obj.getTypeIdOfProperty(name)
     whole = kind in ("App::PropertyInteger", "App::PropertyIntegerConstraint")
-    quantity = kind in ("App::PropertyLength", "App::PropertyDistance", "App::PropertyAngle")
+    quantity = kind in ("App::PropertyLength", "App::PropertyDistance", "App::PropertyAngle") or bool(part)
     widget = "Gui::IntSpinBox" if whole else "Gui::QuantitySpinBox" if quantity else "Gui::DoubleSpinBox"
     box = Gui.UiLoader().createWidget(widget)
     binding = Gui.ExpressionBinding(box)
@@ -1154,17 +1162,19 @@ def formula_box(obj, prop, minimum=None, maximum=None):
     cast = int if whole else float
     box.setProperty("minimum", cast(-1e9 if minimum is None else minimum))
     box.setProperty("maximum", cast(1e9 if maximum is None else maximum))
-    value = getattr(obj, prop)
-    box.blockSignals(True)  # showing the stored value is not an edit
-    set_field_value(box, cast(getattr(value, "Value", value)))
-    box.blockSignals(False)
+    show_field_value(box, cast(property_number(obj, prop)))  # showing the stored value is not an edit
 
     def edited(number):
         doc = obj.Document
         if binding.hasExpression():  # the property takes the formula's value when the document recomputes
             QtCore.QTimer.singleShot(0, lambda: doc.recompute())
             return
-        setattr(obj, prop, cast(number))
+        if part:
+            vector = App.Vector(getattr(obj, name))
+            setattr(vector, part, number)
+            setattr(obj, name, vector)
+        else:
+            setattr(obj, name, cast(number))
         doc.recompute()
 
     box.connect(QtCore.SIGNAL("valueChanged(int)" if whole else "valueChanged(double)"), edited)
@@ -1172,8 +1182,9 @@ def formula_box(obj, prop, minimum=None, maximum=None):
 
 
 class AirRegionPanel:
-    """Edit an Air Region: its outer shape and the numbers that size it. Changes apply on OK.
-    new: obj was just made inside an open transaction; OK commits it, Cancel undoes it."""
+    """Edit an Air Region: its outer shape and its size, typed in or padded around the Study's bodies. Every field
+    writes its property as it changes, inside one transaction: OK commits it, Cancel undoes it. The fields take
+    formulas (see formula_box). new: obj was just made inside the command's open transaction, so Cancel removes it."""
 
     # plane -> [(AirShape, name shown)]; a 2D box is a rectangle and a ZX sector is a half disc
     SHAPES = {
@@ -1184,11 +1195,14 @@ class AirRegionPanel:
     CENTER_AXES = {"3D": "xyz", "XY": "xy", "ZX": "xz"}
 
     def __init__(self, obj, new=False):
-        self.obj, self.new = obj, new
+        self.obj, self.new, self.done = obj, new, False
         self.study = objects.owner_study(obj)
         self.plane = airshapes.study_plane(self.study)
         self.source = obj.Source
+        if not new:  # a new item's transaction is already open
+            obj.Document.openTransaction("Edit " + obj.Label)
         highlight.clear()
+        self.bound = []  # (field, property) of every formula field, to show the properties again
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QVBoxLayout(self.form)
@@ -1202,19 +1216,54 @@ class AirRegionPanel:
             self.shape.addItem(text, key)
         self.shape.setCurrentIndex(max(self.shape.findData(obj.AirShape), 0))
         top.addRow("Shape", self.shape)
+        self.mode_box = QtWidgets.QWidget()  # hidden for a Custom shape: it has no Padding
+        modes = QtWidgets.QHBoxLayout(self.mode_box)
+        modes.setContentsMargins(0, 0, 0, 0)
+        self.mode_manual, self.mode_padding = QtWidgets.QRadioButton("Manual"), QtWidgets.QRadioButton("Padding")
+        self.mode_padding.setToolTip("Size the air from the Study's bodies: a percentage and a length beyond each side")
+        for widget in (QtWidgets.QLabel("Size"), self.mode_manual, self.mode_padding):
+            modes.addWidget(widget)
+        modes.addStretch()
+        layout.addWidget(self.mode_box)
         self.groups = {"Box": self.box_group(), "Sector": self.sector_group(), "Custom": self.custom_group()}
-        for group in self.groups.values():
-            layout.addWidget(group)
-        self.shape.currentIndexChanged.connect(self.show_shape)
-        self.show_shape()
+        self.pad, self.ring = {}, None  # shape -> {side key: (percent field, length field)}; the Sector ring switch
+        self.tables = {"Box": self.padding_table("Box"), "Sector": self.padding_table("Sector")}
+        for widget in list(self.groups.values()) + list(self.tables.values()):
+            layout.addWidget(widget)
+        self.symmetric = QtWidgets.QCheckBox("Symmetric")
+        self.symmetric.setToolTip("Each - side takes the value (or formula) of its + side")
+        self.symmetric.setChecked(self.is_symmetric())
+        self.result = QtWidgets.QLabel()
+        self.convert = QtWidgets.QPushButton("Convert to Manual")
+        self.convert.setToolTip("Keep the sizes as they are now and stop following the bodies")
+        self.foot = QtWidgets.QWidget()
+        foot = QtWidgets.QVBoxLayout(self.foot)
+        foot.setContentsMargins(0, 0, 0, 0)
+        foot.addWidget(self.symmetric)
+        foot.addWidget(self.result)
+        foot.addWidget(self.convert, 0, QtCore.Qt.AlignLeft)
+        layout.addWidget(self.foot)
+        self.shape.currentIndexChanged.connect(self.write_shape)
+        self.mode_padding.toggled.connect(lambda padding: self.set_mode("Padding" if padding else "Manual"))
+        self.symmetric.toggled.connect(self.write_symmetric)
+        self.convert.clicked.connect(lambda: self.set_mode("Manual"))
+        self.show_layout()
+        self.show_values()
+
+    def field(self, prop, minimum=None, maximum=None):
+        """A formula field on obj.prop; its edits update the panel."""
+        box = formula_box(self.obj, prop, minimum, maximum)
+        box.connect(QtCore.SIGNAL("valueChanged(double)"), self.changed)
+        self.bound.append((box, prop))
+        return box
 
     def box_group(self):
-        obj, plane = self.obj, self.plane
+        plane = self.plane
         group = QtWidgets.QGroupBox("Box" if plane == "3D" else "Rectangle")
         form = QtWidgets.QFormLayout(group)
         self.center = {}
         for axis in self.CENTER_AXES[plane]:
-            self.center[axis] = _number_box(getattr(obj.Center, axis), -1e6, 1e6, " mm")
+            self.center[axis] = self.field(f"Center.{axis}", -1e6, 1e6)
             form.addRow(f"Centre {axis}", self.center[axis])
         labels = {
             "Length": "Length (x)",
@@ -1223,42 +1272,31 @@ class AirRegionPanel:
         }
         self.size = {}
         for prop in ("Length", "Width") + (("Height",) if plane == "3D" else ()):
-            self.size[prop] = _length_box(getattr(obj, prop).Value)
+            self.size[prop] = self.field(prop, 0.001, 1e6)
             form.addRow(labels[prop], self.size[prop])
-        self.padding = _number_box(50, 0, 1000, " %")
-        self.padding.setDecimals(0)
-        fit = QtWidgets.QPushButton("Fit to bodies")
-        fit.setToolTip("Size the box around the Study's bodies, with this padding on each side")
-        fit.clicked.connect(self.fit)
-        row = QtWidgets.QHBoxLayout()
-        row.addWidget(self.padding)
-        row.addWidget(fit)
-        form.addRow("Padding", row)
         return group
 
     def sector_group(self):
-        obj, plane = self.obj, self.plane
+        plane = self.plane
         group = QtWidgets.QGroupBox("Half disc" if plane == "ZX" else "Sector")
-        form = QtWidgets.QFormLayout(group)
-        self.inner = _length_box(obj.InnerRadius.Value, minimum=0.0)
-        self.outer = _length_box(obj.OuterRadius.Value)
+        self.sector_form = form = QtWidgets.QFormLayout(group)
+        self.inner, self.outer = self.field("InnerRadius", 0, 1e6), self.field("OuterRadius", 0.001, 1e6)
         form.addRow("Inner radius", self.inner)
         form.addRow("Outer radius", self.outer)
+        self.sector_sized = [self.inner, self.outer]  # the rows Padding computes
         self.angles = self.z_min = self.sector_height = self.sector_z = None
         if plane == "ZX":
-            self.sector_z = _number_box(obj.Center.z, -1e6, 1e6, " mm")
+            self.sector_z = self.field("Center.z", -1e6, 1e6)
             form.addRow("Centre z", self.sector_z)
         else:
-            start = _number_box(obj.StartAngle.Value, -360, 720, " deg")
-            end = _number_box(obj.EndAngle.Value, -360, 720, " deg")
-            self.angles = (start, end)
-            form.addRow("Start angle", start)
-            form.addRow("End angle", end)
+            self.angles = (self.field("StartAngle", -360, 720), self.field("EndAngle", -360, 720))
+            form.addRow("Start angle", self.angles[0])
+            form.addRow("End angle", self.angles[1])
         if plane == "3D":
-            self.z_min = _number_box(obj.ZMin.Value, -1e6, 1e6, " mm")
-            self.sector_height = _length_box(obj.Height.Value)
+            self.z_min, self.sector_height = self.field("ZMin", -1e6, 1e6), self.field("Height", 0.001, 1e6)
             form.addRow("Z min", self.z_min)
             form.addRow("Height", self.sector_height)
+            self.sector_sized += [self.z_min, self.sector_height]
         return group
 
     def custom_group(self):
@@ -1274,9 +1312,149 @@ class AirRegionPanel:
         self.show_source()
         return group
 
-    def show_shape(self):
-        for key, group in self.groups.items():
-            group.setVisible(key == self.shape.currentData())
+    def padding_table(self, shape):
+        """The % and mm fields of each side Padding offers for shape; the padding is their sum."""
+        group = QtWidgets.QGroupBox("Padding")
+        grid = QtWidgets.QGridLayout(group)
+        grid.addWidget(QtWidgets.QLabel("%"), 0, 1)
+        grid.addWidget(QtWidgets.QLabel("mm"), 0, 2)
+        self.pad[shape] = {}
+        for row, (key, label) in enumerate(airshapes.padding_sides(shape, self.plane), 1):
+            percent, length = self.field(f"Pad{key}Percent", 0, 1e6), self.field(f"Pad{key}", 0, 1e6)
+            self.pad[shape][key] = (percent, length)
+            grid.addWidget(QtWidgets.QLabel(label), row, 0)
+            grid.addWidget(percent, row, 1)
+            grid.addWidget(length, row, 2)
+        if shape == "Sector" and self.plane != "ZX":
+            self.ring = QtWidgets.QCheckBox("Inner radius from the bodies (a ring)")
+            self.ring.setToolTip("Unchecked: a full disc, inner radius 0")
+            self.ring.setChecked(self.obj.InnerFromBodies)
+            self.ring.toggled.connect(self.write_ring)
+            grid.addWidget(self.ring, len(self.pad[shape]) + 1, 0, 1, 3)
+        return group
+
+    def pairs(self, shapes):
+        """[(+ property, - property)] that Symmetric ties for the sides of the shapes: the % and the mm of each axis."""
+        found = []
+        for shape in shapes:
+            keys = [key for key, _ in airshapes.padding_sides(shape, self.plane)]
+            for key in keys:
+                if key.endswith("Plus") and key[:-4] + "Minus" in keys:
+                    for suffix in ("Percent", ""):
+                        found.append((f"Pad{key}{suffix}", f"Pad{key[:-4]}Minus{suffix}"))
+        return list(dict.fromkeys(found))
+
+    def is_symmetric(self):
+        """True if every - side holds what its + side holds, a value or the same formula."""
+        formulas, obj = dict(self.obj.ExpressionEngine), self.obj
+        return all(
+            formulas.get(plus) == formulas.get(minus) and property_number(obj, plus) == property_number(obj, minus)
+            for plus, minus in self.pairs(("Box", "Sector"))
+        )
+
+    def mirror(self):
+        """Copy the value or formula of each + side of the current shape to its - side."""
+        obj, formulas = self.obj, dict(self.obj.ExpressionEngine)
+        for plus, minus in self.pairs((self.shape.currentData(),)):
+            if formulas.get(plus):
+                if formulas.get(minus) != formulas[plus]:
+                    obj.setExpression(minus, formulas[plus])
+            else:
+                if formulas.get(minus):
+                    obj.setExpression(minus, None)
+                if property_number(obj, plus) != property_number(obj, minus):
+                    setattr(obj, minus, getattr(obj, plus))
+
+    def write_symmetric(self, checked):
+        if checked:
+            self.mirror()
+            self.settle()
+        self.show_layout()
+
+    def changed(self, _value=None):
+        """A field was edited, by hand or by a formula: keep the - sides equal while Symmetric. The recompute of a
+        formula waits for the event loop, so the panel updates after it."""
+        if self.symmetric.isChecked():
+            self.mirror()
+        QtCore.QTimer.singleShot(0, self.settle)
+
+    def settle(self):
+        if not self.done:
+            self.obj.Document.recompute()
+            self.show_values()
+
+    def show_values(self):
+        """Show the properties in the fields and the result line: the recompute may have written them."""
+        for box, prop in self.bound:
+            number = property_number(self.obj, prop)
+            if abs(field_value(box) - number) > 1e-9:
+                show_field_value(box, number)
+        self.result.setText(self.result_text())
+
+    def result_text(self):
+        obj = self.obj
+        if "Invalid" in obj.State:
+            return "Result: " + obj.getStatusString()
+        if obj.AirShape == "Sector":
+            text = f"radii {obj.InnerRadius.Value:g} to {obj.OuterRadius.Value:g} mm"
+            if self.plane == "3D":
+                text += f" · z {obj.ZMin.Value:g} to {obj.ZMin.Value + obj.Height.Value:g} mm"
+            return "Result: " + text
+        centre = ", ".join(f"{getattr(obj.Center, axis):g}" for axis in self.CENTER_AXES[self.plane])
+        sizes = [obj.Length.Value, obj.Width.Value] + ([obj.Height.Value] if self.plane == "3D" else [])
+        return f"Result: centre ({centre}) · " + " × ".join(f"{v:g}" for v in sizes) + " mm"
+
+    def show_layout(self):
+        """Show what the shape and the size mode need."""
+        shape, padding = self.shape.currentData(), self.obj.SizeMode == "Padding"
+        for radio, on in ((self.mode_manual, not padding), (self.mode_padding, padding)):
+            radio.blockSignals(True)
+            radio.setChecked(on)
+            radio.blockSignals(False)
+        self.mode_box.setVisible(shape != "Custom")
+        self.groups["Box"].setVisible(shape == "Box" and not padding)
+        self.groups["Sector"].setVisible(shape == "Sector")
+        self.groups["Custom"].setVisible(shape == "Custom")
+        for box in self.sector_sized:  # Padding computes these; the angles and the centre z stay manual
+            box.setVisible(not padding)
+            self.sector_form.labelForField(box).setVisible(not padding)
+        for key, table in self.tables.items():
+            table.setVisible(key == shape and padding)
+        self.foot.setVisible(padding and shape != "Custom")
+        self.symmetric.setVisible(bool(self.pairs((shape,))))
+        minus = {pair[1] for pair in self.pairs(("Box", "Sector"))}
+        for box, prop in self.bound:
+            if prop in minus:
+                box.setEnabled(not self.symmetric.isChecked())
+        if self.ring is not None:  # no inner padding for a full disc
+            for box in self.pad["Sector"]["Inner"]:
+                box.setEnabled(self.ring.isChecked())
+
+    def set_mode(self, mode):
+        self.obj.SizeMode = mode
+        self.obj.Document.recompute()
+        self.show_layout()
+        self.show_values()
+
+    def write_ring(self, checked):
+        self.obj.InnerFromBodies = checked
+        self.show_layout()
+        self.settle()
+
+    def write_shape(self):
+        obj, shape = self.obj, self.shape.currentData()
+        if shape == "Custom":
+            obj.SizeMode = "Manual"  # a Custom shape has no Padding
+            if self.source is not None:
+                obj.Source = self.source
+                obj.AirShape = "Custom"
+        else:
+            obj.AirShape = shape
+            if self.symmetric.isChecked():
+                self.mirror()
+        obj.Document.recompute()
+        self.show_layout()
+        self.show_values()
 
     def show_source(self):
         self.source_label.setText(self.source.Label if self.source is not None else "none picked yet")
@@ -1287,58 +1465,29 @@ class AirRegionPanel:
             return warn("Select a body in the 3D view or the tree first.")
         self.source = picked[0]
         self.show_source()
-
-    def fit(self):
-        fit = airshapes.fit_study(self.study, self.padding.value())  # main and moving geometry, not the air
-        if fit is None:
-            return warn(objects.NO_MAIN_GEOMETRY)
-        center, length, width, height = fit
-        for axis, box in self.center.items():
-            box.setValue(getattr(center, axis))
-        values = {"Length": length, "Width": width, "Height": height}
-        for prop, box in self.size.items():
-            box.setValue(values[prop])
+        if self.shape.currentData() == "Custom":
+            self.write_shape()
 
     def accept(self):
         obj, doc = self.obj, self.obj.Document
-        shape = self.shape.currentData()
-        if shape == "Custom" and self.source is None:
+        if self.shape.currentData() == "Custom" and obj.AirShape != "Custom":
             warn("Select a body and click Use selected body.")
             return False
-        if not self.new:  # a new item's transaction is already open
-            doc.openTransaction("Edit " + obj.Label)
         name = self.name.text().strip()
         if name:
             obj.Label = name
             obj.GroupName = name  # FreeCAD may have suffixed the Label
-        obj.AirShape = shape
-        if shape == "Box":
-            center = App.Vector(obj.Center)
-            for axis, box in self.center.items():
-                setattr(center, axis, box.value())
-            obj.Center = center
-            for prop, box in self.size.items():
-                setattr(obj, prop, box.value())
-        elif shape == "Sector":
-            obj.InnerRadius, obj.OuterRadius = self.inner.value(), self.outer.value()
-            if self.angles is not None:
-                obj.StartAngle, obj.EndAngle = self.angles[0].value(), self.angles[1].value()
-            if self.z_min is not None:
-                obj.ZMin, obj.Height = self.z_min.value(), self.sector_height.value()
-            if self.sector_z is not None:
-                obj.Center = App.Vector(obj.Center.x, obj.Center.y, self.sector_z.value())
-        else:
-            obj.Source = self.source
+        self.done = True
         doc.commitTransaction()
         doc.recompute()
         Gui.Control.closeDialog()
         return True
 
     def reject(self):
-        if self.new:
-            doc = self.obj.Document
-            doc.abortTransaction()  # removes the new Air Region
-            doc.recompute()
+        doc = self.obj.Document
+        self.done = True
+        doc.abortTransaction()  # removes a new Air Region, undoes the edits of an old one
+        doc.recompute()
         Gui.Control.closeDialog()
         return True
 

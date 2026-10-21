@@ -169,10 +169,7 @@ class Study(_Proxy):
             and not obj.Document.Restoring
             and getattr(obj, "AirRegionsGroup", None) is not None
         ):
-            try:
-                refresh_sized_by(obj)
-            except Exception:  # a body not recomputed yet has no shape; Validate and Run Mesh refresh again
-                pass
+            safe_refresh_sized_by(obj)
 
     def onDocumentRestored(self, obj):
         ensure_folders(obj)  # Studies saved before a folder existed
@@ -388,6 +385,19 @@ def refresh_sized_by(study):
             air.SizedBy = want
 
 
+def safe_refresh_sized_by(study):
+    """refresh_sized_by for a change event: a body not recomputed yet has no shape, and raising there would leave the
+    change half made. The failure is a console warning; Validate and Run Mesh refresh again. True if it worked."""
+    try:
+        refresh_sized_by(study)
+    except Exception as exc:
+        import FreeCAD as App
+
+        App.Console.PrintWarning(f"EMSolution: Air Region not linked to the bodies yet ({exc}); Validate retries.\n")
+        return False
+    return True
+
+
 def _differs(current, value):
     """True if the property value current is not the new size value (a float in mm, or a Vector for Center)."""
     if hasattr(value, "x"):
@@ -440,7 +450,7 @@ class AirRegion(_Named):
             set_size_modes(obj)
             study = owner_study(obj)
             if study is not None:
-                refresh_sized_by(study)
+                safe_refresh_sized_by(study)
 
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
@@ -573,7 +583,7 @@ def make_air_region(study, shape="Box", **props):
     for iface in sliding_interfaces(study):  # left without one when the old Air Region was deleted
         if iface.AirRegion is None:
             iface.AirRegion = obj
-    refresh_sized_by(study)
+    safe_refresh_sized_by(study)
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 

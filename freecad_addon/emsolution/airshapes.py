@@ -142,6 +142,24 @@ def _span(air, axis, low, high, fixed_low=None):
     return start, end - start
 
 
+def padding_sides(shape, plane):
+    """[(key, label)] of the sides Padding offers for an AirShape in a study plane ("3D", "XY" or "ZX"), in the order
+    of the panel; the properties are Pad<key>Percent and Pad<key>. A Custom shape has none."""
+    if shape == "Box":
+        keys = ["XPlus", "ZPlus", "ZMinus"] if plane == "ZX" else ["XPlus", "XMinus", "YPlus", "YMinus"]
+        if plane == "3D":
+            keys += ["ZPlus", "ZMinus"]
+        return [(key, ("+" if key.endswith("Plus") else "−") + key[0]) for key in keys]
+    if shape == "Sector":
+        sides = [("Outer", "Outer radius")]
+        if plane != "ZX":  # a half disc has no inner radius
+            sides.append(("Inner", "Inner radius"))
+        if plane == "3D":
+            sides += [("ZPlus", "Top (+Z)"), ("ZMinus", "Bottom (−Z)")]
+        return sides
+    return []
+
+
 def padded_size(air, bodies, plane):
     """The size properties of a Padding mode Air Region, from the global shapes of bodies: {name: value}, lengths in
     mm and Center a Vector. The Sector angles and the centre z of the ZX half disc stay as they are."""
