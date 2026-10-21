@@ -180,7 +180,9 @@ def _padded_sector(air, shapes, box, plane):
             f"Air Region {objects.display_name(air)}: padding gives no size along the radius; add a length padding."
         )
     size = {"OuterRadius": outer}
-    if plane != "ZX":
+    if plane == "ZX":
+        size["InnerRadius"] = 0.0  # a half disc
+    else:
         size["InnerRadius"] = max(low - _pad(air, "Inner", high), 0.0) if air.InnerFromBodies else 0.0
     if plane == "3D":
         z0, height = _span(air, "Z", box.ZMin, box.ZMax)

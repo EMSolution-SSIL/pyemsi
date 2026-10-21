@@ -5,6 +5,7 @@ import math
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 import Part
@@ -1149,3 +1150,169 @@ class AirTest(unittest.TestCase):
         self.doc.recompute()
         self.assertSize(air, Center=(1, 2, 3), Length=20, Width=10, Height=4)
         self.assertEqual(air.Shape.Volume, pytest.approx(800))
+
+    def padding_air(self, shape="Box", **props):
+        """An Air Region made in Padding mode: nothing sets SizedBy by hand."""
+        air = objects.make_air_region(self.study, shape, **props)
+        air.SizeMode = "Padding"
+        self.doc.recompute()
+        return air
+
+    def test_air_follows_an_edited_body(self):
+        (body,) = self.bodies("B")
+        air = self.padding_air(PadXPlus=2)
+        self.assertSize(air, Length=12)
+        body.Length = 30
+        self.doc.recompute()
+        self.assertSize(air, Length=32)
+
+    def test_air_grows_when_a_body_joins_main_geometry(self):
+        (body,) = self.bodies("B")
+        air = self.padding_air()
+        self.assertSize(air, Length=10)
+        other = self.doc.addObject("Part::Box", "C")
+        other.Placement.Base = App.Vector(20, 0, 0)
+        self.doc.recompute()  # a body without a shape cannot be listed yet
+        self.study.MainObjects = [body, other]
+        self.doc.recompute()
+        self.assertEqual([o.Name for o in air.SizedBy], ["B", "C"])
+        self.assertSize(air, Length=30)
+        self.study.MainObjects = [body]
+        self.doc.recompute()
+        self.assertSize(air, Length=10)
+
+    def test_air_follows_moving_geometry_when_sliding(self):
+        self.sliding(["A"], ["M"])
+        air = self.padding_air()
+        self.assertEqual([o.Name for o in air.SizedBy], ["A", "M"])
+        self.assertSize(air, Length=30)
+        self.study.Movement = "No movement"
+        self.doc.recompute()
+        self.assertEqual([o.Name for o in air.SizedBy], ["A"])
+        self.assertSize(air, Length=10)
+
+    def test_body_added_to_container_source_is_picked_up_at_validate(self):
+        part = self.doc.addObject("App::Part", "Part")
+        first = self.doc.addObject("Part::Box", "First")
+        part.addObject(first)
+        self.study.MainMode, self.study.MainSource = "Container", part
+        self.doc.recompute()
+        air = self.padding_air()
+        self.assertEqual([o.Name for o in air.SizedBy], ["First"])
+        second = self.doc.addObject("Part::Box", "Second")
+        second.Placement.Base = App.Vector(20, 0, 0)
+        part.addObject(second)  # no property of the Study changes
+        self.doc.recompute()
+        self.assertSize(air, Length=10)
+        self.assertEqual(self.air_problems(), [])
+        self.assertEqual([o.Name for o in air.SizedBy], ["First", "Second"])
+        self.assertSize(air, Length=30)
+        self.assertNotIn("Touched", air.State)
+
+    def test_validate_sees_a_body_edited_without_recompute(self):
+        (body,) = self.bodies("B")
+        air = self.padding_air()
+        body.Length = 30
+        self.assertEqual(self.air_problems(), [])
+        self.assertSize(air, Length=30)
+
+    def test_padding_without_bodies_is_an_error(self):
+        air = self.padding_air()
+        self.assertEqual(air.SizedBy, [])
+        self.assertIn("Air Region Air: Padding needs bodies in the main or moving geometry.", self.air_errors())
+
+    def test_negative_padding_is_an_error(self):
+        self.bodies("B")
+        air = self.padding_air()
+        self.assertEqual(self.air_problems(), [])
+        air.PadXMinusPercent = -1
+        air.setExpression("PadZPlus", "-2 mm")  # a length property clamps a typed negative, an expression does not
+        self.doc.recompute()
+        negative = "Air Region Air: padding must not be negative (%s)."
+        self.assertEqual(self.air_problems(), [negative % "-X", negative % "+Z"])
+        air.PadXMinusPercent = 0
+        air.setExpression("PadZPlus", None)
+        air.PadZPlus = 0
+        self.doc.recompute()
+        self.assertEqual(self.air_problems(), [])
+
+    def test_negative_sector_padding_names_outer_and_inner(self):
+        self.bodies("B")
+        air = self.padding_air("Sector", PadInnerPercent=-5)
+        air.setExpression("PadOuter", "-1 mm")
+        self.doc.recompute()
+        negative = "Air Region Air: padding must not be negative (%s)."
+        self.assertEqual(self.air_problems(), [negative % "outer", negative % "inner"])
+
+    def test_padding_without_size_is_reported_like_a_shape_error(self):
+        self.bodies("B")
+        self.padding_air()
+        text = "Air Region Air: padding gives no size along Z; add a length padding."
+        with mock.patch.object(airshapes, "padded_size", side_effect=ValueError(text)):  # as for a flat body
+            self.assertEqual(self.air_problems(), [text])
+
+    def test_custom_padding_is_reported(self):
+        (body,) = self.bodies("B")
+        self.padding_air("Custom", Source=body)
+        self.assertIn("Air Region Air: Padding is not available for a Custom shape.", self.air_problems())
+
+    def test_manual_air_has_no_sized_by(self):
+        (body,) = self.bodies("B")
+        air = self.padding_air()
+        self.assertEqual(air.SizedBy, [body])
+        air.SizeMode = "Manual"
+        self.assertEqual(air.SizedBy, [])
+        self.study.MainObjects = []
+        self.study.MainObjects = [body]
+        self.assertEqual(air.SizedBy, [])
+        objects.refresh_sized_by(self.study)
+        self.assertEqual(air.SizedBy, [])
+
+    def test_sliding_sector_padding_keeps_period(self):
+        self.doc.removeObject(self.study.Name)
+        self.study = objects.make_study(self.doc, "2D")
+        self.study.MainMode = self.study.MovingMode = "Manual"
+        parts = {}
+        for name, inner, outer in (("Shaft", 0, 30), ("Rotor", 30, 78), ("Stator", 82, 149)):
+            parts[name] = self.doc.addObject("Part::Feature", name)
+            parts[name].Shape = airshapes._bottom_face(airshapes._ring_sector(inner, outer, 0, 45, 0, 1), 0)
+        self.study.MainObjects = [parts["Stator"]]
+        self.study.MovingObjects = [parts["Shaft"], parts["Rotor"]]
+        self.study.Movement = "Sliding motion"
+        air = objects.make_air_region(self.study, "Sector", OuterRadius=200, EndAngle=45)
+        objects.make_sliding_interface(self.study, "Rotational", Radius=80.575, Divisions=90)
+        self.doc.recompute()
+        manual = airshapes.period(self.study)
+        self.assertEqual(manual, {"kind": "rotation", "angle": 45.0, "start": 0.0})
+        air.SizeMode, air.PadOuter = "Padding", 20
+        self.doc.recompute()
+        self.assertEqual([o.Name for o in air.SizedBy], ["Stator", "Shaft", "Rotor"])
+        self.assertSize(air, OuterRadius=169, InnerRadius=0)
+        self.assertEqual(airshapes.period(self.study), manual)
+        self.assertEqual(self.air_errors(), [])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual(job["periodic"], manual)
+
+    def test_padded_half_disc_zx_writes_a_zero_inner_radius(self):
+        body = self.study_2d(App.Vector(0, 1, 0))
+        body.Shape = Part.makePlane(24, 32, App.Vector(0, 0, 10), App.Vector(0, 1, 0))
+        air = objects.make_air_region(self.study, "Sector", Center=App.Vector(0, 0, 10), InnerRadius=7, PadOuter=5)
+        air.SizeMode = "Padding"
+        self.doc.recompute()
+        self.assertSize(air, OuterRadius=45, InnerRadius=0)
+
+    def test_saved_padding_air_keeps_size_properties_read_only(self):
+        self.bodies("B")
+        self.padding_air(PadXPlus=2)
+        path = os.path.join(self.tmp.name, "padding.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        (air,) = objects.air_regions(objects.find_study(self.doc))
+        self.assertEqual(air.SizeMode, "Padding")
+        for name in objects.SIZE_PROPERTIES:
+            self.assertIn("ReadOnly", air.getEditorMode(name), name)
+        self.assertEqual([o.Name for o in air.SizedBy], ["B"])
+        self.doc.recompute()
+        self.assertSize(air, Length=12)

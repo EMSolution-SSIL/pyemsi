@@ -59,6 +59,7 @@ def validate(study):
     if unavailable:
         r.error(unavailable)
         return r.problems
+    _refresh_padding(study)
     main, moving, setup_errors = geometry.setup(study)
     for text in setup_errors:
         r.error(text)
@@ -168,6 +169,47 @@ def _settings(study, included, r):
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
 
 
+def _refresh_padding(study):
+    """Padding mode Air Regions follow the Study's bodies as they are now: a body added to a container source or
+    edited since the last recompute counts."""
+    objects.refresh_sized_by(study)
+    for air in objects.air_regions(study):
+        if air.SizeMode == "Padding" and any("Touched" in o.State for o in [air, *air.OutListRecursive]):
+            study.Document.recompute()  # an object recomputed alone does not recompute what it depends on
+            return
+
+
+def _padding_sides(air, plane):
+    """[(side name, property name)] of the padding the Air Region's shape and plane use."""
+    if air.AirShape == "Sector":
+        sides = [("outer", "Outer")] + ([("inner", "Inner")] if plane != "ZX" else [])
+        return sides + ([("+Z", "ZPlus"), ("-Z", "ZMinus")] if plane == "3D" else [])
+    axes = {"3D": "XYZ", "XY": "XY", "ZX": "XZ"}[plane]
+    sides = [(f"{sign}{axis}", f"{axis}{'Plus' if sign == '+' else 'Minus'}") for axis in axes for sign in "+-"]
+    return [side for side in sides if not (plane == "ZX" and side[0] == "-X")]  # the left edge stays on the axis
+
+
+def _padding(air, bodies, plane, r):
+    """Padding mode: no negative padding and a size the bodies give. True if the air can be built."""
+    prefix = f"Air Region {objects.display_name(air)}: "
+    negative = [
+        side
+        for side, prop in _padding_sides(air, plane)
+        if getattr(air, f"Pad{prop}Percent") < 0 or getattr(air, f"Pad{prop}").Value < 0
+    ]
+    for side in negative:
+        r.error(prefix + f"padding must not be negative ({side}).", air)
+    if negative:
+        return False
+    try:
+        airshapes.padded_size(air, bodies, plane)
+    except ValueError as e:
+        text = str(e)
+        r.error(text if text.startswith(prefix) else prefix + text, air)
+        return False
+    return True
+
+
 def _air(study, bodies, moving, r):
     """One Air Region, a shape the Study's plane allows, and every body inside it. moving: names of the moving
     bodies."""
@@ -181,6 +223,8 @@ def _air(study, bodies, moving, r):
     off_axis = air.AirShape == "Box" and air.Center.x - air.Length.Value / 2 < -airshapes.TOL
     if plane == "ZX" and (air.AirShape == "Custom" or off_axis):
         r.error(prefix + "in a ZX (axisymmetric) Study use a half disc or a rectangle starting on the Z axis.", air)
+        return
+    if air.SizeMode == "Padding" and not _padding(air, bodies, plane, r):
         return
     try:
         shape = airshapes.air_shape(air, plane)

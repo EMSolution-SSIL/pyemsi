@@ -120,6 +120,17 @@ FOLDERS = (
 )
 
 
+SIZING_PROPERTIES = (
+    "MainMode",
+    "MainSource",
+    "MainObjects",
+    "MovingMode",
+    "MovingSource",
+    "MovingObjects",
+    "Movement",
+)  # what decides study_bodies: a change refreshes the Air Regions' SizedBy
+
+
 class Study(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
@@ -151,6 +162,17 @@ class Study(_Proxy):
             obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
             for prop in (mode, source, refs):
                 obj.setEditorMode(prop, 2)  # edit together in the Study panel
+
+    def onChanged(self, obj, prop):
+        if (
+            prop in SIZING_PROPERTIES
+            and not obj.Document.Restoring
+            and getattr(obj, "AirRegionsGroup", None) is not None
+        ):
+            try:
+                refresh_sized_by(obj)
+            except Exception:  # a body not recomputed yet has no shape; Validate and Run Mesh refresh again
+                pass
 
     def onDocumentRestored(self, obj):
         ensure_folders(obj)  # Studies saved before a folder existed
@@ -326,7 +348,7 @@ def add_padding(air):
             "App::PropertyBool", "InnerFromBodies", "Padding", "Sector: ring from the bodies' inner radius, else a disc"
         )
     if not hasattr(air, "SizedBy"):
-        add("App::PropertyLinkListHidden", "SizedBy", "Padding", "Bodies that size the air in Padding mode")
+        add("App::PropertyLinkListGlobal", "SizedBy", "Padding", "Bodies that size the air in Padding mode")
         air.setEditorMode("SizedBy", 2)  # hidden
     set_size_modes(air)
 
@@ -336,6 +358,16 @@ def set_size_modes(air):
     mode = 1 if air.SizeMode == "Padding" else 0
     for name in SIZE_PROPERTIES:
         air.setEditorMode(name, mode)
+
+
+def refresh_sized_by(study):
+    """SizedBy of each Air Region: the Study's bodies in Padding mode, none in Manual mode. Only a change is written."""
+    airs = air_regions(study)
+    bodies = study_bodies(study) if any(a.SizeMode == "Padding" for a in airs) else []
+    for air in airs:
+        want = bodies if air.SizeMode == "Padding" else []
+        if [o.Name for o in air.SizedBy] != [o.Name for o in want]:
+            air.SizedBy = want
 
 
 def _differs(current, value):
@@ -388,6 +420,9 @@ class AirRegion(_Named):
         super().onChanged(obj, prop)
         if prop == "SizeMode" and not obj.Document.Restoring:
             set_size_modes(obj)
+            study = owner_study(obj)
+            if study is not None:
+                refresh_sized_by(study)
 
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
@@ -520,6 +555,7 @@ def make_air_region(study, shape="Box", **props):
     for iface in sliding_interfaces(study):  # left without one when the old Air Region was deleted
         if iface.AirRegion is None:
             iface.AirRegion = obj
+    refresh_sized_by(study)
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
