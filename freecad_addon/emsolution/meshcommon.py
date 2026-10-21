@@ -666,6 +666,10 @@ def slide_report(job):
         angle = period["angle"] if period else 360.0
         lines.append(f"ANGLE {angle:g}")
         condition = {"CYCLIC": 2, "SYMMETRY": 1 if period else 0, "ANGLE": angle}
+        if abs(angle - 180) < 1e-9:  # the solver needs the angle between the two periodic boundaries
+            separate = (period["start"] + 90) % 360
+            lines.append(f"SEPARATE_ANGLE {separate:g}: ANGLE is 180, one periodic boundary lies on each side of it")
+            condition["SEPARATE_ANGLE"] = separate
     condition["SLIDE_CONDITION"] = [
         {"SLIDE_NDIV": s["divisions"], "SLIDE_MAT_ID": s["slide_mat_id"], "FITNESS": 0.01} for s in job["slides"]
     ]

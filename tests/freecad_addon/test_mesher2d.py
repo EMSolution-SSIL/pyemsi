@@ -11,6 +11,8 @@ import unittest
 
 import gmsh
 
+from emsolution import meshcommon
+
 from .test_mesher import write_line, write_point
 from .meshreport import report
 
@@ -946,6 +948,16 @@ class Mesher2DTest(unittest.TestCase):
         for text in ("SLIDE_NDIV 90", "SLIDE_MAT_ID 20", "ANGLE 45", '"CYCLIC": 2', "UNIT = 1"):
             self.assertIn(text, r.stdout)
         self.assertLess(r.stdout.index("MAT_ID      10  Air_fixed"), r.stdout.index("SLIDE_NDIV 90"))
+
+    def test_slide_report_half_turn_separates_the_boundaries(self):
+        """ANGLE = 180 needs SEPARATE_ANGLE (handbook 14): the middle of the meshed half turn."""
+        job = {"slides": [{"name": "Gap", "divisions": 90, "slide_mat_id": 20}]}
+        job["periodic"] = {"kind": "rotation", "angle": 180.0, "start": 300.0}
+        text = "\n".join(meshcommon.slide_report(job))
+        self.assertIn("SEPARATE_ANGLE 30", text)
+        self.assertIn('"SEPARATE_ANGLE": 30.0', text)
+        job["periodic"]["angle"] = 90.0
+        self.assertNotIn("SEPARATE_ANGLE", "\n".join(meshcommon.slide_report(job)))
 
 
 if __name__ == "__main__":
