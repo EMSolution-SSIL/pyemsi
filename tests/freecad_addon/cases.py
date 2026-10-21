@@ -88,12 +88,10 @@ def new_study(doc, dimension, shapes):
 
 
 def fit_air(study, bodies, padding=50):
-    """A Box Air Region fitted around the bodies."""
-    center, length, width, height = airshapes.fit_box(bodies, padding, airshapes.study_plane(study))
-    props = {"Center": center, "Length": length, "Width": width}
-    if study.Dimension == "3D":
-        props["Height"] = height
-    return objects.make_air_region(study, "Box", **props)
+    """A Box Air Region in Padding mode: padding % of the bodies' size on every side the Study's plane offers."""
+    sides = airshapes.padding_sides("Box", airshapes.study_plane(study))
+    props = {f"Pad{key}Percent": padding for key, _ in sides}
+    return objects.make_air_region(study, "Box", SizeMode="Padding", **props)
 
 
 def finish(study, bodies, air):
@@ -142,6 +140,13 @@ def crescent_2d(doc):
     return air_study(doc, "2D", shapes, "Sector", InnerRadius=20, OuterRadius=60, StartAngle=0, EndAngle=180)
 
 
+def padded_sector_ring_2d(doc):
+    """The crescent of case 05 with a hollow inside that follows the bodies: 5 mm inside the yoke, 20 % outside."""
+    shapes = [("Yoke", ring_face(30, 40, 20, 160)), ("Coil", ring_face(40, 48, 20, 160))]
+    props = {"EndAngle": 180, "InnerFromBodies": True, "PadOuterPercent": 20, "PadInner": 5}
+    return air_study(doc, "2D", shapes, "Sector", SizeMode="Padding", **props)
+
+
 def custom_2d(doc):
     study, bodies = new_study(doc, "2D", [("Core", face(CORE)), ("Coil", face(COIL))])
     hexagon = [(16 + 50 * math.cos(math.radians(a)), 10 + 50 * math.sin(math.radians(a))) for a in range(0, 360, 60)]
@@ -166,6 +171,12 @@ def rect_zx(doc):
     return air_study(doc, "2D", zx_bodies(), "Box", Center=App.Vector(50, 0, 25), Length=100, Width=100)
 
 
+def padded_rect_zx(doc):
+    """The left edge stays on the axis; 30 % past the coil in x, 10 mm above and below in z."""
+    props = {"PadXPlusPercent": 30, "PadZPlus": 10, "PadZMinus": 10}
+    return air_study(doc, "2D", zx_bodies(), "Box", SizeMode="Padding", **props)
+
+
 # ---- 3D
 
 
@@ -175,6 +186,13 @@ def c_bodies():
 
 def box_3d(doc):
     return air_study(doc, "3D", c_bodies())
+
+
+def padded_box_3d(doc):
+    """Unequal padding: 20 % in x, 10 mm on +y only, 50 % in z."""
+    props = {"PadXPlusPercent": 20, "PadXMinusPercent": 20, "PadYPlus": 10}
+    props.update(PadZPlusPercent=50, PadZMinusPercent=50)
+    return air_study(doc, "3D", c_bodies(), "Box", SizeMode="Padding", **props)
 
 
 def cylinder_3d(doc):
@@ -403,6 +421,21 @@ CASES = [
             "33 x 9 slide nodes on the plane z = 22 in both files",
             "the faces x = 0 and x = 80 have matching nodes in each file; DXYZ = 0.08 m",
         ],
+    ),
+    Case(
+        "21_padded_box_3d",
+        padded_box_3d,
+        ["air x -12..72 (20 %), y 0..60 (10 mm on +y only), z -15..45 (50 %): centre (30, 30, 15), 84 x 60 x 60"],
+    ),
+    Case(
+        "22_padded_sector_ring_2d",
+        padded_sector_ring_2d,
+        ["outer radius 57.6 (48 + 20 %), inner radius 25 (30 - 5 mm): no air nor elements for r < 25"],
+    ),
+    Case(
+        "23_padded_rect_zx",
+        padded_rect_zx,
+        ["air x 0..32.5 (the left edge on the Z axis, 30 % past the coil), z -10..60 (10 mm each side)"],
     ),
     Case(
         "E1_body_outside_air",

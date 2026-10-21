@@ -583,6 +583,16 @@ def main():
     assert air.AirShape == "Box" and not panel.tables["Box"].isHidden() and panel.groups["Box"].isHidden()
     assert panel.reject()
     assert objects.air_regions(study) == [] and not Gui.Control.activeDialog(), "Cancel kept the new Air Region"
+    saved_bodies = study.MainObjects  # a Study with no bodies: the new Air Region stays Manual with the old defaults
+    study.MainObjects = []
+    Gui.runCommand("EMS_AddAirRegion")
+    panel = air_panels.pop()
+    (empty,) = objects.air_regions(study)
+    assert empty.SizeMode == "Manual" and panel.mode_manual.isChecked(), "no bodies: the Air Region is not Manual"
+    assert (empty.Length.Value, empty.Width.Value, empty.Height.Value) == (100, 100, 100), "no bodies: not the defaults"
+    assert all(getattr(empty, f"Pad{s}Percent") == 0 for s in sides), "no bodies: padding was set"
+    assert panel.reject() and objects.air_regions(study) == []
+    study.MainObjects = saved_bodies
     Gui.runCommand("EMS_AddAirRegion")
     panel = air_panels.pop()
     (air,) = objects.air_regions(study)

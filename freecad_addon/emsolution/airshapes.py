@@ -208,29 +208,6 @@ def _padded_sector(air, shapes, box, plane):
     return size
 
 
-def fit_box(bodies, padding, plane):
-    """(centre, length, width, height) of the bodies' global bound box, grown by padding % of its size on each side.
-
-    Length is along x; width is along y ("3D", "XY") or z ("ZX"); height is along z and 0 in 2D.
-    """
-    box = App.BoundBox()
-    for body in bodies:
-        box.add(geometry.global_shape(body).BoundBox)
-    grow = 1 + padding / 100 * 2
-    length, depth, height = box.XLength * grow, box.YLength * grow, box.ZLength * grow
-    if plane == "ZX":
-        return App.Vector(box.Center.x, 0, box.Center.z), length, height, 0.0
-    if plane == "XY":
-        return App.Vector(box.Center.x, box.Center.y, 0), length, depth, 0.0
-    return App.Vector(box.Center), length, depth, height
-
-
-def fit_study(study, padding):
-    """fit_box of all the Study's bodies (main and moving geometry, never the air), or None if it has none."""
-    bodies = objects.study_bodies(study)
-    return fit_box(bodies, padding, study_plane(study)) if bodies else None
-
-
 def outside(body_shape, air_shape, plane):
     """Volume ("3D") or area (2D) of the part of body_shape that lies outside air_shape."""
     rest = body_shape.cut(air_shape)

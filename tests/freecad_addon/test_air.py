@@ -159,22 +159,6 @@ class AirTest(unittest.TestCase):
         self.study_2d(App.Vector(0, 0, 1))
         self.assertEqual(airshapes.study_plane(self.study), "XY")
 
-    def test_fit_box_adds_padding(self):
-        a = self.doc.addObject("Part::Box", "A")
-        b = self.doc.addObject("Part::Box", "B")
-        a.Length = a.Width = a.Height = b.Length = b.Width = b.Height = 10
-        b.Placement.Base = App.Vector(10, 0, 0)
-        self.doc.recompute()
-        center, length, width, height = airshapes.fit_box([a, b], 50, "3D")
-        self.assertEqual((center.x, center.y, center.z), tuple(pytest.approx(v) for v in (10, 5, 5)))
-        self.assertEqual((length, width, height), tuple(pytest.approx(v) for v in (40, 20, 20)))
-
-    def test_fit_box_2d_has_no_height(self):
-        body = self.study_2d(App.Vector(0, 1, 0))
-        center, length, width, height = airshapes.fit_box([body], 10, "ZX")
-        self.assertEqual((center.x, center.y, center.z), tuple(pytest.approx(v) for v in (5, 0, 5)))
-        self.assertEqual((length, width, height), tuple(pytest.approx(v) for v in (12, 12, 0)))
-
     def bodies(self, *names):
         boxes = [self.doc.addObject("Part::Box", n) for n in names]
         self.study.MainObjects = boxes
@@ -983,17 +967,6 @@ class AirTest(unittest.TestCase):
         self.assertNotIn(text, self.air_errors())
         second.Kind = "Rotational"
         self.assertIn(text, self.air_errors())
-
-    def test_fit_takes_the_moving_bodies_and_not_the_air(self):
-        self.sliding(["A"], ["M"])  # A at x = 0..10, M at x = 20..30
-        objects.make_air_region(self.study, "Box", Center=App.Vector(500, 0, 0), Length=10, Width=10, Height=10)
-        self.doc.recompute()
-        center, length, width, height = airshapes.fit_study(self.study, 0)
-        self.assertEqual((center.x, length, width, height), (pytest.approx(15), pytest.approx(30), 10, 10))
-        self.study.Movement = "No movement"
-        self.assertAlmostEqual(airshapes.fit_study(self.study, 0)[1], 10)
-        self.study.MainObjects = []
-        self.assertIsNone(airshapes.fit_study(self.study, 0))
 
     def test_interface_follows_the_studys_air_region(self):
         self.motor()
