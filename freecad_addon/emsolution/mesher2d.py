@@ -24,15 +24,9 @@ from meshcommon import (
     apply_slides,
     apply_periodic,
     slide_report,
+    import_brep,
+    slide_split,
 )
-
-
-def _import(path, *dims):
-    """All entities of a BREP file; every one must have a dimension in dims."""
-    tags = gmsh.model.occ.importShapes(path, highestDimOnly=True)
-    if not tags or any(d not in dims for d, _ in tags):
-        raise JobError(f"{os.path.basename(path)}: expected {'/'.join(map(str, dims))}D entities, got {tags}")
-    return tags
 
 
 def _on_bodies(dim, tag, faces):
@@ -54,17 +48,17 @@ def build(job, folder):
     inputs, body_spans = [], []  # body i owns inputs[start:end]
     for b in bodies:
         start = len(inputs)
-        inputs += _import(os.path.join(folder, b["file"]), 2)
+        inputs += import_brep(os.path.join(folder, b["file"]), 2)
         body_spans.append((start, len(inputs)))
     air = job.get("air")
     if air:  # after the bodies, so the fragment keeps the bodies' pieces whole
         air_start = len(inputs)
-        inputs += _import(os.path.join(folder, air["file"]), 2)
+        inputs += import_brep(os.path.join(folder, air["file"]), 2)
         air_span = (air_start, len(inputs))
 
     def add(file, *dims):
         start = len(inputs)
-        inputs.extend(_import(os.path.join(folder, file), *dims))
+        inputs.extend(import_brep(os.path.join(folder, file), *dims))
         return start, len(inputs)
 
     cell_spans = [add(f, 2) for f in job.get("moving_cells", [])]  # sliding: the air there is moving air
@@ -74,13 +68,13 @@ def build(job, folder):
     size_spans = []
     for _, path in size_files:
         start = len(inputs)
-        inputs += _import(path, 0, 1, 2)
+        inputs += import_brep(path, 0, 1, 2)
         size_spans.append((start, len(inputs)))
     tf_files = transfinite_files(job, folder)
     tf_spans = []
     for kind, _, path in tf_files:
         start = len(inputs)
-        inputs += _import(path, 1 if kind == "edge" else 0)
+        inputs += import_brep(path, 1 if kind == "edge" else 0)
         tf_spans.append((start, len(inputs)))
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
@@ -144,17 +138,7 @@ def build(job, folder):
         return None
     base = os.path.basename
     mapped = [([(base(f), at(span)) for f, span in files], (base(m), at(span))) for files, (m, span) in slide_spans]
-    markers = apply_slides(slides, mapped, 2)
-    moving = set(job["moving"])
-    split = {"fixed": [], "moving": []}
-    sides = ["moving" if b["mat_id"] in moving else "fixed" for b in bodies] + ["fixed", "moving"]
-    for b, side in zip(bodies + airs, sides):
-        if body_faces[b["mat_id"]]:
-            split[side].append((2, body_faces[b["mat_id"]], b["mat_id"], b["name"]))
-    for s in slides:  # the slide point goes to the moving side only
-        gmsh.model.addPhysicalGroup(0, markers[s["slide_mat_id"]], s["slide_mat_id"], name=s["name"])
-        split["moving"].append((0, markers[s["slide_mat_id"]], s["slide_mat_id"], s["name"]))
-    return split
+    return slide_split(job, bodies, body_faces, apply_slides(slides, mapped, 2), 2)
 
 
 def run_job(job_path):

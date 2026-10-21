@@ -1,6 +1,7 @@
 """Mesher tests. Run from the repo root: pixi run pytest tests/freecad_addon/test_mesher.py"""
 
 import json
+import math
 import os
 import stat
 import subprocess
@@ -58,6 +59,54 @@ def write_point(path, p):
         gmsh.finalize()
 
 
+def write_rings(path, *rings):
+    """One BREP holding a solid ring sector about Z per (inner, outer, z0, height[, a0, a1]): a cylinder when inner
+    is 0, from angle a0 to a1 (degrees, default the full turn)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        for inner, outer, z0, h, *angles in rings:
+            a0, a1 = angles or (0.0, 360.0)
+            sweep = math.radians(a1 - a0)
+            vol = [(3, occ.addCylinder(0, 0, z0, 0, 0, h, outer, angle=sweep))]
+            if inner:
+                vol = occ.cut(vol, [(3, occ.addCylinder(0, 0, z0 - 1, 0, 0, h + 2, inner, angle=sweep))])[0]
+            occ.rotate(vol, 0, 0, 0, 0, 0, 1, math.radians(a0))
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_revolved(path, p, q, a0, a1):
+    """The face swept by the line p-q turning about Z from angle a0 to a1 (degrees): a cylinder piece for a vertical
+    line, a disc or ring piece for a radial one. Built like FreeCAD's half faces, so a disc piece has a corner on Z."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        line = occ.addLine(occ.addPoint(*p), occ.addPoint(*q))
+        out = occ.revolve([(1, line)], 0, 0, 0, 0, 0, 1, math.radians(a1 - a0))
+        occ.rotate([dt for dt in out if dt[0] == 2], 0, 0, 0, 0, 0, 1, math.radians(a0))
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def read_nodes(path):
+    """[(x, y, z)] of the nodes of a mesh file, rounded to 1e-9."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        c = gmsh.model.mesh.getNodes()[1]
+    finally:
+        gmsh.finalize()
+    return [tuple(round(x, 9) + 0.0 for x in c[i : i + 3]) for i in range(0, len(c), 3)]
+
+
 def box_lines(x=0.0):
     """The 12 edges of the unit box at x as point pairs."""
     pts = [(x + i, j, k) for i in (0, 1) for j in (0, 1) for k in (0, 1)]
@@ -87,6 +136,7 @@ class MesherTest(unittest.TestCase):
         transfinite=None,
         recombine=None,
         air=None,
+        extra=None,
     ):
         job = {
             "model_name": "Model",
@@ -104,6 +154,7 @@ class MesherTest(unittest.TestCase):
             job["recombine"] = recombine
         if air is not None:
             job["air"] = air
+        job.update(extra or {})  # e.g. the slide keys
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -622,6 +673,180 @@ class MesherTest(unittest.TestCase):
         sizes = [{"name": "Fine", "size": 0.4, "files": ["geometry/size_1.brep"]}]
         r = self.run_job([self.vol(1, "Body", "vol_1.brep", size=0.8)], sizes=sizes, air=air)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+    # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
+
+    def files(self):
+        return os.path.join(self.dir, "pre_geom.msh"), os.path.join(self.dir, "rotor_mesh.msh")
+
+    def slide(self, kind, files, n, cross, full=False, id_=20):
+        """A slide entry named Slide; its marker is geometry/marker_<id_>.brep."""
+        return {
+            "name": "Slide",
+            "kind": kind,
+            "files": ["geometry/" + f for f in files],
+            "marker": f"geometry/marker_{id_}.brep",
+            "divisions": n,
+            "cross_divisions": cross,
+            "slide_mat_id": id_,
+            "full": full,
+        }
+
+    def slide_job(self, volumes, moving, slides, periodic=None):
+        """Run a slide job: air from geometry/air.brep (fixed ID 10, moving 11), moving cell geometry/cell_1.brep."""
+        sides = {"fixed": {"mat_id": 10, "name": "Air_fixed"}, "moving": {"mat_id": 11, "name": "Air_moving"}}
+        air = {"sides": sides, "file": "geometry/air.brep", "size": 15.0}
+        extra = {
+            "rotor_file": self.files()[1],
+            "moving": moving,
+            "moving_cells": ["geometry/cell_1.brep"],
+            "slides": slides,
+        }
+        if periodic:
+            extra["periodic"] = periodic
+        return self.run_job(volumes, air=air, extra=extra)
+
+    def motor_job(self, tooth=False):
+        """Case 17: stator ring 45..80 fixed, rotor r 40 moving, both z 0..50, air cylinder r 100 from z -25 to 75,
+        slide cylinder r 42.5 in two halves, 72 divisions round and 10 up, slide edge at (42.5, 0).
+        tooth: the stator also has a tooth 42.5..45 from 10° to 20° that touches the slide cylinder."""
+        write_rings(self.geo("vol_1.brep"), (45, 80, 0, 50), *([(42.5, 45, 0, 50, 10, 20)] if tooth else []))
+        write_rings(self.geo("vol_2.brep"), (0, 40, 0, 50))
+        write_rings(self.geo("air.brep"), (0, 100, -25, 100))
+        write_rings(self.geo("cell_1.brep"), (0, 42.5, -25, 100))
+        for k, a in enumerate((0, 180), 1):
+            write_revolved(self.geo(f"slide_20_{k}.brep"), (42.5, 0, -25), (42.5, 0, 75), a, a + 180)
+        write_line(self.geo("marker_20.brep"), (42.5, 0, -25), (42.5, 0, 75))
+        vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Rotor", "vol_2.brep", 10)]
+        return self.slide_job(
+            vols, [2], [self.slide("rotational", ["slide_20_1.brep", "slide_20_2.brep"], 72, 10, True)]
+        )
+
+    def test_radial_slide_cylinder_matches(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (
+            sorted(p for p in read_nodes(f) if abs(math.hypot(p[0], p[1]) - 42.5) < 1e-6) for f in self.files()
+        )
+        self.assertEqual(len(fixed), 72 * 11)
+        self.assertEqual(fixed, moving)
+        self.assertEqual(sorted({p[2] for p in fixed}), list(range(-25, 76, 10)))
+        angles = sorted({round(math.degrees(math.atan2(p[1], p[0])), 6) % 360 for p in fixed})
+        self.assertEqual(len(angles), 72)
+        for got, want in zip(angles, range(0, 360, 5)):
+            self.assertAlmostEqual(got, want, places=6)
+        self.assertIn("MAT_ID      10  Air_fixed", r.stdout)
+        self.assertIn("MAT_ID      11  Air_moving", r.stdout)
+        self.assertIn("SLIDE_NDIV 72", r.stdout)
+        self.assertIn(f"Wrote {self.files()[1]}", r.stdout)
+
+    def test_body_touching_the_slide_cylinder_fails_cleanly(self):
+        r = self.motor_job(tooth=True)
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("ERROR: sliding interface Slide: slide_20_1.brep was split"), last)
+
+    def line_group(self, path, group):
+        """(element count, node coordinates) of the dim-1 physical group in a mesh file; None if it has none."""
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(path)
+            if (1, group) not in gmsh.model.getPhysicalGroups(1):
+                return None
+            count = 0
+            for e in gmsh.model.getEntitiesForPhysicalGroup(1, group):
+                count += sum(len(t) for t in gmsh.model.mesh.getElements(1, e)[1])
+            c = gmsh.model.mesh.getNodesForPhysicalGroup(1, group)[1]
+            return count, [tuple(round(x, 9) + 0.0 for x in c[i : i + 3]) for i in range(0, len(c), 3)]
+        finally:
+            gmsh.finalize()
+
+    def test_rotor_file_has_slide_edge_at_start_angle(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.files()
+        count, nodes = self.line_group(rotor, 20)
+        self.assertEqual(count, 10)
+        self.assertEqual(sorted(nodes), [(42.5, 0, z) for z in range(-25, 76, 10)])
+        self.assertIsNone(self.line_group(fixed, 20))
+
+    def slide_triangles(self, path, r):
+        """The faces of the tetrahedra in path that lie on the cylinder of radius r, each as a frozenset of
+        (5° step, z) of its nodes."""
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(path)
+            tags, coords = gmsh.model.mesh.getNodes()[:2]
+            where = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+            _, nodes = gmsh.model.mesh.getElementsByType(4)
+        finally:
+            gmsh.finalize()
+        on = {t: (round(math.degrees(math.atan2(y, x)) / 5) % 72, round(z, 6)) for t, (x, y, z) in where.items()}
+        on = {t: key for t, key in on.items() if abs(math.hypot(*where[t][:2]) - r) < 1e-6}
+        found = set()
+        for k in range(0, len(nodes), 4):
+            tet = [int(n) for n in nodes[k : k + 4]]
+            for skip in range(4):
+                tri = [n for i, n in enumerate(tet) if i != skip]
+                if all(n in on for n in tri):
+                    found.add(frozenset(on[n] for n in tri))
+        return found
+
+    def test_slide_triangles_same_after_one_division(self):
+        r = self.motor_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        tris = self.slide_triangles(self.files()[1], 42.5)
+        self.assertEqual(len(tris), 72 * 10 * 2)
+        turned = {frozenset(((k + 1) % 72, z) for k, z in tri) for tri in tris}
+        self.assertEqual(turned, tris)
+
+    def test_axial_gap_disc_reaching_axis(self):
+        """Case 19: rotor disc z 0..10 moving, stator disc z 12..22 fixed, slide disc z 11 over the whole air."""
+        write_rings(self.geo("vol_1.brep"), (0, 50, 12, 10))
+        write_rings(self.geo("vol_2.brep"), (0, 50, 0, 10))
+        write_rings(self.geo("air.brep"), (0, 80, -10, 42))
+        write_rings(self.geo("cell_1.brep"), (0, 80, -10, 21))
+        for k, a in enumerate((0, 180), 1):
+            write_revolved(self.geo(f"slide_20_{k}.brep"), (0, 0, 11), (80, 0, 11), a, a + 180)
+        write_line(self.geo("marker_20.brep"), (0, 0, 11), (80, 0, 11))
+        vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Rotor", "vol_2.brep", 10)]
+        slide = self.slide("axial", ["slide_20_1.brep", "slide_20_2.brep"], 36, 8, True)
+        r = self.slide_job(vols, [2], [slide])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, moving = (sorted(p for p in read_nodes(f) if abs(p[2] - 11) < 1e-9) for f in self.files())
+        self.assertEqual(len(fixed), 36 * 8 + 1)
+        self.assertEqual(fixed, moving)
+        count, nodes = self.line_group(self.files()[1], 20)
+        self.assertEqual(count, 8)
+        self.assertEqual(sorted(nodes), [(x, 0, 11) for x in range(0, 81, 10)])
+
+    def test_linear_3d_plane_and_period(self):
+        """Case 20: stator box below z 20 fixed, mover z 24..40 moving, slide plane z 22 moving along x, the period is
+        the 80 mm air box length."""
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 80, 40, 20)
+        write_box(self.geo("vol_2.brep"), 0, 0, 24, 80, 40, 16)
+        write_box(self.geo("air.brep"), 0, 0, -5, 80, 40, 50)
+        write_box(self.geo("cell_1.brep"), 0, 0, 22, 80, 40, 23)
+        write_rect(self.geo("slide_20_1.brep"), 0, 0, 22, 80, 40)
+        write_line(self.geo("marker_20.brep"), (0, 0, 22), (0, 40, 22))
+        vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Mover", "vol_2.brep", 10)]
+        period = {"kind": "translation", "vector": [80.0, 0.0, 0.0], "start": 0.0}
+        r = self.slide_job(vols, [2], [self.slide("linear", ["slide_20_1.brep"], 32, 8)], period)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        planes = []
+        for path in self.files():
+            pts = read_nodes(path)
+            planes.append(sorted(p for p in pts if abs(p[2] - 22) < 1e-9))
+            self.assertEqual(len(planes[-1]), 33 * 9, path)
+            left = sorted(p[1:] for p in pts if abs(p[0]) < 1e-9)
+            right = sorted(p[1:] for p in pts if abs(p[0] - 80) < 1e-9)
+            self.assertGreater(len(left), 9)
+            self.assertEqual(left, right, path)
+        self.assertEqual(planes[0], planes[1])
+        self.assertEqual(self.line_group(self.files()[1], 20)[0], 8)
+        self.assertIn("DXYZ 0.08 0 0", r.stdout)
 
 
 if __name__ == "__main__":

@@ -194,10 +194,12 @@ def hollow_sector_3d(doc):
 # ---- sliding motion (2D XY)
 
 
-def slide_study(doc, fixed, moving, shape, air_props, interfaces):
-    """A sliding-motion Study: fixed and moving (name, face) bodies, an Air Region of shape with air_props and the
-    Sliding Interfaces [(kind, properties)]."""
-    study, bodies = new_study(doc, "2D", fixed + moving)
+def slide_study(doc, fixed, moving, shape, air_props, interfaces, dimension="2D", size=None):
+    """A sliding-motion Study: fixed and moving (name, face or solid) bodies, an Air Region of shape with air_props
+    and the Sliding Interfaces [(kind, properties)]. size: the default mesh size, if not the Study's."""
+    study, bodies = new_study(doc, dimension, fixed + moving)
+    if size:
+        study.MeshSizesGroup.DefaultMeshSize = size
     study.MainObjects = bodies[: len(fixed)]
     study.MovingMode = "Manual"
     study.MovingObjects = bodies[len(fixed) :]
@@ -240,6 +242,44 @@ def linear_two_2d(doc):
     return slide_study(doc, fixed, moving, "Box", air, gaps)
 
 
+# ---- sliding motion (3D)
+
+
+def motor_3d(doc, end=360, divisions=72):
+    """Stator ring 45..80 and rotor r 40, both z 0..50, in a Sector air r 100 from z -25 to 75; slide cylinder
+    r 42.5, 10 divisions up."""
+    fixed, moving = [("Stator", ring_sector(45, 80, 0, end, 0, 50))], [("Rotor", ring_sector(0, 40, 0, end, 0, 50))]
+    interface = ("Rotational", {"Radius": 42.5, "Divisions": divisions, "CrossDivisions": 10})
+    air = {"OuterRadius": 100, "EndAngle": end, "ZMin": -25, "Height": 100}
+    return slide_study(doc, fixed, moving, "Sector", air, [interface], "3D", 10)
+
+
+def full_motor_3d(doc):
+    return motor_3d(doc)
+
+
+def sector_motor_3d(doc):
+    return motor_3d(doc, 90, 18)
+
+
+def axial_gap_3d(doc):
+    """Rotor disc z 0..10 moving, stator disc z 12..22 fixed, slide disc z 11 over the whole air."""
+    fixed, moving = [("Stator", ring_sector(0, 50, 0, 360, 12, 10))], [("Rotor", ring_sector(0, 50, 0, 360, 0, 10))]
+    interface = ("Axial gap", {"Position": 11, "Divisions": 36, "CrossDivisions": 8})
+    air = {"OuterRadius": 80, "ZMin": -10, "Height": 42}
+    return slide_study(doc, fixed, moving, "Sector", air, [interface], "3D", 10)
+
+
+def linear_3d(doc):
+    """Stator box below z 20 fixed, mover z 24..40 moving along x, slide plane z 22."""
+    mover = solid(rect(0, 0, 80, 40), 16)
+    mover.translate(App.Vector(0, 0, 24))
+    fixed, moving = [("Stator", solid(rect(0, 0, 80, 40), 20))], [("Mover", mover)]
+    props = {"NormalAxis": "Z", "Position": 22, "MotionAxis": "X", "Divisions": 32, "CrossDivisions": 8}
+    air = {"Center": App.Vector(40, 20, 20), "Length": 80, "Width": 40, "Height": 50}
+    return slide_study(doc, fixed, moving, "Box", air, [("Linear", props)], "3D", 10)
+
+
 # ---- error cases
 
 
@@ -261,6 +301,15 @@ def sliding_zx(doc):
     fixed, moving = zx_bodies()[1:], zx_bodies()[:1]  # the plunger moves
     air = {"OuterRadius": 80, "Center": App.Vector(0, 0, 25)}
     return slide_study(doc, fixed, moving, "Sector", air, [("Rotational", {"Radius": 12})])
+
+
+def axis_not_z(doc):
+    """The motor of case 17 turned onto the X axis: the slide cylinder about Z cuts through both bodies."""
+    axis, base = App.Vector(1, 0, 0), App.Vector(-25, 0, 0)
+    stator = Part.makeCylinder(80, 50, base, axis).cut(Part.makeCylinder(45, 50, base, axis))
+    fixed, moving = [("Stator", stator)], [("Rotor", Part.makeCylinder(40, 50, base, axis))]
+    air = {"OuterRadius": 120, "ZMin": -100, "Height": 200}
+    return slide_study(doc, fixed, moving, "Sector", air, [("Rotational", {"Radius": 42.5})], "3D", 20)
 
 
 def moving_on_fixed_side(doc):
@@ -323,6 +372,39 @@ CASES = [
         ],
     ),
     Case(
+        "17_full_motor_3d",
+        full_motor_3d,
+        [
+            "72 x 11 slide nodes on the cylinder r = 42.5 (every 5°, every 10 mm in z), the same in both files",
+            "pre_geom.msh: the stator and the fixed air; rotor_mesh.msh: the rotor and the moving air",
+            "the slide edge: 10 line elements in rotor_mesh.msh along (42.5, 0, z), z -25..75",
+        ],
+    ),
+    Case(
+        "18_sector_motor_3d",
+        sector_motor_3d,
+        [
+            "19 x 11 slide nodes on the quarter cylinder r = 42.5 in both files; it ends on the 0° and 90° faces",
+            "in each file the 0° and 90° faces have nodes at the same (r, z)",
+        ],
+    ),
+    Case(
+        "19_axial_gap_3d",
+        axial_gap_3d,
+        [
+            "the slide disc z = 11 has 36 x 8 + 1 nodes in both files: 8 rings of 36 and the centre",
+            "the slide edge is radial: 8 line elements in rotor_mesh.msh from (0, 0, 11) to (80, 0, 11)",
+        ],
+    ),
+    Case(
+        "20_linear_3d",
+        linear_3d,
+        [
+            "33 x 9 slide nodes on the plane z = 22 in both files",
+            "the faces x = 0 and x = 80 have matching nodes in each file; DXYZ = 0.08 m",
+        ],
+    ),
+    Case(
         "E1_body_outside_air",
         body_outside_air,
         ["Validate refuses: the coil sticks out of the air"],
@@ -333,6 +415,12 @@ CASES = [
         body_crosses_slide,
         ["Validate refuses: the rotor reaches across the slide circle"],
         "crosses a Sliding Interface",
+    ),
+    Case(
+        "E3_axis_not_z",
+        axis_not_z,
+        ["Validate refuses: the machine axis is X, the slide cylinder is about Z"],
+        "Rotation is about the global Z axis",
     ),
     Case("E4_sliding_zx", sliding_zx, ["Validate refuses: no sliding motion in a ZX Study"], "not supported in a ZX"),
     Case(

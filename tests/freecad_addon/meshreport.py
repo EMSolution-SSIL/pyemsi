@@ -53,16 +53,29 @@ def _coords(msh_path):
     return [tuple(c[i : i + 3]) for i in range(0, len(c), 3)]
 
 
-def _point(msh_path, group=None):
-    """Coordinates of the node of a point group (the first one when group is None) in a mesh file; None if absent."""
+def _marker(msh_path, dim, group=None):
+    """(element count, node coordinates) of a physical group of dimension dim (the first one when group is None) in a
+    mesh file: the slide point (dim 0) or slide edge (dim 1). None if there is none."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.open(msh_path)
-        tags = [t for _, t in gmsh.model.getPhysicalGroups(0) if group in (None, t)]
-        return tuple(gmsh.model.mesh.getNodesForPhysicalGroup(0, tags[0])[1][:3]) if tags else None
+        tags = [t for _, t in gmsh.model.getPhysicalGroups(dim) if group in (None, t)]
+        if not tags:
+            return None
+        count = 0
+        for e in gmsh.model.getEntitiesForPhysicalGroup(dim, tags[0]):
+            count += sum(len(t) for t in gmsh.model.mesh.getElements(dim, e)[1])
+        c = gmsh.model.mesh.getNodesForPhysicalGroup(dim, tags[0])[1]
+        return count, [tuple(c[i : i + 3]) for i in range(0, len(c), 3)]
     finally:
         gmsh.finalize()
+
+
+def _point(msh_path, group=None):
+    """Coordinates of the node of a point group (the first one when group is None) in a mesh file; None if absent."""
+    found = _marker(msh_path, 0, group)
+    return found[1][0] if found else None
 
 
 def slide_check(fixed_msh, rotor_msh, on_slide):
@@ -108,14 +121,23 @@ def periodic_check(msh_path, period):
     return bool(first) and not left
 
 
-def _on_slide(slide, point, period, tol=1e-6):
-    """f(node) -> True on a 2D slide curve: the circle through the slide point, or the line through it along the
-    motion (the axis the period moves along)."""
+def _on_slide(slide, marker, period, tol=1e-6):
+    """f(node) -> True on a slide curve or surface, from the marker's nodes: the circle (2D) or cylinder (3D) about Z
+    through the slide point or edge, the plane z = const of an axial gap, or the line or plane through the marker
+    along the motion (the axis the period moves along)."""
+    point = marker[0]
     if slide["kind"] == "rotational":
         r = math.hypot(point[0], point[1])
         return lambda p: abs(math.hypot(p[0], p[1]) - r) < tol
+    if slide["kind"] == "axial":
+        return lambda p: abs(p[2] - point[2]) < tol
     axis = next(k for k, x in enumerate(period["vector"]) if x)
-    return lambda p: all(abs(p[k] - point[k]) < tol for k in range(3) if k != axis)
+    fixed = [k for k in range(3) if k != axis and all(abs(q[k] - point[k]) < tol for q in marker)]
+    return lambda p: all(abs(p[k] - point[k]) < tol for k in fixed)
+
+
+def _round(p):
+    return ", ".join(f"{round(c, 9) + 0.0:g}" for c in p)
 
 
 def _angle(p):
@@ -127,21 +149,37 @@ def slide_lines(data):
     fixed, rotor = data["mesh_file"], data["rotor_file"]
     names = os.path.basename(fixed), os.path.basename(rotor)
     lines = []
+    dim = 1 if "volumes" in data else 0  # 3D: a slide edge; 2D: a slide point
     for s in data["slides"]:
-        point = _point(rotor, s["slide_mat_id"])
-        if point is None:
-            raise RuntimeError(f"{s['name']}: no slide point (group {s['slide_mat_id']}) in {names[1]}")
-        n_fixed, n_rotor, same = slide_check(fixed, rotor, _on_slide(s, point, data.get("periodic")))
+        found = _marker(rotor, dim, s["slide_mat_id"])
+        if found is None:
+            what = "slide edge" if dim else "slide point"
+            raise RuntimeError(f"{s['name']}: no {what} (group {s['slide_mat_id']}) in {names[1]}")
+        count, marker = found
+        n_fixed, n_rotor, same = slide_check(fixed, rotor, _on_slide(s, marker, data.get("periodic")))
         want = s["divisions"] if s["full"] else s["divisions"] + 1
+        if s["kind"] == "axial" and min(math.hypot(p[0], p[1]) for p in marker) < 1e-9:
+            want = want * s["cross_divisions"] + 1  # a disc: rings round its centre node
+        elif dim:
+            want *= s["cross_divisions"] + 1
         lines.append(
             f"Slide {s['name']} (SLIDE_MAT_ID {s['slide_mat_id']}, {s['divisions']} divisions): {n_fixed} nodes in"
             f" {names[0]}, {n_rotor} in {names[1]}, {want} expected"
         )
         lines.append(f"slide nodes match: {'yes' if same and n_fixed == want else 'no'}")
-        where = f", angle {_angle(point):g}°" if s["kind"] == "rotational" else ""
-        stray = "none" if _point(fixed) is None else "one too (wrong)"
-        x, y = (round(c, 9) + 0.0 for c in point[:2])
-        lines.append(f"slide point in {names[1]} at ({x:g}, {y:g}){where}; {stray} in {names[0]}")
+        out = max(marker, key=lambda p: math.hypot(p[0], p[1]))  # off the Z axis, for the angle
+        where = f", angle {_angle(out):g}°" if s["kind"] != "linear" else ""
+        stray = "none" if _marker(fixed, dim) is None else "one too (wrong)"
+        if dim:
+            b = max(marker, key=lambda p: math.dist(p, marker[0]))  # the two ends: the nodes farthest apart
+            a, b = sorted((max(marker, key=lambda p: math.dist(p, b)), b), key=lambda p: [round(c, 6) for c in p])
+            lines.append(
+                f"slide edge in {names[1]}: {count} line elements from ({_round(a)}) to ({_round(b)}){where};"
+                f" {stray} in {names[0]}"
+            )
+        else:
+            x, y = (round(c, 9) + 0.0 for c in marker[0][:2])
+            lines.append(f"slide point in {names[1]} at ({x:g}, {y:g}){where}; {stray} in {names[0]}")
     if data.get("periodic"):
         for path, name in zip((fixed, rotor), names):
             lines.append(f"{name} periodic: {'yes' if periodic_check(path, data['periodic']) else 'no'}")
