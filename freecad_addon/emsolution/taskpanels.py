@@ -981,7 +981,7 @@ class ItemPanel:
         highlight.clear()  # the list's selected rows are highlighted instead
         self.pick, label, kinds, whole, hint3d, hint2d = ITEM_PICKS[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
-        air = not isinstance(obj.Proxy, objects.Excitation)  # an Excitation never goes on the air
+        air = isinstance(obj.Proxy, objects.MeshSize)  # the air is not recombined, structured or excited
         Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole, air))  # replaces any filter the user set
         self.current = objects.item_refs(obj)
         self.form = QtWidgets.QWidget()
@@ -1048,10 +1048,15 @@ class ItemPanel:
 
     def add_selection(self):
         new = self.pick()
-        problem = objects.assignment_problem(objects.owner_study(self.obj), [b for b, _ in new])
+        study, cls = objects.owner_study(self.obj), type(self.obj.Proxy)
+
+        def problem_of(bodies):
+            return objects.assignment_problem(study, bodies) or objects.air_refusal(cls, bodies)
+
+        problem = problem_of([b for b, _ in new])
         if problem:
             warn(problem)
-            new = [(b, f) for b, f in new if not objects.assignment_problem(objects.owner_study(self.obj), [b])]
+            new = [(b, f) for b, f in new if not problem_of([b])]
         have = {(b.Name, f) for b, f in self.current}
         added = [(b, f) for b, f in new if (b.Name, f) not in have]
         if not added and not problem:
@@ -1178,7 +1183,7 @@ class AirRegionPanel:
         self.padding = _number_box(50, 0, 1000, " %")
         self.padding.setDecimals(0)
         fit = QtWidgets.QPushButton("Fit to bodies")
-        fit.setToolTip("Size the box around the main geometry, with this padding on each side")
+        fit.setToolTip("Size the box around the Study's bodies, with this padding on each side")
         fit.clicked.connect(self.fit)
         row = QtWidgets.QHBoxLayout()
         row.addWidget(self.padding)
@@ -1239,10 +1244,10 @@ class AirRegionPanel:
         self.show_source()
 
     def fit(self):
-        bodies = geometry.region(self.study, "Main")[0]
-        if not bodies:
+        fit = airshapes.fit_study(self.study, self.padding.value())  # main and moving geometry, not the air
+        if fit is None:
             return warn(objects.NO_MAIN_GEOMETRY)
-        center, length, width, height = airshapes.fit_box(bodies, self.padding.value(), self.plane)
+        center, length, width, height = fit
         for axis, box in self.center.items():
             box.setValue(getattr(center, axis))
         values = {"Length": length, "Width": width, "Height": height}
@@ -1364,7 +1369,7 @@ class SlidingInterfacePanel:
 
     def show_step(self):
         """The motion of one division: an angle about Z, or a length along the motion axis of a Linear interface."""
-        n, air = self.divisions.value(), self.obj.AirRegion
+        n, air = self.divisions.value(), objects.air_of(self.obj)
         if self.kind.currentData() == "Linear":
             if air is None or air.AirShape != "Box":
                 return self.step_label.setText("")

@@ -114,6 +114,12 @@ def fit_box(bodies, padding, plane):
     return App.Vector(box.Center), length, depth, height
 
 
+def fit_study(study, padding):
+    """fit_box of all the Study's bodies (main and moving geometry, never the air), or None if it has none."""
+    bodies = objects.study_bodies(study)
+    return fit_box(bodies, padding, study_plane(study)) if bodies else None
+
+
 def outside(body_shape, air_shape, plane):
     """Volume ("3D") or area (2D) of the part of body_shape that lies outside air_shape."""
     rest = body_shape.cut(air_shape)
@@ -122,7 +128,7 @@ def outside(body_shape, air_shape, plane):
 
 def _start(iface):
     """Start angle of the motion in degrees: the StartAngle of a Sector Air Region, else 0."""
-    air = iface.AirRegion
+    air = objects.air_of(iface)
     return air.StartAngle.Value if air is not None and air.AirShape == "Sector" else 0.0
 
 

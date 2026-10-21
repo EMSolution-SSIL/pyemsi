@@ -283,12 +283,22 @@ class Recombine(_Proxy):
         )
 
 
+def _unplaced(obj):
+    """Reset the Placement of an object its properties place: a moved Placement would detach its Shape from the
+    mesh, which is built from the properties."""
+    import FreeCAD as App
+
+    if obj.Placement != App.Placement():
+        obj.Placement = App.Placement()
+
+
 class AirRegion(_Named):
     """The outer shape of the air around the model; the mesher fills it. Shape is built from the properties."""
 
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
+        obj.setEditorMode("Placement", 2)  # hidden: the properties place the air
         add = obj.addProperty
         add("App::PropertyEnumeration", "AirShape", "Air", "Outer shape of the air")
         obj.AirShape = ["Box", "Sector", "Custom"]
@@ -312,7 +322,11 @@ class AirRegion(_Named):
         from . import airshapes
 
         study = owner_study(obj)
+        _unplaced(obj)
         obj.Shape = airshapes.air_shape(obj, airshapes.study_plane(study) if study else "3D")
+
+    def onDocumentRestored(self, obj):
+        obj.setEditorMode("Placement", 2)
 
 
 AXES = ["X", "Y", "Z"]
@@ -324,6 +338,7 @@ class SlidingInterface(_Named):
     def __init__(self, obj):
         obj.Proxy = self
         self.add_group_name(obj)
+        obj.setEditorMode("Placement", 2)  # hidden: the properties place the surface
         add = obj.addProperty
         add("App::PropertyEnumeration", "Kind", "Sliding", "Rotational about the Z axis, Axial gap (3D) or Linear")
         obj.Kind = ["Rotational", "Axial gap", "Linear"]
@@ -345,11 +360,16 @@ class SlidingInterface(_Named):
     def execute(self, obj):
         from . import airshapes
 
-        if obj.AirRegion is None:
+        air = air_of(obj)
+        if air is None:
             raise ValueError(f"Sliding Interface {display_name(obj)}: it needs an Air Region")
         study = owner_study(obj)
         plane = airshapes.study_plane(study) if study else "3D"
-        obj.Shape = airshapes.slide_surface(obj, airshapes.air_shape(obj.AirRegion, plane), plane)
+        _unplaced(obj)
+        obj.Shape = airshapes.slide_surface(obj, airshapes.air_shape(air, plane), plane)
+
+    def onDocumentRestored(self, obj):
+        obj.setEditorMode("Placement", 2)
 
 
 def _make_folder(study, prop, cls):
@@ -432,6 +452,9 @@ def make_air_region(study, shape="Box", **props):
     for name, value in props.items():
         setattr(obj, name, value)
     study.AirRegionsGroup.addObject(obj)
+    for iface in sliding_interfaces(study):  # left without one when the old Air Region was deleted
+        if iface.AirRegion is None:
+            iface.AirRegion = obj
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
@@ -440,14 +463,17 @@ def make_air_region(study, shape="Box", **props):
     return obj
 
 
-def make_sliding_interface(study, kind, **props):
-    """Adds a Sliding Interface of kind on the Study's Air Region (see SlidingInterface)."""
+def make_sliding_interface(study, kind=None, **props):
+    """Adds a Sliding Interface of kind on the Study's Air Region (see SlidingInterface). The default kind is
+    Linear for a Box Air Region (a Linear interface needs one), else Rotational."""
+    airs = air_regions(study)
+    if kind is None:
+        kind = "Linear" if airs and airs[0].AirShape == "Box" else "Rotational"
     obj = study.Document.addObject("Part::FeaturePython", "SlidingInterface")
     SlidingInterface(obj)
     obj.Label = "Sliding Interface"
     obj.GroupName = "Sliding Interface"
     obj.Kind = kind
-    airs = air_regions(study)
     obj.AirRegion = airs[0] if airs else None
     for name, value in props.items():
         setattr(obj, name, value)
@@ -587,6 +613,28 @@ def air_regions(study):
 
 def sliding_interfaces(study):
     return [o for o in study.AirRegionsGroup.Group if isinstance(getattr(o, "Proxy", None), SlidingInterface)]
+
+
+def air_of(iface):
+    """The Air Region a Sliding Interface spans: its Study's (one per Study), not the link, which a deleted Air
+    Region leaves empty."""
+    study = owner_study(iface)
+    airs = air_regions(study) if study is not None else []
+    return airs[0] if airs else iface.AirRegion
+
+
+def is_air(obj):
+    return isinstance(getattr(obj, "Proxy", None), AirRegion)
+
+
+def air_refusal(item_cls, bodies):
+    """Why an item of class item_cls cannot take bodies, because some are Air Regions; "" when it can. The air
+    takes Materials and Mesh Sizes: it is not recombined or structured, and an excitation goes on a body."""
+    airs = list(dict.fromkeys(display_name(b) for b in bodies if is_air(b)))
+    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine):
+        return ""
+    what = "an Excitation" if item_cls is Excitation else "recombined or structured"
+    return f"Air Region {', '.join(airs)} cannot be {what}."
 
 
 def library_materials(study):

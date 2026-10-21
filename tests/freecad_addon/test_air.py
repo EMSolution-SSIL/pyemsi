@@ -773,7 +773,8 @@ class AirTest(unittest.TestCase):
     def test_air_cell_without_a_body_is_an_error(self):
         stator, _ = self.motor(extra=(60,))  # three cells; the ring between 42.5 and 60 holds nothing
         stator.Shape = self.disc(90, 65)
-        text = "Part of the air between Sliding Interfaces holds no body; its side is unknown."
+        inner, outer = objects.sliding_interfaces(self.study)
+        text = f"Part of the air next to Sliding Interfaces {inner.Label}, {outer.Label} holds no body; its side is unknown."
         self.assertIn(text + " Move an interface or add the body.", self.air_errors())
 
     def test_no_body_in_the_moving_geometry_is_an_error(self):
@@ -875,3 +876,142 @@ class AirTest(unittest.TestCase):
         (v,) = marker.Vertexes
         a = math.radians(30)
         self.assertEqual((v.X, v.Y, v.Z), (pytest.approx(42.5 * math.cos(a)), pytest.approx(42.5 * math.sin(a)), 0))
+
+    def test_a_moved_placement_does_not_detach_the_air(self):
+        """The properties place the air and the slide surface: Placement is hidden and a recompute resets it."""
+        iface = self.box_slide()
+        air = objects.air_regions(self.study)[0]
+        moved = App.Placement(App.Vector(100, 0, 0), App.Rotation())
+        for obj in (air, iface):
+            self.assertIn("Hidden", obj.getEditorMode("Placement"))
+            before = obj.Shape.BoundBox.XMin
+            obj.Placement = moved
+            self.doc.recompute()
+            self.assertEqual(obj.Placement, App.Placement())
+            self.assertAlmostEqual(obj.Shape.BoundBox.XMin, before)
+        air.Placement = moved  # after the last recompute
+        jobwriter.write_job(self.study)
+        self.assertAlmostEqual(self.exported_air().XMin, -20)
+        self.assertEqual(air.Placement, App.Placement())
+
+    def air_box(self):
+        """Box A (0..10) inside a 30 mm Box Air Region, recomputed."""
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        return air
+
+    def test_mesh_size_on_the_air_is_checked_like_a_body(self):
+        air = self.air_box()
+        size = objects.make_mesh_size(self.study, 2, [(air, "")])
+        self.assertEqual([p.text for p in validation.validate(self.study) if size.Label in p.text], [])
+        size.Size = 0
+        self.assertIn(f"Mesh size {size.Label} must be greater than 0.", self.air_errors())
+        size.Size = 2
+        size.References = [(air, "Face99")]
+        self.assertIn(f"Mesh Size {size.Label}: body {air.Label} has no Face99. Reselect it.", self.air_errors())
+        with self.assertRaisesRegex(jobwriter.StudyError, "has no Face99"):
+            jobwriter.write_job(self.study)
+
+    def test_air_cannot_be_recombined_structured_or_excited(self):
+        air = self.air_box()
+        refused = f"Air Region {air.Label} cannot be recombined or structured."
+        items = [
+            objects.make_recombine(self.study, [air]),
+            objects.make_transfinite_body(self.study, [air]),
+            objects.make_transfinite_edges(self.study, 10, [(air, "Edge1")]),
+        ]
+        errors = self.air_errors()
+        for item in items:
+            self.assertEqual(objects.air_refusal(type(item.Proxy), [air]), refused)
+            self.assertIn(f"{validation._kind(item)} {item.Label}: {refused} Remove it from the item.", errors)
+        coil = objects.make_excitation(self.study, "Coil", [(air, "Face1")])
+        refused = f"Air Region {air.Label} cannot be an Excitation."
+        self.assertIn(f"Excitation {coil.Label}: {refused} Remove it from the item.", self.air_errors())
+        self.assertEqual(objects.air_refusal(objects.MeshSize, [air]), "")
+        self.assertEqual(objects.air_refusal(objects.Recombine, self.study.MainObjects), "")
+
+    def test_custom_source_in_the_study_geometry_is_an_error(self):
+        (a,) = self.bodies("A")
+        outer = self.doc.addObject("Part::Box", "OuterBox")
+        outer.Length = outer.Width = outer.Height = 40
+        outer.Placement.Base = App.Vector(-15, -15, -15)
+        self.study.MainObjects = [a, outer]
+        air = objects.make_air_region(self.study, "Custom", Source=outer)
+        self.doc.recompute()
+        text = f"OuterBox is the Custom shape of Air Region {air.Label}; take it out of the main geometry."
+        self.assertIn(text, self.air_errors())
+        self.study.MainObjects = [a]
+        self.assertEqual(self.air_problems(), [])
+        self.study.Movement, self.study.MovingMode, self.study.MovingObjects = "Sliding motion", "Manual", [outer]
+        text = f"OuterBox is the Custom shape of Air Region {air.Label}; take it out of the moving geometry."
+        self.assertIn(text, self.air_errors())
+
+    def test_custom_source_of_the_wrong_kind_is_an_error(self):
+        self.bodies("A")
+        sheet = self.doc.addObject("Part::Feature", "Sheet")
+        sheet.Shape = Part.makePlane(40, 40, App.Vector(-15, -15, 0))
+        air = objects.make_air_region(self.study, "Custom", Source=sheet)
+        self.assertEqual(self.air_problems(), [f"Air Region {air.Label}: the Custom body Sheet must be a solid."])
+        self.study_2d(App.Vector(0, 0, 1))
+        solid = self.doc.addObject("Part::Box", "Block")
+        solid.Length = solid.Width = 40
+        solid.Placement.Base = App.Vector(-15, -15, -5)
+        lifted = self.doc.addObject("Part::Feature", "Lifted")
+        lifted.Shape = Part.makePlane(40, 40, App.Vector(-15, -15, 5))
+        air = objects.make_air_region(self.study, "Custom", Source=solid)
+        self.doc.recompute()
+        name = objects.display_name(air)  # the 3D Study's Air Region keeps the Label
+        for source in (solid, lifted):
+            air.Source = source
+            text = f"Air Region {name}: the Custom body {source.Label} must be a face in the Study's XY plane."
+            self.assertEqual(self.air_problems(), [text])
+        sheet.Shape = Part.makePlane(40, 40, App.Vector(-15, -15, 0))
+        air.Source = sheet
+        self.assertEqual(self.air_problems(), [])
+
+    def test_one_motion_per_study(self):
+        first = self.box_slide()  # Linear along Y
+        second = objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=-15, MotionAxis="Z")
+        text = (
+            f"Sliding Interfaces {first.Label}, {second.Label} move in different ways: a Study has one motion,"
+            " a rotation about Z (Rotational, Axial gap) or a translation along one axis (Linear)."
+        )
+        self.assertIn(text, self.air_errors())
+        second.MotionAxis = "Y"
+        self.assertNotIn(text, self.air_errors())
+        second.Kind = "Rotational"
+        self.assertIn(text, self.air_errors())
+
+    def test_fit_takes_the_moving_bodies_and_not_the_air(self):
+        self.sliding(["A"], ["M"])  # A at x = 0..10, M at x = 20..30
+        objects.make_air_region(self.study, "Box", Center=App.Vector(500, 0, 0), Length=10, Width=10, Height=10)
+        self.doc.recompute()
+        center, length, width, height = airshapes.fit_study(self.study, 0)
+        self.assertEqual((center.x, length, width, height), (pytest.approx(15), pytest.approx(30), 10, 10))
+        self.study.Movement = "No movement"
+        self.assertAlmostEqual(airshapes.fit_study(self.study, 0)[1], 10)
+        self.study.MainObjects = []
+        self.assertIsNone(airshapes.fit_study(self.study, 0))
+
+    def test_interface_follows_the_studys_air_region(self):
+        self.motor()
+        (iface,) = objects.sliding_interfaces(self.study)
+        self.doc.removeObject(objects.air_regions(self.study)[0].Name)
+        self.assertIsNone(iface.AirRegion)
+        air = objects.make_air_region(self.study, "Sector", OuterRadius=100)
+        self.assertIs(iface.AirRegion, air)  # linked again
+        iface.AirRegion = None
+        self.doc.recompute()
+        self.assertNotIn("Invalid", iface.State)
+        self.assertEqual(len(iface.Shape.Edges), 2)
+        self.assertEqual(self.air_errors(), [])
+        air.StartAngle = 30
+        self.assertEqual(airshapes._start(iface), 30)
+
+    def test_default_interface_kind_follows_the_air_shape(self):
+        self.sliding(["A"], ["M"])
+        air = objects.make_air_region(self.study, "Box")
+        for shape, kind in (("Box", "Linear"), ("Sector", "Rotational"), ("Custom", "Rotational")):
+            air.AirShape = shape
+            self.assertEqual(objects.make_sliding_interface(self.study).Kind, kind)

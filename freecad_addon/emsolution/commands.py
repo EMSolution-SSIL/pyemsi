@@ -65,9 +65,10 @@ def _create_and_edit(study, title, make):
     Gui.Control.showDialog(taskpanels.ItemPanel(obj, new=True))
 
 
-def gate(study, bodies):
-    """Warn and return False unless bodies can get assignments; with no main geometry, select the Study."""
-    problem = objects.assignment_problem(study, bodies)
+def gate(study, bodies, item_cls=None):
+    """Warn and return False unless bodies can get assignments (of an item of class item_cls, which may refuse the
+    air); with no main geometry, select the Study."""
+    problem = objects.assignment_problem(study, bodies) or objects.air_refusal(item_cls, bodies)
     if problem == objects.NO_MAIN_GEOMETRY:
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(study)  # its panel shows the main geometry choice
@@ -187,15 +188,13 @@ class AddAirRegion(_StudyCommand):
             return
         if objects.air_regions(study):
             return warn("This Study already has an Air Region.")
-        bodies = geometry.region(study, "Main")[0]
-        plane = airshapes.study_plane(study)
+        fit = airshapes.fit_study(study, 50)  # main and moving geometry
         doc = study.Document
         doc.openTransaction("Add Air Region")  # stays open until OK or Cancel
         air = objects.make_air_region(study, "Box")
-        if bodies:
-            center, air.Length, air.Width, height = airshapes.fit_box(bodies, 50, plane)
-            air.Center = center
-            if plane == "3D":
+        if fit:
+            air.Center, air.Length, air.Width, height = fit
+            if airshapes.study_plane(study) == "3D":
                 air.Height = height
         doc.recompute()
         Gui.Control.showDialog(taskpanels.AirRegionPanel(air, new=True))
@@ -222,7 +221,7 @@ class AddSlidingInterface(_StudyCommand):
             return warn("Add an Air Region first.")
         doc = study.Document
         doc.openTransaction("Add Sliding Interface")  # stays open until OK or Cancel
-        iface = objects.make_sliding_interface(study, "Rotational" if airs[0].AirShape == "Sector" else "Linear")
+        iface = objects.make_sliding_interface(study)  # Linear in a Box Air Region, else Rotational
         doc.recompute()
         Gui.Control.showDialog(taskpanels.SlidingInterfacePanel(iface, new=True))
 
@@ -240,7 +239,7 @@ class AddTransfiniteBody(_StudyCommand):
         if study is None:
             return
         bodies = taskpanels.selected_bodies()
-        if gate(study, bodies):
+        if gate(study, bodies, objects.TransfiniteBody):
             corners = taskpanels.selected_subs(("Vertex",))
             _create_and_edit(
                 study, "Add Transfinite Body", lambda: objects.make_transfinite_body(study, bodies, corners)
@@ -260,7 +259,7 @@ class AddTransfiniteEdges(_StudyCommand):
         if study is None:
             return
         edges = taskpanels.selected_subs(("Edge",))
-        if gate(study, [b for b, _ in edges]):
+        if gate(study, [b for b, _ in edges], objects.TransfiniteEdges):
             _create_and_edit(study, "Add Transfinite Edges", lambda: objects.make_transfinite_edges(study, 10, edges))
 
 
@@ -277,7 +276,7 @@ class AddRecombine(_StudyCommand):
         if study is None:
             return
         bodies = taskpanels.selected_bodies()
-        if gate(study, bodies):
+        if gate(study, bodies, objects.Recombine):
             _create_and_edit(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
 
 

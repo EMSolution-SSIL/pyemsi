@@ -600,6 +600,23 @@ def main():
     assert Gui.Selection.getSelection() == [air], "the Mesh Size gate refused the Air Region"
     ok(size=4.0)
     air_size = objects.mesh_sizes(study)[-1]
+    # The air is not recombined or structured: the commands and an open Recombine panel refuse it.
+    for command, sub in (("EMS_Recombine", ""), ("EMS_TransfiniteBody", ""), ("EMS_TransfiniteEdges", "Edge1")):
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, air.Name, sub)
+        panels = len(opened)
+        Gui.runCommand(command)
+        refused = f"Air Region {objects.display_name(air)} cannot be recombined or structured."
+        assert warned[-1] == refused and len(opened) == panels, (command, warned[-1])
+    recombine = objects.make_recombine(study, [doc.A])
+    panel = taskpanels.ItemPanel(recombine)
+    opened.pop()
+    Gui.Control.showDialog(panel)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, air.Name)
+    assert Gui.Selection.getSelection() == [], "the Recombine gate let the Air Region through"
+    panel.reject()
+    doc.removeObject(recombine.Name)
     run = runner.start(study)
     assert run is not None and run.proc.waitForFinished(120000), "mesher timed out"
     Gui.updateGui()

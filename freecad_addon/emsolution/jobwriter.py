@@ -51,7 +51,7 @@ def check(study):
     included = {b.Name for b in bodies}
     excitation_items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: none yet
     surfaces = [(e, b, faces) for e in excitation_items for b, faces in objects.subs_by_body(e) if b.Name in included]
-    with_air = included | {a.Name for a in objects.air_regions(study)}  # the air takes Mesh Sizes like a body
+    with_air = validation.meshed(study, bodies)  # the air takes Mesh Sizes like a body
     sized = [
         (s, b, subs) for s in objects.mesh_sizes(study) for b, subs in objects.subs_by_body(s) if b.Name in with_air
     ]
@@ -119,9 +119,16 @@ def mesh_options(settings, dimension="3D"):
     return opts
 
 
+def meshed_shape(body):
+    """The shape of body the mesh gets: an Air Region's is built from its properties, as validation sees it."""
+    if objects.is_air(body):
+        return airshapes.air_shape(body, airshapes.study_plane(objects.owner_study(body)))
+    return global_shape(body)
+
+
 def export_subs(folder, body, subs, prefix):
     """Write each sub-element of body to geometry/<prefix>_<n>.brep. Returns the relative paths."""
-    shape = global_shape(body)
+    shape = meshed_shape(body)
     files = []
     for n, sub in enumerate(subs, 1):
         rel = f"geometry/{prefix}_{n}.brep"
@@ -174,7 +181,7 @@ def write_slides(study, folder, job):
 def write_job(study):
     """Run the checks, update the ID table, write job.json and BREPs to the scratch folder. Returns the job path."""
     stale = [a for a in objects.air_regions(study) if "Touched" in a.State or a.Shape.isNull()]
-    if stale:  # the job must get the air as its properties describe it now
+    if stale:  # validation checks the sub-elements of Mesh Sizes on the air's Shape: make it current
         study.Document.recompute(stale)
     volumes, surfaces, elements = check(study)
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change
@@ -218,7 +225,7 @@ def write_job(study):
     sliding = study.Movement == "Sliding motion"
     for air in objects.air_regions(study):  # validation allows one
         rel = "geometry/air.brep"
-        global_shape(air).exportBrep(os.path.join(folder, rel))
+        meshed_shape(air).exportBrep(os.path.join(folder, rel))
         if sliding:  # the two sides get their own IDs and names
             sides = {
                 half: {

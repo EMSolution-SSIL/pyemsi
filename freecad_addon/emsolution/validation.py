@@ -35,6 +35,12 @@ def _has(body, sub):
         return False
 
 
+def meshed(study, bodies):
+    """Names of what the mesh holds, for the items that refer to it: the bodies and the Air Region, which takes Mesh
+    Sizes like a body. The job writer uses the same set."""
+    return {b.Name for b in bodies} | {a.Name for a in objects.air_regions(study)}
+
+
 class _Report:
     def __init__(self):
         self.problems = []
@@ -58,10 +64,11 @@ def validate(study):
         r.error(text)
     bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
     included = {b.Name for b in bodies}
+    with_air = meshed(study, bodies)
     _skipped_picks(study, r)
-    _links(study, included, r)
-    _settings(study, included, r)
-    _air(study, bodies, r)
+    _links(study, with_air, r)
+    _settings(study, with_air, r)
+    _air(study, bodies, {b.Name for b in moving}, r)
     _slides(study, main, moving, r)
     _transfinite(study, bodies, r)
     _names(study, bodies, included, r)
@@ -109,6 +116,10 @@ def _links(study, included, r):
         if not by_body:
             r.error(f"{kind} {item.Label} refers to nothing (were its bodies deleted?). Pick again or delete it.", item)
             continue
+        refused = objects.air_refusal(type(item.Proxy), [b for b, _ in by_body])
+        if refused:
+            airs = [(b, "") for b, _ in by_body if objects.is_air(b)]
+            r.error(f"{kind} {item.Label}: {refused} Remove it from the item.", item, airs)
         outside = [(b, subs) for b, subs in by_body if b.Name not in included]
         if outside:  # kept on purpose, e.g. to mesh only part of a model; they just do not reach this mesh
             r.warning(
@@ -118,7 +129,7 @@ def _links(study, included, r):
                 [(b, s) for b, subs in outside for s in subs],
             )
         for b, subs in by_body:
-            if b.Name not in included:
+            if b.Name not in included or (refused and objects.is_air(b)):
                 continue
             for sub in subs:
                 if sub and not _has(b, sub):
@@ -157,8 +168,9 @@ def _settings(study, included, r):
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
 
 
-def _air(study, bodies, r):
-    """One Air Region, a shape the Study's plane allows, and every body inside it."""
+def _air(study, bodies, moving, r):
+    """One Air Region, a shape the Study's plane allows, and every body inside it. moving: names of the moving
+    bodies."""
     airs = objects.air_regions(study)
     if not airs:
         return
@@ -176,11 +188,33 @@ def _air(study, bodies, r):
         text = str(e)
         r.error(text if text.startswith(prefix) else prefix + text, air)
         return
+    if air.AirShape == "Custom":
+        source = air.Source
+        if source.Name in {b.Name for b in bodies}:  # the mesher would find it overlapping the bodies inside it
+            where = "moving" if source.Name in moving else "main"
+            r.error(
+                f"{source.Label} is the Custom shape of Air Region {objects.display_name(air)};"
+                f" take it out of the {where} geometry.",
+                air,
+                [(source, "")],
+            )
+            return
+        if not _custom_fits(shape, plane):
+            need = "a solid" if plane == "3D" else f"a face in the Study's {plane} plane"
+            r.error(prefix + f"the Custom body {source.Label} must be {need}.", air, [(source, "")])
+            return
     for body in bodies:
         body_shape = geometry.global_shape(body)
         measure = body_shape.Volume if plane == "3D" else body_shape.Area
         if airshapes.outside(body_shape, shape, plane) > 1e-6 * measure:
             r.error(f"{body.Label} is not fully inside Air Region {objects.display_name(air)}.", air, [(body, "")])
+
+
+def _custom_fits(shape, plane):
+    """True if a Custom air shape suits the Study: solids in 3D; in 2D faces in the Study's plane and no solid."""
+    if plane == "3D":
+        return bool(shape.Solids)
+    return bool(shape.Faces) and not shape.Solids and all(geometry.plane_of(f) == plane for f in shape.Faces)
 
 
 def _slides(study, main, moving, r):
@@ -240,16 +274,30 @@ def _slides(study, main, moving, r):
                 m,
                 refs,
             )
-    if any(not any(held.get(k, ([], []))) for k in range(len(cells))):
-        r.error(
-            "Part of the air between Sliding Interfaces holds no body; its side is unknown."
-            " Move an interface or add the body."
-        )
+    empty = {}  # error text -> the first interface it names
+    for k, cell in enumerate(cells):
+        if any(held.get(k, ([], []))):
+            continue
+        near = [i for i, s in zip(interfaces, surfaces) if cell.distToShape(s)[0] < airshapes.TOL]
+        names = ("Sliding Interfaces " if len(near) > 1 else "Sliding Interface ") + ", ".join(i.Label for i in near)
+        text = f"Part of the air next to {names} holds no body; its side is unknown. Move an interface or add the body."
+        empty.setdefault(text, near[0] if near else None)
+    for text, iface in empty.items():
+        r.error(text, iface)
 
 
 def _surfaces(interfaces, air, air_shape, plane, r):
     """The slide surface of every interface, or None after reporting an interface that cannot be used."""
     surfaces, ok = [], True
+    if len({"rotation" if i.Kind != "Linear" else "translation " + i.MotionAxis for i in interfaces}) > 1:
+        r.error(
+            "Sliding Interfaces "
+            + ", ".join(i.Label for i in interfaces)
+            + " move in different ways: a Study has one motion, a rotation about Z (Rotational, Axial gap)"
+            " or a translation along one axis (Linear).",
+            interfaces[-1],
+        )
+        ok = False
     for i in interfaces:
         name = f"Sliding Interface {i.Label}"
         if i.Kind == "Linear" and air.AirShape != "Box":
