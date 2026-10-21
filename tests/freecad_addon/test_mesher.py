@@ -692,7 +692,7 @@ class MesherTest(unittest.TestCase):
             "full": full,
         }
 
-    def slide_job(self, volumes, moving, slides, periodic=None):
+    def slide_job(self, volumes, moving, slides, periodic=None, surfaces=()):
         """Run a slide job: air from geometry/air.brep (fixed ID 10, moving 11), moving cell geometry/cell_1.brep."""
         sides = {"fixed": {"mat_id": 10, "name": "Air_fixed"}, "moving": {"mat_id": 11, "name": "Air_moving"}}
         air = {"sides": sides, "file": "geometry/air.brep", "size": 15.0}
@@ -704,9 +704,9 @@ class MesherTest(unittest.TestCase):
         }
         if periodic:
             extra["periodic"] = periodic
-        return self.run_job(volumes, air=air, extra=extra)
+        return self.run_job(volumes, surfaces, air=air, extra=extra)
 
-    def motor_job(self, tooth=False):
+    def motor_job(self, tooth=False, surfaces=()):
         """Case 17: stator ring 45..80 fixed, rotor r 40 moving, both z 0..50, air cylinder r 100 from z -25 to 75,
         slide cylinder r 42.5 in two halves, 72 divisions round and 10 up, slide edge at (42.5, 0).
         tooth: the stator also has a tooth 42.5..45 from 10° to 20° that touches the slide cylinder."""
@@ -718,9 +718,8 @@ class MesherTest(unittest.TestCase):
             write_revolved(self.geo(f"slide_20_{k}.brep"), (42.5, 0, -25), (42.5, 0, 75), a, a + 180)
         write_line(self.geo("marker_20.brep"), (42.5, 0, -25), (42.5, 0, 75))
         vols = [self.vol(1, "Stator", "vol_1.brep", 10), self.vol(2, "Rotor", "vol_2.brep", 10)]
-        return self.slide_job(
-            vols, [2], [self.slide("rotational", ["slide_20_1.brep", "slide_20_2.brep"], 72, 10, True)]
-        )
+        slide = self.slide("rotational", ["slide_20_1.brep", "slide_20_2.brep"], 72, 10, True)
+        return self.slide_job(vols, [2], [slide], surfaces=surfaces)
 
     def test_radial_slide_cylinder_matches(self):
         r = self.motor_job()
@@ -739,6 +738,25 @@ class MesherTest(unittest.TestCase):
         self.assertIn("MAT_ID      11  Air_moving", r.stdout)
         self.assertIn("SLIDE_NDIV 72", r.stdout)
         self.assertIn(f"Wrote {self.files()[1]}", r.stdout)
+
+    def test_excitation_surface_goes_to_the_file_of_its_body(self):
+        write_revolved(self.geo("surf_1001_1.brep"), (45, 0, 50), (80, 0, 50), 0, 360)  # the stator's top face
+        surface = {"smat_id": 1001, "name": "Terminal", "mat_id": 1, "files": ["geometry/surf_1001_1.brep"]}
+        r = self.motor_job(surfaces=[surface])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        found = []
+        for path in self.files():
+            gmsh.initialize()
+            try:
+                gmsh.option.setNumber("General.Terminal", 0)
+                gmsh.open(path)
+                found.append(gmsh.model.getPhysicalGroups(2))
+                if found[-1]:
+                    z = gmsh.model.mesh.getNodesForPhysicalGroup(2, 1001)[1][2::3]
+                    self.assertTrue(len(z) and all(abs(v - 50) < 1e-9 for v in z))
+            finally:
+                gmsh.finalize()
+        self.assertEqual(found, [[(2, 1001)], []])
 
     def test_body_touching_the_slide_cylinder_fails_cleanly(self):
         r = self.motor_job(tooth=True)

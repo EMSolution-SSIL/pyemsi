@@ -145,7 +145,12 @@ def build(job, folder):
         return None
     base = os.path.basename
     mapped = [([(base(f), at(span)) for f, span in files], (base(m), at(span))) for files, (m, span) in slide_spans]
-    return slide_split(job, vols, body_vols, apply_slides(slides, mapped, 3), 3)
+    split = slide_split(job, vols, body_vols, apply_slides(slides, mapped, 3), 3)
+    moving = set(job["moving"])
+    for s in surfs:  # an excitation surface goes to the file of its body
+        side = "moving" if s["mat_id"] in moving else "fixed"
+        split[side].append((2, sorted(set(surf_tags[s["smat_id"]])), s["smat_id"], s["name"]))
+    return split
 
 
 def run_job(job_path):
