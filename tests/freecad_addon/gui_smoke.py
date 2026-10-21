@@ -729,24 +729,35 @@ def main():
     assert isinstance(iface.ViewObject.Proxy, taskpanels.ViewProviderSlidingInterface)
     assert [panel.kind.itemText(i) for i in range(panel.kind.count())] == ["Rotational", "Linear"]
     assert panel.cross is None, "Cross divisions in a 2D Study"
-    panel.divisions.setValue(72)
+    taskpanels.set_field_value(panel.divisions, 72)
+    assert iface.Divisions == 72, "the Divisions field did not write the property while editing"
     assert "5" in panel.step_label.text() and "deg" in panel.step_label.text(), panel.step_label.text()
     assert panel.reject() and objects.sliding_interfaces(slide_study) == [], "Cancel kept the new Sliding Interface"
     assert not Gui.Control.activeDialog()
     Gui.runCommand("EMS_AddSlidingInterface")
     panel = slide_panels.pop()
-    panel.radius.setValue(42.5)
-    panel.divisions.setValue(72)
-    assert panel.accept() and not Gui.Control.activeDialog()
     (iface,) = objects.sliding_interfaces(slide_study)
+    taskpanels.set_field_value(panel.radius, 42.5)
+    assert iface.Radius.Value == 42.5, "the Radius field did not write the property while editing"
+    # The f(x) dialog cannot be driven from a script; with auto-apply it ends in setExpression on the property.
+    iface.setExpression("Divisions", "36 * 2")
+    for _ in range(5):
+        Gui.updateGui()
+    assert iface.Divisions == 72 and taskpanels.field_value(panel.divisions) == 72, "the formula was not followed"
+    assert panel.divisions.property("minimum") == 2 and panel.radius.property("unit") == "mm"
+    assert panel.accept() and not Gui.Control.activeDialog()
     assert (iface.Radius.Value, iface.Divisions) == (42.5, 72), (iface.Radius, iface.Divisions)
+    assert ("Divisions", "36 * 2") in iface.ExpressionEngine, iface.ExpressionEngine
     assert len(iface.Shape.Edges) == 2, "a full turn is two half circles"
     study_view.refresh()
     assert not study_view.slide_hint.isVisibleTo(study_view.form), "the hint stayed with an Air Region and an interface"
     assert iface.ViewObject.Proxy.doubleClicked(iface.ViewObject)
     panel = slide_panels.pop()
-    assert not panel.new and panel.divisions.value() == 72
+    assert not panel.new and taskpanels.field_value(panel.divisions) == 72
+    taskpanels.set_field_value(panel.radius, 10)
+    assert iface.Radius.Value == 10, "the edit was not live"
     assert panel.reject() and objects.sliding_interfaces(slide_study) == [iface], "Cancel of an edit removed it"
+    assert iface.Radius.Value == 42.5 and ("Divisions", "36 * 2") in iface.ExpressionEngine, "Cancel kept the edit"
     slide_errors = [p.text for p in validation.errors(validation.validate(slide_study))]
     assert not slide_errors, slide_errors
     slide_run = runner.start(slide_study)

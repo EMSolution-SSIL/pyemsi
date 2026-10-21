@@ -1126,6 +1126,51 @@ def _number_box(value, low, high, suffix):
     return box
 
 
+def field_value(box):
+    """The number a formula_box shows."""
+    return box.property("rawValue" if box.metaObject().className() == "Gui::QuantitySpinBox" else "value")
+
+
+def set_field_value(box, value):
+    """Show (and, like typing it, write) a number in a formula_box."""
+    box.setProperty("rawValue" if box.metaObject().className() == "Gui::QuantitySpinBox" else "value", value)
+
+
+def formula_box(obj, prop, minimum=None, maximum=None):
+    """A number field bound to obj.prop, in FreeCAD's own style: it shows the unit, takes a formula through its f(x)
+    button, writes each edit to the property and recomputes. A formula is stored on the property and the field
+    follows it. Length, Distance and Angle give a Gui::QuantitySpinBox; Float a Gui::DoubleSpinBox; Integer and
+    IntegerConstraint a Gui::IntSpinBox (no decimals). minimum and maximum are in mm, degrees or plain numbers."""
+    kind = obj.getTypeIdOfProperty(prop)
+    whole = kind in ("App::PropertyInteger", "App::PropertyIntegerConstraint")
+    quantity = kind in ("App::PropertyLength", "App::PropertyDistance", "App::PropertyAngle")
+    widget = "Gui::IntSpinBox" if whole else "Gui::QuantitySpinBox" if quantity else "Gui::DoubleSpinBox"
+    box = Gui.UiLoader().createWidget(widget)
+    binding = Gui.ExpressionBinding(box)
+    binding.bind(obj, prop)
+    binding.setAutoApply(True)  # a formula typed in the f(x) dialog goes onto the property
+    if quantity:
+        box.setProperty("unit", "deg" if kind == "App::PropertyAngle" else "mm")
+    cast = int if whole else float
+    box.setProperty("minimum", cast(-1e9 if minimum is None else minimum))
+    box.setProperty("maximum", cast(1e9 if maximum is None else maximum))
+    value = getattr(obj, prop)
+    box.blockSignals(True)  # showing the stored value is not an edit
+    set_field_value(box, cast(getattr(value, "Value", value)))
+    box.blockSignals(False)
+
+    def edited(number):
+        doc = obj.Document
+        if binding.hasExpression():  # the property takes the formula's value when the document recomputes
+            QtCore.QTimer.singleShot(0, lambda: doc.recompute())
+            return
+        setattr(obj, prop, cast(number))
+        doc.recompute()
+
+    box.connect(QtCore.SIGNAL("valueChanged(int)" if whole else "valueChanged(double)"), edited)
+    return box
+
+
 class AirRegionPanel:
     """Edit an Air Region: its outer shape and the numbers that size it. Changes apply on OK.
     new: obj was just made inside an open transaction; OK commits it, Cancel undoes it."""
@@ -1300,12 +1345,15 @@ class AirRegionPanel:
 
 class SlidingInterfacePanel:
     """Edit a Sliding Interface: its kind, where its surface lies and how many divisions the motion has.
-    Changes apply on OK. new: obj was just made inside an open transaction; OK commits it, Cancel undoes it."""
+    Changes apply as they are made, inside one transaction: OK commits it, Cancel undoes it. new: obj was just made
+    inside an open transaction, so Cancel removes it."""
 
     def __init__(self, obj, new=False):
         self.obj, self.new = obj, new
         self.study = objects.owner_study(obj)
         self.three_d = self.study.Dimension == "3D"
+        if not new:  # a new item's transaction is already open
+            obj.Document.openTransaction("Edit " + obj.Label)
         highlight.clear()
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
@@ -1323,9 +1371,9 @@ class SlidingInterfacePanel:
         self.kind.setCurrentIndex(max(self.kind.findData(obj.Kind), 0))
         self.fields.addRow("Kind", self.kind)
         axes = objects.AXES if self.three_d else objects.AXES[:2]  # a 2D motion lies in the XY plane
-        self.radius = _length_box(obj.Radius.Value)
+        self.radius = formula_box(obj, "Radius", 0.001, 1e6)
         self.add_field("Radius", self.radius, "Rotational")
-        self.position = _number_box(obj.Position.Value, -1e6, 1e6, " mm")
+        self.position = formula_box(obj, "Position", -1e6, 1e6)
         self.position_text = self.add_field("Position", self.position, "Axial gap", "Linear")
         self.normal = QtWidgets.QComboBox()
         self.normal.addItems(axes)
@@ -1335,22 +1383,31 @@ class SlidingInterfacePanel:
         self.motion.addItems(axes)
         self.motion.setCurrentText(obj.MotionAxis if obj.MotionAxis in axes else axes[0])
         self.add_field("Motion axis", self.motion, "Linear")
-        self.divisions = QtWidgets.QSpinBox()
-        self.divisions.setRange(2, 100000)
-        self.divisions.setValue(obj.Divisions)
+        self.divisions = formula_box(obj, "Divisions", 2, 100000)
         self.fields.addRow("Divisions", self.divisions)
         self.cross = None  # 3D only
         if self.three_d:
-            self.cross = QtWidgets.QSpinBox()
-            self.cross.setRange(1, 100000)
-            self.cross.setValue(obj.CrossDivisions)
+            self.cross = formula_box(obj, "CrossDivisions", 1, 100000)
             self.fields.addRow("Cross divisions", self.cross)
         self.step_label = QtWidgets.QLabel()
         self.fields.addRow("Step", self.step_label)
+        self.kind.currentIndexChanged.connect(self.write_kind)
+        self.normal.currentIndexChanged.connect(self.write_axes)
+        self.motion.currentIndexChanged.connect(self.write_axes)
         self.kind.currentIndexChanged.connect(self.show_kind)
-        self.divisions.valueChanged.connect(self.show_step)
+        self.divisions.connect(QtCore.SIGNAL("valueChanged(int)"), self.show_step)
         self.motion.currentIndexChanged.connect(self.show_step)
         self.show_kind()
+
+    def write_kind(self):
+        self.obj.Kind = self.kind.currentData()
+        self.obj.Document.recompute()
+
+    def write_axes(self):
+        """The axes of a Linear interface; equal axes are not written (OK refuses them)."""
+        if self.normal.currentText() != self.motion.currentText():
+            self.obj.NormalAxis, self.obj.MotionAxis = self.normal.currentText(), self.motion.currentText()
+            self.obj.Document.recompute()
 
     def add_field(self, label, widget, *kinds):
         """A row shown only for the kinds; returns its label (the widget is the caller's)."""
@@ -1369,7 +1426,7 @@ class SlidingInterfacePanel:
 
     def show_step(self):
         """The motion of one division: an angle about Z, or a length along the motion axis of a Linear interface."""
-        n, air = self.divisions.value(), objects.air_of(self.obj)
+        n, air = field_value(self.divisions), objects.air_of(self.obj)
         if self.kind.currentData() == "Linear":
             if air is None or air.AirShape != "Box":
                 return self.step_label.setText("")
@@ -1382,36 +1439,22 @@ class SlidingInterfacePanel:
 
     def accept(self):
         obj, doc = self.obj, self.obj.Document
-        kind = self.kind.currentData()
-        if kind == "Linear" and self.normal.currentText() == self.motion.currentText():
+        if self.kind.currentData() == "Linear" and self.normal.currentText() == self.motion.currentText():
             warn("The motion axis must differ from the normal axis.")
             return False
-        if not self.new:  # a new item's transaction is already open
-            doc.openTransaction("Edit " + obj.Label)
         name = self.name.text().strip()
         if name:
             obj.Label = name
             obj.GroupName = name  # FreeCAD may have suffixed the Label
-        obj.Kind = kind
-        if kind == "Rotational":
-            obj.Radius = self.radius.value()
-        else:
-            obj.Position = self.position.value()
-        if kind == "Linear":
-            obj.NormalAxis, obj.MotionAxis = self.normal.currentText(), self.motion.currentText()
-        obj.Divisions = self.divisions.value()
-        if self.cross is not None:
-            obj.CrossDivisions = self.cross.value()
         doc.commitTransaction()
         doc.recompute()
         Gui.Control.closeDialog()
         return True
 
     def reject(self):
-        if self.new:
-            doc = self.obj.Document
-            doc.abortTransaction()  # removes the new Sliding Interface
-            doc.recompute()
+        doc = self.obj.Document
+        doc.abortTransaction()  # removes a new Sliding Interface, undoes the edits of an old one
+        doc.recompute()
         Gui.Control.closeDialog()
         return True
 
