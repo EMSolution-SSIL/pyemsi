@@ -1380,6 +1380,8 @@ class AirRegionPanel:
 
     def settle(self):
         if not self.done:
+            if self.symmetric.isChecked():  # a formula that kept its value sent no change
+                self.mirror()
             self.obj.Document.recompute()
             self.show_values()
 
@@ -1444,11 +1446,13 @@ class AirRegionPanel:
     def write_shape(self):
         obj, shape = self.obj, self.shape.currentData()
         if shape == "Custom":
-            obj.SizeMode = "Manual"  # a Custom shape has no Padding
-            if self.source is not None:
+            if self.source is not None:  # applied only with a body: until then the air keeps its shape and mode
+                obj.SizeMode = "Manual"  # a Custom shape has no Padding
                 obj.Source = self.source
                 obj.AirShape = "Custom"
         else:
+            if obj.SizeMode == "Padding":  # sides new to the shape start padded, as a new Air Region does
+                airshapes.seed_padding(obj, obj.AirShape, shape, self.plane)
             obj.AirShape = shape
             if self.symmetric.isChecked():
                 self.mirror()
@@ -1477,6 +1481,8 @@ class AirRegionPanel:
         if name:
             obj.Label = name
             obj.GroupName = name  # FreeCAD may have suffixed the Label
+        if self.symmetric.isChecked():  # a formula that kept its value sent no change
+            self.mirror()
         self.done = True
         doc.commitTransaction()
         doc.recompute()

@@ -559,6 +559,7 @@ def main():
     )
     panel.shape.setCurrentIndex(panel.shape.findData("Sector"))
     assert air.AirShape == "Sector", "the shape was not written while editing"
+    assert air.PadOuterPercent == 20, "the Sector hugs the bodies: no outer padding"
     assert not panel.tables["Sector"].isHidden() and panel.tables["Box"].isHidden()
     assert list(panel.pad["Sector"]) == ["Outer", "Inner", "ZPlus", "ZMinus"], list(panel.pad["Sector"])
     assert not panel.groups["Sector"].isHidden(), "the Sector angles stay manual in Padding"
@@ -579,7 +580,10 @@ def main():
     assert air.EndAngle.Value == 90 and taskpanels.field_value(panel.angles[1]) == 90, "the angle formula"
     air.setExpression("EndAngle", None)
     taskpanels.set_field_value(panel.angles[1], 360)
+    panel.shape.setCurrentIndex(panel.shape.findData("Custom"))  # no body picked: nothing is applied yet
+    assert (air.AirShape, air.SizeMode) == ("Sector", "Padding"), (air.AirShape, air.SizeMode)
     panel.shape.setCurrentIndex(panel.shape.findData("Box"))
+    assert air.SizeMode == "Padding", "a look at Custom lost Padding"
     assert air.AirShape == "Box" and not panel.tables["Box"].isHidden() and panel.groups["Box"].isHidden()
     assert panel.reject()
     assert objects.air_regions(study) == [] and not Gui.Control.activeDialog(), "Cancel kept the new Air Region"
@@ -610,6 +614,11 @@ def main():
     assert taskpanels.field_value(plus[0]) == 20 and air.PadXPlusPercent == 20, "the percent formula"
     assert ("PadXMinusPercent", "10 + 10") in air.ExpressionEngine, air.ExpressionEngine
     assert air.PadXMinusPercent == 20 and taskpanels.field_value(minus[0]) == 20, "Symmetric: - does not follow"
+    air.setExpression("PadXPlusPercent", "15 + 5")  # the same value: no field sends a change
+    for _ in range(5):
+        Gui.updateGui()
+    panel.settle()
+    assert ("PadXMinusPercent", "15 + 5") in air.ExpressionEngine, "Symmetric: settle did not mirror"
     assert plus[0].metaObject().className() == "Gui::DoubleSpinBox", plus[0].metaObject().className()
     assert abs(air.Length.Value - 28) < 1e-6 and "28 ×" in panel.result.text(), panel.result.text()
     # A length field (Gui::QuantitySpinBox, mm) in the padding column follows a formula too.
@@ -788,12 +797,18 @@ def main():
         assert list(flat_panel.pad["Sector"]) == half_rows, list(flat_panel.pad["Sector"])
         if "Custom" in shapes:  # a Custom shape has no Padding
             flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Custom"))
-            assert flat_panel.mode_box.isHidden() and flat_air.SizeMode == "Manual"
+            assert flat_panel.mode_box.isHidden() and (flat_air.AirShape, flat_air.SizeMode) == ("Sector", "Padding")
         flat_panel.shape.setCurrentIndex(flat_panel.shape.findData("Box"))
-        flat_panel.mode_padding.setChecked(True)
+        assert flat_air.SizeMode == "Padding" and flat_panel.mode_padding.isChecked(), "Padding was lost"
+        plus = "PadYPlusPercent" if normal.z else "PadZPlusPercent"
+        assert flat_panel.symmetric.isChecked() and getattr(flat_air, plus) == 20, getattr(flat_air, plus)
+        flat_air.setExpression(plus, "10 * 2")  # the same value: no field sends a change
+        for _ in range(5):
+            Gui.updateGui()
         flat_panel.convert.click()
         assert flat_panel.accept() and not flat_air.Shape.isNull() and flat_air.AirShape == "Box"
         assert flat_air.SizeMode == "Manual", "Convert to Manual in a 2D Study"
+        assert (plus.replace("Plus", "Minus"), "10 * 2") in flat_air.ExpressionEngine, "OK did not mirror"
         flat.removeObject(flat_study.Name)
     App.closeDocument(flat.Name)
     App.setActiveDocument(doc.Name)

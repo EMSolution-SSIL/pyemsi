@@ -197,8 +197,7 @@ class AddAirRegion(_StudyCommand):
         doc.openTransaction("Add Air Region")  # stays open until OK or Cancel
         air = objects.make_air_region(study, "Box")
         if bodies:  # padding of 20 % on every side the shape offers, following the bodies
-            for key, _ in airshapes.padding_sides("Box", airshapes.study_plane(study)):
-                setattr(air, f"Pad{key}Percent", 20)
+            airshapes.seed_padding(air, "Custom", "Box", airshapes.study_plane(study))
             air.SizeMode = "Padding"
         doc.recompute()
         Gui.Control.showDialog(taskpanels.AirRegionPanel(air, new=True))
