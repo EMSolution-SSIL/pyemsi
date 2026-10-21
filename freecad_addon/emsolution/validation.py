@@ -201,6 +201,12 @@ def _padding(air, bodies, plane, r):
         r.error(prefix + f"padding must not be negative ({side}).", air)
     if negative:
         return False
+    loops = objects.dependents_of(air)
+    dependent = [b for b in bodies if b.Name in loops]
+    for body in dependent:
+        r.error(prefix + f"body {objects.display_name(body)} depends on the Air Region; it cannot size it.", air)
+    if dependent:
+        return False
     try:
         airshapes.padded_size(air, bodies, plane)
     except ValueError as e:

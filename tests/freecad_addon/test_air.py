@@ -1316,3 +1316,22 @@ class AirTest(unittest.TestCase):
         self.assertEqual([o.Name for o in air.SizedBy], ["B"])
         self.doc.recompute()
         self.assertSize(air, Length=12)
+
+    def test_body_that_depends_on_the_air_cannot_size_it(self):
+        body, other = self.bodies("B", "Other")
+        other.Placement.Base = App.Vector(20, 0, 0)
+        air = objects.make_air_region(self.study, "Box")
+        body.setExpression("Height", "Air.Height / 10")  # B now depends on the air: it must not be linked back
+        self.doc.recompute()
+        air.SizeMode = "Padding"
+        self.doc.recompute()
+        self.assertEqual(air.SizedBy, [])  # no link closes a cycle, and none hides Other as an input of B
+        text = "Air Region Air: body B depends on the Air Region; it cannot size it."
+        for _ in range(2):  # stable: validating again changes nothing
+            self.assertEqual(self.air_problems(), [text])
+            self.assertEqual(air.SizedBy, [])
+        self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["B", "Other"])
+        body.setExpression("Height", None)
+        self.doc.recompute()
+        self.assertEqual(self.air_problems(), [])
+        self.assertEqual([o.Name for o in air.SizedBy], ["B", "Other"])

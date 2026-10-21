@@ -360,12 +360,30 @@ def set_size_modes(air):
         air.setEditorMode(name, mode)
 
 
+def dependents_of(air):
+    """Names of the objects outside the Study that depend on the Air Region (an expression, a Boolean)."""
+    try:
+        found = air.InListRecursive
+    except IndexError:  # a cycle through SizedBy already: look again without the links
+        air.SizedBy = []
+        found = air.InListRecursive
+    return {o.Name for o in found if not is_study_object(o)}
+
+
 def refresh_sized_by(study):
-    """SizedBy of each Air Region: the Study's bodies in Padding mode, none in Manual mode. Only a change is written."""
+    """SizedBy of each Air Region: the Study's bodies in Padding mode, none in Manual mode. A body that depends on the
+    air would close a cycle (and links make study_bodies see the bodies as made from each other): then none. Only a
+    change is written."""
     airs = air_regions(study)
-    bodies = study_bodies(study) if any(a.SizeMode == "Padding" for a in airs) else []
+    padding = [a for a in airs if a.SizeMode == "Padding"]
+    loops = {a.Name: dependents_of(a) for a in padding}
+    for air in padding:
+        if loops[air.Name] and air.SizedBy:
+            air.SizedBy = []  # study_bodies must not follow the links
+    bodies = study_bodies(study) if padding else []
+    names = {b.Name for b in bodies}
     for air in airs:
-        want = bodies if air.SizeMode == "Padding" else []
+        want = bodies if air in padding and not names & loops[air.Name] else []
         if [o.Name for o in air.SizedBy] != [o.Name for o in want]:
             air.SizedBy = want
 
