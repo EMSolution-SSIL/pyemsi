@@ -1,7 +1,7 @@
 # Air Region and Sliding Interface for FreeCAD Studies: Design
 
 Date: 2026-10-20
-Status: decisions agreed in conversation, waiting for spec review
+Status: implemented (plan docs/superpowers/plans/2026-10-20-air-region-and-sliding.md); not yet run through EMSolution
 Branch: `feature/freecad-addon`
 
 ## 1. Goal
