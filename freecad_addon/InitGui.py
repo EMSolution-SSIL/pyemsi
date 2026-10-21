@@ -34,3 +34,4 @@ class EMSolutionWorkbench(Gui.Workbench):
 EMSolutionWorkbench.Icon = emsolution.icon("emsolution")
 Gui.addWorkbench(EMSolutionWorkbench())
 taskpanels.install_selection_observer()  # highlight and workbench switch, in any workbench
+taskpanels.install_open_observer()  # view providers for documents built without the GUI

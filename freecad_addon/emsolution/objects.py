@@ -569,7 +569,7 @@ def _make_folder(study, prop, cls):
     if getattr(folder, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
-        taskpanels.ViewProviderFolder(folder.ViewObject)
+        taskpanels.attach_view_provider(folder)
     return folder
 
 
@@ -647,8 +647,7 @@ def make_air_region(study, shape="Box", **props):
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
-        if hasattr(taskpanels, "ViewProviderAir"):
-            taskpanels.ViewProviderAir(obj.ViewObject)
+        taskpanels.attach_view_provider(obj)
     return obj
 
 
@@ -670,8 +669,7 @@ def make_sliding_interface(study, kind=None, **props):
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
-        if hasattr(taskpanels, "ViewProviderSlidingInterface"):
-            taskpanels.ViewProviderSlidingInterface(obj.ViewObject)
+        taskpanels.attach_view_provider(obj)
     return obj
 
 
@@ -683,7 +681,7 @@ def make_library_material(study, record_json):
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
-        taskpanels.ViewProviderLibraryMaterial(obj.ViewObject)
+        taskpanels.attach_view_provider(obj)
     return obj
 
 
@@ -710,7 +708,7 @@ def assign(study, bodies, lib, potential):
             if getattr(m, "ViewObject", None) is not None:  # GUI running
                 from . import taskpanels
 
-                taskpanels.ViewProviderItem(m.ViewObject)
+                taskpanels.attach_view_provider(m)
             have[body.Name] = m
         m.LibraryMaterial, m.Potential = lib, potential
         m.Label = assignment_label(m)

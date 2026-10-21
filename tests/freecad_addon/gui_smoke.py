@@ -1111,6 +1111,92 @@ def main():
     left = [n for n in owned + [study_name] if doc.getObject(n) is not None]
     assert left == [], ("left after deleting a mixed selection", left)
     log.append("study delete ok")
+
+    # A document a script built without the GUI has no GuiDocument.xml, so no view providers: opening it must
+    # attach ours. A document saved from the GUI keeps its own.
+    import zipfile
+
+    headless = App.newDocument("Headless")
+    body = headless.addObject("Part::Box", "Body")
+    headless.recompute()
+    headless_study = objects.make_study(headless, "3D", "Headless")
+    headless_study.MainMode, headless_study.MainObjects = "Manual", [body]
+    objects.make_air_region(headless_study, "Box")
+    objects.make_sliding_interface(headless_study)
+    material = objects.make_library_material(headless_study, json.dumps(json.loads(lib.Record)))
+    objects.assign(headless_study, [body], material, 0)
+    objects.make_excitation(headless_study, "Coil", [(body, "Face1")])
+    objects.make_mesh_size(headless_study, 2.0, [(body, "")])
+    objects.make_recombine(headless_study, [body])
+    headless.recompute()
+    path = os.path.join(tempfile.mkdtemp(), "Headless.FCStd")
+    headless.saveAs(path)
+    App.closeDocument(headless.Name)
+    stripped = path + ".tmp"
+    with zipfile.ZipFile(path) as zin, zipfile.ZipFile(stripped, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.namelist():
+            if item != "GuiDocument.xml":
+                zout.writestr(item, zin.read(item))
+    os.replace(stripped, path)
+    with zipfile.ZipFile(path) as zin:
+        assert "GuiDocument.xml" not in zin.namelist()
+
+    def providers(study_obj):
+        """{object Name: view provider class name} for the Study, its folders and everything it owns."""
+        return {o.Name: type(o.ViewObject.Proxy).__name__ for o in [study_obj, *objects.study_contents(study_obj)]}
+
+    reopened = App.openDocument(path)
+    Gui.updateGui()
+    reopened_study = objects.find_study(reopened)
+    by_kind = {}
+    for obj in [reopened_study, *objects.study_contents(reopened_study)]:
+        by_kind[type(obj.Proxy).__name__] = type(obj.ViewObject.Proxy).__name__
+    assert by_kind == {
+        "Study": "ViewProviderStudy",
+        "MaterialLibraryFolder": "ViewProviderFolder",
+        "MaterialsFolder": "ViewProviderFolder",
+        "ExcitationsFolder": "ViewProviderFolder",
+        "MeshSizesFolder": "ViewProviderFolder",
+        "AirRegionsFolder": "ViewProviderFolder",
+        "AirRegion": "ViewProviderAir",
+        "SlidingInterface": "ViewProviderSlidingInterface",
+        "LibraryMaterial": "ViewProviderLibraryMaterial",
+        "Material": "ViewProviderItem",
+        "Excitation": "ViewProviderItem",
+        "MeshSize": "ViewProviderItem",
+        "Recombine": "ViewProviderItem",
+    }, by_kind
+    names = providers(reopened_study)
+    (reopened_air,) = objects.air_regions(reopened_study)
+    assert (reopened_air.ViewObject.Transparency, reopened_air.ViewObject.DisplayMode) == (80, "Flat Lines")
+    (reopened_slide,) = objects.sliding_interfaces(reopened_study)
+    assert reopened_slide.ViewObject.LineWidth == 3
+    reopened_air.ViewObject.Transparency = 50  # a user's change must survive a save from the GUI
+    App.setActiveDocument(reopened.Name)
+    Gui.Selection.clearSelection()
+    air_panels.clear()
+    assert not Gui.Control.activeDialog()
+    assert reopened_air.ViewObject.Proxy.doubleClicked(reopened_air.ViewObject)
+    assert len(air_panels) == 1 and Gui.Control.activeDialog(), "the Air Region double-click did not open its panel"
+    Gui.Control.closeDialog()
+    for _ in range(3):
+        Gui.updateGui()
+    slide_panels.clear()
+    assert reopened_slide.ViewObject.Proxy.doubleClicked(reopened_slide.ViewObject)
+    assert len(slide_panels) == 1 and Gui.Control.activeDialog(), "the Sliding Interface double-click did not open"
+    Gui.Control.closeDialog()
+    for _ in range(3):
+        Gui.updateGui()
+    reopened.save()  # saved from the GUI: the providers come back as they were, not made again
+    App.closeDocument(reopened.Name)
+    again = App.openDocument(path)
+    Gui.updateGui()
+    again_study = objects.find_study(again)
+    assert providers(again_study) == names, "a GUI-saved document came back with other view providers"
+    (again_air,) = objects.air_regions(again_study)
+    assert again_air.ViewObject.Transparency == 50, "an existing view provider was made again"
+    App.closeDocument(again.Name)
+    log.append("view providers attached on open ok")
     App.closeDocument(doc.Name)
 
 

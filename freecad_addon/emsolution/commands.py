@@ -49,7 +49,7 @@ def _create(study, title, make):
     doc = study.Document
     doc.openTransaction(title)
     obj = make()
-    taskpanels.ViewProviderItem(obj.ViewObject)
+    taskpanels.attach_view_provider(obj)
     doc.commitTransaction()
     doc.recompute()
     return obj
@@ -60,7 +60,7 @@ def _create_and_edit(study, title, make):
     doc = study.Document
     doc.openTransaction(title)
     obj = make()
-    taskpanels.ViewProviderItem(obj.ViewObject)
+    taskpanels.attach_view_provider(obj)
     doc.recompute()
     Gui.Control.showDialog(taskpanels.ItemPanel(obj, new=True))
 
@@ -101,7 +101,7 @@ class NewStudy:
         label, dimension = choice
         doc.openTransaction("New Study")
         study = objects.make_study(doc, dimension, label)
-        taskpanels.ViewProviderStudy(study.ViewObject)
+        taskpanels.attach_view_provider(study)
         doc.commitTransaction()
         doc.recompute()
         taskpanels.set_active_study(study)

@@ -909,6 +909,51 @@ class ViewProviderItem(_ViewProvider):
         return True
 
 
+def attach_view_provider(obj):
+    """Give an EMSolution object the view provider it gets at creation. Returns it, or None for any other object."""
+    proxy = getattr(obj, "Proxy", None)
+    if isinstance(proxy, objects.Study):
+        return ViewProviderStudy(obj.ViewObject)
+    if isinstance(proxy, objects.Folder):
+        return ViewProviderFolder(obj.ViewObject)
+    if isinstance(proxy, objects.LibraryMaterial):
+        return ViewProviderLibraryMaterial(obj.ViewObject)
+    if isinstance(proxy, objects.AirRegion):
+        return ViewProviderAir(obj.ViewObject)
+    if isinstance(proxy, objects.SlidingInterface):
+        return ViewProviderSlidingInterface(obj.ViewObject)
+    if isinstance(proxy, objects._Proxy):  # Material, Excitation and the mesh items
+        return ViewProviderItem(obj.ViewObject)
+    return None
+
+
+class OpenObserver:
+    """A document a script built without the GUI has no view providers (no GuiDocument.xml), so when one is opened,
+    its EMSolution objects get theirs. A document saved from the GUI keeps its own.
+
+    The Python observers get no restore signal. A document is activated twice while it opens, the second time once
+    its objects exist, and activating one later finds nothing missing."""
+
+    def slotActivateDocument(self, doc):
+        if doc.Restoring:
+            return
+        for obj in doc.Objects:
+            view = getattr(obj, "ViewObject", None)
+            if view is not None and isinstance(getattr(obj, "Proxy", None), objects._Proxy):
+                if not isinstance(view.Proxy, _ViewProvider):  # an int until set
+                    attach_view_provider(obj)
+
+
+_open_observer = None
+
+
+def install_open_observer():
+    global _open_observer
+    if _open_observer is None:
+        _open_observer = OpenObserver()
+        App.addDocumentObserver(_open_observer)
+
+
 class ItemGate:
     """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
 
