@@ -97,6 +97,97 @@ def _sector(air, plane):
     return _bottom_face(_ring_sector(inner, outer, start, sweep, 0, 1), 0)
 
 
+def _points(shape):
+    """Points on the shape that reach its farthest from an axis: its vertices and tessellation nodes."""
+    box = shape.BoundBox
+    points = [v.Point for v in shape.Vertexes]
+    if shape.Faces:
+        points += shape.tessellate(1e-3 * box.DiagonalLength)[0]
+    return points
+
+
+def radial_extent(shapes, center_z=None):
+    """(smallest, largest) distance of the shapes from the Z axis; for the ZX half disc (center_z given) from the
+    point (0, 0, center_z)."""
+    low, high = math.inf, 0.0
+    if center_z is None:
+        for shape in shapes:
+            far = 2 * (shape.BoundBox.DiagonalLength + shape.BoundBox.Center.Length) + 1
+            axis = Part.makeLine(App.Vector(0, 0, -far), App.Vector(0, 0, far))
+            low = min(low, shape.distToShape(axis)[0])
+            high = max(high, max(math.hypot(p.x, p.y) for p in _points(shape)))
+    else:
+        centre = Part.Vertex(0, 0, center_z)
+        for shape in shapes:
+            low = min(low, shape.distToShape(centre)[0])
+            high = max(high, max(math.hypot(p.x, p.z - center_z) for p in _points(shape)))
+    return low, high
+
+
+def _pad(air, side, size):
+    """Padding of a side in mm: its percentage of size plus its length."""
+    return getattr(air, f"Pad{side}Percent") / 100 * size + getattr(air, f"Pad{side}").Value
+
+
+def _span(air, axis, low, high, fixed_low=None):
+    """(start, length) of the bodies' extent low..high along axis ("X", "Y" or "Z") grown by the padding on both
+    sides; the start is fixed_low when the low side does not move."""
+    size = high - low
+    start = low - _pad(air, f"{axis}Minus", size) if fixed_low is None else fixed_low
+    end = high + _pad(air, f"{axis}Plus", size)
+    if end - start <= 0:
+        raise ValueError(
+            f"Air Region {objects.display_name(air)}: padding gives no size along {axis}; add a length padding."
+        )
+    return start, end - start
+
+
+def padded_size(air, bodies, plane):
+    """The size properties of a Padding mode Air Region, from the global shapes of bodies: {name: value}, lengths in
+    mm and Center a Vector. The Sector angles and the centre z of the ZX half disc stay as they are."""
+    name = objects.display_name(air)
+    if air.AirShape == "Custom":
+        raise ValueError(f"Air Region {name}: Padding is not available for a Custom shape.")
+    if not bodies:
+        raise ValueError(f"Air Region {name}: Padding needs bodies in the main or moving geometry.")
+    shapes = [geometry.global_shape(b) for b in bodies]
+    box = App.BoundBox()
+    for shape in shapes:
+        box.add(shape.BoundBox)
+    if air.AirShape == "Sector":
+        return _padded_sector(air, shapes, box, plane)
+    if plane == "ZX":  # the left edge stays on the axis, x = 0
+        x0, length = _span(air, "X", box.XMin, box.XMax, 0.0)
+        z0, width = _span(air, "Z", box.ZMin, box.ZMax)
+        return {"Center": App.Vector(x0 + length / 2, 0, z0 + width / 2), "Length": length, "Width": width}
+    x0, length = _span(air, "X", box.XMin, box.XMax)
+    y0, width = _span(air, "Y", box.YMin, box.YMax)
+    if plane == "XY":
+        return {"Center": App.Vector(x0 + length / 2, y0 + width / 2, 0), "Length": length, "Width": width}
+    z0, height = _span(air, "Z", box.ZMin, box.ZMax)
+    center = App.Vector(x0 + length / 2, y0 + width / 2, z0 + height / 2)
+    return {"Center": center, "Length": length, "Width": width, "Height": height}
+
+
+def _padded_sector(air, shapes, box, plane):
+    if plane == "ZX":
+        low, high = radial_extent(shapes, air.Center.z)
+    else:
+        low, high = radial_extent(shapes)
+    outer = high + _pad(air, "Outer", high)
+    if outer <= 0:
+        raise ValueError(
+            f"Air Region {objects.display_name(air)}: padding gives no size along the radius; add a length padding."
+        )
+    size = {"OuterRadius": outer}
+    if plane != "ZX":
+        size["InnerRadius"] = max(low - _pad(air, "Inner", high), 0.0) if air.InnerFromBodies else 0.0
+    if plane == "3D":
+        z0, height = _span(air, "Z", box.ZMin, box.ZMax)
+        size.update({"ZMin": z0, "Height": height})
+    return size
+
+
 def fit_box(bodies, padding, plane):
     """(centre, length, width, height) of the bodies' global bound box, grown by padding % of its size on each side.
 

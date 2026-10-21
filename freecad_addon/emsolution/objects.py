@@ -292,6 +292,59 @@ def _unplaced(obj):
         obj.Placement = App.Placement()
 
 
+SIDES = ("XPlus", "XMinus", "YPlus", "YMinus", "ZPlus", "ZMinus")
+PADDING_PROPERTIES = (
+    ["SizeMode"]
+    + [f"Pad{s}Percent" for s in SIDES]
+    + [f"Pad{s}" for s in SIDES]
+    + ["PadOuterPercent", "PadInnerPercent", "PadOuter", "PadInner", "InnerFromBodies", "SizedBy"]
+)
+SIZE_PROPERTIES = ("Center", "Length", "Width", "Height", "InnerRadius", "OuterRadius", "ZMin")
+
+
+def add_padding(air):
+    """Adds the padding properties the Air Region lacks (Manual size, zero padding), also to documents saved before."""
+    add = air.addProperty
+    if not hasattr(air, "SizeMode"):
+        add("App::PropertyEnumeration", "SizeMode", "Padding", "Manual: the size properties; Padding: from the bodies")
+        air.SizeMode = ["Manual", "Padding"]
+    for side in SIDES:
+        axis, sign = side[0], "+" if side.endswith("Plus") else "-"
+        if not hasattr(air, f"Pad{side}Percent"):
+            add(
+                "App::PropertyFloat", f"Pad{side}Percent", "Padding", f"Padding on the {sign}{axis} side, % of the size"
+            )
+        if not hasattr(air, f"Pad{side}"):
+            add("App::PropertyLength", f"Pad{side}", "Padding", f"Padding on the {sign}{axis} side, added to the %")
+    for name, text in (("Outer", "outer radius"), ("Inner", "inner radius")):
+        if not hasattr(air, f"Pad{name}Percent"):
+            add("App::PropertyFloat", f"Pad{name}Percent", "Padding", f"Padding of the {text}, % of the outer radius")
+        if not hasattr(air, f"Pad{name}"):
+            add("App::PropertyLength", f"Pad{name}", "Padding", f"Padding of the {text}, added to the %")
+    if not hasattr(air, "InnerFromBodies"):
+        add(
+            "App::PropertyBool", "InnerFromBodies", "Padding", "Sector: ring from the bodies' inner radius, else a disc"
+        )
+    if not hasattr(air, "SizedBy"):
+        add("App::PropertyLinkListHidden", "SizedBy", "Padding", "Bodies that size the air in Padding mode")
+        air.setEditorMode("SizedBy", 2)  # hidden
+    set_size_modes(air)
+
+
+def set_size_modes(air):
+    """The size properties are read-only in Padding mode: the recompute writes them."""
+    mode = 1 if air.SizeMode == "Padding" else 0
+    for name in SIZE_PROPERTIES:
+        air.setEditorMode(name, mode)
+
+
+def _differs(current, value):
+    """True if the property value current is not the new size value (a float in mm, or a Vector for Center)."""
+    if hasattr(value, "x"):
+        return (current - value).Length > 1e-9
+    return abs(getattr(current, "Value", current) - value) > 1e-9
+
+
 class AirRegion(_Named):
     """The outer shape of the air around the model; the mesher fills it. Shape is built from the properties."""
 
@@ -317,16 +370,28 @@ class AirRegion(_Named):
         add("App::PropertyDistance", "ZMin", "Air", "Bottom of a 3D Sector")
         obj.ZMin = -50.0
         add("App::PropertyLinkGlobal", "Source", "Air", "Body that gives a Custom shape")
+        add_padding(obj)
 
     def execute(self, obj):
         from . import airshapes
 
         study = owner_study(obj)
+        plane = airshapes.study_plane(study) if study else "3D"
         _unplaced(obj)
-        obj.Shape = airshapes.air_shape(obj, airshapes.study_plane(study) if study else "3D")
+        if obj.SizeMode == "Padding":
+            for name, value in airshapes.padded_size(obj, list(obj.SizedBy), plane).items():
+                if _differs(getattr(obj, name), value):
+                    setattr(obj, name, value)
+        obj.Shape = airshapes.air_shape(obj, plane)
+
+    def onChanged(self, obj, prop):
+        super().onChanged(obj, prop)
+        if prop == "SizeMode" and not obj.Document.Restoring:
+            set_size_modes(obj)
 
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
+        add_padding(obj)  # documents saved before the padding existed
 
 
 AXES = ["X", "Y", "Z"]

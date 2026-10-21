@@ -1015,3 +1015,137 @@ class AirTest(unittest.TestCase):
         for shape, kind in (("Box", "Linear"), ("Sector", "Rotational"), ("Custom", "Rotational")):
             air.AirShape = shape
             self.assertEqual(objects.make_sliding_interface(self.study).Kind, kind)
+
+    def padded(self, bodies, shape="Box", **props):
+        """An Air Region in Padding mode sized by bodies (the Study's main geometry)."""
+        self.study.MainObjects = list(bodies)
+        air = objects.make_air_region(self.study, shape, **props)
+        air.SizeMode = "Padding"
+        air.SizedBy = list(bodies)
+        self.doc.recompute()
+        return air
+
+    def assertSize(self, air, **expected):
+        for name, value in expected.items():
+            actual = getattr(air, name)
+            actual = tuple(actual) if name == "Center" else getattr(actual, "Value", actual)
+            want = tuple(pytest.approx(v) for v in value) if name == "Center" else pytest.approx(value)
+            self.assertEqual(actual, want, name)
+
+    def test_padded_box_percent_and_mm(self):
+        (body,) = self.bodies("B")
+        body.Length, body.Width, body.Height = 10, 20, 30
+        self.doc.recompute()
+        air = self.padded([body], PadXPlusPercent=20, PadXMinus=5, PadZPlusPercent=10, PadZMinusPercent=10)
+        self.assertNotIn("Invalid", air.State)
+        self.assertSize(air, Center=(3.5, 10, 15), Length=17, Width=20, Height=36)
+        box = air.Shape.BoundBox
+        self.assertEqual((box.XMin, box.XMax, box.ZMin, box.ZMax), tuple(pytest.approx(v) for v in (-5, 12, -3, 33)))
+
+    def test_padded_rectangle_xy(self):
+        body = self.study_2d(App.Vector(0, 0, 1))
+        air = self.padded([body], PadXPlusPercent=10, PadXMinus=2, PadYPlusPercent=20, PadYMinusPercent=20)
+        self.assertSize(air, Center=(4.5, 5, 0), Length=13, Width=14)
+        self.assertEqual(air.Shape.Area, pytest.approx(13 * 14))
+
+    def test_padded_rectangle_zx_left_edge_on_axis(self):
+        body = self.study_2d(App.Vector(0, 1, 0))
+        body.Shape = Part.makePlane(10, 10, App.Vector(5, 0, 0), App.Vector(0, 1, 0))
+        air = self.padded([body], PadXPlusPercent=10, PadXMinusPercent=50, PadZPlus=1, PadZMinus=1)
+        self.assertSize(air, Center=(8, 0, 5), Length=16, Width=12)  # x from 0 (not from 5 - padding) to 15 + 1
+        self.assertEqual(air.Shape.BoundBox.XMin, pytest.approx(0))
+
+    def ring(self):
+        body = self.doc.addObject("Part::Feature", "Ring")
+        body.Shape = Part.makeCylinder(50, 10).cut(Part.makeCylinder(30, 10))
+        return body
+
+    def test_padded_sector_ring_from_bodies(self):
+        air = self.padded(
+            [self.ring()], "Sector", StartAngle=10, EndAngle=100, PadOuterPercent=10, PadInner=2, InnerFromBodies=True
+        )
+        air.PadZPlus = air.PadZMinus = 1
+        self.doc.recompute()
+        self.assertSize(air, InnerRadius=28, OuterRadius=55, ZMin=-1, Height=12, StartAngle=10, EndAngle=100)
+
+    def test_padded_sector_disc_ignores_inner(self):
+        body = self.doc.addObject("Part::Cylinder", "Disc")
+        body.Radius, body.Height = 50, 10
+        air = self.padded([body], "Sector", PadInner=2, InnerRadius=7, PadZPlus=1)
+        self.assertSize(air, InnerRadius=0, OuterRadius=50, ZMin=0, Height=11)
+        air.InnerFromBodies = True  # the bodies reach the axis: still a full disc
+        self.doc.recompute()
+        self.assertSize(air, InnerRadius=0)
+
+    def test_padded_half_disc_zx(self):
+        body = self.study_2d(App.Vector(0, 1, 0))
+        body.Shape = Part.makePlane(24, 32, App.Vector(0, 0, 10), App.Vector(0, 1, 0))
+        air = self.padded([body], "Sector", Center=App.Vector(0, 0, 10), PadOuter=5)
+        self.assertSize(air, OuterRadius=45, Center=(0, 0, 10))
+
+    def test_flat_body_without_length_padding_is_an_error(self):
+        body = self.doc.addObject("Part::Feature", "Flat")
+        body.Shape = Part.makePlane(10, 10)
+        air = self.padded([body], PadXPlusPercent=10, PadXMinusPercent=10, PadYPlusPercent=10, PadYMinusPercent=10)
+        self.assertIn("Invalid", air.State)
+        with self.assertRaises(ValueError) as ctx:
+            airshapes.padded_size(air, [body], "3D")
+        self.assertEqual(str(ctx.exception), "Air Region Air: padding gives no size along Z; add a length padding.")
+        air.PadZPlus = 1
+        self.doc.recompute()
+        self.assertNotIn("Invalid", air.State)
+        self.assertSize(air, Height=1)
+
+    def test_custom_padding_is_an_error(self):
+        (body,) = self.bodies("B")
+        air = self.padded([body], "Custom", Source=body)
+        self.assertIn("Invalid", air.State)
+        with self.assertRaises(ValueError) as ctx:
+            airshapes.padded_size(air, [body], "3D")
+        self.assertEqual(str(ctx.exception), "Air Region Air: Padding is not available for a Custom shape.")
+
+    def test_padding_follows_a_varset_expression(self):
+        (body,) = self.bodies("B")
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "Gap")
+        varset.Gap = 3
+        air = self.padded([body])
+        air.setExpression("PadXPlus", "VarSet.Gap * 2")
+        self.doc.recompute()
+        self.assertSize(air, Length=16)
+        varset.Gap = 5
+        self.doc.recompute()
+        self.assertSize(air, Length=20)
+
+    def test_size_properties_read_only_in_padding(self):
+        (body,) = self.bodies("B")
+        air = objects.make_air_region(self.study, "Box")
+        names = ("Center", "Length", "Width", "Height", "InnerRadius", "OuterRadius", "ZMin")
+        self.assertEqual(air.SizeMode, "Manual")
+        for name in names:
+            self.assertNotIn("ReadOnly", air.getEditorMode(name))
+        air.SizeMode = "Padding"
+        for name in names:
+            self.assertIn("ReadOnly", air.getEditorMode(name))
+        air.SizeMode = "Manual"
+        for name in names:
+            self.assertNotIn("ReadOnly", air.getEditorMode(name))
+        self.assertEqual(air.getGroupOfProperty("SizeMode"), "Padding")
+        self.assertIn("Hidden", air.getEditorMode("SizedBy"))
+
+    def test_old_air_region_opens_manual_with_same_size(self):
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(1, 2, 3), Length=20, Width=10, Height=4)
+        for name in objects.PADDING_PROPERTIES:
+            air.removeProperty(name)
+        self.assertFalse(hasattr(air, "SizeMode"))
+        path = os.path.join(self.tmp.name, "old_air.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        (air,) = objects.air_regions(objects.find_study(self.doc))
+        self.assertEqual(air.SizeMode, "Manual")
+        self.assertEqual(air.PadXPlusPercent, 0)
+        self.assertEqual(air.SizedBy, [])
+        self.doc.recompute()
+        self.assertSize(air, Center=(1, 2, 3), Length=20, Width=10, Height=4)
+        self.assertEqual(air.Shape.Volume, pytest.approx(800))
