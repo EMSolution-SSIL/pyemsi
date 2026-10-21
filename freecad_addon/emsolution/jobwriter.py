@@ -180,7 +180,7 @@ def write_slides(study, folder, job):
 
 def write_job(study):
     """Run the checks, update the ID table, write job.json and BREPs to the scratch folder. Returns the job path."""
-    objects.refresh_sized_by(study)
+    validation.refresh_padding(study)  # Padding mode air as the bodies are now
     stale = [a for a in objects.air_regions(study) if "Touched" in a.State or a.Shape.isNull()]
     if stale:  # validation checks the sub-elements of Mesh Sizes on the air's Shape: make it current
         study.Document.recompute(stale)

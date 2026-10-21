@@ -1341,3 +1341,181 @@ class AirTest(unittest.TestCase):
         self.doc.recompute()
         self.assertEqual(self.air_problems(), [])  # Validate refreshes again
         self.assertEqual([o.Name for o in air.SizedBy], ["Fresh"])
+
+    def nested_parts(self):
+        """B in an inner App::Part in an outer one, the outer the Study's main container; a Padding air."""
+        outer, inner = self.doc.addObject("App::Part", "Outer"), self.doc.addObject("App::Part", "Inner")
+        body = self.doc.addObject("Part::Box", "B")
+        outer.addObject(inner)
+        inner.addObject(body)
+        self.study.MainMode, self.study.MainSource = "Container", outer
+        self.doc.recompute()
+        air = self.padding_air()
+        self.assertSize(air, Center=(5, 5, 5))
+        return outer, inner, air
+
+    def test_air_follows_a_moved_container(self):
+        outer, inner, air = self.nested_parts()
+        inner.Placement.Base = App.Vector(100, 0, 0)  # neither the body nor its link changes
+        self.doc.recompute()
+        self.assertSize(air, Center=(105, 5, 5))
+        outer.Placement.Base = App.Vector(0, 50, 0)
+        self.doc.recompute()
+        self.assertSize(air, Center=(105, 55, 5))
+        self.assertNotIn("Touched", air.State)
+        self.assertEqual(self.air_problems(), [])
+
+    def test_validate_follows_a_moved_container_it_was_not_told_about(self):
+        _, inner, air = self.nested_parts()
+        inner.Placement.Base = App.Vector(100, 0, 0)
+        inner.purgeTouched()  # as if the move reached no link: the sizes differ from the padding all the same
+        self.assertEqual(self.air_problems(), [])
+        self.assertSize(air, Center=(105, 5, 5))
+
+    def test_run_mesh_follows_a_moved_container(self):
+        _, inner, air = self.nested_parts()
+        inner.Placement.Base = App.Vector(100, 0, 0)
+        inner.purgeTouched()
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            json.load(fh)
+        self.assertSize(air, Center=(105, 5, 5))
+
+    def test_container_that_depends_on_the_air_is_not_linked(self):
+        part = self.doc.addObject("App::Part", "Part")
+        body, reader = self.doc.addObject("Part::Box", "B"), self.doc.addObject("Part::Box", "Reader")
+        part.addObject(body)
+        part.addObject(reader)
+        self.study.MainObjects = [body]
+        self.doc.recompute()
+        air = objects.make_air_region(self.study, "Box")
+        reader.setExpression("Height", "Air.Height / 10")  # the Part now depends on the air through Reader
+        self.doc.recompute()
+        air.SizeMode = "Padding"
+        self.doc.recompute()
+        self.assertEqual([o.Name for o in air.SizedBy], ["B"])
+        self.assertEqual(air.SizedByContainers, [])
+        self.assertNotIn("Invalid", air.State)
+        self.assertEqual(self.air_problems(), [])
+
+    def test_manual_air_links_no_container(self):
+        _, _, air = self.nested_parts()
+        self.assertEqual([o.Name for o in air.SizedByContainers], ["Inner", "Outer"])
+        self.assertIn("Hidden", air.getEditorMode("SizedByContainers"))
+        air.SizeMode = "Manual"
+        self.assertEqual(air.SizedByContainers, [])
+
+    def test_air_names_a_body_that_depends_on_it(self):
+        (body,) = self.bodies("B")
+        air = objects.make_air_region(self.study, "Box")
+        body.setExpression("Height", "Air.Height / 10")
+        self.doc.recompute()
+        air.SizeMode = "Padding"
+        self.doc.recompute()
+        self.assertIn("Invalid", air.State)
+        self.assertEqual(air.getStatusString(), "Air Region Air: body B depends on the Air Region; it cannot size it.")
+
+    def test_reopened_old_air_region_is_not_touched(self):
+        objects.make_air_region(self.study, "Box", Length=20)
+        self.doc.recompute()
+        (air,) = objects.air_regions(self.study)
+        for name in objects.PADDING_PROPERTIES:
+            air.removeProperty(name)
+        path = os.path.join(self.tmp.name, "old_touch.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        (air,) = objects.air_regions(objects.find_study(self.doc))
+        self.assertTrue(hasattr(air, "SizeMode"))
+        self.assertNotIn("Touched", air.State)
+
+    def test_padding_drops_the_formulas_of_the_sizes_it_writes(self):
+        self.bodies("B")
+        air = objects.make_air_region(self.study, "Box")
+        air.setExpression("Length", "3 mm * 7")
+        air.setExpression("Center.x", "3 mm")
+        air.setExpression("PadXPlus", "1 mm")  # a padding formula stays
+        self.doc.recompute()
+        with mock.patch.object(App.Console, "PrintMessage") as message:
+            air.SizeMode = "Padding"
+        self.assertEqual([path for path, _ in air.ExpressionEngine], ["PadXPlus"])
+        text = message.call_args[0][0]
+        self.assertIn("Air Region Air", text)
+        self.assertIn("Center", text)
+        self.assertIn("Length", text)
+        self.doc.recompute()
+        self.assertSize(air, Length=11, Center=(5.5, 5, 5))
+
+    def test_padding_keeps_the_formulas_of_manual_sector_values(self):
+        self.bodies("B")
+        air = objects.make_air_region(self.study, "Sector")
+        air.setExpression("EndAngle", "45 deg * 2")
+        air.setExpression("OuterRadius", "70 mm")
+        self.doc.recompute()
+        with mock.patch.object(App.Console, "PrintMessage"):
+            air.SizeMode = "Padding"
+        self.assertEqual([path for path, _ in air.ExpressionEngine], ["EndAngle"])
+        with mock.patch.object(App.Console, "PrintMessage") as message:
+            air.SizeMode = "Manual"
+            air.SizeMode = "Padding"  # nothing left to drop: no message
+        self.assertFalse(message.called)
+
+    def test_padding_keeps_the_centre_z_formula_of_a_zx_half_disc(self):
+        self.study_2d(App.Vector(0, 1, 0))
+        air = objects.make_air_region(self.study, "Sector")
+        air.setExpression("Center.z", "4 mm")
+        air.setExpression("OuterRadius", "70 mm")
+        self.doc.recompute()
+        with mock.patch.object(App.Console, "PrintMessage"):
+            air.SizeMode = "Padding"
+        self.assertEqual([path for path, _ in air.ExpressionEngine], [".Center.z"])
+
+    def test_validate_recomputes_only_what_the_air_depends_on(self):
+        (body,) = self.bodies("B")
+        air = self.padding_air()
+        other = self.doc.addObject("Part::Box", "Unrelated")
+        self.doc.recompute()
+        body.Length, other.Length = 30, 40
+        self.assertEqual(self.air_problems(), [])
+        self.assertSize(air, Length=30)
+        self.assertIn("Touched", other.State)
+
+    def test_seed_padding_for_the_sides_a_shape_change_brings(self):
+        air = objects.make_air_region(self.study, "Box")
+        airshapes.seed_padding(air, "Custom", "Box", "3D")  # a new Box: 20 % on every side
+        sides = [key for key, _ in airshapes.padding_sides("Box", "3D")]
+        self.assertEqual([getattr(air, f"Pad{s}Percent") for s in sides], [20] * 6)
+        airshapes.seed_padding(air, "Box", "Sector", "3D")  # the radial sides are new: 20 % on the outer one
+        self.assertEqual((air.PadOuterPercent, air.PadInnerPercent), (20, 0))
+        air.PadOuterPercent, air.PadOuter = 0, 3
+        air.PadXPlusPercent = air.PadXMinusPercent = air.PadYPlusPercent = air.PadYMinusPercent = 0
+        air.PadYPlus = 1
+        airshapes.seed_padding(air, "Box", "Sector", "3D")  # a padding of its own: kept
+        self.assertEqual((air.PadOuterPercent, air.PadOuter.Value), (0, 3))
+        airshapes.seed_padding(air, "Sector", "Box", "3D")
+        self.assertEqual((air.PadXPlusPercent, air.PadYPlus.Value), (0, 1))
+        airshapes.seed_padding(air, "Box", "Box", "3D")  # no new sides
+        self.assertEqual(air.PadXPlusPercent, 0)
+
+    def test_padded_properties_are_what_padded_size_writes(self):
+        (body,) = self.bodies("B")
+        air = objects.make_air_region(self.study, "Box")
+        for shape, plane in (("Box", "3D"), ("Box", "XY"), ("Box", "ZX"), ("Sector", "3D"), ("Sector", "XY")):
+            air.AirShape = shape
+            size = airshapes.padded_size(air, [body], plane)
+            self.assertEqual(sorted(airshapes.padded_properties(shape, plane)), sorted(size), (shape, plane))
+        air.AirShape = "Sector"
+        size = airshapes.padded_size(air, [body], "ZX")  # InnerRadius 0: a half disc; its centre z stays manual
+        self.assertEqual(sorted(airshapes.padded_properties("Sector", "ZX")), sorted(size))
+        self.assertEqual(airshapes.padded_properties("Custom", "3D"), [])
+
+    def test_validate_leaves_a_formula_reading_the_air_alone(self):
+        self.bodies("B")
+        air = self.padding_air()
+        varset = self.doc.addObject("App::VarSet", "VarSet")
+        varset.addProperty("App::PropertyLength", "AirLength")
+        varset.setExpression("AirLength", "Air.Length")
+        self.doc.recompute()
+        for _ in range(2):  # the VarSet depends on the air, but no body does: the links stay as they are
+            self.assertEqual(self.air_problems(), [])
+            self.assertEqual([o.Name for o in air.SizedBy], ["B"])
+            self.assertEqual([o.Name for o in self.doc.Objects if "Touched" in o.State], [])

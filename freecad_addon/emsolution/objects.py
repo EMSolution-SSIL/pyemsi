@@ -316,7 +316,7 @@ PADDING_PROPERTIES = (
     ["SizeMode"]
     + [f"Pad{s}Percent" for s in SIDES]
     + [f"Pad{s}" for s in SIDES]
-    + ["PadOuterPercent", "PadInnerPercent", "PadOuter", "PadInner", "InnerFromBodies", "SizedBy"]
+    + ["PadOuterPercent", "PadInnerPercent", "PadOuter", "PadInner", "InnerFromBodies", "SizedBy", "SizedByContainers"]
 )
 SIZE_PROPERTIES = ("Center", "Length", "Width", "Height", "InnerRadius", "OuterRadius", "ZMin")
 
@@ -347,6 +347,9 @@ def add_padding(air):
     if not hasattr(air, "SizedBy"):
         add("App::PropertyLinkListGlobal", "SizedBy", "Padding", "Bodies that size the air in Padding mode")
         air.setEditorMode("SizedBy", 2)  # hidden
+    if not hasattr(air, "SizedByContainers"):
+        add("App::PropertyLinkListGlobal", "SizedByContainers", "Padding", "Parts that place the bodies in SizedBy")
+        air.setEditorMode("SizedByContainers", 2)  # hidden
     set_size_modes(air)
 
 
@@ -361,28 +364,46 @@ def dependents_of(air):
     """Names of the objects outside the Study that depend on the Air Region (an expression, a Boolean)."""
     try:
         found = air.InListRecursive
-    except IndexError:  # a cycle through SizedBy already: look again without the links
-        air.SizedBy = []
+    except IndexError:  # a cycle through the links already: look again without them
+        air.SizedBy, air.SizedByContainers = [], []
         found = air.InListRecursive
     return {o.Name for o in found if not is_study_object(o)}
 
 
+def containers_of(bodies):
+    """The containers that place the bodies (App::Part, PartDesign Body: GeoFeatureGroups), innermost first. Moving
+    one moves its bodies without changing them."""
+    found = {}
+    for body in bodies:
+        parent = body.getParentGeoFeatureGroup()
+        while parent is not None:
+            found.setdefault(parent.Name, parent)
+            parent = parent.getParentGeoFeatureGroup()
+    return list(found.values())
+
+
 def refresh_sized_by(study):
-    """SizedBy of each Air Region: the Study's bodies in Padding mode, none in Manual mode. A body that depends on the
-    air would close a cycle (and links make study_bodies see the bodies as made from each other): then none. Only a
-    change is written."""
+    """SizedBy of each Air Region: the Study's bodies in Padding mode, none in Manual mode; SizedByContainers: the
+    containers that place them, so that moving one recomputes the air. A body that depends on the air would close a
+    cycle (and links make study_bodies see the bodies as made from each other): then no body; a container that
+    depends on the air is left out. Only a change is written."""
     airs = air_regions(study)
     padding = [a for a in airs if a.SizeMode == "Padding"]
     loops = {a.Name: dependents_of(a) for a in padding}
-    for air in padding:
-        if loops[air.Name] and air.SizedBy:
-            air.SizedBy = []  # study_bodies must not follow the links
     bodies = study_bodies(study) if padding else []
+    tangled = [a for a in padding if loops[a.Name] & {b.Name for b in bodies} and (a.SizedBy or a.SizedByContainers)]
+    if tangled:  # study_bodies must not follow the links: look again without them
+        for air in tangled:
+            air.SizedBy, air.SizedByContainers = [], []
+        bodies = study_bodies(study)
     names = {b.Name for b in bodies}
     for air in airs:
         want = bodies if air in padding and not names & loops[air.Name] else []
         if [o.Name for o in air.SizedBy] != [o.Name for o in want]:
             air.SizedBy = want
+        places = [c for c in containers_of(want) if c.Name not in loops.get(air.Name, ())]
+        if [o.Name for o in air.SizedByContainers] != [o.Name for o in places]:
+            air.SizedByContainers = places
 
 
 def safe_refresh_sized_by(study):
@@ -396,6 +417,31 @@ def safe_refresh_sized_by(study):
         App.Console.PrintWarning(f"EMSolution: Air Region not linked to the bodies yet ({exc}); Validate retries.\n")
         return False
     return True
+
+
+def dependent_body(air, study):
+    """The first of the Study's bodies that depends on the Air Region (so it cannot size it), or None."""
+    loops = dependents_of(air)
+    return next((b for b in study_bodies(study) if b.Name in loops), None)
+
+
+def drop_size_formulas(air):
+    """Padding writes some of the size properties: a formula on one of them would fight the recompute. Removes those
+    formulas, with a console message; a formula on a size Padding leaves manual (Sector angles) stays."""
+    import FreeCAD as App
+    from . import airshapes
+
+    study = owner_study(air)
+    plane = airshapes.study_plane(study) if study is not None else "3D"
+    written = airshapes.padded_properties(air.AirShape, plane)
+    dropped = [path for path, _ in air.ExpressionEngine if path.lstrip(".").split(".")[0] in written]
+    for path in dropped:
+        air.setExpression(path, None)
+    if dropped:
+        names = ", ".join(dict.fromkeys(path.lstrip(".") for path in dropped))
+        App.Console.PrintMessage(
+            f"EMSolution: Air Region {display_name(air)}: Padding computes {names}; their formulas were removed.\n"
+        )
 
 
 def _differs(current, value):
@@ -439,6 +485,13 @@ class AirRegion(_Named):
         plane = airshapes.study_plane(study) if study else "3D"
         _unplaced(obj)
         if obj.SizeMode == "Padding":
+            if not obj.SizedBy and study is not None:  # say why rather than "needs bodies"
+                body = dependent_body(obj, study)
+                if body is not None:
+                    raise ValueError(
+                        f"Air Region {display_name(obj)}: body {display_name(body)} depends on the Air Region;"
+                        " it cannot size it."
+                    )
             for name, value in airshapes.padded_size(obj, list(obj.SizedBy), plane).items():
                 if _differs(getattr(obj, name), value):
                     setattr(obj, name, value)
@@ -446,7 +499,11 @@ class AirRegion(_Named):
 
     def onChanged(self, obj, prop):
         super().onChanged(obj, prop)
-        if prop == "SizeMode" and not obj.Document.Restoring:
+        if obj.Document.Restoring or not hasattr(obj, "SizeMode"):
+            return
+        if prop in ("SizeMode", "AirShape") and obj.SizeMode == "Padding":
+            drop_size_formulas(obj)
+        if prop == "SizeMode":
             set_size_modes(obj)
             study = owner_study(obj)
             if study is not None:
@@ -454,7 +511,10 @@ class AirRegion(_Named):
 
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
+        touched = "Touched" in obj.State
         add_padding(obj)  # documents saved before the padding existed
+        if not touched:
+            obj.purgeTouched()  # properties an old document lacked are no edit
 
 
 AXES = ["X", "Y", "Z"]

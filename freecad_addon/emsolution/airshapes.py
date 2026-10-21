@@ -160,6 +160,28 @@ def padding_sides(shape, plane):
     return []
 
 
+def padded_properties(shape, plane):
+    """Names of the size properties Padding computes for an AirShape in a study plane (the keys of padded_size); the
+    Sector angles and the centre of a ZX half disc stay manual."""
+    if shape == "Box":
+        return ["Center", "Length", "Width"] + (["Height"] if plane == "3D" else [])
+    if shape == "Sector":
+        return ["OuterRadius", "InnerRadius"] + (["ZMin", "Height"] if plane == "3D" else [])
+    return []
+
+
+def seed_padding(air, before, shape, plane, percent=20):
+    """Start padding for the sides shape offers that the AirShape before did not, when all of them are zero, so the
+    air does not hug the bodies there: percent on each new Box side, on the outer radius of a Sector."""
+    have = {key for key, _ in padding_sides(before, plane)}
+    new = [key for key, _ in padding_sides(shape, plane) if key not in have]
+    if any(getattr(air, f"Pad{key}Percent") or getattr(air, f"Pad{key}").Value for key in new):
+        return
+    for key in new:
+        if shape == "Box" or key == "Outer":
+            setattr(air, f"Pad{key}Percent", percent)
+
+
 def padded_size(air, bodies, plane):
     """The size properties of a Padding mode Air Region, from the global shapes of bodies: {name: value}, lengths in
     mm and Center a Vector. The Sector angles and the centre z of the ZX half disc stay as they are."""

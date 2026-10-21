@@ -59,7 +59,7 @@ def validate(study):
     if unavailable:
         r.error(unavailable)
         return r.problems
-    _refresh_padding(study)
+    refresh_padding(study)
     main, moving, setup_errors = geometry.setup(study)
     for text in setup_errors:
         r.error(text)
@@ -169,24 +169,38 @@ def _settings(study, included, r):
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
 
 
-def _refresh_padding(study):
-    """Padding mode Air Regions follow the Study's bodies as they are now: a body added to a container source or
-    edited since the last recompute counts."""
+def refresh_padding(study):
+    """Padding mode Air Regions follow the Study's bodies as they are now: a body added to a container source, edited
+    since the last recompute or moved with a container counts. Recomputes the air and what it depends on, no more.
+    Validate and Run Mesh call it."""
     objects.refresh_sized_by(study)
+    plane = None
     for air in objects.air_regions(study):
-        if air.SizeMode == "Padding" and any("Touched" in o.State for o in [air, *air.OutListRecursive]):
-            study.Document.recompute()  # an object recomputed alone does not recompute what it depends on
-            return
+        if air.SizeMode != "Padding":
+            continue
+        plane = plane or airshapes.study_plane(study)
+        if _off_size(air, plane):  # e.g. a container moved that no link reports
+            air.touch()
+        group = [air, *air.OutListRecursive]  # an object recomputed alone does not recompute what it depends on
+        if any("Touched" in o.State for o in group):
+            study.Document.recompute(group)
+
+
+def _off_size(air, plane):
+    """True if the size properties of a Padding mode air are not what its bodies give now."""
+    try:
+        size = airshapes.padded_size(air, list(air.SizedBy), plane)
+    except ValueError:  # _padding reports it
+        return False
+    return any(objects._differs(getattr(air, name), value) for name, value in size.items())
 
 
 def _padding_sides(air, plane):
-    """[(side name, property name)] of the padding the Air Region's shape and plane use."""
-    if air.AirShape == "Sector":
-        sides = [("outer", "Outer")] + ([("inner", "Inner")] if plane != "ZX" else [])
-        return sides + ([("+Z", "ZPlus"), ("-Z", "ZMinus")] if plane == "3D" else [])
-    axes = {"3D": "XYZ", "XY": "XY", "ZX": "XZ"}[plane]
-    sides = [(f"{sign}{axis}", f"{axis}{'Plus' if sign == '+' else 'Minus'}") for axis in axes for sign in "+-"]
-    return [side for side in sides if not (plane == "ZX" and side[0] == "-X")]  # the left edge stays on the axis
+    """[(side name, property key)] of the padding the Air Region's shape and plane use: "+X", "-Z", "outer"."""
+    return [
+        (key.lower() if key in ("Outer", "Inner") else ("+" if key.endswith("Plus") else "-") + key[0], key)
+        for key, _ in airshapes.padding_sides(air.AirShape, plane)
+    ]
 
 
 def _padding(air, bodies, plane, r):
