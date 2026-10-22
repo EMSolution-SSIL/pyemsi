@@ -83,23 +83,6 @@ def _create_splash(app):
         return None
 
 
-def _configure_graphics_policy(environ=None) -> None:
-    """Keep Qt Quick / WebEngine composition on the same OpenGL backend as OpenGL widgets.
-
-    Must run before ``QApplication`` exists. Pins Qt Quick (which WebEngine
-    composes through) to OpenGL and shares GL contexts, so the Monaco
-    WebEngine views and OpenGL widgets (VTK) use one rendering configuration.
-    ``setdefault`` keeps an explicit user/diagnostic override intact.
-    """
-    import os
-
-    from PySide6.QtCore import QCoreApplication, Qt
-
-    env = os.environ if environ is None else environ
-    env.setdefault("QSG_RHI_BACKEND", "opengl")
-    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
-
-
 def _exec_app(app) -> None:
     """Run the Qt event loop. Extracted so tests can monkeypatch this."""
     app.exec()
@@ -125,8 +108,6 @@ def launch(
         Folder to open as the initial workspace.
     """
     global _window, _app
-
-    _configure_graphics_policy()
 
     from PySide6.QtWidgets import QApplication
 
