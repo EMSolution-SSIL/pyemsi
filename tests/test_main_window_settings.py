@@ -141,11 +141,11 @@ def test_main_window_does_not_restore_workspace_from_global_settings(tmp_path, m
         window.close()
 
 
-def test_saved_freecad_tab_is_ignored(tmp_path, monkeypatch):
-    """Release 0.6.0 stored no tab list: its only trace is a FreeCAD document in the workspace and window state.
+def test_workspace_with_fcstd_file_opens_without_freecad(tmp_path, monkeypatch):
+    """A workspace that holds an ``.FCStd`` file, with saved window geometry and state, opens cleanly.
 
-    A workspace that still holds an ``.FCStd`` file must open cleanly, restore no tab for it, and treat the file
-    like any other file pyemsi has no viewer for.
+    pyemsi saves no list of open tabs, so no tab comes back for the file; opening it gives the same viewer as any
+    other file pyemsi has no viewer for.
     """
     _app()
     workspace = tmp_path / "workspace"

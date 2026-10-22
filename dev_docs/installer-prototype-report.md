@@ -22,24 +22,24 @@ Ship FreeCAD + the EMSolution addon + pyemsi (Femap converter, VTK viewer, input
 Build it with:
 
 ```
-cd installer\freecad
-pixi run installer      # = pixi run packages, then constructor -> dist\EMSolution-FreeCAD-0.1.0-Windows-x86_64.exe
+pixi run installer-freecad   # from the repo root, a short checkout path (see PACKAGING.md)
+                             # -> installer\freecad\dist\EMSolution-FreeCAD-<version>-Windows-x86_64.exe
 ```
 
-Install silently with `EMSolution-FreeCAD-0.1.0-Windows-x86_64.exe /S /D=<prefix>`. The prefix must be the last argument, without quotes or spaces.
+`<version>` is `pyemsi.__version__`. Install silently with `EMSolution-FreeCAD-<version>-Windows-x86_64.exe /S /D=<prefix>`, from PowerShell or cmd (Git Bash rewrites `/S` and `/D=`). The prefix must be the last argument, without quotes or spaces.
 
 ## Developer mode (no installer)
 
-Day to day you don't need the installer. pyemsi's own pixi env already has FreeCAD 1.1.0 and an editable install of pyemsi. Point FreeCAD's user Mod folder at the addon:
+Day to day you don't need the installer. pyemsi's `addon` pixi environment has FreeCAD 1.1.0 and an editable install of pyemsi (the default environment has no FreeCAD). Point FreeCAD's user Mod folder at the addon, once per clone (it links `%APPDATA%\FreeCAD\v1-1\Mod\EMSolution` to `freecad_addon`):
 
 ```
-mklink /J "%APPDATA%\FreeCAD\v1-1\Mod\EMSolution" "<pyemsi checkout>\freecad_addon"
+pixi run -e addon install-addon
 ```
 
 Then start FreeCAD from pyemsi's root with:
 
 ```
-pixi run freecad
+pixi run -e addon freecad
 ```
 
 Restart FreeCAD after you change the addon or pyemsi's Python code. After a change to the Cython code, rebuild it with `pixi run python setup.py build_ext --inplace`. An installed EMSolution FreeCAD also reads this Mod folder, so remove the junction while you test an installed build.

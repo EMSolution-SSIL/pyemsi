@@ -1,10 +1,12 @@
 # Packaging And Distribution
 
-This repository produces three distributables:
+This repository produces four distributables:
 
 - The `pyemsi` API wheel (`.whl`) via the standard Python build flow.
 - A Windows portable `pyemsi` GUI runtime staged under `dist/`.
 - A Windows NSIS installer built from the portable runtime.
+- The EMSolution-FreeCAD Windows installer (FreeCAD + the add-on + pyemsi), see
+  [The Two Windows Installers In One Step](#the-two-windows-installers-in-one-step).
 
 The local packaging commands use the checked-in Pixi environment. Run the following command from the repository root before building:
 
@@ -171,6 +173,44 @@ The installer:
 - Creates a desktop shortcut and a Start Menu group.
 - Registers an "Open with pyemsi" entry in the Windows Explorer folder context menu.
 - Writes an uninstaller and an Add/Remove Programs entry under `HKCU`.
+
+## The Two Windows Installers In One Step
+
+The repository builds two Windows installers, both versioned by `pyemsi.__version__` (read by `installer/version.py`):
+
+- **pyemsi**: `pixi run installer-pyemsi` builds the portable runtime, refuses it if it carries FreeCAD, the add-on or
+  `ems_material` (the leak check `tools/check_dist_clean.py dist/pyemsi`, which prints only hits; silence means clean),
+  then runs NSIS with `makensis` from the `installer/freecad` pixi workspace, so no system NSIS is needed.
+  Output: `dist/pyemsi-<version>-setup.exe`.
+- **EMSolution-FreeCAD** (FreeCAD + the EMSolution add-on + pyemsi): `pixi run installer-freecad` builds the conda
+  packages with rattler-build, then the installer with constructor.
+  Output: `installer/freecad/dist/EMSolution-FreeCAD-<version>-Windows-x86_64.exe`.
+
+The FreeCAD build needs a **short checkout path**. rattler-build's work dirs nest pyemsi's deepest Monaco files under
+the checkout, and Windows' 260-char `MAX_PATH` breaks the build from a normal path. It has been built from a 7-char
+path, e.g. a detached worktree:
+
+```powershell
+git worktree add C:\b\pe --detach HEAD
+cd C:\b\pe
+pixi run installer-freecad
+```
+
+Each run rebuilds pyemsi and the add-on package; the repackaged third-party wheels are reused from
+`installer/freecad/output/`.
+
+In CI, the **Windows Packaging** workflow ([.github/workflows/windows-packaging.yml](./.github/workflows/windows-packaging.yml))
+asks which installers to build: `pyemsi` (default), `freecad` or `both`. The FreeCAD job builds from a worktree at
+`<drive>:\pe` to get the short path. A `subst` drive or a junction doesn't work: pixi resolves it to the real, long path.
+
+To test the FreeCAD bundle, install it silently **from PowerShell** (Git Bash rewrites the `/S` and `/D=` arguments and
+the installer hangs). The prefix must be the last argument, without quotes or spaces:
+
+```powershell
+Start-Process .\installer\freecad\dist\EMSolution-FreeCAD-<version>-Windows-x86_64.exe -ArgumentList '/S','/D=C:\b\ems' -Wait
+```
+
+Uninstall silently with `C:\b\ems\Uninstall-EMSolution-FreeCAD.exe /S _?=C:\b\ems`.
 
 ## Related Guides
 

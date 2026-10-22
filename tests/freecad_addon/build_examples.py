@@ -1,7 +1,7 @@
 r"""Builds the example models into a folder you can open in FreeCAD and check by hand.
 
 From the repo root:
-    pixi run python tests/freecad_addon/build_examples.py [out_dir] [--only NAME ...] [--sample DIR]
+    pixi run -e addon python tests/freecad_addon/build_examples.py [out_dir] [--only NAME ...] [--sample DIR]
 Each case gets out_dir/<name>/ with the .FCStd, the mesh and report.txt (elements per MAT_ID and a checklist).
 One line per case: OK name, ERROR name: text (what an E-case must give) or FAILED name: text.
 """

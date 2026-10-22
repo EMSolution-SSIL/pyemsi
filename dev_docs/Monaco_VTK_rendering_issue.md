@@ -1,5 +1,7 @@
 # Monaco / VTK rendering issues with `QSG_RHI_BACKEND=opengl`
 
+> Historical: the FreeCAD tab and its OpenGL graphics policy were removed from pyemsi (kept on the local branch `experimental/freecad-viewer`).
+
 Status: open, not part of the FreeCAD `.FCStd` tab feature. Recorded here so it can be picked up separately.
 Observed on: Windows 11, AMD GPU (`atio6axx.dll`), PySide6 / Qt 6.10.2, Pixi env `.pixi/envs/default`, branch `feat/freecad-fcstd-tab`.
 
