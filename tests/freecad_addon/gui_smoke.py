@@ -609,7 +609,8 @@ def main():
     (fresh_lib,) = objects.library_materials(fresh)
     (fresh_mat,) = objects.materials(fresh)
     fresh_record = studymaterials.record_material(fresh_lib)
-    assert (fresh_record.name, fresh_lib.MaterialId) == ("Air", "user:air"), (fresh_record.name, fresh_lib.MaterialId)
+    assert (fresh_record.name, fresh_lib.Label, fresh_lib.MaterialId) == ("Air (μr=1)", "Air (μr=1)", "user:air")
+    assert fresh_air.Label == "Air", fresh_air.Label
     assert (fresh_mat.Body, fresh_mat.LibraryMaterial, fresh_mat.Potential) == (fresh_air, fresh_lib, 0)
     assert panel.reject()
     assert objects.air_regions(fresh) == [] and objects.library_materials(fresh) == [], "Cancel kept the Air material"

@@ -192,22 +192,31 @@ class StudyMaterialRepository:
 
 
 # Built-in default materials shipped with the app, for the user to choose from, are planned. Until then the air
-# gets this one material: a Study material named Air, reused when the Study already has one.
+# gets this one material: a Study material named "Air (μr=1)", reused when the Study already has one. The name is not
+# plain Air so that the Air Region keeps the tree label Air (FreeCAD labels are unique).
+AIR_NAME = "Air (μr=1)"
+
+
 def _is_air(lib):
     record = json.loads(lib.Record)
     mu = record["properties"].get("electromagnetic", {}).get("relative_permeability", {})
     identity = record["identity"]
-    return mu.get("value") == 1 and (identity["family"] == "fluid_or_gas" or identity["name"].lower() == "air")
+    named = identity["name"].lower() in (AIR_NAME.lower(), "air")
+    return mu.get("value") == 1 and (identity["family"] == "fluid_or_gas" or named)
 
 
 def default_air_material(study):
-    """The Study's Air material (mu_r = 1): an existing one, preferring the one named Air, or a new one.
+    """The Study's Air material (mu_r = 1): an existing one, preferring "Air (μr=1)", then "Air", or a new one.
 
     Makes no transaction of its own: a new material joins the caller's open transaction.
     """
     airs = [lib for lib in objects.library_materials(study) if _is_air(lib)]
     if airs:
-        return next((lib for lib in airs if lib.Label.lower() == "air"), airs[0])
+        for name in (AIR_NAME.lower(), "air"):
+            for lib in airs:
+                if json.loads(lib.Record)["identity"]["name"].lower() == name:
+                    return lib
+        return airs[0]
     taken = {lib.MaterialId for lib in objects.library_materials(study)}
     material_id, n = "user:air", 1
     while material_id in taken:
@@ -220,7 +229,7 @@ def default_air_material(study):
             "material_id": material_id,
             "material_version": "1.0.0",
             "identity": {
-                "name": "Air",
+                "name": AIR_NAME,
                 "family": "fluid_or_gas",
                 "manufacturer": None,
                 "grade": None,

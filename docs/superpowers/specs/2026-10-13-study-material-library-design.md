@@ -320,5 +320,5 @@ environment, so the add-on can import it.
 ## 12. Future
 
 - Default materials: pyemsi will ship a set of built-in materials (air and other common ones) that the user can pick
-  from. Until then, Add Air Region creates or reuses one Study material named Air (μr = 1, family `fluid_or_gas`) and
-  assigns it with Potential 0.
+  from. Until then, Add Air Region creates or reuses one Study material named "Air (μr=1)" (μr = 1, family `fluid_or_gas`)
+  and assigns it with Potential 0. The name is not plain Air so that the Air Region keeps the tree label Air.

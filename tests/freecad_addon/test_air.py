@@ -1562,8 +1562,8 @@ class AirTest(unittest.TestCase):
         lib = studymaterials.default_air_material(self.study)
         self.assertEqual(objects.library_materials(self.study), [lib])
         material = studymaterials.record_material(lib)
-        self.assertEqual((lib.Label, lib.MaterialId), ("Air", "user:air"))
-        self.assertEqual((material.name, material.identity.family), ("Air", "fluid_or_gas"))
+        self.assertEqual((lib.Label, lib.MaterialId), ("Air (μr=1)", "user:air"))
+        self.assertEqual((material.name, material.identity.family), ("Air (μr=1)", "fluid_or_gas"))
         self.assertEqual(material.provenance.source_type, "USER_INPUT")
         self.assertIs(studymaterials.default_air_material(self.study), lib)
         self.assertEqual(len(objects.library_materials(self.study)), 1)
@@ -1576,7 +1576,9 @@ class AirTest(unittest.TestCase):
         (row,) = [r for r in studymaterials.study_material_rows(self.study) if r[1] == "Air"]
         (entry,) = studymaterials.material_properties([row])["16_Material_Properties"]["16_1_3D_Element_Properties"]
         self.assertEqual(entry["MagneticProperty"], {"MU": 1.0})
-        self.assertEqual((entry["MAT_NAME"], entry["POTENTIAL"]), ("Air", 0))
+        self.assertEqual(
+            (entry["MAT_NAME"], entry["POTENTIAL"]), ("Air", 0)
+        )  # MAT_NAME is the air region, not the material
 
     def test_default_air_material_reuses_an_air_one(self):
         make = lambda *a: objects.make_library_material(self.study, json.dumps(record(*a)))  # noqa: E731
@@ -1585,7 +1587,9 @@ class AirTest(unittest.TestCase):
         self.assertIs(studymaterials.default_air_material(self.study), gas)
         named = make("user:a", "air", "generic", AIR)  # the one named Air wins
         self.assertIs(studymaterials.default_air_material(self.study), named)
-        self.assertEqual(len(objects.library_materials(self.study)), 3)
+        exact = make("user:b", "air (μr=1)", "generic", AIR)  # and "Air (μr=1)" wins over Air, whatever the case
+        self.assertIs(studymaterials.default_air_material(self.study), exact)
+        self.assertEqual(len(objects.library_materials(self.study)), 4)
 
     def test_default_air_material_needs_mu_1(self):
         make = lambda *a: objects.make_library_material(self.study, json.dumps(record(*a)))  # noqa: E731

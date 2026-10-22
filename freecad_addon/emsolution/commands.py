@@ -195,7 +195,7 @@ class AddAirRegion(_StudyCommand):
             App.Console.PrintWarning(f"EMSolution: the Air Region starts Manual, the bodies are not ready ({exc}).\n")
             bodies = []
         doc.openTransaction("Add Air Region")  # stays open until OK or Cancel
-        lib = studymaterials.default_air_material(study)  # first: the material keeps the tree label Air, the air Air001
+        lib = studymaterials.default_air_material(study)
         air = objects.make_air_region(study, "Box")
         if bodies:  # padding of 20 % on every side the shape offers, following the bodies
             airshapes.seed_padding(air, "Custom", "Box", airshapes.study_plane(study))
