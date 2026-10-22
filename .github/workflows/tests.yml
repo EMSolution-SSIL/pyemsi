@@ -27,7 +27,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.10.2
         with:
-          pixi-version: v0.80.0
+          pixi-version: v0.81.0
           locked: true
           environments: default addon
           cache: true

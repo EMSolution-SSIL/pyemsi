@@ -182,3 +182,46 @@ def test_packaging_workflow_offers_installer_choice():
     assert "freecad" in freecad_job["if"]
     assert "both" in freecad_job["if"]
     assert "pyemsi" in workflow["jobs"]["build_windows_portable"]["if"]
+
+
+def _freecad_job_steps() -> list[dict]:
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "windows-packaging.yml").read_text("utf-8"))
+    return workflow["jobs"]["build_windows_freecad_installer"]["steps"]
+
+
+def test_freecad_ci_job_builds_from_a_short_path():
+    # rattler-build's work dirs hit Windows' 260-char MAX_PATH from the runner's checkout path (see
+    # installer/freecad/pixi.toml): the job builds from a git worktree at <drive>:\pe, like the local build. Not subst
+    # or a junction: pixi resolves those to the real, long path.
+    steps = _freecad_job_steps()
+    worktree = next(i for i, step in enumerate(steps) if "git worktree add" in step.get("run", ""))
+    assert '"\\pe"' in steps[worktree]["run"]
+    assert "SHORT_ROOT=" in steps[worktree]["run"] and "GITHUB_ENV" in steps[worktree]["run"]
+    assert "subst" not in "".join(step.get("run", "") for step in steps)
+    pixi = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("prefix-dev/setup-pixi@"))
+    assert worktree < pixi
+    assert steps[pixi]["with"]["manifest-path"] == "${{ env.SHORT_ROOT }}\\installer\\freecad\\pixi.toml"
+    build = next(i for i, step in enumerate(steps) if "pixi run" in step.get("run", ""))
+    assert pixi < build
+    assert steps[build]["working-directory"] == "${{ env.SHORT_ROOT }}"
+    assert steps[build]["run"] == "pixi run --manifest-path installer\\freecad\\pixi.toml installer"
+    upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
+    assert upload["with"]["path"].startswith("${{ env.SHORT_ROOT }}/installer/freecad/dist/")
+
+
+def test_ci_pins_the_pixi_version_that_wrote_the_locks():
+    # pixi.lock and installer/freecad/pixi.lock were written by pixi 0.81.0; `locked: true` needs a pixi that reads them.
+    versions = []
+    for workflow in (ROOT / ".github" / "workflows").glob("*.yml"):
+        for job in yaml.safe_load(workflow.read_text("utf-8"))["jobs"].values():
+            for step in job["steps"]:
+                if step.get("uses", "").startswith("prefix-dev/setup-pixi@"):
+                    versions.append(step["with"]["pixi-version"])
+    assert len(versions) >= 2
+    assert set(versions) == {"v0.81.0"}
+
+
+def test_freecad_ci_job_leaves_the_version_to_the_tasks():
+    # The installer tasks set PYEMSI_VERSION from installer/version.py themselves.
+    for step in _freecad_job_steps():
+        assert "PYEMSI_VERSION" not in step.get("env", {}), step.get("name")
