@@ -71,6 +71,9 @@ jobs:
           }
           python @args
 
+      - name: Check portable runtime carries no FreeCAD, add-on or ems_material
+        run: python tools/check_dist_clean.py dist/pyemsi
+
       - name: Upload portable runtime
         uses: actions/upload-artifact@v4
         with:

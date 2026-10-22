@@ -32,6 +32,9 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
 
+      - name: Check wheels carry no FreeCAD, add-on or ems_material
+        run: python tools/check_dist_clean.py "wheelhouse/*.whl"
+
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -54,6 +57,9 @@ jobs:
 
       - name: Build sdist
         run: python -m build --sdist
+
+      - name: Check sdist carries no FreeCAD, add-on or ems_material
+        run: python tools/check_dist_clean.py "dist/*.tar.gz"
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4

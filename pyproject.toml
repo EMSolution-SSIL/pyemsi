@@ -115,7 +115,9 @@ install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blam
 python = "python"
 # pyemsi installer: portable runtime, then NSIS -> dist/pyemsi-<version>-setup.exe (version from installer/version.py)
 build-portable = "python tools/build_windows_private_runtime.py"
-installer-pyemsi = { cmd = "pixi run --manifest-path installer/freecad/pixi.toml nsis-pyemsi", depends-on = ["build-portable"] }
+# refuse a portable runtime that carries FreeCAD, the add-on or ems_material
+check-portable = { cmd = "python tools/check_dist_clean.py dist/pyemsi", depends-on = ["build-portable"] }
+installer-pyemsi = { cmd = "pixi run --manifest-path installer/freecad/pixi.toml nsis-pyemsi", depends-on = ["check-portable"] }
 # EMSolution-FreeCAD installer -> installer/freecad/dist/EMSolution-FreeCAD-<version>-Windows-x86_64.exe
 installer-freecad = "pixi run --manifest-path installer/freecad/pixi.toml installer"
 
