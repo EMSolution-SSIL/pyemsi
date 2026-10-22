@@ -93,6 +93,7 @@ pywinpty = "*"
 ruff = ">=0.16.9,<0.17"
 pre-commit = ">=4"
 qtpy = ">=2.4"
+pyyaml = ">=6.0.3,<7"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
@@ -102,7 +103,6 @@ twine = "*"
 
 [tool.pixi.activation.env]
 QT_API = "pyside6"
-PYTHONPATH = "%CONDA_PREFIX%\\Library\\bin"
 QTWEBENGINE_CHROMIUM_FLAGS = "--no-sandbox"
 
 [tool.pixi.tasks]
@@ -129,6 +129,10 @@ freecad = "==1.1.0"
 
 [tool.pixi.feature.freecad.pypi-dependencies]
 ems-material-manager = ">=0.1,<0.2"
+
+# FreeCAD.pyd and FreeCADGui.pyd live in Library\bin.
+[tool.pixi.feature.freecad.activation.env]
+PYTHONPATH = "%CONDA_PREFIX%\\Library\\bin"
 
 [tool.pixi.feature.freecad.tasks]
 test-addon = "pytest tests/freecad_addon -q -p no:cacheprovider"
