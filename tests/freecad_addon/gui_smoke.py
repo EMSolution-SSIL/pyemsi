@@ -541,7 +541,13 @@ def main():
     assert panel.new and Gui.Control.activeDialog(), "the Air Region panel did not open"
     (air,) = objects.air_regions(study)
     assert isinstance(air.ViewObject.Proxy, taskpanels.ViewProviderAir)
-    assert (air.ViewObject.Transparency, air.ViewObject.DisplayMode) == (80, "Flat Lines")
+    assert (air.ViewObject.Transparency, air.ViewObject.DisplayMode) == (95, "Flat Lines")
+    look = air.ViewObject
+    assert all(abs(a - b) < 0.01 for a, b in zip(look.ShapeColor, taskpanels.AIR_COLOR)), look.ShapeColor
+    assert all(abs(a - b) < 0.01 for a, b in zip(look.ShapeAppearance[0].DiffuseColor, taskpanels.AIR_COLOR)), (
+        look.ShapeAppearance[0].DiffuseColor
+    )
+    assert all(abs(a - b) < 0.01 for a, b in zip(look.LineColor, taskpanels.AIR_LINE_COLOR)), look.LineColor
     sides = ("XPlus", "XMinus", "YPlus", "YMinus", "ZPlus", "ZMinus")
     assert air.SizeMode == "Padding" and panel.mode_padding.isChecked(), "a new Air Region does not start in Padding"
     assert all(getattr(air, f"Pad{s}Percent") == 20 for s in sides), "not 20 % on every side"
@@ -1168,7 +1174,9 @@ def main():
     }, by_kind
     names = providers(reopened_study)
     (reopened_air,) = objects.air_regions(reopened_study)
-    assert (reopened_air.ViewObject.Transparency, reopened_air.ViewObject.DisplayMode) == (80, "Flat Lines")
+    assert (reopened_air.ViewObject.Transparency, reopened_air.ViewObject.DisplayMode) == (95, "Flat Lines")
+    reopened_color = reopened_air.ViewObject.ShapeAppearance[0].DiffuseColor
+    assert all(abs(a - b) < 0.01 for a, b in zip(reopened_color, taskpanels.AIR_COLOR)), reopened_color
     (reopened_slide,) = objects.sliding_interfaces(reopened_study)
     assert reopened_slide.ViewObject.LineWidth == 3
     reopened_air.ViewObject.Transparency = 50  # a user's change must survive a save from the GUI

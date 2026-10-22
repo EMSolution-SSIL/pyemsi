@@ -228,12 +228,19 @@ class ViewProviderLibraryMaterial(_ViewProvider):
         return True
 
 
+AIR_COLOR = (0.68, 0.85, 1.0)  # light blue
+AIR_LINE_COLOR = (0.30, 0.55, 0.85)  # a blue that keeps the outline visible through the 95 % transparency
+AIR_TRANSPARENCY = 95
+
+
 class ViewProviderAir(_ViewProvider):
-    """The Air Region's shape, mostly see-through; double-click edits it."""
+    """The Air Region's shape, light blue and almost see-through; double-click edits it."""
 
     def __init__(self, vobj):
         super().__init__(vobj)
-        vobj.Transparency = 80
+        vobj.ShapeColor = AIR_COLOR
+        vobj.LineColor = AIR_LINE_COLOR
+        vobj.Transparency = AIR_TRANSPARENCY
         vobj.DisplayMode = "Flat Lines" if objects.owner_study(vobj.Object).Dimension == "3D" else "Wireframe"
 
     def getIcon(self):
