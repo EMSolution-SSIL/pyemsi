@@ -41,7 +41,6 @@ dependencies = [
     "gmsh",
     "ems-file-format-converter",
     "pywinpty; sys_platform == 'win32'",
-    "ems-material-manager>=0.1,<0.2",
     "qtpy>=2.4",
 ]
 
@@ -63,7 +62,6 @@ platforms = ["win-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.11,<3.12"
-freecad = "==1.1.0"
 qt6-webengine = "==6.10.2"
 qt6-multimedia = "==6.10.2"
 vtk = ">=9.0.0"
@@ -109,12 +107,24 @@ QTWEBENGINE_CHROMIUM_FLAGS = "--no-sandbox"
 
 [tool.pixi.tasks]
 gui = "python -m pyemsi.gui"
-test = "pytest tests"
+test = "pytest tests --ignore=tests/freecad_addon -q -p no:cacheprovider"
 format = "ruff format"
 lint = "ruff check"
 # One-time per clone: git pre-commit hook + skip formatting-only commits in git blame
 install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blame-ignore-revs"
 python = "python"
+
+[tool.pixi.environments]
+addon = ["freecad"]
+
+[tool.pixi.feature.freecad.dependencies]
+freecad = "==1.1.0"
+
+[tool.pixi.feature.freecad.pypi-dependencies]
+ems-material-manager = ">=0.1,<0.2"
+
+[tool.pixi.feature.freecad.tasks]
+test-addon = "pytest tests/freecad_addon -q -p no:cacheprovider"
 freecad = "freecad"
 # One-time per clone: link freecad_addon into FreeCAD's user Mod folder (re-run to repoint it at this clone)
 install-addon = '''powershell -NoProfile -Command '$mod = Join-Path $env:APPDATA FreeCAD\v1-1\Mod; $link = Join-Path $mod EMSolution; New-Item -ItemType Directory -Force $mod | Out-Null; $old = Get-Item -Force -ErrorAction SilentlyContinue $link; if ($old) { $old.Delete() }; New-Item -ItemType Junction -Path $link -Target (Join-Path $env:PIXI_PROJECT_ROOT freecad_addon) | Select-Object FullName, Target' '''

@@ -29,9 +29,13 @@ jobs:
         with:
           pixi-version: v0.80.0
           locked: true
+          environments: default addon
           cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
       # tests/conftest.py runs Qt on the offscreen platform.
-      - name: Run pytest
-        run: pixi run pytest tests -q -p no:cacheprovider
+      - name: Run pyemsi tests
+        run: pixi run test
+
+      - name: Run FreeCAD add-on tests
+        run: pixi run -e addon test-addon

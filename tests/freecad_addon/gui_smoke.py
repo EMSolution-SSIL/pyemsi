@@ -8,7 +8,7 @@ Needs the addon linked into a throwaway FreeCAD profile (PowerShell, repo root):
     Get-Content "$env:TEMP\ems_gui_smoke.txt"
 The last line of the result file is "PASS" or "FAIL". FreeCAD may report a crash on quit after that.
 For the pixi env's FreeCAD 1.1.0, replace the Start-Process line with
-    pixi run freecad tests\freecad_addon\gui_smoke.py
+    pixi run -e addon freecad tests\freecad_addon\gui_smoke.py
 """
 
 import os

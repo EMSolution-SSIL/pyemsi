@@ -14,13 +14,13 @@ Human-oriented setup details are in [BUILDING.md](BUILDING.md).
 
 ## FreeCAD add-on (`freecad_addon/`)
 
-- Workbench `EMSolution`, package `freecad_addon/emsolution/`. FreeCAD 1.1.0 is pinned in pixi; run it with `pixi run freecad`.
+- Workbench `EMSolution`, package `freecad_addon/emsolution/`. FreeCAD 1.1.0 is pinned in pixi; run it with `pixi run -e addon freecad` (the `addon` environment; the default one has no FreeCAD).
 - `mesher.py`, `mesher2d.py` and `meshcommon.py` run in a separate Python process started by `runner.py`.
   Never import FreeCAD there. `objects.py`, `geometry.py` and `studymaterials.py` have no GUI code;
   GUI lives in `commands.py` and `taskpanels.py`.
-- Unit tests: `pixi run pytest tests/freecad_addon`.
+- Unit tests: `pixi run -e addon test-addon`.
 - GUI changes also need the smoke test, which drives the real FreeCAD GUI (steps in the docstring of
-  `tests/freecad_addon/gui_smoke.py`). Use `pixi run freecad tests\freecad_addon\gui_smoke.py`, then read the last
+  `tests/freecad_addon/gui_smoke.py`). Use `pixi run -e addon freecad tests\freecad_addon\gui_smoke.py`, then read the last
   line of `%TEMP%\ems_gui_smoke.txt`: `PASS` or `FAIL`. A crash report on quit after `PASS` is normal.
 - For FreeCAD API questions use the `freecad-addon-api` skill in `.claude/skills/`.
 
