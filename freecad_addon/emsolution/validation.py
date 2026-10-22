@@ -221,6 +221,12 @@ def _padding(air, bodies, plane, r):
         r.error(prefix + f"body {objects.display_name(body)} depends on the Air Region; it cannot size it.", air)
     if dependent:
         return False
+    study = objects.owner_study(air)
+    readers = objects.readers_in_sources(air, study) if not bodies and study is not None else []
+    for reader in readers:  # the container source is no source: it holds an object made from the air
+        r.error(prefix + f"{objects.display_name(reader)} depends on the Air Region; it cannot size it.", air)
+    if readers:
+        return False
     try:
         airshapes.padded_size(air, bodies, plane)
     except ValueError as e:

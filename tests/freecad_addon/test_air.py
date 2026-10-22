@@ -1397,6 +1397,44 @@ class AirTest(unittest.TestCase):
         self.assertNotIn("Invalid", air.State)
         self.assertEqual(self.air_problems(), [])
 
+    def linked_part(self):
+        """B in an App::Part, the Study's main container; a Padding air linked to B and to the Part."""
+        part, body = self.doc.addObject("App::Part", "Part"), self.doc.addObject("Part::Box", "B")
+        part.addObject(body)
+        self.study.MainMode, self.study.MainSource = "Container", part
+        self.doc.recompute()
+        air = self.padding_air()
+        self.assertEqual([o.Name for o in air.SizedByContainers], ["Part"])
+        return part, air
+
+    def check_reader_moved_into_linked_part(self, reader, air, part):
+        """Part -> reader -> Air -> SizedByContainers -> Part: Validate names the reader, unlinks, and heals."""
+        part.addObject(reader)
+        text = "Air Region Air: Reader depends on the Air Region; it cannot size it."
+        for _ in range(2):  # stable: validating again changes nothing
+            self.assertEqual(self.air_problems(), [text])
+            self.assertEqual((air.SizedBy, air.SizedByContainers), ([], []))
+        self.assertTrue(objects.safe_refresh_sized_by(self.study))
+        part.removeObject(reader)
+        self.doc.recompute()
+        self.assertEqual(self.air_problems(), [])
+        self.assertEqual([o.Name for o in air.SizedBy], ["B"])
+        self.assertEqual([o.Name for o in air.SizedByContainers], ["Part"])
+
+    def test_reader_with_expression_moved_into_a_linked_container(self):
+        part, air = self.linked_part()
+        reader = self.doc.addObject("Part::Box", "Reader")
+        reader.setExpression("Height", "Air.Height / 10")
+        self.doc.recompute()
+        self.check_reader_moved_into_linked_part(reader, air, part)
+
+    def test_boolean_of_the_air_moved_into_a_linked_container(self):
+        part, air = self.linked_part()
+        reader = self.doc.addObject("Part::Common", "Reader")
+        reader.Base, reader.Tool = self.doc.addObject("Part::Box", "Other"), air
+        self.doc.recompute()
+        self.check_reader_moved_into_linked_part(reader, air, part)
+
     def test_manual_air_links_no_container(self):
         _, _, air = self.nested_parts()
         self.assertEqual([o.Name for o in air.SizedByContainers], ["Inner", "Outer"])

@@ -363,11 +363,29 @@ def set_size_modes(air):
 def dependents_of(air):
     """Names of the objects outside the Study that depend on the Air Region (an expression, a Boolean)."""
     try:
+        air.OutListRecursive  # raises on a cycle through the links, e.g. a reader moved into a linked container
         found = air.InListRecursive
     except IndexError:  # a cycle through the links already: look again without them
         air.SizedBy, air.SizedByContainers = [], []
         found = air.InListRecursive
     return {o.Name for o in found if not is_study_object(o)}
+
+
+def readers_in_sources(air, study):
+    """The objects inside the Study's container sources that read the Air Region (an expression, a Boolean): such a
+    container cannot be a source, and the air cannot follow its bodies. Only the objects that read it themselves, not
+    the groups that hold them."""
+    regions = ["Main", "Moving"] if study.Movement == "Sliding motion" else ["Main"]
+    sources = [getattr(study, n + "Source") for n in regions if getattr(study, n + "Mode") == "Container"]
+    loops = dependents_of(air)
+    found = {}
+    for source in sources:
+        if source is None or source.Document != study.Document:
+            continue
+        for o in source.OutListRecursive:
+            if o.Name in loops and not is_study_object(o) and not any(p.Name in loops for p in o.OutList):
+                found.setdefault(o.Name, o)
+    return list(found.values())
 
 
 def containers_of(bodies):
@@ -390,7 +408,12 @@ def refresh_sized_by(study):
     airs = air_regions(study)
     padding = [a for a in airs if a.SizeMode == "Padding"]
     loops = {a.Name: dependents_of(a) for a in padding}
-    bodies = study_bodies(study) if padding else []
+    try:
+        bodies = study_bodies(study) if padding else []
+    except IndexError:  # a cycle through the links: the bodies are the Study's own, look again without them
+        for air in padding:
+            air.SizedBy, air.SizedByContainers = [], []
+        bodies = study_bodies(study)
     tangled = [a for a in padding if loops[a.Name] & {b.Name for b in bodies} and (a.SizedBy or a.SizedByContainers)]
     if tangled:  # study_bodies must not follow the links: look again without them
         for air in tangled:
