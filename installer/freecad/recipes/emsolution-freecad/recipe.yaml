@@ -18,6 +18,8 @@ build:
     - xcopy /E /I /Q icons "%MOD%\icons"
     - copy InitGui.py "%MOD%\"
     - copy package.xml "%MOD%\"
+    # The add-on's version is pyemsi's; stamp it so a build never ships a stale repo value (UTF-8 without BOM).
+    - powershell -NoProfile -Command "$f = Join-Path $env:MOD 'package.xml'; [IO.File]::WriteAllText($f, ((Get-Content -Raw $f) -replace '<version>[^<]*</version>', '<version>${{ version }}</version>'))"
     - mkdir "%PREFIX%\Scripts" "%PREFIX%\Menu"
     - copy "%RECIPE_DIR%\emsolution-freecad.bat" "%PREFIX%\Scripts\"
     - copy "%RECIPE_DIR%\menu.json" "%PREFIX%\Menu\emsolution-freecad.json"

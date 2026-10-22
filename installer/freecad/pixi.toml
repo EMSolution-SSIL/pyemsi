@@ -17,7 +17,9 @@ nsis = "*"
 [tasks]
 # --no-build-id keeps pyemsi's deepest Monaco file under Windows' 260-char MAX_PATH; build from a short checkout path.
 # Without build ids a failed build's dir is reused, hence the cleanup (pixi's rm chokes on read-only files).
-packages = "export PYEMSI_VERSION=$(python ../version.py) && powershell -NoProfile -Command \"Remove-Item -Recurse -Force output/bld -ErrorAction SilentlyContinue\" ; rattler-build build --recipe-dir recipes --output-dir output -c conda-forge --skip-existing=local --no-build-id"
+# The build string doesn't depend on the source, so --skip-existing=local would also keep a stale pyemsi or add-on
+# package of the same version: the cleanup deletes those two, and only the third-party wheels are skipped.
+packages = "export PYEMSI_VERSION=$(python ../version.py) && powershell -NoProfile -Command \"Remove-Item -Recurse -Force output/bld, output/win-64/pyemsi-*, output/noarch/emsolution-freecad-* -ErrorAction SilentlyContinue\" ; rattler-build build --recipe-dir recipes --output-dir output -c conda-forge --skip-existing=local --no-build-id"
 installer = { cmd = "export PYEMSI_VERSION=$(python ../version.py) && constructor . --output-dir dist", depends-on = ["packages"] }
 # The pyemsi NSIS installer; makensis comes from this workspace's nsis package, so no system NSIS is needed.
 nsis-pyemsi = "makensis /DAPP_VERSION=$(python ../version.py) ../pyemsi.nsi"

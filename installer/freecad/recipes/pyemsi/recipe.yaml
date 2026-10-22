@@ -46,6 +46,7 @@ requirements:
     - python-gmsh
     - ems-file-format-converter
     - pywinpty
+    - qtpy >=2.4
 
 tests:
   - python:

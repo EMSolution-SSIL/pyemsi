@@ -1,4 +1,5 @@
-# Repackages the PyPI wheel; not on conda-forge. Keep the version equal to the one pixi.lock resolves for the add-on.
+# Repackages the PyPI wheel; not on conda-forge. Keep the version and sha256 equal to the ems-material-manager entry
+# in pixi.lock (tests/test_installer_config.py checks it).
 context:
   version: "0.1.0"
   wheel: ems_material_manager-${{ version }}-py3-none-any.whl
@@ -25,3 +26,4 @@ requirements:
     - python >=3.11
     - jsonschema >=4.18
     - qtpy >=2.4  # ems_material.gui (the wheel's gui extra)
+    # The gui extra's pyside6 and matplotlib arrive through pyemsi, which the add-on package also depends on.
