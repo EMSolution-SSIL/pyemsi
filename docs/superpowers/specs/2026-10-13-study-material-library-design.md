@@ -316,3 +316,9 @@ environment, so the add-on can import it.
 - Input control file editor uses `material_properties`.
 - 16.2 surface properties with `SMAT_ID`; Excitations become Field Sources.
 - 2D Studies: surfaces tagged `MAT_ID`, lines `SMAT_ID`.
+
+## 12. Future
+
+- Default materials: pyemsi will ship a set of built-in materials (air and other common ones) that the user can pick
+  from. Until then, Add Air Region creates or reuses one Study material named Air (μr = 1, family `fluid_or_gas`) and
+  assigns it with Potential 0.

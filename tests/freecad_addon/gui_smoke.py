@@ -540,6 +540,9 @@ def main():
     panel = air_panels.pop()
     assert panel.new and Gui.Control.activeDialog(), "the Air Region panel did not open"
     (air,) = objects.air_regions(study)
+    (air_mat,) = [m for m in objects.materials(study) if m.Body == air]
+    assert (air_mat.LibraryMaterial, air_mat.Potential) == (lib, 0), "the new air did not reuse the Air material"
+    assert air not in objects.bodies_without_material(study), "the new air still lacks a material"
     assert isinstance(air.ViewObject.Proxy, taskpanels.ViewProviderAir)
     assert (air.ViewObject.Transparency, air.ViewObject.DisplayMode) == (95, "Flat Lines")
     look = air.ViewObject
@@ -593,6 +596,38 @@ def main():
     assert air.AirShape == "Box" and not panel.tables["Box"].isHidden() and panel.groups["Box"].isHidden()
     assert panel.reject()
     assert objects.air_regions(study) == [] and not Gui.Control.activeDialog(), "Cancel kept the new Air Region"
+    assert [m.Body for m in objects.materials(study)] == [doc.A, doc.B], "Cancel kept the air's Material assignment"
+    assert objects.library_materials(study) == [lib], "Cancel changed the Material Library"
+    # A Study without an Air material: the command makes one, Cancel takes it away again, OK keeps it.
+    fresh_doc = App.newDocument("FreshAir")
+    fresh = objects.make_study(fresh_doc)
+    App.setActiveDocument(fresh_doc.Name)
+    select(fresh.Name)
+    Gui.runCommand("EMS_AddAirRegion")
+    panel = air_panels.pop()
+    (fresh_air,) = objects.air_regions(fresh)
+    (fresh_lib,) = objects.library_materials(fresh)
+    (fresh_mat,) = objects.materials(fresh)
+    fresh_record = studymaterials.record_material(fresh_lib)
+    assert (fresh_record.name, fresh_lib.MaterialId) == ("Air", "user:air"), (fresh_record.name, fresh_lib.MaterialId)
+    assert (fresh_mat.Body, fresh_mat.LibraryMaterial, fresh_mat.Potential) == (fresh_air, fresh_lib, 0)
+    assert panel.reject()
+    assert objects.air_regions(fresh) == [] and objects.library_materials(fresh) == [], "Cancel kept the Air material"
+    assert objects.materials(fresh) == []
+    Gui.runCommand("EMS_AddAirRegion")
+    assert air_panels.pop().accept()
+    (fresh_air,) = objects.air_regions(fresh)
+    (fresh_lib,) = objects.library_materials(fresh)
+    (fresh_mat,) = objects.materials(fresh)
+    assert (fresh_mat.Body, fresh_mat.LibraryMaterial, fresh_mat.Potential) == (fresh_air, fresh_lib, 0)
+    from emsolution import validation
+
+    assert not [p for p in validation.validate(fresh) if "No material" in p.text], "the air still has no material"
+    fresh_doc.undo()  # one Undo removes the air and its material together
+    assert objects.air_regions(fresh) == [] and objects.library_materials(fresh) == [], "Undo left the Air material"
+    App.closeDocument(fresh_doc.Name)
+    App.setActiveDocument(doc.Name)
+    select(study.Name)
     saved_bodies = study.MainObjects  # a Study with no bodies: the new Air Region stays Manual with the old defaults
     study.MainObjects = []
     Gui.runCommand("EMS_AddAirRegion")

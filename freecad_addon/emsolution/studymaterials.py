@@ -1,8 +1,10 @@
 """Study Material Library <-> EMS Material Manager (ems_material). No GUI code here."""
 
 import copy
+import json
 import os
 from dataclasses import replace
+from datetime import datetime, timezone
 
 from ems_material import (
     MaterialAlreadyExistsError,
@@ -11,6 +13,7 @@ from ems_material import (
     ReadOnlyMaterialError,
     VersionMetadata,
     load_material,
+    material_from_dict,
     material_from_json,
     material_to_json,
     save_material,
@@ -186,6 +189,55 @@ class StudyMaterialRepository:
 
     def list_sources(self):
         return (SOURCE,)
+
+
+# Built-in default materials shipped with the app, for the user to choose from, are planned. Until then the air
+# gets this one material: a Study material named Air, reused when the Study already has one.
+def _is_air(lib):
+    record = json.loads(lib.Record)
+    mu = record["properties"].get("electromagnetic", {}).get("relative_permeability", {})
+    identity = record["identity"]
+    return mu.get("value") == 1 and (identity["family"] == "fluid_or_gas" or identity["name"].lower() == "air")
+
+
+def default_air_material(study):
+    """The Study's Air material (mu_r = 1): an existing one, preferring the one named Air, or a new one.
+
+    Makes no transaction of its own: a new material joins the caller's open transaction.
+    """
+    airs = [lib for lib in objects.library_materials(study) if _is_air(lib)]
+    if airs:
+        return next((lib for lib in airs if lib.Label.lower() == "air"), airs[0])
+    taken = {lib.MaterialId for lib in objects.library_materials(study)}
+    material_id, n = "user:air", 1
+    while material_id in taken:
+        n += 1
+        material_id = f"user:air-{n}"
+    material = material_from_dict(
+        {
+            "schema": "ems_material",
+            "schema_version": "1.0",
+            "material_id": material_id,
+            "material_version": "1.0.0",
+            "identity": {
+                "name": "Air",
+                "family": "fluid_or_gas",
+                "manufacturer": None,
+                "grade": None,
+                "description": None,
+                "aliases": [],
+                "tags": [],
+            },
+            "properties": {"electromagnetic": {"relative_permeability": {"type": "scalar", "value": 1, "unit": "1"}}},
+            "provenance": {"source_type": "USER_INPUT", "reference": None, "date": None, "notes": None},
+            "version_metadata": {
+                "author": "EMSolution",
+                "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "change_note": "Default air material",
+            },
+        }
+    )
+    return objects.make_library_material(study, material_to_json(material))
 
 
 def study_material_rows(study):
