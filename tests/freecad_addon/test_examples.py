@@ -1,5 +1,5 @@
 """Every example model builds, validates and meshes (or is refused as it should be).
-Run from the repo root: pixi run pytest tests/freecad_addon/test_examples.py"""
+Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_examples.py"""
 
 import json
 import os

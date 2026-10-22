@@ -1,4 +1,4 @@
-"""Air Region item and its shapes. Run from the repo root: pixi run pytest tests/freecad_addon/test_air.py"""
+"""Air Region item and its shapes. Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_air.py"""
 
 import json
 import math

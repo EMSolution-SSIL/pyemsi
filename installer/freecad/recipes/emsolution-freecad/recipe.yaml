@@ -1,5 +1,6 @@
+# Fails if PYEMSI_VERSION is unset: the installer tasks set it from installer/version.py.
 context:
-  version: "0.1.0"
+  version: ${{ env.get("PYEMSI_VERSION") }}
 
 package:
   name: emsolution-freecad
@@ -24,4 +25,5 @@ build:
 requirements:
   run:
     - freecad ==1.1.0
-    - pyemsi
+    - pyemsi ==${{ version }}
+    - ems-material-manager

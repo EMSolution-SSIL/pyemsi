@@ -1,4 +1,4 @@
-"""2D mesher tests. Run from the repo root: pixi run pytest tests/freecad_addon/test_mesher2d.py"""
+"""2D mesher tests. Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_mesher2d.py"""
 
 import json
 import math

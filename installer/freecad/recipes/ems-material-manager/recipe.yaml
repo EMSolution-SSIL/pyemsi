@@ -1,0 +1,27 @@
+# Repackages the PyPI wheel; not on conda-forge. Keep the version equal to the one pixi.lock resolves for the add-on.
+context:
+  version: "0.1.0"
+  wheel: ems_material_manager-${{ version }}-py3-none-any.whl
+
+package:
+  name: ems-material-manager
+  version: ${{ version }}
+
+source:
+  url: https://files.pythonhosted.org/packages/e3/38/d2f191f65bd556738717a181c20a93edce647ac088864f2647a402d96fac/${{ wheel }}
+  sha256: 94229c66f999185983e73df97b0b58de8715da6362c81d92d310414099c55646
+  file_name: ${{ wheel }}
+
+build:
+  number: 0
+  noarch: python
+  script: python -m pip install ${{ wheel }} --no-deps -vv
+
+requirements:
+  host:
+    - python >=3.11
+    - pip
+  run:
+    - python >=3.11
+    - jsonschema >=4.18
+    - qtpy >=2.4  # ems_material.gui (the wheel's gui extra)

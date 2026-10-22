@@ -1,6 +1,6 @@
 {% set local_channel = os.path.abspath("output") %}  {# invalid YAML on purpose: makes constructor render Jinja #}
 name: EMSolution-FreeCAD
-version: 0.1.0
+version: {{ environ["PYEMSI_VERSION"].strip() }}  # fails if unset; the installer tasks set it from installer/version.py
 company: EMSolution
 
 channels:

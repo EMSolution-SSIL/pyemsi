@@ -113,6 +113,11 @@ lint = "ruff check"
 # One-time per clone: git pre-commit hook + skip formatting-only commits in git blame
 install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blame-ignore-revs"
 python = "python"
+# pyemsi installer: portable runtime, then NSIS -> dist/pyemsi-<version>-setup.exe (version from installer/version.py)
+build-portable = "python tools/build_windows_private_runtime.py"
+installer-pyemsi = { cmd = "pixi run --manifest-path installer/freecad/pixi.toml nsis-pyemsi", depends-on = ["build-portable"] }
+# EMSolution-FreeCAD installer -> installer/freecad/dist/EMSolution-FreeCAD-<version>-Windows-x86_64.exe
+installer-freecad = "pixi run --manifest-path installer/freecad/pixi.toml installer"
 
 [tool.pixi.environments]
 addon = ["freecad"]

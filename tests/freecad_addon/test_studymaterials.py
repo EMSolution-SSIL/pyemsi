@@ -1,4 +1,5 @@
-"""Study Material Library tests. Run from the repo root: pixi run pytest tests/freecad_addon/test_studymaterials.py"""
+"""Study Material Library tests.
+Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_studymaterials.py"""
 
 import dataclasses
 import json

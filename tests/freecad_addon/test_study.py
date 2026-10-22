@@ -1,4 +1,5 @@
-"""Study, ID table and job writer tests. Run from the repo root: pixi run pytest tests/freecad_addon/test_study.py"""
+"""Study, ID table and job writer tests.
+Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_study.py"""
 
 import json
 import os
