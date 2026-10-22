@@ -11,7 +11,6 @@ from ._viewers._audio import AudioViewer
 from ._viewers._constants import (
     _AUDIO_EXTENSIONS,
     _CATEGORY,
-    _FREECAD_EXTENSIONS,
     _IMAGE_EXTENSIONS,
     _MARKDOWN_EXTENSIONS,
     _PYTHON_EXTENSIONS,
@@ -21,7 +20,6 @@ from ._viewers._emsolution_input_viewer import EMSolutionInputViewer
 from ._viewers._emsolution_output_viewer import EMSolutionOutputViewer
 from ._viewers._factory import create_viewer
 from ._viewers._field_viewer import FieldViewer
-from ._viewers._freecad import FreeCADViewer
 from ._viewers._image import ImageViewer
 from ._viewers._markdown import MarkdownPreviewViewer, MarkdownViewer
 from ._viewers._matplotlib import MatplotlibViewer
@@ -40,7 +38,6 @@ __all__ = [
     "_MARKDOWN_EXTENSIONS",
     "_IMAGE_EXTENSIONS",
     "_AUDIO_EXTENSIONS",
-    "_FREECAD_EXTENSIONS",
     "AudioViewer",
     "MarkdownViewer",
     "MarkdownPreviewViewer",
@@ -52,6 +49,5 @@ __all__ = [
     "create_viewer",
     "MatplotlibViewer",
     "FieldViewer",
-    "FreeCADViewer",
     "_HAS_MATPLOTLIB",
 ]

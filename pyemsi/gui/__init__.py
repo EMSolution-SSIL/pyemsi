@@ -84,13 +84,12 @@ def _create_splash(app):
 
 
 def _configure_graphics_policy(environ=None) -> None:
-    """Align Qt Quick / WebEngine composition with FreeCAD's OpenGL view.
+    """Keep Qt Quick / WebEngine composition on the same OpenGL backend as OpenGL widgets.
 
-    Must run before ``QApplication`` exists. Validated on Windows/Qt 6.10:
-    without ``QSG_RHI_BACKEND=opengl`` the Monaco WebEngine view renders
-    black once a FreeCAD (QOpenGLWidget) view is shown in the same window,
-    and ``AA_ShareOpenGLContexts`` alone is not sufficient. ``setdefault``
-    keeps an explicit user/diagnostic override intact.
+    Must run before ``QApplication`` exists. Pins Qt Quick (which WebEngine
+    composes through) to OpenGL and shares GL contexts, so the Monaco
+    WebEngine views and OpenGL widgets (VTK) use one rendering configuration.
+    ``setdefault`` keeps an explicit user/diagnostic override intact.
     """
     import os
 

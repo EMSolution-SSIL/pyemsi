@@ -172,7 +172,7 @@ def test_create_splash_returns_splash_screen():
 
 
 # ---------------------------------------------------------------------------
-# Graphics policy (FreeCAD / WebEngine coexistence)
+# Graphics policy (WebEngine / OpenGL coexistence)
 # ---------------------------------------------------------------------------
 
 
