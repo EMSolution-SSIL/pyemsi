@@ -136,8 +136,9 @@ jobs:
           Write-Host "package_version=$version"
 
       - name: Set up pixi (installer workspace)
-        uses: prefix-dev/setup-pixi@v0.9.0
+        uses: prefix-dev/setup-pixi@v0.10.2
         with:
+          pixi-version: v0.80.0
           manifest-path: installer/freecad/pixi.toml
           locked: true
 

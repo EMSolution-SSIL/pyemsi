@@ -23,23 +23,45 @@ def _package_version() -> str:
 
 
 def test_version_script_matches_package():
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "installer" / "version.py")], capture_output=True, text=True, check=True
-    )
-    assert result.stdout.strip() == _package_version()
+    result = subprocess.run([sys.executable, str(ROOT / "installer" / "version.py")], capture_output=True, check=True)
+    assert result.stdout.strip().decode() == _package_version()
 
 
-def test_no_literal_versions_in_installer_files():
-    literal = re.compile(r"""^\s*version:\s*["']?\d+\.\d+""", re.MULTILINE)
-    files = [FREECAD_INSTALLER / "construct.yaml"]
-    files += [
+def test_version_script_output_has_no_carriage_return():
+    # The value goes into PYEMSI_VERSION through $(...); a trailing CR from Windows text-mode print would break it.
+    result = subprocess.run([sys.executable, str(ROOT / "installer" / "version.py")], capture_output=True, check=True)
+    assert result.stdout in (_package_version().encode(), _package_version().encode() + b"\n")
+
+
+def _installer_files() -> list[Path]:
+    recipes = [
         recipe
         for recipe in (FREECAD_INSTALLER / "recipes").glob("*/recipe.yaml")
         if recipe.parent.name not in THIRD_PARTY_RECIPES
     ]
-    assert len(files) == 3  # construct.yaml + the pyemsi and emsolution-freecad recipes
+    return [FREECAD_INSTALLER / "construct.yaml", ROOT / "installer" / "pyemsi.nsi", *recipes]
+
+
+def test_no_literal_versions_in_installer_files():
+    literal = re.compile(
+        r"""^\s*(?:version:\s*["']?\d+\.\d+|!define\s+APP_VERSION\s+["']?\d+\.\d+)""", re.MULTILINE | re.IGNORECASE
+    )
+    files = _installer_files()
+    assert FREECAD_INSTALLER / "construct.yaml" in files and ROOT / "installer" / "pyemsi.nsi" in files
     offenders = [str(path.relative_to(ROOT)) for path in files if literal.search(path.read_text(encoding="utf-8"))]
     assert offenders == []
+
+
+def test_versioned_installer_files_read_pyemsi_version():
+    for name in ("pyemsi", "emsolution-freecad"):
+        text = (FREECAD_INSTALLER / "recipes" / name / "recipe.yaml").read_text(encoding="utf-8")
+        assert 'env.get("PYEMSI_VERSION")' in text, name
+    assert 'environ["PYEMSI_VERSION"]' in (FREECAD_INSTALLER / "construct.yaml").read_text(encoding="utf-8")
+
+
+def test_nsis_script_requires_app_version():
+    text = (ROOT / "installer" / "pyemsi.nsi").read_text(encoding="utf-8")
+    assert re.search(r"^!ifndef APP_VERSION\s*\n\s*!error", text, re.MULTILINE)
 
 
 def test_addon_recipe_depends_on_ems_material_manager():

@@ -8,4 +8,5 @@ init_text = (Path(__file__).resolve().parents[1] / "pyemsi" / "__init__.py").rea
 match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', init_text, re.MULTILINE)
 if match is None:
     sys.exit("Could not find __version__ in pyemsi/__init__.py")
-print(match.group(1).strip())
+# Write bytes: print() would end the line with CRLF on Windows, and the CR would end up in PYEMSI_VERSION.
+sys.stdout.buffer.write(match.group(1).strip().encode("ascii") + b"\n")
