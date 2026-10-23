@@ -1,13 +1,14 @@
 """Symmetric Mesh item, Materials on pieces and their MAT_IDs.
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_symmetric_study.py"""
 
+import json
 import os
 
 import pytest
 
 import FreeCAD as App
 
-from emsolution import objects
+from emsolution import jobwriter, objects
 
 from . import symcases
 
@@ -244,3 +245,23 @@ def test_duplicate_assignment_labels_are_refused(motor):
     a, b = objects.piece_assignments(motor)[:2]
     a.Label, b.Label = "Coil 01", "Coil_01"
     assert _has(motor, "group names are the same")
+
+
+def test_job_has_cell_bodies_and_symmetric_block(motor):
+    with open(jobwriter.write_job(motor), encoding="utf-8") as fh:
+        job = json.load(fh)
+    assert [b["mat_id"] for b in job["bodies"]] == [1, 2, 3, 4, 5, 6]
+    fixed, moving = job["symmetric"]["sides"]
+    assert (fixed["side"], moving["side"]) == ("fixed", "moving")
+    assert (len(fixed["transforms"]), len(moving["transforms"])) == (24, 16)
+    assert all(len(t) == 16 for t in fixed["transforms"])
+    pieces = fixed["pieces"] + moving["pieces"]
+    assert len(pieces) == 120
+    folder = os.path.dirname(jobwriter.write_job(motor))
+    assert all(os.path.exists(os.path.join(folder, p["file"])) for p in pieces)
+    assert {p["mat_id"] for p in pieces} == {int(motor.MatIds[m.Name]) for m in objects.piece_assignments(motor)}
+    assert len({p["mat_id"] for p in pieces}) == 18
+    slide = job["symmetric"]["slide"]
+    assert slide["divisions"] == 144 and slide["radius"] == 35 and slide["full"]
+    assert slide["slide_mat_id"] == int(motor.MatIds[objects.sliding_interfaces(motor)[0].Name])
+    assert not {"air", "slides", "moving", "periodic"} & set(job)
