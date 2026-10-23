@@ -10,6 +10,7 @@ from pivy import coin
 from PySide import QtCore, QtWidgets
 
 from . import airshapes, geometry, highlight, icon, jobwriter, objects, validation
+from . import symmetry
 
 _active = {}  # document name -> (document instance, Study Name); GUI state only
 
@@ -195,13 +196,6 @@ def edit_piece_assignments(study, assignments):
     dialog.material.setCurrentIndex(dialog.material.findData(lib.Name if lib else ""))
     dialog.potential.setValue(assignments[0].Potential)
     dialog.exec()
-
-
-def select_top(item):
-    """A Symmetric Mesh item has no panel: double-clicking it selects its top object."""
-    Gui.Selection.clearSelection()
-    if item.Top is not None:
-        Gui.Selection.addSelection(item.Top)
 
 
 class _ViewProvider:
@@ -583,10 +577,10 @@ class FolderView:
             else:
                 ask_assignment(self.study, [item])
             self.fill()
-        elif isinstance(item.Proxy, objects.SymmetricMesh):
-            select_top(item)
         elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             pass
+        elif isinstance(item.Proxy, objects.SymmetricMesh):
+            Gui.Control.showDialog(SymmetricMeshPanel(item))
         elif isinstance(item.Proxy, objects.AirRegion):
             Gui.Control.showDialog(AirRegionPanel(item))
         elif isinstance(item.Proxy, objects.SlidingInterface):
@@ -979,9 +973,11 @@ class ViewProviderItem(_ViewProvider):
                 ask_assignment(objects.owner_study(obj), [obj.Body])
             elif is_piece_assignment(obj):
                 edit_piece_assignments(objects.owner_study(obj), [obj])
+        elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
+            pass
         elif isinstance(obj.Proxy, objects.SymmetricMesh):
-            select_top(obj)
-        elif not Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
+            Gui.Control.showDialog(SymmetricMeshPanel(obj))
+        else:
             Gui.Control.showDialog(ItemPanel(obj))
         return True
 
@@ -1253,6 +1249,86 @@ class ItemPanel:
             doc.abortTransaction()  # removes the new item
             doc.recompute()
         self.close()
+        Gui.Control.closeDialog()
+        return True
+
+
+class SymmetricMeshPanel:
+    """A Symmetric Mesh item: its name and the object built from the cell; the cell bodies and copy steps found
+    under that object are shown, as the mesh will use them."""
+
+    def __init__(self, obj):
+        self.obj = obj
+        self.top = obj.Top
+        study = objects.owner_study(obj)
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle(obj.Label)
+        layout = QtWidgets.QFormLayout(self.form)
+        layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
+        hint = QtWidgets.QLabel(
+            "Only the cell bodies are meshed; the mesh is copied by the steps below."
+            " To use another object, select it (the Fragments or Array) and click Use selection."
+        )
+        hint.setWordWrap(True)
+        layout.addRow(hint)
+        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
+        layout.addRow("Name", self.name)
+        self.top_label = QtWidgets.QLabel()
+        use = QtWidgets.QPushButton("Use selection")
+        use.clicked.connect(self.use_selection)
+        top_row = QtWidgets.QHBoxLayout()
+        top_row.addWidget(self.top_label, 1)
+        top_row.addWidget(use)
+        layout.addRow("Built from", top_row)
+        self.steps = QtWidgets.QListWidget()
+        layout.addRow("Copy steps", self.steps)
+        self.cells = QtWidgets.QListWidget()
+        layout.addRow("Cell bodies", self.cells)
+        self.problem = QtWidgets.QLabel()
+        self.problem.setWordWrap(True)
+        self.problem.setStyleSheet("color: #c0392b")
+        layout.addRow(self.problem)
+        self.refresh()
+
+    def refresh(self):
+        self.top_label.setText(self.top.Label if self.top is not None else "— none —")
+        self.steps.clear()
+        self.cells.clear()
+        self.problem.clear()
+        if self.top is None:
+            return
+        try:
+            cells, _ = symmetry.read_chain(self.top)
+            self.steps.addItems(symmetry.steps(self.top))
+        except symmetry.SymmetryError as exc:
+            self.problem.setText(str(exc))
+            return
+        self.cells.addItems([b.Label for b in cells])
+
+    def use_selection(self):
+        study = objects.owner_study(self.obj)
+        picked = [s.Object for s in Gui.Selection.getSelectionEx()]
+        sides = {b.Name for b in objects.study_bodies(study)}
+        if len(picked) != 1 or picked[0].Name not in sides:
+            warn("Select the object built from the cell (the Fragments or Array) first.")
+            return
+        self.top = picked[0]
+        self.refresh()
+
+    def accept(self):
+        doc = self.obj.Document
+        doc.openTransaction("Edit " + self.obj.Label)
+        name = self.name.text().strip()
+        if name:
+            self.obj.Label = name
+        if self.top != self.obj.Top:
+            self.obj.Top = self.top
+        doc.commitTransaction()
+        doc.recompute()
+        Gui.Control.closeDialog()
+        return True
+
+    def reject(self):
         Gui.Control.closeDialog()
         return True
 

@@ -1293,17 +1293,36 @@ def main():
         objects.item_refs(made[-1]) == [(stator_top, "Face1"), (stator_top, "Face2")]
         and sym_doc.UndoNames[0] == "Assign material"
     ), sym_doc.UndoNames
-    # The item: a tree icon that exists; a double-click (tree or Mesh Sizes panel) selects its top, no panel.
+    # The item: a tree icon that exists; a double-click (tree or Mesh Sizes panel) opens its panel.
     assert os.path.exists(sym_item.ViewObject.Proxy.getIcon()), sym_item.ViewObject.Proxy.getIcon()
-    Gui.Selection.clearSelection()
+    sym_panels = []
+    real_sym_panel = taskpanels.SymmetricMeshPanel
+
+    class RecordedSymPanel(real_sym_panel):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            sym_panels.append(self)
+
+    taskpanels.SymmetricMeshPanel = RecordedSymPanel
     sym_item.ViewObject.Proxy.doubleClicked(sym_item.ViewObject)
-    assert [o.Name for o in Gui.Selection.getSelection()] == [stator_top.Name], Gui.Selection.getSelection()
-    sizes_view = taskpanels.FolderView(sym_study.MeshSizesGroup)
+    panel = sym_panels.pop()
+    assert Gui.Control.activeDialog() and panel.top_label.text() == stator_top.Label, panel.top_label.text()
+    assert panel.steps.count() == 2 and panel.cells.count() == 3, (panel.steps.count(), panel.cells.count())
     Gui.Selection.clearSelection()
-    panels = len(opened)
+    Gui.Selection.addSelection(sym_doc.Name, "StatorIronCell")  # not the Study's geometry: refused
+    panel.use_selection()
+    assert log[-1].startswith("refused: Select the object built from the cell"), log[-1]
+    panel.name.setText("Stator symmetry")
+    panel.accept()
+    assert sym_item.Label == "Stator symmetry" and sym_item.Top == stator_top, (sym_item.Label, sym_item.Top)
+    assert sym_doc.UndoNames[0].startswith("Edit ") and not Gui.Control.activeDialog(), sym_doc.UndoNames
+    sizes_view = taskpanels.FolderView(sym_study.MeshSizesGroup)
     sizes_view.open_item([r[0] for r in sizes_view.rows].index(sym_item), 0)
-    assert len(opened) == panels and not Gui.Control.activeDialog(), "a panel opened for the Symmetric Mesh"
-    assert [o.Name for o in Gui.Selection.getSelection()] == [stator_top.Name], Gui.Selection.getSelection()
+    panel = sym_panels.pop()
+    assert Gui.Control.activeDialog(), "no panel from the Mesh Sizes panel"
+    panel.reject()
+    assert not Gui.Control.activeDialog()
+    taskpanels.SymmetricMeshPanel = real_sym_panel
     # Materials panel of a symmetric Study: no top listed without material; a row edits its assignment.
     objects.make_symmetric_mesh(sym_study, sym_study.MovingObjects[0])  # the rotor's, removed above
     mat_view = taskpanels.FolderView(sym_study.MaterialsGroup)
