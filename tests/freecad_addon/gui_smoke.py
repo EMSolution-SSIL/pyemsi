@@ -1350,11 +1350,11 @@ def main():
     assert whole[0].Name in cells and whole[1] == "", whole
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Edge100")
-    (edge,) = taskpanels.ITEM_PICKS[objects.TransfiniteEdges][0](sym_study)
-    assert edge[0].Name in cells and edge[1].startswith("Edge"), edge
+    edges = taskpanels.ITEM_PICKS[objects.TransfiniteEdges][0](sym_study)  # an edge two cells share gives both
+    assert edges and all(b.Name in cells and s.startswith("Edge") for b, s in edges), edges
     Gui.runCommand("EMS_TransfiniteEdges")
     made = objects.transfinite_edges(sym_study)[-1]
-    assert [(b.Name, s) for b, s in objects.item_refs(made)] == [(edge[0].Name, edge[1])], objects.item_refs(made)
+    assert objects.item_refs(made) == edges, objects.item_refs(made)
     Gui.Control.closeDialog()
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)

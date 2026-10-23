@@ -103,12 +103,27 @@ def test_picks_on_the_top_point_at_the_cell(motor):
     face.rotate(App.Vector(), App.Vector(0, 0, 1), 90)  # the coil's copy in the 90..105° pitch
     copy = _named(top.Shape, "Face", face)
     other = motor.Document.getObject("RotorIronCell")
-    mapped = objects.to_cells(motor, [(top, on_top), (top, copy), (other, "Edge1"), (top, "")])
-    cell, sub = mapped[0]  # the slot wall is also an edge of StatorIronCell: either cell's edge is the same curve
-    assert cell in objects.cell_bodies(motor) and _same(cell.Shape.getElement(sub), edge)
-    assert mapped[1] == (coil, "Face1")
-    assert mapped[2:] == [(other, "Edge1"), (top, "")]  # not on a top, or a whole top: left alone
+    wall = objects.to_cells(motor, [(top, on_top)])  # the slot wall is an edge of both CoilCell and StatorIronCell
+    assert {b.Name for b, _ in wall} == {"CoilCell", "StatorIronCell"}
+    assert all(_same(b.Shape.getElement(s), edge) for b, s in wall)
+    mapped = objects.to_cells(motor, [(top, copy), (other, "Edge1"), (top, "")])
+    assert mapped == [(coil, "Face1"), (other, "Edge1"), (top, "")]  # not on a top, or a whole top: left alone
     assert objects.to_cells(motor, [(top, copy)], whole=True) == [(coil, "")]
+
+
+def test_structured_cell_from_edges_picked_on_the_top(motor):
+    """Edges a cell shares with another cell are picked on the Fragments: the structured cell still counts them."""
+    top, coil = motor.MainObjects[0], motor.Document.getObject("CoilCell")
+    picks = [(top, _named(top.Shape, "Edge", e)) for e in coil.Shape.Edges]
+    objects.make_transfinite_body(motor, [coil])
+    objects.make_transfinite_edges(motor, 6, objects.to_cells(motor, picks))
+    motor.Document.recompute()
+    assert not _has(motor, "has edges without"), _texts(motor)
+    # The mesher takes a curve set on two bodies' edges once; a transfinite face that falls back is an error there.
+    path = jobwriter.write_job(motor)
+    mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+    r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
 
 
 def test_sliding_interface_without_air_has_a_circle(motor):

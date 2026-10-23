@@ -906,7 +906,8 @@ def cell_bodies(study):
 
 def to_cells(study, refs, whole=False):
     """Mesh setting picks [(body, sub)] with those on the top of a Symmetric Mesh item moved to the cell: a face,
-    edge or vertex of any copy becomes the cell body's own one that the copy came from (whole: the cell body itself).
+    edge or vertex of any copy becomes the cell bodies' own ones that the copy came from (whole: the cell bodies).
+    An edge two cell bodies share is the edge of both, so it gives one pick on each: a structured body counts it.
     Picks on other bodies, a whole top, or a sub-element no copy comes from stay as they are; validation explains
     those."""
     from . import geometry
@@ -921,13 +922,14 @@ def to_cells(study, refs, whole=False):
             continue
     out = []
     for body, sub in refs:
-        found = _cell_of(chains[body.Name], geometry.global_shape(body), sub) if sub and body.Name in chains else None
-        out.append(((found[0], "") if whole else found) if found else (body, sub))
+        found = _cell_of(chains[body.Name], geometry.global_shape(body), sub) if sub and body.Name in chains else []
+        out += [(c, "") if whole else (c, s) for c, s in found] or [(body, sub)]
     return list(dict.fromkeys(out))
 
 
 def _cell_of(chain, shape, sub):
-    """(cell body, sub-element name) that a copy step puts onto sub of shape, the top; None if none does."""
+    """[(cell body, sub-element name)] that a copy step puts onto sub of shape, the top: every cell body that has
+    that element, for the first copy that has one; [] if none does."""
     import FreeCAD as App
 
     cells, transforms = chain
@@ -936,11 +938,15 @@ def _cell_of(chain, shape, sub):
     tol = 1e-6 * shape.BoundBox.DiagonalLength
     for m in transforms:  # the identity first: a pick in the cell's own place
         back = picked.transformed(App.Matrix(*m).inverse())
-        for cell, cell_shape in cells:
-            for k, item in enumerate(getattr(cell_shape, {"Face": "Faces", "Edge": "Edges"}.get(kind, "Vertexes"))):
-                if _coincide(item, back, tol):
-                    return cell, f"{kind}{k + 1}"
-    return None
+        found = [
+            (cell, f"{kind}{k + 1}")
+            for cell, cell_shape in cells
+            for k, item in enumerate(getattr(cell_shape, {"Face": "Faces", "Edge": "Edges"}.get(kind, "Vertexes")))
+            if _coincide(item, back, tol)
+        ]
+        if found:
+            return found
+    return []
 
 
 def _coincide(a, b, tol):
