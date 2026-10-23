@@ -6,6 +6,7 @@ import FreeCAD as App
 import Part
 
 from emsolution import symmetry
+from emsolution.geometry import global_shape
 
 from . import symcases
 
@@ -27,17 +28,19 @@ def inner_point(face):
 
 
 def assert_lands(cells, transforms, top):
-    """Every moved cell face sits on a face of top, and the cell areas on each face add up to the face area."""
+    """Every moved cell face sits on a face of top, and the cell areas on each face add up to the face area.
+    Global positions, as the job writer exports them."""
     sums = {}
+    top_faces = global_shape(top).Faces
     for body in cells:
-        for face in body.Shape.Faces:
+        for face in global_shape(body).Faces:
             c = inner_point(face)
             for t in transforms:
                 p = Part.Vertex(App.Vector(*symmetry.apply(t, (c.x, c.y, c.z))))
-                hits = [i for i, f in enumerate(top.Shape.Faces) if p.distToShape(f)[0] < 1e-6]
+                hits = [i for i, f in enumerate(top_faces) if p.distToShape(f)[0] < 1e-6]
                 assert len(hits) == 1
                 sums[hits[0]] = sums.get(hits[0], 0.0) + face.Area
-    for i, f in enumerate(top.Shape.Faces):
+    for i, f in enumerate(top_faces):
         assert sums[i] == pytest.approx(f.Area, rel=1e-6)
 
 
@@ -128,3 +131,51 @@ def test_identity_comes_first_whatever_the_link_order(motor):
     _, transforms = symmetry.read_chain(motor["stator_top"])
     assert len(transforms) == 24
     assert transforms[0] == symmetry.ID
+
+
+def test_compound_without_links_is_refused(motor):
+    pitch = motor["doc"].getObject("StatorPitch")
+    pitch.Links = []
+    with pytest.raises(symmetry.SymmetryError, match="StatorPitch"):
+        symmetry.read_chain(motor["stator_top"])
+
+
+def test_mirror_without_source_is_refused(motor):
+    mirror = motor["doc"].getObject("StatorMirror")
+    mirror.Source = None
+    with pytest.raises(symmetry.SymmetryError, match="StatorMirror"):
+        symmetry.read_chain(motor["stator_top"])
+    with pytest.raises(symmetry.SymmetryError, match="StatorMirror"):
+        symmetry.steps(motor["stator_top"])
+
+
+def test_fragments_without_objects_are_refused(motor):
+    frag = motor["stator_top"]
+    frag.Objects = []
+    with pytest.raises(symmetry.SymmetryError, match="StatorFragments"):
+        symmetry.read_chain(frag)
+
+
+def test_array_of_one_copy_short_of_a_full_turn_is_refused(motor):
+    array = motor["doc"].getObjectsByLabel("StatorArray")[0]
+    array.NumberPolar, array.Angle = 1, 180
+    with pytest.raises(symmetry.SymmetryError, match="StatorArray"):
+        symmetry.read_chain(motor["stator_top"])
+
+
+def test_array_angle_minus_360_is_read_as_draft_does(motor):
+    array = motor["doc"].getObjectsByLabel("StatorArray")[0]
+    array.Angle = -360  # not a full turn for Draft: 12 copies 360/11° apart
+    assert symmetry._array_step(array) == (12, pytest.approx(-360 / 11))
+
+
+def test_chain_in_a_rotated_part_lands(motor):
+    doc = motor["doc"]
+    top = motor["stator_top"]
+    part = doc.addObject("App::Part", "Holder")
+    part.addObjects([top, *top.OutListRecursive])
+    part.Placement = App.Placement(App.Vector(5, -3, 0), App.Rotation(App.Vector(0, 0, 1), 10))
+    doc.recompute()
+    cells, transforms = symmetry.read_chain(top)
+    assert transforms[0] == symmetry.ID
+    assert_lands(cells, transforms, top)

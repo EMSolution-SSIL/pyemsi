@@ -225,6 +225,11 @@ class Material(_Proxy):
     def add_pieces(obj):
         if not hasattr(obj, "Pieces"):
             obj.addProperty("App::PropertyLinkSubListGlobal", "Pieces", "EMSolution", "Faces made of this material")
+        if not hasattr(obj, "PieceCentres"):
+            obj.addProperty(
+                "App::PropertyVectorList", "PieceCentres", "EMSolution", "Where each piece was when assigned (mm)"
+            )
+            obj.setEditorMode("PieceCentres", 2)
 
     def onDocumentRestored(self, obj):
         self.add_pieces(obj)  # assignments saved before pieces existed
@@ -828,12 +833,20 @@ def assign_pieces(study, name, pieces, lib, potential):
     m = _add(study, "MaterialsGroup", Material, name)
     m.Label = name
     m.Pieces = list(pieces)
+    m.PieceCentres = piece_centres(m)
     m.LibraryMaterial, m.Potential = lib, potential
     if getattr(m, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
         taskpanels.attach_view_provider(m)
     return m
+
+
+def piece_centres(m):
+    """Global centre of mass of each piece of the assignment m, in the order of its flattened Pieces."""
+    from . import geometry
+
+    return [geometry.global_shape(b).getElement(s).CenterOfMass for b, subs in m.Pieces for s in subs]
 
 
 def make_transfinite_body(study, bodies, corners=()):
@@ -1003,12 +1016,13 @@ def material_rows(study):
     """Rows for the Materials panel: (body, refs, [body, material, MAT_ID, POTENTIAL]).
 
     Every main- and moving-geometry body and Air Region, then bodies outside them that still have an assignment.
+    A symmetric Study lists its piece assignments instead: (assignment, its pieces, [name, ...]).
     """
     if is_symmetric(study):
         rows = []
         for m in piece_assignments(study):
             lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
-            rows.append((None, item_refs(m), [m.Label, lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
+            rows.append((m, item_refs(m), [m.Label, lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
         return rows
     have = assignment_of(study)
     main = assignable(study)
@@ -1081,9 +1095,11 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Main-geometry bodies and Air Regions without an assignment."""
+    """Main-geometry bodies and Air Regions without an assignment; not the tops of Symmetric Mesh items, whose
+    Materials are on their pieces."""
     have = assignment_of(study)
-    return [b for b in assignable(study) if b.Name not in have]
+    tops = {i.Top.Name for i in symmetric_items(study) if i.Top is not None}
+    return [b for b in assignable(study) if b.Name not in have and b.Name not in tops]
 
 
 def _main_bodies(study):

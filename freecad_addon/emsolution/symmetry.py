@@ -91,21 +91,29 @@ def _merge(parts):
     return out
 
 
+def _below(obj, prop):
+    """What obj's prop links to; SymmetryError when it links to nothing."""
+    value = getattr(obj, prop)
+    if value is None or (isinstance(value, (list, tuple)) and not value):
+        raise SymmetryError(f"{_name(obj)} has no {prop}: it builds nothing")
+    return value
+
+
 def _walk(obj):
     """{body name: (body, transforms)}: where each cell body below obj has been copied to, in obj's shape."""
     if obj.TypeId == "Part::Compound":
-        found = _merge(_walk(o) for o in obj.Links)
+        found = _merge(_walk(o) for o in _below(obj, "Links"))
     elif obj.TypeId == "Part::Mirroring":
         n = obj.Normal
         length = math.sqrt(n.x**2 + n.y**2 + n.z**2)
         if length == 0 or abs(n.z) > TOL * length:
             raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis (2D, XY plane only)")
         m = mirror_plane((obj.Base.x, obj.Base.y), (n.x / length, n.y / length))
-        found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(obj.Source).items()}
+        found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source")).items()}
     elif _is_array(obj):
         found = _array(obj)
     elif _is_fragments(obj):
-        found = _merge(_walk(o) for o in obj.Objects)
+        found = _merge(_walk(o) for o in _below(obj, "Objects"))
     elif _is_leaf(obj):
         return {obj.Name: (obj, [ID])}  # its shape already carries its own Placement
     else:
@@ -117,7 +125,9 @@ def _walk(obj):
 def _array_step(obj):
     """(copies, turn between copies in degrees) of a polar array about +Z or -Z."""
     n, angle = int(obj.NumberPolar), float(obj.Angle)
-    step = angle / n if abs(angle) == 360 else angle / (n - 1)
+    if n < 1 or (n == 1 and angle != 360):
+        raise SymmetryError(f"{_name(obj)}: a polar array needs at least 2 copies (it has {n})")
+    step = angle / n if angle == 360 else angle / (n - 1)  # Draft's rule: only exactly 360 is a full turn
     return n, step if obj.Axis.z > 0 else -step
 
 
@@ -130,7 +140,7 @@ def _array(obj):
     if abs(obj.IntervalAxis.x) > TOL or abs(obj.IntervalAxis.y) > TOL or abs(obj.IntervalAxis.z) > TOL:
         raise SymmetryError(f"{_name(obj)}: the array interval along the axis must be zero")
     n, step = _array_step(obj)
-    sub = _walk(obj.Base)
+    sub = _walk(_below(obj, "Base"))
     c = obj.Center
     return {
         k: (b, [compose(rotation(i * step, c.x, c.y), t) for i in range(n) for t in ts]) for k, (b, ts) in sub.items()
@@ -142,6 +152,8 @@ def read_chain(top):
 
     The transforms are those of the first cell body, identity first; every cell body must have the same set."""
     found = _walk(top)
+    if not found:
+        raise SymmetryError(f"{_name(top)} holds no cell body")
     sets = {}
     for name, (body, ts) in found.items():
         unique = {}
@@ -158,6 +170,11 @@ def read_chain(top):
     ident = _key(ID)
     transforms = [first[ident]] if ident in first else []
     transforms += [t for k, t in first.items() if k != ident]
+    # the chain sits in its containers (App::Part): move the transforms into the global frame of global_shape
+    outer = top.getGlobalPlacement().multiply(top.Placement.inverse())
+    if not outer.isIdentity():
+        c, back = list(outer.toMatrix().A), list(outer.inverse().toMatrix().A)
+        transforms = [ID if _key(t) == ident else compose(c, t, back) for t in transforms]
     return [b for b, _ in found.values()], transforms
 
 
@@ -168,10 +185,10 @@ def _num(v):
 def _chain_steps(obj):
     """The Mirror and Array objects below obj, outermost first."""
     if obj.TypeId == "Part::Mirroring":
-        return [obj] + _chain_steps(obj.Source)
+        return [obj] + _chain_steps(_below(obj, "Source"))
     if _is_array(obj):
-        return [obj] + _chain_steps(obj.Base)
-    kids = obj.Links if obj.TypeId == "Part::Compound" else obj.Objects if _is_fragments(obj) else []
+        return [obj] + _chain_steps(_below(obj, "Base"))
+    kids = _below(obj, "Links") if obj.TypeId == "Part::Compound" else obj.Objects if _is_fragments(obj) else []
     return [s for k in kids for s in _chain_steps(k)]
 
 

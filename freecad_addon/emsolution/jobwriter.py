@@ -210,7 +210,7 @@ def write_symmetric(study, folder, ids):
                 {"side": side, "cells": [ids[c.Name] for c in cells], "transforms": transforms, "pieces": pieces}
             )
     block = {"sides": sides}
-    for iface in objects.sliding_interfaces(study):  # validation allows one, Rotational
+    for iface in objects.sliding_interfaces(study):  # validation refuses a second one and any but Rotational
         block["slide"] = {
             "name": objects.volume_name(iface),
             "kind": "rotational",

@@ -77,7 +77,11 @@ def validate(study):
     else:
         _air(study, bodies, {b.Name for b in moving}, r)
         _slides(study, main, moving, r)
-    _transfinite(study, bodies, r)
+        for m in objects.piece_assignments(study):
+            r.warning(
+                f"Material {m.Label} has pieces but the Study has no Symmetric Mesh: its pieces are not meshed.", m
+            )
+    _transfinite(study, objects.cell_bodies(study) if symmetric else bodies, r)  # only the cells are meshed
     _names(study, bodies, included, r)
     if not symmetric:
         _materials(study, r)
@@ -584,6 +588,8 @@ def _interfaces(study, items, copies, sliding, r):
         return
     if not interfaces:
         r.error("Sliding motion needs at least one Sliding Interface.")
+    for i in interfaces[1:]:
+        r.error(f"A Study with a Symmetric Mesh has only one Sliding Interface: delete {i.Label}.", i)
     for i in interfaces:
         if i.Kind != "Rotational":
             r.error(f"Sliding Interface {i.Label}: a Study with a Symmetric Mesh slides Rotational only.", i)
@@ -596,6 +602,21 @@ def _interfaces(study, items, copies, sliding, r):
                     f" of {item.Label}'s cell.",
                     i,
                 )
+
+
+def _moved(m, tops, r):
+    """Warn for each piece of m whose face is no longer where it was when assigned: FreeCAD renumbers the faces when
+    the drawing changes, and FaceN may now be another piece."""
+    stored = list(getattr(m, "PieceCentres", []))
+    pieces = [(b, s) for b, subs in m.Pieces for s in subs]
+    if len(stored) != len(pieces):  # an older document, or Pieces edited by hand
+        return
+    for (body, sub), was in zip(pieces, stored):
+        if body.Name not in tops or not _has(body, sub):
+            continue  # reported elsewhere
+        shape = geometry.global_shape(body)
+        if shape.getElement(sub).CenterOfMass.distanceToPoint(was) > 1e-6 * shape.BoundBox.DiagonalLength:
+            r.warning(f"piece {body.Label}.{sub} of {m.Label} has moved: reassign it", m, [(body, sub)])
 
 
 def _pieces(study, item_of, top_side, r):
@@ -627,6 +648,7 @@ def _pieces(study, item_of, top_side, r):
                 " of its own. Use two Materials.",
                 m,
             )
+        _moved(m, tops, r)
     for name, labels in gone.items():
         r.error(
             f"Pieces with no Material: the faces of {_listed(list(labels))} no longer exist on {tops[name].Label}"

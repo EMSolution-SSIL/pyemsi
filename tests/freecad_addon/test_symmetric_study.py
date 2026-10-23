@@ -49,7 +49,8 @@ def test_piece_assignment_gets_one_mat_id_keyed_by_itself(motor):
     rows = objects.material_rows(motor)
     assert len(rows) == 18
     assert {r[2][2] for r in rows} == {motor.MatIds[n] for n in names}
-    assert all(r[0] is None and r[2][1] == "Steel" and r[2][3] == "0" for r in rows)
+    assert [r[0] for r in rows] == objects.piece_assignments(motor)
+    assert all(r[2][1] == "Steel" and r[2][3] == "0" for r in rows)
 
 
 def test_piece_assignment_label_is_kept_on_sync(motor):
@@ -252,6 +253,64 @@ def test_duplicate_assignment_labels_are_refused(motor):
     assert _has(motor, "group names are the same")
 
 
+def test_every_item_type_has_its_tree_icon(motor):
+    from emsolution import icon
+
+    for item in objects.symmetric_items(motor) + objects.piece_assignments(motor)[:1]:
+        assert os.path.exists(icon(type(item.Proxy).__name__.lower()))
+
+
+def test_empty_compound_in_the_chain_is_an_error_not_a_crash(motor):
+    stator, _ = objects.symmetric_items(motor)
+    motor.Document.getObject("StatorPitch").Links = []
+    found = [p for p in _problems(motor, "error") if "StatorPitch" in p.text]
+    assert found and found[0].item == stator
+
+
+def test_two_transfinite_bodies_on_one_cell_body_are_refused(motor):
+    cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
+    objects.make_transfinite_body(motor, [cell])
+    objects.make_transfinite_body(motor, [cell])
+    assert _has(motor, "CoilCell", "is in Transfinite Body")
+
+
+def test_two_sliding_interfaces_are_refused(motor):
+    objects.make_sliding_interface(motor, "Rotational", Radius=35, Divisions=144)
+    assert _has(motor, "only one Sliding Interface")
+
+
+def test_swapped_pieces_warn(motor):
+    coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.Label in ("Coil01", "Coil02")]
+    coil1.Pieces, coil2.Pieces = list(coil2.Pieces), list(coil1.Pieces)
+    texts = _texts(motor, "warning")
+    moved = [t for t in texts if "has moved: reassign it" in t]
+    assert any("of Coil01" in t for t in moved) and any("of Coil02" in t for t in moved)
+    assert all("StatorFragments.Face" in t for t in moved)
+    assert _texts(motor) == []
+
+
+def test_piece_centres_are_kept_on_reload(motor, tmp_path):
+    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    assert len(coil.PieceCentres) == 2
+    path = str(tmp_path / "t.FCStd")
+    motor.Document.saveAs(path)
+    App.closeDocument(motor.Document.Name)
+    study = objects.find_study(App.openDocument(path))
+    coil = next(m for m in objects.piece_assignments(study) if m.Label == "Coil01")
+    assert len(coil.PieceCentres) == 2
+    assert _problems(study) == []
+
+
+def test_pieces_without_a_symmetric_mesh_warn(motor):
+    for item in objects.symmetric_items(motor):
+        motor.Document.removeObject(item.Name)
+    assert _has(motor, "has pieces but the Study has no Symmetric Mesh", severity="warning")
+
+
+def test_tops_are_not_listed_without_material(motor):
+    assert objects.bodies_without_material(motor) == []
+
+
 def test_job_has_cell_bodies_and_symmetric_block(motor):
     with open(jobwriter.write_job(motor), encoding="utf-8") as fh:
         job = json.load(fh)
@@ -278,6 +337,8 @@ def test_symmetric_job_meshes_into_both_files(motor):
     with open(path, encoding="utf-8") as fh:
         job = json.load(fh)
     mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+    r = subprocess.run([sys.executable, mesher, path, "--check"], capture_output=True, encoding="utf-8")
+    assert r.returncode == 0 and "CHECK OK" in r.stdout, r.stderr
     r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     ids = {p["mat_id"] for s in job["symmetric"]["sides"] for p in s["pieces"]}
