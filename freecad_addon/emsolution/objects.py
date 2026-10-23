@@ -3,6 +3,8 @@
 import json
 import re
 
+from . import symmetry
+
 # Gmsh algorithm numbers; the first entry is the default
 ALGORITHMS_2D = {"Frontal-Delaunay": 6, "Delaunay": 5, "MeshAdapt": 1, "Automatic": 2}
 ALGORITHMS_3D = {"Delaunay": 1, "Frontal": 4, "HXT": 10}
@@ -208,14 +210,48 @@ class _Named(_Proxy):
 
 
 class Material(_Proxy):
-    """An assignment: one body, its Material Library entry and its potential region. Made by assign()."""
+    """An assignment: one body (assign()) or faces of a symmetric drawing (assign_pieces()), its Material Library
+    entry and its potential region."""
 
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLinkGlobal", "Body", "EMSolution", "Body made of this material")
+        self.add_pieces(obj)
         obj.addProperty("App::PropertyLink", "LibraryMaterial", "EMSolution", "Material from the Material Library")
         obj.addProperty("App::PropertyIntegerConstraint", "Potential", "EMSolution", "POTENTIAL: 0 total, 1+ reduced")
         obj.Potential = (0, 0, 1000000, 1)
+
+    @staticmethod
+    def add_pieces(obj):
+        if not hasattr(obj, "Pieces"):
+            obj.addProperty("App::PropertyLinkSubListGlobal", "Pieces", "EMSolution", "Faces made of this material")
+
+    def onDocumentRestored(self, obj):
+        self.add_pieces(obj)  # assignments saved before pieces existed
+        obj.purgeTouched()
+
+
+class SymmetricMesh(_Proxy):
+    """Mesh the cell, copy the mesh: Top is the object that builds the full drawing (Boolean Fragments, Compound,
+    Polar Array or Mirror). Cells and Steps show what the chain was read as."""
+
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty("App::PropertyLinkGlobal", "Top", "EMSolution", "Top object of the Mirror / Polar Array chain")
+        obj.addProperty("App::PropertyLinkListGlobal", "Cells", "EMSolution", "Cell bodies: the only ones meshed")
+        obj.addProperty("App::PropertyStringList", "Steps", "EMSolution", "Copy steps, in the order they are applied")
+        obj.setEditorMode("Cells", 1)
+        obj.setEditorMode("Steps", 1)
+
+    def execute(self, obj):
+        cells, steps = [], []
+        if obj.Top is not None:
+            try:
+                cells, _ = symmetry.read_chain(obj.Top)
+                steps = symmetry.steps(obj.Top)
+            except symmetry.SymmetryError:
+                cells, steps = [], []
+        obj.Cells, obj.Steps = cells, steps
 
 
 class LibraryMaterial(_Proxy):
@@ -572,9 +608,17 @@ class SlidingInterface(_Named):
         from . import airshapes
 
         air = air_of(obj)
+        study = owner_study(obj)
+        if air is None and study is not None and is_symmetric(study):
+            if obj.Kind != "Rotational":
+                raise ValueError(f"Sliding Interface {display_name(obj)}: a symmetric Study slides Rotational only")
+            import Part
+
+            _unplaced(obj)
+            obj.Shape = Part.makeCompound([Part.makeCircle(obj.Radius.Value)])  # the full circle, no Air Region
+            return
         if air is None:
             raise ValueError(f"Sliding Interface {display_name(obj)}: it needs an Air Region")
-        study = owner_study(obj)
         plane = airshapes.study_plane(study) if study else "3D"
         _unplaced(obj)
         obj.Shape = airshapes.slide_surface(obj, airshapes.air_shape(air, plane), plane)
@@ -771,6 +815,27 @@ def make_mesh_size(study, size, refs):
     return obj
 
 
+def make_symmetric_mesh(study, top):
+    """Adds a Symmetric Mesh item reading the chain below top."""
+    obj = _add(study, "MeshSizesGroup", SymmetricMesh, "Symmetric Mesh")
+    obj.Top = top
+    obj.recompute()
+    return obj
+
+
+def assign_pieces(study, name, pieces, lib, potential):
+    """Add an assignment named name for pieces [(body, "FaceN")], which need not be whole bodies."""
+    m = _add(study, "MaterialsGroup", Material, name)
+    m.Label = name
+    m.Pieces = list(pieces)
+    m.LibraryMaterial, m.Potential = lib, potential
+    if getattr(m, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        taskpanels.attach_view_provider(m)
+    return m
+
+
 def make_transfinite_body(study, bodies, corners=()):
     """bodies: list of bodies; corners: list of (body, "VertexN")."""
     obj = _add(study, "MeshSizesGroup", TransfiniteBody, "TransfiniteBody")
@@ -803,6 +868,32 @@ def excitations(study):
 
 def mesh_sizes(study):
     return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, MeshSize)]
+
+
+def symmetric_items(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, SymmetricMesh)]
+
+
+def is_symmetric(study):
+    return bool(symmetric_items(study))
+
+
+def cell_bodies(study):
+    """The leaves (cell bodies) of every Symmetric Mesh item whose chain reads, once each."""
+    found = {}
+    for item in symmetric_items(study):
+        try:
+            cells, _ = symmetry.read_chain(item.Top) if item.Top is not None else ([], [])
+        except symmetry.SymmetryError:
+            continue
+        for body in cells:
+            found.setdefault(body.Name, body)
+    return list(found.values())
+
+
+def piece_assignments(study):
+    """The assignments made of pieces: they have no Body."""
+    return [m for m in materials(study) if m.Body is None and len(getattr(m, "Pieces", [])) > 0]
 
 
 def transfinite_bodies(study):
@@ -890,14 +981,18 @@ def subs_by_body(item):
 
 
 def is_item(obj):
-    proxies = (Material, Excitation, MeshSize, TransfiniteBody, TransfiniteEdges, Recombine)
+    proxies = (Material, Excitation, MeshSize, TransfiniteBody, TransfiniteEdges, Recombine, SymmetricMesh)
     return isinstance(getattr(obj, "Proxy", None), proxies)
 
 
 def item_refs(item):
     """[(body, sub)] of a Material, Excitation, Mesh Size, Recombine or transfinite item; sub "" = the whole body."""
     if isinstance(item.Proxy, Material):
-        return [(item.Body, "")] if item.Body else []
+        if item.Body is None:
+            return [(b, s) for b, subs in item.Pieces for s in subs]
+        return [(item.Body, "")]
+    if isinstance(item.Proxy, SymmetricMesh):
+        return [(b, "") for b in item.Cells]
     refs = [(b, s) for b, subs in item.References for s in subs]
     if isinstance(item.Proxy, TransfiniteBody):
         refs += [(b, s) for b, subs in item.Corners for s in subs]
@@ -909,6 +1004,12 @@ def material_rows(study):
 
     Every main- and moving-geometry body and Air Region, then bodies outside them that still have an assignment.
     """
+    if is_symmetric(study):
+        rows = []
+        for m in piece_assignments(study):
+            lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
+            rows.append((None, item_refs(m), [m.Label, lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
+        return rows
     have = assignment_of(study)
     main = assignable(study)
     inside = {b.Name for b in main}
@@ -965,6 +1066,8 @@ def _size_text(item):
         return "structured"
     if isinstance(item.Proxy, Recombine):
         return "recombine"
+    if isinstance(item.Proxy, SymmetricMesh):
+        return "symmetric"
     bump = f" {item.BumpCoefficient:g}" if item.Distribution == "Bump" else ""
     return f"{item.Elements} el, {item.Distribution}{bump}"
 
@@ -1011,7 +1114,7 @@ def assignment_problem(study, bodies):
     """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
     if not _main_bodies(study):
         return NO_MAIN_GEOMETRY
-    main = {b.Name for b in assignable(study)}
+    main = {b.Name for b in assignable(study) + cell_bodies(study)}
     outside = list(dict.fromkeys(display_name(b) for b in bodies if b.Name not in main))
     if outside:
         return (
@@ -1030,8 +1133,12 @@ def air_keys(study):
 
 
 def volume_keys(study):
-    """MAT_ID keys: bodies, Air Regions (or their halves), then the Sliding Interfaces' SLIDE_MAT_IDs when sliding."""
-    keys = [b.Name for b in study_bodies(study)] + air_keys(study)
+    """MAT_ID keys: bodies, Air Regions (or their halves), then the Sliding Interfaces' SLIDE_MAT_IDs when sliding.
+    A symmetric Study has the piece assignments instead of the bodies and Air Regions."""
+    if is_symmetric(study):
+        keys = [m.Name for m in piece_assignments(study)]  # one MAT_ID per assignment; no bodies, no Air Region
+    else:
+        keys = [b.Name for b in study_bodies(study)] + air_keys(study)
     if study.Movement == "Sliding motion":
         keys += [i.Name for i in sliding_interfaces(study)]
     return keys

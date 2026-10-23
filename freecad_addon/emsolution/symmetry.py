@@ -114,6 +114,13 @@ def _walk(obj):
     return {k: (b, [compose(p, t) for t in ts]) for k, (b, ts) in found.items()}
 
 
+def _array_step(obj):
+    """(copies, turn between copies in degrees) of a polar array about +Z or -Z."""
+    n, angle = int(obj.NumberPolar), float(obj.Angle)
+    step = angle / n if abs(angle) == 360 else angle / (n - 1)
+    return n, step if obj.Axis.z > 0 else -step
+
+
 def _array(obj):
     if obj.ArrayType != "polar":
         raise SymmetryError(f"{_name(obj)}: only polar arrays are supported")
@@ -122,9 +129,7 @@ def _array(obj):
         raise SymmetryError(f"{_name(obj)}: the array axis must be Z")
     if abs(obj.IntervalAxis.x) > TOL or abs(obj.IntervalAxis.y) > TOL or abs(obj.IntervalAxis.z) > TOL:
         raise SymmetryError(f"{_name(obj)}: the array interval along the axis must be zero")
-    n, angle = int(obj.NumberPolar), float(obj.Angle)
-    step = angle / n if abs(angle) == 360 else angle / (n - 1)
-    step = step if axis.z > 0 else -step
+    n, step = _array_step(obj)
     sub = _walk(obj.Base)
     c = obj.Center
     return {
@@ -154,3 +159,37 @@ def read_chain(top):
     transforms = [first[ident]] if ident in first else []
     transforms += [t for k, t in first.items() if k != ident]
     return [b for b, _ in found.values()], transforms
+
+
+def _num(v):
+    return f"{round(v, 6) + 0.0:g}"
+
+
+def _chain_steps(obj):
+    """The Mirror and Array objects below obj, outermost first."""
+    if obj.TypeId == "Part::Mirroring":
+        return [obj] + _chain_steps(obj.Source)
+    if _is_array(obj):
+        return [obj] + _chain_steps(obj.Base)
+    kids = obj.Links if obj.TypeId == "Part::Compound" else obj.Objects if _is_fragments(obj) else []
+    return [s for k in kids for s in _chain_steps(k)]
+
+
+def steps(top):
+    """One line per Mirror and Polar Array below top, in the order they are applied (the cell first), e.g.
+    "mirror (0, 0) 15°" or "rotate (0, 0) 30° × 12". Raises SymmetryError like read_chain."""
+    out = []
+    for obj in reversed(list(dict.fromkeys(_chain_steps(top)))):
+        if obj.TypeId == "Part::Mirroring":
+            n, b = obj.Normal, obj.Base
+            length = math.hypot(n.x, n.y)
+            if length == 0:
+                raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis (2D, XY plane only)")
+            nx, ny = n.x / length, n.y / length
+            d = nx * b.x + ny * b.y  # the foot of the perpendicular from the origin, on the mirror line
+            angle = math.degrees(math.atan2(-nx, ny)) % 180
+            out.append(f"mirror ({_num(d * nx)}, {_num(d * ny)}) {_num(angle)}°")
+        else:
+            n, step = _array_step(obj)
+            out.append(f"rotate ({_num(obj.Center.x)}, {_num(obj.Center.y)}) {_num(step)}° × {n}")
+    return out
