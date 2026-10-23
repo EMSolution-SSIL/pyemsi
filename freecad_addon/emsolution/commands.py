@@ -297,7 +297,7 @@ class AddRecombine(_StudyCommand):
 class AddSymmetricMesh(_StudyCommand):
     def GetResources(self):
         return {
-            "Pixmap": icon("symmetric"),
+            "Pixmap": icon("symmetricmesh"),
             "MenuText": "Symmetric Mesh",
             "ToolTip": "Mesh one cell of a Mirror / Polar Array drawing and copy the mesh around",
         }

@@ -163,11 +163,45 @@ def ask_piece_assignment(study, pieces):
     def apply(lib, potential):
         doc = study.Document
         doc.openTransaction("Assign material")
-        objects.assign_pieces(study, name, pieces, lib, potential)
+        try:
+            objects.assign_pieces(study, name, pieces, lib, potential)
+        except Exception:
+            doc.abortTransaction()
+            raise
         doc.commitTransaction()
         doc.recompute()
 
     AssignDialog(study, list(dict.fromkeys(b for b, _ in pieces)), apply=apply).exec()
+
+
+def is_piece_assignment(obj):
+    return isinstance(getattr(obj, "Proxy", None), objects.Material) and obj.Body is None and len(obj.Pieces) > 0
+
+
+def edit_piece_assignments(study, assignments):
+    """Library material and POTENTIAL of assignments made of pieces, shown as the first one has them; one undo
+    step. Their pieces stay: reassign faces with the Material command."""
+
+    def apply(lib, potential):
+        doc = study.Document
+        doc.openTransaction("Assign material")
+        for m in assignments:
+            m.LibraryMaterial, m.Potential = lib, potential
+        doc.commitTransaction()
+        doc.recompute()
+
+    dialog = AssignDialog(study, assignments, apply=apply)
+    lib = assignments[0].LibraryMaterial
+    dialog.material.setCurrentIndex(dialog.material.findData(lib.Name if lib else ""))
+    dialog.potential.setValue(assignments[0].Potential)
+    dialog.exec()
+
+
+def select_top(item):
+    """A Symmetric Mesh item has no panel: double-clicking it selects its top object."""
+    Gui.Selection.clearSelection()
+    if item.Top is not None:
+        Gui.Selection.addSelection(item.Top)
 
 
 class _ViewProvider:
@@ -498,7 +532,11 @@ class FolderView:
         bodies = self.selected_items()
         if not bodies:
             return warn("Select one or more rows first.")
-        ask_assignment(self.study, bodies)
+        pieces = [b for b in bodies if is_piece_assignment(b)]  # a symmetric Study lists its piece assignments
+        if pieces:
+            edit_piece_assignments(self.study, pieces)
+        else:
+            ask_assignment(self.study, bodies)
         self.fill()
 
     def import_materials(self):
@@ -540,8 +578,13 @@ class FolderView:
 
             materialstandins.open_editor(self.study, item.MaterialId)
         elif isinstance(self.folder_proxy, objects.MaterialsFolder):
-            ask_assignment(self.study, [item])
+            if is_piece_assignment(item):
+                edit_piece_assignments(self.study, [item])
+            else:
+                ask_assignment(self.study, [item])
             self.fill()
+        elif isinstance(item.Proxy, objects.SymmetricMesh):
+            select_top(item)
         elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             pass
         elif isinstance(item.Proxy, objects.AirRegion):
@@ -934,6 +977,10 @@ class ViewProviderItem(_ViewProvider):
         if isinstance(obj.Proxy, objects.Material):
             if obj.Body is not None:
                 ask_assignment(objects.owner_study(obj), [obj.Body])
+            elif is_piece_assignment(obj):
+                edit_piece_assignments(objects.owner_study(obj), [obj])
+        elif isinstance(obj.Proxy, objects.SymmetricMesh):
+            select_top(obj)
         elif not Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             Gui.Control.showDialog(ItemPanel(obj))
         return True

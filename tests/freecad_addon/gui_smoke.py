@@ -1293,6 +1293,35 @@ def main():
         objects.item_refs(made[-1]) == [(stator_top, "Face1"), (stator_top, "Face2")]
         and sym_doc.UndoNames[0] == "Assign material"
     ), sym_doc.UndoNames
+    # The item: a tree icon that exists; a double-click (tree or Mesh Sizes panel) selects its top, no panel.
+    assert os.path.exists(sym_item.ViewObject.Proxy.getIcon()), sym_item.ViewObject.Proxy.getIcon()
+    Gui.Selection.clearSelection()
+    sym_item.ViewObject.Proxy.doubleClicked(sym_item.ViewObject)
+    assert [o.Name for o in Gui.Selection.getSelection()] == [stator_top.Name], Gui.Selection.getSelection()
+    sizes_view = taskpanels.FolderView(sym_study.MeshSizesGroup)
+    Gui.Selection.clearSelection()
+    panels = len(opened)
+    sizes_view.open_item([r[0] for r in sizes_view.rows].index(sym_item), 0)
+    assert len(opened) == panels and not Gui.Control.activeDialog(), "a panel opened for the Symmetric Mesh"
+    assert [o.Name for o in Gui.Selection.getSelection()] == [stator_top.Name], Gui.Selection.getSelection()
+    # Materials panel of a symmetric Study: no top listed without material; a row edits its assignment.
+    objects.make_symmetric_mesh(sym_study, sym_study.MovingObjects[0])  # the rotor's, removed above
+    mat_view = taskpanels.FolderView(sym_study.MaterialsGroup)
+    asked_before = len(asked)
+    assert mat_view.missing.isHidden(), mat_view.missing.text()
+    taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(3), self.accept())
+    mat_view.open_item(0, 0)
+    first = mat_view.rows[0][0]
+    assert first.Potential == 3 and sym_doc.UndoNames[0] == "Assign material", (first.Potential, sym_doc.UndoNames)
+    taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(4), self.accept())
+    mat_view.table.selectRow(1)
+    mat_view.assign_rows()
+    assert mat_view.rows[1][0].Potential == 4 and first.Potential == 3, "Assign… on a piece row"
+    taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(5), self.accept())
+    first.ViewObject.Proxy.doubleClicked(first.ViewObject)
+    assert first.Potential == 5, "double-click on a piece assignment in the tree"
+    taskpanels.AssignDialog.exec = real_exec
+    assert len(asked) == asked_before, asked  # never the body dialog
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")
