@@ -1320,8 +1320,25 @@ def main():
     taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(5), self.accept())
     first.ViewObject.Proxy.doubleClicked(first.ViewObject)
     assert first.Potential == 5, "double-click on a piece assignment in the tree"
-    taskpanels.AssignDialog.exec = real_exec
     assert len(asked) == asked_before, asked  # never the body dialog
+    # assign_pieces failing half way: the transaction is aborted, nothing is left behind.
+    real_assign_pieces = objects.assign_pieces
+
+    def failing(*args):
+        real_assign_pieces(*args)
+        raise RuntimeError("smoke: assign_pieces failed")
+
+    objects.assign_pieces = failing
+    taskpanels.AssignDialog.exec = lambda self: self.accept()
+    undo, count = list(sym_doc.UndoNames), len(objects.piece_assignments(sym_study))
+    try:
+        taskpanels.ask_piece_assignment(sym_study, [(stator_top, "Face1")])
+    except RuntimeError:
+        pass
+    objects.assign_pieces = real_assign_pieces
+    taskpanels.AssignDialog.exec = real_exec
+    assert len(objects.piece_assignments(sym_study)) == count, "a failed assignment was left behind"
+    assert not sym_doc.HasPendingTransaction and list(sym_doc.UndoNames) == undo, list(sym_doc.UndoNames)
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")
