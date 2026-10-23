@@ -40,7 +40,8 @@ def chain(mirror, step, count):
 
 
 def mesh_check(path, radii):
-    """(element type names, inverted elements, edges used by one element that are not on a circle of radii)."""
+    """(element type names, inverted elements, edges used by one element that are not on a circle of radii).
+    Inverted: corners clockwise in XY (minSJ cannot tell: on discrete entities it is 1 either way)."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
@@ -51,7 +52,13 @@ def mesh_check(path, radii):
         for typ in gmsh.model.mesh.getElementTypes(2):
             etags, _ = gmsh.model.mesh.getElementsByType(typ)
             kinds.add(gmsh.model.mesh.getElementProperties(typ)[0])
-            inverted += sum(q < 0 for q in gmsh.model.mesh.getElementQualities(etags, "minSJ"))
+            corners = gmsh.model.mesh.getElementProperties(typ)[5]
+            enodes = gmsh.model.mesh.getElementsByType(typ)[1]
+            per = len(enodes) // len(etags)
+            for k in range(len(etags)):  # clockwise corners (signed shoelace area <= 0): an inverted element
+                pts = [xyz[int(n)] for n in enodes[k * per : k * per + corners]]
+                twice = sum(p[0] * q[1] - q[0] * p[1] for p, q in zip(pts, pts[1:] + pts[:1]))
+                inverted += twice <= 0
             en = gmsh.model.mesh.getElementEdgeNodes(typ)
             edges.update(tuple(sorted(int(n) for n in en[k : k + 2])) for k in range(0, len(en), 2))
     finally:
@@ -182,6 +189,7 @@ class MeshSymTest(unittest.TestCase):
             angles.append(sorted(round(math.degrees(math.atan2(p[1], p[0])), 6) % 360 for p in on))
         self.assertEqual(len(angles[0]), 144)
         self.assertEqual(angles[0], angles[1])
+        self.assertEqual([mesh_check(f, ())[1] for f in (fixed, rotor)], [0, 0])
         self.assertEqual(sorted(groups(fixed)), [5])
         self.assertEqual(sorted(groups(rotor)), [6])
         marker = _point(rotor, 7)
