@@ -291,13 +291,17 @@ def test_symmetric_job_meshes_into_both_files(motor):
 
     label = {int(motor.MatIds[m.Name]): m.Label for m in objects.piece_assignments(motor)}
     for side, msh in zip(job["symmetric"]["sides"], (job["mesh_file"], job["rotor_file"])):
-        found = {name for name, _ in meshreport.groups(msh).values()}
-        assert found == {label[p["mat_id"]] for p in side["pieces"]}
+        found = meshreport.groups(msh)
+        assert {name for name, _ in found.values()} == {label[p["mat_id"]] for p in side["pieces"]}
+        assert all(count > 0 for _, count in found.values())
     fixed_names = {name for name, _ in meshreport.groups(job["mesh_file"]).values()}
     assert fixed_names == {"StatorIron", "StatorAir"} | {f"Coil{i:02d}" for i in range(1, 13)}
     assert sum(line.startswith("MAT_ID") for line in r.stdout.splitlines()) == 18
     for msh in (job["mesh_file"], job["rotor_file"]):
         assert mesh_check(msh, (35,))[1] == 0
+    marker = job["symmetric"]["slide"]["slide_mat_id"]
+    assert meshreport._point(job["rotor_file"], marker) is not None
+    assert meshreport._point(job["mesh_file"], marker) is None
 
 
 def test_static_study_writes_one_file(tmp_path):
@@ -327,6 +331,9 @@ def test_static_study_writes_one_file(tmp_path):
         r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
         assert r.returncode == 0, r.stderr
         assert os.path.exists(job["mesh_file"])
+        found = meshreport.groups(job["mesh_file"])
+        assert {name for name, _ in found.values()} == {"Stator"} and all(c > 0 for _, c in found.values())
+        assert meshreport._marker(job["mesh_file"], 0) is None
     finally:
         for name in list(App.listDocuments()):
             App.closeDocument(name)
