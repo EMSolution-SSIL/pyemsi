@@ -2,7 +2,10 @@
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_symmetric_study.py"""
 
 import json
+import math
 import os
+import subprocess
+import sys
 
 import pytest
 
@@ -10,7 +13,7 @@ import FreeCAD as App
 
 from emsolution import jobwriter, objects
 
-from . import symcases
+from . import meshreport, symcases
 
 
 @pytest.fixture
@@ -265,3 +268,21 @@ def test_job_has_cell_bodies_and_symmetric_block(motor):
     assert slide["divisions"] == 144 and slide["radius"] == 35 and slide["full"]
     assert slide["slide_mat_id"] == int(motor.MatIds[objects.sliding_interfaces(motor)[0].Name])
     assert not {"air", "slides", "moving", "periodic"} & set(job)
+    assert job["rotor_file"] == jobwriter.rotor_file(motor)
+
+
+def test_symmetric_job_meshes_into_both_files(motor):
+    path = jobwriter.write_job(motor)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+    r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
+    ids = {p["mat_id"] for s in job["symmetric"]["sides"] for p in s["pieces"]}
+    assert set(meshreport.groups(job["mesh_file"])) | set(meshreport.groups(job["rotor_file"])) == ids
+    assert meshreport._point(job["rotor_file"]) is not None
+
+    def on_slide(p):
+        return abs(math.hypot(p[0], p[1]) - 35) < 1e-6
+
+    assert meshreport.slide_check(job["mesh_file"], job["rotor_file"], on_slide) == (144, 144, True)

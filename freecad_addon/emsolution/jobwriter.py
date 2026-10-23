@@ -314,6 +314,8 @@ def write_job(study):
         }
     if symmetric:
         job["symmetric"] = write_symmetric(study, folder, ids)
+        if sliding:
+            job["rotor_file"] = rotor_file(study)
     elif sliding:
         job["moving"] = [int(study.MatIds[b.Name]) for b in geometry.setup(study)[1]]
         write_slides(study, folder, job)

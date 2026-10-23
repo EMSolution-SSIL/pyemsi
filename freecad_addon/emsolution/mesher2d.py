@@ -1,10 +1,12 @@
 """2D job file -> Gmsh .msh at job["mesh_file"] + mesh.unv beside the job. Runs in its own process.
 Sliding motion: the fixed side goes to job["mesh_file"], the moving side to job["rotor_file"].
+A job with a "symmetric" key meshes only the cell and copies it (meshsym.py).
 Never import FreeCAD here.
 
 Usage: python mesher2d.py <job.json> [--check]   (--check: geometry checks only, nothing written)
 """
 
+import json
 import os
 import sys
 
@@ -27,6 +29,7 @@ from meshcommon import (
     import_brep,
     slide_split,
 )
+import meshsym
 
 
 def _on_bodies(dim, tag, faces):
@@ -142,6 +145,11 @@ def build(job, folder):
 
 
 def run_job(job_path):
+    with open(job_path, encoding="utf-8") as fh:
+        symmetric = "symmetric" in json.load(fh)
+    if symmetric:  # mesh the cell and copy it
+        print("\n".join(meshsym.report(meshsym.run(job_path, build))))
+        return
     job = run(job_path, build, 2)
     for item in job["bodies"] + air_items(job):
         if item["mat_id"] in job["unwritten"]:
