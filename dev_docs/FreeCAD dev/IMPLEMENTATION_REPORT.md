@@ -1,5 +1,7 @@
 # FreeCAD `.FCStd` Integration — Implementation Report
 
+> Historical: the `.FCStd` integration was removed from pyemsi (kept on the local branch `experimental/freecad-viewer`).
+
 Sections 1–7 record the original integration completed on 2026-09-17. Section 8
 records the current design after the 2026-09-18 follow-up work and supersedes
 the original single-tab details where they differ.

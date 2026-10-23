@@ -46,7 +46,16 @@ Start the GUI:
 pixi run gui
 ```
 
-Run the test suite:
+Start FreeCAD with the EMSolution workbench:
+
+```powershell
+pixi run -e addon install-addon   # once per clone
+pixi run -e addon freecad
+```
+
+`install-addon` (in the `addon` environment, which adds FreeCAD and the add-on dependencies) links `freecad_addon/` into `%APPDATA%\FreeCAD\v1-1\Mod\EMSolution` as a directory junction, so FreeCAD loads the addon straight from your checkout and code changes take effect on the next FreeCAD start. Re-run it to point FreeCAD at a different clone or worktree.
+
+Run the pyemsi test suite (the `addon` environment has its own: `pixi run -e addon test-addon`):
 
 ```powershell
 pixi run test

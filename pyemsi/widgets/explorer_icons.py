@@ -36,7 +36,6 @@ _EXTENSIONS = {
     ".cfg": "settings",
     ".csv": "table",
     ".db": "database",
-    ".fcstd": "freecad",
     ".flac": "audio",
     ".gif": "image",
     ".gz": "zip",
@@ -128,7 +127,6 @@ class MaterialFileIconProvider(QFileIconProvider):
         icon = self._icons.get(name)
         if icon is None:
             resource = {
-                "freecad": ":/icons/FreeCAD.svg",
                 "vtk": ":/icons/VTK.svg",
             }.get(name, f"{_RESOURCE_PREFIX}{name}.svg")
             icon = QIcon(resource)

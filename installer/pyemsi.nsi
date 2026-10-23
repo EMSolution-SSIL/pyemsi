@@ -9,7 +9,7 @@
 ;---------------------------------------------------------------------------
 !define APP_NAME        "pyemsi"
 !ifndef APP_VERSION
-!define APP_VERSION     "0.5.1"
+!error "APP_VERSION not defined: build with /DAPP_VERSION=<version> (pixi run installer-pyemsi)"
 !endif
 !define APP_PUBLISHER   "SSIL"
 !define APP_URL         "https://github.com/EMSolution-SSIL/pyemsi"

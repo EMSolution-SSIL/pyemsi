@@ -1,0 +1,56 @@
+# Fails if PYEMSI_VERSION is unset: the installer tasks set it from installer/version.py.
+context:
+  version: ${{ env.get("PYEMSI_VERSION") }}
+
+package:
+  name: pyemsi
+  version: ${{ version }}
+
+source:
+  path: ../../../..
+
+build:
+  number: 0
+  # No compiler('c'): conda-forge's vs2022 activation can't find VS 18, setuptools finds it itself.
+  script: python -m pip install . --no-deps --no-build-isolation -vv
+
+requirements:
+  host:
+    - python 3.11.*
+    - pip
+    - setuptools >=61
+    - wheel
+    - cython >=3.0.0
+    - numpy
+  run:
+    - python 3.11.*
+    - qt6-webengine ==6.10.2
+    - qt6-multimedia ==6.10.2
+    - vtk >=9.0.0
+    - numpy >=1.21.0
+    - networkx >=3.0
+    - pyvista >=0.43.0
+    - imageio
+    - imageio-ffmpeg
+    - pyvistaqt >=0.11.0
+    - pyside6 >=6.5.0
+    - matplotlib-base >=3.5.0,<3.11
+    - qtconsole >=5.4.0
+    - ipykernel >=6.0.0
+    - packaging >=24.0
+    - markdown >=3.4.0
+    - python-lsp-server
+    - websockets
+    - basedpyright >=1.31.4
+    - scienceplots
+    - python-gmsh
+    - ems-file-format-converter
+    - pywinpty
+    - qtpy >=2.4
+
+tests:
+  - python:
+      imports:
+        - pyemsi
+        - pyemsi.core.femap_parser
+      pip_check: false

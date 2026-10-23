@@ -1,0 +1,40 @@
+# `ArchSql.InComparison`
+
+[Source module](index.md)
+
+```python
+class InComparison:
+```
+
+Represents a SQL 'IN (values...)' comparison.
+
+Evidence: `src/Mod/BIM/ArchSql.py:1533`. Source-defined class; runtime behavior and support status unverified.
+
+## `ArchSql.InComparison.__init__`
+
+Status: source-defined name; no independently verified stability/export guarantee.
+
+```python
+def __init__(self, reference_extractor, literal_extractors):
+```
+
+No source docstring; inspect implementation and callers for purpose, return values and side effects.
+
+Typing limit: missing source annotations are unspecified; no inferred parameter/return types are supplied.
+
+Evidence: `src/Mod/BIM/ArchSql.py:1536`. Decorators are copied as source expressions and have not been executed.
+
+## `ArchSql.InComparison.evaluate`
+
+Status: source-defined name; no independently verified stability/export guarantee.
+
+```python
+def evaluate(self, obj):
+```
+
+No source docstring; inspect implementation and callers for purpose, return values and side effects.
+
+Typing limit: missing source annotations are unspecified; no inferred parameter/return types are supplied.
+
+Evidence: `src/Mod/BIM/ArchSql.py:1541`. Decorators are copied as source expressions and have not been executed.
+

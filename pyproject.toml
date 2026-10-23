@@ -41,6 +41,7 @@ dependencies = [
     "gmsh",
     "ems-file-format-converter",
     "pywinpty; sys_platform == 'win32'",
+    "qtpy>=2.4",
 ]
 
 [project.optional-dependencies]
@@ -61,7 +62,6 @@ platforms = ["win-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.11,<3.12"
-freecad = "==1.1.0"
 qt6-webengine = "==6.10.2"
 qt6-multimedia = "==6.10.2"
 vtk = ">=9.0.0"
@@ -92,6 +92,8 @@ trame = ">=3.13.2,<4"
 pywinpty = "*"
 ruff = ">=0.16.9,<0.17"
 pre-commit = ">=4"
+qtpy = ">=2.4"
+pyyaml = ">=6.0.3,<7"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
@@ -101,17 +103,42 @@ twine = "*"
 
 [tool.pixi.activation.env]
 QT_API = "pyside6"
-PYTHONPATH = "%CONDA_PREFIX%\\Library\\bin"
 QTWEBENGINE_CHROMIUM_FLAGS = "--no-sandbox"
 
 [tool.pixi.tasks]
 gui = "python -m pyemsi.gui"
-test = "pytest tests"
+test = "pytest tests --ignore=tests/freecad_addon -q -p no:cacheprovider"
 format = "ruff format"
 lint = "ruff check"
 # One-time per clone: git pre-commit hook + skip formatting-only commits in git blame
 install-hooks = "pre-commit install && git config blame.ignoreRevsFile .git-blame-ignore-revs"
 python = "python"
+# pyemsi installer: portable runtime, then NSIS -> dist/pyemsi-<version>-setup.exe (version from installer/version.py)
+build-portable = "python tools/build_windows_private_runtime.py"
+# refuse a portable runtime that carries FreeCAD, the add-on or ems_material
+check-portable = { cmd = "python tools/check_dist_clean.py dist/pyemsi", depends-on = ["build-portable"] }
+installer-pyemsi = { cmd = "pixi run --manifest-path installer/freecad/pixi.toml nsis-pyemsi", depends-on = ["check-portable"] }
+# EMSolution-FreeCAD installer -> installer/freecad/dist/EMSolution-FreeCAD-<version>-Windows-x86_64.exe
+installer-freecad = "pixi run --manifest-path installer/freecad/pixi.toml installer"
+
+[tool.pixi.environments]
+addon = ["freecad"]
+
+[tool.pixi.feature.freecad.dependencies]
+freecad = "==1.1.0"
+
+[tool.pixi.feature.freecad.pypi-dependencies]
+ems-material-manager = ">=0.1,<0.2"
+
+# FreeCAD.pyd and FreeCADGui.pyd live in Library\bin.
+[tool.pixi.feature.freecad.activation.env]
+PYTHONPATH = "%CONDA_PREFIX%\\Library\\bin"
+
+[tool.pixi.feature.freecad.tasks]
+test-addon = "pytest tests/freecad_addon -q -p no:cacheprovider"
+freecad = "freecad"
+# One-time per clone: link freecad_addon into FreeCAD's user Mod folder (re-run to repoint it at this clone)
+install-addon = '''powershell -NoProfile -Command '$mod = Join-Path $env:APPDATA FreeCAD\v1-1\Mod; $link = Join-Path $mod EMSolution; New-Item -ItemType Directory -Force $mod | Out-Null; $old = Get-Item -Force -ErrorAction SilentlyContinue $link; if ($old) { $old.Delete() }; New-Item -ItemType Junction -Path $link -Target (Join-Path $env:PIXI_PROJECT_ROOT freecad_addon) | Select-Object FullName, Target' '''
 
 [project.urls]
 Homepage = "https://github.com/EMSolution-SSIL/pyemsi"

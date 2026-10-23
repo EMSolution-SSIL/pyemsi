@@ -30,9 +30,13 @@ def _wait_for_index(widget: ExplorerWidget, path: str) -> QModelIndex:
 def test_material_icon_associations_cover_pyemsi_formats() -> None:
     assert icon_name_for_path("project/.pyemsi", is_dir=True) == "folder-simulations"
     assert icon_name_for_path("mesh.vtu", is_dir=False) == "vtk"
-    assert icon_name_for_path("assembly.FCStd", is_dir=False) == "freecad"
     assert icon_name_for_path("post_geom.neu", is_dir=False) == "simulink"
     assert icon_name_for_path("unknown.bin", is_dir=False) == "document"
+
+
+def test_fcstd_files_get_the_generic_file_icon() -> None:
+    assert icon_name_for_path("assembly.FCStd", is_dir=False) == "document"
+    assert icon_name_for_path("assembly.FCStd", is_dir=False) == icon_name_for_path("unknown.bin", is_dir=False)
 
 
 def test_material_icon_provider_loads_bundled_icons(tmp_path) -> None:
@@ -43,7 +47,7 @@ def test_material_icon_provider_loads_bundled_icons(tmp_path) -> None:
     provider = MaterialFileIconProvider()
 
     assert QFile.exists(":/icons/material/python.svg")
-    assert QFile.exists(":/icons/FreeCAD.svg")
+    assert not QFile.exists(":/icons/FreeCAD.svg")
     icon = provider.icon(QFileInfo(str(python_file)))
     assert isinstance(icon, QIcon)
     assert provider._icons["python"] is icon

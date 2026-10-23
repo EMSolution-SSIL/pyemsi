@@ -17,12 +17,12 @@ def test_add_log_tab_creates_process_free_terminal_tab():
     _app()
     dock = ExternalTerminalDock()
 
-    xterm = dock.add_log_tab("FreeCAD messages")
+    xterm = dock.add_log_tab("Diagnostics")
 
     assert isinstance(xterm, XtermWidget)
     assert xterm.is_alive is False
     assert dock._tabs.count() == 1
-    assert dock._tabs.tabText(0) == "FreeCAD messages"
+    assert dock._tabs.tabText(0) == "Diagnostics"
     assert dock._tabs.currentWidget() is xterm
     assert dock._stack.currentWidget() is dock._tabs
 
@@ -30,7 +30,7 @@ def test_add_log_tab_creates_process_free_terminal_tab():
 def test_closing_log_tab_returns_to_empty_page():
     _app()
     dock = ExternalTerminalDock()
-    dock.add_log_tab("FreeCAD messages")
+    dock.add_log_tab("Diagnostics")
 
     dock._close_tab(0)
 

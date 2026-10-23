@@ -253,7 +253,7 @@ class XtermWidget(QWebEngineView):
     def write(self, text: str) -> None:
         """Display *text* in the terminal without any process behind it.
 
-        Used for log-style tabs (e.g. FreeCAD's Report view). xterm.js
+        Used for log-style tabs (e.g. a diagnostics or report view). xterm.js
         needs CRLF line endings, so bare ``\\n`` is expanded. Text sent
         before the JavaScript side has initialised is queued by the bridge.
         """

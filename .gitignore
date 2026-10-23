@@ -4,7 +4,10 @@ t.py
 y.py
 z.py
 todo
-.claude/
+/.claude/*
+!/.claude/skills/
+.agents/
+.superpowers/study-setup-*/
 .copilot-tracking/
 tests/visual_output/
 # pytest --basetemp directories from local test runs
@@ -237,3 +240,5 @@ remotion/build/
 # runtime (only TypeScript source is vendored otherwise) -- unignore them.
 !pyemsi/widgets/xterm/xterm-js/*/lib/
 !pyemsi/widgets/xterm/xterm-js/*/lib/**
+# ...but not their source maps, which only help debug the JavaScript
+pyemsi/widgets/xterm/xterm-js/*/lib/*.js.map

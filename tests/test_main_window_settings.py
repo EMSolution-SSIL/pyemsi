@@ -141,6 +141,48 @@ def test_main_window_does_not_restore_workspace_from_global_settings(tmp_path, m
         window.close()
 
 
+def test_workspace_with_fcstd_file_opens_without_freecad(tmp_path, monkeypatch):
+    """A workspace that holds an ``.FCStd`` file, with saved window geometry and state, opens cleanly.
+
+    pyemsi saves no list of open tabs, so no tab comes back for the file; opening it gives the same viewer as any
+    other file pyemsi has no viewer for.
+    """
+    _app()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    document = workspace / "Bracket.FCStd"
+    document.write_bytes(b"PK")
+    global_settings_path = tmp_path / "config" / "settings.json"
+
+    manager = SettingsManager(global_settings_path=global_settings_path)
+    manager.add_recent_folder(workspace)
+    manager.set_global("workbench.window.geometry", "Zm9v")
+    manager.set_global("workbench.window.state", "YmFy")
+    manager.save()
+    manager.load_workspace(workspace)
+    manager.set_local("workbench.explorer.root_path", str(workspace))
+    manager.save()
+
+    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
+    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
+
+    window = main_window_module.PyEmsiMainWindow(
+        settings_manager=SettingsManager(global_settings_path=global_settings_path)
+    )
+    try:
+        window._set_workspace_path(str(workspace))
+        assert window.container.left_panel.count() == 0
+        assert window.container.right_panel.count() == 0
+
+        viewer = window.container.open_file(str(document))
+
+        assert type(viewer).__name__ == "UnsupportedViewer"
+        assert getattr(viewer, "viewer_kind", None) is None
+        assert window.container.left_panel.count() == 1
+    finally:
+        window.close()
+
+
 def test_main_window_close_event_persists_workspace_state(tmp_path, monkeypatch):
     _app()
     workspace = tmp_path / "workspace"
@@ -403,11 +445,9 @@ def test_main_window_file_menu_includes_settings_submenu_between_separators(tmp_
         converters_actions = window._converters_menu.actions()
         help_actions = window._help_menu.actions()
 
-        assert file_actions[0] is window._new_freecad_action
-        assert file_actions[1].isSeparator()
-        assert file_actions[2].text() == "Open &Folder..."
-        assert file_actions[3].text() == "Open &Recent"
-        assert file_actions[4].isSeparator()
+        assert file_actions[0].text() == "Open &Folder..."
+        assert file_actions[1].text() == "Open &Recent"
+        assert file_actions[2].isSeparator()
         assert "&Converters" not in action_texts
         assert "Convert &FEMAP" not in action_texts
         assert "&Field Plot" in action_texts
@@ -769,8 +809,6 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
 
             if action is window._open_folder_action:
                 action_order.append("open_folder")
-            elif action is window._new_freecad_action:
-                action_order.append("new_freecad")
             elif action is window._open_femap_converter_action:
                 action_order.append("convert_femap")
             elif action is window._open_field_plot_action:
@@ -779,8 +817,6 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
                 action_order.append("output_plot")
 
         assert action_order == [
-            "new_freecad",
-            "separator",
             "open_folder",
             "open_recent",
             "separator",
@@ -796,39 +832,6 @@ def test_main_window_file_toolbar_contains_requested_actions_and_dropdowns(tmp_p
         assert window._settings_tool_button.objectName() == "settings_tool_button"
         assert window._settings_tool_button.menu() is window._settings_menu
         assert window._settings_tool_button.popupMode() == QToolButton.ToolButtonPopupMode.InstantPopup
-    finally:
-        window.close()
-
-
-def test_new_freecad_action_uses_current_folder_and_adds_extension(tmp_path, monkeypatch):
-    _app()
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    created = []
-
-    monkeypatch.setattr(main_window_module, "ExternalTerminalDock", _DummyExternalTerminalDock)
-    monkeypatch.setattr(main_window_module.PyEmsiMainWindow, "_setup_ipython_terminal", _stub_ipython_terminal)
-    monkeypatch.setattr(
-        main_window_module.QFileDialog,
-        "getSaveFileName",
-        lambda *args: (str(workspace / "Bracket"), "FreeCAD Documents (*.FCStd)"),
-    )
-    monkeypatch.setattr(
-        main_window_module.SplitContainer,
-        "create_freecad_file",
-        lambda self, path: created.append(path),
-    )
-    window = main_window_module.PyEmsiMainWindow(
-        settings_manager=SettingsManager(global_settings_path=tmp_path / "config" / "settings.json")
-    )
-    try:
-        assert not window._new_freecad_action.isEnabled()
-        window._set_workspace_path(str(workspace))
-        assert window._new_freecad_action.isEnabled()
-
-        window._new_freecad_action.trigger()
-
-        assert created == [str(workspace / "Bracket.FCStd")]
     finally:
         window.close()
 
