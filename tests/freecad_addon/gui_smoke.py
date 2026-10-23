@@ -1342,6 +1342,20 @@ def main():
     # Item panels let the cell bodies be picked: the mesh settings belong on them.
     for air in (True, False):
         assert "CoilCell" in taskpanels.ItemGate(sym_study, ("Edge",), False, air).main, "gate: cell body"
+    # Picks on the Fragments point at the cell: the panels' pickers and the commands.
+    cells = {b.Name for b in objects.cell_bodies(sym_study)}
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face40")  # a face of some copy
+    (whole,) = taskpanels.ITEM_PICKS[objects.Recombine][0](sym_study)
+    assert whole[0].Name in cells and whole[1] == "", whole
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Edge100")
+    (edge,) = taskpanels.ITEM_PICKS[objects.TransfiniteEdges][0](sym_study)
+    assert edge[0].Name in cells and edge[1].startswith("Edge"), edge
+    Gui.runCommand("EMS_TransfiniteEdges")
+    made = objects.transfinite_edges(sym_study)[-1]
+    assert [(b.Name, s) for b, s in objects.item_refs(made)] == [(edge[0].Name, edge[1])], objects.item_refs(made)
+    Gui.Control.closeDialog()
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")

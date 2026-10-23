@@ -904,6 +904,51 @@ def cell_bodies(study):
     return list(found.values())
 
 
+def to_cells(study, refs, whole=False):
+    """Mesh setting picks [(body, sub)] with those on the top of a Symmetric Mesh item moved to the cell: a face,
+    edge or vertex of any copy becomes the cell body's own one that the copy came from (whole: the cell body itself).
+    Picks on other bodies, a whole top, or a sub-element no copy comes from stay as they are; validation explains
+    those."""
+    from . import geometry
+
+    chains = {}
+    for item in symmetric_items(study):
+        try:
+            if item.Top is not None:
+                cells, transforms = symmetry.read_chain(item.Top)
+                chains[item.Top.Name] = ([(c, geometry.global_shape(c)) for c in cells], transforms)
+        except symmetry.SymmetryError:
+            continue
+    out = []
+    for body, sub in refs:
+        found = _cell_of(chains[body.Name], geometry.global_shape(body), sub) if sub and body.Name in chains else None
+        out.append(((found[0], "") if whole else found) if found else (body, sub))
+    return list(dict.fromkeys(out))
+
+
+def _cell_of(chain, shape, sub):
+    """(cell body, sub-element name) that a copy step puts onto sub of shape, the top; None if none does."""
+    import FreeCAD as App
+
+    cells, transforms = chain
+    kind = sub.rstrip("0123456789")
+    picked = shape.getElement(sub)
+    tol = 1e-6 * shape.BoundBox.DiagonalLength
+    for m in transforms:  # the identity first: a pick in the cell's own place
+        back = picked.transformed(App.Matrix(*m).inverse())
+        for cell, cell_shape in cells:
+            for k, item in enumerate(getattr(cell_shape, {"Face": "Faces", "Edge": "Edges"}.get(kind, "Vertexes"))):
+                if _coincide(item, back, tol):
+                    return cell, f"{kind}{k + 1}"
+    return None
+
+
+def _coincide(a, b, tol):
+    if hasattr(a, "Point") and hasattr(b, "Point"):  # vertices
+        return (a.Point - b.Point).Length < tol
+    return (a.CenterOfMass - b.CenterOfMass).Length < tol and abs(a.Mass - b.Mass) < tol * max(1.0, a.Mass)
+
+
 def piece_assignments(study):
     """The assignments made of pieces: they have no Body."""
     return [m for m in materials(study) if m.Body is None and len(getattr(m, "Pieces", [])) > 0]

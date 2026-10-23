@@ -177,7 +177,7 @@ class AddMeshSize(_StudyCommand):
         study = assignment_study()
         if study is None:
             return
-        refs = taskpanels.selected_mesh_refs()
+        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
         if gate(study, [b for b, _ in refs]):
             size = study.MeshSizesGroup.DefaultMeshSize.Value
             _create_and_edit(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
@@ -252,9 +252,9 @@ class AddTransfiniteBody(_StudyCommand):
         study = assignment_study()
         if study is None:
             return
-        bodies = taskpanels.selected_bodies()
+        bodies = [b for b, _ in taskpanels.picked_bodies(study)]
         if gate(study, bodies, objects.TransfiniteBody):
-            corners = taskpanels.selected_subs(("Vertex",))
+            corners = taskpanels.mesh_picks(study, ("Vertex",))
             _create_and_edit(
                 study, "Add Transfinite Body", lambda: objects.make_transfinite_body(study, bodies, corners)
             )
@@ -272,7 +272,7 @@ class AddTransfiniteEdges(_StudyCommand):
         study = assignment_study()
         if study is None:
             return
-        edges = taskpanels.selected_subs(("Edge",))
+        edges = taskpanels.mesh_picks(study, ("Edge",))
         if gate(study, [b for b, _ in edges], objects.TransfiniteEdges):
             _create_and_edit(study, "Add Transfinite Edges", lambda: objects.make_transfinite_edges(study, 10, edges))
 
@@ -289,7 +289,7 @@ class AddRecombine(_StudyCommand):
         study = assignment_study()
         if study is None:
             return
-        bodies = taskpanels.selected_bodies()
+        bodies = [b for b, _ in taskpanels.picked_bodies(study)]
         if gate(study, bodies, objects.Recombine):
             _create_and_edit(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
 

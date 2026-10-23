@@ -84,6 +84,33 @@ def test_save_reload_keeps_pieces_and_item(motor, tmp_path):
     assert dict(study.MatIds) == ids
 
 
+def _same(a, b):
+    return (a.CenterOfMass - b.CenterOfMass).Length < 1e-6 and abs(a.Mass - b.Mass) < 1e-6
+
+
+def _named(shape, kind, wanted):
+    """The name ("Edge3") of a sub-element of shape whose geometry equals wanted. Fragments keeps a separate
+    copy of an edge on each side of a seam, so there may be two; either is what a click picks."""
+    items = shape.Edges if kind == "Edge" else shape.Faces
+    return f"{kind}{next(k for k, e in enumerate(items) if _same(e, wanted)) + 1}"
+
+
+def test_picks_on_the_top_point_at_the_cell(motor):
+    top, coil = motor.MainObjects[0], motor.Document.getObject("CoilCell")
+    edge = coil.Shape.Edge1
+    on_top = _named(top.Shape, "Edge", edge)  # the same edge, picked on the Fragments in the cell's place
+    face = coil.Shape.Face1.copy()
+    face.rotate(App.Vector(), App.Vector(0, 0, 1), 90)  # the coil's copy in the 90..105° pitch
+    copy = _named(top.Shape, "Face", face)
+    other = motor.Document.getObject("RotorIronCell")
+    mapped = objects.to_cells(motor, [(top, on_top), (top, copy), (other, "Edge1"), (top, "")])
+    cell, sub = mapped[0]  # the slot wall is also an edge of StatorIronCell: either cell's edge is the same curve
+    assert cell in objects.cell_bodies(motor) and _same(cell.Shape.getElement(sub), edge)
+    assert mapped[1] == (coil, "Face1")
+    assert mapped[2:] == [(other, "Edge1"), (top, "")]  # not on a top, or a whole top: left alone
+    assert objects.to_cells(motor, [(top, copy)], whole=True) == [(coil, "")]
+
+
 def test_sliding_interface_without_air_has_a_circle(motor):
     (iface,) = objects.sliding_interfaces(motor)
     assert objects.air_regions(motor) == []

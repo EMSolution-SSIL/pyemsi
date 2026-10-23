@@ -1048,16 +1048,34 @@ class ItemGate:
         return sub.startswith(self.kinds) if sub else self.whole
 
 
-def _whole_bodies():
-    return [(b, "") for b in selected_bodies()]  # a click anywhere on a body picks it
+def picked_bodies(study):
+    """Whole bodies picked: a click anywhere on a body picks it, and a click on a face of a Symmetric Mesh top
+    picks the cell body that face is a copy of."""
+    tops = {i.Top.Name for i in objects.symmetric_items(study) if i.Top is not None}
+    faces = [(b, s) for b, s in selected_subs(("Face",)) if b.Name in tops]
+    clicked = {b.Name for b, _ in faces}
+    cells = [(b, "") for b, _ in objects.to_cells(study, faces, whole=True)]  # one no copy explains: the whole top
+    return list(dict.fromkeys([(b, "") for b in selected_bodies() if b.Name not in clicked] + cells))
+
+
+def mesh_picks(study, kinds):
+    """Picked sub-elements named kinds[i]N, those on a Symmetric Mesh top moved to the cell."""
+    return objects.to_cells(study, selected_subs(kinds))
 
 
 ANY_SUB = ("Face", "Edge", "Vertex")
-# proxy: (pick, list label, sub-elements the gate lets through, whole bodies too?, hint for 3D, hint for 2D)
+# proxy: (pick(study), list label, sub-elements the gate lets through, whole bodies too?, hint for 3D, hint for 2D)
 ITEM_PICKS = {
-    objects.Excitation: (selected_faces, "Faces", ("Face",), False, "Click faces in the 3D view.", "3D only"),
+    objects.Excitation: (
+        lambda study: selected_faces(),
+        "Faces",
+        ("Face",),
+        False,
+        "Click faces in the 3D view.",
+        "3D only",
+    ),
     objects.TransfiniteBody: (
-        lambda: _whole_bodies() + selected_subs(("Vertex",)),
+        lambda study: picked_bodies(study) + mesh_picks(study, ("Vertex",)),
         "Bodies,\ncorner vertices",
         ANY_SUB,
         True,
@@ -1065,7 +1083,7 @@ ITEM_PICKS = {
         "Click a region to add it. Clicked vertices become its corners.",
     ),
     objects.Recombine: (
-        _whole_bodies,
+        picked_bodies,
         "Bodies",
         ANY_SUB,
         True,
@@ -1073,7 +1091,7 @@ ITEM_PICKS = {
         "Click regions in the 3D view.",
     ),
     objects.TransfiniteEdges: (
-        lambda: selected_subs(("Edge",)),
+        lambda study: mesh_picks(study, ("Edge",)),
         "Edges",
         ("Edge",),
         False,
@@ -1081,7 +1099,7 @@ ITEM_PICKS = {
         "Click edges in the 3D view.",
     ),
     objects.MeshSize: (
-        selected_mesh_refs,
+        lambda study: objects.to_cells(study, selected_mesh_refs()),
         "Bodies, faces,\nedges, vertices",
         ANY_SUB,
         True,
@@ -1169,8 +1187,8 @@ class ItemPanel:
         self.close()
 
     def add_selection(self):
-        new = self.pick()
         study, cls = objects.owner_study(self.obj), type(self.obj.Proxy)
+        new = self.pick(study)
 
         def problem_of(bodies):
             return objects.assignment_problem(study, bodies) or objects.air_refusal(cls, bodies)
