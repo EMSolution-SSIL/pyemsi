@@ -1241,6 +1241,61 @@ def main():
     assert again_air.ViewObject.Transparency == 50, "an existing view provider was made again"
     App.closeDocument(again.Name)
     log.append("view providers attached on open ok")
+    # Symmetric Mesh: the command on the stator's Fragments, and Materials on faces of it.
+    import sys
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    from tests.freecad_addon import symcases
+
+    sym_doc = App.newDocument("Symmetric")
+    sym_study = symcases.motor_study(sym_doc)
+    App.setActiveDocument(sym_doc.Name)
+    taskpanels.set_active_study(sym_study)
+    stator_top = sym_study.MainObjects[0]
+    for item in objects.symmetric_items(sym_study):  # the command makes them again
+        sym_doc.removeObject(item.Name)
+    Gui.Selection.clearSelection()
+    Gui.runCommand("EMS_SymmetricMesh")
+    assert warned[-1] == "Select the object built from the cell (the Fragments or Array) first.", warned[-1]
+    Gui.Selection.addSelection(sym_doc.Name, "StatorIronCell")  # a cell body is not the top
+    Gui.runCommand("EMS_SymmetricMesh")
+    assert not objects.symmetric_items(sym_study), "a Symmetric Mesh item on a cell"
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name)
+    Gui.runCommand("EMS_SymmetricMesh")
+    (sym_item,) = objects.symmetric_items(sym_study)
+    assert sym_item.Top == stator_top and len(sym_item.Steps) == 2, (sym_item.Top, list(sym_item.Steps))
+    assert sym_doc.UndoNames[0] == "Add Symmetric Mesh", sym_doc.UndoNames
+    # Materials: faces of the top ask for pieces, a whole top body is refused.
+    asked_pieces = []
+    real_ask_piece = taskpanels.ask_piece_assignment
+    taskpanels.ask_piece_assignment = lambda study, pieces: asked_pieces.append(pieces)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face1")
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face2")
+    Gui.runCommand("EMS_Material")
+    assert asked_pieces == [[(stator_top, "Face1"), (stator_top, "Face2")]], asked_pieces
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name)
+    Gui.runCommand("EMS_Material")
+    assert len(asked_pieces) == 1 and warned[-1].startswith("Materials go on the faces"), warned[-1]
+    taskpanels.ask_piece_assignment = real_ask_piece
+    # The real prompt: a name, then the library material and POTENTIAL; one undo step.
+    before = len(objects.piece_assignments(sym_study))
+    commands.ask_text = lambda title, label, default: "Smoke pieces"
+    real_exec = taskpanels.AssignDialog.exec
+    taskpanels.AssignDialog.exec = lambda self: self.accept()
+    taskpanels.ask_piece_assignment(sym_study, [(stator_top, "Face1"), (stator_top, "Face2")])
+    taskpanels.AssignDialog.exec = real_exec
+    made = objects.piece_assignments(sym_study)
+    assert len(made) == before + 1 and made[-1].Label == "Smoke pieces", [m.Label for m in made]
+    assert (
+        objects.item_refs(made[-1]) == [(stator_top, "Face1"), (stator_top, "Face2")]
+        and sym_doc.UndoNames[0] == "Assign material"
+    ), sym_doc.UndoNames
+    App.closeDocument(sym_doc.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("symmetric mesh ok")
     App.closeDocument(doc.Name)
 
 

@@ -124,6 +124,15 @@ class AssignMaterial(_StudyCommand):
         bodies = taskpanels.selected_bodies()
         if not bodies:
             return warn("Select one or more bodies first.")
+        tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
+        pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
+        if pieces:
+            if gate(study, [b for b, _ in pieces]):
+                taskpanels.ask_piece_assignment(study, pieces)
+            return
+        whole = [b for b in bodies if b.Name in tops]
+        if whole:
+            return warn(f"Materials go on the faces (pieces) of {objects.display_name(whole[0])}: select faces first.")
         if gate(study, bodies):
             taskpanels.ask_assignment(study, bodies)
 
@@ -285,6 +294,26 @@ class AddRecombine(_StudyCommand):
             _create_and_edit(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
 
 
+class AddSymmetricMesh(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("symmetric"),
+            "MenuText": "Symmetric Mesh",
+            "ToolTip": "Mesh one cell of a Mirror / Polar Array drawing and copy the mesh around",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        picked = Gui.Selection.getSelection()
+        names = {b.Name for b in objects.study_bodies(study)}
+        if len(picked) != 1 or picked[0].Name not in names:
+            return warn("Select the object built from the cell (the Fragments or Array) first.")
+        top = picked[0]
+        _create(study, "Add Symmetric Mesh", lambda: objects.make_symmetric_mesh(study, top))
+
+
 class ValidateStudy(_StudyCommand):
     def GetResources(self):
         return {
@@ -333,6 +362,7 @@ COMMANDS = {
     "EMS_TransfiniteBody": AddTransfiniteBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
+    "EMS_SymmetricMesh": AddSymmetricMesh(),
     "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),
 }

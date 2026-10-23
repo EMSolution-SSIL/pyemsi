@@ -99,9 +99,9 @@ def apply_assignment(study, bodies, lib, potential):
 class AssignDialog(QtWidgets.QDialog):
     """Material and POTENTIAL for bodies; "— none —" removes their assignments."""
 
-    def __init__(self, study, bodies, parent=None):
+    def __init__(self, study, bodies, parent=None, apply=None):
         super().__init__(parent or Gui.getMainWindow())
-        self.study, self.bodies = study, list(bodies)
+        self.study, self.bodies, self.apply = study, list(bodies), apply  # apply(lib, potential): assign pieces
         self.setWindowTitle("Assign Material")
         layout = QtWidgets.QFormLayout(self)
         names = ", ".join(b.Label for b in self.bodies[:5])
@@ -136,6 +136,11 @@ class AssignDialog(QtWidgets.QDialog):
     def accept(self):
         name = self.material.currentData()
         lib = self.study.Document.getObject(name) if name else None
+        if self.apply is not None:
+            if lib is None:
+                return warn("Choose a material from the Material Library.")
+            self.apply(lib, self.potential.value())
+            return super().accept()
         problem = objects.assignment_problem(self.study, self.bodies) if lib else ""  # removing is always allowed
         if problem:
             return warn(problem)
@@ -145,6 +150,24 @@ class AssignDialog(QtWidgets.QDialog):
 
 def ask_assignment(study, bodies):
     AssignDialog(study, bodies).exec()
+
+
+def ask_piece_assignment(study, pieces):
+    """Ask for a name, then a library material and POTENTIAL, for pieces [(body, "FaceN")]; one undo step."""
+    from . import commands  # commands imports this module
+
+    name = commands.ask_text("Assign Material", "Name of the assignment", "Pieces")
+    if name is None:
+        return
+
+    def apply(lib, potential):
+        doc = study.Document
+        doc.openTransaction("Assign material")
+        objects.assign_pieces(study, name, pieces, lib, potential)
+        doc.commitTransaction()
+        doc.recompute()
+
+    AssignDialog(study, list(dict.fromkeys(b for b, _ in pieces)), apply=apply).exec()
 
 
 class _ViewProvider:
