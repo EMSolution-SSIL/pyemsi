@@ -680,6 +680,32 @@ def slide_report(job):
     return lines
 
 
+def generate(job, dim):
+    """Apply the user's mesh settings and mesh the current model to dimension dim; a transfinite face or volume
+    that would fall back to unstructured is an error."""
+    for name, value in job.get("options", {}).items():  # the user's mesh settings
+        gmsh.option.setNumber(name, value)
+    gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
+    gmsh.option.setNumber("Mesh.Optimize", 1)
+    gmsh.logger.start()  # Gmsh only warns when a transfinite face or volume falls back to unstructured
+    try:
+        gmsh.model.mesh.generate(dim)
+        failed = [m for m in gmsh.logger.get() if "cannot be meshed using the transfinite" in m]
+    finally:
+        gmsh.logger.stop()
+    if failed:
+        raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
+
+
+def publish(outputs):
+    """Move each finished (path, target) over its target: only a finished mesh replaces the solver's file."""
+    for path, target in outputs:
+        try:
+            os.replace(path, target)
+        except PermissionError:
+            raise JobError(f"Could not replace {target}: it is read-only or open in another program.") from None
+
+
 def run(job_path, build, dim):
     """Read the job, call build(job, folder) on a fresh model, mesh to dimension dim, write mesh.unv and
     replace job["mesh_file"] with the finished .msh. Returns the job.
@@ -696,18 +722,7 @@ def run(job_path, build, dim):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         split = build(job, folder)
-        for name, value in job.get("options", {}).items():  # the user's mesh settings
-            gmsh.option.setNumber(name, value)
-        gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
-        gmsh.option.setNumber("Mesh.Optimize", 1)
-        gmsh.logger.start()  # Gmsh only warns when a transfinite face or volume falls back to unstructured
-        try:
-            gmsh.model.mesh.generate(dim)
-            failed = [m for m in gmsh.logger.get() if "cannot be meshed using the transfinite" in m]
-        finally:
-            gmsh.logger.stop()
-        if failed:
-            raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
+        generate(job, dim)
         gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))
         gmsh.option.setNumber("Mesh.Binary", 0)
         if split:
@@ -719,11 +734,7 @@ def run(job_path, build, dim):
         gmsh.write(os.path.join(folder, "mesh.unv"))
     finally:
         gmsh.finalize()
-    for path, target in outputs:
-        try:
-            os.replace(path, target)  # only a finished mesh replaces the solver's file
-        except PermissionError:
-            raise JobError(f"Could not replace {target}: it is read-only or open in another program.") from None
+    publish(outputs)
     return job
 
 
