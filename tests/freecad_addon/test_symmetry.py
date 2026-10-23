@@ -104,3 +104,27 @@ def test_array_axis_other_than_z_is_refused(motor):
     array.Axis = App.Vector(1, 0, 0)
     with pytest.raises(symmetry.SymmetryError, match="StatorArray"):
         symmetry.read_chain(motor["stator_top"])
+
+
+def test_cell_bodies_made_from_other_objects_are_leaves(motor):
+    doc = motor["doc"]
+    big = symcases.feature(doc, "BigFace", symcases.sector(60, 62, 0, 15))
+    small = symcases.feature(doc, "SmallFace", symcases.sector(60, 61, 0, 15))
+    cut = doc.addObject("Part::Cut", "CutCell")
+    cut.Base, cut.Tool = big, small
+    doc.recompute()
+    pitch = doc.getObject("StatorCell")
+    pitch.Links = list(pitch.Links) + [cut]
+    doc.recompute()
+    cells, transforms = symmetry.read_chain(motor["stator_top"])
+    assert cut in cells
+    assert len(transforms) == 24
+
+
+def test_identity_comes_first_whatever_the_link_order(motor):
+    pitch = motor["doc"].getObject("StatorPitch")
+    pitch.Links = list(reversed(pitch.Links))
+    motor["doc"].recompute()
+    _, transforms = symmetry.read_chain(motor["stator_top"])
+    assert len(transforms) == 24
+    assert transforms[0] == symmetry.ID

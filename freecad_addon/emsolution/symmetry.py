@@ -74,11 +74,13 @@ def _is_fragments(obj):
     return obj.TypeId == "Part::FeaturePython" and hasattr(obj, "Objects") and not hasattr(obj, "ArrayType")
 
 
+def _in_table(obj):
+    return obj.TypeId in ("Part::Compound", "Part::Mirroring") or _is_array(obj) or _is_fragments(obj)
+
+
 def _is_leaf(obj):
-    """A drawn body: it has a shape and is not made from other objects."""
-    return hasattr(obj, "Shape") and not any(
-        obj.getTypeIdOfProperty(p).startswith("App::PropertyLink") for p in obj.PropertiesList
-    )
+    """A drawn body: it has a shape and nothing it is made from is a Mirror, Array, Compound or Fragments."""
+    return hasattr(obj, "Shape") and not any(_in_table(o) for o in obj.OutListRecursive)
 
 
 def _merge(parts):
@@ -104,16 +106,12 @@ def _walk(obj):
         found = _array(obj)
     elif _is_fragments(obj):
         found = _merge(_walk(o) for o in obj.Objects)
-    elif obj.TypeId == "Part::Feature" or _is_leaf(obj):
-        return {obj.Name: (obj, [compose(_placement_free(obj))])}
+    elif _is_leaf(obj):
+        return {obj.Name: (obj, [ID])}  # its shape already carries its own Placement
     else:
         raise SymmetryError(f"{_name(obj)} is not supported in a Symmetric Mesh chain")
     p = _placement(obj)
     return {k: (b, [compose(p, t) for t in ts]) for k, (b, ts) in found.items()}
-
-
-def _placement_free(obj):
-    return ID
 
 
 def _array(obj):
@@ -152,4 +150,7 @@ def read_chain(top):
                 f"{found[name][0].Label} is not copied the same way as the other cell bodies: "
                 "every body of the cell must go through the same Mirror and Polar Array"
             )
-    return [b for b, _ in found.values()], list(first.values())
+    ident = _key(ID)
+    transforms = [first[ident]] if ident in first else []
+    transforms += [t for k, t in first.items() if k != ident]
+    return [b for b, _ in found.values()], transforms
