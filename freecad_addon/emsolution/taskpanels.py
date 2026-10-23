@@ -1036,7 +1036,7 @@ class ItemGate:
 
     def __init__(self, study, kinds, whole, air=True):
         bodies = objects.assignable(study) if air else objects.study_bodies(study)
-        self.main = {b.Name for b in bodies}
+        self.main = {b.Name for b in bodies + objects.cell_bodies(study)}  # a symmetric Study meshes its cells
         self.kinds, self.whole = kinds, whole
 
     def allow(self, doc, obj, sub):

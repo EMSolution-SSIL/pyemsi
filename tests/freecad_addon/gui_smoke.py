@@ -1339,6 +1339,9 @@ def main():
     taskpanels.AssignDialog.exec = real_exec
     assert len(objects.piece_assignments(sym_study)) == count, "a failed assignment was left behind"
     assert not sym_doc.HasPendingTransaction and list(sym_doc.UndoNames) == undo, list(sym_doc.UndoNames)
+    # Item panels let the cell bodies be picked: the mesh settings belong on them.
+    for air in (True, False):
+        assert "CoilCell" in taskpanels.ItemGate(sym_study, ("Edge",), False, air).main, "gate: cell body"
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")
