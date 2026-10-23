@@ -92,13 +92,14 @@ class MeshSymTest(unittest.TestCase):
         write_sectors(self.geo(f"vol_{mat_id}.brep"), sector)
         return {"mat_id": mat_id, "name": name, "file": f"geometry/vol_{mat_id}.brep", "size": size}
 
-    def piece(self, mat_id, name, sector):
+    def piece(self, mat_id, name, *sectors):
         self.count += 1
         rel = f"geometry/piece_{self.count}.brep"
-        write_sectors(os.path.join(self.dir, rel), sector)
+        write_sectors(os.path.join(self.dir, rel), *sectors)
         return {"mat_id": mat_id, "name": name, "file": rel}
 
-    def run_job(self, bodies, sides, slide=None, extra=None):
+    def run_job(self, bodies, sides, slide=None, extra=None, check=False, patch=""):
+        """Run the mesher on the job (--check when check); patch: Python run on meshsym first, e.g. to break it."""
         job = {
             "dimension": "2D",
             "model_name": "Model",
@@ -115,9 +116,16 @@ class MeshSymTest(unittest.TestCase):
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
-        return subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        cmd = [sys.executable, MESHER2D, path] + (["--check"] if check else [])
+        if patch:
+            code = (
+                f"import runpy, sys; sys.path.insert(0, {os.path.dirname(MESHER2D)!r}); import meshsym; {patch}; "
+                f"sys.argv = {cmd[1:]!r}; runpy.run_path({MESHER2D!r}, run_name='__main__')"
+            )
+            cmd = [sys.executable, "-c", code]
+        return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
-    def ring_job(self, outer_ids=(2,) * 8, outer_cuts=None):
+    def ring_job(self, outer_ids=(2,) * 8, outer_cuts=None, **kw):
         """Cell: sectors r 10..20 (id 1) and 20..30 (id 2), 0..45°; 4 rotations × {identity, mirror at 45°}.
         Pieces: 8 inner sectors (MAT_ID 1) and 8 outer ones with outer_ids, cut at the angles outer_cuts."""
         bodies = [self.cell(1, "InnerCell", (10, 20, 0, 45)), self.cell(2, "OuterCell", (20, 30, 0, 45))]
@@ -126,7 +134,7 @@ class MeshSymTest(unittest.TestCase):
         for k, id_ in enumerate(outer_ids):
             pieces.append(self.piece(id_, f"Outer{id_}", (20, 30, cuts[k], cuts[k + 1])))
         side = {"side": "fixed", "cells": [1, 2], "transforms": chain(45, 90, 4), "pieces": pieces}
-        return self.run_job(bodies, [side])
+        return self.run_job(bodies, [side], **kw)
 
     def test_copies_cover_the_ring_without_gaps(self):
         r = self.ring_job()
@@ -221,6 +229,79 @@ class MeshSymTest(unittest.TestCase):
         self.assertEqual(inverted, 0)
         self.assertEqual(loose, 0)
         self.assertEqual(groups(self.files()[0]), {4: ("Iron", 8 * 36)})
+
+    def rotation_job(self, **kw):
+        """Cell A r 10..30, 0..22.5° with a fine size, cell B 22.5..45° coarse; 8 rotations of 45°, no mirror: the
+        0° seam of A meets the 45° seam of B of the next copy."""
+        bodies = [self.cell(1, "A", (10, 30, 0, 22.5), size=0.5), self.cell(2, "B", (10, 30, 22.5, 45))]
+        pieces = [self.piece(1, "PA", (10, 30, 45 * k, 45 * k + 22.5)) for k in range(8)]
+        pieces += [self.piece(2, "PB", (10, 30, 45 * k + 22.5, 45 * k + 45)) for k in range(8)]
+        side = {"side": "fixed", "cells": [1, 2], "transforms": [rotation(45 * k) for k in range(8)], "pieces": pieces}
+        return self.run_job(bodies, [side], **kw)
+
+    def test_pure_rotation_seams_conform(self):
+        r = self.rotation_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        _, inverted, loose = mesh_check(self.files()[0], (10, 30))
+        self.assertEqual((inverted, loose), (0, 0))
+
+    def test_seams_that_do_not_match_are_refused(self):
+        r = self.rotation_job(patch="meshsym._periodic = lambda sides: None")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("do not match", r.stderr)
+        self.assertFalse(os.path.exists(self.files()[0]))
+
+    def test_side_short_of_the_sliding_circle_is_refused(self):
+        bodies = [self.cell(1, "StatorCell", (35, 60, 0, 15)), self.cell(2, "RotorCell", (10, 34.5, 0, 22.5))]
+        fixed = {
+            "side": "fixed",
+            "cells": [1],
+            "transforms": chain(15, 30, 12),
+            "pieces": [self.piece(5, "S", (35, 60))],
+        }
+        moving = {"side": "moving", "cells": [2], "transforms": chain(22.5, 45, 8)}
+        moving["pieces"] = [self.piece(6, "R", (10, 34.5))]
+        slide = {"name": "Slide", "kind": "rotational", "radius": 35.0, "divisions": 144, "slide_mat_id": 7}
+        r = self.run_job(bodies, [fixed, moving], slide)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("moving side", r.stderr)
+
+    def test_side_covering_part_of_the_sliding_circle_is_refused(self):
+        """The rotor cell reaches the circle from 0 to 10° only: its copies leave gaps in the circle."""
+        write_sectors(self.geo("vol_2.brep"), (10, 35, 0, 10), (10, 34, 10, 22.5))
+        rotor = {"mat_id": 2, "name": "RotorCell", "file": "geometry/vol_2.brep", "size": 2.0}
+        bodies = [self.cell(1, "StatorCell", (35, 60, 0, 15)), rotor]
+        fixed = {
+            "side": "fixed",
+            "cells": [1],
+            "transforms": chain(15, 30, 12),
+            "pieces": [self.piece(5, "S", (35, 60))],
+        }
+        parts = []
+        for k in range(8):
+            a = 45 * k
+            parts += [(10, 35, a, a + 10), (10, 34, a + 10, a + 35), (10, 35, a + 35, a + 45)]
+        moving = {
+            "side": "moving",
+            "cells": [2],
+            "transforms": chain(22.5, 45, 8),
+            "pieces": [self.piece(6, "R", *parts)],
+        }
+        slide = {"name": "Slide", "kind": "rotational", "radius": 35.0, "divisions": 144, "slide_mat_id": 7}
+        r = self.run_job(bodies, [fixed, moving], slide)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("moving side", r.stderr)
+        self.assertIn("on the circle", r.stderr)
+
+    def test_check_runs_the_symmetric_checks_and_writes_nothing(self):
+        r = self.rotation_job(check=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("CHECK OK", r.stdout)
+        self.assertFalse(os.path.exists(self.files()[0]))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "mesh.unv")))
+        r = self.ring_job(outer_cuts=[0, 44, 90, 135, 180, 225, 270, 315, 360], check=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("not symmetric", r.stderr)
 
 
 if __name__ == "__main__":

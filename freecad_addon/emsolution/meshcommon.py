@@ -753,8 +753,9 @@ def check(job_path, build):
     print("CHECK OK")
 
 
-def main(argv, script, run_job, build=None):
-    """argv: [script, job.json] meshes; [script, job.json, "--check"] only checks (needs build)."""
+def main(argv, script, run_job, build=None, check_job=None):
+    """argv: [script, job.json] meshes; [script, job.json, "--check"] only checks (needs build), with
+    check_job(job_path, build) when given, else check."""
     for stream in (sys.stdout, sys.stderr):  # the runner reads UTF-8, whatever the console code page
         stream.reconfigure(encoding="utf-8", errors="replace")
     checking = len(argv) == 3 and argv[2] == "--check" and build is not None
@@ -763,7 +764,7 @@ def main(argv, script, run_job, build=None):
         return 1
     try:
         if checking:
-            check(argv[1], build)
+            (check_job or check)(argv[1], build)
         else:
             run_job(argv[1])
     except Exception as exc:  # anything -> one clean ERROR line for the runner

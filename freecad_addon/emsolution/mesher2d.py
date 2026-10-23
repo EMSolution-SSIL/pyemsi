@@ -14,6 +14,7 @@ import gmsh
 
 from meshcommon import (
     JobError,
+    check,
     apply_size_fields,
     apply_transfinite,
     main,
@@ -144,10 +145,18 @@ def build(job, folder):
     return slide_split(job, bodies, body_faces, apply_slides(slides, mapped, 2), 2)
 
 
-def run_job(job_path):
+def _symmetric(job_path):
     with open(job_path, encoding="utf-8") as fh:
-        symmetric = "symmetric" in json.load(fh)
-    if symmetric:  # mesh the cell and copy it
+        return "symmetric" in json.load(fh)
+
+
+def check_job(job_path, build):
+    """--check: a symmetric job meshes and copies its cell to run its checks (meshsym.check)."""
+    (meshsym.check if _symmetric(job_path) else check)(job_path, build)
+
+
+def run_job(job_path):
+    if _symmetric(job_path):  # mesh the cell and copy it
         print("\n".join(meshsym.report(meshsym.run(job_path, build))))
         return
     job = run(job_path, build, 2)
@@ -168,4 +177,4 @@ def run_job(job_path):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv, "mesher2d.py", run_job, build))
+    sys.exit(main(sys.argv, "mesher2d.py", run_job, build, check_job))
