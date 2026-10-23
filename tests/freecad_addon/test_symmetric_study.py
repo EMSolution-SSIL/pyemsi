@@ -84,3 +84,163 @@ def test_sliding_interface_without_air_has_a_circle(motor):
     motor.Document.recompute()
     (edge,) = iface.Shape.Edges
     assert edge.isClosed() and edge.Curve.Radius == pytest.approx(35)
+
+
+# ---- validation
+
+
+def _problems(study, severity=None):
+    from emsolution import validation
+
+    return [p for p in validation.validate(study) if severity in (None, p.severity)]
+
+
+def _texts(study, severity="error"):
+    return [p.text for p in _problems(study, severity)]
+
+
+def _has(study, *words, severity="error"):
+    return any(all(w in t for w in words) for t in _texts(study, severity))
+
+
+def _tops(study):
+    return [i.Top for i in objects.symmetric_items(study)]
+
+
+def test_motor_study_validates_clean(motor):
+    assert [(p.severity, p.text) for p in _problems(motor)] == []
+
+
+def test_item_without_top_is_an_error(motor):
+    stator, _ = objects.symmetric_items(motor)
+    stator.Top = None
+    found = [p for p in _problems(motor, "error") if "has no top object" in p.text]
+    assert found and found[0].item == stator
+
+
+def test_unreadable_chain_gives_the_symmetry_error_on_the_item(motor):
+    stator, _ = objects.symmetric_items(motor)
+    array = next(o for o in motor.Document.Objects if o.Label == "StatorArray")
+    array.ArrayType = "ortho"
+    problems = [p for p in _problems(motor, "error") if "only polar arrays" in p.text]
+    assert problems and problems[0].item == stator
+
+
+def test_two_items_on_one_side_are_refused(motor):
+    objects.make_symmetric_mesh(motor, _tops(motor)[0])
+    assert _has(motor, "only one Symmetric Mesh per side")
+
+
+def test_extra_body_in_main_is_refused(motor):
+    import Part
+
+    extra = symcases.feature(
+        motor.Document, "Extra", Part.Face(Part.makePolygon([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 0, 0)]))
+    )
+    motor.MainObjects = [*motor.MainObjects, extra]
+    assert _has(motor, "only one Symmetric Mesh per side")
+
+
+def test_air_region_is_refused(motor):
+    objects.make_air_region(motor)
+    assert _has(motor, "Air Region")
+
+
+def test_zx_plane_is_refused(motor, monkeypatch):
+    from emsolution import airshapes
+
+    monkeypatch.setattr(airshapes, "study_plane", lambda study: "ZX")
+    assert _has(motor, "XY plane")
+
+
+def test_whole_body_assignment_on_a_top_is_refused(motor):
+    objects.assign(motor, [_tops(motor)[0]], motor.MaterialsGroup.Group[0].LibraryMaterial, 0)
+    assert _has(motor, "pieces")
+
+
+def test_whole_body_assignment_on_a_cell_body_warns(motor):
+    cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
+    objects.assign(motor, [cell], motor.MaterialsGroup.Group[0].LibraryMaterial, 0)
+    assert _has(motor, "not used", "pieces", severity="warning")
+    assert not [t for t in _texts(motor) if "CoilCell" in t]
+
+
+def test_face_without_material_is_an_error(motor):
+    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil.Pieces = []
+    motor.Document.recompute()
+    assert _has(motor, "no Material", "Face")
+
+
+def test_face_with_two_materials_is_an_error(motor):
+    coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.Label in ("Coil01", "Coil02")]
+    coil2.Pieces = [*coil2.Pieces, *coil1.Pieces]
+    assert _has(motor, "two Materials", "Face")
+
+
+def test_assignment_on_both_sides_is_refused(motor):
+    stator_top, rotor_top = _tops(motor)
+    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil.Pieces = [*coil.Pieces, (rotor_top, ("Face1",))]
+    assert _has(motor, "both sides")
+
+
+def test_piece_on_a_body_that_is_not_a_top_is_refused(motor):
+    cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
+    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil.Pieces = [*coil.Pieces, (cell, ("Face1",))]
+    assert _has(motor, "not a Symmetric Mesh top")
+
+
+@pytest.mark.parametrize("make", ["size", "recombine"])
+def test_mesh_setting_on_a_top_is_refused(motor, make):
+    top = _tops(motor)[0]
+    if make == "size":
+        objects.make_mesh_size(motor, 1.0, [(top, "Face1")])
+    else:
+        objects.make_recombine(motor, [top])
+    assert _has(motor, "copies are not meshed")
+
+
+def test_transfinite_on_a_top_is_refused(motor):
+    top = _tops(motor)[0]
+    objects.make_transfinite_edges(motor, 5, [(top, "Edge1")])
+    assert _has(motor, "copies are not meshed")
+
+
+def test_mesh_size_on_a_cell_body_is_fine(motor):
+    cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
+    objects.make_mesh_size(motor, 1.0, [(cell, "")])
+    assert _problems(motor) == []
+
+
+def test_linear_interface_is_refused(motor):
+    (iface,) = objects.sliding_interfaces(motor)
+    iface.Kind = "Linear"
+    assert _has(motor, "Rotational")
+
+
+def test_divisions_must_fit_the_copy_count(motor):
+    (iface,) = objects.sliding_interfaces(motor)
+    iface.Divisions = 146  # 24 copies of the stator cell
+    assert _has(motor, "divisions", "24")
+
+
+def test_changing_array_count_reports_pieces(motor):
+    array = next(o for o in motor.Document.Objects if o.Label == "StatorArray")
+    array.NumberPolar = 6
+    motor.Document.recompute()
+    assert _has(motor, "no Material") or _has(motor, "two Materials")
+
+
+def test_deleted_cell_body_is_an_error(motor):
+    stator, _ = objects.symmetric_items(motor)
+    motor.Document.removeObject("CoilCell")
+    motor.Document.recompute()
+    assert [p for p in _problems(motor, "error") if p.item == stator]
+
+
+def test_duplicate_assignment_labels_are_refused(motor):
+    a, b = objects.piece_assignments(motor)[:2]
+    a.Label, b.Label = "Coil 01", "Coil_01"
+    assert _has(motor, "group names are the same")
