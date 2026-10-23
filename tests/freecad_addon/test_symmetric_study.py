@@ -14,6 +14,8 @@ import FreeCAD as App
 from emsolution import jobwriter, objects
 
 from . import meshreport, symcases
+from .materialdata import STEEL, record
+from .test_meshsym import mesh_check
 
 
 @pytest.fixture
@@ -286,3 +288,45 @@ def test_symmetric_job_meshes_into_both_files(motor):
         return abs(math.hypot(p[0], p[1]) - 35) < 1e-6
 
     assert meshreport.slide_check(job["mesh_file"], job["rotor_file"], on_slide) == (144, 144, True)
+
+    label = {int(motor.MatIds[m.Name]): m.Label for m in objects.piece_assignments(motor)}
+    for side, msh in zip(job["symmetric"]["sides"], (job["mesh_file"], job["rotor_file"])):
+        found = {name for name, _ in meshreport.groups(msh).values()}
+        assert found == {label[p["mat_id"]] for p in side["pieces"]}
+    fixed_names = {name for name, _ in meshreport.groups(job["mesh_file"]).values()}
+    assert fixed_names == {"StatorIron", "StatorAir"} | {f"Coil{i:02d}" for i in range(1, 13)}
+    assert sum(line.startswith("MAT_ID") for line in r.stdout.splitlines()) == 18
+    for msh in (job["mesh_file"], job["rotor_file"]):
+        assert mesh_check(msh, (35,))[1] == 0
+
+
+def test_static_study_writes_one_file(tmp_path):
+    doc = App.newDocument("SymStatic")
+    try:
+        info = symcases.motor_doc(doc)
+        study = objects.make_study(doc, "2D")
+        study.MainMode, study.MainObjects = "Manual", [info["stator_top"]]
+        study.Movement = "No movement"
+        objects.make_symmetric_mesh(study, info["stator_top"])
+        lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL)))
+        objects.assign_pieces(
+            study,
+            "Stator",
+            [(info["stator_top"], f"Face{i + 1}") for i in range(len(info["stator_top"].Shape.Faces))],
+            lib,
+            0,
+        )
+        doc.recompute()
+        doc.saveAs(str(tmp_path / "s.FCStd"))
+        path = jobwriter.write_job(study)
+        with open(path, encoding="utf-8") as fh:
+            job = json.load(fh)
+        assert "rotor_file" not in job and len(job["symmetric"]["sides"]) == 1
+        assert "slide" not in job["symmetric"]
+        mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+        r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
+        assert r.returncode == 0, r.stderr
+        assert os.path.exists(job["mesh_file"])
+    finally:
+        for name in list(App.listDocuments()):
+            App.closeDocument(name)
