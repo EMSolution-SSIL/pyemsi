@@ -1039,6 +1039,11 @@ def main():
     Gui.runCommand("EMS_Recombine")
     ok()
     assert objects.recombine_items(second)[-1].References == [(section, ("",))]
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, section.Name, "Edge1")  # an edge click on a one-face body adds the region
+    Gui.runCommand("EMS_Recombine")
+    ok()
+    assert objects.recombine_items(second)[-1].References == [(section, ("",))]
     for item in [tb] + objects.recombine_items(second):  # leave the Study as the rest of the smoke test expects it
         doc.removeObject(item.Name)
     source.removeObject(blocks)

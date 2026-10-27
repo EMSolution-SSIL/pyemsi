@@ -417,27 +417,31 @@ def _transfinite(study, bodies, r):
     included = {b.Name for b in bodies}
     owner = {}  # (body name, face) -> Transfinite Body
     entries = []  # (t, b, whole body, the faces of b that t owns)
-    clashed = set()
     for t in objects.transfinite_bodies(study):
         picks = objects.face_picks(t) if study.Dimension == "2D" else [(b, []) for b, _ in objects.subs_by_body(t)]
         for b, faces in picks:
             if b.Name not in included:
                 continue
             owned = []
+            clashes = {}  # first Transfinite Body -> the faces of b it shares with t
             for face in objects.structured_faces(b, faces):
                 if not _has(b, face):  # _links reports it
                     continue
                 first = owner.setdefault((b.Name, face), t)
                 if first is t:
                     owned.append(face)
-                elif (b.Name, first.Name, t.Name) not in clashed:
-                    clashed.add((b.Name, first.Name, t.Name))
-                    first_whole = any(e[0] is first and e[1].Name == b.Name and e[2] for e in entries)
-                    if not faces and first_whole:
-                        r.error(f"Body {b.Label} is in Transfinite Body {first.Label} and {t.Label}.", t, [(b, "")])
-                    else:
-                        text = f"{b.Label}.{face} is in Transfinite Body {first.Label} and {t.Label}."
-                        r.error(text, t, [(b, face)])
+                else:
+                    clashes.setdefault(first, []).append(face)
+            for first, shared in clashes.items():
+                first_whole = any(e[0] is first and e[1].Name == b.Name and e[2] for e in entries)
+                if not faces and first_whole:
+                    r.error(f"Body {b.Label} is in Transfinite Body {first.Label} and {t.Label}.", t, [(b, "")])
+                else:
+                    names = ", ".join(f"{b.Label}.{f}" for f in shared)
+                    verb = "is" if len(shared) == 1 else "are"
+                    r.error(
+                        f"{names} {verb} in Transfinite Body {first.Label} and {t.Label}.", t, [(b, f) for f in shared]
+                    )
             if owned:
                 entries.append((t, b, not faces, owned))
     seen = {}
@@ -487,9 +491,8 @@ def _transfinite(study, bodies, r):
                 continue
             for sub in subs:
                 if _has(b, sub) and not any(_on_face(b, f, sub) for f in faces):
-                    r.error(
-                        f"Transfinite Body {t.Label}: corner {b.Label}.{sub} is on none of its structured faces.", t
-                    )
+                    text = f"Transfinite Body {t.Label}: corner {b.Label}.{sub} is on none of its structured faces."
+                    r.error(text, t, [(b, sub)])
 
 
 def _edge_numbers(body, face):

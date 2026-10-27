@@ -863,6 +863,22 @@ class StudyTest(unittest.TestCase):
         self.assertStudyErrorIn(
             study, f"Transfinite Body {t.Label}: corner B.{far} is on none of its structured faces."
         )
+        problem = next(p for p in validation.validate(study) if "is on none of its structured faces" in p.text)
+        self.assertEqual(problem.refs, [(b, far)])
+
+    def test_two_shared_faces_are_named_in_one_message(self):
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        faces = [self.nearest_face(core, 15, 5), self.nearest_face(core, 5, 5)]
+        t1 = objects.make_transfinite_body(study, [])
+        t1.References = [(core, f) for f in faces]
+        t2 = objects.make_transfinite_body(study, [])
+        t2.References = [(core, f) for f in faces]
+        a, b = sorted(faces, key=lambda f: int(f[4:]))
+        text = f"Core.{a}, Core.{b} are in Transfinite Body {t1.Label} and {t2.Label}."
+        problems = [p for p in validation.validate(study) if " are in Transfinite Body " in p.text]
+        self.assertEqual([p.text for p in problems], [text])
+        self.assertEqual(sorted(s for _, s in problems[0].refs), [a, b])
 
     def test_face_picks_in_a_3d_study_are_refused(self):
         a = self.box("A")
@@ -1003,6 +1019,7 @@ class StudyTest(unittest.TestCase):
         r, msh = self.run_mesher2d(study)
         self.assertIn("Structured      Core", r.stdout)
         self.assertEqual(msh_element_types(msh, 2), {3}, "only quadrangles")
+        self.assertEqual(sorted(self.faces_of_msh(msh)), [5, 15, 25])
         self.assert_no_inverted(msh)
 
     def test_only_the_middle_block_structured(self):  # A2
