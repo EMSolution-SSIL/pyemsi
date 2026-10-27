@@ -88,7 +88,7 @@ def _skipped_picks(study, r):
         for obj in picked:
             if obj.Name in kept or not obj.isDerivedFrom("Part::Feature"):
                 continue
-            users = [o.Label for o in resolved if obj in o.OutListRecursive]
+            users = [o.Label for o in resolved if obj.Name in geometry.inputs(o)]
             if users:
                 r.warning(
                     f"{obj.Label} is not meshed on its own: {', '.join(users)} is made from it."

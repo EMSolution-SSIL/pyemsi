@@ -1148,6 +1148,29 @@ class StudyTest(unittest.TestCase):
         self.assertIn("at least one solid", geometry.collect([b], "3D")[1][0])
         self.assertIn("without solids", geometry.collect([self.box("Solid")], "2D")[1][0])
 
+    def sketched_face_aligned_to(self, other):
+        """A Part::Face of a sketch that uses other's Edge1 as external geometry: a reference, not an input."""
+        sketch = self.doc.addObject("Sketcher::SketchObject", "Sketch")
+        sketch.addExternal(other.Name, "Edge1")
+        sketch.addGeometry(
+            [
+                Part.LineSegment(App.Vector(0, 0, 0), App.Vector(10, 0, 0)),
+                Part.LineSegment(App.Vector(10, 0, 0), App.Vector(10, -10, 0)),
+                Part.LineSegment(App.Vector(10, -10, 0), App.Vector(0, -10, 0)),
+                Part.LineSegment(App.Vector(0, -10, 0), App.Vector(0, 0, 0)),
+            ]
+        )
+        face = self.doc.addObject("Part::Face", "Aligned")
+        face.Sources = [sketch]
+        self.doc.recompute()
+        self.assertIn(other, face.OutListRecursive)  # the reference FreeCAD records
+        return face
+
+    def test_body_a_sketch_only_references_stays_a_body(self):
+        coil = self.face("Coil")
+        aligned = self.sketched_face_aligned_to(coil)
+        self.assertEqual(geometry.collect([aligned, coil], "2D"), ([aligned, coil], []))
+
     def test_2d_faces_may_be_in_the_zx_plane_but_not_in_both(self):
         xy, zx = self.face("XY"), self.face("ZX")
         zx.Placement = App.Placement(
@@ -1566,6 +1589,16 @@ print('RESTORE PASS')
         self.include(cut, coil)
         (warning,) = [w for w in self.problems(validation.WARNING) if "not meshed on its own" in w]
         self.assertTrue(warning.startswith("Coil is not meshed on its own: Air is made from it."), warning)
+
+    def test_body_a_sketch_only_references_is_not_reported_as_skipped(self):
+        coil = self.doc.addObject("Part::Feature", "Coil")
+        coil.Shape = Part.makePlane(10, 10)
+        aligned = self.sketched_face_aligned_to(coil)
+        study = objects.make_study(self.doc, "2D", "Section")
+        study.MainMode, study.MainObjects = "Manual", [aligned, coil]
+        self.assertEqual(objects.study_bodies(study), [aligned, coil])
+        texts = [p.text for p in validation.validate(study) if "not meshed on its own" in p.text]
+        self.assertEqual(texts, [])
 
     def test_bodies_without_material_are_a_warning(self):
         self.include(self.box("A"))
