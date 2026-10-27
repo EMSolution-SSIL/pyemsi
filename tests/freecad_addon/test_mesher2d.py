@@ -61,6 +61,21 @@ def write_polygons(path, loops):
         gmsh.finalize()
 
 
+def write_faces(path, polygons):
+    """One BREP holding one plane face in z = 0 per point loop (no holes)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for pts in polygons:
+            tags = [gmsh.model.occ.addPoint(x, y, 0) for x, y in pts]
+            lines = [gmsh.model.occ.addLine(tags[k], tags[(k + 1) % len(tags)]) for k in range(len(tags))]
+            gmsh.model.occ.addPlaneSurface([gmsh.model.occ.addCurveLoop(lines)])
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
 def add_sector(inner, outer, a0=0.0, a1=360.0):
     """OCC face(s) of the ring (a disc when inner is 0) between the radii from angle a0 to a1 (degrees; under 180
     apart unless a full turn). Gmsh must be initialized."""
@@ -475,6 +490,91 @@ class Mesher2DTest(unittest.TestCase):
         last = self.last_error(self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf))
         self.assertIn("structured body Core", last)
         self.assertIn("5 boundary points and 5 corners", last)
+
+    def face_file(self, name, loop):
+        write_polygons(self.geo(f"{name}.brep"), [loop])
+        return f"geometry/{name}.brep"
+
+    def face_types(self, x):
+        """{element name: count} of the face of group 1 whose mesh nodes have mean x within 0.25 of x."""
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        xs = {int(t): coords[3 * k] for k, t in enumerate(tags)}
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, 1):
+            types, elements, nodes = gmsh.model.mesh.getElements(2, e)
+            used = {int(n) for ns in nodes for n in ns}
+            if abs(sum(xs[n] for n in used) / len(used) - x) < 0.25:
+                return {gmsh.model.mesh.getElementProperties(t)[0]: len(ts) for t, ts in zip(types, elements)}
+        self.fail(f"no face of group 1 at x = {x}")
+
+    def test_only_the_picked_face_is_structured(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1), (1, 0, 1, 1)])
+        right = self.face_file("tface_1_1", [(1, 0), (2, 0), (2, 1), (1, 1)])
+        tf = {
+            "bodies": [{"name": "Core", "mat_id": 1, "corner_files": [], "faces": [{"face": "Face2", "file": right}]}],
+            "edges": [self.edge_item("tedge_1", square_lines(1), 4)],
+        }
+        rface = {"name": "Core", "mat_id": 1, "face": "Face2", "file": right}
+        r = self.run_job(
+            [self.body(1, "Core", "vol_1.brep", size=0.1)], transfinite=tf, extra={"recombine_faces": [rface]}
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Structured      Core Face2", r.stdout)
+        self.assertIn("Recombined      Core Face2", r.stdout)
+        self.open_msh()
+        self.assertEqual(self.face_types(1.5), {"Quadrilateral 4": 16})
+        self.assertEqual(set(self.face_types(0.5)), {"Triangle 3"})
+
+    def test_recombine_only_the_picked_face(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1), (1, 0, 1, 1)])
+        right = self.face_file("rface_1_1", [(1, 0), (2, 0), (2, 1), (1, 1)])
+        rface = {"name": "Core", "mat_id": 1, "face": "Face2", "file": right}
+        r = self.run_job(
+            [self.body(1, "Core", "vol_1.brep", size=0.1)],
+            options={"Mesh.RecombinationAlgorithm": 1},
+            extra={"recombine_faces": [rface]},
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Recombined      Core Face2", r.stdout)
+        self.open_msh()
+        self.assertIn("Quadrilateral 4", self.face_types(1.5))  # Blossom may leave a few triangles
+        self.assertEqual(set(self.face_types(0.5)), {"Triangle 3"})
+
+    def test_picked_face_message_names_body_and_face(self):
+        pentagon = [(1, 0), (2, 0), (2, 1), (1.5, 1.5), (1, 1)]
+        write_faces(self.geo("vol_1.brep"), [[(0, 0), (1, 0), (1, 1), (0, 1)], pentagon])
+        right = self.face_file("tface_1_1", pentagon)
+        lines = [((*pentagon[k], 0), (*pentagon[(k + 1) % 5], 0)) for k in range(5)]
+        tf = {
+            "bodies": [{"name": "Core", "mat_id": 1, "corner_files": [], "faces": [{"face": "Face2", "file": right}]}],
+            "edges": [self.edge_item("tedge_1", lines, 2)],
+        }
+        r = self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf)
+        last = self.last_error(r)
+        self.assertIn("structured body Core Face2: face at (", last)
+        self.assertIn("it needs 3 or 4", last)
+
+    def test_picked_face_with_a_split_edge_uses_the_turning_points(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1), (1, 0, 1, 1)])
+        write_rects(self.geo("vol_2.brep"), [(1.4, 1, 0.2, 0.2)])  # splits Face2's top edge: 6 boundary points
+        right = self.face_file("tface_1_1", [(1, 0), (2, 0), (2, 1), (1, 1)])
+        tf = {
+            "bodies": [{"name": "Core", "mat_id": 1, "corner_files": [], "faces": [{"face": "Face2", "file": right}]}],
+            "edges": [self.edge_item("tedge_1", square_lines(1), 4)],
+        }
+        r = self.run_job([self.body(1, "Core", "vol_1.brep"), self.body(2, "Tooth", "vol_2.brep")], transfinite=tf)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: structured body Core Face2: face at (", r.stderr)
+        self.assertIn("6 boundary points; using the 4 where the boundary turns as corners", r.stderr)
+
+    def test_face_file_outside_its_body_is_an_error(self):
+        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1), (1, 0, 1, 1)])
+        far = self.face_file("tface_1_1", [(5, 5), (6, 5), (6, 6), (5, 6)])
+        tf = {
+            "bodies": [{"name": "Core", "mat_id": 1, "corner_files": [], "faces": [{"face": "Face2", "file": far}]}],
+            "edges": [self.edge_item("tedge_1", square_lines(1), 4)],
+        }
+        last = self.last_error(self.run_job([self.body(1, "Core", "vol_1.brep")], transfinite=tf))
+        self.assertIn("structured body Core Face2: tface_1_1.brep did not merge with the body", last)
 
     def test_opposite_sides_with_different_counts_are_an_error(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])

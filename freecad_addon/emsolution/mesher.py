@@ -17,6 +17,7 @@ from meshcommon import (
     main,
     run,
     transfinite_files,
+    FILE_DIMS,
     apply_recombine,
     claim_air,
     air_items,
@@ -53,7 +54,7 @@ def build(job, folder):
     size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
     inputs += [_import_one(path, 0, 1, 2) for _, path in size_files]
     tf_files = transfinite_files(job, folder)
-    inputs += [_import_one(path, 1 if kind == "edge" else 0) for kind, _, path in tf_files]
+    inputs += [_import_one(path, FILE_DIMS[kind]) for kind, _, path in tf_files]
 
     def add(file, *dims):  # sliding: last, so the spans above keep their places
         start = len(inputs)
@@ -129,8 +130,8 @@ def build(job, folder):
     apply_size_fields(by_size)
     tf_maps = rest[first + len(size_files) : first + len(size_files) + len(tf_files)]
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
-    tf_curves = apply_transfinite(job, mapped, body_vols, 3)
-    apply_recombine(job, body_vols, 3, tf_curves)
+    tf = apply_transfinite(job, mapped, body_vols, 3)
+    apply_recombine(job, body_vols, 3, tf, mapped)
     if job.get("periodic"):
         apply_periodic(job["periodic"], 3)
     if not slides:
