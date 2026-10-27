@@ -986,7 +986,7 @@ def main():
     Gui.Selection.addSelection(doc.Name, section.Name)
     Gui.runCommand("EMS_TransfiniteBody")
     texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
-    assert any(t.startswith("Click a region") for t in texts), texts
+    assert any(t.startswith("Click a face to structure") for t in texts), texts
     ok()
     Gui.Selection.clearSelection()
     for k in range(1, 5):
@@ -1014,6 +1014,37 @@ def main():
     for item in (tb, te, rc):  # leave the Study as the rest of the smoke test expects it
         doc.removeObject(item.Name)
     second.MeshSizesGroup.RecombinationAlgorithm = "Blossom"
+    # Face picks in 2D: a clicked face of a two-face body stays a face; a tree pick and a one-face body are whole.
+    blocks = doc.addObject("Part::Feature", "Blocks")
+    blocks.Shape = Part.makePlane(10, 10).generalFuse([Part.makePlane(10, 10, App.Vector(10, 0, 0))])[0]
+    source.addObject(blocks)
+    doc.recompute()
+    right = next(f"Face{i}" for i, f in enumerate(blocks.Shape.Faces, 1) if abs(f.CenterOfMass.x - 15) < 1e-6)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, blocks.Name, right)
+    Gui.runCommand("EMS_TransfiniteBody")
+    texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
+    assert any(t.startswith("Click a face to structure that block") for t in texts), texts
+    ok()
+    (tb,) = objects.transfinite_bodies(second)
+    assert tb.References == [(blocks, (right,))], tb.References
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, blocks.Name)  # tree pick
+    Gui.runCommand("EMS_Recombine")
+    ok()
+    (rc,) = objects.recombine_items(second)
+    assert rc.References == [(blocks, ("",))], rc.References
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, section.Name, "Face1")  # one-face body: stored whole
+    Gui.runCommand("EMS_Recombine")
+    ok()
+    assert objects.recombine_items(second)[-1].References == [(section, ("",))]
+    for item in [tb] + objects.recombine_items(second):  # leave the Study as the rest of the smoke test expects it
+        doc.removeObject(item.Name)
+    source.removeObject(blocks)
+    doc.removeObject(blocks.Name)
+    doc.recompute()
+    log.append("2D face picks ok")
     named_manual = doc.addObject("App::DocumentObjectGroup", "Manual")
     view.refresh()
     combo.setCurrentIndex(combo.findData("source:" + named_manual.Name))

@@ -75,6 +75,25 @@ def is_air(body):
     return isinstance(getattr(body, "Proxy", None), objects.AirRegion)
 
 
+def selected_face_picks(vertices):
+    """[(body, sub)] for a 2D structured item: a body picked as a whole is (body, ""); each clicked FaceN is
+    (body, FaceN), or (body, "") when the body has one face; clicked vertices too when vertices."""
+    out = []
+    for sel in Gui.Selection.getSelectionEx():
+        body = objects.pick_body(sel.Object)
+        if body is None:
+            continue
+        if not sel.SubElementNames:
+            out.append((body, ""))
+            continue
+        for sub in sel.SubElementNames:
+            if sub.startswith("Face"):
+                out.append((body, "" if len(body.Shape.Faces) == 1 else sub))
+            elif vertices and sub.startswith("Vertex"):
+                out.append((body, sub))
+    return out
+
+
 def selected_faces():
     """Faces of bodies; an Excitation never goes on an Air Region."""
     return [(b, s) for b, s in selected_subs(("Face",)) if not is_air(b)]
@@ -1019,6 +1038,20 @@ ITEM_PICKS = {
         "Click regions, edges or vertices in the 3D view.",
     ),
 }
+# in a 2D Study: (pick, list label, hint) replacing those of ITEM_PICKS
+ITEM_PICKS_2D = {
+    objects.TransfiniteBody: (
+        lambda: selected_face_picks(True),
+        "Bodies, faces,\ncorner vertices",
+        "Click a face to structure that block, or select the body in the tree for all its faces."
+        " Clicked vertices become corners.",
+    ),
+    objects.Recombine: (
+        lambda: selected_face_picks(False),
+        "Bodies, faces",
+        "Click a face to recombine that block, or select the body in the tree for all its faces.",
+    ),
+}
 
 
 class ItemPanel:
@@ -1032,6 +1065,8 @@ class ItemPanel:
         study = objects.owner_study(obj)
         highlight.clear()  # the list's selected rows are highlighted instead
         self.pick, label, kinds, whole, hint3d, hint2d = ITEM_PICKS[type(obj.Proxy)]
+        if study.Dimension == "2D" and type(obj.Proxy) in ITEM_PICKS_2D:
+            self.pick, label, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
         air = isinstance(obj.Proxy, objects.MeshSize)  # the air is not recombined, structured or excited
         Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole, air))  # replaces any filter the user set
@@ -1149,8 +1184,8 @@ class ItemPanel:
             self.obj.Distribution = self.distribution.currentText()
             self.obj.BumpCoefficient = self.bump.value()
         if isinstance(self.obj.Proxy, objects.TransfiniteBody):
-            self.obj.References = [(b, s) for b, s in self.current if not s]
-            self.obj.Corners = [(b, s) for b, s in self.current if s]
+            self.obj.References = [(b, s) for b, s in self.current if not s.startswith("Vertex")]
+            self.obj.Corners = [(b, s) for b, s in self.current if s.startswith("Vertex")]
         else:
             self.obj.References = list(self.current)
         doc.commitTransaction()
