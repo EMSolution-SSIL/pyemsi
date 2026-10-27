@@ -928,6 +928,119 @@ class StudyTest(unittest.TestCase):
             msh_element_types(os.path.join(self.tmp.name, "pre_geom2D.msh"), 2), {2, 3}, "triangles and quads"
         )
 
+    def three_blocks(self):
+        """Two squares and a pentagon in a row, fused so they share the edges x = 10 and x = 20."""
+        pts = [(20, 0), (30, 0), (30, 10), (25, 13), (20, 10)]
+        pentagon = Part.Face(Part.makePolygon([App.Vector(x, y, 0) for x, y in pts + pts[:1]]))
+        parts = [Part.makePlane(10, 10, App.Vector(10, 0, 0)), pentagon]
+        obj = self.doc.addObject("Part::Feature", "Core")
+        obj.Shape = Part.makePlane(10, 10).generalFuse(parts)[0]
+        return obj
+
+    def vertex_at(self, body, x, y):
+        for i, v in enumerate(body.Shape.Vertexes, 1):
+            if abs(v.Point.x - x) < 1e-6 and abs(v.Point.y - y) < 1e-6:
+                return f"Vertex{i}"
+        raise AssertionError(f"no vertex at {(x, y)}")
+
+    def nearest_face(self, body, x, y):
+        faces = body.Shape.Faces
+        best = min(range(len(faces)), key=lambda i: faces[i].CenterOfMass.distanceToPoint(App.Vector(x, y, 0)))
+        return f"Face{best + 1}"
+
+    def run_mesher2d(self, study):
+        r = subprocess.run(
+            [sys.executable, MESHER2D, jobwriter.write_job(study)],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r, os.path.join(self.tmp.name, "pre_geom2D.msh")
+
+    def faces_of_msh(self, msh):
+        """{centre x (5, 15 or 25) of a face entity: [(element type, signed area of its corner nodes), ...]}"""
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(msh)
+            xy = {}
+            for tag in gmsh.model.mesh.getNodes()[0]:
+                xy[int(tag)] = gmsh.model.mesh.getNode(int(tag))[0][:2]
+            out = {}
+            for _, ent in gmsh.model.getEntities(2):
+                types, _, nodes = gmsh.model.mesh.getElements(2, ent)
+                elements, xs = [], []
+                for t, ns in zip(types, nodes):
+                    k = 3 if t == 2 else 4
+                    for j in range(0, len(ns), k):
+                        pts = [xy[int(n)] for n in ns[j : j + k]]
+                        area = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1])) / 2
+                        elements.append((int(t), area))
+                        xs += [p[0] for p in pts]
+                out[round((sum(xs) / len(xs) - 5) / 10) * 10 + 5] = elements  # the block: 5, 15 or 25
+            return out
+        finally:
+            gmsh.finalize()
+
+    def assert_no_inverted(self, msh):
+        for x, elements in self.faces_of_msh(msh).items():
+            areas = [a for _, a in elements]
+            self.assertTrue(all(abs(a) > 1e-9 for a in areas), f"degenerate element near x = {x}")
+            self.assertTrue(all(a > 0 for a in areas) or all(a < 0 for a in areas), f"inverted element near x = {x}")
+
+    def test_all_blocks_structured_with_corners_on_the_pentagon(self):  # A1
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        corners = [self.vertex_at(core, x, y) for x, y in ((20, 0), (30, 0), (30, 10), (20, 10))]
+        objects.make_transfinite_body(study, [core], [(core, v) for v in corners])
+        edges = self.all_edges(core)
+        roof = [e for e in edges if core.Shape.getElement(e[1]).BoundBox.YMax > 10.5]
+        self.assertEqual(len(roof), 2)
+        objects.make_transfinite_edges(study, 2, roof)
+        objects.make_transfinite_edges(study, 4, [e for e in edges if e not in roof])
+        objects.make_recombine(study, [core])
+        r, msh = self.run_mesher2d(study)
+        self.assertIn("Structured      Core", r.stdout)
+        self.assertEqual(msh_element_types(msh, 2), {3}, "only quadrangles")
+        self.assert_no_inverted(msh)
+
+    def test_only_the_middle_block_structured(self):  # A2
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        middle = self.nearest_face(core, 15, 5)
+        objects.make_transfinite_body(study, []).References = [(core, middle)]
+        objects.make_transfinite_edges(study, 4, self.face_edges(core, middle))
+        objects.make_recombine(study, []).References = [(core, middle)]
+        r, msh = self.run_mesher2d(study)
+        self.assertIn(f"Structured      Core {middle}", r.stdout)
+        faces = self.faces_of_msh(msh)
+        self.assertEqual(sorted(faces), [5, 15, 25])
+        self.assertEqual({t for t, _ in faces[15]}, {3}, "middle block: quadrangles only")
+        self.assertEqual({t for t, _ in faces[5]}, {2}, "left block: triangles only")
+        self.assertEqual({t for t, _ in faces[25]}, {2}, "pentagon: triangles only")
+        self.assert_no_inverted(msh)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(msh)
+            tags, coords, _ = gmsh.model.mesh.getNodes()
+            for x in (10, 20):
+                on_line = [int(t) for t, c in zip(tags, zip(coords[0::3], coords[1::3])) if abs(c[0] - x) < 1e-6]
+                self.assertEqual(len(on_line), 5, f"x = {x}")
+        finally:
+            gmsh.finalize()
+
+    def test_recombine_on_one_face_only(self):  # A3
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        objects.make_recombine(study, []).References = [(core, self.nearest_face(core, 15, 5))]
+        r, msh = self.run_mesher2d(study)
+        faces = self.faces_of_msh(msh)
+        self.assertIn(3, {t for t, _ in faces[15]}, "middle block has quadrangles")
+        self.assertEqual({t for t, _ in faces[5]}, {2})
+        self.assertEqual({t for t, _ in faces[25]}, {2})
+
     def test_uniform_items_on_a_shared_edge_ignore_their_bump_coefficient(self):
         a, b = self.face("A"), self.face("B")
         b.Placement.Base = App.Vector(10, 0, 0)  # touches A along x = 10
