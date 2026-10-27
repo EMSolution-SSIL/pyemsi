@@ -129,6 +129,11 @@ def _links(study, included, r):
                 item,
                 [(b, s) for b, subs in outside for s in subs],
             )
+        if study.Dimension == "3D" and isinstance(item.Proxy, (objects.TransfiniteBody, objects.Recombine)):
+            faces = [(b, s) for b, subs in by_body for s in subs if s.startswith("Face")]
+            if faces:
+                picked = ", ".join(f"{b.Label}.{s}" for b, s in faces)
+                r.error(f"{kind} {item.Label}: pick whole solids in a 3D Study ({picked}).", item, faces)
         for b, subs in by_body:
             if b.Name not in included or (refused and objects.is_air(b)):
                 continue
@@ -407,18 +412,34 @@ def _marked(iface, surface, plane):
 
 
 def _transfinite(study, bodies, r):
-    """R1 to R3: a body in one Transfinite Body, an edge in one Transfinite Edges, every edge of a
-    structured body counted, and no loose compound pieces."""
+    """R1 to R3: a face (a whole body in 3D) in one Transfinite Body, an edge in one Transfinite Edges, every edge of
+    a structured face counted, no loose compound pieces, corners on a structured face."""
     included = {b.Name for b in bodies}
-    owner = {}
+    owner = {}  # (body name, face) -> Transfinite Body
+    entries = []  # (t, b, whole body, the faces of b that t owns)
+    clashed = set()
     for t in objects.transfinite_bodies(study):
-        for b, _ in objects.subs_by_body(t):
+        picks = objects.face_picks(t) if study.Dimension == "2D" else [(b, []) for b, _ in objects.subs_by_body(t)]
+        for b, faces in picks:
             if b.Name not in included:
                 continue
-            if b.Name in owner:
-                r.error(f"Body {b.Label} is in Transfinite Body {owner[b.Name].Label} and {t.Label}.", t, [(b, "")])
-                continue
-            owner[b.Name] = t
+            owned = []
+            for face in objects.structured_faces(b, faces):
+                if not _has(b, face):  # _links reports it
+                    continue
+                first = owner.setdefault((b.Name, face), t)
+                if first is t:
+                    owned.append(face)
+                elif (b.Name, first.Name, t.Name) not in clashed:
+                    clashed.add((b.Name, first.Name, t.Name))
+                    first_whole = any(e[0] is first and e[1].Name == b.Name and e[2] for e in entries)
+                    if not faces and first_whole:
+                        r.error(f"Body {b.Label} is in Transfinite Body {first.Label} and {t.Label}.", t, [(b, "")])
+                    else:
+                        text = f"{b.Label}.{face} is in Transfinite Body {first.Label} and {t.Label}."
+                        r.error(text, t, [(b, face)])
+            if owned:
+                entries.append((t, b, not faces, owned))
     seen = {}
     for e in objects.transfinite_edges(study):
         for b, subs in objects.subs_by_body(e):
@@ -432,10 +453,11 @@ def _transfinite(study, bodies, r):
                 seen.setdefault((b.Name, s), e)
     pieces, shared = ("faces", "edges") if study.Dimension == "2D" else ("solids", "faces")
     for b in bodies:
-        t = owner.get(b.Name)
-        if t is None:
+        mine = [e for e in entries if e[1].Name == b.Name]
+        if not mine:
             continue
         if loose_pieces(b.Shape):
+            t = mine[0][0]
             r.error(
                 f"Transfinite Body {t.Label}: the {pieces} of {b.Label} touch without sharing {shared}."
                 " Make it with Part Slice or Boolean Fragments instead of a compound.",
@@ -443,13 +465,42 @@ def _transfinite(study, bodies, r):
                 [(b, "")],
             )
             continue
-        missing = [f"Edge{i}" for i in range(1, len(b.Shape.Edges) + 1) if (b.Name, f"Edge{i}") not in seen]
-        if missing:
-            r.error(
-                f"Transfinite Body {t.Label}: {b.Label} has edges without Transfinite Edges: " + ", ".join(missing),
-                t,
-                [(b, s) for s in missing],
-            )
+        for t, _, whole, faces in mine:
+            if whole:
+                groups = [("", range(1, len(b.Shape.Edges) + 1))]
+            else:
+                groups = [(f" {f}", _edge_numbers(b, f)) for f in faces]
+            for where, numbers in groups:
+                missing = [f"Edge{i}" for i in numbers if (b.Name, f"Edge{i}") not in seen]
+                if missing:
+                    r.error(
+                        f"Transfinite Body {t.Label}: {b.Label}{where} has edges without Transfinite Edges: "
+                        + ", ".join(missing),
+                        t,
+                        [(b, s) for s in missing],
+                    )
+    for t, b, whole, faces in entries:
+        if whole:
+            continue
+        for cb, subs in t.Corners:
+            if cb.Name != b.Name:
+                continue
+            for sub in subs:
+                if _has(b, sub) and not any(_on_face(b, f, sub) for f in faces):
+                    r.error(
+                        f"Transfinite Body {t.Label}: corner {b.Label}.{sub} is on none of its structured faces.", t
+                    )
+
+
+def _edge_numbers(body, face):
+    """Numbers N of the EdgeN of body that bound the given face."""
+    edges = body.Shape.getElement(face).Edges
+    return [i for i, e in enumerate(body.Shape.Edges, 1) if any(e.isSame(f) for f in edges)]
+
+
+def _on_face(body, face, vertex):
+    v = body.Shape.getElement(vertex)
+    return any(v.isSame(f) for f in body.Shape.getElement(face).Vertexes)
 
 
 def _names(study, bodies, included, r):

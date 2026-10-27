@@ -889,6 +889,25 @@ def subs_by_body(item):
     return list(out.values())
 
 
+def face_picks(item):
+    """[(body, [FaceN])] in reference order, one entry per body. An empty list means the whole body: a whole-body
+    reference wins over face references to the same body. Other sub-elements are ignored."""
+    out = []
+    for body, subs in subs_by_body(item):
+        if "" in subs:
+            out.append((body, []))
+            continue
+        faces = sorted({s for s in subs if s.startswith("Face")}, key=lambda s: int(s[4:]))
+        if faces:
+            out.append((body, faces))
+    return out
+
+
+def structured_faces(body, faces):
+    """The faces of a face pick: the picked ones, or every face of the body for a whole-body pick."""
+    return list(faces) or [f"Face{i}" for i in range(1, len(body.Shape.Faces) + 1)]
+
+
 def is_item(obj):
     proxies = (Material, Excitation, MeshSize, TransfiniteBody, TransfiniteEdges, Recombine)
     return isinstance(getattr(obj, "Proxy", None), proxies)

@@ -734,6 +734,95 @@ class StudyTest(unittest.TestCase):
         objects.make_transfinite_body(self.study, [a], [(b, "Vertex1")])
         self.assertStudyError("is not on one of its bodies")
 
+    def assertStudyErrorIn(self, study, text):
+        with self.assertRaises(jobwriter.StudyError) as ctx:
+            jobwriter.check(study)
+        self.assertIn(text, str(ctx.exception))
+
+    def two_blocks(self, name):
+        """Two 10 x 10 faces side by side that share the edge x = 10."""
+        obj = self.doc.addObject("Part::Feature", name)
+        obj.Shape = Part.makePlane(10, 10).generalFuse([Part.makePlane(10, 10, App.Vector(10, 0, 0))])[0]
+        return obj
+
+    def face_edges(self, body, face):
+        edges = body.Shape.getElement(face).Edges
+        return [(body, f"Edge{i}") for i, e in enumerate(body.Shape.Edges, 1) if any(e.isSame(f) for f in edges)]
+
+    def test_face_picks_whole_body_wins_over_its_faces(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        t = objects.make_transfinite_body(study, [b])
+        t.References = [(b, "Face2"), (b, ""), (b, "Face2")]
+        self.assertEqual(objects.face_picks(t), [(b, [])])
+        t.References = [(b, "Face2"), (b, "Face1"), (b, "Face2")]
+        self.assertEqual(objects.face_picks(t), [(b, ["Face1", "Face2"])])
+
+    def test_picked_face_needs_only_its_own_edges(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        right = self.face_at(b, 15, 5)
+        t = objects.make_transfinite_body(study, [])
+        t.References = [(b, right)]
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right)[:3])
+        self.assertStudyErrorIn(study, f"B {right} has edges without Transfinite Edges: ")
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right)[3:])
+        jobwriter.check(study)  # the left face's other edges are not required
+
+    def test_face_in_two_transfinite_bodies_is_refused(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        right = self.face_at(b, 15, 5)
+        t1 = objects.make_transfinite_body(study, [b])
+        t2 = objects.make_transfinite_body(study, [])
+        t2.References = [(b, right)]
+        self.assertStudyErrorIn(study, f"B.{right} is in Transfinite Body {t1.Label} and {t2.Label}.")
+
+    def test_faces_of_one_body_in_two_transfinite_bodies_are_fine(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        for x in (5, 15):
+            objects.make_transfinite_body(study, []).References = [(b, self.face_at(b, x, 5))]
+        jobwriter.check(study)
+
+    def test_missing_face_on_transfinite_body_and_recombine_is_refused(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_body(study, []).References = [(b, "Face7")]
+        self.assertStudyErrorIn(study, "Transfinite Body TransfiniteBody: body B has no Face7. Reselect it.")
+        objects.make_recombine(study, []).References = [(b, "Face9")]
+        self.assertStudyErrorIn(study, "Recombine Recombine: body B has no Face9. Reselect it.")
+
+    def test_whole_body_in_two_recombine_items_is_still_fine(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_recombine(study, [b])
+        objects.make_recombine(study, []).References = [(b, "Face1")]
+        jobwriter.check(study)
+
+    def test_corner_on_no_structured_face_of_its_item_is_refused(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        right = self.face_at(b, 15, 5)
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right))
+        far = next(f"Vertex{i}" for i, v in enumerate(b.Shape.Vertexes, 1) if v.Point.x < 1e-6)  # on the left face only
+        t = objects.make_transfinite_body(study, [], [(b, far)])
+        t.References = [(b, right)]
+        self.assertStudyErrorIn(
+            study, f"Transfinite Body {t.Label}: corner B.{far} is on none of its structured faces."
+        )
+
+    def test_face_picks_in_a_3d_study_are_refused(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
+        objects.make_transfinite_body(self.study, []).References = [(a, "Face1")]
+        objects.make_recombine(self.study, []).References = [(a, "Face2")]
+        self.assertStudyError("Transfinite Body TransfiniteBody: pick whole solids in a 3D Study (A.Face1).")
+        self.assertStudyError("Recombine Recombine: pick whole solids in a 3D Study (A.Face2).")
+
     def test_structured_box_job_meshes_to_hexahedra(self):
         a = self.box("A")
         self.include(a)
@@ -1114,7 +1203,7 @@ print('RESTORE PASS')
         self.doc.recompute()
         return obj
 
-    def face_at(self, body, x, y, z):
+    def face_at(self, body, x, y, z=0):
         """Name of the face of body whose center is at (x, y, z)."""
         for i, f in enumerate(body.Shape.Faces, 1):
             if f.CenterOfMass.distanceToPoint(App.Vector(x, y, z)) < 1e-6:
