@@ -1,6 +1,6 @@
 # Structured mesh on chosen faces of a body (2D)
 
-Status: design, awaiting the user's review. Scope: 2D Studies of the FreeCAD add-on. Builds on
+Status: implemented on feature/freecad-addon. Scope: 2D Studies of the FreeCAD add-on. Builds on
 `2026-10-15-transfinite-mesh-design.md` and `2026-10-16-recombine-design.md`.
 
 ## 1. Intent
@@ -106,6 +106,8 @@ jobs, against G4).
 
 ### 5.4 Job and mesher
 
+The job keys and BREP file prefixes were built as recommended here (they match).
+
 The mesher must find the final Gmsh faces of a picked face. The existing pattern for this is the sub-element files:
 `export_subs` writes `geometry/<prefix>_<n>.brep` and the mesher maps each file through the fragment
 (`transfinite_files`, corner and edge files). Picked faces use the same pattern.
@@ -139,6 +141,8 @@ Recommended job shape (builder may adjust, keeping G4):
 - A1. A document like the sample (built in a test, not loaded from the user's file): all five blocks structured
   (two whole Fragments bodies, corners picked on the 5-edge faces) meshes with 0 inverted elements (signed area)
   and quads where recombined.
+  As built, A1 is tested on one three-block body (whole body, corners on the pentagon) rather than on two whole
+  Fragments bodies.
 - A2. The same document with only `stator_cell_fragments Face2` structured: Face2 is a structured grid, Face1 and
   Face3 are meshed unstructured, and the shared edges are conformal.
 - A3. Recombine on one face only: that face has quads, the other faces of the body triangles.
