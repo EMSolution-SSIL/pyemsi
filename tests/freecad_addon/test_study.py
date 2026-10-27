@@ -749,6 +749,56 @@ class StudyTest(unittest.TestCase):
         edges = body.Shape.getElement(face).Edges
         return [(body, f"Edge{i}") for i, e in enumerate(body.Shape.Edges, 1) if any(e.isSame(f) for f in edges)]
 
+    def scratch_of(self, study, *parts):
+        return os.path.join(jobwriter.scratch_folder(study), *parts)
+
+    def test_picked_faces_go_to_the_job(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        right = self.face_at(b, 15, 5)
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right))
+        t = objects.make_transfinite_body(study, [])
+        t.References = [(b, right), (b, right)]  # twice: one entry
+        objects.make_recombine(study, []).References = [(b, right)]
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        (entry,) = job["transfinite"]["bodies"]
+        self.assertEqual(entry["faces"], [{"face": right, "file": "geometry/tface_1_1.brep"}])
+        self.assertEqual(
+            job["recombine_faces"],
+            [{"name": "B", "mat_id": entry["mat_id"], "face": right, "file": "geometry/rface_1_1.brep"}],
+        )
+        self.assertNotIn("recombine", job)
+        shape = Part.Shape()
+        shape.read(self.scratch_of(study, "geometry", "tface_1_1.brep"))
+        self.assertEqual(shape.ShapeType, "Face")
+        self.assertAlmostEqual(shape.Faces[0].CenterOfMass.x, 15)
+
+    def test_whole_body_and_its_face_in_one_item_write_the_whole_body(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        objects.make_transfinite_body(study, []).References = [(b, "Face1"), (b, "")]
+        objects.make_recombine(study, [b])
+        objects.make_recombine(study, []).References = [(b, "Face1")]
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertNotIn("faces", job["transfinite"]["bodies"][0])
+        self.assertNotIn("recombine_faces", job)
+
+    def test_corners_stay_with_their_item(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        left, right = self.face_at(b, 5, 5), self.face_at(b, 15, 5)
+        shared = next(f"Vertex{i}" for i, v in enumerate(b.Shape.Vertexes, 1) if abs(v.Point.x - 10) < 1e-6)
+        objects.make_transfinite_body(study, [], [(b, shared)]).References = [(b, left)]
+        objects.make_transfinite_body(study, []).References = [(b, right)]
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            first, second = json.load(fh)["transfinite"]["bodies"]
+        self.assertEqual(first["corner_files"], ["geometry/corner_1_1.brep"])
+        self.assertEqual(second["corner_files"], [])
+
     def test_face_picks_whole_body_wins_over_its_faces(self):
         b = self.two_blocks("B")
         study = self.make_2d_study(b)
