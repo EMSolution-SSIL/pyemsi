@@ -731,14 +731,15 @@ class StudyView:
         else:  # every problem that stops the mesh; Validate Study also lists the warnings
             lines = [p.text for p in validation.errors(validation.validate(study))]
         self.diagnostics.setText("\n".join(lines))
-        unavailable = geometry.export_unavailable(study)
-        if unavailable:
-            self.export_notice.setText(unavailable)
-        else:
+        notice = geometry.export_unavailable(study)
+        if not notice:
             try:
-                self.export_notice.setText(f"Writes {jobwriter.mesh_file(study)}")
+                notice = f"Writes {jobwriter.mesh_file(study)}"
             except jobwriter.StudyError as exc:
-                self.export_notice.setText(str(exc))
+                notice = str(exc)
+        # A path has no spaces to wrap at, so it would widen the panel: let it break after each separator.
+        self.export_notice.setText(notice.replace("\\", "\\​").replace("/", "/​"))
+        self.export_notice.setToolTip(notice)
         self.update_run_button()
 
     def update_run_button(self):

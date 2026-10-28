@@ -987,7 +987,9 @@ def main():
     view.refresh()
     assert view.diagnostics.text() == "", view.diagnostics.text()
     assert view.run_button.isEnabled()
-    assert view.export_notice.text() == f"Writes {jobwriter.mesh_file(second)}", view.export_notice.text()
+    assert view.export_notice.toolTip() == f"Writes {jobwriter.mesh_file(second)}", view.export_notice.toolTip()
+    long_path = view.export_notice.fontMetrics().horizontalAdvance(view.export_notice.toolTip())
+    assert view.export_notice.minimumSizeHint().width() < long_path / 2, "the output path widens the panel"
     run2d = runner.start(second)
     assert run2d is not None and run2d.proc.waitForFinished(120000)
     Gui.updateGui()
@@ -1159,7 +1161,7 @@ def main():
     view.refresh()
     assert view.diagnostics.text() == "", view.diagnostics.text()  # meshing does not need materials
     assert view.run_button.isEnabled(), "a body without a material disabled generation"
-    assert view.export_notice.text() == f"Writes {jobwriter.mesh_file(study)}", view.export_notice.text()
+    assert view.export_notice.toolTip() == f"Writes {jobwriter.mesh_file(study)}", view.export_notice.toolTip()
     run = runner.start(study)
     assert run is not None and run.proc.waitForFinished(120000)
     Gui.updateGui()
