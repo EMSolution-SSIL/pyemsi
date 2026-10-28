@@ -799,6 +799,11 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(first["corner_files"], ["geometry/corner_1_1.brep"])
         self.assertEqual(second["corner_files"], [])
 
+    def test_transfinite_picks_split_into_references_and_corners(self):
+        b = self.two_blocks("B")
+        picks = [(b, "Face2"), (b, "Vertex3"), (b, ""), (b, "Vertex1")]
+        self.assertEqual(objects.split_corners(picks), ([(b, "Face2"), (b, "")], [(b, "Vertex3"), (b, "Vertex1")]))
+
     def test_face_picks_whole_body_wins_over_its_faces(self):
         b = self.two_blocks("B")
         study = self.make_2d_study(b)

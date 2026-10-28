@@ -779,6 +779,12 @@ def make_transfinite_body(study, bodies, corners=()):
     return obj
 
 
+def split_corners(picks):
+    """(References, Corners) of a Transfinite Body from picks [(body, sub)]: the VertexN picks are its corners."""
+    corners = [(b, s) for b, s in picks if s.startswith("Vertex")]
+    return [(b, s) for b, s in picks if not s.startswith("Vertex")], corners
+
+
 def make_transfinite_edges(study, elements, edges, distribution="Uniform", coef=0.5):
     """edges: list of (body, "EdgeN")."""
     obj = _add(study, "MeshSizesGroup", TransfiniteEdges, "TransfiniteEdges")

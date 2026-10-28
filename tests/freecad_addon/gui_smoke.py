@@ -1025,12 +1025,19 @@ def main():
     Gui.runCommand("EMS_TransfiniteBody")
     texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
     assert any(t.startswith("Click a face to structure that block") for t in texts), texts
+    gate = opened[-1].gate  # what the 3D view may pick while the panel is open
+    assert gate.allow(doc, blocks, right) and gate.allow(doc, blocks, "Vertex1"), "faces and corners"
+    assert gate.allow(doc, section, "Edge1"), "an edge click on a one-face body is that region"
+    assert not gate.allow(doc, blocks, "Edge1"), "an edge of a two-face body is no region"
     ok()
     (tb,) = objects.transfinite_bodies(second)
     assert tb.References == [(blocks, (right,))], tb.References
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, blocks.Name)  # tree pick
     Gui.runCommand("EMS_Recombine")
+    gate = opened[-1].gate
+    assert gate.allow(doc, blocks, right) and gate.allow(doc, section, "Vertex1"), "faces, one-face regions"
+    assert not gate.allow(doc, blocks, "Vertex1"), "Recombine takes no corners"
     ok()
     (rc,) = objects.recombine_items(second)
     assert rc.References == [(blocks, ("",))], rc.References

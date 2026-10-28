@@ -246,9 +246,7 @@ class AddTransfiniteBody(_StudyCommand):
         bodies = taskpanels.selected_bodies()
         if gate(study, bodies, objects.TransfiniteBody):
             if study.Dimension == "2D":  # clicked faces stay faces
-                picks = taskpanels.selected_face_picks(True)
-                corners = [p for p in picks if p[1].startswith("Vertex")]
-                refs = [p for p in picks if not p[1].startswith("Vertex")]
+                refs, corners = objects.split_corners(taskpanels.selected_face_picks(True))
 
                 def make():
                     obj = objects.make_transfinite_body(study, [], corners)

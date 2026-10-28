@@ -992,10 +992,11 @@ def install_open_observer():
 class ItemGate:
     """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
 
-    def __init__(self, study, kinds, whole, air=True):
+    def __init__(self, study, kinds, whole, air=True, regions=False):
+        """regions: any click on a one-face body picks that region (2D face picks)."""
         bodies = objects.assignable(study) if air else objects.study_bodies(study)
         self.main = {b.Name for b in bodies}
-        self.kinds, self.whole = kinds, whole
+        self.kinds, self.whole, self.regions = kinds, whole, regions
 
     def allow(self, doc, obj, sub):
         if not Gui.Control.activeDialog():  # the panel was closed without OK or Cancel
@@ -1003,7 +1004,11 @@ class ItemGate:
         body = objects.pick_body(obj)
         if body is None or body.Name not in self.main:
             return False
-        return sub.startswith(self.kinds) if sub else self.whole
+        if not sub:
+            return self.whole
+        if self.regions and len(body.Shape.Faces) == 1:
+            return sub.startswith(ANY_SUB)
+        return sub.startswith(self.kinds)
 
 
 def _whole_bodies():
@@ -1059,7 +1064,7 @@ ITEM_PICKS_2D = {
     objects.Recombine: (
         lambda: selected_face_picks(False),
         "Bodies, faces",
-        ("Face", "Vertex"),
+        ("Face",),
         "Click a face to recombine that block, or select the body in the tree for all its faces.",
     ),
 }
@@ -1076,11 +1081,13 @@ class ItemPanel:
         study = objects.owner_study(obj)
         highlight.clear()  # the list's selected rows are highlighted instead
         self.pick, label, kinds, whole, hint3d, hint2d = ITEM_PICKS[type(obj.Proxy)]
-        if study.Dimension == "2D" and type(obj.Proxy) in ITEM_PICKS_2D:
+        regions = study.Dimension == "2D" and type(obj.Proxy) in ITEM_PICKS_2D
+        if regions:
             self.pick, label, kinds, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
         air = isinstance(obj.Proxy, objects.MeshSize)  # the air is not recombined, structured or excited
-        Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole, air))  # replaces any filter the user set
+        self.gate = ItemGate(study, kinds, whole, air, regions)
+        Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.current = objects.item_refs(obj)
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
@@ -1195,8 +1202,7 @@ class ItemPanel:
             self.obj.Distribution = self.distribution.currentText()
             self.obj.BumpCoefficient = self.bump.value()
         if isinstance(self.obj.Proxy, objects.TransfiniteBody):
-            self.obj.References = [(b, s) for b, s in self.current if not s.startswith("Vertex")]
-            self.obj.Corners = [(b, s) for b, s in self.current if s.startswith("Vertex")]
+            self.obj.References, self.obj.Corners = objects.split_corners(self.current)
         else:
             self.obj.References = list(self.current)
         doc.commitTransaction()
