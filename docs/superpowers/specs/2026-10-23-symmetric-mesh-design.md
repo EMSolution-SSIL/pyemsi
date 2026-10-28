@@ -36,7 +36,10 @@ Example: 12 slots, 8 poles, rotor moves.
 
 1. Draw the cells as faces. Stator cell, 0..15°: half a tooth, half a slot's coil, the stator half of the air gap.
    Rotor cell, 0..22.5°: rotor iron, half a magnet, the rotor half of the air gap. **The air is drawn in the cells**;
-   no Air Region.
+   no Air Region. Every cell body stays inside the cell (between the mirror line and the edge the array turns), so
+   that its copies only touch. To cut a cell face into blocks (for example two coil layers), either draw each block as
+   its own face, sharing the cut edge, or put the face and a cutting sketch in a Boolean Fragments and use that in the
+   cell (section 4). Either way each block can get its own Material and its own face-picked mesh settings.
 2. Build the full geometry from each cell with FreeCAD tools, for example: Compound(cell bodies) → Part Mirror →
    Compound(cell compound, mirror) → Draft Polar Array (12 × 30°) → Boolean Fragments. The final object (here the
    Fragments) is what goes into the Study's Main or Moving geometry.
@@ -137,6 +140,8 @@ does both, and only the cell's geometry goes to gmsh.
 - Sliding divisions give every cell's arc a whole number of elements.
 - No Air Region in a Study with a Symmetric Mesh.
 - No mesh setting on a copy.
+- Every cell body has a face, and the copies of the cell only touch: a cell body that overlaps one of its copies is
+  named, with where (split-cell PRD R1 and R3).
 
 ## 8. Decided by me (Claude), not by the user; check these
 

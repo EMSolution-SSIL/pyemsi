@@ -1,7 +1,10 @@
 """Study validation: every problem at once, for the Validate command, the Study panel and Run Mesh.
 Errors stop the mesh; warnings do not. No GUI code here."""
 
+import math
 from dataclasses import dataclass, field
+
+import FreeCAD as App
 
 from . import airshapes, geometry, objects, symmetry
 
@@ -587,6 +590,8 @@ def _symmetric(study, main, moving, r):
                     item,
                     [(cell, "")],
                 )
+        if all(cell.Shape.Faces for cell in cells):
+            _overlaps(item, cells, transforms, r)
     top_side = {}  # top Name -> "main" or "moving"
     for side, bodies in (("main", main), ("moving", moving if sliding else [])):
         names = {b.Name for b in bodies}
@@ -642,6 +647,39 @@ def _symmetric(study, main, moving, r):
                 m,
                 [(m.Body, "")],
             )
+
+
+def _overlaps(item, cells, transforms, r):
+    """The copies of the cell may only touch (split-cell PRD R3). A cell body past the mirror line or the edge of the
+    cell, or a Polar Array with too many copies, makes them overlap, and the mesher would fail with only a point.
+    Any two copies overlap the way the cell overlaps one of its copies, so the cell is tested against each copy.
+    Reports the first overlap found."""
+    shapes = [(cell, geometry.global_shape(cell)) for cell in cells]
+    for m in transforms:
+        if all(abs(a - b) < symmetry.TOL for a, b in zip(m, symmetry.ID)):
+            continue
+        for other, shape in shapes:
+            copy = shape.transformed(App.Matrix(*m))
+            for cell, mine in shapes:
+                if not mine.BoundBox.intersect(copy.BoundBox):
+                    continue
+                common = mine.common(copy)
+                if common.Area <= 1e-6 * min(mine.Area, copy.Area):
+                    continue  # they only touch
+                if symmetry.det(m) < 0:
+                    how = "a mirrored copy"
+                else:
+                    how = f"a copy turned by {math.degrees(math.atan2(m[4], m[0])):.4g}°"
+                c = max(common.Faces, key=lambda f: f.Area).CenterOfMass
+                r.error(
+                    f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} overlaps {how} of"
+                    f" {objects.display_name(other)} near ({c.x:.6g}, {c.y:.6g}), by {common.Area:.3g} mm². The copies"
+                    " of a cell may only touch: keep every cell body inside the cell, between the Mirror's line and"
+                    " the edge the Polar Array turns, and check the Polar Array's count and angle.",
+                    item,
+                    list({b.Name: (b, "") for b in (cell, other)}.values()),
+                )
+                return
 
 
 def _interfaces(study, items, copies, sliding, r):

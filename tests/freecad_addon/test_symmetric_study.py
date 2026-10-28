@@ -326,6 +326,46 @@ def test_cell_body_without_a_face_is_refused(motor):
     assert [p for p in _problems(motor, "error") if p.item == stator and "has no face" in p.text]
 
 
+def _overlap(study):
+    stator, _ = objects.symmetric_items(study)
+    return [p for p in _problems(study, "error") if p.item == stator and "overlaps" in p.text]
+
+
+def test_cell_body_past_the_mirror_line_is_refused(motor):
+    """The coil drawn 10..17 deg in the 0..15 deg cell overlaps its own mirrored copy. Validate Study names it, and
+    where, before the mesher fails with only a point (examples/5_coil_past_mirror_line)."""
+    doc = motor.Document
+    coil = doc.getObject("CoilCell")
+    coil.Shape = symcases.sector(37, 50, 10, 17)
+    doc.getObject("StatorIronCell").Shape = symcases.sector(36, 60, 0, 15).cut(coil.Shape).Faces[0]
+    doc.recompute()
+    (found,) = _overlap(motor)
+    assert "CoilCell overlaps a mirrored copy of CoilCell" in found.text, found.text
+    r, a = _near(found.text)
+    assert 13 < a < 17 and 37 < r < 50  # in the overlap, 13..17 deg
+    assert (coil, "") in found.refs
+
+
+def _near(text):
+    """(radius, angle in deg) of the point "near (x, y)" in text."""
+    x, y = (float(v) for v in text.split("near (")[1].split(")")[0].split(", "))
+    return math.hypot(x, y), math.degrees(math.atan2(y, x))
+
+
+def test_polar_array_with_too_many_copies_is_refused(motor):
+    """13 copies of the 30 deg slot pitch are 27.7 deg apart, so each overlaps the next (examples/6_thirteen_copies)."""
+    array = next(o for o in motor.Document.Objects if o.Label == "StatorArray")
+    array.NumberPolar = 13
+    motor.Document.recompute()
+    (found,) = _overlap(motor)
+    assert "Polar Array's count" in found.text, found.text
+    assert 0 < _near(found.text)[1] < 30 - 360 / 13  # where the last copy reaches over the first: 0..2.3 deg
+
+
+def test_copies_that_only_touch_do_not_overlap(motor):
+    assert not [p for p in _problems(motor, "error") if "overlaps" in p.text]
+
+
 def test_cell_cut_by_a_fragments_meshes_per_block(tmp_path):
     """A Boolean Fragments in the cell (the coil cut by an arc) is one cell body with two blocks. Face picks structure
     and recombine one block only, and each block takes the Material of the pieces it lands on."""

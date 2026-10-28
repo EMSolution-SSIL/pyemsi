@@ -1,11 +1,14 @@
 # Split cell bodies in a Symmetric Mesh (problem definition and PRD)
 
-Status: proposal. Scope: 2D only, as in `2026-10-23-symmetric-mesh-design.md` (3D is out for now).
+Status: proposal, implemented 2026-10-28 (see the update below). Scope: 2D only, as in `2026-10-23-symmetric-mesh-design.md` (3D is out for now).
 
 Update 2026-10-28, after the merge of the face-pick work (`2026-10-27-face-mesh-settings-design.md`): R1 is
 implemented. R4 is implemented in its small form: a Boolean Fragments with no Mirror or Polar Array below it is one
 cell body with several faces. Mesh settings take its faces through the face picks, a face clicked on the top is that
-block of the cell, and Materials stay on the pieces of the top. R2 still works, and R3 is not done.
+block of the cell, and Materials stay on the pieces of the top. R2 still works, and both ways are now written into
+step 1 of section 3 of the symmetric-mesh spec. R3 is implemented as an overlap check in Validate Study: the cell is
+tested against each of its copies, and a cell body that overlaps one is named, with the point where. Every leaf is in
+the cell, so a cell body cut by the full drawing can only come from such an overlap.
 
 ## 1. Problem
 
