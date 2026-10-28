@@ -254,10 +254,21 @@ class AddTransfiniteBody(_StudyCommand):
             return
         bodies = [b for b, _ in taskpanels.picked_bodies(study)]
         if gate(study, bodies, objects.TransfiniteBody):
-            corners = taskpanels.mesh_picks(study, ("Vertex",))
-            _create_and_edit(
-                study, "Add Transfinite Body", lambda: objects.make_transfinite_body(study, bodies, corners)
-            )
+            if study.Dimension == "2D":  # clicked faces stay faces
+                refs, corners = objects.split_corners(taskpanels.selected_face_picks(study, True))
+
+                def make():
+                    obj = objects.make_transfinite_body(study, [], corners)
+                    obj.References = refs
+                    return obj
+
+            else:
+                corners = taskpanels.mesh_picks(study, ("Vertex",))
+
+                def make():
+                    return objects.make_transfinite_body(study, bodies, corners)
+
+            _create_and_edit(study, "Add Transfinite Body", make)
 
 
 class AddTransfiniteEdges(_StudyCommand):
@@ -291,7 +302,19 @@ class AddRecombine(_StudyCommand):
             return
         bodies = [b for b, _ in taskpanels.picked_bodies(study)]
         if gate(study, bodies, objects.Recombine):
-            _create_and_edit(study, "Add Recombine", lambda: objects.make_recombine(study, bodies))
+            if study.Dimension == "2D":  # clicked faces stay faces
+
+                def make():
+                    obj = objects.make_recombine(study, [])
+                    obj.References = taskpanels.selected_face_picks(study, False)
+                    return obj
+
+            else:
+
+                def make():
+                    return objects.make_recombine(study, bodies)
+
+            _create_and_edit(study, "Add Recombine", make)
 
 
 class AddSymmetricMesh(_StudyCommand):

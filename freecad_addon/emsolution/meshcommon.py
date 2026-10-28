@@ -68,12 +68,26 @@ def _note(text):
     print(f"NOTE: {text}", file=sys.stderr)
 
 
+FILE_DIMS = {"edge": 1, "corner": 0, "face": 2, "rface": 2}  # what each kind of transfinite_files file holds
+
+
 def transfinite_files(job, folder):
-    """[(kind, item, path)] for job["transfinite"]: every edge file ("edge"), then every corner file ("corner")."""
+    """[(kind, item, path)]: every edge file ("edge"), then every corner file ("corner", the body entry), then every
+    picked face of a body entry ("face", (entry, face row)), then every job["recombine_faces"] row ("rface")."""
     tf = job.get("transfinite") or {}
     out = [("edge", e, os.path.join(folder, f)) for e in tf.get("edges", []) for f in e["files"]]
     out += [("corner", b, os.path.join(folder, f)) for b in tf.get("bodies", []) for f in b["corner_files"]]
+    out += [("face", (b, f), os.path.join(folder, f["file"])) for b in tf.get("bodies", []) for f in b.get("faces", [])]
+    out += [("rface", f, os.path.join(folder, f["file"])) for f in job.get("recombine_faces", [])]
     return out
+
+
+def _picked(label, name, dimtags, body):
+    """The final faces of a picked face file; each must be one of body (the body's final 2D tags)."""
+    tags = [t for d, t in dimtags if d == 2]
+    if not tags or any(t not in body for t in tags):
+        raise JobError(f"{label}: {name} did not merge with the body")
+    return tags
 
 
 def _boundary(dim, tag):
@@ -126,38 +140,37 @@ def _loop(face, curves, ends, at, start, label):
     return loop
 
 
-def _set_face(face, chosen, curve_set, body):
-    """Check one face of a structured body (R4, R6) and make it transfinite. curve_set: curve -> (nodes, ...)."""
+def _set_face(face, chosen, curve_set, label):
+    """Check one face of a structured body (R4, R6) and make it transfinite. curve_set: curve -> (nodes, ...).
+    label: who owns the face, for the messages: "structured body Core", or "structured body Core Face2"."""
     curves = _boundary(2, face)
     if any(c not in curve_set for c in curves):
-        raise JobError(f"structured body {body}: face at {_at(2, face)} has edges without Transfinite Edges")
+        raise JobError(f"{label}: face at {_at(2, face)} has edges without Transfinite Edges")
     ends = {c: _boundary(1, c) for c in curves}
     if any(len(e) != 2 for e in ends.values()):
-        raise JobError(
-            f"structured body {body}: face at {_at(2, face)} has a closed edge (circle?); it cannot be structured"
-        )
+        raise JobError(f"{label}: face at {_at(2, face)} has a closed edge (circle?); it cannot be structured")
     at = {}  # point -> the curves meeting there
     for c in curves:
         for p in ends[c]:
             at.setdefault(p, []).append(c)
     points = set(at)
     # a hole is the true error, whatever the corners
-    _loop(face, curves, ends, at, min(points), f"structured body {body}")
+    _loop(face, curves, ends, at, min(points), label)
     corners = points if len(points) <= 4 else {p for p in chosen if p in points}
     if not corners:  # more than 4 points and none chosen: the points where the boundary turns
         corners = {p for p in points if len(at[p]) == 2 and _turns(p, *at[p])}
         if len(corners) in (3, 4):
             _note(
-                f"structured body {body}: face at {_at(2, face)} has {len(points)} boundary points;"
+                f"{label}: face at {_at(2, face)} has {len(points)} boundary points;"
                 f" using the {len(corners)} where the boundary turns as corners"
             )
     if len(corners) not in (3, 4):
         raise JobError(
-            f"structured body {body}: face at {_at(2, face)} has {len(points)} boundary points and {len(corners)} corners"
+            f"{label}: face at {_at(2, face)} has {len(points)} boundary points and {len(corners)} corners"
             " on it; it needs 3 or 4 (choose Corners in the Transfinite Body)"
         )
     for start in sorted(corners):  # 3 corners: Gmsh collapses the first one; its two sides must match
-        loop = _loop(face, curves, ends, at, start, f"structured body {body}")
+        loop = _loop(face, curves, ends, at, start, label)
         sides = []
         for c, p in loop:
             if p in corners:
@@ -167,24 +180,27 @@ def _set_face(face, chosen, curve_set, body):
             break
     else:
         raise JobError(
-            f"structured body {body}: face at {_at(2, face)} has 3 corners and its sides have {'/'.join(map(str, sorted(sides)))}"
+            f"{label}: face at {_at(2, face)} has 3 corners and its sides have {'/'.join(map(str, sorted(sides)))}"
             " elements; two of them must match"
         )
     if len(sides) == 4 and (sides[0] != sides[2] or sides[1] != sides[3]):
         raise JobError(
-            f"structured body {body}: face at {_at(2, face)} opposite sides have {sides[0]}/{sides[2]} and"
+            f"{label}: face at {_at(2, face)} opposite sides have {sides[0]}/{sides[2]} and"
             f" {sides[1]}/{sides[3]} elements; they must match"
         )
     gmsh.model.mesh.setTransfiniteSurface(face, cornerTags=[p for _, p in loop if p in corners])
 
 
 def apply_transfinite(job, mapped, body_tags, dim):
-    """Transfinite curves, faces and (3D) volumes from job["transfinite"]. Returns {curve: (nodes, item name)}.
+    """Transfinite curves, faces and (3D) volumes from job["transfinite"]. Returns ({curve: (nodes, item name)},
+    the set of final 2D tags made transfinite).
 
     mapped: [(kind, item, file name, final dimtags)] in transfinite_files order, from the fragment map.
     body_tags: {mat_id: the body's final entity tags of dimension dim}.
+    A body entry with "faces" structures only those faces (2D); without it, all the body's faces.
     """
-    curve_set, corners, edges = {}, {}, []  # final curve -> (nodes, distribution, coef, item name); body -> points
+    curve_set, corners, edges = {}, {}, []  # final curve -> (nodes, distribution, coef, item name); entry -> points
+    picked = {}  # id(face row) -> its final faces
 
     def put(t, setting, owner):
         old = curve_set.setdefault(t, (*setting, owner))
@@ -192,13 +208,20 @@ def apply_transfinite(job, mapped, body_tags, dim):
             raise JobError(f"Transfinite Edges {old[3]} and {owner} give one edge different settings")
 
     for kind, item, name, dimtags in mapped:
-        want = 1 if kind == "edge" else 0
+        if kind == "rface":  # apply_recombine's
+            continue
+        if kind == "face":
+            entry, row = item
+            label = f"structured body {entry['name']} {row['face']}"
+            picked[id(row)] = _picked(label, name, dimtags, body_tags[entry["mat_id"]])
+            continue
+        want = FILE_DIMS[kind]
         label = f"Transfinite Edges {item['name']}" if kind == "edge" else f"structured body {item['name']}"
         tags = [t for d, t in dimtags if d == want]
         if not tags or any(len(gmsh.model.getAdjacencies(want, t)[0]) == 0 for t in tags):
             raise JobError(f"{label}: {name} did not merge with the bodies")
-        if kind == "corner":
-            corners.setdefault(item["name"], set()).update(tags)
+        if kind == "corner":  # by entry, not name: one body's faces may be in two items, each with its corners
+            corners.setdefault(id(item), set()).update(tags)
             continue
         if len(tags) == 1:  # whole edges first: the user set exactly these
             put(tags[0], (item["nodes"], item["distribution"], item["coef"]), item["name"])
@@ -229,7 +252,15 @@ def apply_transfinite(job, mapped, body_tags, dim):
     for t, (nodes, distribution, coef, _) in curve_set.items():
         bump = distribution == "Bump"
         gmsh.model.mesh.setTransfiniteCurve(t, nodes, "Bump" if bump else "Progression", coef if bump else 1.0)
+    done = set()  # final faces made transfinite
     for b in (job.get("transfinite") or {}).get("bodies", []):
+        chosen = corners.get(id(b), set())
+        if "faces" in b:  # picked faces of a 2D body
+            for row in b["faces"]:
+                for f in dict.fromkeys(picked[id(row)]):
+                    _set_face(f, chosen, curve_set, f"structured body {b['name']} {row['face']}")
+                    done.add(f)
+            continue
         tags = body_tags[b["mat_id"]]
         faces = list(tags) if dim == 2 else []
         for v in tags if dim == 3 else []:
@@ -244,10 +275,11 @@ def apply_transfinite(job, mapped, body_tags, dim):
                 )
             faces += vfaces
         for f in dict.fromkeys(faces):
-            _set_face(f, corners.get(b["name"], set()), curve_set, b["name"])
+            _set_face(f, chosen, curve_set, f"structured body {b['name']}")
+            done.add(f)
         for v in tags if dim == 3 else []:
             gmsh.model.mesh.setTransfiniteVolume(v)
-    return {t: (nodes, item) for t, (nodes, _, _, item) in curve_set.items()}
+    return {t: (nodes, item) for t, (nodes, _, _, item) in curve_set.items()}, done
 
 
 def _check_full_quad(job, faces, tf_curves):
@@ -265,19 +297,24 @@ def _check_full_quad(job, faces, tf_curves):
                 )
 
 
-def apply_recombine(job, body_tags, dim, tf_curves):
-    """Recombine the bodies listed in job["recombine"] (MAT_IDs) into quads (2D) or hexes (3D).
+def apply_recombine(job, body_tags, dim, tf, mapped):
+    """Recombine the bodies listed in job["recombine"] (MAT_IDs) into quads (2D) or hexes (3D), and (2D) the faces
+    of job["recombine_faces"].
 
     body_tags: {mat_id: the body's final entity tags of dimension dim}.
-    tf_curves: what apply_transfinite returned.
+    tf: what apply_transfinite returned. mapped: what it was given (the "rface" rows are read here).
     """
+    tf_curves, structured = tf
     if dim == 3:
         _recombine_3d(job, body_tags, tf_curves)
         return
-    structured = {b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])}
     names = {b["mat_id"]: b["name"] for b in job["bodies"]}
-    faces = [(m, f) for m in job.get("recombine", []) for f in dict.fromkeys(body_tags[m])]
-    _check_full_quad(job, [(names[m], f) for m, f in faces if m not in structured], tf_curves)
+    faces = [(names[m], f) for m in job.get("recombine", []) for f in dict.fromkeys(body_tags[m])]
+    for kind, row, name, dimtags in mapped:
+        if kind == "rface":
+            label = f"{row['name']} {row['face']}"
+            faces += [(label, f) for f in _picked(f"recombine {label}", name, dimtags, body_tags[row["mat_id"]])]
+    _check_full_quad(job, [(b, f) for b, f in faces if f not in structured], tf_curves)
     for _, f in faces:
         gmsh.model.mesh.setRecombine(2, f)
 

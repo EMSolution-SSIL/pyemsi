@@ -126,6 +126,30 @@ def test_structured_cell_from_edges_picked_on_the_top(motor):
     assert r.returncode == 0, r.stderr
 
 
+def test_face_picks_on_a_cell_carry_its_local_id(motor):
+    """Transfinite Body and Recombine on a face of a cell body: their job entries have the cell's local id, the one
+    of its body entry; the cells have no MAT_ID of their own."""
+    top, coil = motor.MainObjects[0], motor.Document.getObject("CoilCell")
+    picks = [(top, _named(top.Shape, "Edge", e)) for e in coil.Shape.Edges]
+    objects.make_transfinite_body(motor, []).References = [(coil, "Face1")]
+    objects.make_transfinite_edges(motor, 6, objects.to_cells(motor, picks))
+    objects.make_recombine(motor, []).References = [(coil, "Face1")]
+    motor.Document.recompute()
+    path = jobwriter.write_job(motor)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    local = next(b["mat_id"] for b in job["bodies"] if b["name"] == objects.volume_name(coil))
+    (entry,) = job["transfinite"]["bodies"]
+    assert entry["mat_id"] == local and [f["face"] for f in entry["faces"]] == ["Face1"]
+    (face,) = job["recombine_faces"]
+    assert face["mat_id"] == local and "recombine" not in job
+    mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+    r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
+    kinds, inverted, _ = mesh_check(job["mesh_file"], (35,))
+    assert inverted == 0 and any(k.startswith("Quadrilateral") for k in kinds), kinds
+
+
 def test_sliding_interface_without_air_has_a_circle(motor):
     (iface,) = objects.sliding_interfaces(motor)
     assert objects.air_regions(motor) == []

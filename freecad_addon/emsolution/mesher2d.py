@@ -20,6 +20,7 @@ from meshcommon import (
     main,
     run,
     transfinite_files,
+    FILE_DIMS,
     apply_recombine,
     claim_air,
     air_items,
@@ -78,7 +79,7 @@ def build(job, folder):
     tf_spans = []
     for kind, _, path in tf_files:
         start = len(inputs)
-        inputs += import_brep(path, 1 if kind == "edge" else 0)
+        inputs += import_brep(path, FILE_DIMS[kind])
         tf_spans.append((start, len(inputs)))
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
@@ -134,8 +135,8 @@ def build(job, folder):
         (kind, item, os.path.basename(path), [dt for dimtags in out_map[start:end] for dt in dimtags])
         for (kind, item, path), (start, end) in zip(tf_files, tf_spans)
     ]
-    tf_curves = apply_transfinite(job, mapped, body_faces, 2)
-    apply_recombine(job, body_faces, 2, tf_curves)
+    tf = apply_transfinite(job, mapped, body_faces, 2)
+    apply_recombine(job, body_faces, 2, tf, mapped)
     if job.get("periodic"):
         apply_periodic(job["periodic"], 2)
     if not slides:
@@ -165,10 +166,13 @@ def run_job(job_path):
             continue
         print(f"MAT_ID  {item['mat_id']:>6}  {item['name']}")
     for item in (job.get("transfinite") or {}).get("bodies", []):
-        print(f"Structured      {item['name']}")
+        for face in [f" {f['face']}" for f in item["faces"]] if "faces" in item else [""]:
+            print(f"Structured      {item['name']}{face}")
     for item in job["bodies"]:
         if item["mat_id"] in job.get("recombine", []):
             print(f"Recombined      {item['name']}")
+    for item in job.get("recombine_faces", []):
+        print(f"Recombined      {item['name']} {item['face']}")
     if job.get("slides"):
         print("\n".join(slide_report(job)))
     print(f"Wrote {job['mesh_file']}")

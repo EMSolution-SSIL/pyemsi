@@ -857,6 +857,12 @@ def make_transfinite_body(study, bodies, corners=()):
     return obj
 
 
+def split_corners(picks):
+    """(References, Corners) of a Transfinite Body from picks [(body, sub)]: the VertexN picks are its corners."""
+    corners = [(b, s) for b, s in picks if s.startswith("Vertex")]
+    return [(b, s) for b, s in picks if not s.startswith("Vertex")], corners
+
+
 def make_transfinite_edges(study, elements, edges, distribution="Uniform", coef=0.5):
     """edges: list of (body, "EdgeN")."""
     obj = _add(study, "MeshSizesGroup", TransfiniteEdges, "TransfiniteEdges")
@@ -1042,6 +1048,25 @@ def subs_by_body(item):
     for body, subs in item.References:
         out.setdefault(body.Name, (body, []))[1].extend(subs)
     return list(out.values())
+
+
+def face_picks(item):
+    """[(body, [FaceN])] in reference order, one entry per body. An empty list means the whole body: a whole-body
+    reference wins over face references to the same body. Other sub-elements are ignored."""
+    out = []
+    for body, subs in subs_by_body(item):
+        if "" in subs:
+            out.append((body, []))
+            continue
+        faces = sorted({s for s in subs if s.startswith("Face")}, key=lambda s: int(s[4:]))
+        if faces:
+            out.append((body, faces))
+    return out
+
+
+def structured_faces(body, faces):
+    """The faces of a face pick: the picked ones, or every face of the body for a whole-body pick."""
+    return list(faces) or [f"Face{i}" for i in range(1, len(body.Shape.Faces) + 1)]
 
 
 def is_item(obj):

@@ -83,7 +83,8 @@ def air_size(study):
 
 def transfinite_items(study, bodies):
     """The Study's transfinite items on bodies, after check(). Returns (structured, edges):
-    structured = [(body, [corner vertex names])] in tree order
+    structured = [(item, body, faces, [corner vertex names])] in tree order, one per body of an item;
+                 faces as objects.face_picks gives them ([] = the whole body)
     edges      = [(item, body, [edge names])] in tree order
     """
     included = {b.Name for b in bodies}
@@ -92,9 +93,9 @@ def transfinite_items(study, bodies):
         corners = {}
         for b, subs in t.Corners:
             corners.setdefault(b.Name, []).extend(subs)
-        for b, _ in objects.subs_by_body(t):
+        for b, faces in objects.face_picks(t):
             if b.Name in included:
-                structured.append((b, corners.get(b.Name, [])))
+                structured.append((t, b, faces, corners.get(b.Name, [])))
     edges = [
         (e, b, list(subs))
         for e in objects.transfinite_edges(study)
@@ -295,10 +296,13 @@ def write_job(study):
     structured, tf_edges = transfinite_items(study, [b for b, _ in volumes])
     if structured or tf_edges:
         tf_bodies = []
-        for body, corners in structured:
-            mat_id = ids[body.Name]
-            files = export_subs(folder, body, corners, f"corner_{mat_id}")
-            tf_bodies.append({"name": objects.volume_name(body), "mat_id": mat_id, "corner_files": files})
+        for k, (_, body, faces, corners) in enumerate(structured, 1):
+            files = export_subs(folder, body, corners, f"corner_{k}")
+            entry = {"name": objects.volume_name(body), "mat_id": ids[body.Name], "corner_files": files}
+            if faces:  # a pick of faces; a whole body has no "faces" key
+                paths = export_subs(folder, body, faces, f"tface_{k}")
+                entry["faces"] = [{"face": f, "file": p} for f, p in zip(faces, paths)]
+            tf_bodies.append(entry)
         job["transfinite"] = {
             "bodies": tf_bodies,
             "edges": [
@@ -319,10 +323,23 @@ def write_job(study):
     elif sliding:
         job["moving"] = [int(study.MatIds[b.Name]) for b in geometry.setup(study)[1]]
         write_slides(study, folder, job)
-    recombine_names = {body.Name for item in objects.recombine_items(study) for body, _ in objects.subs_by_body(item)}
+    picks = [pick for item in objects.recombine_items(study) for pick in objects.face_picks(item)]
+    recombine_names = {body.Name for body, faces in picks if not faces}
     recombine = [ids[b.Name] for b, _ in volumes if b.Name in recombine_names]
     if recombine:
         job["recombine"] = recombine
+    included = {b.Name for b, _ in volumes}
+    picked = {}  # (body name, face) -> body; the same face in two items is written once
+    for body, faces in picks:
+        if body.Name in included and body.Name not in recombine_names:
+            picked.update({(body.Name, f): body for f in faces})
+    if picked:
+        job["recombine_faces"] = []
+        for k, ((_, face), body) in enumerate(picked.items(), 1):
+            (rel,) = export_subs(folder, body, [face], f"rface_{k}")
+            job["recombine_faces"].append(
+                {"name": objects.volume_name(body), "mat_id": ids[body.Name], "face": face, "file": rel}
+            )
     path = os.path.join(folder, "job.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(job, fh, indent=2)

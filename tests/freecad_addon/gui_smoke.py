@@ -986,7 +986,7 @@ def main():
     Gui.Selection.addSelection(doc.Name, section.Name)
     Gui.runCommand("EMS_TransfiniteBody")
     texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
-    assert any(t.startswith("Click a region") for t in texts), texts
+    assert any(t.startswith("Click a face to structure") for t in texts), texts
     ok()
     Gui.Selection.clearSelection()
     for k in range(1, 5):
@@ -1014,6 +1014,49 @@ def main():
     for item in (tb, te, rc):  # leave the Study as the rest of the smoke test expects it
         doc.removeObject(item.Name)
     second.MeshSizesGroup.RecombinationAlgorithm = "Blossom"
+    # Face picks in 2D: a clicked face of a two-face body stays a face; a tree pick and a one-face body are whole.
+    blocks = doc.addObject("Part::Feature", "Blocks")
+    blocks.Shape = Part.makePlane(10, 10).generalFuse([Part.makePlane(10, 10, App.Vector(10, 0, 0))])[0]
+    source.addObject(blocks)
+    doc.recompute()
+    right = next(f"Face{i}" for i, f in enumerate(blocks.Shape.Faces, 1) if abs(f.CenterOfMass.x - 15) < 1e-6)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, blocks.Name, right)
+    Gui.runCommand("EMS_TransfiniteBody")
+    texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
+    assert any(t.startswith("Click a face to structure that block") for t in texts), texts
+    gate = opened[-1].gate  # what the 3D view may pick while the panel is open
+    assert gate.allow(doc, blocks, right) and gate.allow(doc, blocks, "Vertex1"), "faces and corners"
+    assert gate.allow(doc, section, "Edge1"), "an edge click on a one-face body is that region"
+    assert not gate.allow(doc, blocks, "Edge1"), "an edge of a two-face body is no region"
+    ok()
+    (tb,) = objects.transfinite_bodies(second)
+    assert tb.References == [(blocks, (right,))], tb.References
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, blocks.Name)  # tree pick
+    Gui.runCommand("EMS_Recombine")
+    gate = opened[-1].gate
+    assert gate.allow(doc, blocks, right) and gate.allow(doc, section, "Vertex1"), "faces, one-face regions"
+    assert not gate.allow(doc, blocks, "Vertex1"), "Recombine takes no corners"
+    ok()
+    (rc,) = objects.recombine_items(second)
+    assert rc.References == [(blocks, ("",))], rc.References
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, section.Name, "Face1")  # one-face body: stored whole
+    Gui.runCommand("EMS_Recombine")
+    ok()
+    assert objects.recombine_items(second)[-1].References == [(section, ("",))]
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, section.Name, "Edge1")  # an edge click on a one-face body adds the region
+    Gui.runCommand("EMS_Recombine")
+    ok()
+    assert objects.recombine_items(second)[-1].References == [(section, ("",))]
+    for item in [tb] + objects.recombine_items(second):  # leave the Study as the rest of the smoke test expects it
+        doc.removeObject(item.Name)
+    source.removeObject(blocks)
+    doc.removeObject(blocks.Name)
+    doc.recompute()
+    log.append("2D face picks ok")
     named_manual = doc.addObject("App::DocumentObjectGroup", "Manual")
     view.refresh()
     combo.setCurrentIndex(combo.findData("source:" + named_manual.Name))
@@ -1374,6 +1417,23 @@ def main():
     Gui.runCommand("EMS_TransfiniteEdges")
     made = objects.transfinite_edges(sym_study)[-1]
     assert objects.item_refs(made) == edges, objects.item_refs(made)
+    Gui.Control.closeDialog()
+    # 2D face picks: a face of a copy is that block of the cell (a one-face cell: the whole cell), and a vertex two
+    # cells share is a corner of the cell the selection picks only.
+    face40 = stator_top.Shape.getElement("Face40")
+    names = [
+        f"Vertex{i}" for i, v in enumerate(stator_top.Shape.Vertexes, 1) if any(v.isSame(w) for w in face40.Vertexes)
+    ]
+    shared = next(n for n in names if len(objects.to_cells(sym_study, [(stator_top, n)])) > 1)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face40")
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, shared)
+    picks = [(b.Name, s) for b, s in taskpanels.ITEM_PICKS_2D[objects.TransfiniteBody][0](sym_study)]
+    assert len(picks) == 2 and picks[0] == (whole[0].Name, ""), picks
+    assert picks[1][0] == whole[0].Name and picks[1][1].startswith("Vertex"), picks
+    Gui.runCommand("EMS_TransfiniteBody")
+    made = objects.transfinite_bodies(sym_study)[-1]
+    assert [(b.Name, s) for b, s in objects.item_refs(made)] == picks, objects.item_refs(made)
     Gui.Control.closeDialog()
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)

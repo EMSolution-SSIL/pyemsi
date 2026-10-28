@@ -36,6 +36,21 @@ def plane_of(face):
     return None
 
 
+def inputs(obj):
+    """Names of the objects obj is made from, in its document. A sketch's links (external geometry, attachment)
+    only align it, so the walk does not go through a sketch: a face whose sketch traces another body's edge is
+    not made from that body."""
+    found, stack = set(), list(obj.OutList)
+    while stack:
+        dep = stack.pop()
+        if dep.Name in found or dep.Document != obj.Document:
+            continue
+        found.add(dep.Name)
+        if not dep.isDerivedFrom("Sketcher::SketchObject"):
+            stack += dep.OutList
+    return found
+
+
 def collect(roots, dimension):
     """Return final geometry objects and diagnostics, in source order.
 
@@ -65,7 +80,7 @@ def collect(roots, dimension):
 
     for obj in roots:
         visit(obj)
-    consumed = {dep.Name for obj in candidates for dep in obj.OutListRecursive if dep.Document == obj.Document}
+    consumed = {name for obj in candidates for name in inputs(obj)}
     result, plane = [], None
     for obj in candidates:
         if obj.Name in consumed:

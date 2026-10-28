@@ -76,6 +76,47 @@ def is_air(body):
     return isinstance(getattr(body, "Proxy", None), objects.AirRegion)
 
 
+def selected_face_picks(study, vertices):
+    """[(body, sub)] for a 2D structured item: a body picked as a whole is (body, ""); each clicked FaceN is
+    (body, FaceN), or (body, "") when the body has one face (any click on it, an edge or vertex too);
+    clicked vertices too when vertices.
+    A click on a Symmetric Mesh top is moved to the cell: a face of a copy is that block of the cell body, and a
+    vertex is a corner of the cell bodies that have it, those this selection picks if it picks any of them."""
+    tops = {i.Top.Name for i in objects.symmetric_items(study) if i.Top is not None}
+    out, top_corners = [], []
+    for sel in Gui.Selection.getSelectionEx():
+        body = objects.pick_body(sel.Object)
+        if body is None:
+            continue
+        if not sel.SubElementNames:
+            out.append((body, ""))
+            continue
+        if body.Name in tops:
+            faces = [(body, s) for s in sel.SubElementNames if s.startswith("Face")]
+            out += [(b, "" if len(b.Shape.Faces) == 1 else s) for b, s in objects.to_cells(study, faces)]
+            if vertices:
+                top_corners += objects.to_cells(
+                    study, [(body, s) for s in sel.SubElementNames if s.startswith("Vertex")]
+                )
+            continue
+        one_face = len(body.Shape.Faces) == 1
+        for sub in sel.SubElementNames:
+            if vertices and sub.startswith("Vertex"):
+                out.append((body, sub))
+            if one_face and sub.startswith(("Face", "Edge", "Vertex")):
+                out.append((body, ""))
+            elif sub.startswith("Face"):
+                out.append((body, sub))
+    regions = {b.Name for b, s in out if not s.startswith("Vertex")}
+    out += [(b, s) for b, s in top_corners if b.Name in regions] or top_corners
+    seen, unique = set(), []
+    for body, sub in out:
+        if (body.Name, sub) not in seen:
+            seen.add((body.Name, sub))
+            unique.append((body, sub))
+    return unique
+
+
 def selected_faces():
     """Faces of bodies; an Excitation never goes on an Air Region."""
     return [(b, s) for b, s in selected_subs(("Face",)) if not is_air(b)]
@@ -1030,10 +1071,11 @@ def install_open_observer():
 class ItemGate:
     """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
 
-    def __init__(self, study, kinds, whole, air=True):
+    def __init__(self, study, kinds, whole, air=True, regions=False):
+        """regions: any click on a one-face body picks that region (2D face picks)."""
         bodies = objects.assignable(study) if air else objects.study_bodies(study)
         self.main = {b.Name for b in bodies + objects.cell_bodies(study)}  # a symmetric Study meshes its cells
-        self.kinds, self.whole = kinds, whole
+        self.kinds, self.whole, self.regions = kinds, whole, regions
 
     def allow(self, doc, obj, sub):
         if not Gui.Control.activeDialog():  # the panel was closed without OK or Cancel
@@ -1041,7 +1083,11 @@ class ItemGate:
         body = objects.pick_body(obj)
         if body is None or body.Name not in self.main:
             return False
-        return sub.startswith(self.kinds) if sub else self.whole
+        if not sub:
+            return self.whole
+        if self.regions and len(body.Shape.Faces) == 1:
+            return sub.startswith(ANY_SUB)
+        return sub.startswith(self.kinds)
 
 
 def picked_bodies(study):
@@ -1103,6 +1149,22 @@ ITEM_PICKS = {
         "Click regions, edges or vertices in the 3D view.",
     ),
 }
+# in a 2D Study: (pick, list label, gate kinds, hint) replacing those of ITEM_PICKS
+ITEM_PICKS_2D = {
+    objects.TransfiniteBody: (
+        lambda study: selected_face_picks(study, True),
+        "Bodies, faces,\ncorner vertices",
+        ("Face", "Vertex"),
+        "Click a face to structure that block, or select the body in the tree for all its faces."
+        " Clicked vertices become corners.",
+    ),
+    objects.Recombine: (
+        lambda study: selected_face_picks(study, False),
+        "Bodies, faces",
+        ("Face",),
+        "Click a face to recombine that block, or select the body in the tree for all its faces.",
+    ),
+}
 
 
 class ItemPanel:
@@ -1116,9 +1178,13 @@ class ItemPanel:
         study = objects.owner_study(obj)
         highlight.clear()  # the list's selected rows are highlighted instead
         self.pick, label, kinds, whole, hint3d, hint2d = ITEM_PICKS[type(obj.Proxy)]
+        regions = study.Dimension == "2D" and type(obj.Proxy) in ITEM_PICKS_2D
+        if regions:
+            self.pick, label, kinds, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
         air = isinstance(obj.Proxy, objects.MeshSize)  # the air is not recombined, structured or excited
-        Gui.Selection.addSelectionGate(ItemGate(study, kinds, whole, air))  # replaces any filter the user set
+        self.gate = ItemGate(study, kinds, whole, air, regions)
+        Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.current = objects.item_refs(obj)
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(obj.Label)
@@ -1233,8 +1299,7 @@ class ItemPanel:
             self.obj.Distribution = self.distribution.currentText()
             self.obj.BumpCoefficient = self.bump.value()
         if isinstance(self.obj.Proxy, objects.TransfiniteBody):
-            self.obj.References = [(b, s) for b, s in self.current if not s]
-            self.obj.Corners = [(b, s) for b, s in self.current if s]
+            self.obj.References, self.obj.Corners = objects.split_corners(self.current)
         else:
             self.obj.References = list(self.current)
         doc.commitTransaction()

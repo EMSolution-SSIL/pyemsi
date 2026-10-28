@@ -734,6 +734,166 @@ class StudyTest(unittest.TestCase):
         objects.make_transfinite_body(self.study, [a], [(b, "Vertex1")])
         self.assertStudyError("is not on one of its bodies")
 
+    def assertStudyErrorIn(self, study, text):
+        with self.assertRaises(jobwriter.StudyError) as ctx:
+            jobwriter.check(study)
+        self.assertIn(text, str(ctx.exception))
+
+    def two_blocks(self, name):
+        """Two 10 x 10 faces side by side that share the edge x = 10."""
+        obj = self.doc.addObject("Part::Feature", name)
+        obj.Shape = Part.makePlane(10, 10).generalFuse([Part.makePlane(10, 10, App.Vector(10, 0, 0))])[0]
+        return obj
+
+    def face_edges(self, body, face):
+        edges = body.Shape.getElement(face).Edges
+        return [(body, f"Edge{i}") for i, e in enumerate(body.Shape.Edges, 1) if any(e.isSame(f) for f in edges)]
+
+    def scratch_of(self, study, *parts):
+        return os.path.join(jobwriter.scratch_folder(study), *parts)
+
+    def test_picked_faces_go_to_the_job(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        right = self.face_at(b, 15, 5)
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right))
+        t = objects.make_transfinite_body(study, [])
+        t.References = [(b, right), (b, right)]  # twice: one entry
+        objects.make_recombine(study, []).References = [(b, right)]
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        (entry,) = job["transfinite"]["bodies"]
+        self.assertEqual(entry["faces"], [{"face": right, "file": "geometry/tface_1_1.brep"}])
+        self.assertEqual(
+            job["recombine_faces"],
+            [{"name": "B", "mat_id": entry["mat_id"], "face": right, "file": "geometry/rface_1_1.brep"}],
+        )
+        self.assertNotIn("recombine", job)
+        shape = Part.Shape()
+        shape.read(self.scratch_of(study, "geometry", "tface_1_1.brep"))
+        self.assertEqual(shape.ShapeType, "Face")
+        self.assertAlmostEqual(shape.Faces[0].CenterOfMass.x, 15)
+
+    def test_whole_body_and_its_face_in_one_item_write_the_whole_body(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        objects.make_transfinite_body(study, []).References = [(b, "Face1"), (b, "")]
+        objects.make_recombine(study, [b])
+        objects.make_recombine(study, []).References = [(b, "Face1")]
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertNotIn("faces", job["transfinite"]["bodies"][0])
+        self.assertNotIn("recombine_faces", job)
+
+    def test_corners_stay_with_their_item(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        left, right = self.face_at(b, 5, 5), self.face_at(b, 15, 5)
+        shared = next(f"Vertex{i}" for i, v in enumerate(b.Shape.Vertexes, 1) if abs(v.Point.x - 10) < 1e-6)
+        objects.make_transfinite_body(study, [], [(b, shared)]).References = [(b, left)]
+        objects.make_transfinite_body(study, []).References = [(b, right)]
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            first, second = json.load(fh)["transfinite"]["bodies"]
+        self.assertEqual(first["corner_files"], ["geometry/corner_1_1.brep"])
+        self.assertEqual(second["corner_files"], [])
+
+    def test_transfinite_picks_split_into_references_and_corners(self):
+        b = self.two_blocks("B")
+        picks = [(b, "Face2"), (b, "Vertex3"), (b, ""), (b, "Vertex1")]
+        self.assertEqual(objects.split_corners(picks), ([(b, "Face2"), (b, "")], [(b, "Vertex3"), (b, "Vertex1")]))
+
+    def test_face_picks_whole_body_wins_over_its_faces(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        t = objects.make_transfinite_body(study, [b])
+        t.References = [(b, "Face2"), (b, ""), (b, "Face2")]
+        self.assertEqual(objects.face_picks(t), [(b, [])])
+        t.References = [(b, "Face2"), (b, "Face1"), (b, "Face2")]
+        self.assertEqual(objects.face_picks(t), [(b, ["Face1", "Face2"])])
+
+    def test_picked_face_needs_only_its_own_edges(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        right = self.face_at(b, 15, 5)
+        t = objects.make_transfinite_body(study, [])
+        t.References = [(b, right)]
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right)[:3])
+        self.assertStudyErrorIn(study, f"B {right} has edges without Transfinite Edges: ")
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right)[3:])
+        jobwriter.check(study)  # the left face's other edges are not required
+
+    def test_face_in_two_transfinite_bodies_is_refused(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        right = self.face_at(b, 15, 5)
+        t1 = objects.make_transfinite_body(study, [b])
+        t2 = objects.make_transfinite_body(study, [])
+        t2.References = [(b, right)]
+        self.assertStudyErrorIn(study, f"B.{right} is in Transfinite Body {t1.Label} and {t2.Label}.")
+
+    def test_faces_of_one_body_in_two_transfinite_bodies_are_fine(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_edges(study, 4, self.all_edges(b))
+        for x in (5, 15):
+            objects.make_transfinite_body(study, []).References = [(b, self.face_at(b, x, 5))]
+        jobwriter.check(study)
+
+    def test_missing_face_on_transfinite_body_and_recombine_is_refused(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_transfinite_body(study, []).References = [(b, "Face7")]
+        self.assertStudyErrorIn(study, "Transfinite Body TransfiniteBody: body B has no Face7. Reselect it.")
+        objects.make_recombine(study, []).References = [(b, "Face9")]
+        self.assertStudyErrorIn(study, "Recombine Recombine: body B has no Face9. Reselect it.")
+
+    def test_whole_body_in_two_recombine_items_is_still_fine(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        objects.make_recombine(study, [b])
+        objects.make_recombine(study, []).References = [(b, "Face1")]
+        jobwriter.check(study)
+
+    def test_corner_on_no_structured_face_of_its_item_is_refused(self):
+        b = self.two_blocks("B")
+        study = self.make_2d_study(b)
+        right = self.face_at(b, 15, 5)
+        objects.make_transfinite_edges(study, 4, self.face_edges(b, right))
+        far = next(f"Vertex{i}" for i, v in enumerate(b.Shape.Vertexes, 1) if v.Point.x < 1e-6)  # on the left face only
+        t = objects.make_transfinite_body(study, [], [(b, far)])
+        t.References = [(b, right)]
+        self.assertStudyErrorIn(
+            study, f"Transfinite Body {t.Label}: corner B.{far} is on none of its structured faces."
+        )
+        problem = next(p for p in validation.validate(study) if "is on none of its structured faces" in p.text)
+        self.assertEqual(problem.refs, [(b, far)])
+
+    def test_two_shared_faces_are_named_in_one_message(self):
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        faces = [self.nearest_face(core, 15, 5), self.nearest_face(core, 5, 5)]
+        t1 = objects.make_transfinite_body(study, [])
+        t1.References = [(core, f) for f in faces]
+        t2 = objects.make_transfinite_body(study, [])
+        t2.References = [(core, f) for f in faces]
+        a, b = sorted(faces, key=lambda f: int(f[4:]))
+        text = f"Core.{a}, Core.{b} are in Transfinite Body {t1.Label} and {t2.Label}."
+        problems = [p for p in validation.validate(study) if " are in Transfinite Body " in p.text]
+        self.assertEqual([p.text for p in problems], [text])
+        self.assertEqual(sorted(s for _, s in problems[0].refs), [a, b])
+
+    def test_face_picks_in_a_3d_study_are_refused(self):
+        a = self.box("A")
+        self.include(a)
+        objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
+        objects.make_transfinite_body(self.study, []).References = [(a, "Face1")]
+        objects.make_recombine(self.study, []).References = [(a, "Face2")]
+        self.assertStudyError("Transfinite Body TransfiniteBody: pick whole solids in a 3D Study (A.Face1).")
+        self.assertStudyError("Recombine Recombine: pick whole solids in a 3D Study (A.Face2).")
+
     def test_structured_box_job_meshes_to_hexahedra(self):
         a = self.box("A")
         self.include(a)
@@ -788,6 +948,120 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(
             msh_element_types(os.path.join(self.tmp.name, "pre_geom2D.msh"), 2), {2, 3}, "triangles and quads"
         )
+
+    def three_blocks(self):
+        """Two squares and a pentagon in a row, fused so they share the edges x = 10 and x = 20."""
+        pts = [(20, 0), (30, 0), (30, 10), (25, 13), (20, 10)]
+        pentagon = Part.Face(Part.makePolygon([App.Vector(x, y, 0) for x, y in pts + pts[:1]]))
+        parts = [Part.makePlane(10, 10, App.Vector(10, 0, 0)), pentagon]
+        obj = self.doc.addObject("Part::Feature", "Core")
+        obj.Shape = Part.makePlane(10, 10).generalFuse(parts)[0]
+        return obj
+
+    def vertex_at(self, body, x, y):
+        for i, v in enumerate(body.Shape.Vertexes, 1):
+            if abs(v.Point.x - x) < 1e-6 and abs(v.Point.y - y) < 1e-6:
+                return f"Vertex{i}"
+        raise AssertionError(f"no vertex at {(x, y)}")
+
+    def nearest_face(self, body, x, y):
+        faces = body.Shape.Faces
+        best = min(range(len(faces)), key=lambda i: faces[i].CenterOfMass.distanceToPoint(App.Vector(x, y, 0)))
+        return f"Face{best + 1}"
+
+    def run_mesher2d(self, study):
+        r = subprocess.run(
+            [sys.executable, MESHER2D, jobwriter.write_job(study)],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r, os.path.join(self.tmp.name, "pre_geom2D.msh")
+
+    def faces_of_msh(self, msh):
+        """{centre x (5, 15 or 25) of a face entity: [(element type, signed area of its corner nodes), ...]}"""
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(msh)
+            xy = {}
+            for tag in gmsh.model.mesh.getNodes()[0]:
+                xy[int(tag)] = gmsh.model.mesh.getNode(int(tag))[0][:2]
+            out = {}
+            for _, ent in gmsh.model.getEntities(2):
+                types, _, nodes = gmsh.model.mesh.getElements(2, ent)
+                elements, xs = [], []
+                for t, ns in zip(types, nodes):
+                    k = 3 if t == 2 else 4
+                    for j in range(0, len(ns), k):
+                        pts = [xy[int(n)] for n in ns[j : j + k]]
+                        area = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1])) / 2
+                        elements.append((int(t), area))
+                        xs += [p[0] for p in pts]
+                out[round((sum(xs) / len(xs) - 5) / 10) * 10 + 5] = elements  # the block: 5, 15 or 25
+            return out
+        finally:
+            gmsh.finalize()
+
+    def assert_no_inverted(self, msh):
+        for x, elements in self.faces_of_msh(msh).items():
+            areas = [a for _, a in elements]
+            self.assertTrue(all(abs(a) > 1e-9 for a in areas), f"degenerate element near x = {x}")
+            self.assertTrue(all(a > 0 for a in areas) or all(a < 0 for a in areas), f"inverted element near x = {x}")
+
+    def test_all_blocks_structured_with_corners_on_the_pentagon(self):  # A1
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        corners = [self.vertex_at(core, x, y) for x, y in ((20, 0), (30, 0), (30, 10), (20, 10))]
+        objects.make_transfinite_body(study, [core], [(core, v) for v in corners])
+        edges = self.all_edges(core)
+        roof = [e for e in edges if core.Shape.getElement(e[1]).BoundBox.YMax > 10.5]
+        self.assertEqual(len(roof), 2)
+        objects.make_transfinite_edges(study, 2, roof)
+        objects.make_transfinite_edges(study, 4, [e for e in edges if e not in roof])
+        objects.make_recombine(study, [core])
+        r, msh = self.run_mesher2d(study)
+        self.assertIn("Structured      Core", r.stdout)
+        self.assertEqual(msh_element_types(msh, 2), {3}, "only quadrangles")
+        self.assertEqual(sorted(self.faces_of_msh(msh)), [5, 15, 25])
+        self.assert_no_inverted(msh)
+
+    def test_only_the_middle_block_structured(self):  # A2
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        middle = self.nearest_face(core, 15, 5)
+        objects.make_transfinite_body(study, []).References = [(core, middle)]
+        objects.make_transfinite_edges(study, 4, self.face_edges(core, middle))
+        objects.make_recombine(study, []).References = [(core, middle)]
+        r, msh = self.run_mesher2d(study)
+        self.assertIn(f"Structured      Core {middle}", r.stdout)
+        faces = self.faces_of_msh(msh)
+        self.assertEqual(sorted(faces), [5, 15, 25])
+        self.assertEqual({t for t, _ in faces[15]}, {3}, "middle block: quadrangles only")
+        self.assertEqual({t for t, _ in faces[5]}, {2}, "left block: triangles only")
+        self.assertEqual({t for t, _ in faces[25]}, {2}, "pentagon: triangles only")
+        self.assert_no_inverted(msh)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(msh)
+            tags, coords, _ = gmsh.model.mesh.getNodes()
+            for x in (10, 20):
+                on_line = [int(t) for t, c in zip(tags, zip(coords[0::3], coords[1::3])) if abs(c[0] - x) < 1e-6]
+                self.assertEqual(len(on_line), 5, f"x = {x}")
+        finally:
+            gmsh.finalize()
+
+    def test_recombine_on_one_face_only(self):  # A3
+        core = self.three_blocks()
+        study = self.make_2d_study(core)
+        objects.make_recombine(study, []).References = [(core, self.nearest_face(core, 15, 5))]
+        r, msh = self.run_mesher2d(study)
+        faces = self.faces_of_msh(msh)
+        self.assertIn(3, {t for t, _ in faces[15]}, "middle block has quadrangles")
+        self.assertEqual({t for t, _ in faces[5]}, {2})
+        self.assertEqual({t for t, _ in faces[25]}, {2})
 
     def test_uniform_items_on_a_shared_edge_ignore_their_bump_coefficient(self):
         a, b = self.face("A"), self.face("B")
@@ -878,6 +1152,29 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(geometry.collect([a], "2D"), ([a], []))
         self.assertIn("at least one solid", geometry.collect([b], "3D")[1][0])
         self.assertIn("without solids", geometry.collect([self.box("Solid")], "2D")[1][0])
+
+    def sketched_face_aligned_to(self, other):
+        """A Part::Face of a sketch that uses other's Edge1 as external geometry: a reference, not an input."""
+        sketch = self.doc.addObject("Sketcher::SketchObject", "Sketch")
+        sketch.addExternal(other.Name, "Edge1")
+        sketch.addGeometry(
+            [
+                Part.LineSegment(App.Vector(0, 0, 0), App.Vector(10, 0, 0)),
+                Part.LineSegment(App.Vector(10, 0, 0), App.Vector(10, -10, 0)),
+                Part.LineSegment(App.Vector(10, -10, 0), App.Vector(0, -10, 0)),
+                Part.LineSegment(App.Vector(0, -10, 0), App.Vector(0, 0, 0)),
+            ]
+        )
+        face = self.doc.addObject("Part::Face", "Aligned")
+        face.Sources = [sketch]
+        self.doc.recompute()
+        self.assertIn(other, face.OutListRecursive)  # the reference FreeCAD records
+        return face
+
+    def test_body_a_sketch_only_references_stays_a_body(self):
+        coil = self.face("Coil")
+        aligned = self.sketched_face_aligned_to(coil)
+        self.assertEqual(geometry.collect([aligned, coil], "2D"), ([aligned, coil], []))
 
     def test_2d_faces_may_be_in_the_zx_plane_but_not_in_both(self):
         xy, zx = self.face("XY"), self.face("ZX")
@@ -1114,7 +1411,7 @@ print('RESTORE PASS')
         self.doc.recompute()
         return obj
 
-    def face_at(self, body, x, y, z):
+    def face_at(self, body, x, y, z=0):
         """Name of the face of body whose center is at (x, y, z)."""
         for i, f in enumerate(body.Shape.Faces, 1):
             if f.CenterOfMass.distanceToPoint(App.Vector(x, y, z)) < 1e-6:
@@ -1297,6 +1594,16 @@ print('RESTORE PASS')
         self.include(cut, coil)
         (warning,) = [w for w in self.problems(validation.WARNING) if "not meshed on its own" in w]
         self.assertTrue(warning.startswith("Coil is not meshed on its own: Air is made from it."), warning)
+
+    def test_body_a_sketch_only_references_is_not_reported_as_skipped(self):
+        coil = self.doc.addObject("Part::Feature", "Coil")
+        coil.Shape = Part.makePlane(10, 10)
+        aligned = self.sketched_face_aligned_to(coil)
+        study = objects.make_study(self.doc, "2D", "Section")
+        study.MainMode, study.MainObjects = "Manual", [aligned, coil]
+        self.assertEqual(objects.study_bodies(study), [aligned, coil])
+        texts = [p.text for p in validation.validate(study) if "not meshed on its own" in p.text]
+        self.assertEqual(texts, [])
 
     def test_bodies_without_material_are_a_warning(self):
         self.include(self.box("A"))
