@@ -124,6 +124,16 @@ def test_cell_bodies_made_from_other_objects_are_leaves(motor):
     assert len(transforms) == 24
 
 
+def test_fragments_that_cut_a_cell_is_one_cell_body(motor):
+    """A Boolean Fragments with no copy step below it only cuts: it is the cell body, not its face and divider."""
+    frag = symcases.split_coil(motor["doc"])
+    cells, transforms = symmetry.read_chain(motor["stator_top"])
+    assert [c.Name for c in cells] == ["StatorIronCell", "CoilFragments", "StatorAirCell"]
+    assert len(transforms) == 24 and len(frag.Shape.Faces) == 2
+    assert len(motor["stator_top"].Shape.Faces) == 4 * 24  # the cut reaches the full drawing
+    assert_lands(cells, transforms, motor["stator_top"])
+
+
 def test_identity_comes_first_whatever_the_link_order(motor):
     pitch = motor["doc"].getObject("StatorPitch")
     pitch.Links = list(reversed(pitch.Links))

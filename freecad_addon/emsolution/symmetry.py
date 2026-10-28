@@ -83,6 +83,13 @@ def _is_leaf(obj):
     return hasattr(obj, "Shape") and not any(_in_table(o) for o in obj.OutListRecursive)
 
 
+def _cuts_a_cell(obj):
+    """A Boolean Fragments with something below it but no Mirror or Polar Array: it cuts cell faces into blocks, so it
+    is one cell body with several faces, as a Fragments body is in a Study without a Symmetric Mesh."""
+    copies = any(o.TypeId == "Part::Mirroring" or _is_array(o) for o in obj.OutListRecursive)
+    return _is_fragments(obj) and bool(obj.Objects) and not copies
+
+
 def _merge(parts):
     out = {}
     for part in parts:
@@ -112,6 +119,8 @@ def _walk(obj):
         found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source")).items()}
     elif _is_array(obj):
         found = _array(obj)
+    elif _cuts_a_cell(obj):
+        return {obj.Name: (obj, [ID])}  # a cell body, like a leaf
     elif _is_fragments(obj):
         found = _merge(_walk(o) for o in _below(obj, "Objects"))
     elif _is_leaf(obj):

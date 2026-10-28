@@ -1435,6 +1435,16 @@ def main():
     made = objects.transfinite_bodies(sym_study)[-1]
     assert [(b.Name, s) for b, s in objects.item_refs(made)] == picks, objects.item_refs(made)
     Gui.Control.closeDialog()
+    # A cell cut by a Boolean Fragments: a face click on a copy of one block is that block of the cell body.
+    frag = symcases.split_coil(sym_doc)
+    outer = symcases.sector(43, 50, 10, 15).Area
+    copy = next(f"Face{i}" for i, f in enumerate(stator_top.Shape.Faces, 1) if abs(f.Area - outer) < 1e-6)
+    block = next(f"Face{i}" for i, f in enumerate(frag.Shape.Faces, 1) if abs(f.Area - outer) < 1e-6)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, copy)
+    for cls in (objects.TransfiniteBody, objects.Recombine):
+        picks = [(b.Name, s) for b, s in taskpanels.ITEM_PICKS_2D[cls][0](sym_study)]
+        assert picks == [(frag.Name, block)], picks
     App.closeDocument(sym_doc.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")

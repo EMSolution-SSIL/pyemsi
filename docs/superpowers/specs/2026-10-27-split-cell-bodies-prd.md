@@ -1,6 +1,11 @@
 # Split cell bodies in a Symmetric Mesh (problem definition and PRD)
 
-Status: proposal. Nothing is implemented. Scope: 2D only, as in `2026-10-23-symmetric-mesh-design.md` (3D is out for now).
+Status: proposal. Scope: 2D only, as in `2026-10-23-symmetric-mesh-design.md` (3D is out for now).
+
+Update 2026-10-28, after the merge of the face-pick work (`2026-10-27-face-mesh-settings-design.md`): R1 is
+implemented. R4 is implemented in its small form: a Boolean Fragments with no Mirror or Polar Array below it is one
+cell body with several faces. Mesh settings take its faces through the face picks, a face clicked on the top is that
+block of the cell, and Materials stay on the pieces of the top. R2 still works, and R3 is not done.
 
 ## 1. Problem
 

@@ -573,9 +573,20 @@ def _symmetric(study, main, moving, r):
             r.error(f"Symmetric Mesh {item.Label} has no top object. Pick the object that builds the drawing.", item)
             continue
         try:
-            copies[item.Name] = len(symmetry.read_chain(item.Top)[1])
+            cells, transforms = symmetry.read_chain(item.Top)
         except symmetry.SymmetryError as e:
             r.error(f"Symmetric Mesh {item.Label}: {e}", item)
+            continue
+        copies[item.Name] = len(transforms)
+        for cell in cells:
+            if not cell.Shape.Faces:
+                r.error(
+                    f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} has no face; a cell body"
+                    " must be a face. To cut a cell into blocks, put its face and the cutting sketch in a Boolean"
+                    " Fragments and use that in the cell.",
+                    item,
+                    [(cell, "")],
+                )
     top_side = {}  # top Name -> "main" or "moving"
     for side, bodies in (("main", main), ("moving", moving if sliding else [])):
         names = {b.Name for b in bodies}

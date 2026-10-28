@@ -10,6 +10,7 @@ import sys
 import pytest
 
 import FreeCAD as App
+import Part
 
 from emsolution import jobwriter, objects
 
@@ -311,6 +312,64 @@ def test_deleted_cell_body_is_an_error(motor):
     motor.Document.removeObject("CoilCell")
     motor.Document.recompute()
     assert [p for p in _problems(motor, "error") if p.item == stator]
+
+
+def test_cell_body_without_a_face_is_refused(motor):
+    """A sketch or line put in the cell is not a cell body: Validate Study says so before the mesher reads it as one."""
+    doc = motor.Document
+    line = symcases.feature(doc, "StrayLine", Part.LineSegment(App.Vector(61, 0, 0), App.Vector(62, 0, 0)).toShape())
+    cell = doc.getObject("StatorCell")
+    cell.Links = list(cell.Links) + [line]
+    doc.recompute()
+    assert _has(motor, "StrayLine", "has no face", "Boolean Fragments"), _texts(motor)
+    stator, _ = objects.symmetric_items(motor)
+    assert [p for p in _problems(motor, "error") if p.item == stator and "has no face" in p.text]
+
+
+def test_cell_cut_by_a_fragments_meshes_per_block(tmp_path):
+    """A Boolean Fragments in the cell (the coil cut by an arc) is one cell body with two blocks. Face picks structure
+    and recombine one block only, and each block takes the Material of the pieces it lands on."""
+    doc = App.newDocument("SymSplit")
+    try:
+        info = symcases.motor_doc(doc)
+        frag = symcases.split_coil(doc)
+        top = info["stator_top"]
+        study = objects.make_study(doc, "2D")
+        study.MainMode, study.MainObjects = "Manual", [top]
+        study.Movement = "No movement"
+        objects.make_symmetric_mesh(study, top)
+        assert [b.Name for b in objects.cell_bodies(study)] == ["StatorIronCell", "CoilFragments", "StatorAirCell"]
+        lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL)))
+        outer_area = symcases.sector(43, 50, 10, 15).Area
+        faces = [(top, f"Face{i}") for i, f in enumerate(top.Shape.Faces, 1)]
+        outer = [p for p, f in zip(faces, top.Shape.Faces) if abs(f.Area - outer_area) < 1e-6]
+        assert len(outer) == 24
+        objects.assign_pieces(study, "OuterCoil", outer, lib, 0)
+        objects.assign_pieces(study, "Stator", [p for p in faces if p not in outer], lib, 0)
+        block = next(f"Face{i}" for i, f in enumerate(frag.Shape.Faces, 1) if abs(f.Area - outer_area) < 1e-6)
+        own = frag.Shape.getElement(block).Edges
+        edges = [(frag, f"Edge{i}") for i, e in enumerate(frag.Shape.Edges, 1) if any(e.isSame(g) for g in own)]
+        assert len(edges) == 4
+        objects.make_transfinite_body(study, []).References = [(frag, block)]
+        objects.make_transfinite_edges(study, 4, edges)
+        objects.make_recombine(study, []).References = [(frag, block)]
+        doc.recompute()
+        doc.saveAs(str(tmp_path / "split.FCStd"))
+        path = jobwriter.write_job(study)
+        with open(path, encoding="utf-8") as fh:
+            job = json.load(fh)
+        (entry,) = job["transfinite"]["bodies"]
+        assert entry["name"] == objects.volume_name(frag) and [f["face"] for f in entry["faces"]] == [block]
+        mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+        r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
+        assert r.returncode == 0, r.stderr
+        found = meshreport.groups(job["mesh_file"])
+        assert {name for name, _ in found.values()} == {"OuterCoil", "Stator"}
+        kinds, inverted, loose = mesh_check(job["mesh_file"], (35, 60))
+        assert inverted == 0 and loose == 0 and any(k.startswith("Quadrilateral") for k in kinds), (kinds, loose)
+    finally:
+        for name in list(App.listDocuments()):
+            App.closeDocument(name)
 
 
 def test_duplicate_assignment_labels_are_refused(motor):

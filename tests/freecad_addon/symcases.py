@@ -74,6 +74,24 @@ def motor_doc(doc):
     }
 
 
+def split_coil(doc, radius=43):
+    """Cut motor_doc's CoilCell into an inner and an outer block at radius, the way a user does: a Boolean Fragments
+    of the coil face and an arc across it, put in the stator cell in the coil's place. Returns the Fragments."""
+
+    def p(a):
+        return V(radius * math.cos(math.radians(a)), radius * math.sin(math.radians(a)), 0)
+
+    coil = doc.getObject("CoilCell")
+    divider = feature(doc, "CoilDivider", Part.Arc(p(10), p(12.5), p(15)).toShape())
+    frag = BOPTools.SplitFeatures.makeBooleanFragments(name="CoilFragments")
+    frag.Objects = [coil, divider]
+    frag.Mode = "Standard"
+    cell = doc.getObject("StatorCell")
+    cell.Links = [frag if o.Name == coil.Name else o for o in cell.Links]
+    doc.recompute()
+    return frag
+
+
 def _piece_name(face, part):
     """The assignment a face of the full stator or rotor belongs to, from where its centre lies (radius, angle)."""
     c = face.CenterOfMass

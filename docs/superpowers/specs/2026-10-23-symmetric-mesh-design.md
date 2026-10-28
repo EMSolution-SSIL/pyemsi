@@ -62,6 +62,7 @@ The Symmetric Mesh item links one object, the **top**. The add-on walks down its
 | `Part::Mirroring` | its mirror (`Base`, `Normal`) applied after each transform of `Source` |
 | Draft polar array | rotation by k × step (k = 0..`NumberPolar`−1, about `Center`, `Axis` = Z) after each transform of `Base` |
 | Boolean Fragments | the union over its `Objects` (it only splits; it moves nothing) |
+| Boolean Fragments with no Mirror or Polar Array below it | a cell body (a leaf) with several faces: it cuts the cell into blocks, which face picks structure and recombine one by one (`2026-10-27-split-cell-bodies-prd.md`) |
 
 Rules:
 - Mirrors must have a normal in the XY plane, and rotations must be about the Z axis (2D).
