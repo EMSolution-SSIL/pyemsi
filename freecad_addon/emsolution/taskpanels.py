@@ -1,7 +1,6 @@
 """View providers, the item edit panel, folder watchers, the ID table dialog, the selection
 observer and selection helpers."""
 
-from collections import Counter
 import weakref
 
 import FreeCAD as App
@@ -649,27 +648,21 @@ class StudyView:
         self.slide_hint = QtWidgets.QLabel("Add an Air Region and a Sliding Interface")
         self.slide_hint.setStyleSheet("color: #c00000")
         layout.addWidget(self.slide_hint)
-        self.regions = {}
+        self.regions, self.pending = {}, set()
         for name in ("Main", "Moving"):
             box = QtWidgets.QGroupBox()
             rows = QtWidgets.QVBoxLayout(box)
-            combo = QtWidgets.QComboBox()
-            combo.setObjectName(name + "Geometry")
-            rows.addWidget(combo)
+            tree = QtWidgets.QTreeWidget()
+            tree.setObjectName(name + "Geometry")
+            tree.setHeaderHidden(True)
+            rows.addWidget(tree)
             count = QtWidgets.QLabel()
             count.setWordWrap(True)
             rows.addWidget(count)
-            buttons = QtWidgets.QHBoxLayout()
-            inspect = QtWidgets.QPushButton("Inspect / highlight")
-            manual = QtWidgets.QPushButton("Edit manual selection")
-            inspect.clicked.connect(lambda _=False, n=name: self.inspect(n))
-            manual.clicked.connect(lambda _=False, n=name: self.edit_manual(n))
-            buttons.addWidget(inspect)
-            buttons.addWidget(manual)
-            rows.addLayout(buttons)
             layout.addWidget(box)
-            self.regions[name] = (box, combo, count, manual)
-            combo.currentIndexChanged.connect(lambda _i, n=name: self.choose_source(n))
+            self.regions[name] = (box, tree, count)
+            tree.itemChanged.connect(lambda _item, _col, n=name: self.ticked(n))
+            tree.currentItemChanged.connect(lambda item, _prev: self.highlight_item(item))
         refresh = QtWidgets.QPushButton("Refresh geometry")
         refresh.clicked.connect(self.refresh)
         layout.addWidget(refresh)
@@ -717,31 +710,13 @@ class StudyView:
 
     def refresh(self):
         study = self.study
-        containers = [o for o in study.Document.Objects if geometry.is_source(o)]
-        labels = Counter(o.Label for o in containers)
         sliding = study.Movement == "Sliding motion"
         self.slide_hint.setVisible(sliding and not (objects.air_regions(study) and objects.sliding_interfaces(study)))
-        for name, (box, combo, count, manual) in self.regions.items():
+        nodes = geometry.tree(study.Document, study.Dimension)
+        for name, (box, tree, count) in self.regions.items():
             box.setTitle("Moving geometry" if name == "Moving" else "Fixed geometry" if sliding else "Main geometry")
             box.setVisible(name == "Main" or sliding)
-            combo.blockSignals(True)
-            combo.clear()
-            combo.addItem("Choose a Part or Group…", "mode:Unassigned")
-            combo.addItem("Manual selection", "mode:Manual")
-            for obj in containers:
-                kind = "Part" if obj.isDerivedFrom("App::Part") else "Group"
-                label = f"{obj.Label} ({kind})"
-                if labels[obj.Label] > 1:
-                    label += f" — {obj.Name}"
-                combo.addItem(label, "source:" + obj.Name)
-            mode = getattr(study, name + "Mode")
-            source = getattr(study, name + "Source")
-            key = "source:" + source.Name if mode == "Container" and source is not None else "mode:" + mode
-            if mode == "Container" and source is None:
-                combo.addItem("Missing container — choose another", "mode:Container")
-            combo.setCurrentIndex(combo.findData(key))
-            combo.blockSignals(False)
-            manual.setEnabled(mode == "Manual")
+            self.fill(tree, nodes, geometry.stored(study, name))
             resolved, _ = geometry.region(study, name)
             if study.Dimension == "2D":
                 number = sum(len(obj.Shape.Faces) for obj in resolved)
@@ -772,109 +747,93 @@ class StudyView:
         if self.study.Document is not None:
             self.run_button.setEnabled(not geometry.export_unavailable(self.study) and not runner.busy())
 
-    def choose_source(self, name):
-        key = self.regions[name][1].currentData()
-        if key is None:
+    def fill(self, tree, nodes, stored):
+        """Show nodes with the stored objects ticked; a stored object the tree leaves out is listed last, so a
+        tick elsewhere does not drop it."""
+        expanded, stack = set(), [tree.invisibleRootItem()]
+        while stack:
+            item = stack.pop()
+            stack += [item.child(i) for i in range(item.childCount())]
+            if item.isExpanded():
+                expanded.add(item.data(0, QtCore.Qt.UserRole))
+        listed, stack = set(), list(nodes)
+        while stack:
+            obj, children = stack.pop()
+            listed.add(obj.Name)
+            stack += children or []
+        nodes = nodes + [(o, None) for o in stored if o.Name not in listed]
+        names = {o.Name for o in stored}
+
+        def add(parent, nodes, ticked):
+            for obj, children in nodes:
+                item = QtWidgets.QTreeWidgetItem(parent, [obj.Label])
+                item.setIcon(0, obj.ViewObject.Icon)
+                item.setToolTip(0, obj.Name)
+                item.setData(0, QtCore.Qt.UserRole, obj.Name)
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+                if children is None:
+                    item.setCheckState(0, QtCore.Qt.Checked if ticked or obj.Name in names else QtCore.Qt.Unchecked)
+                else:
+                    item.setFlags(item.flags() | QtCore.Qt.ItemIsAutoTristate)
+                    add(item, children, ticked or obj.Name in names)
+                    item.setExpanded(obj.Name in expanded)
+
+        tree.blockSignals(True)
+        tree.clear()
+        add(tree.invisibleRootItem(), nodes, False)
+        tree.blockSignals(False)
+
+    def ticked(self, name):
+        # A container's tick changes each child too: save once, after all of them.
+        if name not in self.pending:
+            self.pending.add(name)
+            QtCore.QTimer.singleShot(0, lambda: self.save_ticks(name))
+
+    def picked(self, parent):
+        """The ticked objects under parent; a fully ticked container that can be saved whole is one object."""
+        out, doc = [], self.study.Document
+        for item in (parent.child(i) for i in range(parent.childCount())):
+            obj, state = doc.getObject(item.data(0, QtCore.Qt.UserRole)), item.checkState(0)
+            if obj is None or state == QtCore.Qt.Unchecked:
+                continue
+            if not item.childCount() or (state == QtCore.Qt.Checked and geometry.whole(obj, self.study.Dimension)):
+                out.append(obj)
+            else:
+                out += self.picked(item)
+        return out
+
+    def save_ticks(self, name):
+        self.pending.discard(name)
+        study = self.study
+        if study.Document is None:
             return
-        kind, value = key.split(":", 1)
-        mode = value if kind == "mode" else "Container"
-        doc = self.study.Document
+        picked = self.picked(self.regions[name][1].invisibleRootItem())
+        if picked == geometry.stored(study, name):
+            return
+        doc = study.Document
         doc.openTransaction("Choose Study geometry")
-        setattr(self.study, name + "Mode", mode)
-        if kind == "source":
-            setattr(self.study, name + "Source", doc.getObject(value))
+        if not picked:
+            setattr(study, name + "Mode", "Unassigned")
+        elif len(picked) == 1 and geometry.is_container(picked[0]):
+            setattr(study, name + "Mode", "Container")
+            setattr(study, name + "Source", picked[0])
+        else:
+            setattr(study, name + "Mode", "Manual")
+            setattr(study, name + "Objects", picked)
         doc.commitTransaction()
         doc.recompute()
         self.refresh()
 
-    def inspect(self, name):
-        Gui.Control.showDialog(GeometryPanel(self.study, name))
-
-    def edit_manual(self, name):
-        Gui.Control.showDialog(GeometryPanel(self.study, name, editable=True))
+    def highlight_item(self, item):
+        obj = item and self.study.Document.getObject(item.data(0, QtCore.Qt.UserRole))
+        bodies = geometry.collect([obj], self.study.Dimension)[0] if obj is not None else []
+        highlight.show([(b, "") for b in bodies])
 
     def run_mesh(self):
         from . import runner
 
         runner.start(self.study)
         self.refresh()
-
-
-class GeometryPanel:
-    """Persistent bulk selection editor or inspection panel for a single Study region."""
-
-    def __init__(self, study, region, editable=False):
-        self.study, self.region, self.editable = study, region, editable
-        self.current = list(getattr(study, region + "Objects")) if editable else geometry.region(study, region)[0]
-        highlight.clear()
-        self.form = QtWidgets.QWidget()
-        self.form.setWindowTitle("Study geometry")
-        layout = QtWidgets.QVBoxLayout(self.form)
-        layout.addWidget(QtWidgets.QLabel(f"{study.Label} — {region} geometry ({study.Dimension})"))
-        self.refs = QtWidgets.QListWidget()
-        self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.refs.itemSelectionChanged.connect(self.highlight_rows)
-        layout.addWidget(self.refs)
-        self.message = QtWidgets.QLabel()
-        self.message.setWordWrap(True)
-        layout.addWidget(self.message)
-        if editable:
-            add = QtWidgets.QPushButton("Add selected objects / containers")
-            remove = QtWidgets.QPushButton("Remove selected rows")
-            add.clicked.connect(self.add_selection)
-            remove.clicked.connect(self.remove)
-            layout.addWidget(add)
-            layout.addWidget(remove)
-        self.refresh()
-
-    def refresh(self):
-        self.refs.clear()
-        self.refs.addItems([f"{o.Label} — {o.Name}" for o in self.current])
-
-    def add_selection(self):
-        selected = [objects.owning_body(o) for o in Gui.Selection.getSelection() if o.Document == self.study.Document]
-        added, errors = geometry.collect(selected, self.study.Dimension)
-        if errors or not added:
-            self.message.setText("\n".join(errors) or "Select filled faces or solid objects first.")
-            return
-        self.current = list(dict.fromkeys(self.current + added))
-        self.message.clear()
-        self.refresh()
-
-    def remove(self):
-        rows = {i.row() for i in self.refs.selectedIndexes()}
-        self.current = [obj for i, obj in enumerate(self.current) if i not in rows]
-        self.refresh()
-
-    def highlight_rows(self):
-        rows = sorted({i.row() for i in self.refs.selectedIndexes()})
-        highlight.show([(self.current[r], "") for r in rows])
-
-    def accept(self):
-        if self.editable:
-            _, errors = geometry.collect(self.current, self.study.Dimension)
-            if errors:
-                self.message.setText("\n".join(errors))
-                return False
-            doc = self.study.Document
-            doc.openTransaction("Edit Study geometry")
-            setattr(self.study, self.region + "Objects", self.current)
-            setattr(self.study, self.region + "Mode", "Manual")
-            doc.commitTransaction()
-            doc.recompute()
-        return self.reject()
-
-    def reject(self):
-        highlight.clear()
-        Gui.Control.closeDialog()
-        return True
-
-    def getStandardButtons(self):
-        return (
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-            if self.editable
-            else QtWidgets.QDialogButtonBox.Close
-        )
 
 
 class StudyWatcher:

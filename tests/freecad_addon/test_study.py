@@ -1203,6 +1203,26 @@ class StudyTest(unittest.TestCase):
         self.assertIn("missing", errors[0])
         self.assertEqual(self.study.MainMode, "Container")
 
+    def test_geometry_tree_shows_containers_and_meshable_bodies(self):
+        part = self.doc.addObject("App::Part", "Stator")
+        a, b, c = self.box("A"), self.box("B", 20), self.box("C", 40)
+        cut = self.doc.addObject("Part::Cut", "Cut")
+        cut.Base, cut.Tool = b, c
+        part.addObject(a)
+        self.doc.addObject("App::DocumentObjectGroup", "Empty")
+        flat = self.face("Flat")
+        self.doc.recompute()
+        self.assertEqual(geometry.tree(self.doc, "3D"), [(part, [(a, None)]), (cut, None)])
+        self.assertEqual(geometry.tree(self.doc, "2D"), [(flat, None)])
+        self.assertTrue(geometry.whole(part, "3D"))
+        self.assertFalse(geometry.whole(part, "2D"), "a container of solids is not 2D geometry")
+        self.study.MainObjects = [a, cut]
+        self.assertEqual(geometry.stored(self.study, "Main"), [a, cut])
+        self.study.MainMode, self.study.MainSource = "Container", part
+        self.assertEqual(geometry.stored(self.study, "Main"), [part])
+        self.study.MainMode = "Unassigned"
+        self.assertEqual(geometry.stored(self.study, "Main"), [])
+
     def test_a_container_with_study_objects_is_not_a_geometry_source(self):
         group = self.doc.addObject("App::DocumentObjectGroup", "Everything")
         group.addObject(self.study)

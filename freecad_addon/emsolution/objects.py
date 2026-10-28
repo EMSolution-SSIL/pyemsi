@@ -1199,7 +1199,7 @@ def assignable(study):
     return study_bodies(study) + air_regions(study)
 
 
-NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: a Part, a Group or Manual selection in the Study panel."
+NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: tick it in the Study panel's geometry tree."
 
 
 def assignment_problem(study, bodies):

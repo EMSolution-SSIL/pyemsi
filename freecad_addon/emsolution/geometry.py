@@ -134,9 +134,55 @@ def region(study, name):
     resolved, errors = collect(roots, study.Dimension)
     if not resolved and not errors:
         errors.append(
-            "No geometry chosen. Select the Study and pick a Part or Group, or add bodies to Manual selection."
+            "No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree."
         )
     return resolved, errors
+
+
+def stored(study, name):
+    """The objects a region is saved as: its container, its manual list, or nothing."""
+    mode = getattr(study, name + "Mode")
+    if mode == "Container":
+        source = getattr(study, name + "Source")
+        return [source] if source is not None else []
+    return list(getattr(study, name + "Objects")) if mode == "Manual" else []
+
+
+def tree(doc, dimension):
+    """[(obj, children)] for the Study geometry tree: Parts and Groups as in FreeCAD's tree (children a list) and
+    the bodies collect() meshes in dimension (children None). Study objects, sketches, bodies another body is made
+    from, bodies of the other dimension and containers left empty are not shown."""
+    shapes = {
+        o.Name
+        for o in doc.Objects
+        if o.isDerivedFrom("Part::Feature")
+        and not o.isDerivedFrom("App::Link")
+        and not o.isDerivedFrom("Sketcher::SketchObject")
+        and not objects.is_study_object(o)
+        and objects.owning_body(o) is o
+    }
+    consumed = {n for name in shapes for n in inputs(doc.getObject(name))}
+
+    def fits(obj):
+        return bool(obj.Shape.Solids) if dimension == "3D" else not obj.Shape.Solids and bool(obj.Shape.Faces)
+
+    def nodes(objs):
+        out = []
+        for obj in objs:
+            if is_container(obj):
+                children = nodes(obj.Group)
+                if children:
+                    out.append((obj, children))
+            elif obj.Name in shapes and obj.Name not in consumed and fits(obj):
+                out.append((obj, None))
+        return out
+
+    return nodes([o for o in doc.Objects if o.getParentGroup() is None and o.getParentGeoFeatureGroup() is None])
+
+
+def whole(obj, dimension):
+    """A container that can be saved as itself: no Study objects inside and nothing collect() refuses."""
+    return is_source(obj) and not collect([obj], dimension)[1]
 
 
 def setup(study):

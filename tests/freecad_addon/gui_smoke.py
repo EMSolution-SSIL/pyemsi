@@ -22,7 +22,7 @@ log = []
 def main():
     import FreeCAD as App
     import FreeCADGui as Gui
-    from PySide import QtWidgets
+    from PySide import QtCore, QtWidgets
 
     Gui.activateWorkbench("EMSolutionWorkbench")  # loaded by FreeCAD from the Mod folder
     # FreeCAD 1.1.0 started from a script keeps the Tasks dock hidden in the overlay (by hand it shows),
@@ -183,6 +183,18 @@ def main():
             Gui.Selection.addSelection(doc.Name, name)
         for _ in range(5):  # the watcher panel and the workbench switch follow the selection
             Gui.updateGui()
+
+    def tick(tree, obj, on=True):
+        """Tick obj's row in a Study geometry tree as a click does; the panel saves on the next event loop turn."""
+
+        def row():
+            rows = tree.findItems("*", QtCore.Qt.MatchWildcard | QtCore.Qt.MatchRecursive)
+            (item,) = [i for i in rows if i.data(0, QtCore.Qt.UserRole) == obj.Name]
+            return item
+
+        row().setCheckState(0, QtCore.Qt.Checked if on else QtCore.Qt.Unchecked)
+        QtWidgets.QApplication.processEvents()
+        return row()  # the save rebuilt the tree
 
     first_column = {
         "Name": "Material Library",
@@ -968,8 +980,9 @@ def main():
     part.addObject(doc.A)
     doc.recompute()
     view = taskpanels.StudyView(second)
-    combo = view.regions["Main"][1]
-    assert combo.findData("source:" + source.Name) >= 0 and combo.findData("source:" + part.Name) >= 0
+    tree = view.regions["Main"][1]
+    shown = [tree.topLevelItem(i).data(0, QtCore.Qt.UserRole) for i in range(tree.topLevelItemCount())]
+    assert source.Name in shown and part.Name not in shown, f"a 2D tree lists faces, not solids: {shown}"
     second.MainMode, second.MainSource = "Container", source
     view.refresh()
     assert view.diagnostics.text() == "", view.diagnostics.text()
@@ -1057,14 +1070,13 @@ def main():
     doc.removeObject(blocks.Name)
     doc.recompute()
     log.append("2D face picks ok")
-    named_manual = doc.addObject("App::DocumentObjectGroup", "Manual")
     view.refresh()
-    combo.setCurrentIndex(combo.findData("source:" + named_manual.Name))
-    assert second.MainMode == "Container" and second.MainSource == named_manual
     undo_before = list(doc.UndoNames)
     view.refresh()
     assert list(doc.UndoNames) == undo_before, "populating widgets changed the model"
-    combo.setCurrentIndex(combo.findData("source:" + source.Name))
+    tick(tree, source, False)
+    assert second.MainMode == "Unassigned"
+    tick(tree, source)
     assert second.MainSource == source and second.MainMode == "Container"
     assert "1 face region" in view.regions["Main"][2].text()
     assert view.run_button.isEnabled(), "a 2D Study with a main geometry can mesh"
@@ -1080,23 +1092,24 @@ def main():
     select("B")
     assert commands.active_study() is None, "ambiguous target was silently remembered"
     select(second.Name)
-    manual = taskpanels.GeometryPanel(second, "Main", editable=True)
-    Gui.Control.showDialog(manual)
-    select(source.Name, section.Name)
-    manual.add_selection()
-    assert manual.current == [section], "bulk container selection duplicated a face"
-    manual.reject()
-    assert second.MainMode == "Container", "Cancel changed the saved geometry"
-    manual = taskpanels.GeometryPanel(second, "Main", editable=True)
-    Gui.Control.showDialog(manual)
-    select(source.Name)
-    manual.add_selection()
-    manual.accept()
-    assert second.MainMode == "Manual" and second.MainObjects == [section]
+    extra = doc.addObject("Part::Feature", "Extra")
+    extra.Shape = Part.makePlane(5, 5, App.Vector(20, 0, 0))
+    source.addObject(extra)
+    doc.recompute()
+    view.refresh()
+    assert tick(tree, extra, False).parent().checkState(0) == QtCore.Qt.PartiallyChecked
+    assert second.MainMode == "Manual" and second.MainObjects == [section], "a partly ticked group keeps its ticks"
     doc.undo()
     assert second.MainMode == "Container" and second.MainObjects == []
     doc.redo()
     assert second.MainMode == "Manual" and second.MainObjects == [section]
+    source.removeObject(extra)
+    doc.removeObject(extra.Name)
+    doc.recompute()
+    view.refresh()
+    tree.setCurrentItem(tick(tree, section))
+    assert highlight.shown() is not None, "a clicked row highlights its bodies"
+    highlight.clear()
     assert study.MainMode == "Manual"
     select(second.Name)
     assert second.ViewObject.Proxy.doubleClicked(second.ViewObject)
@@ -1111,19 +1124,15 @@ def main():
     second_settings = taskpanels.FolderView(second.MeshSizesGroup)
     assert second_settings.settings.box.isEnabled()
     assert "RecombinationAlgorithm" in second_settings.settings.algorithms
-    inspect = taskpanels.GeometryPanel(second, "Main")
-    Gui.Control.showDialog(inspect)
-    inspect.refs.item(0).setSelected(True)
-    assert highlight.shown() is not None
-    inspect.reject()
-    assert highlight.shown() is None
     select(second.Name)
-    (actual_combo,) = [
-        c
-        for c in Gui.getMainWindow().findChildren(QtWidgets.QComboBox)
-        if c.isVisible() and c.objectName() == "MainGeometry"
+    (actual_tree,) = [
+        t
+        for t in Gui.getMainWindow().findChildren(QtWidgets.QTreeWidget)
+        if t.isVisible() and t.objectName() == "MainGeometry"
     ]
-    actual_combo.setCurrentIndex(actual_combo.findData("source:" + source.Name))
+    tick(actual_tree, source, False)
+    tick(actual_tree, source)
+    assert second.MainMode == "Container" and second.MainSource == source
     Gui.activeDocument().activeView().viewTop()
     Gui.activeDocument().activeView().fitAll()
     Gui.updateGui()
