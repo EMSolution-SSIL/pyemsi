@@ -1276,7 +1276,14 @@ def key_name(study, key):
     """The volume name of a volume key: a body's, Air Region's or Sliding Interface's name, with _fixed or _moving
     for an air half."""
     name, _, half = key.partition("#")
-    return volume_name(study.Document.getObject(name)) + (f"_{half}" if half else "")
+    return region_name(study, study.Document.getObject(name)) + (f"_{half}" if half else "")
+
+
+def region_name(study, body):
+    """MAT_NAME and the mesh group name of a body: its Material's name, or its own when it has none. An Air Region
+    (or a Sliding Interface) keeps its own name; its Material is named after it."""
+    m = assignment_of(study).get(body.Name) if not isinstance(getattr(body, "Proxy", None), AirRegion) else None
+    return volume_name(m if m is not None else body)
 
 
 def surface_keys(study):

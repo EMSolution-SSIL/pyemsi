@@ -300,6 +300,42 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib, own=m), "Coil")
         self.assertEqual(objects.suggest_name(self.study, [], lib), "")
 
+    def job_volume_names(self):
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            return [v["name"] for v in json.load(fh)["volumes"]]
+
+    def test_mesh_name_is_the_material_name(self):
+        a = self.box("A")
+        self.include(a)
+        objects.assign(self.study, [a], self.steel(), 0, name="Core")
+        self.assertEqual(self.job_volume_names(), ["Core"])
+        self.assertEqual(objects.key_name(self.study, "A"), "Core")
+
+    def test_mesh_name_without_material_is_the_body_label(self):
+        self.include(self.box("A"))
+        self.assertEqual(self.job_volume_names(), ["A"])
+
+    def test_renaming_the_body_keeps_the_mesh_name(self):
+        a = self.box("A")
+        self.include(a)
+        (m,) = objects.assign(self.study, [a], self.steel(), 0, name="Core")
+        a.Label = "Other"
+        objects.sync_labels(self.study)
+        self.assertEqual((objects.key_name(self.study, "A"), m.Label), ("Core", "Core: Steel"))
+
+    def test_material_names_equal_after_clean_are_refused(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        objects.assign(self.study, [a], self.steel(), 0, name="Coil 1")
+        objects.assign(self.study, [b], self.steel(), 0, name="Coil_1")
+        self.assertTrue(any("group names are the same" in t for t in self.problems("error")))
+
+    def test_air_keeps_its_own_mesh_name(self):
+        self.include(self.box("A"))
+        air = objects.make_air_region(self.study)
+        objects.assign(self.study, [air], self.steel(), 0, name="X")
+        self.assertEqual(objects.key_name(self.study, air.Name), "Air")
+
     def test_assign_takes_a_name(self):
         (m,) = objects.assign(self.study, [self.box("A")], self.steel(), 0, name="Core")
         self.assertEqual((m.GroupName, m.Label), ("Core", "Core: Steel"))

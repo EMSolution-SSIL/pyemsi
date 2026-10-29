@@ -524,7 +524,7 @@ def _names(study, bodies, included, r):
     if objects.is_symmetric(study):  # the piece assignments are the volumes; no bodies, no Air Region
         names = [objects.volume_name(m) for m in objects.piece_assignments(study)]
     else:
-        names = [objects.volume_name(b) for b in bodies]
+        names = [objects.region_name(study, b) for b in bodies]
         names += [objects.key_name(study, k) for k in objects.air_keys(study)]  # Air, or Air_fixed and Air_moving
     if study.Movement == "Sliding motion":
         names += [objects.key_name(study, i.Name) for i in objects.sliding_interfaces(study)]
