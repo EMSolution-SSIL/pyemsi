@@ -125,24 +125,48 @@ def selected_mesh_refs():
     return selected_subs(("Face", "Edge", "Vertex"), whole_bodies=True)
 
 
-def apply_assignment(study, bodies, lib, potential):
-    """Assign lib and potential to bodies, or remove their assignments when lib is None; one undo step."""
-    doc = study.Document
-    doc.openTransaction("Remove material" if lib is None else "Assign material")
-    if lib is None:
-        objects.unassign(study, bodies)
-    else:
-        objects.assign(study, bodies, lib, potential)
-    doc.commitTransaction()
-    doc.recompute()
+LIBRARY_EMPTY = "The Material Library is empty: import materials from its folder first."
 
 
-class AssignDialog(QtWidgets.QDialog):
-    """Material and POTENTIAL for bodies; "— none —" removes their assignments."""
+def library_combo(study, current=None):
+    """The Study's Material Library entries (data: object Name), current selected, else the first."""
+    combo = QtWidgets.QComboBox()
+    for lib in objects.library_materials(study):
+        combo.addItem(lib.Label, lib.Name)
+    if current is not None:
+        combo.setCurrentIndex(combo.findData(current.Name))
+    return combo
 
-    def __init__(self, study, bodies, parent=None, apply=None):
+
+def owned_text(owned, what, target, target_one=None):
+    """The move confirmation for owned [((body, sub), Material)]; what: "body" or "face"; target_one: target when
+    only one is moved (default: target)."""
+    rule = f"\n\nA {what} can have only one Material."
+    if len(owned) == 1:
+        (((b, s), m),) = owned
+        where = f'{objects.ref_label(b, s)} already belongs to the Material "{objects.display_name(m)}".'
+        return f"{where}{rule} Move it to {target_one or target}?"
+    lines = [f'• {objects.ref_label(b, s)} (in "{objects.display_name(m)}")' for (b, s), m in owned]
+    return "These already belong to other Materials:\n" + "\n".join(lines) + f"{rule} Move them to {target}?"
+
+
+def confirm_move(text):
+    box = QtWidgets.QMessageBox(Gui.getMainWindow())
+    box.setWindowTitle("Move to this Material?")
+    box.setText(text)
+    move = box.addButton("Move", QtWidgets.QMessageBox.AcceptRole)
+    box.addButton("Cancel", QtWidgets.QMessageBox.RejectRole)
+    box.exec()
+    return box.clickedButton() == move
+
+
+class BulkAssignDialog(QtWidgets.QDialog):
+    """Library material and POTENTIAL for several bodies at once: each gets a Material of its own, named after it;
+    an Air Region keeps its Material, named after it."""
+
+    def __init__(self, study, bodies, parent=None):
         super().__init__(parent or Gui.getMainWindow())
-        self.study, self.bodies, self.apply = study, list(bodies), apply  # apply(lib, potential): assign pieces
+        self.study, self.bodies = study, list(bodies)
         self.setWindowTitle("Assign Material")
         layout = QtWidgets.QFormLayout(self)
         names = ", ".join(b.Label for b in self.bodies[:5])
@@ -151,22 +175,16 @@ class AssignDialog(QtWidgets.QDialog):
         shown = QtWidgets.QLabel(names)
         shown.setWordWrap(True)
         layout.addRow("Bodies", shown)
-        libraries = objects.library_materials(study)
-        self.material = QtWidgets.QComboBox()
-        for lib in libraries:
-            self.material.addItem(lib.Label, lib.Name)
-        self.material.addItem(objects.NO_MATERIAL, "")
+        current = objects.assignment_of(study).get(self.bodies[0].Name)
+        self.material = library_combo(study, current.LibraryMaterial if current else None)
         self.potential = QtWidgets.QSpinBox()
         self.potential.setRange(0, 1000000)
-        current = objects.assignment_of(study).get(self.bodies[0].Name)
         if current is not None:
-            lib = current.LibraryMaterial
-            self.material.setCurrentIndex(self.material.findData(lib.Name if lib else ""))
             self.potential.setValue(current.Potential)
         layout.addRow("Material", self.material)
         layout.addRow("POTENTIAL", self.potential)
-        if not libraries:
-            note = QtWidgets.QLabel("The Material Library is empty: import materials from its folder first.")
+        if not self.material.count():
+            note = QtWidgets.QLabel(LIBRARY_EMPTY)
             note.setWordWrap(True)
             layout.addRow(note)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
@@ -177,65 +195,45 @@ class AssignDialog(QtWidgets.QDialog):
     def accept(self):
         name = self.material.currentData()
         lib = self.study.Document.getObject(name) if name else None
-        if self.apply is not None:
-            if lib is None:
-                return warn("Choose a material from the Material Library.")
-            self.apply(lib, self.potential.value())
-            return super().accept()
-        problem = objects.assignment_problem(self.study, self.bodies) if lib else ""  # removing is always allowed
+        if lib is None:
+            return warn("Choose a material from the Material Library.")
+        problem = objects.assignment_problem(self.study, self.bodies)
         if problem:
             return warn(problem)
-        apply_assignment(self.study, self.bodies, lib, self.potential.value())
-        super().accept()
-
-
-def ask_assignment(study, bodies):
-    AssignDialog(study, bodies).exec()
-
-
-def ask_piece_assignment(study, pieces):
-    """Ask for a name, then a library material and POTENTIAL, for pieces [(body, "FaceN")]; one undo step."""
-    from . import commands  # commands imports this module
-
-    name = commands.ask_text("Assign Material", "Name of the assignment", "Pieces")
-    if name is None:
-        return
-
-    def apply(lib, potential):
-        doc = study.Document
+        refs = [(b, "") for b in self.bodies if not is_air(b)]  # an Air Region keeps its own Material
+        owned = objects.material_owners(self.study, refs)
+        bodies = self.bodies
+        if owned and not confirm_move(owned_text(owned, "body", "Materials of their own", "a Material of its own")):
+            skipped = {b.Name for (b, _), _ in owned}
+            bodies = [b for b in bodies if b.Name not in skipped]
+        doc = self.study.Document
         doc.openTransaction("Assign material")
         try:
-            objects.assign_pieces(study, name, pieces, lib, potential)
+            objects.assign(self.study, bodies, lib, self.potential.value())
         except Exception:
             doc.abortTransaction()
             raise
         doc.commitTransaction()
         doc.recompute()
-
-    AssignDialog(study, list(dict.fromkeys(b for b, _ in pieces)), apply=apply).exec()
-
-
-def is_piece_assignment(obj):
-    return isinstance(getattr(obj, "Proxy", None), objects.Material) and obj.Body is None and len(obj.Pieces) > 0
+        super().accept()
 
 
-def edit_piece_assignments(study, assignments):
-    """Library material and POTENTIAL of assignments made of pieces, shown as the first one has them; one undo
-    step. Their pieces stay: reassign faces with the Material command."""
+def ask_bulk_assignment(study, bodies):
+    BulkAssignDialog(study, bodies).exec()
 
-    def apply(lib, potential):
-        doc = study.Document
-        doc.openTransaction("Assign material")
-        for m in assignments:
-            m.LibraryMaterial, m.Potential = lib, potential
-        doc.commitTransaction()
+
+def open_material_panel(study, refs=()):
+    """A new Material in its panel, holding refs [(body, sub)]; the transaction stays open until OK or Cancel."""
+    doc = study.Document
+    doc.openTransaction("Assign material")
+    try:
+        panel = MaterialPanel(objects.make_material(study), new=True, refs=refs)
+    except Exception:
+        Gui.Selection.removeSelectionGate()  # the panel may have set it before failing
+        doc.abortTransaction()
         doc.recompute()
-
-    dialog = AssignDialog(study, assignments, apply=apply)
-    lib = assignments[0].LibraryMaterial
-    dialog.material.setCurrentIndex(dialog.material.findData(lib.Name if lib else ""))
-    dialog.potential.setValue(assignments[0].Potential)
-    dialog.exec()
+        raise
+    Gui.Control.showDialog(panel)
 
 
 class _ViewProvider:
@@ -563,15 +561,30 @@ class FolderView:
         return [self.rows[r][0] for r in sorted({i.row() for i in self.table.selectedIndexes()})]
 
     def assign_rows(self):
-        bodies = self.selected_items()
-        if not bodies:
+        items = self.selected_items()
+        if not items:
             return warn("Select one or more rows first.")
-        pieces = [b for b in bodies if is_piece_assignment(b)]  # a symmetric Study lists its piece assignments
-        if pieces:
-            edit_piece_assignments(self.study, pieces)
+        if len(items) == 1:
+            self.edit_row_material(items[0])
+        elif objects.is_symmetric(self.study):  # its rows are Materials, edited one panel at a time
+            warn("Select one row: a symmetric Study's Materials are edited one at a time.")
         else:
-            ask_assignment(self.study, bodies)
-        self.fill()
+            ask_bulk_assignment(self.study, items)
+            self.fill()
+
+    def edit_row_material(self, item):
+        """The panel of a row's Material (a symmetric Study's rows are Materials), or of a new one on its body."""
+        if Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
+            return
+        m = (
+            item
+            if isinstance(getattr(item, "Proxy", None), objects.Material)
+            else objects.assignment_of(self.study).get(item.Name)
+        )
+        if m is None:
+            open_material_panel(self.study, [(item, "")])
+        else:
+            Gui.Control.showDialog(MaterialPanel(m))
 
     def import_materials(self):
         from . import materialstandins
@@ -612,11 +625,7 @@ class FolderView:
 
             materialstandins.open_editor(self.study, item.MaterialId)
         elif isinstance(self.folder_proxy, objects.MaterialsFolder):
-            if is_piece_assignment(item):
-                edit_piece_assignments(self.study, [item])
-            else:
-                ask_assignment(self.study, [item])
-            self.fill()
+            self.edit_row_material(item)
         elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             pass
         elif isinstance(item.Proxy, objects.SymmetricMesh):
@@ -969,13 +978,10 @@ class ViewProviderItem(_ViewProvider):
 
     def doubleClicked(self, vobj):
         obj = vobj.Object
-        if isinstance(obj.Proxy, objects.Material):
-            if obj.Body is not None:
-                ask_assignment(objects.owner_study(obj), [obj.Body])
-            elif is_piece_assignment(obj):
-                edit_piece_assignments(objects.owner_study(obj), [obj])
-        elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
+        if Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             pass
+        elif isinstance(obj.Proxy, objects.Material):
+            Gui.Control.showDialog(MaterialPanel(obj))
         elif isinstance(obj.Proxy, objects.SymmetricMesh):
             Gui.Control.showDialog(SymmetricMeshPanel(obj))
         else:
@@ -1272,6 +1278,225 @@ class ItemPanel:
         if self.new:
             doc = self.obj.Document
             doc.abortTransaction()  # removes the new item
+            doc.recompute()
+        self.close()
+        Gui.Control.closeDialog()
+        return True
+
+
+def _key(ref):
+    return (ref[0].Name, ref[1])
+
+
+ONE_BODY = (
+    "A Material holds one body: select one, or use Assign Material with several bodies selected to give each its"
+    " own Material."
+)
+
+
+class MaterialPanel:
+    """Edit a Material: its name, library material, POTENTIAL and what it covers, one body or Air Region, or faces
+    of a symmetric drawing. Picking what another Material covers moves it here, after asking.
+    new: obj was just made inside an open transaction; OK commits it, Cancel undoes it.
+    While open, a selection gate limits picks to what a Material takes; closing removes it."""
+
+    def __init__(self, obj, new=False, refs=()):
+        self.obj, self.new = obj, new
+        self.study = study = objects.owner_study(obj)
+        self.pieces = objects.is_symmetric(study)  # a symmetric Study's Materials are on faces of the drawing
+        self.air = obj.Body if obj.Body is not None and is_air(obj.Body) else None
+        self.current = objects.item_refs(obj)
+        if self.pieces:  # a whole-body Material left from before the drawing was symmetric: its faces only
+            self.current = [r for r in self.current if r[1]]
+        self.kept = {_key(r) for r in self.current}  # faces that keep the centre stored for them
+        highlight.clear()  # the list's selected rows are highlighted instead
+        self.gate = ItemGate(study, ("Face",) if self.pieces else ANY_SUB, not self.pieces)
+        Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("New Material" if new else obj.Label)
+        layout = QtWidgets.QFormLayout(self.form)
+        layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
+        region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"
+        if self.pieces:
+            text = "Click faces of the drawing in the 3D view."
+        elif study.Dimension == "2D":
+            text = "Click a region in the 3D view, or select a body or the Air Region in the tree."
+        else:
+            text = "Click a solid in the 3D view, or select a body or the Air Region in the tree."
+        hint = QtWidgets.QLabel(f"{text} Only the Study's {region} can be picked.")
+        hint.setWordWrap(True)
+        layout.addRow(hint)
+        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
+        self.typed = not new  # the name follows the suggestion until it is typed in
+        self.name.textEdited.connect(self.name_typed)
+        layout.addRow("Name", self.name)
+        self.air_note = QtWidgets.QLabel("Named after its Air Region; rename it there.")
+        layout.addRow(self.air_note)
+        self.material = library_combo(study, obj.LibraryMaterial)
+        self.material.currentIndexChanged.connect(lambda _index: self.suggest())
+        layout.addRow("Material", self.material)
+        self.potential = QtWidgets.QSpinBox()
+        self.potential.setRange(0, 1000000)
+        self.potential.setValue(obj.Potential)
+        layout.addRow("POTENTIAL", self.potential)
+        if not self.material.count():
+            note = QtWidgets.QLabel(LIBRARY_EMPTY)
+            note.setWordWrap(True)
+            layout.addRow(note)
+        self.refs = QtWidgets.QListWidget()
+        self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.refs.itemSelectionChanged.connect(self.highlight_rows)
+        layout.addRow("Faces" if self.pieces else "Body", self.refs)
+        add = QtWidgets.QPushButton("Add selection")
+        remove = QtWidgets.QPushButton("Remove")
+        add.clicked.connect(self.add_selection)
+        remove.clicked.connect(self.remove)
+        add.setEnabled(self.air is None)  # an Air Region keeps its Material
+        remove.setEnabled(self.air is None)
+        self.name.setReadOnly(self.air is not None)
+        self.air_note.setVisible(self.air is not None)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.addWidget(add)
+        buttons.addWidget(remove)
+        layout.addRow(buttons)
+        self.note = QtWidgets.QLabel()
+        self.note.setWordWrap(True)
+        layout.addRow(self.note)
+        if refs:
+            self.take(list(refs))
+        self.refresh()
+
+    def name_typed(self, _text):
+        self.typed = True
+
+    def lib(self):
+        name = self.material.currentData()
+        return self.study.Document.getObject(name) if name else None
+
+    def gone(self):
+        """The other Materials OK removes, as they have nothing left: their names are free."""
+        return objects.emptied_by(self.study, self.current, own=self.obj)
+
+    def suggest(self):
+        if self.air is not None:
+            self.name.setText(objects.display_name(self.air))
+        elif not self.typed:
+            self.name.setText(objects.suggest_name(self.study, self.current, self.lib(), self.obj, self.gone()))
+
+    def refresh(self):
+        self.refs.clear()
+        self.refs.addItems([objects.ref_label(b, s) for b, s in self.current])
+        gone = self.gone()
+        self.note.setText("\n".join(f'"{objects.display_name(m)}" will be removed: it has nothing left.' for m in gone))
+        self.note.setVisible(bool(gone))
+
+    def highlight_rows(self):
+        highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
+
+    def picks(self):
+        """What the selection offers: faces of Symmetric Mesh tops, or whole bodies."""
+        if self.pieces:
+            tops = {i.Top.Name for i in objects.symmetric_items(self.study) if i.Top is not None}
+            return [(b, s) for b, s in selected_subs(("Face",)) if b.Name in tops]
+        return [(b, "") for b in selected_bodies()]
+
+    def take(self, picks):
+        """Add picks [(body, sub)] to the list, refusing what a Material cannot take and asking before moving what
+        another Material covers. Returns whether anything was added."""
+        problem = objects.assignment_problem(self.study, [b for b, _ in picks])
+        if problem:
+            warn(problem)
+            picks = [p for p in picks if not objects.assignment_problem(self.study, [p[0]])]
+        airs = [p for p in picks if is_air(p[0]) and objects.air_material(self.study, p[0]) not in (None, self.obj)]
+        if airs:  # one without a Material gets it here
+            warn("An Air Region keeps its own Material: open it from the Air Region's row.")
+            picks = [p for p in picks if p not in airs]
+        have = {_key(r) for r in self.current}
+        picks = list({_key(p): p for p in picks if _key(p) not in have}.values())
+        if not picks:
+            return False
+        if not self.pieces and len(picks) > 1:
+            warn(ONE_BODY)
+            return False
+        owned = objects.material_owners(self.study, picks, own=self.obj)
+        if owned:
+            current = self.current + picks if self.pieces else picks
+            gone = objects.emptied_by(self.study, current, own=self.obj)
+            name = self.name.text().strip() if self.typed else ""
+            name = name or objects.suggest_name(self.study, current, self.lib(), self.obj, gone) or "this Material"
+            if not confirm_move(owned_text(owned, "face" if self.pieces else "body", f'"{name}"')):
+                skipped = {_key(r) for r, _ in owned}
+                picks = [p for p in picks if _key(p) not in skipped]
+                if not picks:
+                    return False
+        self.current = self.current + picks if self.pieces else picks
+        if not self.pieces:  # an Air Region's Material is named after it
+            self.air = picks[0][0] if is_air(picks[0][0]) else None
+            self.name.setReadOnly(self.air is not None)
+            self.air_note.setVisible(self.air is not None)
+        self.refresh()
+        self.suggest()
+        return True
+
+    def add_selection(self):
+        picks = self.picks()
+        if not self.take(picks) and not picks:
+            if not Gui.Selection.getSelectionEx():
+                warn("Nothing is selected. Pick geometry in the 3D view first.")
+            elif self.pieces and selected_bodies():
+                warn("Materials go on the faces (pieces) of the drawing: select faces.")
+            else:
+                warn("Nothing new to add.")
+
+    def remove(self):
+        rows = {i.row() for i in self.refs.selectedIndexes()}
+        self.kept -= {_key(r) for i, r in enumerate(self.current) if i in rows}  # re-added: measured again
+        self.current = [r for i, r in enumerate(self.current) if i not in rows]
+        self.refresh()
+        self.suggest()
+
+    def close(self):
+        """Undo what the open panel changed outside itself."""
+        Gui.Selection.removeSelectionGate()
+        highlight.clear()
+
+    def autoClosedOnDeletedDocument(self):  # FreeCAD closed the panel with its document
+        self.close()
+
+    def accept(self):
+        name, lib = self.name.text().strip(), self.lib()
+        if not self.current:
+            warn("Select geometry in the 3D view and click Add selection.")
+            return False
+        if not name:
+            warn("Give the Material a name.")
+            return False
+        if lib is None:
+            warn(LIBRARY_EMPTY if not self.material.count() else "Choose a material from the Material Library.")
+            return False
+        if self.air is None and objects.name_taken(self.study, name, self.obj, self.gone()):
+            warn(f'Another Material is already named "{name}" (spaces and symbols count as "_" in the mesh).')
+            return False
+        doc = self.obj.Document
+        if not self.new:  # a new item's transaction is already open
+            doc.openTransaction("Edit " + self.obj.Label)
+        try:
+            objects.apply_material(self.study, self.obj, name, lib, self.potential.value(), self.current, self.kept)
+        except Exception:
+            doc.abortTransaction()
+            self.close()
+            Gui.Control.closeDialog()
+            raise
+        doc.commitTransaction()
+        doc.recompute()
+        self.close()
+        Gui.Control.closeDialog()
+        return True
+
+    def reject(self):
+        if self.new:
+            doc = self.obj.Document
+            doc.abortTransaction()  # removes the new Material
             doc.recompute()
         self.close()
         Gui.Control.closeDialog()
@@ -1720,8 +1945,7 @@ class AirRegionPanel:
             return False
         name = self.name.text().strip()
         if name:
-            obj.Label = name
-            obj.GroupName = name  # FreeCAD may have suffixed the Label
+            objects.rename_air_region(objects.owner_study(obj), obj, name)
         if self.symmetric.isChecked():  # a formula that kept its value sent no change
             self.mirror()
         self.done = True

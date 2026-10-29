@@ -216,10 +216,16 @@ class Material(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLinkGlobal", "Body", "EMSolution", "Body made of this material")
+        self.add_group_name(obj)
         self.add_pieces(obj)
         obj.addProperty("App::PropertyLink", "LibraryMaterial", "EMSolution", "Material from the Material Library")
         obj.addProperty("App::PropertyIntegerConstraint", "Potential", "EMSolution", "POTENTIAL: 0 total, 1+ reduced")
         obj.Potential = (0, 0, 1000000, 1)
+
+    @staticmethod
+    def add_group_name(obj):
+        """The typed name, used in the mesh group names; the Label is "<name>: <material>" (see assignment_label)."""
+        obj.addProperty("App::PropertyString", "GroupName", "EMSolution", "Name used in the mesh group names")
 
     @staticmethod
     def add_pieces(obj):
@@ -233,6 +239,11 @@ class Material(_Proxy):
 
     def onDocumentRestored(self, obj):
         self.add_pieces(obj)  # assignments saved before pieces existed
+        if not hasattr(obj, "GroupName"):  # saved before Materials were named: keep the mesh name they had
+            name = display_name(obj.Body) if obj.Body is not None else obj.Label
+            self.add_group_name(obj)
+            obj.GroupName = name
+            obj.Label = assignment_label(obj)
         obj.purgeTouched()
 
 
@@ -763,25 +774,54 @@ def assignment_of(study):
 
 
 def assignment_label(m):
-    """The tree label "<body>: <material>"; FreeCAD keeps labels unique, so it cannot be the body's label."""
+    """The tree label "<name>: <material>"; FreeCAD keeps labels unique, so it cannot be the body's label."""
     lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
-    return f"{display_name(m.Body)}: {lib}" if m.Body else m.Label
+    return f"{display_name(m)}: {lib}"
 
 
-def assign(study, bodies, lib, potential):
-    """Give each body lib and potential, updating its assignment or adding one. Returns them in body order."""
+def set_material_name(m, name):
+    m.GroupName = name
+    m.Label = assignment_label(m)
+
+
+def name_taken(study, name, own=None, ignore=()):
+    """Whether another Material of the Study already has this name, compared as mesh group names ("Coil 1" is
+    "Coil_1"); ignore: Materials about to be removed."""
+    return any(clean(m.GroupName) == clean(name) for m in materials(study) if m != own and m not in ignore)
+
+
+def suggest_name(study, refs, lib, own=None, ignore=()):
+    """A free name for a Material on refs [(body, sub)]: a whole body's name, else the library material's (faces
+    have no name of their own), else the drawing's; "_2", "_3"... when taken. "" for no refs."""
+    if not refs:
+        return ""
+    body, sub = refs[0]
+    base = display_name(body) if not sub or lib is None else lib.Label
+    name, n = base, 1
+    while name_taken(study, name, own, ignore):
+        n += 1
+        name = f"{base}_{n}"
+    return name
+
+
+def assign(study, bodies, lib, potential, name=None):
+    """Give each body a Material with lib and potential, named name (default: suggested). A body's old Material is
+    replaced (reused under the new name); an Air Region's keeps its name, which follows the Air Region's.
+    Returns them in body order."""
     have = assignment_of(study)
     out = []
     for body in bodies:
         m = have.get(body.Name)
         if m is None:
-            m = _add(study, "MaterialsGroup", Material, display_name(body))
+            m = _add(study, "MaterialsGroup", Material, name or suggest_name(study, [(body, "")], lib))
             m.Body = body
             if getattr(m, "ViewObject", None) is not None:  # GUI running
                 from . import taskpanels
 
                 taskpanels.attach_view_provider(m)
             have[body.Name] = m
+        elif not isinstance(getattr(body, "Proxy", None), AirRegion):
+            m.GroupName = name or suggest_name(study, [(body, "")], lib, own=m)
         m.LibraryMaterial, m.Potential = lib, potential
         m.Label = assignment_label(m)
         out.append(m)
@@ -798,7 +838,7 @@ def unassign(study, bodies):
 
 
 def sync_labels(study):
-    """Rewrite assignment labels after a body or material was renamed."""
+    """Rewrite assignment labels after a library material was renamed."""
     for m in materials(study):
         label = assignment_label(m)
         if m.Label != label:
@@ -831,15 +871,87 @@ def make_symmetric_mesh(study, top):
 def assign_pieces(study, name, pieces, lib, potential):
     """Add an assignment named name for pieces [(body, "FaceN")], which need not be whole bodies."""
     m = _add(study, "MaterialsGroup", Material, name)
-    m.Label = name
     m.Pieces = list(pieces)
     m.PieceCentres = piece_centres(m)
     m.LibraryMaterial, m.Potential = lib, potential
+    set_material_name(m, name)
     if getattr(m, "ViewObject", None) is not None:  # GUI running
         from . import taskpanels
 
         taskpanels.attach_view_provider(m)
     return m
+
+
+def make_material(study):
+    """An empty Material for the Material panel to fill; the panel holds the transaction that removes it on Cancel."""
+    m = _add(study, "MaterialsGroup", Material, "")
+    m.Label = assignment_label(m)
+    if getattr(m, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        taskpanels.attach_view_provider(m)
+    return m
+
+
+def air_material(study, air):
+    return assignment_of(study).get(air.Name)
+
+
+def rename_air_region(study, air, name):
+    """Rename an Air Region and its Material, which is named after it."""
+    air.Label = name
+    air.GroupName = name  # FreeCAD may have suffixed the Label
+    m = air_material(study, air)
+    if m is not None:
+        set_material_name(m, name)
+
+
+def _key(ref):
+    return (ref[0].Name, ref[1])
+
+
+def material_owners(study, refs, own=None):
+    """[(ref, the other Material holding it)] for refs [(body, sub)], in ref order; refs nobody holds are left out."""
+    held = {_key(r): m for m in materials(study) if m != own for r in item_refs(m)}
+    return [(r, held[_key(r)]) for r in refs if _key(r) in held]
+
+
+def emptied_by(study, refs, own=None):
+    """The other Materials that would have nothing left once refs leave them."""
+    taking = {_key(r) for r in refs}
+    owners = dict.fromkeys(m for _, m in material_owners(study, refs, own))
+    return [m for m in owners if all(_key(r) in taking for r in item_refs(m))]
+
+
+def _set_pieces(m, refs, centres):
+    """Pieces = refs [(body, "FaceN")]; centres: (body Name, sub) -> stored centre, the others are measured now."""
+    m.Pieces = list(refs)
+    now = piece_centres(m)
+    m.PieceCentres = [centres.get(_key(r), c) for r, c in zip(item_refs(m), now)]
+
+
+def apply_material(study, m, name, lib, potential, refs, kept=frozenset()):
+    """Make m cover refs (a whole body [(body, "")] or faces [(body, "FaceN")]), taking them from other Materials,
+    which are removed when left empty. Faces in kept, (body Name, sub), keep the centre m stored for them; the others
+    are measured now. No transaction: the caller holds it."""
+    whole = [r for r in refs if r[1] == ""]
+    if whole and (len(whole) > 1 or len(refs) > 1):
+        raise ValueError("a Material covers one whole body or faces, not both")
+    taking = {_key(r) for r in refs}
+    for other in emptied_by(study, refs, own=m):
+        study.Document.removeObject(other.Name)
+    for other in dict.fromkeys(o for _, o in material_owners(study, refs, own=m)):
+        left = [r for r in item_refs(other) if _key(r) not in taking]  # only piece Materials get here
+        stored = dict(zip(map(_key, item_refs(other)), other.PieceCentres))
+        _set_pieces(other, left, stored)
+    if whole:
+        m.Body = refs[0][0]
+    else:
+        stored = dict(zip(map(_key, item_refs(m)), getattr(m, "PieceCentres", [])))
+        m.Body = None  # a whole-body Material left from before the drawing was symmetric
+        _set_pieces(m, refs, {k: v for k, v in stored.items() if k in kept})
+    m.LibraryMaterial, m.Potential = lib, potential
+    set_material_name(m, name)
 
 
 def piece_centres(m):
@@ -1098,7 +1210,7 @@ def material_rows(study):
         rows = []
         for m in piece_assignments(study):
             lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
-            rows.append((m, item_refs(m), [m.Label, lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
+            rows.append((m, item_refs(m), [display_name(m), lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
         return rows
     have = assignment_of(study)
     main = assignable(study)
@@ -1240,7 +1352,14 @@ def key_name(study, key):
     """The volume name of a volume key: a body's, Air Region's or Sliding Interface's name, with _fixed or _moving
     for an air half."""
     name, _, half = key.partition("#")
-    return volume_name(study.Document.getObject(name)) + (f"_{half}" if half else "")
+    return region_name(study, study.Document.getObject(name)) + (f"_{half}" if half else "")
+
+
+def region_name(study, body):
+    """MAT_NAME and the mesh group name of a body: its Material's name, or its own when it has none. An Air Region
+    (or a Sliding Interface) keeps its own name; its Material is named after it."""
+    m = assignment_of(study).get(body.Name) if not isinstance(getattr(body, "Proxy", None), AirRegion) else None
+    return volume_name(m if m is not None else body)
 
 
 def surface_keys(study):

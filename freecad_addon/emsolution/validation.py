@@ -524,7 +524,7 @@ def _names(study, bodies, included, r):
     if objects.is_symmetric(study):  # the piece assignments are the volumes; no bodies, no Air Region
         names = [objects.volume_name(m) for m in objects.piece_assignments(study)]
     else:
-        names = [objects.volume_name(b) for b in bodies]
+        names = [objects.region_name(study, b) for b in bodies]
         names += [objects.key_name(study, k) for k in objects.air_keys(study)]  # Air, or Air_fixed and Air_moving
     if study.Movement == "Sliding motion":
         names += [objects.key_name(study, i.Name) for i in objects.sliding_interfaces(study)]
@@ -719,7 +719,12 @@ def _moved(m, tops, r):
             continue  # reported elsewhere
         shape = geometry.global_shape(body)
         if shape.getElement(sub).CenterOfMass.distanceToPoint(was) > 1e-6 * shape.BoundBox.DiagonalLength:
-            r.warning(f"piece {body.Label}.{sub} of {m.Label} has moved: reassign it", m, [(body, sub)])
+            r.warning(
+                f"piece {body.Label}.{sub} of {objects.display_name(m)} has moved:"
+                " remove and add it again in its Material's panel",
+                m,
+                [(body, sub)],
+            )
 
 
 def _pieces(study, item_of, top_side, r):

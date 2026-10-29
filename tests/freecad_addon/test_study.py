@@ -268,7 +268,8 @@ class StudyTest(unittest.TestCase):
         first = self.assign([a, b], 2, steel)
         self.assertEqual([(m.Body, m.LibraryMaterial, m.Potential) for m in first], [(a, steel, 2), (b, steel, 2)])
         self.assertEqual([m.Label for m in first], ["A: Steel", "B: Steel"])
-        self.assertFalse(hasattr(first[0], "GroupName") or hasattr(first[0], "References"))
+        self.assertEqual(first[0].GroupName, "A")
+        self.assertFalse(hasattr(first[0], "References"))
         again = objects.assign(self.study, [b, b], air, 0)
         self.assertEqual(again, [first[1], first[1]])
         self.assertEqual(objects.materials(self.study), first)
@@ -280,13 +281,144 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.materials(self.study), [first[1]])
         self.assertEqual(objects.library_rows(self.study)[1], (air, [(b, "")], ["Air", "generic", "user:air", "B"]))
 
-    def test_assignment_label_follows_renamed_body_and_material(self):
+    def test_assignment_label_follows_material_not_body(self):
         a = self.box("A")
         (m,) = self.assign([a])
         a.Label = "Core"
         m.LibraryMaterial.Label = "M330"
         objects.sync_labels(self.study)
-        self.assertEqual(m.Label, "Core: M330")
+        self.assertEqual((m.Label, m.GroupName), ("A: M330", "A"))
+
+    def test_suggest_name(self):
+        a, b = self.box("A"), self.box("B", 10)
+        b.Label = "Coil"
+        lib = self.steel()
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil")
+        self.include(a)
+        (m,) = objects.assign(self.study, [a], lib, 0, name="Coil")
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil_2")
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib, own=m), "Coil")
+        self.assertEqual(objects.suggest_name(self.study, [], lib), "")
+
+    def job_volume_names(self):
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            return [v["name"] for v in json.load(fh)["volumes"]]
+
+    def test_mesh_name_is_the_material_name(self):
+        a = self.box("A")
+        self.include(a)
+        objects.assign(self.study, [a], self.steel(), 0, name="Core")
+        self.assertEqual(self.job_volume_names(), ["Core"])
+        self.assertEqual(objects.key_name(self.study, "A"), "Core")
+
+    def test_mesh_name_without_material_is_the_body_label(self):
+        self.include(self.box("A"))
+        self.assertEqual(self.job_volume_names(), ["A"])
+
+    def test_renaming_the_body_keeps_the_mesh_name(self):
+        a = self.box("A")
+        self.include(a)
+        (m,) = objects.assign(self.study, [a], self.steel(), 0, name="Core")
+        a.Label = "Other"
+        objects.sync_labels(self.study)
+        self.assertEqual((objects.key_name(self.study, "A"), m.Label), ("Core", "Core: Steel"))
+
+    def test_material_names_equal_after_clean_are_refused(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        objects.assign(self.study, [a], self.steel(), 0, name="Coil 1")
+        objects.assign(self.study, [b], self.steel(), 0, name="Coil_1")
+        self.assertTrue(any("group names are the same" in t for t in self.problems("error")))
+
+    def test_air_keeps_its_own_mesh_name(self):
+        self.include(self.box("A"))
+        air = objects.make_air_region(self.study)
+        objects.assign(self.study, [air], self.steel(), 0, name="X")
+        self.assertEqual(objects.key_name(self.study, air.Name), "Air")
+
+    def test_material_owners_and_emptied(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        (copper,) = objects.assign(self.study, [a], self.steel(), 0, name="Copper")
+        (steel,) = objects.assign(self.study, [b], self.steel(), 0, name="Steel")
+        refs = [(a, ""), (b, "")]
+        self.assertEqual(objects.material_owners(self.study, refs), [((a, ""), copper), ((b, ""), steel)])
+        self.assertEqual(objects.material_owners(self.study, refs, own=copper), [((b, ""), steel)])
+        self.assertEqual(objects.emptied_by(self.study, refs), [copper, steel])
+
+    def test_apply_material_moves_a_body(self):
+        a = self.box("A")
+        self.include(a)
+        lib = self.steel()
+        (copper,) = objects.assign(self.study, [a], lib, 0, name="Copper")
+        m = objects.make_material(self.study)
+        self.assertEqual((m.Body, objects.item_refs(m)), (None, []))
+        objects.apply_material(self.study, m, "Iron", lib, 2, [(a, "")])
+        self.assertEqual((m.Body, m.Label, m.Potential), (a, "Iron: Steel", 2))
+        self.assertEqual(objects.materials(self.study), [m])
+        self.assertIs(objects.assignment_of(self.study)["A"], m)
+
+    def test_bulk_assign_replaces_but_keeps_air_name(self):
+        a = self.box("A")
+        self.include(a)
+        air = objects.make_air_region(self.study)
+        objects.assign(self.study, [a], self.steel(), 0, name="Core")
+        objects.assign(self.study, [air], self.steel(), 0, name="Air")
+        lib2 = self.lib("user:air", "Vacuum", "generic")
+        objects.assign(self.study, [a, air], lib2, 1)
+        have = objects.assignment_of(self.study)
+        self.assertEqual((have["A"].GroupName, have["A"].LibraryMaterial), ("A", lib2))
+        self.assertEqual((have[air.Name].GroupName, have[air.Name].LibraryMaterial), ("Air", lib2))
+        self.assertEqual((have[air.Name].Potential, len(objects.materials(self.study))), (1, 2))
+        self.assertIs(objects.air_material(self.study, air), have[air.Name])
+
+    def test_renaming_air_renames_its_material(self):
+        self.include(self.box("A"))
+        air = objects.make_air_region(self.study)
+        (m,) = objects.assign(self.study, [air], self.steel(), 0, name="Air")
+        objects.rename_air_region(self.study, air, "Gap")
+        self.assertEqual((air.GroupName, m.GroupName, m.Label), ("Gap", "Gap", "Gap: Steel"))
+        self.assertEqual(objects.key_name(self.study, air.Name), "Gap")
+
+    def test_suggest_name_ignores_a_material_about_to_be_removed(self):
+        a = self.box("A")
+        self.include(a)
+        lib = self.steel()
+        (m,) = objects.assign(self.study, [a], lib, 0)  # named "A"
+        self.assertEqual(objects.suggest_name(self.study, [(a, "")], lib, ignore=[m]), "A")
+        self.assertFalse(objects.name_taken(self.study, "A", ignore=[m]))
+
+    def test_names_equal_after_clean_are_taken(self):
+        a, b = self.box("A"), self.box("B", 10)
+        b.Label = "Coil 1"
+        self.include(a)
+        lib = self.steel()
+        objects.assign(self.study, [a], lib, 0, name="Coil_1")  # the same mesh group name as "Coil 1"
+        self.assertTrue(objects.name_taken(self.study, "Coil 1"))
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil 1_2")
+
+    def test_apply_material_refuses_bodies_mixed_with_faces(self):
+        a = self.box("A")
+        self.include(a)
+        m = objects.make_material(self.study)
+        with self.assertRaises(ValueError):
+            objects.apply_material(self.study, m, "M", self.steel(), 0, [(a, ""), (a, "Face1")])
+
+    def test_assign_takes_a_name(self):
+        (m,) = objects.assign(self.study, [self.box("A")], self.steel(), 0, name="Core")
+        self.assertEqual((m.GroupName, m.Label), ("Core", "Core: Steel"))
+
+    def test_old_material_gets_group_name_on_restore(self):
+        a = self.box("A")
+        (m,) = self.assign([a])
+        m.removeProperty("GroupName")
+        m.Label = "A: Steel"
+        m.Proxy.onDocumentRestored(m)
+        self.assertEqual((m.GroupName, m.Label), ("A", "A: Steel"))
+        m.removeProperty("GroupName")
+        self.doc.removeObject("A")  # an orphan: its body is gone
+        m.Proxy.onDocumentRestored(m)
+        self.assertEqual(m.GroupName, "A: Steel")
 
     def test_assignment_of_a_deleted_body_is_ignored(self):
         a, b = self.box("A"), self.box("B", 10)

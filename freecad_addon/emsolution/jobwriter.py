@@ -257,7 +257,7 @@ def write_job(study):
         rel = f"geometry/vol_{mat_id}.brep"
         global_shape(body).exportBrep(os.path.join(folder, rel))
         job["bodies" if two_d else "volumes"].append(
-            {"mat_id": mat_id, "name": objects.volume_name(body), "file": rel, "size": size}
+            {"mat_id": mat_id, "name": objects.region_name(study, body), "file": rel, "size": size}
         )
     for exc, body, faces in surfaces:
         smat_id = int(study.SmatIds[f"{exc.Name}|{body.Name}"])
@@ -298,7 +298,7 @@ def write_job(study):
         tf_bodies = []
         for k, (_, body, faces, corners) in enumerate(structured, 1):
             files = export_subs(folder, body, corners, f"corner_{k}")
-            entry = {"name": objects.volume_name(body), "mat_id": ids[body.Name], "corner_files": files}
+            entry = {"name": objects.region_name(study, body), "mat_id": ids[body.Name], "corner_files": files}
             if faces:  # a pick of faces; a whole body has no "faces" key
                 paths = export_subs(folder, body, faces, f"tface_{k}")
                 entry["faces"] = [{"face": f, "file": p} for f, p in zip(faces, paths)]
@@ -338,7 +338,7 @@ def write_job(study):
         for k, ((_, face), body) in enumerate(picked.items(), 1):
             (rel,) = export_subs(folder, body, [face], f"rface_{k}")
             job["recombine_faces"].append(
-                {"name": objects.volume_name(body), "mat_id": ids[body.Name], "face": face, "file": rel}
+                {"name": objects.region_name(study, body), "mat_id": ids[body.Name], "face": face, "file": rel}
             )
     path = os.path.join(folder, "job.json")
     with open(path, "w", encoding="utf-8") as fh:
