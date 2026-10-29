@@ -18,7 +18,9 @@ def ask_study():
         row = QtWidgets.QHBoxLayout()
         groups[title] = [QtWidgets.QRadioButton(option) for option in options]
         groups[title][0].setChecked(True)
+        exclusive = QtWidgets.QButtonGroup(dialog)  # radios with one parent are otherwise a single group
         for button in groups[title]:
+            exclusive.addButton(button)
             row.addWidget(button)
         layout.addRow(title, row)
     buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
