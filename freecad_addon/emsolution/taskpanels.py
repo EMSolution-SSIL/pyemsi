@@ -138,14 +138,16 @@ def library_combo(study, current=None):
     return combo
 
 
-def owned_text(owned, what, target):
-    """The move confirmation for owned [((body, sub), Material)]; what: "body" or "face"."""
+def owned_text(owned, what, target, target_one=None):
+    """The move confirmation for owned [((body, sub), Material)]; what: "body" or "face"; target_one: target when
+    only one is moved (default: target)."""
+    rule = f"\n\nA {what} can have only one Material."
+    if len(owned) == 1:
+        (((b, s), m),) = owned
+        where = f'{objects.ref_label(b, s)} already belongs to the Material "{objects.display_name(m)}".'
+        return f"{where}{rule} Move it to {target_one or target}?"
     lines = [f'• {objects.ref_label(b, s)} (in "{objects.display_name(m)}")' for (b, s), m in owned]
-    return (
-        "These already belong to another Material:\n"
-        + "\n".join(lines)
-        + f"\n\nA {what} can have only one Material. Move them to {target}?"
-    )
+    return "These already belong to other Materials:\n" + "\n".join(lines) + f"{rule} Move them to {target}?"
 
 
 def confirm_move(text):
@@ -201,7 +203,7 @@ class BulkAssignDialog(QtWidgets.QDialog):
         refs = [(b, "") for b in self.bodies if not is_air(b)]  # an Air Region keeps its own Material
         owned = objects.material_owners(self.study, refs)
         bodies = self.bodies
-        if owned and not confirm_move(owned_text(owned, "body", "Materials of their own")):
+        if owned and not confirm_move(owned_text(owned, "body", "Materials of their own", "a Material of its own")):
             skipped = {b.Name for (b, _), _ in owned}
             bodies = [b for b in bodies if b.Name not in skipped]
         doc = self.study.Document
@@ -1311,7 +1313,7 @@ class MaterialPanel:
         self.gate = ItemGate(study, ("Face",) if self.pieces else ANY_SUB, not self.pieces)
         Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.form = QtWidgets.QWidget()
-        self.form.setWindowTitle(obj.Label)
+        self.form.setWindowTitle("New Material" if new else obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
         layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
         region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"

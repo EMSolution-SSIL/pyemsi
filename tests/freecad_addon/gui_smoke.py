@@ -363,11 +363,13 @@ def main():
     Gui.runCommand("EMS_Material")
     panel = material_panels.pop()
     assert panel.new and panel.refs.count() == 0 and not panel.accept(), "an empty Material was made"
+    assert panel.form.windowTitle() == "New Material", panel.form.windowTitle()
     assert log[-1].startswith("refused: Select geometry"), log[-1]
     Gui.Selection.addSelection(doc.Name, "A")
     move_answers.append(False)
     panel.add_selection()
-    assert 'A (in "Core")' in moves[-1] and moves[-1].endswith('one Material. Move them to "A"?'), moves[-1]
+    one = 'A already belongs to the Material "Core".\n\nA body can have only one Material. Move it to "A"?'
+    assert moves[-1] == one, moves[-1]
     assert panel.current == [], "Cancel in the move box added the body"
     move_answers.append(True)
     panel.add_selection()
@@ -1417,7 +1419,8 @@ def main():
     panel = material_panels.pop()
     assert panel.current == [(stator_top, "Face1"), (stator_top, "Face2")], panel.current
     assert panel.name.text().startswith("Steel"), panel.name.text()
-    assert "Face1 (in " in moves[-1] and "A face can have only one Material." in moves[-1], moves[-1]
+    assert moves[-1].startswith("These already belong to other Materials:\n• "), moves[-1]
+    assert "Face1 (in " in moves[-1] and "A face can have only one Material. Move them" in moves[-1], moves[-1]
     gone = objects.emptied_by(sym_study, panel.current, own=panel.obj)
     panel.name.setText("Smoke pieces")
     panel.name_typed("Smoke pieces")
