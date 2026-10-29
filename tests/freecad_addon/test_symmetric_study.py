@@ -46,21 +46,30 @@ def test_piece_assignment_gets_one_mat_id_keyed_by_itself(motor):
     assert len(names) == 18
     assert set(motor.MatIds) == names | {iface.Name}
     assert len(set(motor.MatIds.values())) == 19
-    assert [m.Label for m in objects.piece_assignments(motor)].count("Coil01") == 1
+    assert [m.GroupName for m in objects.piece_assignments(motor)].count("Coil01") == 1
     rows = objects.material_rows(motor)
     assert len(rows) == 18
     assert {r[2][2] for r in rows} == {motor.MatIds[n] for n in names}
     assert [r[0] for r in rows] == objects.piece_assignments(motor)
     assert all(r[2][1] == "Steel" and r[2][3] == "0" for r in rows)
+    assert [r[2][0] for r in rows] == [m.GroupName for m in objects.piece_assignments(motor)]
 
 
-def test_piece_assignment_label_is_kept_on_sync(motor):
+def test_piece_assignment_label_shows_name_and_material(motor):
     (lib,) = objects.library_materials(motor)
     lib.Label = "Renamed"
     objects.sync_labels(motor)
-    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
-    assert coil.Label == "Coil01"
+    coil = next(m for m in objects.piece_assignments(motor) if m.GroupName == "Coil01")
+    assert coil.Label == "Coil01: Renamed"
     assert len(objects.item_refs(coil)) == 2
+
+
+def test_suggest_name_for_faces(motor):
+    (lib,) = objects.library_materials(motor)
+    top = objects.symmetric_items(motor)[0].Top
+    name = objects.suggest_name(motor, [(top, "Face1")], lib)
+    assert name.startswith("Steel") and not objects.name_taken(motor, name)
+    assert objects.suggest_name(motor, [(top, "Face1")], None).startswith(objects.display_name(top))
 
 
 def test_mesh_size_on_a_cell_body_is_allowed(motor):
@@ -78,7 +87,7 @@ def test_save_reload_keeps_pieces_and_item(motor, tmp_path):
     doc = App.openDocument(path)
     study = objects.find_study(doc)
     assert len(objects.piece_assignments(study)) == 18
-    coil = next(m for m in objects.piece_assignments(study) if m.Label == "Coil01")
+    coil = next(m for m in objects.piece_assignments(study) if m.GroupName == "Coil01")
     assert len(coil.Pieces) == 1 and len(coil.Pieces[0][1]) == 2 and coil.Body is None
     stator, _ = objects.symmetric_items(study)
     assert stator.Steps[0] == "mirror (0, 0) 15°" and len(stator.Cells) == 3
@@ -240,28 +249,28 @@ def test_whole_body_assignment_on_a_cell_body_warns(motor):
 
 
 def test_face_without_material_is_an_error(motor):
-    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil = next(m for m in objects.piece_assignments(motor) if m.GroupName == "Coil01")
     coil.Pieces = []
     motor.Document.recompute()
     assert _has(motor, "no Material", "Face")
 
 
 def test_face_with_two_materials_is_an_error(motor):
-    coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.Label in ("Coil01", "Coil02")]
+    coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.GroupName in ("Coil01", "Coil02")]
     coil2.Pieces = [*coil2.Pieces, *coil1.Pieces]
     assert _has(motor, "two Materials", "Face")
 
 
 def test_assignment_on_both_sides_is_refused(motor):
     stator_top, rotor_top = _tops(motor)
-    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil = next(m for m in objects.piece_assignments(motor) if m.GroupName == "Coil01")
     coil.Pieces = [*coil.Pieces, (rotor_top, ("Face1",))]
     assert _has(motor, "both sides")
 
 
 def test_piece_on_a_body_that_is_not_a_top_is_refused(motor):
     cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
-    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil = next(m for m in objects.piece_assignments(motor) if m.GroupName == "Coil01")
     coil.Pieces = [*coil.Pieces, (cell, ("Face1",))]
     assert _has(motor, "not a Symmetric Mesh top")
 
@@ -414,7 +423,7 @@ def test_cell_cut_by_a_fragments_meshes_per_block(tmp_path):
 
 def test_duplicate_assignment_labels_are_refused(motor):
     a, b = objects.piece_assignments(motor)[:2]
-    a.Label, b.Label = "Coil 01", "Coil_01"
+    a.GroupName, b.GroupName = "Coil 01", "Coil_01"
     assert _has(motor, "group names are the same")
 
 
@@ -445,7 +454,7 @@ def test_two_sliding_interfaces_are_refused(motor):
 
 
 def test_swapped_pieces_warn(motor):
-    coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.Label in ("Coil01", "Coil02")]
+    coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.GroupName in ("Coil01", "Coil02")]
     coil1.Pieces, coil2.Pieces = list(coil2.Pieces), list(coil1.Pieces)
     texts = _texts(motor, "warning")
     moved = [t for t in texts if "has moved: reassign it" in t]
@@ -455,13 +464,13 @@ def test_swapped_pieces_warn(motor):
 
 
 def test_piece_centres_are_kept_on_reload(motor, tmp_path):
-    coil = next(m for m in objects.piece_assignments(motor) if m.Label == "Coil01")
+    coil = next(m for m in objects.piece_assignments(motor) if m.GroupName == "Coil01")
     assert len(coil.PieceCentres) == 2
     path = str(tmp_path / "t.FCStd")
     motor.Document.saveAs(path)
     App.closeDocument(motor.Document.Name)
     study = objects.find_study(App.openDocument(path))
-    coil = next(m for m in objects.piece_assignments(study) if m.Label == "Coil01")
+    coil = next(m for m in objects.piece_assignments(study) if m.GroupName == "Coil01")
     assert len(coil.PieceCentres) == 2
     assert _problems(study) == []
 
@@ -515,7 +524,7 @@ def test_symmetric_job_meshes_into_both_files(motor):
 
     assert meshreport.slide_check(job["mesh_file"], job["rotor_file"], on_slide) == (144, 144, True)
 
-    label = {int(motor.MatIds[m.Name]): m.Label for m in objects.piece_assignments(motor)}
+    label = {int(motor.MatIds[m.Name]): m.GroupName for m in objects.piece_assignments(motor)}
     for side, msh in zip(job["symmetric"]["sides"], (job["mesh_file"], job["rotor_file"])):
         found = meshreport.groups(msh)
         assert {name for name, _ in found.values()} == {label[p["mat_id"]] for p in side["pieces"]}

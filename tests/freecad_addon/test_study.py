@@ -268,7 +268,8 @@ class StudyTest(unittest.TestCase):
         first = self.assign([a, b], 2, steel)
         self.assertEqual([(m.Body, m.LibraryMaterial, m.Potential) for m in first], [(a, steel, 2), (b, steel, 2)])
         self.assertEqual([m.Label for m in first], ["A: Steel", "B: Steel"])
-        self.assertFalse(hasattr(first[0], "GroupName") or hasattr(first[0], "References"))
+        self.assertEqual(first[0].GroupName, "A")
+        self.assertFalse(hasattr(first[0], "References"))
         again = objects.assign(self.study, [b, b], air, 0)
         self.assertEqual(again, [first[1], first[1]])
         self.assertEqual(objects.materials(self.study), first)
@@ -280,13 +281,40 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.materials(self.study), [first[1]])
         self.assertEqual(objects.library_rows(self.study)[1], (air, [(b, "")], ["Air", "generic", "user:air", "B"]))
 
-    def test_assignment_label_follows_renamed_body_and_material(self):
+    def test_assignment_label_follows_material_not_body(self):
         a = self.box("A")
         (m,) = self.assign([a])
         a.Label = "Core"
         m.LibraryMaterial.Label = "M330"
         objects.sync_labels(self.study)
-        self.assertEqual(m.Label, "Core: M330")
+        self.assertEqual((m.Label, m.GroupName), ("A: M330", "A"))
+
+    def test_suggest_name(self):
+        a, b = self.box("A"), self.box("B", 10)
+        b.Label = "Coil"
+        lib = self.steel()
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil")
+        self.include(a)
+        (m,) = objects.assign(self.study, [a], lib, 0, name="Coil")
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil_2")
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib, own=m), "Coil")
+        self.assertEqual(objects.suggest_name(self.study, [], lib), "")
+
+    def test_assign_takes_a_name(self):
+        (m,) = objects.assign(self.study, [self.box("A")], self.steel(), 0, name="Core")
+        self.assertEqual((m.GroupName, m.Label), ("Core", "Core: Steel"))
+
+    def test_old_material_gets_group_name_on_restore(self):
+        a = self.box("A")
+        (m,) = self.assign([a])
+        m.removeProperty("GroupName")
+        m.Label = "A: Steel"
+        m.Proxy.onDocumentRestored(m)
+        self.assertEqual((m.GroupName, m.Label), ("A", "A: Steel"))
+        m.removeProperty("GroupName")
+        self.doc.removeObject("A")  # an orphan: its body is gone
+        m.Proxy.onDocumentRestored(m)
+        self.assertEqual(m.GroupName, "A: Steel")
 
     def test_assignment_of_a_deleted_body_is_ignored(self):
         a, b = self.box("A"), self.box("B", 10)
