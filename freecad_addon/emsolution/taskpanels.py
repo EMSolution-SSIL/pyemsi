@@ -1720,8 +1720,7 @@ class AirRegionPanel:
             return False
         name = self.name.text().strip()
         if name:
-            obj.Label = name
-            obj.GroupName = name  # FreeCAD may have suffixed the Label
+            objects.rename_air_region(objects.owner_study(obj), obj, name)
         if self.symmetric.isChecked():  # a formula that kept its value sent no change
             self.mirror()
         self.done = True

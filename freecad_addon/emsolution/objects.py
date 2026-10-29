@@ -896,6 +896,15 @@ def air_material(study, air):
     return assignment_of(study).get(air.Name)
 
 
+def rename_air_region(study, air, name):
+    """Rename an Air Region and its Material, which is named after it."""
+    air.Label = name
+    air.GroupName = name  # FreeCAD may have suffixed the Label
+    m = air_material(study, air)
+    if m is not None:
+        set_material_name(m, name)
+
+
 def _key(ref):
     return (ref[0].Name, ref[1])
 

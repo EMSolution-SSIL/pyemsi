@@ -372,6 +372,14 @@ class StudyTest(unittest.TestCase):
         self.assertEqual((have[air.Name].Potential, len(objects.materials(self.study))), (1, 2))
         self.assertIs(objects.air_material(self.study, air), have[air.Name])
 
+    def test_renaming_air_renames_its_material(self):
+        self.include(self.box("A"))
+        air = objects.make_air_region(self.study)
+        (m,) = objects.assign(self.study, [air], self.steel(), 0, name="Air")
+        objects.rename_air_region(self.study, air, "Gap")
+        self.assertEqual((air.GroupName, m.GroupName, m.Label), ("Gap", "Gap", "Gap: Steel"))
+        self.assertEqual(objects.key_name(self.study, air.Name), "Gap")
+
     def test_assign_takes_a_name(self):
         (m,) = objects.assign(self.study, [self.box("A")], self.steel(), 0, name="Core")
         self.assertEqual((m.GroupName, m.Label), ("Core", "Core: Steel"))

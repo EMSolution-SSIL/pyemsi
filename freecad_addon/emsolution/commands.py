@@ -209,7 +209,7 @@ class AddAirRegion(_StudyCommand):
         if bodies:  # padding of 20 % on every side the shape offers, following the bodies
             airshapes.seed_padding(air, "Custom", "Box", airshapes.study_plane(study))
             air.SizeMode = "Padding"
-        objects.assign(study, [air], lib, 0)  # Cancel undoes the material and this as well
+        objects.assign(study, [air], lib, 0, name=objects.display_name(air))  # Cancel undoes the material too
         doc.recompute()
         Gui.Control.showDialog(taskpanels.AirRegionPanel(air, new=True))
 
