@@ -336,6 +336,42 @@ class StudyTest(unittest.TestCase):
         objects.assign(self.study, [air], self.steel(), 0, name="X")
         self.assertEqual(objects.key_name(self.study, air.Name), "Air")
 
+    def test_material_owners_and_emptied(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.include(a, b)
+        (copper,) = objects.assign(self.study, [a], self.steel(), 0, name="Copper")
+        (steel,) = objects.assign(self.study, [b], self.steel(), 0, name="Steel")
+        refs = [(a, ""), (b, "")]
+        self.assertEqual(objects.material_owners(self.study, refs), [((a, ""), copper), ((b, ""), steel)])
+        self.assertEqual(objects.material_owners(self.study, refs, own=copper), [((b, ""), steel)])
+        self.assertEqual(objects.emptied_by(self.study, refs), [copper, steel])
+
+    def test_apply_material_moves_a_body(self):
+        a = self.box("A")
+        self.include(a)
+        lib = self.steel()
+        (copper,) = objects.assign(self.study, [a], lib, 0, name="Copper")
+        m = objects.make_material(self.study)
+        self.assertEqual((m.Body, objects.item_refs(m)), (None, []))
+        objects.apply_material(self.study, m, "Iron", lib, 2, [(a, "")])
+        self.assertEqual((m.Body, m.Label, m.Potential), (a, "Iron: Steel", 2))
+        self.assertEqual(objects.materials(self.study), [m])
+        self.assertIs(objects.assignment_of(self.study)["A"], m)
+
+    def test_bulk_assign_replaces_but_keeps_air_name(self):
+        a = self.box("A")
+        self.include(a)
+        air = objects.make_air_region(self.study)
+        objects.assign(self.study, [a], self.steel(), 0, name="Core")
+        objects.assign(self.study, [air], self.steel(), 0, name="Air")
+        lib2 = self.lib("user:air", "Vacuum", "generic")
+        objects.assign(self.study, [a, air], lib2, 1)
+        have = objects.assignment_of(self.study)
+        self.assertEqual((have["A"].GroupName, have["A"].LibraryMaterial), ("A", lib2))
+        self.assertEqual((have[air.Name].GroupName, have[air.Name].LibraryMaterial), ("Air", lib2))
+        self.assertEqual((have[air.Name].Potential, len(objects.materials(self.study))), (1, 2))
+        self.assertIs(objects.air_material(self.study, air), have[air.Name])
+
     def test_assign_takes_a_name(self):
         (m,) = objects.assign(self.study, [self.box("A")], self.steel(), 0, name="Core")
         self.assertEqual((m.GroupName, m.Label), ("Core", "Core: Steel"))

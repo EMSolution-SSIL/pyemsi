@@ -457,10 +457,49 @@ def test_swapped_pieces_warn(motor):
     coil1, coil2 = [m for m in objects.piece_assignments(motor) if m.GroupName in ("Coil01", "Coil02")]
     coil1.Pieces, coil2.Pieces = list(coil2.Pieces), list(coil1.Pieces)
     texts = _texts(motor, "warning")
-    moved = [t for t in texts if "has moved: reassign it" in t]
+    moved = [t for t in texts if "has moved: remove and add it again" in t]
     assert any("of Coil01" in t for t in moved) and any("of Coil02" in t for t in moved)
     assert all("StatorFragments.Face" in t for t in moved)
     assert _texts(motor) == []
+
+
+def _coils(study):
+    return [m for m in objects.piece_assignments(study) if m.GroupName in ("Coil01", "Coil02")]
+
+
+def _keys(refs):
+    return frozenset((b.Name, s) for b, s in refs)
+
+
+def test_apply_material_moves_faces_and_keeps_centres(motor):
+    p, q = _coils(motor)
+    before = list(p.PieceCentres)
+    refs = objects.item_refs(p) + objects.item_refs(q)[:1]
+    objects.apply_material(motor, p, "Coil01", p.LibraryMaterial, 0, refs, kept=_keys(objects.item_refs(p)))
+    assert objects.item_refs(p) == refs and len(objects.item_refs(q)) == 1
+    assert len(p.PieceCentres) == len(refs) == 3 and len(q.PieceCentres) == 1
+    assert [v.distanceToPoint(w) for v, w in zip(p.PieceCentres, before)] == [0.0, 0.0]
+    assert p.Label == "Coil01: Steel"
+
+
+def test_readded_face_gets_a_fresh_centre(motor):
+    p, _ = _coils(motor)
+    centres = list(p.PieceCentres)
+    centres[0] = App.Vector(1e6, 0, 0)
+    p.PieceCentres = centres
+    moved = [t for t in _texts(motor, "warning") if "has moved" in t]
+    assert moved and all("remove and add it again in its Material's panel" in t for t in moved)
+    refs = objects.item_refs(p)
+    objects.apply_material(motor, p, "Coil01", p.LibraryMaterial, 0, refs, kept=_keys(refs[1:]))
+    assert not [t for t in _texts(motor, "warning") if "has moved" in t]
+
+
+def test_moving_last_face_removes_the_owner(motor):
+    p, q = _coils(motor)
+    refs = objects.item_refs(p) + objects.item_refs(q)
+    assert objects.emptied_by(motor, refs, own=p) == [q]
+    objects.apply_material(motor, p, "Coil01", p.LibraryMaterial, 0, refs, kept=_keys(objects.item_refs(p)))
+    assert q not in objects.materials(motor) and len(objects.item_refs(p)) == 4
 
 
 def test_piece_centres_are_kept_on_reload(motor, tmp_path):

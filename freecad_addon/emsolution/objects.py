@@ -804,7 +804,8 @@ def suggest_name(study, refs, lib, own=None):
 
 
 def assign(study, bodies, lib, potential, name=None):
-    """Give each body lib and potential, updating its assignment or adding one named name (default: suggested).
+    """Give each body a Material with lib and potential, named name (default: suggested). A body's old Material is
+    replaced (reused under the new name); an Air Region's keeps its name, which follows the Air Region's.
     Returns them in body order."""
     have = assignment_of(study)
     out = []
@@ -818,6 +819,8 @@ def assign(study, bodies, lib, potential, name=None):
 
                 taskpanels.attach_view_provider(m)
             have[body.Name] = m
+        elif not isinstance(getattr(body, "Proxy", None), AirRegion):
+            m.GroupName = name or suggest_name(study, [(body, "")], lib, own=m)
         m.LibraryMaterial, m.Potential = lib, potential
         m.Label = assignment_label(m)
         out.append(m)
@@ -876,6 +879,65 @@ def assign_pieces(study, name, pieces, lib, potential):
 
         taskpanels.attach_view_provider(m)
     return m
+
+
+def make_material(study):
+    """An empty Material for the Material panel to fill; the panel holds the transaction that removes it on Cancel."""
+    m = _add(study, "MaterialsGroup", Material, "")
+    m.Label = assignment_label(m)
+    if getattr(m, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        taskpanels.attach_view_provider(m)
+    return m
+
+
+def air_material(study, air):
+    return assignment_of(study).get(air.Name)
+
+
+def _key(ref):
+    return (ref[0].Name, ref[1])
+
+
+def material_owners(study, refs, own=None):
+    """[(ref, the other Material holding it)] for refs [(body, sub)], in ref order; refs nobody holds are left out."""
+    held = {_key(r): m for m in materials(study) if m != own for r in item_refs(m)}
+    return [(r, held[_key(r)]) for r in refs if _key(r) in held]
+
+
+def emptied_by(study, refs, own=None):
+    """The other Materials that would have nothing left once refs leave them."""
+    taking = {_key(r) for r in refs}
+    owners = dict.fromkeys(m for _, m in material_owners(study, refs, own))
+    return [m for m in owners if all(_key(r) in taking for r in item_refs(m))]
+
+
+def _set_pieces(m, refs, centres):
+    """Pieces = refs [(body, "FaceN")]; centres: (body Name, sub) -> stored centre, the others are measured now."""
+    m.Pieces = list(refs)
+    now = piece_centres(m)
+    m.PieceCentres = [centres.get(_key(r), c) for r, c in zip(item_refs(m), now)]
+
+
+def apply_material(study, m, name, lib, potential, refs, kept=frozenset()):
+    """Make m cover refs (a whole body [(body, "")] or faces [(body, "FaceN")]), taking them from other Materials,
+    which are removed when left empty. Faces in kept, (body Name, sub), keep the centre m stored for them; the others
+    are measured now. No transaction: the caller holds it."""
+    taking = {_key(r) for r in refs}
+    for other in emptied_by(study, refs, own=m):
+        study.Document.removeObject(other.Name)
+    for other in dict.fromkeys(o for _, o in material_owners(study, refs, own=m)):
+        left = [r for r in item_refs(other) if _key(r) not in taking]  # only piece Materials get here
+        stored = dict(zip(map(_key, item_refs(other)), other.PieceCentres))
+        _set_pieces(other, left, stored)
+    if refs and refs[0][1] == "":
+        m.Body = refs[0][0]
+    else:
+        stored = dict(zip(map(_key, item_refs(m)), getattr(m, "PieceCentres", [])))
+        _set_pieces(m, refs, {k: v for k, v in stored.items() if k in kept})
+    m.LibraryMaterial, m.Potential = lib, potential
+    set_material_name(m, name)
 
 
 def piece_centres(m):

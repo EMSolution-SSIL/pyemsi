@@ -719,7 +719,12 @@ def _moved(m, tops, r):
             continue  # reported elsewhere
         shape = geometry.global_shape(body)
         if shape.getElement(sub).CenterOfMass.distanceToPoint(was) > 1e-6 * shape.BoundBox.DiagonalLength:
-            r.warning(f"piece {body.Label}.{sub} of {m.Label} has moved: reassign it", m, [(body, sub)])
+            r.warning(
+                f"piece {body.Label}.{sub} of {objects.display_name(m)} has moved:"
+                " remove and add it again in its Material's panel",
+                m,
+                [(body, sub)],
+            )
 
 
 def _pieces(study, item_of, top_side, r):
