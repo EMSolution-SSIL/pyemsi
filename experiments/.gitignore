@@ -1,0 +1,6 @@
+# Files the example build scripts make; rebuild them with the script instead of committing them.
+*.FCBak
+*.msh
+.pyemsi/
+structured_examples/**/*.FCStd
+symmetric_examples/**/*.FCStd
