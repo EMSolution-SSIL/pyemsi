@@ -37,8 +37,18 @@ def main():
     from emsolution import highlight
 
     commands.ask_text = lambda title, label, default: {"Excitation": "Terminal In"}[title]
-    asked = []  # bodies the Assign dialog was opened for; the modal dialog is driven directly below
-    taskpanels.ask_assignment = lambda study, bodies: asked.append([b.Name for b in bodies])
+    asked = []  # bodies the several-bodies dialog was opened for; the modal dialog is driven directly below
+    taskpanels.ask_bulk_assignment = lambda study, bodies: asked.append([b.Name for b in bodies])
+    moves, move_answers = [], []  # texts of the move confirmations, and the answers to give them
+    taskpanels.confirm_move = lambda text: (moves.append(text), move_answers.pop(0))[1]
+    material_panels = []
+
+    class RecordedMaterialPanel(taskpanels.MaterialPanel):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            material_panels.append(self)
+
+    taskpanels.MaterialPanel = RecordedMaterialPanel
     warned = []  # commands' warnings; panels' warnings go to the log as "refused: ..."
     commands.warn = lambda text: warned.append(text)
     taskpanels.warn = lambda text: log.append("refused: " + text)
@@ -83,6 +93,7 @@ def main():
         assert warned[-1:] == [objects.NO_MAIN_GEOMETRY], (name, warned)
         assert [o.Name for o in Gui.Selection.getSelection()] == [study.Name], (name, "the Study was not selected")
     assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), "assigned without geometry"
+    assert not material_panels, "a Material panel opened without main geometry"
     study.MainMode, study.MainObjects = "Manual", [doc.A, doc.B]
     outside_message = (
         "Not in the Study's main geometry: Outside. Add them to it in the Study panel or select other bodies."
@@ -94,6 +105,7 @@ def main():
         Gui.runCommand(name)
         assert warned[-1:] == [outside_message], (name, warned)
     assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), "assigned outside geometry"
+    assert not material_panels, "a Material panel opened for a body outside the main geometry"
     log.append("main geometry gate ok")
     doc.saveAs(os.path.join(tempfile.mkdtemp(), "Smoke.FCStd"))  # the simulation folder
     log.append("study ok")
@@ -258,7 +270,9 @@ def main():
 
     select(study.MaterialsGroup.Name)
     shown_folders()["Materials"].cellDoubleClicked.emit(1, 0)
-    assert asked[-1] == ["B"], ("Assign dialog not asked for the row's body", asked)
+    panel = material_panels.pop()  # B has no Material: a new one on it
+    assert panel.new and panel.current == [(doc.B, "")] and panel.name.text() == "B", (panel.current, panel.name.text())
+    assert panel.reject() and objects.materials(study) == [], "Cancel kept the row's new Material"
     select(study.ExcitationsGroup.Name)
     shown_folders()["Excitations"].cellDoubleClicked.emit(0, 0)
     for _ in range(5):
@@ -312,23 +326,53 @@ def main():
     window = materialstandins.open_editor(study, "user:air")
     assert window.isVisible() and materialstandins.open_editor(study) is window
     window.close()
-    dialog = taskpanels.AssignDialog(study, [doc.A, doc.B])
+    dialog = taskpanels.BulkAssignDialog(study, [doc.A, doc.B])  # several bodies: one Material each
     assert dialog.material.currentData() == lib.Name, "an unassigned body did not default to the first material"
     dialog.potential.setValue(2)
     dialog.accept()
     mat, mat_b = objects.materials(study)
     assert (mat.Body, mat.LibraryMaterial, mat.Potential, mat.Label) == (doc.A, lib, 2, "A: Air"), mat.Label
+    assert (mat.GroupName, mat_b.GroupName) == ("A", "B") and doc.UndoNames[0] == "Assign material", doc.UndoNames
+    # The panel: double-click, rename; the typed name stays.
+    mat.ViewObject.Proxy.doubleClicked(mat.ViewObject)
+    panel = material_panels.pop()
+    assert not panel.new and Gui.Control.activeDialog() and panel.name.text() == "A", panel.name.text()
+    assert panel.current == [(doc.A, "")] and panel.material.currentData() == lib.Name
+    panel.name.setText("Core")
+    panel.name_typed("Core")
+    assert panel.accept() and not Gui.Control.activeDialog()
+    assert (mat.GroupName, mat.Label) == ("Core", "Core: Air") and doc.UndoNames[0] == "Edit A: Air", doc.UndoNames
+    # Nothing selected: an empty panel that refuses OK; picking A asks before taking it from Core.
+    Gui.Selection.clearSelection()
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert panel.new and panel.refs.count() == 0 and not panel.accept(), "an empty Material was made"
+    assert log[-1].startswith("refused: Select geometry"), log[-1]
+    Gui.Selection.addSelection(doc.Name, "A")
+    move_answers.append(False)
+    panel.add_selection()
+    assert 'A (in "Core")' in moves[-1] and moves[-1].endswith('one Material. Move them to "A"?'), moves[-1]
+    assert panel.current == [], "Cancel in the move box added the body"
+    move_answers.append(True)
+    panel.add_selection()
+    assert panel.current == [(doc.A, "")] and not panel.note.isHidden(), panel.note.text()
+    assert panel.note.text() == '"Core" will be removed: it has nothing left.', panel.note.text()
+    assert panel.reject() and objects.assignment_of(study)["A"] == mat, "Cancel moved A out of Core"
+    # Picked before the command: the panel opens with it, suggests its name and moves it on OK.
+    select("A")
+    move_answers.append(True)
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert panel.current == [(doc.A, "")] and panel.name.text() == "A", (panel.current, panel.name.text())
+    assert panel.accept()
+    mat = objects.assignment_of(study)["A"]
+    assert mat.GroupName == "A" and "Core" not in [m.GroupName for m in objects.materials(study)]
     assert doc.UndoNames[0] == "Assign material", doc.UndoNames
-    dialog = taskpanels.AssignDialog(study, [doc.B])
-    assert (dialog.material.currentData(), dialog.potential.value()) == (lib.Name, 2)
-    dialog.material.setCurrentIndex(dialog.material.findData(""))
-    dialog.accept()
-    assert objects.materials(study) == [mat] and doc.UndoNames[0] == "Remove material", doc.UndoNames
-    doc.undo()
-    assert [m.Body for m in objects.materials(study)] == [doc.A, doc.B], "undo did not bring the assignment back"
     materials_view = taskpanels.FolderView(study.MaterialsGroup)
     assert materials_view.missing.isHidden(), materials_view.missing.text()
-    taskpanels.apply_assignment(study, [doc.B], None, 0)
+    doc.openTransaction("Remove material")
+    objects.unassign(study, [doc.B])
+    doc.commitTransaction()
     materials_view.fill()
     missing = materials_view.missing
     assert not missing.isHidden() and missing.text().endswith(": B"), (missing.isHidden(), missing.text())
@@ -344,18 +388,15 @@ def main():
     assert asked[-1] == ["A", "B"], asked
     extra = doc.addObject("Part::Box", "Extra")
     doc.recompute()
-    dialog = taskpanels.AssignDialog(study, [extra])
-    dialog.material.setCurrentIndex(dialog.material.findData(""))
-    dialog.accept()
-    assert objects.assignment_of(study).get("Extra") is None
-    dialog = taskpanels.AssignDialog(study, [extra])  # the first library material
+    dialog = taskpanels.BulkAssignDialog(study, [extra])
     dialog.accept()
     assert objects.assignment_of(study).get("Extra") is None, "assigned a body outside the main geometry"
     assert log[-1].startswith("refused: Not in the Study's main geometry: Extra"), log[-1]
     dialog.reject()
     doc.removeObject("Extra")
     select(study.MaterialLibraryGroup.Name)
-    assert shown_folders()["Material Library"].item(0, 3).text() == "A, B"
+    used_by = shown_folders()["Material Library"].item(0, 3).text()
+    assert sorted(used_by.split(", ")) == ["A", "B"], used_by  # a moved body's Material comes last
     taskpanels.warn = lambda text: log.append("refused: " + text)
     assert lib.ViewObject.Proxy.onDelete(lib.ViewObject, []) is False, "deleted a used material"
     assert objects.library_materials(study) == [lib]
@@ -608,7 +649,8 @@ def main():
     assert air.AirShape == "Box" and not panel.tables["Box"].isHidden() and panel.groups["Box"].isHidden()
     assert panel.reject()
     assert objects.air_regions(study) == [] and not Gui.Control.activeDialog(), "Cancel kept the new Air Region"
-    assert [m.Body for m in objects.materials(study)] == [doc.A, doc.B], "Cancel kept the air's Material assignment"
+    bodies = sorted(m.Body.Name for m in objects.materials(study))
+    assert bodies == ["A", "B"], ("Cancel kept the air's Material assignment", bodies)
     assert objects.library_materials(study) == [lib], "Cancel changed the Material Library"
     # A Study without an Air material: the command makes one, Cancel takes it away again, OK keeps it.
     fresh_doc = App.newDocument("FreshAir")
@@ -1157,7 +1199,9 @@ def main():
     view = taskpanels.StudyView(study)
     assert commands.COMMANDS["EMS_RunMesh"].IsActive()
     assert view.run_button.isEnabled()
-    taskpanels.apply_assignment(study, [doc.A], None, 0)
+    doc.openTransaction("Remove material")
+    objects.unassign(study, [doc.A])
+    doc.commitTransaction()
     view.refresh()
     assert view.diagnostics.text() == "", view.diagnostics.text()  # meshing does not need materials
     assert view.run_button.isEnabled(), "a body without a material disabled generation"
@@ -1320,33 +1364,36 @@ def main():
     (sym_item,) = objects.symmetric_items(sym_study)
     assert sym_item.Top == stator_top and len(sym_item.Steps) == 2, (sym_item.Top, list(sym_item.Steps))
     assert sym_doc.UndoNames[0] == "Add Symmetric Mesh", sym_doc.UndoNames
-    # Materials: faces of the top ask for pieces, a whole top body is refused.
-    asked_pieces = []
-    real_ask_piece = taskpanels.ask_piece_assignment
-    taskpanels.ask_piece_assignment = lambda study, pieces: asked_pieces.append(pieces)
+    # Materials: faces of the top open the panel with them (taken from their Materials), a whole top is refused.
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face1")
     Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face2")
+    before = len(objects.piece_assignments(sym_study))
+    move_answers.append(True)  # every face of the drawing already has a Material
     Gui.runCommand("EMS_Material")
-    assert asked_pieces == [[(stator_top, "Face1"), (stator_top, "Face2")]], asked_pieces
+    panel = material_panels.pop()
+    assert panel.current == [(stator_top, "Face1"), (stator_top, "Face2")], panel.current
+    assert panel.name.text().startswith("Steel"), panel.name.text()
+    assert "Face1 (in " in moves[-1] and "A face can have only one Material." in moves[-1], moves[-1]
+    gone = objects.emptied_by(sym_study, panel.current, own=panel.obj)
+    panel.name.setText("Smoke pieces")
+    panel.name_typed("Smoke pieces")
+    assert panel.accept()
+    (made,) = [m for m in objects.piece_assignments(sym_study) if m.GroupName == "Smoke pieces"]
+    assert len(objects.piece_assignments(sym_study)) == before + 1 - len(gone), [m.Label for m in gone]
+    assert made.Label == "Smoke pieces: Steel" and sym_doc.UndoNames[0] == "Assign material", sym_doc.UndoNames
+    assert objects.item_refs(made) == [(stator_top, "Face1"), (stator_top, "Face2")], objects.item_refs(made)
+    made.ViewObject.Proxy.doubleClicked(made.ViewObject)  # the selection is editable: remove a face
+    panel = material_panels.pop()
+    panel.refs.item(1).setSelected(True)
+    panel.remove()
+    assert panel.accept() and objects.item_refs(made) == [(stator_top, "Face1")], objects.item_refs(made)
+    sym_doc.undo()
+    assert len(objects.item_refs(made)) == 2, "undo did not bring the face back"
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sym_doc.Name, stator_top.Name)
     Gui.runCommand("EMS_Material")
-    assert len(asked_pieces) == 1 and warned[-1].startswith("Materials go on the faces"), warned[-1]
-    taskpanels.ask_piece_assignment = real_ask_piece
-    # The real prompt: a name, then the library material and POTENTIAL; one undo step.
-    before = len(objects.piece_assignments(sym_study))
-    commands.ask_text = lambda title, label, default: "Smoke pieces"
-    real_exec = taskpanels.AssignDialog.exec
-    taskpanels.AssignDialog.exec = lambda self: self.accept()
-    taskpanels.ask_piece_assignment(sym_study, [(stator_top, "Face1"), (stator_top, "Face2")])
-    taskpanels.AssignDialog.exec = real_exec
-    made = objects.piece_assignments(sym_study)
-    assert len(made) == before + 1 and made[-1].Label == "Smoke pieces", [m.Label for m in made]
-    assert (
-        objects.item_refs(made[-1]) == [(stator_top, "Face1"), (stator_top, "Face2")]
-        and sym_doc.UndoNames[0] == "Assign material"
-    ), sym_doc.UndoNames
+    assert not material_panels and warned[-1].startswith("Materials go on the faces"), warned[-1]
     # The item: a tree icon that exists; a double-click (tree or Mesh Sizes panel) opens its panel.
     assert os.path.exists(sym_item.ViewObject.Proxy.getIcon()), sym_item.ViewObject.Proxy.getIcon()
     sym_panels = []
@@ -1377,41 +1424,50 @@ def main():
     panel.reject()
     assert not Gui.Control.activeDialog()
     taskpanels.SymmetricMeshPanel = real_sym_panel
-    # Materials panel of a symmetric Study: no top listed without material; a row edits its assignment.
+    # Materials panel of a symmetric Study: no top listed without material; a row opens its Material's panel.
     objects.make_symmetric_mesh(sym_study, sym_study.MovingObjects[0])  # the rotor's, removed above
     mat_view = taskpanels.FolderView(sym_study.MaterialsGroup)
     asked_before = len(asked)
     assert mat_view.missing.isHidden(), mat_view.missing.text()
-    taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(3), self.accept())
     mat_view.open_item(0, 0)
+    panel = material_panels.pop()
     first = mat_view.rows[0][0]
-    assert first.Potential == 3 and sym_doc.UndoNames[0] == "Assign material", (first.Potential, sym_doc.UndoNames)
-    taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(4), self.accept())
+    assert panel.obj == first and not panel.new, panel.obj.Label
+    panel.potential.setValue(3)
+    assert panel.accept()
+    assert first.Potential == 3 and sym_doc.UndoNames[0].startswith("Edit "), (first.Potential, sym_doc.UndoNames)
     mat_view.table.selectRow(1)
     mat_view.assign_rows()
-    assert mat_view.rows[1][0].Potential == 4 and first.Potential == 3, "Assign… on a piece row"
-    taskpanels.AssignDialog.exec = lambda self: (self.potential.setValue(5), self.accept())
+    panel = material_panels.pop()
+    assert panel.obj == mat_view.rows[1][0], "Assign… on a piece row"
+    assert panel.reject()
     first.ViewObject.Proxy.doubleClicked(first.ViewObject)
-    assert first.Potential == 5, "double-click on a piece assignment in the tree"
-    assert len(asked) == asked_before, asked  # never the body dialog
-    # assign_pieces failing half way: the transaction is aborted, nothing is left behind.
-    real_assign_pieces = objects.assign_pieces
+    panel = material_panels.pop()
+    panel.potential.setValue(5)
+    assert panel.accept() and first.Potential == 5, "double-click on a piece assignment in the tree"
+    assert len(asked) == asked_before, asked  # never the several-bodies dialog
+    # apply_material failing half way: the transaction is aborted, nothing is left behind.
+    real_apply = objects.apply_material
 
     def failing(*args):
-        real_assign_pieces(*args)
-        raise RuntimeError("smoke: assign_pieces failed")
+        real_apply(*args)
+        raise RuntimeError("smoke: apply_material failed")
 
-    objects.assign_pieces = failing
-    taskpanels.AssignDialog.exec = lambda self: self.accept()
+    objects.apply_material = failing
     undo, count = list(sym_doc.UndoNames), len(objects.piece_assignments(sym_study))
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face1")
+    move_answers.append(True)
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
     try:
-        taskpanels.ask_piece_assignment(sym_study, [(stator_top, "Face1")])
+        panel.accept()
     except RuntimeError:
         pass
-    objects.assign_pieces = real_assign_pieces
-    taskpanels.AssignDialog.exec = real_exec
+    objects.apply_material = real_apply
     assert len(objects.piece_assignments(sym_study)) == count, "a failed assignment was left behind"
     assert not sym_doc.HasPendingTransaction and list(sym_doc.UndoNames) == undo, list(sym_doc.UndoNames)
+    assert not Gui.Control.activeDialog(), "the failed panel stayed open"
     # Item panels let the cell bodies be picked: the mesh settings belong on them.
     for air in (True, False):
         assert "CoilCell" in taskpanels.ItemGate(sym_study, ("Edge",), False, air).main, "gate: cell body"

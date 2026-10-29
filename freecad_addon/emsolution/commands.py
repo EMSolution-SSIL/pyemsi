@@ -114,7 +114,7 @@ class AssignMaterial(_StudyCommand):
         return {
             "Pixmap": icon("material"),
             "MenuText": "Assign Material",
-            "ToolTip": "Give the selected bodies a material from the Material Library",
+            "ToolTip": "Add a Material from the Material Library: for the selected body, or for each of several",
         }
 
     def Activated(self):
@@ -122,19 +122,26 @@ class AssignMaterial(_StudyCommand):
         if study is None:
             return
         bodies = taskpanels.selected_bodies()
-        if not bodies:
-            return warn("Select one or more bodies first.")
         tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
         pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
         if pieces:
             if gate(study, [b for b, _ in pieces]):
-                taskpanels.ask_piece_assignment(study, pieces)
+                taskpanels.open_material_panel(study, pieces)
             return
         whole = [b for b in bodies if b.Name in tops]
         if whole:
             return warn(f"Materials go on the faces (pieces) of {objects.display_name(whole[0])}: select faces first.")
-        if gate(study, bodies):
-            taskpanels.ask_assignment(study, bodies)
+        if not gate(study, bodies):  # with nothing selected, still refused without main geometry
+            return
+        if objects.is_symmetric(study):  # its Materials are on faces: the panel picks them
+            bodies = []
+        air = objects.air_material(study, bodies[0]) if len(bodies) == 1 and taskpanels.is_air(bodies[0]) else None
+        if air is not None:  # an Air Region keeps its Material: edit that one
+            Gui.Control.showDialog(taskpanels.MaterialPanel(air))
+        elif len(bodies) > 1:
+            taskpanels.ask_bulk_assignment(study, bodies)
+        else:
+            taskpanels.open_material_panel(study, [(b, "") for b in bodies])
 
 
 class AddExcitation(_StudyCommand):
