@@ -656,12 +656,15 @@ def _make_folder(study, prop, cls):
     return folder
 
 
-def make_study(doc, dimension="3D", label=None):
+def make_study(doc, dimension="3D", label=None, movement="No movement"):
     if dimension not in ("2D", "3D"):
         raise ValueError("Study dimension must be 2D or 3D")
+    if movement not in ("No movement", "Sliding motion"):
+        raise ValueError("Study movement must be No movement or Sliding motion")
     study = doc.addObject("App::DocumentObjectGroupPython", "Study")
     Study(study)
     study.Dimension = dimension
+    study.Movement = movement
     if label:
         study.Label = label
     for prop, cls in FOLDERS:

@@ -132,6 +132,13 @@ class StudyTest(unittest.TestCase):
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds["C"], "51")
 
+    def test_study_is_made_with_the_chosen_movement(self):
+        self.assertEqual(self.study.Movement, "No movement")
+        sliding = objects.make_study(self.doc, "2D", "Slider", "Sliding motion")
+        self.assertEqual((sliding.Dimension, sliding.Movement), ("2D", "Sliding motion"))
+        with self.assertRaises(ValueError):
+            objects.make_study(self.doc, "2D", "Bad", "Spinning")
+
     def test_study_has_mat_and_smat_tables_only(self):
         for prop in ("MatIds", "SmatIds", "NextMatId", "NextSmatId"):
             self.assertIn(prop, self.study.PropertiesList)
