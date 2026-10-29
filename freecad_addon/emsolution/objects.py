@@ -136,8 +136,6 @@ SIZING_PROPERTIES = (
 class Study(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
-        obj.addProperty("App::PropertyEnumeration", "MshVersion", "EMSolution", "Gmsh file format version (ASCII)")
-        obj.MshVersion = ["4.1", "2.2"]
         obj.addProperty("App::PropertyMap", "MatIds", "IDs", "Body Name -> MAT_ID")
         obj.addProperty("App::PropertyMap", "SmatIds", "IDs", "'Excitation Name|Body Name' -> SMAT_ID")
         obj.addProperty("App::PropertyInteger", "NextMatId", "IDs", "Next MAT_ID")
@@ -175,6 +173,8 @@ class Study(_Proxy):
 
     def onDocumentRestored(self, obj):
         ensure_folders(obj)  # Studies saved before a folder existed
+        if hasattr(obj, "MshVersion"):
+            obj.removeProperty("MshVersion")  # EMSolution reads only Gmsh 4.1
 
 
 def add_folder_property(study, prop):
