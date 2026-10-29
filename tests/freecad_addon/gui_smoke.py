@@ -326,6 +326,22 @@ def main():
     window = materialstandins.open_editor(study, "user:air")
     assert window.isVisible() and materialstandins.open_editor(study) is window
     window.close()
+    # A failure inside the several-bodies dialog: the transaction is aborted, nothing is left behind.
+    real_assign = objects.assign
+
+    def failing_assign(*args):
+        real_assign(*args)
+        raise RuntimeError("smoke: assign failed")
+
+    objects.assign = failing_assign
+    undo = list(doc.UndoNames)
+    try:
+        taskpanels.BulkAssignDialog(study, [doc.A, doc.B]).accept()
+    except RuntimeError:
+        pass
+    objects.assign = real_assign
+    assert not objects.materials(study) and not doc.HasPendingTransaction, "a failed bulk assignment was left behind"
+    assert list(doc.UndoNames) == undo, list(doc.UndoNames)
     dialog = taskpanels.BulkAssignDialog(study, [doc.A, doc.B])  # several bodies: one Material each
     assert dialog.material.currentData() == lib.Name, "an unassigned body did not default to the first material"
     dialog.potential.setValue(2)
@@ -1468,6 +1484,11 @@ def main():
     panel = material_panels.pop()
     assert panel.obj == mat_view.rows[1][0], "Assign… on a piece row"
     assert panel.reject()
+    mat_view.table.selectAll()  # several piece rows: one panel edits one Material, so none is opened
+    count = len(material_panels)
+    mat_view.assign_rows()
+    assert len(material_panels) == count and not Gui.Control.activeDialog(), "Assign… on several piece rows"
+    assert log[-1].startswith("refused: Select one row"), log[-1]
     first.ViewObject.Proxy.doubleClicked(first.ViewObject)
     panel = material_panels.pop()
     panel.potential.setValue(5)
@@ -1495,6 +1516,21 @@ def main():
     assert len(objects.piece_assignments(sym_study)) == count, "a failed assignment was left behind"
     assert not sym_doc.HasPendingTransaction and list(sym_doc.UndoNames) == undo, list(sym_doc.UndoNames)
     assert not Gui.Control.activeDialog(), "the failed panel stayed open"
+    # The panel failing as it opens: the new Material's transaction is aborted.
+
+    def failing_refresh(panel):
+        raise RuntimeError("smoke: the panel failed to open")
+
+    taskpanels.MaterialPanel.refresh = failing_refresh
+    undo, count = list(sym_doc.UndoNames), len(objects.materials(sym_study))
+    try:
+        taskpanels.open_material_panel(sym_study)
+    except RuntimeError:
+        pass
+    del taskpanels.MaterialPanel.refresh
+    assert len(objects.materials(sym_study)) == count, "the Material of a panel that failed to open was left behind"
+    assert not sym_doc.HasPendingTransaction and list(sym_doc.UndoNames) == undo, list(sym_doc.UndoNames)
+    assert not Gui.Control.activeDialog(), "a panel that failed to open was shown"
     # Item panels let the cell bodies be picked: the mesh settings belong on them.
     for air in (True, False):
         assert "CoilCell" in taskpanels.ItemGate(sym_study, ("Edge",), False, air).main, "gate: cell body"

@@ -206,7 +206,11 @@ class BulkAssignDialog(QtWidgets.QDialog):
             bodies = [b for b in bodies if b.Name not in skipped]
         doc = self.study.Document
         doc.openTransaction("Assign material")
-        objects.assign(self.study, bodies, lib, self.potential.value())
+        try:
+            objects.assign(self.study, bodies, lib, self.potential.value())
+        except Exception:
+            doc.abortTransaction()
+            raise
         doc.commitTransaction()
         doc.recompute()
         super().accept()
@@ -218,9 +222,16 @@ def ask_bulk_assignment(study, bodies):
 
 def open_material_panel(study, refs=()):
     """A new Material in its panel, holding refs [(body, sub)]; the transaction stays open until OK or Cancel."""
-    study.Document.openTransaction("Assign material")
-    m = objects.make_material(study)
-    Gui.Control.showDialog(MaterialPanel(m, new=True, refs=refs))
+    doc = study.Document
+    doc.openTransaction("Assign material")
+    try:
+        panel = MaterialPanel(objects.make_material(study), new=True, refs=refs)
+    except Exception:
+        Gui.Selection.removeSelectionGate()  # the panel may have set it before failing
+        doc.abortTransaction()
+        doc.recompute()
+        raise
+    Gui.Control.showDialog(panel)
 
 
 class _ViewProvider:
@@ -551,11 +562,13 @@ class FolderView:
         items = self.selected_items()
         if not items:
             return warn("Select one or more rows first.")
-        if len(items) > 1 and not objects.is_symmetric(self.study):  # a symmetric Study lists its Materials
+        if len(items) == 1:
+            self.edit_row_material(items[0])
+        elif objects.is_symmetric(self.study):  # its rows are Materials, edited one panel at a time
+            warn("Select one row: a symmetric Study's Materials are edited one at a time.")
+        else:
             ask_bulk_assignment(self.study, items)
             self.fill()
-        else:
-            self.edit_row_material(items[0])
 
     def edit_row_material(self, item):
         """The panel of a row's Material (a symmetric Study's rows are Materials), or of a new one on its body."""
@@ -1460,7 +1473,7 @@ class MaterialPanel:
             warn(LIBRARY_EMPTY if not self.material.count() else "Choose a material from the Material Library.")
             return False
         if self.air is None and objects.name_taken(self.study, name, self.obj, self.gone()):
-            warn(f'Another Material is already named "{name}".')
+            warn(f'Another Material is already named "{name}" (spaces and symbols count as "_" in the mesh).')
             return False
         doc = self.obj.Document
         if not self.new:  # a new item's transaction is already open

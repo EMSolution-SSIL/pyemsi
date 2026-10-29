@@ -785,8 +785,9 @@ def set_material_name(m, name):
 
 
 def name_taken(study, name, own=None, ignore=()):
-    """Whether another Material of the Study already has this name; ignore: Materials about to be removed."""
-    return any(m.GroupName == name for m in materials(study) if m != own and m not in ignore)
+    """Whether another Material of the Study already has this name, compared as mesh group names ("Coil 1" is
+    "Coil_1"); ignore: Materials about to be removed."""
+    return any(clean(m.GroupName) == clean(name) for m in materials(study) if m != own and m not in ignore)
 
 
 def suggest_name(study, refs, lib, own=None, ignore=()):

@@ -388,6 +388,15 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.suggest_name(self.study, [(a, "")], lib, ignore=[m]), "A")
         self.assertFalse(objects.name_taken(self.study, "A", ignore=[m]))
 
+    def test_names_equal_after_clean_are_taken(self):
+        a, b = self.box("A"), self.box("B", 10)
+        b.Label = "Coil 1"
+        self.include(a)
+        lib = self.steel()
+        objects.assign(self.study, [a], lib, 0, name="Coil_1")  # the same mesh group name as "Coil 1"
+        self.assertTrue(objects.name_taken(self.study, "Coil 1"))
+        self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil 1_2")
+
     def test_apply_material_refuses_bodies_mixed_with_faces(self):
         a = self.box("A")
         self.include(a)
