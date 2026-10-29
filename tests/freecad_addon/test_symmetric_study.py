@@ -611,3 +611,12 @@ def test_static_study_writes_one_file(tmp_path):
     finally:
         for name in list(App.listDocuments()):
             App.closeDocument(name)
+
+
+def test_faces_replace_a_left_over_body(motor):
+    top = _tops(motor)[0]
+    m = objects.make_material(motor)
+    m.Body = top  # a whole-body Material made before the drawing was symmetric
+    (lib,) = objects.library_materials(motor)
+    objects.apply_material(motor, m, "Left", lib, 0, [(top, "Face1")])
+    assert m.Body is None and objects.item_refs(m) == [(top, "Face1")]

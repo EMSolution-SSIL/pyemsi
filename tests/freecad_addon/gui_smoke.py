@@ -368,6 +368,33 @@ def main():
     mat = objects.assignment_of(study)["A"]
     assert mat.GroupName == "A" and "Core" not in [m.GroupName for m in objects.materials(study)]
     assert doc.UndoNames[0] == "Assign material", doc.UndoNames
+    # Assigned again: the name of the Material it leaves, removed on OK, is free (the mesh name stays "A").
+    select("A")
+    move_answers.append(True)
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert panel.name.text() == "A" and panel.accept(), (panel.name.text(), log[-1])
+    mat = objects.assignment_of(study)["A"]
+    assert mat.GroupName == "A" and len(objects.materials(study)) == 2, [m.Label for m in objects.materials(study)]
+    # An Air Region without a Material gets one in a new panel, named after it; its panel saves despite a clash.
+    air = objects.make_air_region(study, "Box")
+    doc.recompute()
+    open_view = taskpanels.FolderView(study.MaterialsGroup)
+    open_view.open_item([r[0] for r in open_view.rows].index(air), 0)
+    panel = material_panels.pop()
+    assert panel.current == [(air, "")] and panel.name.text() == objects.display_name(air), panel.name.text()
+    assert panel.name.isReadOnly() and panel.accept(), log[-1]
+    air_mat = objects.air_material(study, air)
+    assert air_mat is not None and air_mat.GroupName == objects.display_name(air), "the Air Region got no Material"
+    objects.set_material_name(mat_b, objects.display_name(air))  # another Material with the Air Region's name
+    air_mat.ViewObject.Proxy.doubleClicked(air_mat.ViewObject)
+    panel = material_panels.pop()
+    panel.potential.setValue(7)
+    assert panel.accept() and air_mat.Potential == 7, ("the Air's Material panel could not save", log[-1])
+    objects.set_material_name(mat_b, "B")
+    doc.removeObject(air_mat.Name)
+    doc.removeObject(air.Name)
+    doc.recompute()
     materials_view = taskpanels.FolderView(study.MaterialsGroup)
     assert materials_view.missing.isHidden(), materials_view.missing.text()
     doc.openTransaction("Remove material")

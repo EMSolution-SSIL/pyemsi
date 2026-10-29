@@ -380,6 +380,21 @@ class StudyTest(unittest.TestCase):
         self.assertEqual((air.GroupName, m.GroupName, m.Label), ("Gap", "Gap", "Gap: Steel"))
         self.assertEqual(objects.key_name(self.study, air.Name), "Gap")
 
+    def test_suggest_name_ignores_a_material_about_to_be_removed(self):
+        a = self.box("A")
+        self.include(a)
+        lib = self.steel()
+        (m,) = objects.assign(self.study, [a], lib, 0)  # named "A"
+        self.assertEqual(objects.suggest_name(self.study, [(a, "")], lib, ignore=[m]), "A")
+        self.assertFalse(objects.name_taken(self.study, "A", ignore=[m]))
+
+    def test_apply_material_refuses_bodies_mixed_with_faces(self):
+        a = self.box("A")
+        self.include(a)
+        m = objects.make_material(self.study)
+        with self.assertRaises(ValueError):
+            objects.apply_material(self.study, m, "M", self.steel(), 0, [(a, ""), (a, "Face1")])
+
     def test_assign_takes_a_name(self):
         (m,) = objects.assign(self.study, [self.box("A")], self.steel(), 0, name="Core")
         self.assertEqual((m.GroupName, m.Label), ("Core", "Core: Steel"))

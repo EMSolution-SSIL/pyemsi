@@ -784,12 +784,12 @@ def set_material_name(m, name):
     m.Label = assignment_label(m)
 
 
-def name_taken(study, name, own=None):
-    """Whether another Material of the Study already has this name."""
-    return any(m.GroupName == name for m in materials(study) if m != own)
+def name_taken(study, name, own=None, ignore=()):
+    """Whether another Material of the Study already has this name; ignore: Materials about to be removed."""
+    return any(m.GroupName == name for m in materials(study) if m != own and m not in ignore)
 
 
-def suggest_name(study, refs, lib, own=None):
+def suggest_name(study, refs, lib, own=None, ignore=()):
     """A free name for a Material on refs [(body, sub)]: a whole body's name, else the library material's (faces
     have no name of their own), else the drawing's; "_2", "_3"... when taken. "" for no refs."""
     if not refs:
@@ -797,7 +797,7 @@ def suggest_name(study, refs, lib, own=None):
     body, sub = refs[0]
     base = display_name(body) if not sub or lib is None else lib.Label
     name, n = base, 1
-    while name_taken(study, name, own):
+    while name_taken(study, name, own, ignore):
         n += 1
         name = f"{base}_{n}"
     return name
@@ -933,6 +933,9 @@ def apply_material(study, m, name, lib, potential, refs, kept=frozenset()):
     """Make m cover refs (a whole body [(body, "")] or faces [(body, "FaceN")]), taking them from other Materials,
     which are removed when left empty. Faces in kept, (body Name, sub), keep the centre m stored for them; the others
     are measured now. No transaction: the caller holds it."""
+    whole = [r for r in refs if r[1] == ""]
+    if whole and (len(whole) > 1 or len(refs) > 1):
+        raise ValueError("a Material covers one whole body or faces, not both")
     taking = {_key(r) for r in refs}
     for other in emptied_by(study, refs, own=m):
         study.Document.removeObject(other.Name)
@@ -940,10 +943,11 @@ def apply_material(study, m, name, lib, potential, refs, kept=frozenset()):
         left = [r for r in item_refs(other) if _key(r) not in taking]  # only piece Materials get here
         stored = dict(zip(map(_key, item_refs(other)), other.PieceCentres))
         _set_pieces(other, left, stored)
-    if refs and refs[0][1] == "":
+    if whole:
         m.Body = refs[0][0]
     else:
         stored = dict(zip(map(_key, item_refs(m)), getattr(m, "PieceCentres", [])))
+        m.Body = None  # a whole-body Material left from before the drawing was symmetric
         _set_pieces(m, refs, {k: v for k, v in stored.items() if k in kept})
     m.LibraryMaterial, m.Potential = lib, potential
     set_material_name(m, name)

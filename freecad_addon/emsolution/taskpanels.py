@@ -1291,6 +1291,8 @@ class MaterialPanel:
         self.pieces = objects.is_symmetric(study)  # a symmetric Study's Materials are on faces of the drawing
         self.air = obj.Body if obj.Body is not None and is_air(obj.Body) else None
         self.current = objects.item_refs(obj)
+        if self.pieces:  # a whole-body Material left from before the drawing was symmetric: its faces only
+            self.current = [r for r in self.current if r[1]]
         self.kept = {_key(r) for r in self.current}  # faces that keep the centre stored for them
         highlight.clear()  # the list's selected rows are highlighted instead
         self.gate = ItemGate(study, ("Face",) if self.pieces else ANY_SUB, not self.pieces)
@@ -1313,9 +1315,8 @@ class MaterialPanel:
         self.typed = not new  # the name follows the suggestion until it is typed in
         self.name.textEdited.connect(self.name_typed)
         layout.addRow("Name", self.name)
-        if self.air is not None:
-            self.name.setReadOnly(True)
-            layout.addRow(QtWidgets.QLabel("Named after its Air Region; rename it there."))
+        self.air_note = QtWidgets.QLabel("Named after its Air Region; rename it there.")
+        layout.addRow(self.air_note)
         self.material = library_combo(study, obj.LibraryMaterial)
         self.material.currentIndexChanged.connect(lambda _index: self.suggest())
         layout.addRow("Material", self.material)
@@ -1337,6 +1338,8 @@ class MaterialPanel:
         remove.clicked.connect(self.remove)
         add.setEnabled(self.air is None)  # an Air Region keeps its Material
         remove.setEnabled(self.air is None)
+        self.name.setReadOnly(self.air is not None)
+        self.air_note.setVisible(self.air is not None)
         buttons = QtWidgets.QHBoxLayout()
         buttons.addWidget(add)
         buttons.addWidget(remove)
@@ -1355,14 +1358,20 @@ class MaterialPanel:
         name = self.material.currentData()
         return self.study.Document.getObject(name) if name else None
 
+    def gone(self):
+        """The other Materials OK removes, as they have nothing left: their names are free."""
+        return objects.emptied_by(self.study, self.current, own=self.obj)
+
     def suggest(self):
-        if not self.typed:
-            self.name.setText(objects.suggest_name(self.study, self.current, self.lib(), own=self.obj))
+        if self.air is not None:
+            self.name.setText(objects.display_name(self.air))
+        elif not self.typed:
+            self.name.setText(objects.suggest_name(self.study, self.current, self.lib(), self.obj, self.gone()))
 
     def refresh(self):
         self.refs.clear()
         self.refs.addItems([objects.ref_label(b, s) for b, s in self.current])
-        gone = objects.emptied_by(self.study, self.current, own=self.obj)
+        gone = self.gone()
         self.note.setText("\n".join(f'"{objects.display_name(m)}" will be removed: it has nothing left.' for m in gone))
         self.note.setVisible(bool(gone))
 
@@ -1383,10 +1392,10 @@ class MaterialPanel:
         if problem:
             warn(problem)
             picks = [p for p in picks if not objects.assignment_problem(self.study, [p[0]])]
-        airs = [p for p in picks if is_air(p[0])]
-        if airs:
+        airs = [p for p in picks if is_air(p[0]) and objects.air_material(self.study, p[0]) not in (None, self.obj)]
+        if airs:  # one without a Material gets it here
             warn("An Air Region keeps its own Material: open it from the Air Region's row.")
-            picks = [p for p in picks if not is_air(p[0])]
+            picks = [p for p in picks if p not in airs]
         have = {_key(r) for r in self.current}
         picks = list({_key(p): p for p in picks if _key(p) not in have}.values())
         if not picks:
@@ -1397,14 +1406,19 @@ class MaterialPanel:
         owned = objects.material_owners(self.study, picks, own=self.obj)
         if owned:
             current = self.current + picks if self.pieces else picks
+            gone = objects.emptied_by(self.study, current, own=self.obj)
             name = self.name.text().strip() if self.typed else ""
-            name = name or objects.suggest_name(self.study, current, self.lib(), own=self.obj) or "this Material"
+            name = name or objects.suggest_name(self.study, current, self.lib(), self.obj, gone) or "this Material"
             if not confirm_move(owned_text(owned, "face" if self.pieces else "body", f'"{name}"')):
                 skipped = {_key(r) for r, _ in owned}
                 picks = [p for p in picks if _key(p) not in skipped]
                 if not picks:
                     return False
         self.current = self.current + picks if self.pieces else picks
+        if not self.pieces:  # an Air Region's Material is named after it
+            self.air = picks[0][0] if is_air(picks[0][0]) else None
+            self.name.setReadOnly(self.air is not None)
+            self.air_note.setVisible(self.air is not None)
         self.refresh()
         self.suggest()
         return True
@@ -1445,7 +1459,7 @@ class MaterialPanel:
         if lib is None:
             warn(LIBRARY_EMPTY if not self.material.count() else "Choose a material from the Material Library.")
             return False
-        if objects.name_taken(self.study, name, own=self.obj):
+        if self.air is None and objects.name_taken(self.study, name, self.obj, self.gone()):
             warn(f'Another Material is already named "{name}".')
             return False
         doc = self.obj.Document
