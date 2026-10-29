@@ -129,7 +129,6 @@ class MesherTest(unittest.TestCase):
         self,
         volumes,
         surfaces=(),
-        version=4.1,
         sizes=(),
         options=None,
         mesh_file=None,
@@ -140,7 +139,6 @@ class MesherTest(unittest.TestCase):
     ):
         job = {
             "model_name": "Model",
-            "msh_version": version,
             "mesh_file": mesh_file or os.path.join(self.dir, "pre_geom.msh"),
             "volumes": list(volumes),
             "surfaces": list(surfaces),
@@ -323,13 +321,6 @@ class MesherTest(unittest.TestCase):
         last = r.stderr.strip().splitlines()[-1]
         self.assertIn("ERROR:", last)
         self.assertIn("NoSuchOption", last)
-
-    def test_msh_version_22(self):
-        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
-        r = self.run_job([self.vol(1, "Copper_Box", "vol_1.brep")], version=2.2)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        with open(os.path.join(self.dir, "pre_geom.msh"), encoding="ascii") as fh:
-            self.assertEqual(fh.read().split()[:2], ["$MeshFormat", "2.2"])
 
     def test_mesh_goes_to_mesh_file_and_unv_beside_the_job(self):
         write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)

@@ -154,7 +154,6 @@ class Mesher2DTest(unittest.TestCase):
         self,
         bodies,
         sizes=(),
-        version=4.1,
         options=None,
         mesh_file=None,
         transfinite=None,
@@ -165,7 +164,6 @@ class Mesher2DTest(unittest.TestCase):
         job = {
             "dimension": "2D",
             "model_name": "Model",
-            "msh_version": version,
             "mesh_file": mesh_file or os.path.join(self.dir, "pre_geom2D.msh"),
             "bodies": list(bodies),
             "sizes": list(sizes),
@@ -330,13 +328,6 @@ class Mesher2DTest(unittest.TestCase):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
         r = self.run_job([self.body(1, "Copper_Sq", "vol_1.brep")], options={"Mesh.NoSuchOption": 1})
         self.assertIn("NoSuchOption", self.last_error(r))
-
-    def test_msh_version_22(self):
-        write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
-        r = self.run_job([self.body(1, "Copper_Sq", "vol_1.brep")], version=2.2)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        with open(os.path.join(self.dir, "pre_geom2D.msh"), encoding="ascii") as fh:
-            self.assertEqual(fh.read().split()[:2], ["$MeshFormat", "2.2"])
 
     def test_mesh_goes_to_mesh_file_and_unv_beside_the_job(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])

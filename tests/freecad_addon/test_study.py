@@ -762,7 +762,6 @@ class StudyTest(unittest.TestCase):
             job,
             {
                 "model_name": "My_Study",
-                "msh_version": 4.1,
                 "options": {
                     "Mesh.RecombinationAlgorithm": 1,
                     "Mesh.Algorithm": 6,

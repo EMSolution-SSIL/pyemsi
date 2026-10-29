@@ -103,7 +103,6 @@ class MeshSymTest(unittest.TestCase):
         job = {
             "dimension": "2D",
             "model_name": "Model",
-            "msh_version": 4.1,
             "mesh_file": self.files()[0],
             "bodies": bodies,
             "sizes": [],

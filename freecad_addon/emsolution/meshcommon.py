@@ -653,7 +653,10 @@ def apply_periodic(periodic, dim):
         raise JobError(f"periodic boundaries do not match: the piece at {at} has no partner on the other side")
 
 
-def write_split(groups, path, version):
+MSH_VERSION = 4.1  # the only format EMSolution reads
+
+
+def write_split(groups, path):
     """Write the elements of groups [(dim, entity tags, id, name)] of the meshed model to path as a model of its own:
     one discrete entity and physical group per group, nodes and elements numbered from 1."""
     all_tags, all_coords = gmsh.model.mesh.getNodes()[:2]
@@ -682,7 +685,7 @@ def write_split(groups, path, version):
                 gmsh.model.mesh.addElementsByType(id_, typ, range(element, element + count), [new[n] for n in nodes])
                 element += count
             gmsh.model.addPhysicalGroup(dim, [id_], id_, name=name)
-        gmsh.option.setNumber("Mesh.MshFileVersion", float(version))
+        gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.write(path)
     finally:
         gmsh.model.remove()
@@ -760,12 +763,12 @@ def run(job_path, build, dim):
         gmsh.model.add(job["model_name"])
         split = build(job, folder)
         generate(job, dim)
-        gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))
+        gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         if split:
             outputs.append((os.path.join(folder, "rotor.msh"), job["rotor_file"]))
             for side, (path, _) in zip(("fixed", "moving"), outputs):
-                write_split(split[side], path, job["msh_version"])
+                write_split(split[side], path)
         else:
             gmsh.write(msh)
         gmsh.write(os.path.join(folder, "mesh.unv"))
