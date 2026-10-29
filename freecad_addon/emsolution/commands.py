@@ -12,16 +12,22 @@ def ask_study():
     dialog.setWindowTitle("New EMSolution Study")
     layout = QtWidgets.QFormLayout(dialog)
     name = QtWidgets.QLineEdit("EMSolution Study")
-    dimension = QtWidgets.QComboBox()
-    dimension.addItems(["3D", "2D"])
     layout.addRow("Name", name)
-    layout.addRow("Dimension", dimension)
+    groups = {}
+    for title, options in (("Dimension", ["3D", "2D"]), ("Movement", ["No movement", "Sliding motion"])):
+        row = QtWidgets.QHBoxLayout()
+        groups[title] = [QtWidgets.QRadioButton(option) for option in options]
+        groups[title][0].setChecked(True)
+        for button in groups[title]:
+            row.addWidget(button)
+        layout.addRow(title, row)
     buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
     layout.addRow(buttons)
     if dialog.exec() == QtWidgets.QDialog.Accepted:
-        return name.text().strip() or "EMSolution Study", dimension.currentText()
+        dimension, movement = (next(b.text() for b in groups[t] if b.isChecked()) for t in ("Dimension", "Movement"))
+        return name.text().strip() or "EMSolution Study", dimension, movement
     return None
 
 
@@ -98,9 +104,9 @@ class NewStudy:
         choice = ask_study()
         if choice is None:
             return
-        label, dimension = choice
+        label, dimension, movement = choice
         doc.openTransaction("New Study")
-        study = objects.make_study(doc, dimension, label)
+        study = objects.make_study(doc, dimension, label, movement)
         taskpanels.attach_view_provider(study)
         doc.commitTransaction()
         doc.recompute()

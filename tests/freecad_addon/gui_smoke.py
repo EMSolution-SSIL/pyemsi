@@ -70,7 +70,7 @@ def main():
             panel.elements.setValue(elements)
         assert panel.accept()
 
-    commands.ask_study = lambda: ("Study", "3D")
+    commands.ask_study = lambda: ("Study", "3D", "No movement")
 
     doc = App.newDocument("Smoke")
     for name, x in (("A", 0), ("B", 10), ("Outside", 40)):  # Outside never joins the main geometry
@@ -1048,7 +1048,7 @@ def main():
     import Part
     from emsolution import geometry
 
-    commands.ask_study = lambda: ("Cross-section", "2D")
+    commands.ask_study = lambda: ("Cross-section", "2D", "No movement")
     Gui.runCommand("EMS_NewStudy")
     for _ in range(5):
         Gui.updateGui()
