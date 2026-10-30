@@ -1568,6 +1568,17 @@ def main():
     made = objects.transfinite_bodies(sym_study)[-1]
     assert [(b.Name, s) for b, s in objects.item_refs(made)] == picks, objects.item_refs(made)
     Gui.Control.closeDialog()
+    # The cell bodies are hidden, the drawing built from them is not: the labels of items on them show.
+    from emsolution import labels
+
+    App.setActiveDocument(sym_doc.Name)
+    for cell in objects.cell_bodies(sym_study):
+        cell.Visibility = False
+    labels.show([made])
+    overlay = next(iter(labels._overlays.values()))
+    overlay.tick()
+    assert overlay.tags or overlay.badges, "no labels on the hidden cell"
+    labels.clear()
     # A cell cut by a Boolean Fragments: a face click on a copy of one block is that block of the cell body.
     frag = symcases.split_coil(sym_doc)
     outer = symcases.sector(43, 50, 10, 15).Area
@@ -1582,6 +1593,61 @@ def main():
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")
     App.closeDocument(doc.Name)
+
+    label_doc = App.newDocument("Labels")
+    label_box = label_doc.addObject("Part::Box", "Box")
+    label_doc.recompute()
+    label_study = objects.make_study(label_doc)
+    App.setActiveDocument(label_doc.Name)
+    App.ParamGet(labels.PREFS).RemBool("LabelsOfOthers")
+    assert not labels.others_wanted(), "the labels of the other items start off"
+    App.ParamGet(labels.PREFS).SetBool("LabelsOfOthers", True)
+    sized = objects.make_mesh_size(label_study, 2.0, [(label_box, "Edge1"), (label_box, "Face1")])
+    objects.make_mesh_size(label_study, 4.0, [(label_box, "")])
+    objects.make_transfinite_edges(label_study, 7, [(label_box, "Edge2")])
+    objects.make_excitation(label_study, "Terminal", [(label_box, "Face2")])  # not a mesh item: never shown with them
+
+    def label_texts():
+        overlay = next(iter(labels._overlays.values()))
+        overlay.tick()  # builds the tags and badges
+        return sorted(t["text"] for t in overlay.tags), [[text for _, _, text in b["items"]] for b in overlay.badges]
+
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(label_doc.Name, sized.Name)  # a click on the item shows its labels only
+    taskpanels._observer.update()
+    assert label_texts() == (["2 mm", "2 mm"], []), label_texts()
+    panel = taskpanels.ItemPanel(sized)  # its panel adds the other items' labels, as the check box says
+    assert panel.others.isChecked()
+    panel.size.setValue(3.0)  # typed, not saved: the tags follow
+    assert label_texts() == (["3 mm", "3 mm", "7"], [["Mesh size: 4 mm"]]), label_texts()
+    panel.size.setValue(2.0)
+    assert label_texts() == (["2 mm", "2 mm", "7"], [["Mesh size: 4 mm"]]), label_texts()
+    panel.others.setChecked(False)
+    assert label_texts() == (["2 mm", "2 mm"], []), label_texts()
+    panel.others.setChecked(True)
+    label_box.Visibility = False  # hiding a body hides its labels
+    assert label_texts() == ([], []), label_texts()
+    label_box.Visibility = True
+    assert label_texts() == (["2 mm", "2 mm", "7"], [["Mesh size: 4 mm"]]), label_texts()
+    panel.close()
+    assert not labels._overlays
+    labels.show([sized])  # closing the document takes its labels with it, and a new view does not inherit them
+    App.closeDocument(label_doc.Name)
+    for _ in range(5):
+        Gui.updateGui()
+    assert not labels._overlays, labels._overlays
+    label_doc = App.newDocument("Labels")
+    label_box = label_doc.addObject("Part::Box", "Box")
+    label_doc.recompute()
+    label_study = objects.make_study(label_doc)
+    sized = objects.make_mesh_size(label_study, 2.0, [(label_box, "Edge1")])
+    labels.show([sized])
+    overlay = next(iter(labels._overlays.values()))
+    overlay.tick()
+    assert [t["text"] for t in overlay.tags] == ["2 mm"], overlay.tags
+    labels.clear()
+    App.closeDocument(label_doc.Name)
+    log.append("labels ok")
 
 
 try:
