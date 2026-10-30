@@ -236,7 +236,6 @@ def write_job(study):
     two_d = study.Dimension == "2D"
     job = {
         "model_name": objects.clean(study.Label),
-        "msh_version": float(study.MshVersion),
         "mesh_file": mesh_file(study),
         "options": mesh_options(study.MeshSizesGroup, study.Dimension),
     }

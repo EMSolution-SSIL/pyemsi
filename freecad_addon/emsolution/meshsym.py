@@ -9,7 +9,7 @@ from collections import Counter
 
 import gmsh
 
-from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split
+from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, MSH_VERSION
 
 
 def _apply(m, p):
@@ -336,7 +336,7 @@ def run(job_path, build):
         gmsh.model.add(job["model_name"])
         _, slide, split = _mesh(job, folder, build)
         point = _marker(slide) if slide else None
-        gmsh.option.setNumber("Mesh.MshFileVersion", float(job["msh_version"]))
+        gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         gmsh.write(os.path.join(folder, "mesh.unv"))
         if slide:
@@ -345,7 +345,7 @@ def run(job_path, build):
                 groups = [(2, ents, id_, name) for id_, (name, ents) in sorted(split.get(side, {}).items())]
                 if side == "moving":
                     groups.append((0, [point], slide["slide_mat_id"], slide["name"]))
-                write_split(groups, path, job["msh_version"])
+                write_split(groups, path)
         else:
             gmsh.write(msh)
     finally:

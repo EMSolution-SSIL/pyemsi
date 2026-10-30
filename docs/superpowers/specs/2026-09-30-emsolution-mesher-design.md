@@ -3,6 +3,9 @@
 Date: 2026-09-30
 Status: draft, waiting for review
 
+Update 2026-10-30: EMSolution reads only Gmsh 4.1, so the Study has no `MshVersion` property (section 5), the job has
+no `msh_version` key (section 8) and the mesher always writes 4.1 (section 9). Where this spec offers `2.2`, ignore it.
+
 ## 1. Goal
 
 A FreeCAD addon that prepares 3D meshes for the EMSolution electromagnetic
