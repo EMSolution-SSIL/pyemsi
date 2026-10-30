@@ -8,7 +8,7 @@ import FreeCADGui as Gui
 from pivy import coin
 from PySide import QtCore, QtWidgets
 
-from . import airshapes, geometry, highlight, icon, jobwriter, objects, validation
+from . import airshapes, geometry, highlight, icon, jobwriter, labels, objects, validation
 from . import symmetry
 
 _active = {}  # document name -> (document instance, Study Name); GUI state only
@@ -544,6 +544,7 @@ class FolderView:
     def highlight_rows(self):
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
         highlight.show([ref for r in rows for ref in self.rows[r][1]])
+        labels.show([self.rows[r][0] for r in rows])
 
     def fill(self):
         if self.study.Document is None:  # deleted objects raise ReferenceError instead
@@ -929,8 +930,10 @@ class SelectionObserver:
             pass  # an open item panel highlights its own selected rows
         elif len(sel) == 1 and objects.is_item(sel[0]):
             highlight.show(objects.item_refs(sel[0]))
+            labels.show(sel)
         else:
             highlight.clear()
+            labels.clear()
         if editing or Gui.activeWorkbench().name() == WORKBENCH:
             return
         if any(objects.is_study_object(o) for o in sel):
@@ -1155,6 +1158,8 @@ class ItemPanel:
         )
         hint.setWordWrap(True)
         layout.addRow(hint)
+        self.others = labels.others_checkbox()
+        layout.addRow(self.others)
         self.name = QtWidgets.QLineEdit(objects.display_name(obj))
         layout.addRow("Name", self.name)
         self.size = None
@@ -1191,10 +1196,29 @@ class ItemPanel:
         buttons.addWidget(remove)
         layout.addRow(buttons)
         self.refresh()
+        labels.show([obj], self.others.isChecked(), {obj.Name: self.current}, {obj.Name: self.unsaved()})
+        for signal in (
+            self.name.textChanged,
+            self.size and self.size.valueChanged,
+            self.elements and self.elements.valueChanged,
+            self.distribution and self.distribution.currentTextChanged,
+        ):
+            if signal is not None:
+                signal.connect(lambda _value: labels.set_values(self.obj, self.unsaved()))
+
+    def unsaved(self):
+        """What the panel shows and has not saved yet, for the labels."""
+        values = {"Name": self.name.text().strip() or objects.display_name(self.obj)}
+        if self.size is not None:
+            values["Size"] = self.size.value()
+        if self.elements is not None:
+            values.update(Elements=self.elements.value(), Distribution=self.distribution.currentText())
+        return values
 
     def refresh(self):
         self.refs.clear()
         self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
+        labels.set_refs(self.obj, self.current)
 
     def highlight_rows(self):
         highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
@@ -1203,6 +1227,7 @@ class ItemPanel:
         """Undo what the open panel changed outside itself."""
         Gui.Selection.removeSelectionGate()
         highlight.clear()
+        labels.clear()
 
     def autoClosedOnDeletedDocument(self):  # FreeCAD closed the panel with its document
         self.close()
@@ -1319,6 +1344,8 @@ class MaterialPanel:
         hint = QtWidgets.QLabel(f"{text} Only the Study's {region} can be picked.")
         hint.setWordWrap(True)
         layout.addRow(hint)
+        self.others = labels.others_checkbox()
+        layout.addRow(self.others)
         self.name = QtWidgets.QLineEdit(objects.display_name(obj))
         self.typed = not new  # the name follows the suggestion until it is typed in
         self.name.textEdited.connect(self.name_typed)
@@ -1358,6 +1385,13 @@ class MaterialPanel:
         if refs:
             self.take(list(refs))
         self.refresh()
+        labels.show([obj], self.others.isChecked(), {obj.Name: self.current}, {obj.Name: self.unsaved()})
+        self.material.currentIndexChanged.connect(lambda _index: labels.set_values(self.obj, self.unsaved()))
+
+    def unsaved(self):
+        """What the panel shows and has not saved yet, for the labels."""
+        lib = self.lib()
+        return {"Material": lib.Label if lib else objects.NO_MATERIAL}
 
     def name_typed(self, _text):
         self.typed = True
@@ -1382,6 +1416,7 @@ class MaterialPanel:
         gone = self.gone()
         self.note.setText("\n".join(f'"{objects.display_name(m)}" will be removed: it has nothing left.' for m in gone))
         self.note.setVisible(bool(gone))
+        labels.set_refs(self.obj, self.current)
 
     def highlight_rows(self):
         highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
@@ -1452,6 +1487,7 @@ class MaterialPanel:
         """Undo what the open panel changed outside itself."""
         Gui.Selection.removeSelectionGate()
         highlight.clear()
+        labels.clear()
 
     def autoClosedOnDeletedDocument(self):  # FreeCAD closed the panel with its document
         self.close()
