@@ -30,10 +30,10 @@ def feature(doc, group, name, shape):
     return obj
 
 
-def fragments(doc, group, name, inputs):
+def fragments(doc, group, name, inputs, mode="Standard"):
     obj = SplitFeatures.makeBooleanFragments(name)
     obj.Objects = inputs
-    obj.Mode = "Standard"
+    obj.Mode = mode
     group.addObject(obj)
     doc.recompute()
     for o in inputs + [s for i in inputs for s in getattr(i, "Sources", [])]:
@@ -266,6 +266,109 @@ def sliced_t_3d():
     return t_junction_3d(sliced=True)
 
 
+# --- 8, 9: 3D, a sphere octant as an O-grid: a cube and three outer blocks, then a rod on it ----------------------
+
+
+def _turn(p, k):
+    """The point p with its axes shifted k places: x -> y -> z -> x."""
+    return V(*(p[(i - k) % 3] for i in range(3)))
+
+
+def _ogrid_parts(doc, group, radius, cube):
+    """The ball octant, the cube at its corner and the 3 faces that cut the outer shell into 3 blocks. Each face has the
+    cube's edge on one side, the great-circle arc to the middle of the octant's face on the other, and lies in a plane
+    x = y, y = z or z = x."""
+    s, t = radius / math.sqrt(2), radius / math.sqrt(3)
+    parts = [
+        feature(doc, group, "ball", Part.makeSphere(radius, V(), V(0, 0, 1), 0, 90, 90)),
+        feature(doc, group, "cube", Part.makeBox(cube, cube, cube)),
+    ]
+    for k in range(3):
+        p0, p1, q, m = (_turn(p, k) for p in (V(cube, cube, 0), V(s, s, 0), V(cube, cube, cube), V(t, t, t)))
+        arc = Part.Arc(p1, (p1 + m).normalize() * radius, m).toShape()
+        wire = Part.Wire([Part.makeLine(p0, p1), arc, Part.makeLine(m, q), Part.makeLine(q, p0)])
+        parts.append(feature(doc, group, f"cut_{'xyz'[k]}{'xyz'[(k + 1) % 3]}", Part.Face(wire)))
+    return parts
+
+
+def _ogrid_edges(body, study, cube, cube_el, radial_el):
+    """Edges of an O-grid: the cube's edges and all arcs share cube_el (a block's opposite sides are an arc and a cube
+    edge), every other straight edge is a radial one."""
+    even = edges_where(body, lambda e: _is_arc(e) or _is_line(e) and abs(e.Length - cube) < 1e-6)
+    radial = edges_where(body, lambda e: _is_line(e) and abs(e.Length - cube) > 1e-6 and not _axial(e))
+    objects.make_transfinite_edges(study, cube_el, even).Label = f"cube and arcs {cube_el} el"
+    objects.make_transfinite_edges(study, radial_el, radial, "Bump", 0.3).Label = f"radials {radial_el} el bump"
+
+
+# The pole of the sphere is a zero-length edge with no curve type: it is neither an arc nor a line.
+def _is_arc(e):
+    return e.Length > 1e-9 and isinstance(e.Curve, Part.Circle)
+
+
+def _is_line(e):
+    return e.Length > 1e-9 and isinstance(e.Curve, Part.Line)
+
+
+def _axial(e):
+    return _is_line(e) and e.Length > 30
+
+
+def sphere_octant():
+    doc, group, study, path = new_doc("8_sphere_octant", "3D")
+    ball = fragments(doc, group, "ogrid", _ogrid_parts(doc, group, 15, 6), "CompSolid")
+    _ogrid_edges(ball, study, 6, 4, 5)
+    objects.make_transfinite_body(study, [ball])
+    objects.make_recombine(study, [ball])
+    return doc, study, path
+
+
+def at(x, z):
+    """A point of the plane y = 0, where the rod's profile lies."""
+    return V(x, 0, z)
+
+
+def arc(p, q):
+    """The arc of the circle about the origin from the (x, z) point p to q, the short way round."""
+    mid = at(*(p[i] + q[i] for i in range(2))).normalize() * math.hypot(*p)
+    return Part.Arc(at(*p), mid, at(*q)).toShape()
+
+
+def rod_with_cap():
+    """The sphere octant with a quarter rod on its flat face y = 0: the face's 3 blocks (the cube's square and 2 outer
+    ones) extruded 40 mm along -Y."""
+    doc, group, study, path = new_doc("9_rod_with_cap", "3D")
+    r, c, length = 15, 6, 40
+    s = r / math.sqrt(2)
+    parts = _ogrid_parts(doc, group, r, c)
+    profiles = {
+        "rod_core": Part.makePolygon([at(0, 0), at(c, 0), at(c, c), at(0, c), at(0, 0)]),
+        "rod_x": Part.Wire(
+            [
+                Part.makeLine(at(c, 0), at(r, 0)),
+                arc((r, 0), (s, s)),
+                Part.makeLine(at(s, s), at(c, c)),
+                Part.makeLine(at(c, c), at(c, 0)),
+            ]
+        ),
+        "rod_z": Part.Wire(
+            [
+                Part.makeLine(at(0, c), at(c, c)),
+                Part.makeLine(at(c, c), at(s, s)),
+                arc((s, s), (0, r)),
+                Part.makeLine(at(0, r), at(0, c)),
+            ]
+        ),
+    }
+    for name, wire in profiles.items():
+        parts.append(feature(doc, group, name, Part.Face(wire).extrude(V(0, -length, 0))))
+    body = fragments(doc, group, "rod_fragments", parts, "CompSolid")
+    _ogrid_edges(body, study, c, 4, 5)
+    objects.make_transfinite_edges(study, 8, edges_where(body, _axial)).Label = "axial 8 el"
+    objects.make_transfinite_body(study, [body])
+    objects.make_recombine(study, [body])
+    return doc, study, path
+
+
 # --- run ------------------------------------------------------------------------------------------------------------
 
 MESHER = os.path.join(HERE, "..", "..", "freecad_addon", "emsolution", "mesher.py")
@@ -366,7 +469,17 @@ def challenges():
     def core_not_recombined_3d(doc, study):
         doc.removeObject(objects.recombine_items(study)[0].Name)
 
+    def one_arc_5_3d(doc, study):
+        body = doc.getObject("ogrid")
+        recount(study, body, lambda e: _is_arc(e) and abs(mid(e).z) < 1e-6 and abs(mid(e).y - 5.74) < 0.1, 5)
+
+    def one_axial_9_3d(doc, study):
+        body = doc.getObject("rod_fragments")
+        recount(study, body, lambda e: _axial(e) and mid(e).x > 14 and mid(e).z < 1, 9)
+
     for build, change, title in [
+        (sphere_octant, one_arc_5_3d, "8 + one arc 5 el"),
+        (rod_with_cap, one_axial_9_3d, "9 + one outer rod edge 9 el"),
         (ring_3d, pick_a_face_3d, "5 + a face picked in 3D"),
         (ring_3d, outer_arc_9_3d, "5 + one outer arc 9 el"),
         (partial_3d, holed_structured_3d, "6 + holed block structured"),
@@ -390,7 +503,18 @@ def challenges():
 
 
 if __name__ == "__main__":
-    for build in (ring_sectors, mixed, t_junction, coil_traced, ring_3d, partial_3d, t_junction_3d, sliced_t_3d):
+    for build in (
+        ring_sectors,
+        mixed,
+        t_junction,
+        coil_traced,
+        ring_3d,
+        partial_3d,
+        t_junction_3d,
+        sliced_t_3d,
+        sphere_octant,
+        rod_with_cap,
+    ):
         doc, study, path = build()
         doc.recompute()
         doc.saveAs(path)
