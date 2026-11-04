@@ -73,6 +73,7 @@ def validate(study):
     if symmetric:  # mesh settings may sit on the cell bodies, which are not in the main geometry
         with_air |= {b.Name for b in objects.cell_bodies(study)}
     _skipped_picks(study, r)
+    _body_overlaps(bodies, study.Dimension, r)
     _links(study, with_air, r)
     _settings(study, with_air, r)
     if symmetric:
@@ -105,11 +106,39 @@ def _skipped_picks(study, r):
             users = [o.Label for o in resolved if obj.Name in geometry.inputs(o)]
             if users:
                 r.warning(
-                    f"{obj.Label} is not meshed on its own: {', '.join(users)} is made from it."
-                    " Use a copy of it (or the Body) as the Boolean tool if you want both.",
-                    obj,
-                    [(obj, "")],
+                    f"{obj.Label} is not meshed on its own: {', '.join(users)} is made from it.", obj, [(obj, "")]
                 )
+
+
+def _body_overlaps(bodies, dimension, r):
+    """Bodies may only touch: where two overlap the mesher cannot give the region to either. Main and moving bodies
+    alike; the Air Region is not a body, the bodies win where they overlap it."""
+    unit = "mm³" if dimension == "3D" else "mm²"
+
+    def size(shape):
+        return shape.Volume if dimension == "3D" else shape.Area
+
+    shapes = [(b, geometry.global_shape(b)) for b in bodies]
+    for i, (a, sa) in enumerate(shapes):
+        for b, sb in shapes[i + 1 :]:
+            if not sa.BoundBox.intersect(sb.BoundBox):
+                continue
+            try:
+                common = sa.common(sb)
+            except Exception:  # OCC refuses some pairs; the mesher still reports an overlap
+                continue
+            amount = size(common)
+            if amount <= 1e-6 * min(size(sa), size(sb)):
+                continue
+            pieces = common.Solids if dimension == "3D" else common.Faces
+            c = max(pieces, key=size).CenterOfMass
+            r.error(
+                f"Bodies {objects.display_name(a)} and {objects.display_name(b)} overlap by {amount:.3g} {unit}"
+                f" near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g}). Bodies may only touch: make them with Part Slice or"
+                " Boolean Fragments, or cut one out of the other.",
+                b,
+                [(a, ""), (b, "")],
+            )
 
 
 def _kind(item):

@@ -1271,7 +1271,7 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         body.Visibility = False  # hidden final geometry must still be included
         found, errors = geometry.collect([root, part, body], "3D")
-        self.assertEqual([obj.Name for obj in found], [body.Name, cut.Name])
+        self.assertEqual([obj.Name for obj in found], [body.Name, tool.Name, cut.Name], "a Cut's tool is its own body")
         self.assertEqual(errors, [])
 
     def test_planar_sources_are_checked_in_global_coordinates(self):
@@ -1314,6 +1314,46 @@ class StudyTest(unittest.TestCase):
         aligned = self.sketched_face_aligned_to(coil)
         self.assertEqual(geometry.collect([aligned, coil], "2D"), ([aligned, coil], []))
 
+    def air_cut_by(self, tool):
+        """An air box around the coil at x = 10 with tool cut out of it."""
+        box = self.box("AirBox", 0, 30)
+        cut = self.doc.addObject("Part::Cut", "Air")
+        cut.Base, cut.Tool = box, tool
+        self.doc.recompute()
+        return box, cut
+
+    def test_the_tool_of_a_cut_stays_a_body(self):
+        coil = self.box("Coil", 10)
+        box, air = self.air_cut_by(coil)
+        self.assertEqual(geometry.collect([air, coil], "3D"), ([air, coil], []))
+        self.assertEqual(geometry.collect([air, box], "3D"), ([air], []), "the base is inside the result")
+        self.assertEqual(geometry.tree(self.doc, "3D"), [(coil, None), (air, None)])
+
+    def test_a_link_to_the_tool_of_a_cut_keeps_the_tool_a_body(self):
+        coil = self.box("Coil", 10)
+        link = self.doc.addObject("App::Link", "CoilLink")
+        link.LinkedObject = coil
+        _, air = self.air_cut_by(link)
+        self.assertEqual(geometry.collect([air, coil], "3D"), ([air, coil], []))
+
+    def test_a_body_only_an_edge_or_an_expression_refers_to_stays_a_body(self):
+        coil = self.box("Coil", 10)
+        ruled = self.doc.addObject("Part::RuledSurface", "Ruled")
+        ruled.Curve1, ruled.Curve2 = (coil, ["Edge1"]), (coil, ["Edge3"])
+        sized = self.box("Sized", 50)
+        sized.setExpression("Length", "Coil.Length * 2")
+        self.doc.recompute()
+        self.assertNotIn(coil.Name, geometry.inputs(ruled))
+        self.assertNotIn(coil.Name, geometry.inputs(sized))
+        self.assertEqual(geometry.collect([sized, coil], "3D"), ([sized, coil], []))
+
+    def test_the_source_of_a_mirror_stays_a_body(self):
+        coil = self.box("Coil", 10)
+        mirror = self.doc.addObject("Part::Mirroring", "Mirror")
+        mirror.Source, mirror.Normal = coil, App.Vector(1, 0, 0)
+        self.doc.recompute()
+        self.assertEqual(geometry.collect([coil, mirror], "3D"), ([coil, mirror], []))
+
     def test_2d_faces_may_be_in_the_zx_plane_but_not_in_both(self):
         xy, zx = self.face("XY"), self.face("ZX")
         zx.Placement = App.Placement(
@@ -1350,7 +1390,7 @@ class StudyTest(unittest.TestCase):
         self.doc.addObject("App::DocumentObjectGroup", "Empty")
         flat = self.face("Flat")
         self.doc.recompute()
-        self.assertEqual(geometry.tree(self.doc, "3D"), [(part, [(a, None)]), (cut, None)])
+        self.assertEqual(geometry.tree(self.doc, "3D"), [(part, [(a, None)]), (c, None), (cut, None)])
         self.assertEqual(geometry.tree(self.doc, "2D"), [(flat, None)])
         self.assertTrue(geometry.whole(part, "3D"))
         self.assertFalse(geometry.whole(part, "2D"), "a container of solids is not 2D geometry")
@@ -1745,13 +1785,30 @@ print('RESTORE PASS')
         self.assertEqual(len(errors), 3, errors)
 
     def test_body_picked_together_with_a_cut_made_from_it_is_a_warning(self):
-        air, coil = self.box("AirBox", 0, 30), self.box("Coil", 10)
-        cut = self.doc.addObject("Part::Cut", "Air")
-        cut.Base, cut.Tool = air, coil
-        self.doc.recompute()
-        self.include(cut, coil)
+        coil = self.box("Coil", 10)
+        box, cut = self.air_cut_by(coil)
+        self.include(cut, coil, box)
         (warning,) = [w for w in self.problems(validation.WARNING) if "not meshed on its own" in w]
-        self.assertTrue(warning.startswith("Coil is not meshed on its own: Air is made from it."), warning)
+        self.assertEqual(warning, "AirBox is not meshed on its own: Air is made from it.")
+        self.assertEqual(self.problems(validation.ERROR), [])
+
+    def test_overlapping_bodies_are_an_error(self):
+        a, b, c = self.box("A"), self.box("B", 5), self.box("C", 10)  # A and B overlap; A and C only touch
+        self.include(a, b, c)
+        errors = [e for e in self.problems(validation.ERROR) if "overlap" in e]
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(errors[0].startswith("Bodies A and B overlap by 500 mm³ near (7.5, 5, 5)."), errors[0])
+        self.assertTrue(errors[1].startswith("Bodies B and C overlap"), errors[1])
+        self.assertStudyError("Bodies A and B overlap")
+
+    def test_overlapping_faces_are_an_error_in_2d(self):
+        a, b, c = self.face("A"), self.face("B"), self.face("C")
+        b.Placement.Base, c.Placement.Base = App.Vector(5, 5, 0), App.Vector(-10, 0, 0)  # C touches A
+        study = objects.make_study(self.doc, "2D", "Section")
+        study.MainMode, study.MainObjects = "Manual", [a, b, c]
+        errors = [p.text for p in validation.validate(study) if "overlap" in p.text]
+        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(errors[0].startswith("Bodies A and B overlap by 25 mm² near (7.5, 7.5, 0)."), errors[0])
 
     def test_body_a_sketch_only_references_is_not_reported_as_skipped(self):
         coil = self.doc.addObject("Part::Feature", "Coil")

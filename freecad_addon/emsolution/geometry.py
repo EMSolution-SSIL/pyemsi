@@ -36,26 +36,49 @@ def plane_of(face):
     return None
 
 
-def inputs(obj):
-    """Names of the objects obj is made from, in its document. A sketch's links (external geometry, attachment)
-    only align it, so the walk does not go through a sketch: a face whose sketch traces another body's edge is
-    not made from that body."""
-    found, stack = set(), list(obj.OutList)
-    while stack:
-        dep = stack.pop()
-        if dep.Name in found or dep.Document != obj.Document:
+OUTSIDE = {"Part::Cut": "Tool", "Part::Mirroring": "Source"}  # the input whose volume the result leaves out
+
+
+def _made_from(obj):
+    """The objects whose volume obj holds: those it links as a whole. A link to an edge, face or vertex (a ruled
+    surface's curves), an expression, a hidden back-link (a PartDesign feature's Body) and the input in OUTSIDE
+    only shape or place obj."""
+    out, skip, found = obj.OutList, OUTSIDE.get(obj.TypeId), []
+    for prop in obj.PropertiesList:
+        kind = obj.getTypeIdOfProperty(prop)
+        if prop == skip or not (kind.startswith("App::PropertyLink") or kind.startswith("App::PropertyXLink")):
             continue
-        found.add(dep.Name)
-        if not dep.isDerivedFrom("Sketcher::SketchObject"):
-            stack += dep.OutList
+        value = obj.getPropertyByName(prop)
+        for item in value if isinstance(value, list) else [value]:
+            if isinstance(item, tuple):  # (object, sub-elements)
+                item, subs = item[0], item[1] if len(item) > 1 else ()
+                if any([subs] if isinstance(subs, str) else subs):
+                    continue
+            if isinstance(item, App.DocumentObject) and item in out:
+                found.append(item)
+    return found
+
+
+def inputs(obj):
+    """Names of the objects obj is made from, in its document: the walk follows _made_from and does not go through a
+    sketch, whose links (external geometry, attachment) only align it. The tool of a Cut, which the Cut leaves out,
+    and a body a sketch or a ruled surface only traces are not inputs."""
+    found, stack = set(), [obj]
+    while stack:
+        for dep in _made_from(stack.pop()):
+            if dep.Name in found or dep.Document != obj.Document:
+                continue
+            found.add(dep.Name)
+            if not dep.isDerivedFrom("Sketcher::SketchObject"):
+                stack.append(dep)
     return found
 
 
 def collect(roots, dimension):
     """Return final geometry objects and diagnostics, in source order.
 
-    Bodies are atomic. A Part result consumes its dependencies, so a Boolean and
-    its operands do not become three overlapping regions. Visibility is irrelevant.
+    Bodies are atomic. A Part result consumes its inputs, so a Fuse and its operands do not become three
+    overlapping regions; the tool of a Cut stays a body of its own. Visibility is irrelevant.
     """
     candidates, errors, visited = [], [], set()
 
@@ -133,9 +156,7 @@ def region(study, name):
         roots = []
     resolved, errors = collect(roots, study.Dimension)
     if not resolved and not errors:
-        errors.append(
-            "No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree."
-        )
+        errors.append("No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree.")
     return resolved, errors
 
 
