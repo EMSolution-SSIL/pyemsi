@@ -485,7 +485,7 @@ def _transfinite(study, bodies, r):
             continue
         for t, _, whole, faces in mine:
             if whole:
-                groups = [("", range(1, len(b.Shape.Edges) + 1))]
+                groups = [("", _edge_numbers(b))]
             else:
                 groups = [(f" {f}", _edge_numbers(b, f)) for f in faces]
             for where, numbers in groups:
@@ -509,10 +509,15 @@ def _transfinite(study, bodies, r):
                     r.error(text, t, [(b, sub)])
 
 
-def _edge_numbers(body, face):
-    """Numbers N of the EdgeN of body that bound the given face."""
-    edges = body.Shape.getElement(face).Edges
-    return [i for i, e in enumerate(body.Shape.Edges, 1) if any(e.isSame(f) for f in edges)]
+def _edge_numbers(body, face=None):
+    """Numbers N of the EdgeN of body that bound the given face (all of body without one). A zero-length edge, the
+    pole of a sphere, is left out: it cannot be picked, and the mesher does not need it."""
+    edges = None if face is None else body.Shape.getElement(face).Edges
+    return [
+        i
+        for i, e in enumerate(body.Shape.Edges, 1)
+        if e.Length > 1e-9 and (edges is None or any(e.isSame(f) for f in edges))
+    ]
 
 
 def _on_face(body, face, vertex):

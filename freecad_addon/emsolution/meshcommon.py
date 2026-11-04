@@ -143,7 +143,7 @@ def _loop(face, curves, ends, at, start, label):
 def _set_face(face, chosen, curve_set, label):
     """Check one face of a structured body (R4, R6) and make it transfinite. curve_set: curve -> (nodes, ...).
     label: who owns the face, for the messages: "structured body Core", or "structured body Core Face2"."""
-    curves = _boundary(2, face)
+    curves = [c for c in _boundary(2, face) if gmsh.model.occ.getMass(1, c) > 1e-9]  # not the pole of a sphere
     if any(c not in curve_set for c in curves):
         raise JobError(f"{label}: face at {_at(2, face)} has edges without Transfinite Edges")
     ends = {c: _boundary(1, c) for c in curves}
