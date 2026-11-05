@@ -426,6 +426,7 @@ class AirTest(unittest.TestCase):
 
     def test_job_lists_moving_mat_ids(self):
         self.sliding(["A", "B"], ["M"])
+        self.doc.getObject("B").Placement.Base = App.Vector(0, 10, 0)  # beside A: bodies may only touch
         objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
         objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=15, MotionAxis="Y")
         self.doc.recompute()

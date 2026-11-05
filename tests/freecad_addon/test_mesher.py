@@ -95,6 +95,34 @@ def write_revolved(path, p, q, a0, a1):
         gmsh.finalize()
 
 
+def write_sphere_shell(path, outer, inner):
+    """The octant of a spherical shell. Both spherical faces have the pole of their sphere, a zero-length edge, on a
+    corner."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        big = occ.addSphere(0, 0, 0, outer, angle1=0, angle2=math.pi / 2, angle3=math.pi / 2)
+        small = occ.addSphere(0, 0, 0, inner, angle1=0, angle2=math.pi / 2, angle3=math.pi / 2)
+        occ.cut([(3, big)], [(3, small)])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_arc(path, p, q, centre):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        occ.addCircleArc(occ.addPoint(*p), occ.addPoint(*centre), occ.addPoint(*q))
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
 def read_nodes(path):
     """[(x, y, z)] of the nodes of a mesh file, rounded to 1e-9."""
     gmsh.initialize()
@@ -616,6 +644,33 @@ class MesherTest(unittest.TestCase):
         last = r.stderr.strip().splitlines()[-1]
         self.assertTrue(last.startswith("ERROR:"), last)
         self.assertIn("7 faces, needs 5 or 6", last)
+
+    def test_structured_sphere_pole_needs_no_transfinite_edge(self):
+        outer, inner = 1.5, 0.75  # a spherical face has its pole on a corner: a zero-length edge Gmsh does not need
+        write_sphere_shell(self.geo("vol_1.brep"), outer, inner)
+        axes = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
+        rays = [(tuple(inner * c for c in d), tuple(outer * c for c in d)) for d in axes]
+        n = 0
+        for radius in (inner, outer):
+            for k in range(3):
+                n += 1
+                p, q = (tuple(radius * c for c in axes[(k + i) % 3]) for i in range(2))
+                write_arc(self.geo(f"tedge_2_{n}.brep"), p, q, (0, 0, 0))
+        tf = {
+            "bodies": [{"name": "Core", "mat_id": 1, "corner_files": []}],
+            "edges": [
+                self.edge_item("tedge_1", rays, 3),
+                {
+                    "name": "tedge_2",
+                    "nodes": 4,
+                    "distribution": "Uniform",
+                    "coef": 1.0,
+                    "files": [f"geometry/tedge_2_{k}.brep" for k in range(1, n + 1)],
+                },
+            ],
+        }
+        r = self.run_job([self.vol(1, "Core", "vol_1.brep")], transfinite=tf, recombine=[1])
+        self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_folder_with_spaces_and_persian_letters(self):
         self.dir = os.path.join(self.tmp.name, "my model \u0645\u062f\u0644")

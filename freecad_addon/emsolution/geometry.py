@@ -36,26 +36,65 @@ def plane_of(face):
     return None
 
 
-def inputs(obj):
-    """Names of the objects obj is made from, in its document. A sketch's links (external geometry, attachment)
-    only align it, so the walk does not go through a sketch: a face whose sketch traces another body's edge is
-    not made from that body."""
-    found, stack = set(), list(obj.OutList)
-    while stack:
-        dep = stack.pop()
-        if dep.Name in found or dep.Document != obj.Document:
+# The input whose volume the result leaves out, by TypeId or, for a Python feature, by its Proxy class: a Cut's tool,
+# a mirror image's source and a Draft Clone's original (a copy placed elsewhere), a Part Join Cutout's tool.
+OUTSIDE = {"Part::Cut": "Tool", "Part::Mirroring": "Source", "Clone": "Objects", "FeatureCutout": "Tool"}
+
+
+def _kind(obj):
+    proxy = getattr(obj, "Proxy", None)
+    return type(proxy).__name__ if proxy is not None else obj.TypeId
+
+
+def _linked(item):
+    """The objects a link value names as a whole: an object, or (object, subnames) where a subname ending in "."
+    names an object inside it (a Link into a Part: "AirBox.") and one ending in an element ("Edge3") is a reference."""
+    if not isinstance(item, tuple):
+        return [item]
+    obj, subs = item[0], item[1] if len(item) > 1 else ()
+    subs = [subs] if isinstance(subs, str) else list(subs)
+    if not any(subs):
+        return [obj]
+    return [obj.getSubObject(s, retType=1) for s in subs if s and not s.rsplit(".", 1)[-1]]
+
+
+def _made_from(obj):
+    """The objects whose volume obj holds: those it links as a whole. A link to an edge, face or vertex (a ruled
+    surface's curves), an expression, a hidden back-link (a PartDesign feature's Body) and the input in OUTSIDE
+    only shape or place obj."""
+    out, skip, found = obj.OutList, OUTSIDE.get(_kind(obj)), []
+    for prop in obj.PropertiesList:
+        kind = obj.getTypeIdOfProperty(prop)
+        if prop == skip or not (kind.startswith("App::PropertyLink") or kind.startswith("App::PropertyXLink")):
             continue
-        found.add(dep.Name)
-        if not dep.isDerivedFrom("Sketcher::SketchObject"):
-            stack += dep.OutList
+        value = obj.getPropertyByName(prop)
+        for item in value if isinstance(value, list) else [value]:
+            if not (isinstance(item, tuple) and item[0] in out) and item not in out:
+                continue
+            found += [o for o in _linked(item) if isinstance(o, App.DocumentObject)]
+    return found
+
+
+def inputs(obj):
+    """Names of the objects obj is made from, in its document: the walk follows _made_from and does not go through a
+    sketch, whose links (external geometry, attachment) only align it. The tool of a Cut, which the Cut leaves out,
+    and a body a sketch or a ruled surface only traces are not inputs."""
+    found, stack = set(), [obj]
+    while stack:
+        for dep in _made_from(stack.pop()):
+            if dep.Name in found or dep.Document != obj.Document:
+                continue
+            found.add(dep.Name)
+            if not dep.isDerivedFrom("Sketcher::SketchObject"):
+                stack.append(dep)
     return found
 
 
 def collect(roots, dimension):
     """Return final geometry objects and diagnostics, in source order.
 
-    Bodies are atomic. A Part result consumes its dependencies, so a Boolean and
-    its operands do not become three overlapping regions. Visibility is irrelevant.
+    Bodies are atomic. A Part result consumes its inputs, so a Fuse and its operands do not become three
+    overlapping regions; the tool of a Cut stays a body of its own. Visibility is irrelevant.
     """
     candidates, errors, visited = [], [], set()
 
@@ -133,9 +172,7 @@ def region(study, name):
         roots = []
     resolved, errors = collect(roots, study.Dimension)
     if not resolved and not errors:
-        errors.append(
-            "No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree."
-        )
+        errors.append("No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree.")
     return resolved, errors
 
 

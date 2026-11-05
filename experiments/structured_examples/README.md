@@ -1,6 +1,6 @@
 # Structured mesh examples (2D and 3D)
 
-Seven Studies to try face picks, corners and partly structured regions: four in 2D and three in 3D. Each opens set up and meshes as it is.
+Nine Studies to try face picks, corners and partly structured regions: four in 2D and five in 3D. Each opens set up and meshes as it is.
 The challenges then break or extend it. Every expected result below was checked headless with
 `pixi run -e addon python experiments/structured_examples/build_examples.py --challenges`, which also rebuilds the files.
 
@@ -92,3 +92,33 @@ in two, so the tall block has 7 faces.
   extra faces.
 - **Fix:** `7_3d_t_junction_sliced.FCStd` builds the tall block as two cubes. Then all edges are 4 el, giving
   256 hexahedra.
+
+## 8. Sphere octant: an O-grid of 4 blocks
+
+One eighth of a ball (radius 15) cannot be one hexahedral block, because its three flat faces meet in a corner.
+The usual way out is an O-grid: a cube (6 mm) at the corner, and the shell around it cut into 3 blocks. Each block
+has 6 faces, and its sphere face is a quad. The cutting faces are `cut_xy`, `cut_yz` and `cut_zx`: each lies in the
+plane x = y (and so on), from the cube's edge out to the sphere, and ends at the middle of the octant's face.
+`ogrid` is their Fragments in CompSolid mode (the loose cutting faces are gone, and the cube is a solid of its own).
+
+It has `cube and arcs 4 el` and `radials 5 el bump`. A block's opposite sides are always an arc and a cube edge,
+so those two share one count.
+
+- **As is:** 304 hexahedra: 64 in the cube, 80 in each block.
+- **The pole:** the ball's pole (0, 0, 15) is a corner of one block, so that block's sphere face has a zero-length
+  edge there. It cannot be picked and needs no Transfinite Edges: the mesher and Validate Study skip it.
+  Before that fix, this Study was refused with *has edges without Transfinite Edges: Edge5*.
+- **Challenge:** move the arc from (15, 0, 0) towards (10.6, 10.6, 0) into a new Transfinite Edges with 5 elements.
+  Expect *face at (12.5, 5, 5) opposite sides have 4/5 and 4/4 elements; they must match*.
+
+## 9. Rod with a spherical cap
+
+Example 8 with a quarter rod on its flat face y = 0: that face is the cube's square and 2 outer blocks, which are
+extruded 40 mm along -Y (`rod_core`, `rod_x`, `rod_z`). The rod's blocks share faces with the cap's, so the
+hexahedra run from the rod through the sphere. 7 solids in `rod_fragments`.
+
+It has the same two items as 8, and `axial 8 el` for the rod's long edges.
+
+- **As is:** 752 hexahedra: the 304 of the cap, and 128 + 160 + 160 in the rod.
+- **Challenge:** give the rod's outer edge at (15, -20, 0) 9 elements instead of 8. Expect
+  *face at (10.5, -20, 0) opposite sides have 9/8 and 5/5 elements; they must match*.
