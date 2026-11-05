@@ -113,21 +113,27 @@ def _periodic(sides, dim):
                     break
 
 
+def _entity(dim, e):
+    """(entity, {element type: node tags}, nodes used, element centres, area or volume) of a meshed entity."""
+    types, tags, nodes = gmsh.model.mesh.getElements(dim, e)
+    conn = {int(t): [int(n) for n in ns] for t, ns in zip(types, nodes)}
+    used = sorted({n for ns in conn.values() for n in ns})
+    per = len(nodes[0]) // len(tags[0])
+    centres = []
+    for k in (0, len(tags[0]) // 2, len(tags[0]) - 1):  # first, middle and last element: surely inside
+        xyz = [gmsh.model.mesh.getNode(int(t))[0] for t in nodes[0][k * per : (k + 1) * per]]
+        centres.append([sum(p[i] for p in xyz) / per for i in range(3)])
+    return e, conn, used, centres, gmsh.model.occ.getMass(dim, e)
+
+
 def _cell_entities(side, dim):
-    """[(entity, {element type: node tags}, nodes used, element centres, area or volume)] of the side's cell bodies."""
-    out = []
-    for id_ in side["cells"]:
-        for e in gmsh.model.getEntitiesForPhysicalGroup(dim, id_):
-            types, tags, nodes = gmsh.model.mesh.getElements(dim, e)
-            conn = {int(t): [int(n) for n in ns] for t, ns in zip(types, nodes)}
-            used = sorted({n for ns in conn.values() for n in ns})
-            per = len(nodes[0]) // len(tags[0])
-            centres = []
-            for k in (0, len(tags[0]) // 2, len(tags[0]) - 1):  # first, middle and last element: surely inside
-                xyz = [gmsh.model.mesh.getNode(int(t))[0] for t in nodes[0][k * per : (k + 1) * per]]
-                centres.append([sum(p[i] for p in xyz) / per for i in range(3)])
-            out.append((e, conn, used, centres, gmsh.model.occ.getMass(dim, e)))
-    return out
+    """[_entity] of the side's cell bodies."""
+    return [_entity(dim, e) for id_ in side["cells"] for e in gmsh.model.getEntitiesForPhysicalGroup(dim, id_)]
+
+
+def _cell_patches(side, dim):
+    """[_entity] of the boundary entities of the side's cell bodies (faces in 3D); none when it has no excitations."""
+    return [_entity(dim - 1, f) for f in _side_seams(side, dim)] if side.get("excitations") else []
 
 
 def _land(sides, cells, folder, dim):
@@ -170,17 +176,81 @@ def _land(sides, cells, folder, dim):
         gmsh.model.setCurrent(current)
 
 
-def _copy(sides, cells, labels, dim):
+def _on_face(dim, t, box, points, tol):
+    """True when every point lies on entity t: projected onto it within tol (a plane's face projects anywhere on the
+    plane), inside its bounding box and inside the trimmed face."""
+    flat = [x for p in points for x in p]
+    near = gmsh.model.getClosestPoint(dim, t, flat)[0]
+    if any(math.dist(p, near[3 * k : 3 * k + 3]) > tol for k, p in enumerate(points)):
+        return False
+    if any(not box[i] - tol <= p[i] <= box[i + 3] + tol for p in points for i in range(3)):
+        return False
+    return gmsh.model.isInside(dim, t, flat) == len(points)
+
+
+def _land_surfaces(sides, patches, folder, dim):
+    """labels[side][patch][copy] = the side's excitation that copy of the cell boundary patch lands on (all its element
+    centres lie on one of its faces), or None: not copied as a surface. A copy landing where an earlier one did (the
+    face two copies share) is None too. The landed patches must cover each excitation face exactly, or the cell is not
+    split where the face ends."""
+    box = gmsh.model.getBoundingBox(-1, -1)
+    tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
+    tags, coords, _ = gmsh.model.mesh.getNodes()
+    xyz = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+    current = gmsh.model.getCurrent()
+    gmsh.model.add("excitations")
+    try:
+        labels = []
+        for side, ents in zip(sides, patches):
+            files = [(x, f) for x in side.get("excitations", []) for f in x["files"]]
+            faces = [[t for _, t in import_brep(os.path.join(folder, f), dim - 1)] for _, f in files]
+            gmsh.model.occ.synchronize()
+            targets = [(k, t, gmsh.model.getBoundingBox(dim - 1, t)) for k, ts in enumerate(faces) for t in ts]
+            areas = [sum(gmsh.model.occ.getMass(dim - 1, t) for t in ts) for ts in faces]
+            covered = [0.0] * len(files)
+            seen, side_labels = set(), []
+            for _, _, used, centres, area in ents:
+                copies = []
+                for m in side["transforms"]:
+                    moved = [_apply(m, p) for p in centres]
+                    hit = next((k for k, t, b in targets if _on_face(dim - 1, t, b, moved, tol)), None)
+                    if hit is not None:
+                        key = tuple(sorted(tuple(round(v / tol) for v in _apply(m, xyz[n])) for n in used))
+                        if key in seen:
+                            hit = None
+                        else:
+                            seen.add(key)
+                            covered[hit] += area
+                    copies.append(None if hit is None else files[hit][0])
+                side_labels.append(copies)
+            for (x, f), area, got in zip(files, areas, covered):
+                if abs(got - area) > 1e-6 * area:
+                    raise JobError(
+                        f"excitation {x['name']}: the copies of the cell cover {got:.6g} of the {area:.6g} mm² of {f};"
+                        " the cell must be split where the face ends"
+                    )
+            labels.append(side_labels)
+        return labels
+    finally:
+        gmsh.model.remove()
+        gmsh.model.setCurrent(current)
+
+
+def _copy(sides, cells, labels, dim, patches=None, surface_labels=None):
     """Model "full": every side's cell entities copied by that side's transforms, each copy a discrete entity in the
-    physical group of its piece's MAT_ID; mirrored copies reversed, shared nodes merged.
-    Returns {side: {mat_id: (name, entities)}}."""
+    physical group of its piece's MAT_ID; the cell boundary patches that land on an excitation (surface_labels) copied
+    with them into the physical group of its SMAT_ID; mirrored copies reversed, shared nodes merged.
+    Returns (split, surfaces): {side: {mat_id: (name, entities)}} and {side: {smat_id: (name, entities)}}."""
+    patches = patches or [[] for _ in sides]
+    surface_labels = surface_labels or [[] for _ in sides]
     tags, coords, _ = gmsh.model.mesh.getNodes()
     xyz = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
     shift = int(max(tags))
     gmsh.model.add("full")
-    split, mirrored, entity, offset = {}, [], 0, 0
-    for side, ents, side_labels in zip(sides, cells, labels):
+    split, surfaces, mirrored, entity, face, offset = {}, {}, [], 0, 0, 0
+    for side, ents, side_labels, faces, face_labels in zip(sides, cells, labels, patches, surface_labels):
         groups = split.setdefault(side["side"], {})
+        excited = surfaces.setdefault(side["side"], {})
         for c, m in enumerate(side["transforms"]):
             owned = set()
             for (_, conn, used, _, _), copies in zip(ents, side_labels):
@@ -196,19 +266,31 @@ def _copy(sides, cells, labels, dim):
                 groups.setdefault(piece["mat_id"], (piece["name"], []))[1].append(entity)
                 if _det(m) < 0:
                     mirrored.append((dim, entity))
+            for (_, conn, _, _, _), copies in zip(faces, face_labels):
+                x = copies[c]
+                if x is None:
+                    continue
+                face += 1  # its nodes are nodes of this copy's bodies: the same offset
+                gmsh.model.addDiscreteEntity(dim - 1, face)
+                for typ, nodes in conn.items():
+                    gmsh.model.mesh.addElementsByType(face, typ, [], [n + offset for n in nodes])
+                excited.setdefault(x["smat_id"], (x["name"], []))[1].append(face)
+                if _det(m) < 0:
+                    mirrored.append((dim - 1, face))
             offset += shift
     if mirrored:
         gmsh.model.mesh.reverse(mirrored)
     gmsh.model.mesh.removeDuplicateNodes()
     gmsh.model.mesh.renumberNodes()
     gmsh.model.mesh.renumberElements()
-    members = {}
-    for groups in split.values():
-        for id_, (name, ents) in groups.items():
-            members.setdefault(id_, (name, []))[1].extend(ents)
-    for id_, (name, ents) in sorted(members.items()):
-        gmsh.model.addPhysicalGroup(dim, ents, id_, name=name)
-    return split
+    for d, by_side in ((dim, split), (dim - 1, surfaces)):
+        members = {}
+        for groups in by_side.values():
+            for id_, (name, ents) in groups.items():
+                members.setdefault(id_, (name, []))[1].extend(ents)
+        for id_, (name, ents) in sorted(members.items()):
+            gmsh.model.addPhysicalGroup(d, ents, id_, name=name)
+    return split, surfaces
 
 
 def _marker(slide):
@@ -308,7 +390,7 @@ def _on_circle(slide, sides, split):
 
 def _mesh(job, folder, build, dim):
     """Mesh the cell to dimension dim (gmsh initialized, model added), check it and copy it; model "full" is current.
-    Returns (sides, slide, split)."""
+    Returns (sides, slide, split, surfaces)."""
     sides, slide = job["symmetric"]["sides"], job["symmetric"].get("slide")
     if slide and dim == 3:
         raise JobError("3D sliding is not supported yet")
@@ -319,11 +401,13 @@ def _mesh(job, folder, build, dim):
     generate(job, dim)
     cells = [_cell_entities(side, dim) for side in sides]
     labels = _land(sides, cells, folder, dim)
-    split = _copy(sides, cells, labels, dim)
+    patches = [_cell_patches(side, dim) for side in sides]
+    surface_labels = _land_surfaces(sides, patches, folder, dim) if any(patches) else None
+    split, surfaces = _copy(sides, cells, labels, dim, patches, surface_labels)
     _conform(sides, split, folder, dim)
     if slide:
         _on_circle(slide, sides, split)
-    return sides, slide, split
+    return sides, slide, split, surfaces
 
 
 def check(job_path, build, dim=2):
@@ -354,7 +438,7 @@ def run(job_path, build, dim=2):
     try:
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
-        _, slide, split = _mesh(job, folder, build, dim)
+        _, slide, split, surfaces = _mesh(job, folder, build, dim)
         point = _marker(slide) if slide else None
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
@@ -362,7 +446,8 @@ def run(job_path, build, dim=2):
         if slide:
             outputs.append((os.path.join(folder, "rotor.msh"), job["rotor_file"]))
             for side, (path, _) in zip(("fixed", "moving"), outputs):
-                groups = [(2, ents, id_, name) for id_, (name, ents) in sorted(split.get(side, {}).items())]
+                groups = [(dim, ents, id_, name) for id_, (name, ents) in sorted(split.get(side, {}).items())]
+                groups += [(dim - 1, ents, id_, name) for id_, (name, ents) in sorted(surfaces.get(side, {}).items())]
                 if side == "moving":
                     groups.append((0, [point], slide["slide_mat_id"], slide["name"]))
                 write_split(groups, path)
@@ -375,10 +460,14 @@ def run(job_path, build, dim=2):
 
 
 def report(job):
-    """The lines run_job prints: one MAT_ID line per piece assignment, the slide values, the files written."""
+    """The lines run_job prints: one MAT_ID line per piece assignment, one SMAT_ID line per excitation, the slide
+    values, the files written."""
     slide = job["symmetric"].get("slide")
-    seen = {(p["mat_id"], p["name"]): None for s in job["symmetric"]["sides"] for p in s["pieces"]}
+    sides = job["symmetric"]["sides"]
+    seen = {(p["mat_id"], p["name"]): None for s in sides for p in s["pieces"]}
     lines = [f"MAT_ID  {id_:>6}  {name}" for id_, name in seen]
+    excited = {(x["smat_id"], x["name"]): None for s in sides for x in s.get("excitations", [])}
+    lines += [f"SMAT_ID {id_:>6}  {name}" for id_, name in excited]
     if slide:
         lines += slide_report({"slides": [slide]})
     lines.append(f"Wrote {job['mesh_file']}")

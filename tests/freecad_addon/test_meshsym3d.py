@@ -34,6 +34,52 @@ def write_sector_solids(path, *sectors):
         gmsh.finalize()
 
 
+def write_face(path, sector=None, corners=None, z=0):
+    """One BREP holding one face: the add_sector face of sector (inner, outer, a0, a1) at height z, or the planar
+    polygon of corners [(x, y, z)]."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        if sector:
+            occ.translate(add_sector(*sector), 0, 0, z)
+        else:
+            pts = [occ.addPoint(*p) for p in corners]
+            lines = [occ.addLine(pts[k], pts[(k + 1) % len(pts)]) for k in range(len(pts))]
+            occ.addPlaneSurface([occ.addCurveLoop(lines)])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def surface_group(path, id_):
+    """(name, element count, area) of the 2D physical group id_ of a mesh file; None when there is none."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        if (2, id_) not in gmsh.model.getPhysicalGroups(2):
+            return None
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        xyz = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+        count, area = 0, 0.0
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, id_):
+            for typ, etags, enodes in zip(*gmsh.model.mesh.getElements(2, e)):
+                per = len(enodes) // len(etags)
+                corners = gmsh.model.mesh.getElementProperties(typ)[5]  # primary nodes: 3 or 4
+                count += len(etags)
+                for k in range(len(etags)):
+                    a, *rest = (xyz[int(n)] for n in enodes[k * per : k * per + corners])
+                    for b, c in zip(rest, rest[1:]):  # fan of triangles from the first corner
+                        u, v = [b[i] - a[i] for i in range(3)], [c[i] - a[i] for i in range(3)]
+                        w = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+                        area += math.hypot(*w) / 2
+        return gmsh.model.getPhysicalName(2, id_), count, area
+    finally:
+        gmsh.finalize()
+
+
 CORNERS = {"Tetrahedron 4": (0, 1, 2, 3), "Hexahedron 8": (0, 1, 3, 4), "Prism 6": (0, 1, 2, 3)}
 CORNERS["Pyramid 5"] = (0, 1, 3, 4)
 
@@ -125,7 +171,7 @@ class MeshSym3DTest(unittest.TestCase):
             cmd = [sys.executable, "-c", code]
         return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
-    def ring_job(self, outer_ids=(2,) * 8, outer_cuts=None, extra=None, **kw):
+    def ring_job(self, outer_ids=(2,) * 8, outer_cuts=None, extra=None, excitations=None, **kw):
         """Cell: solids r 10..20 (id 1) and 20..30 (id 2), 0..45°, z 0..10; 4 rotations × {identity, mirror at 45°}.
         Pieces: 8 inner sectors (MAT_ID 1) and 8 outer ones with outer_ids, cut at the angles outer_cuts."""
         volumes = [self.cell(1, "InnerCell", (10, 20, 0, 45, 0, 10)), self.cell(2, "OuterCell", (20, 30, 0, 45, 0, 10))]
@@ -134,6 +180,8 @@ class MeshSym3DTest(unittest.TestCase):
         for k, id_ in enumerate(outer_ids):
             pieces.append(self.piece(id_, f"Outer{id_}", (20, 30, cuts[k], cuts[k + 1], 0, 10)))
         side = {"side": "fixed", "cells": [1, 2], "transforms": chain(45, 90, 4), "pieces": pieces}
+        if excitations:
+            side["excitations"] = excitations
         return self.run_job(volumes, [side], extra=extra, **kw)
 
     def test_copies_cover_the_ring_without_gaps(self):
@@ -211,6 +259,38 @@ class MeshSym3DTest(unittest.TestCase):
         self.assertIn("CHECK OK", r.stdout)
         self.assertFalse(os.path.exists(self.files()[0]))
         self.assertFalse(os.path.exists(os.path.join(self.dir, "mesh.unv")))
+
+    def excitation(self, **face):
+        """The excitation Exc (SMAT_ID 101) on the one face write_face(**face) draws."""
+        write_face(self.geo("exc.brep"), **face)
+        return [{"smat_id": 101, "name": "Exc", "files": ["geometry/exc.brep"]}]
+
+    def test_excitation_on_an_outer_top_face_gets_its_smat_id(self):
+        r = self.ring_job(excitations=self.excitation(sector=(20, 30, 0, 45), z=10))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        name, count, area = surface_group(self.files()[0], 101)
+        self.assertEqual(name, "Exc")
+        self.assertGreater(count, 0)
+        exact = math.pi * (30**2 - 20**2) / 8
+        self.assertAlmostEqual(area / exact, 1, delta=1e-2)  # flat triangles along the arcs: a little less
+
+    def test_excitation_face_shared_by_two_copies_counts_once(self):  # the radial face at 45°, between two copies
+        c, s = math.cos(math.radians(45)), math.sin(math.radians(45))
+        corners = [(10 * c, 10 * s, 0), (20 * c, 20 * s, 0), (20 * c, 20 * s, 10), (10 * c, 10 * s, 10)]
+        r = self.ring_job(excitations=self.excitation(corners=corners))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertAlmostEqual(surface_group(self.files()[0], 101)[2], 100, delta=1e-6)
+
+    def test_excitation_face_not_split_by_the_cell_is_refused(self):  # ends at 30°, inside a copy
+        r = self.ring_job(excitations=self.excitation(sector=(20, 30, 0, 30), z=10))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("excitation Exc", r.stderr)
+        self.assertIn("cover", r.stderr)
+
+    def test_excitation_lines_are_reported(self):
+        r = self.ring_job(excitations=self.excitation(sector=(20, 30, 0, 45), z=10))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("SMAT_ID    101  Exc", r.stdout)
 
 
 if __name__ == "__main__":
