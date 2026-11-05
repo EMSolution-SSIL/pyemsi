@@ -15,7 +15,7 @@ import gmsh
 from .test_mesher import MESHER, write_arc, write_line
 from .test_mesher2d import add_sector
 from .test_meshsym import chain, rotation
-from .meshreport import groups
+from .meshreport import groups, _marker
 
 
 def write_sector_solids(path, *sectors):
@@ -82,6 +82,19 @@ def surface_group(path, id_):
         return gmsh.model.getPhysicalName(2, id_), count, area
     finally:
         gmsh.finalize()
+
+
+def slide_nodes(msh, r):
+    """The rounded coordinates of the nodes of a mesh file on the cylinder of radius r about Z."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        c = gmsh.model.mesh.getNodes()[1]
+    finally:
+        gmsh.finalize()
+    pts = [c[k : k + 3] for k in range(0, len(c), 3)]
+    return {tuple(round(x, 6) + 0.0 for x in p) for p in pts if abs(math.hypot(p[0], p[1]) - r) < 1e-6 * r}
 
 
 CORNERS = {"Tetrahedron 4": (0, 1, 2, 3), "Hexahedron 8": (0, 1, 3, 4), "Prism 6": (0, 1, 2, 3)}
@@ -152,7 +165,7 @@ class MeshSym3DTest(unittest.TestCase):
         write_sector_solids(os.path.join(self.dir, rel), *sectors)
         return {"mat_id": mat_id, "name": name, "file": rel}
 
-    def run_job(self, volumes, sides, extra=None, check=False, patch=""):
+    def run_job(self, volumes, sides, extra=None, check=False, patch="", slide=None):
         """Run mesher.py on the job (--check when check); patch: Python run on meshsym first, e.g. to break it."""
         job = {
             "model_name": "Model",
@@ -162,6 +175,9 @@ class MeshSym3DTest(unittest.TestCase):
             "sizes": [],
             "symmetric": {"sides": sides},
         }
+        if slide:
+            job["symmetric"]["slide"] = slide
+            job["rotor_file"] = self.files()[1]
         job.update(extra or {})
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
@@ -303,6 +319,73 @@ class MeshSym3DTest(unittest.TestCase):
         r = self.ring_job(excitations=self.excitation(sector=(20, 30, 0, 45), z=10))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("SMAT_ID    101  Exc", r.stdout)
+
+    def slide_job(self, divisions=16, moving_z=10, fixed_cut=None):
+        """Fixed cell r 20..30, moving cell r 10..20, both 0..45°, z 0..10 (the moving one to moving_z, the fixed one
+        cut at z fixed_cut into two solids); chain(45, 90, 4) on both sides; sliding cylinder r 20, 4 cross divisions."""
+        cut = (
+            [(20, 30, 0, 45, 0, 10)]
+            if fixed_cut is None
+            else [(20, 30, 0, 45, 0, fixed_cut), (20, 30, 0, 45, fixed_cut, 10)]
+        )
+        write_sector_solids(self.geo("vol_1.brep"), *cut)
+        stator = {"mat_id": 1, "name": "StatorCell", "file": "geometry/vol_1.brep", "size": 2.5}
+        volumes = [stator, self.cell(2, "RotorCell", (10, 20, 0, 45, 0, moving_z))]
+        fixed = {
+            "side": "fixed",
+            "cells": [1],
+            "transforms": chain(45, 90, 4),
+            "pieces": [self.piece(5, "Stator", *[(20, 30, 45 * k, 45 * (k + 1), 0, 10) for k in range(8)])],
+        }
+        moving = {
+            "side": "moving",
+            "cells": [2],
+            "transforms": chain(45, 90, 4),
+            "pieces": [self.piece(6, "Rotor", *[(10, 20, 45 * k, 45 * (k + 1), 0, moving_z) for k in range(8)])],
+        }
+        slide = {"name": "Slide", "kind": "rotational", "radius": 20.0, "divisions": divisions, "cross_divisions": 4}
+        slide.update(slide_mat_id=7, full=True)
+        return self.run_job(volumes, [fixed, moving], slide=slide)
+
+    def test_sliding_sides_have_the_same_nodes_on_the_cylinder(self):
+        r = self.slide_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.files()
+        self.assertEqual(slide_nodes(fixed, 20), slide_nodes(rotor, 20))
+        self.assertEqual(len(slide_nodes(fixed, 20)), 16 * (4 + 1))
+        self.assertEqual(sorted(groups(fixed)), [5])
+        self.assertEqual(sorted(groups(rotor)), [6])
+        self.assertEqual(mesh_check_3d(fixed, (20, 30), (0, 10))[1:], (0, 0))
+        self.assertEqual(mesh_check_3d(rotor, (10, 20), (0, 10))[1:], (0, 0))
+        self.assertIn("SLIDE_NDIV 16", r.stdout)
+
+    def test_marker_line_is_on_the_moving_side_only(self):
+        r = self.slide_job()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.files()
+        count, nodes = _marker(rotor, 1, 7)
+        self.assertEqual(count, 4)
+        for p in nodes:
+            self.assertAlmostEqual(p[0], 20, places=6)
+            self.assertAlmostEqual(p[1], 0, places=6)
+        self.assertEqual(sorted(round(p[2], 6) for p in nodes), [0, 2.5, 5, 7.5, 10])
+        self.assertIsNone(_marker(fixed, 1))
+
+    def test_divisions_off_the_grid_are_refused(self):  # divisions 12: a 45° cell arc gets 1.5
+        r = self.slide_job(divisions=12)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("whole number", r.stderr)
+
+    def test_side_short_of_the_cylinder_height_is_refused(self):  # moving cell z 0..8, fixed z 0..10
+        r = self.slide_job(moving_z=8)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("moving side", r.stderr)
+        self.assertIn("cylinder", r.stderr)
+
+    def test_z_cut_off_the_cross_grid_is_refused(self):  # fixed cell split at z = 3 (2 solids), cross_divisions 4
+        r = self.slide_job(fixed_cut=3)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("cross_divisions", r.stderr)
 
 
 if __name__ == "__main__":

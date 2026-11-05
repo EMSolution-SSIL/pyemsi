@@ -10,6 +10,7 @@ from collections import Counter
 import gmsh
 
 from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, MSH_VERSION
+from meshcommon import _slide_faces
 
 
 def _apply(m, p):
@@ -72,6 +73,70 @@ def _slide_arcs(slide, sides):
                 f"sliding interface {name}: the cell of the {side['side']} side has no arc on the sliding circle"
                 f" (radius {r:g} mm); both sides must reach it"
             )
+
+
+def _cylinder_faces(side, r, tol):
+    """Tags of the boundary faces of the side's cells that lie on the cylinder of radius r about Z: their corners and
+    points inside them."""
+    out = []
+    for f in _side_seams(side, 3):
+        lo, hi = gmsh.model.getParametrizationBounds(2, f)
+        steps = (0.25, 0.5, 0.75)
+        uv = [x for a in steps for b in steps for x in (lo[0] + (hi[0] - lo[0]) * a, lo[1] + (hi[1] - lo[1]) * b)]
+        xyz = gmsh.model.getValue(2, f, uv)
+        pts = _corners(2, f) + [xyz[k : k + 3] for k in range(0, len(xyz), 3)]
+        if all(abs(math.hypot(p[0], p[1]) - r) <= tol for p in pts):
+            out.append(f)
+    return out
+
+
+def _slide_faces_sym(slide, sides):
+    """3D twin of _slide_arcs: make the cells' faces on the sliding cylinder (radius about Z) transfinite. Each gets its
+    share of the divisions of the full turn around Z (whole, its corners on the 360° / divisions grid from 0°) and its
+    share of cross_divisions along Z over the height of the cylinder (its corners on that grid), with the "Left"
+    triangles and corner order of 3D sliding (_slide_faces). The cells of every side must reach over the whole
+    cylinder."""
+    r, n, k, name = slide["radius"], slide["divisions"], slide["cross_divisions"], slide["name"]
+    tol = 1e-6 * r
+    faces = {side["side"]: _cylinder_faces(side, r, tol) for side in sides}
+    for side in sides:
+        if not faces[side["side"]]:
+            raise JobError(
+                f"sliding interface {name}: the cells of the {side['side']} side have no face on the sliding cylinder"
+                f" (radius {r:g} mm); both sides must reach it"
+            )
+    tags = sorted({f for fs in faces.values() for f in fs})
+    corners = {f: _corners(2, f) for f in tags}
+    z0, z1 = min(p[2] for f in tags for p in corners[f]), max(p[2] for f in tags for p in corners[f])
+    for side in sides:
+        area = sum(gmsh.model.occ.getMass(2, f) for f in faces[side["side"]])
+        need = 2 * math.pi * r / len(side["transforms"]) * (z1 - z0)
+        if abs(area - need) > 1e-6 * need:
+            raise JobError(
+                f"sliding interface {name}: the cells of the {side['side']} side do not reach over the whole cylinder"
+                f" (radius {r:g}, z {z0:g}..{z1:g})"
+            )
+    done = {}  # curve -> elements, so a curve between two faces gets one count
+    for f in tags:
+        zs = [p[2] for p in corners[f]]
+        height = max(zs) - min(zs)
+        share = n * math.degrees(gmsh.model.occ.getMass(2, f) / (r * height)) / 360
+        angles = [_angle(p) for p in corners[f]]
+        if any(abs(x - round(x)) > 1e-6 for x in [share] + [n * a / 360 for a in angles]):
+            raise JobError(
+                f"sliding interface {name}: the cell's cylinder face from {min(angles):g}° to {max(angles):g}° gets"
+                f" {share:g} of the {n} divisions; it needs a whole number, with both ends on the {360 / n:g}° grid"
+                " that starts at 0°"
+            )
+        for z in zs:
+            x = k * (z - z0) / (z1 - z0)
+            if abs(x - round(x)) > 1e-6:
+                raise JobError(
+                    f"sliding interface {name}: a cut at z = {z:g} is off the grid of {k} cross_divisions over"
+                    f" z {z0:g}..{z1:g}"
+                )
+        cross = round(k * height / (z1 - z0))
+        _slide_faces(dict(slide, cross_divisions=cross), f"sliding interface {name}", [f], round(share), None, done)
 
 
 def _same(c, d, m, tol, dim):
@@ -316,6 +381,25 @@ def _marker(slide):
     return point
 
 
+def _marker_line(slide):
+    """The slide edge: a discrete curve entity holding the line elements between consecutive nodes on the sliding
+    cylinder at 0°, the generatrix through (radius, 0)."""
+    r = slide["radius"]
+    tags, coords, _ = gmsh.model.mesh.getNodes()
+    on = []
+    for k, t in enumerate(tags):
+        p = coords[3 * k : 3 * k + 3]
+        if abs(p[0] - r) < 1e-6 * r and abs(p[1]) < 1e-6 * r:
+            on.append((p[2], int(t)))
+    nodes = [t for _, t in sorted(on)]
+    if len(nodes) < 2:
+        raise JobError(f"sliding interface {slide['name']}: the mesh has no line of nodes at ({r:g}, 0) along Z")
+    line = gmsh.model.addDiscreteEntity(1)
+    gmsh.model.mesh.addElementsByType(line, 1, [], [n for pair in zip(nodes, nodes[1:]) for n in pair])
+    gmsh.model.addPhysicalGroup(1, [line], slide["slide_mat_id"], name=slide["name"])
+    return line
+
+
 def _side_facets(split, side, dim):
     """{sorted node tags: number of the side's elements using them} in model "full", over the element edges (2D) or
     the element faces (3D)."""
@@ -396,15 +480,36 @@ def _on_circle(slide, sides, split):
             )
 
 
+def _on_cylinder(slide, sides, split):
+    """3D twin of _on_circle: each side has exactly one node on the sliding cylinder at each point of the grid of
+    divisions around Z by cross_divisions + 1 levels along it. Only the nodes have to match: the triangles may not."""
+    r, n, k, name = slide["radius"], slide["divisions"], slide["cross_divisions"], slide["name"]
+    tags, coords, _ = gmsh.model.mesh.getNodes()
+    xyz = {int(t): coords[3 * j : 3 * j + 3] for j, t in enumerate(tags)}
+    on = {}
+    for side in sides:
+        nodes = {v for f in _side_facets(split, side, 3) for v in f}
+        on[side["side"]] = [xyz[v] for v in nodes if abs(math.hypot(*xyz[v][:2]) - r) <= 1e-6 * r]
+    zs = [p[2] for pts in on.values() for p in pts]
+    z0, height = min(zs, default=0), (max(zs, default=0) - min(zs, default=0)) or 1
+    for side in sides:
+        pts = on[side["side"]]
+        steps = [(_angle(p) * n / 360, k * (p[2] - z0) / height) for p in pts]
+        grid = {(round(a) % n, round(b)) for a, b in steps if abs(a - round(a)) <= 1e-6 and abs(b - round(b)) <= 1e-6}
+        if len(pts) != n * (k + 1) or len(grid) != n * (k + 1):
+            raise JobError(
+                f"sliding interface {name}: the {side['side']} side has {len(pts)} nodes on the cylinder (radius {r:g}"
+                f" mm) where it needs one on each of the {n} × {k + 1} grid points; its copies must cover the cylinder"
+            )
+
+
 def _mesh(job, folder, build, dim):
     """Mesh the cell to dimension dim (gmsh initialized, model added), check it and copy it; model "full" is current.
     Returns (sides, slide, split, surfaces)."""
     sides, slide = job["symmetric"]["sides"], job["symmetric"].get("slide")
-    if slide and dim == 3:
-        raise JobError("3D sliding is not supported yet")
     build(job, folder)  # one model holds the cells of both sides
     if slide:
-        _slide_arcs(slide, sides)
+        (_slide_arcs if dim == 2 else _slide_faces_sym)(slide, sides)
     _periodic(sides, dim)
     generate(job, dim)
     cells = [_cell_entities(side, dim) for side in sides]
@@ -414,7 +519,7 @@ def _mesh(job, folder, build, dim):
     split, surfaces = _copy(sides, cells, labels, dim, patches, surface_labels)
     _conform(sides, split, folder, dim)
     if slide:
-        _on_circle(slide, sides, split)
+        (_on_circle if dim == 2 else _on_cylinder)(slide, sides, split)
     return sides, slide, split, surfaces
 
 
@@ -447,7 +552,7 @@ def run(job_path, build, dim=2):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         _, slide, split, surfaces = _mesh(job, folder, build, dim)
-        point = _marker(slide) if slide else None
+        point = (_marker if dim == 2 else _marker_line)(slide) if slide else None
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         gmsh.write(os.path.join(folder, "mesh.unv"))
@@ -457,7 +562,7 @@ def run(job_path, build, dim=2):
                 groups = [(dim, ents, id_, name) for id_, (name, ents) in sorted(split.get(side, {}).items())]
                 groups += [(dim - 1, ents, id_, name) for id_, (name, ents) in sorted(surfaces.get(side, {}).items())]
                 if side == "moving":
-                    groups.append((0, [point], slide["slide_mat_id"], slide["name"]))
+                    groups.append((dim - 2, [point], slide["slide_mat_id"], slide["name"]))
                 write_split(groups, path)
         else:
             gmsh.write(msh)
