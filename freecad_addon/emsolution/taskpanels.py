@@ -116,6 +116,47 @@ def selected_face_picks(study, vertices):
     return unique
 
 
+def ask_solid(face, names):
+    """The solid to take for a face two solids share: one of names, or None on Cancel."""
+    name, ok = QtWidgets.QInputDialog.getItem(
+        Gui.getMainWindow(), "Which solid?", f"{face} is shared by two solids. Take:", names, 0, False
+    )
+    return name if ok else None
+
+
+def selected_piece_solids(study):
+    """[(top, SolidN)] for a 3D symmetric Study: the solid of each clicked face of a Symmetric Mesh top. A face two
+    solids share is decided by the solid behind the click, seen from the 3D view; when that cannot be told the user
+    is asked, and a Cancel skips the pick."""
+    from . import geometry
+
+    tops = {i.Top.Name for i in objects.symmetric_items(study) if i.Top is not None}
+    try:
+        view = Gui.ActiveDocument.ActiveView.getViewDirection()
+    except Exception:  # no 3D view: shared faces are asked about
+        view = None
+    out = []
+    for sel in Gui.Selection.getSelectionEx():
+        body = objects.pick_body(sel.Object)
+        if body is None or body.Name not in tops:
+            continue
+        shape = geometry.global_shape(body)
+        points = list(sel.PickedPoints)
+        subs = list(sel.SubElementNames)
+        for k, sub in enumerate(subs):
+            if not sub.startswith("Face"):
+                continue
+            picked = points[k] if len(points) == len(subs) else None
+            solid = objects.piece_solid(shape, sub, picked, view)
+            if solid is None:
+                face = shape.getElement(sub)
+                names = [f"Solid{j + 1}" for j, s in enumerate(shape.Solids) if any(face.isSame(f) for f in s.Faces)]
+                solid = ask_solid(f"{objects.display_name(body)}.{sub}", names) if names else None
+            if solid is not None and (body, solid) not in out:
+                out.append((body, solid))
+    return out
+
+
 def selected_faces():
     """Faces of bodies; an Excitation never goes on an Air Region."""
     return [(b, s) for b, s in selected_subs(("Face",)) if not is_air(b)]
@@ -1321,7 +1362,8 @@ class MaterialPanel:
     def __init__(self, obj, new=False, refs=()):
         self.obj, self.new = obj, new
         self.study = study = objects.owner_study(obj)
-        self.pieces = objects.is_symmetric(study)  # a symmetric Study's Materials are on faces of the drawing
+        self.pieces = objects.is_symmetric(study)  # a symmetric Study's Materials are on pieces of the drawing
+        self.piece = objects.piece_kind(study) if self.pieces else ""  # "Face" in 2D, "Solid" in 3D
         self.air = obj.Body if obj.Body is not None and is_air(obj.Body) else None
         self.current = objects.item_refs(obj)
         if self.pieces:  # a whole-body Material left from before the drawing was symmetric: its faces only
@@ -1335,7 +1377,9 @@ class MaterialPanel:
         layout = QtWidgets.QFormLayout(self.form)
         layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
         region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"
-        if self.pieces:
+        if self.piece == "Solid":
+            text = "Click a face of each solid of the drawing in the 3D view; its solid is taken."
+        elif self.pieces:
             text = "Click faces of the drawing in the 3D view."
         elif study.Dimension == "2D":
             text = "Click a region in the 3D view, or select a body or the Air Region in the tree."
@@ -1366,7 +1410,7 @@ class MaterialPanel:
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.refs.itemSelectionChanged.connect(self.highlight_rows)
-        layout.addRow("Faces" if self.pieces else "Body", self.refs)
+        layout.addRow({"Face": "Faces", "Solid": "Solids"}.get(self.piece, "Body"), self.refs)
         add = QtWidgets.QPushButton("Add selection")
         remove = QtWidgets.QPushButton("Remove")
         add.clicked.connect(self.add_selection)
@@ -1422,7 +1466,9 @@ class MaterialPanel:
         highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
 
     def picks(self):
-        """What the selection offers: faces of Symmetric Mesh tops, or whole bodies."""
+        """What the selection offers: faces (3D: their solids) of Symmetric Mesh tops, or whole bodies."""
+        if self.piece == "Solid":
+            return selected_piece_solids(self.study)
         if self.pieces:
             tops = {i.Top.Name for i in objects.symmetric_items(self.study) if i.Top is not None}
             return [(b, s) for b, s in selected_subs(("Face",)) if b.Name in tops]
@@ -1452,7 +1498,7 @@ class MaterialPanel:
             gone = objects.emptied_by(self.study, current, own=self.obj)
             name = self.name.text().strip() if self.typed else ""
             name = name or objects.suggest_name(self.study, current, self.lib(), self.obj, gone) or "this Material"
-            if not confirm_move(owned_text(owned, "face" if self.pieces else "body", f'"{name}"')):
+            if not confirm_move(owned_text(owned, self.piece.lower() or "body", f'"{name}"')):
                 skipped = {_key(r) for r, _ in owned}
                 picks = [p for p in picks if _key(p) not in skipped]
                 if not picks:
@@ -1472,7 +1518,7 @@ class MaterialPanel:
             if not Gui.Selection.getSelectionEx():
                 warn("Nothing is selected. Pick geometry in the 3D view first.")
             elif self.pieces and selected_bodies():
-                warn("Materials go on the faces (pieces) of the drawing: select faces.")
+                warn(f"Materials go on the {self.piece.lower()}s (pieces) of the drawing: select faces.")
             else:
                 warn("Nothing new to add.")
 

@@ -170,3 +170,42 @@ def test_symmetric_3d_job_meshes_into_both_files(motor3d):
     for msh in (fixed_msh, rotor_msh):
         assert mesh_check_3d(msh, (35,), (0, 10))[1] == 0
     assert meshreport._marker(rotor_msh, 1) is not None and meshreport._marker(fixed_msh, 1) is None
+
+
+def _owners(shape, face_name):
+    face = shape.getElement(face_name)
+    return [k + 1 for k, solid in enumerate(shape.Solids) if any(face.isSame(f) for f in solid.Faces)]
+
+
+def _top_shape(study):
+    from emsolution import geometry
+
+    return geometry.global_shape(objects.symmetric_items(study)[0].Top)
+
+
+def test_outer_face_gives_its_solid(motor3d):
+    shape = _top_shape(motor3d)
+    outer = next(
+        f"Face{i + 1}"
+        for i, face in enumerate(shape.Faces)
+        if abs(getattr(face.Surface, "Radius", 0) - 60) < 1e-6 and len(_owners(shape, f"Face{i + 1}")) == 1
+    )
+    (owner,) = _owners(shape, outer)
+    assert objects.piece_solid(shape, outer, None, None) == f"Solid{owner}"
+
+
+def test_shared_face_gives_the_solid_behind_it(motor3d):
+    shape = _top_shape(motor3d)
+    name = next(f"Face{i + 1}" for i in range(len(shape.Faces)) if len(_owners(shape, f"Face{i + 1}")) == 2)
+    face = shape.getElement(name)
+    picked = face.CenterOfMass
+    for owner in _owners(shape, name):
+        # a view direction pointing into that solid, from the picked point on the shared face
+        view = shape.Solids[owner - 1].CenterOfMass - picked
+        assert objects.piece_solid(shape, name, picked, view) == f"Solid{owner}"
+
+
+def test_shared_face_without_a_view_is_undecided(motor3d):
+    shape = _top_shape(motor3d)
+    name = next(f"Face{i + 1}" for i in range(len(shape.Faces)) if len(_owners(shape, f"Face{i + 1}")) == 2)
+    assert objects.piece_solid(shape, name, None, None) is None

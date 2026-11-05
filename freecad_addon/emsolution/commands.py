@@ -131,7 +131,10 @@ class AssignMaterial(_StudyCommand):
             return
         bodies = taskpanels.selected_bodies()
         tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
-        pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
+        if objects.is_symmetric(study) and objects.piece_kind(study) == "Solid":
+            pieces = taskpanels.selected_piece_solids(study)
+        else:
+            pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
         if pieces:
             if gate(study, [b for b, _ in pieces]):
                 taskpanels.open_material_panel(study, pieces)

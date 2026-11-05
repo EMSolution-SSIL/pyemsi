@@ -1590,6 +1590,48 @@ def main():
         picks = [(b.Name, s) for b, s in taskpanels.ITEM_PICKS_2D[cls][0](sym_study)]
         assert picks == [(frag.Name, block)], picks
     App.closeDocument(sym_doc.Name)
+    # 3D: a click on a face of the drawing takes its solid; a face two solids share asks (stubbed here).
+    doc3 = App.newDocument("Symmetric3D")
+    study3 = symcases.motor_study_3d(doc3)
+    App.setActiveDocument(doc3.Name)
+    taskpanels.set_active_study(study3)
+    top3 = study3.MainObjects[0]
+
+    def owners(face):
+        return [f"Solid{k}" for k, s in enumerate(top3.Shape.Solids, 1) if any(face.isSame(g) for g in s.Faces)]
+
+    single = next(f"Face{i}" for i, f in enumerate(top3.Shape.Faces, 1) if len(owners(f)) == 1)
+    shared = next(f"Face{i}" for i, f in enumerate(top3.Shape.Faces, 1) if len(owners(f)) == 2)
+    solid_asks, solid_answers = [], []
+    taskpanels.ask_solid = lambda face, names: (solid_asks.append((face, names)), solid_answers.pop(0))[1]
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc3.Name, top3.Name, single)
+    move_answers.append(True)  # every solid already has a Material
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    (want,) = owners(top3.Shape.getElement(single))
+    assert panel.current == [(top3, want)] and not solid_asks, (panel.current, solid_asks)
+    assert any(w.text().startswith("Click a face of each solid") for w in panel.form.findChildren(QtWidgets.QLabel))
+    assert panel.refs.item(0).text().endswith(want), panel.refs.item(0).text()
+    assert "A solid can have only one Material" in moves[-1], moves[-1]
+    panel.name.setText("Smoke solid")
+    panel.name_typed("Smoke solid")
+    assert panel.accept()
+    (made3,) = [m for m in objects.piece_assignments(study3) if m.GroupName == "Smoke solid"]
+    assert objects.item_refs(made3) == [(top3, want)], objects.item_refs(made3)
+    Gui.Selection.clearSelection()  # a shared face without a picked point: asked, the answer is taken
+    Gui.Selection.addSelection(doc3.Name, top3.Name, shared)
+    solid_answers.append(owners(top3.Shape.getElement(shared))[1])
+    move_answers.append(True)
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert len(solid_asks) == 1 and solid_asks[0][1] == owners(top3.Shape.getElement(shared)), solid_asks
+    taken = owners(top3.Shape.getElement(shared))[1]
+    assert panel.current == [(top3, taken)] and panel.reject(), panel.current
+    solid_answers.append(None)  # Cancel skips the pick: no panel
+    Gui.runCommand("EMS_Material")
+    assert not material_panels and not Gui.Control.activeDialog(), "a panel opened after Cancel"
+    App.closeDocument(doc3.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")
     App.closeDocument(doc.Name)

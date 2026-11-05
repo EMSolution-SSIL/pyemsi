@@ -1043,6 +1043,23 @@ def piece_kind(study):
     return "Solid" if study.Dimension == "3D" else "Face"
 
 
+def piece_solid(shape, face, picked, view_dir):
+    """The SolidN of shape that has face (a name like Face3). A face two solids share gives the one behind it, as seen
+    along view_dir from the picked point on it (the point a little further along must be inside); None when that
+    cannot be told: picked or view_dir is None, or neither solid holds the point."""
+    face_shape = shape.getElement(face)
+    owners = [k for k, solid in enumerate(shape.Solids) if any(face_shape.isSame(f) for f in solid.Faces)]
+    if len(owners) == 1:
+        return f"Solid{owners[0] + 1}"
+    if len(owners) != 2 or picked is None or view_dir is None or view_dir.Length == 0:
+        return None
+    step = type(view_dir)(view_dir).normalize() * (1e-4 * shape.BoundBox.DiagonalLength)
+    for k in owners:
+        if shape.Solids[k].isInside(picked + step, 0, True):
+            return f"Solid{k + 1}"
+    return None
+
+
 def cell_bodies(study):
     """The leaves (cell bodies) of every Symmetric Mesh item whose chain reads, once each."""
     found = {}
