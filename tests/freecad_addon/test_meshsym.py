@@ -245,7 +245,7 @@ class MeshSymTest(unittest.TestCase):
         self.assertEqual((inverted, loose), (0, 0))
 
     def test_seams_that_do_not_match_are_refused(self):
-        r = self.rotation_job(patch="meshsym._periodic = lambda sides: None")
+        r = self.rotation_job(patch="meshsym._periodic = lambda *a, **k: None")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("do not match", r.stderr)
         self.assertFalse(os.path.exists(self.files()[0]))

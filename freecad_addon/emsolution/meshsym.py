@@ -1,6 +1,6 @@
 """Symmetric mesh: mesh the cell, copy the mesh by the transforms and give every copy the MAT_ID of the drawn piece it
-lands on. Runs in the mesher process (mesher2d.run_job calls run for a job with a "symmetric" key).
-Never import FreeCAD here."""
+lands on. Runs in the mesher process (mesher2d.run_job and mesher.run_job call run for a job with a "symmetric" key);
+dim is 2 (faces) or 3 (solids). Never import FreeCAD here."""
 
 import json
 import math
@@ -28,14 +28,20 @@ def _angle(p):
     return round(math.degrees(math.atan2(p[1], p[0])), 6) % 360
 
 
-def _side_curves(side):
-    """Tags of the boundary curves of the side's cell faces, sorted."""
-    faces = [(2, e) for id_ in side["cells"] for e in gmsh.model.getEntitiesForPhysicalGroup(2, id_)]
-    return sorted({abs(t) for _, t in gmsh.model.getBoundary(faces, combined=False, oriented=False)})
+def _side_seams(side, dim):
+    """Tags of the boundary entities of the side's cell entities of dimension dim (curves in 2D, faces in 3D), sorted."""
+    cells = [(dim, e) for id_ in side["cells"] for e in gmsh.model.getEntitiesForPhysicalGroup(dim, id_)]
+    return sorted({abs(t) for _, t in gmsh.model.getBoundary(cells, combined=False, oriented=False)})
 
 
 def _ends(c):
     return [gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(1, c)], oriented=False)]
+
+
+def _corners(dim, tag):
+    """The points of a curve (its ends) or of a face (its corners)."""
+    points = gmsh.model.getBoundary([(dim, tag)], oriented=False, recursive=True)
+    return [gmsh.model.getValue(0, t, []) for _, t in points]
 
 
 def _slide_arcs(slide, sides):
@@ -45,7 +51,7 @@ def _slide_arcs(slide, sides):
     r, n, name = slide["radius"], slide["divisions"], slide["name"]
     tol = 1e-6 * r
     arcs = set()
-    for c in sorted({c for side in sides for c in _side_curves(side)}):
+    for c in sorted({c for side in sides for c in _side_seams(side, 2)}):
         ends = _ends(c)
         lo, hi = gmsh.model.getParametrizationBounds(1, c)
         mid = gmsh.model.getValue(1, c, [(lo[0] + hi[0]) / 2])
@@ -61,56 +67,58 @@ def _slide_arcs(slide, sides):
         gmsh.model.mesh.setTransfiniteCurve(c, round(share) + 1)
         arcs.add(c)
     for side in sides:
-        if not arcs & set(_side_curves(side)):
+        if not arcs & set(_side_seams(side, 2)):
             raise JobError(
                 f"sliding interface {name}: the cell of the {side['side']} side has no arc on the sliding circle"
                 f" (radius {r:g} mm); both sides must reach it"
             )
 
 
-def _same(c, d, m, tol):
-    """True when curve c moved by the transform m is curve d: the same ends and points of c moved lie on d."""
-    if abs(gmsh.model.occ.getMass(1, c) - gmsh.model.occ.getMass(1, d)) > tol:
+def _same(c, d, m, tol, dim):
+    """True when seam c (a curve when dim is 1, a face when 2) moved by the transform m is seam d: the same length or
+    area, the same corner points, and points of c moved lie on d."""
+    if abs(gmsh.model.occ.getMass(dim, c) - gmsh.model.occ.getMass(dim, d)) > tol:
         return False
-    ends_d = _ends(d)
-    if any(min(math.dist(_apply(m, p), q) for q in ends_d) > tol for p in _ends(c)):
+    corners_d = _corners(dim, d)
+    if any(min(math.dist(_apply(m, p), q) for q in corners_d) > tol for p in _corners(dim, c)):
         return False
-    lo, hi = gmsh.model.getParametrizationBounds(1, c)
-    xyz = gmsh.model.getValue(1, c, [lo[0] + (hi[0] - lo[0]) * f for f in (0.25, 0.5, 0.75)])
+    lo, hi = gmsh.model.getParametrizationBounds(dim, c)
+    xyz = gmsh.model.getValue(dim, c, [lo[i] + (hi[i] - lo[i]) * f for f in (0.25, 0.5, 0.75) for i in range(dim)])
     moved = [v for k in range(0, len(xyz), 3) for v in _apply(m, xyz[k : k + 3])]
-    near = gmsh.model.getClosestPoint(1, d, moved)[0]
+    near = gmsh.model.getClosestPoint(dim, d, moved)[0]
     return all(math.dist(moved[k : k + 3], near[k : k + 3]) <= tol for k in range(0, len(moved), 3))
 
 
-def _periodic(sides):
-    """Seams that a copy of the cell meets carry the same nodes: for curves c != d of a side's cells with T(c) == d for
-    one of the side's transforms T, d is meshed as a copy of c (gmsh periodic). A curve a transform maps onto itself
-    (a mirror line) needs nothing. Each curve is copied from one master at most, and a master is no copy."""
+def _periodic(sides, dim):
+    """Seams that a copy of the cell meets carry the same nodes: for seams c != d of a side's cells (curves in 2D,
+    faces in 3D) with T(c) == d for one of the side's transforms T, d is meshed as a copy of c (gmsh periodic). A seam
+    a transform maps onto itself (on a mirror) needs nothing. Each seam is copied from one master at most, and a
+    master is no copy."""
     box = gmsh.model.getBoundingBox(-1, -1)
     tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
     masters, slaves = set(), set()
     for side in sides:
-        curves = _side_curves(side)
-        for d in curves:
+        seams = _side_seams(side, dim)
+        for d in seams:
             if d in slaves or d in masters:
                 continue
-            for c in curves:
+            for c in seams:
                 if c >= d or c in slaves:
                     continue
-                m = next((m for m in side["transforms"] if _same(c, d, m, tol)), None)
+                m = next((m for m in side["transforms"] if _same(c, d, m, tol, dim - 1)), None)
                 if m is not None:
-                    gmsh.model.mesh.setPeriodic(1, [d], [c], m)
+                    gmsh.model.mesh.setPeriodic(dim - 1, [d], [c], m)
                     masters.add(c)
                     slaves.add(d)
                     break
 
 
-def _cell_entities(side):
-    """[(entity, {element type: node tags}, nodes used, element centres, area)] of the side's cell bodies."""
+def _cell_entities(side, dim):
+    """[(entity, {element type: node tags}, nodes used, element centres, area or volume)] of the side's cell bodies."""
     out = []
     for id_ in side["cells"]:
-        for e in gmsh.model.getEntitiesForPhysicalGroup(2, id_):
-            types, tags, nodes = gmsh.model.mesh.getElements(2, e)
+        for e in gmsh.model.getEntitiesForPhysicalGroup(dim, id_):
+            types, tags, nodes = gmsh.model.mesh.getElements(dim, e)
             conn = {int(t): [int(n) for n in ns] for t, ns in zip(types, nodes)}
             used = sorted({n for ns in conn.values() for n in ns})
             per = len(nodes[0]) // len(tags[0])
@@ -118,22 +126,23 @@ def _cell_entities(side):
             for k in (0, len(tags[0]) // 2, len(tags[0]) - 1):  # first, middle and last element: surely inside
                 xyz = [gmsh.model.mesh.getNode(int(t))[0] for t in nodes[0][k * per : (k + 1) * per]]
                 centres.append([sum(p[i] for p in xyz) / per for i in range(3)])
-            out.append((e, conn, used, centres, gmsh.model.occ.getMass(2, e)))
+            out.append((e, conn, used, centres, gmsh.model.occ.getMass(dim, e)))
     return out
 
 
-def _land(sides, cells, folder):
+def _land(sides, cells, folder, dim):
     """labels[side][cell entity][copy] = index of the side's piece that copy lands on. The copies must cover every
-    piece exactly (by area), or the drawing is not symmetric."""
+    piece exactly (by area in 2D, by volume in 3D), or the drawing is not symmetric."""
+    measure, unit = ("an area", "mm²") if dim == 2 else ("a volume", "mm³")
     current = gmsh.model.getCurrent()
     gmsh.model.add("pieces")
     try:
         labels = []
         for side, ents in zip(sides, cells):
             pieces = side["pieces"]
-            faces = [[t for _, t in import_brep(os.path.join(folder, p["file"]), 2)] for p in pieces]
+            faces = [[t for _, t in import_brep(os.path.join(folder, p["file"]), dim)] for p in pieces]
             gmsh.model.occ.synchronize()
-            areas = [sum(gmsh.model.occ.getMass(2, t) for t in ts) for ts in faces]
+            areas = [sum(gmsh.model.occ.getMass(dim, t) for t in ts) for ts in faces]
             covered = [0.0] * len(pieces)
             side_labels = []
             for _, _, _, centres, area in ents:
@@ -141,18 +150,18 @@ def _land(sides, cells, folder):
                 for m in side["transforms"]:
                     moved = [_apply(m, p) for p in centres]
                     flat = [x for p in moved for x in p]
-                    hits = [k for k, ts in enumerate(faces) if sum(gmsh.model.isInside(2, t, flat) for t in ts) == 3]
+                    hits = [k for k, ts in enumerate(faces) if sum(gmsh.model.isInside(dim, t, flat) for t in ts) == 3]
                     if len(hits) != 1:
-                        x, y = moved[0][:2]
-                        raise JobError(f"copy lands outside the drawing near ({x:.6g}, {y:.6g})")
+                        where = ", ".join(f"{v:.6g}" for v in moved[0][:dim])
+                        raise JobError(f"copy lands outside the drawing near ({where})")
                     covered[hits[0]] += area
                     copies.append(hits[0])
                 side_labels.append(copies)
             for p, area, got in zip(pieces, areas, covered):
                 if abs(got - area) > 1e-6 * area:
                     raise JobError(
-                        f"not symmetric: piece {p['name']} ({p['file']}) has an area of {area:.6g} mm², "
-                        f"but the copies of the cell landing on it cover {got:.6g} mm²"
+                        f"not symmetric: piece {p['name']} ({p['file']}) has {measure} of {area:.6g} {unit}, "
+                        f"but the copies of the cell landing on it cover {got:.6g} {unit}"
                     )
             labels.append(side_labels)
         return labels
@@ -161,7 +170,7 @@ def _land(sides, cells, folder):
         gmsh.model.setCurrent(current)
 
 
-def _copy(sides, cells, labels):
+def _copy(sides, cells, labels, dim):
     """Model "full": every side's cell entities copied by that side's transforms, each copy a discrete entity in the
     physical group of its piece's MAT_ID; mirrored copies reversed, shared nodes merged.
     Returns {side: {mat_id: (name, entities)}}."""
@@ -176,17 +185,17 @@ def _copy(sides, cells, labels):
             owned = set()
             for (_, conn, used, _, _), copies in zip(ents, side_labels):
                 entity += 1
-                gmsh.model.addDiscreteEntity(2, entity)
+                gmsh.model.addDiscreteEntity(dim, entity)
                 mine = [n for n in used if n not in owned]  # nodes the copy's earlier entities did not add
                 owned.update(mine)
                 moved = [v for n in mine for v in _apply(m, xyz[n])]
-                gmsh.model.mesh.addNodes(2, entity, [n + offset for n in mine], moved)
+                gmsh.model.mesh.addNodes(dim, entity, [n + offset for n in mine], moved)
                 for typ, nodes in conn.items():
                     gmsh.model.mesh.addElementsByType(entity, typ, [], [n + offset for n in nodes])
                 piece = side["pieces"][copies[c]]
                 groups.setdefault(piece["mat_id"], (piece["name"], []))[1].append(entity)
                 if _det(m) < 0:
-                    mirrored.append((2, entity))
+                    mirrored.append((dim, entity))
             offset += shift
     if mirrored:
         gmsh.model.mesh.reverse(mirrored)
@@ -198,7 +207,7 @@ def _copy(sides, cells, labels):
         for id_, (name, ents) in groups.items():
             members.setdefault(id_, (name, []))[1].extend(ents)
     for id_, (name, ents) in sorted(members.items()):
-        gmsh.model.addPhysicalGroup(2, ents, id_, name=name)
+        gmsh.model.addPhysicalGroup(dim, ents, id_, name=name)
     return split
 
 
@@ -217,36 +226,44 @@ def _marker(slide):
     return point
 
 
-def _side_edges(split, side):
-    """{(node, node): number of the side's elements using that edge} in model "full"."""
-    edges = Counter()
+def _side_facets(split, side, dim):
+    """{sorted node tags: number of the side's elements using them} in model "full", over the element edges (2D) or
+    the element faces (3D)."""
+    facets = Counter()
     for _, ents in split.get(side["side"], {}).values():
         for e in ents:
-            for typ in gmsh.model.mesh.getElementTypes(2, e):
-                en = gmsh.model.mesh.getElementEdgeNodes(typ, e, primary=True)
-                edges.update(tuple(sorted((int(en[k]), int(en[k + 1])))) for k in range(0, len(en), 2))
-    return edges
+            for typ in gmsh.model.mesh.getElementTypes(dim, e):
+                for n in (2,) if dim == 2 else (3, 4):  # 3D: the triangle faces, then the quad faces
+                    if dim == 2:
+                        fn = gmsh.model.mesh.getElementEdgeNodes(typ, e, primary=True)
+                    else:
+                        fn = gmsh.model.mesh.getElementFaceNodes(typ, n, e, primary=True)
+                    facets.update(tuple(sorted(int(v) for v in fn[k : k + n])) for k in range(0, len(fn), n))
+    return facets
 
 
-def _outline(side, folder, points):
-    """For each point, the set of curves of the outer boundary of the side's pieces (their union) it lies on."""
+def _outline(side, folder, points, dim):
+    """For each point, the set of entities of the outer boundary of the side's pieces (their union) it lies on:
+    curves in 2D, faces in 3D."""
     current = gmsh.model.getCurrent()
     gmsh.model.add("outline")
     try:
-        faces = [dt for p in side["pieces"] for dt in import_brep(os.path.join(folder, p["file"]), 2)]
-        if len(faces) > 1:
-            gmsh.model.occ.fragment(faces[:1], faces[1:])
+        parts = [dt for p in side["pieces"] for dt in import_brep(os.path.join(folder, p["file"]), dim)]
+        if len(parts) > 1:
+            gmsh.model.occ.fragment(parts[:1], parts[1:])
         gmsh.model.occ.synchronize()
         box = gmsh.model.getBoundingBox(-1, -1)
         tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
         flat = [v for p in points for v in p]
         on = [set() for _ in points]
-        for _, c in gmsh.model.getEntities(1):
-            if len(gmsh.model.getAdjacencies(1, c)[0]) != 1:  # between two pieces, or loose
+        for _, c in gmsh.model.getEntities(dim - 1):
+            if len(gmsh.model.getAdjacencies(dim - 1, c)[0]) != 1:  # between two pieces, or loose
                 continue
-            near = gmsh.model.getClosestPoint(1, c, flat)[0]  # on the bounded curve
+            near = gmsh.model.getClosestPoint(dim - 1, c, flat)[0]  # on a plane's face: anywhere on the plane
+            b = gmsh.model.getBoundingBox(dim - 1, c)
             for k, p in enumerate(points):
-                if math.dist(p, near[3 * k : 3 * k + 3]) <= tol:
+                inside = all(b[i] - tol <= p[i] <= b[i + 3] + tol for i in range(3))
+                if inside and math.dist(p, near[3 * k : 3 * k + 3]) <= tol:
                     on[k].add(c)
         return on
     finally:
@@ -254,20 +271,20 @@ def _outline(side, folder, points):
         gmsh.model.setCurrent(current)
 
 
-def _conform(sides, split, folder):
-    """Every mesh edge that only one element of a side uses lies on the outer boundary of the side's pieces: the
-    copies meet node to node everywhere else."""
+def _conform(sides, split, folder, dim):
+    """Every mesh edge (2D) or element face (3D) that only one element of a side uses lies on the outer boundary of
+    the side's pieces: the copies meet node to node everywhere else."""
     tags, coords, _ = gmsh.model.mesh.getNodes()
     xyz = {int(t): list(coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
     for side in sides:
-        loose = [e for e, k in _side_edges(split, side).items() if k == 1]
-        nodes = sorted({n for e in loose for n in e})
-        on = dict(zip(nodes, _outline(side, folder, [xyz[n] for n in nodes])))
-        bad = next((e for e in loose if not on[e[0]] & on[e[1]]), None)
+        loose = [f for f, k in _side_facets(split, side, dim).items() if k == 1]
+        nodes = sorted({n for f in loose for n in f})
+        on = dict(zip(nodes, _outline(side, folder, [xyz[n] for n in nodes], dim)))
+        bad = next((f for f in loose if not set.intersection(*(on[n] for n in f))), None)
         if bad is not None:
-            x, y = [(a + b) / 2 for a, b in zip(xyz[bad[0]][:2], xyz[bad[1]][:2])]
+            where = ", ".join(f"{sum(xyz[n][i] for n in bad) / len(bad):.6g}" for i in range(dim))
             raise JobError(
-                f"the copies of the cell do not match near ({x:.6g}, {y:.6g}) on the {side['side']} side: their"
+                f"the copies of the cell do not match near ({where}) on the {side['side']} side: their"
                 " meshes meet there without sharing nodes"
             )
 
@@ -278,7 +295,7 @@ def _on_circle(slide, sides, split):
     tags, coords, _ = gmsh.model.mesh.getNodes()
     xyz = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
     for side in sides:
-        nodes = {v for e in _side_edges(split, side) for v in e}
+        nodes = {v for e in _side_facets(split, side, 2) for v in e}
         angles = [_angle(xyz[v]) for v in nodes if abs(math.hypot(*xyz[v][:2]) - r) <= 1e-6 * r]
         steps = [a * n / 360 for a in angles]
         grid = {round(k) % n for k in steps if abs(k - round(k)) <= 1e-6}
@@ -289,25 +306,27 @@ def _on_circle(slide, sides, split):
             )
 
 
-def _mesh(job, folder, build):
-    """Mesh the cell (gmsh initialized, model added), check it and copy it; model "full" is current.
+def _mesh(job, folder, build, dim):
+    """Mesh the cell to dimension dim (gmsh initialized, model added), check it and copy it; model "full" is current.
     Returns (sides, slide, split)."""
     sides, slide = job["symmetric"]["sides"], job["symmetric"].get("slide")
+    if slide and dim == 3:
+        raise JobError("3D sliding is not supported yet")
     build(job, folder)  # one model holds the cells of both sides
     if slide:
         _slide_arcs(slide, sides)
-    _periodic(sides)
-    generate(job, 2)
-    cells = [_cell_entities(side) for side in sides]
-    labels = _land(sides, cells, folder)
-    split = _copy(sides, cells, labels)
-    _conform(sides, split, folder)
+    _periodic(sides, dim)
+    generate(job, dim)
+    cells = [_cell_entities(side, dim) for side in sides]
+    labels = _land(sides, cells, folder, dim)
+    split = _copy(sides, cells, labels, dim)
+    _conform(sides, split, folder, dim)
     if slide:
         _on_circle(slide, sides, split)
     return sides, slide, split
 
 
-def check(job_path, build):
+def check(job_path, build, dim=2):
     """--check of a symmetric job: mesh the cell, copy it and run every check, nothing written."""
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
@@ -316,15 +335,16 @@ def check(job_path, build):
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.model.add(job["model_name"])
-        _mesh(job, folder, build)
+        _mesh(job, folder, build, dim)
     finally:
         gmsh.finalize()
     print("CHECK OK")
 
 
-def run(job_path, build):
-    """Read the job, mesh its cell with build(job, folder), copy it per side, write mesh.unv and replace
-    job["mesh_file"] (and job["rotor_file"] when sliding: the moving side) with the finished .msh. Returns the job."""
+def run(job_path, build, dim=2):
+    """Read the job, mesh its cell to dimension dim with build(job, folder), copy it per side, write mesh.unv and
+    replace job["mesh_file"] (and job["rotor_file"] when sliding: the moving side) with the finished .msh. Returns the
+    job."""
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
@@ -334,7 +354,7 @@ def run(job_path, build):
     try:
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
-        _, slide, split = _mesh(job, folder, build)
+        _, slide, split = _mesh(job, folder, build, dim)
         point = _marker(slide) if slide else None
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)

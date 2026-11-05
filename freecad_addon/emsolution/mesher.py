@@ -1,10 +1,12 @@
 """Job file -> Gmsh .msh at job["mesh_file"] + mesh.unv beside the job. Runs in its own process.
 Sliding motion: the fixed side goes to job["mesh_file"], the moving side to job["rotor_file"].
+A job with a "symmetric" key meshes only the cell and copies it (meshsym.py).
 Never import FreeCAD here.
 
 Usage: python mesher.py <job.json> [--check]   (--check: geometry checks only, nothing written)
 """
 
+import json
 import os
 import sys
 
@@ -12,6 +14,7 @@ import gmsh
 
 from meshcommon import (
     JobError,
+    check,
     apply_size_fields,
     apply_transfinite,
     main,
@@ -28,6 +31,7 @@ from meshcommon import (
     import_brep,
     slide_split,
 )
+import meshsym
 
 
 def _import_one(path, *dims):
@@ -146,7 +150,23 @@ def build(job, folder):
     return split
 
 
+def _symmetric(job_path):
+    with open(job_path, encoding="utf-8") as fh:
+        return "symmetric" in json.load(fh)
+
+
+def check_job(job_path, build):
+    """--check: a symmetric job meshes and copies its cell to run its checks (meshsym.check)."""
+    if _symmetric(job_path):
+        meshsym.check(job_path, build, 3)
+    else:
+        check(job_path, build)
+
+
 def run_job(job_path):
+    if _symmetric(job_path):  # mesh the cell and copy it
+        print("\n".join(meshsym.report(meshsym.run(job_path, build, 3))))
+        return
     job = run(job_path, build, 3)
     for item in job["volumes"] + air_items(job):
         if item["mat_id"] in job["unwritten"]:
@@ -167,4 +187,4 @@ def run_job(job_path):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv, "mesher.py", run_job, build))
+    sys.exit(main(sys.argv, "mesher.py", run_job, build, check_job))
