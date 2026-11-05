@@ -177,6 +177,19 @@ def write_slides(study, folder, job):
         job["periodic"] = period
 
 
+def _distinct_faces(body, faces):
+    """faces (names like Face3) of body without a second pick of the same wall: the two coincident copies of an
+    internal face give one surface, else the second would land on nothing."""
+    shape = meshed_shape(body)
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    kept = []
+    for name in faces:
+        face = shape.getElement(name)
+        if not any(objects.coincident_faces(face, shape.getElement(k), tol) for k in kept):
+            kept.append(name)
+    return kept
+
+
 def write_symmetric(study, folder, ids):
     """The job["symmetric"] block: per side the cells (local ids), copy transforms and pieces; the slide if sliding."""
     main, moving, _ = geometry.setup(study)
@@ -209,8 +222,8 @@ def write_symmetric(study, folder, ids):
                     for body, faces in objects.subs_by_body(e):
                         if body.Name == item.Top.Name and faces:
                             smat_id = int(study.SmatIds[f"{e.Name}|{body.Name}"])
-                            files = export_subs(folder, body, faces, f"exc_{smat_id}")
-                            name = objects.clean(objects.display_name(e))
+                            files = export_subs(folder, body, _distinct_faces(body, faces), f"exc_{smat_id}")
+                            name = objects.item_name(e, body)
                             entry["excitations"].append({"smat_id": smat_id, "name": name, "files": files})
             sides.append(entry)
     block = {"sides": sides}

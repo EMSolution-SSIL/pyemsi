@@ -53,7 +53,8 @@ def test_mirror_error_does_not_say_2d(motor3d):
 
 def test_cell_body_that_is_a_face_is_refused(motor3d):
     motor3d.Document.getObject("CoilCell").Shape = symcases.sector(37, 50, 10, 15)
-    assert _has(motor3d, "CoilCell", "has no solid")
+    assert _has(motor3d, "CoilCell", "has no solid", "a cutting face or solid")
+    assert not [t for t in _texts(motor3d) if "sketch" in t]
 
 
 def test_overlap_is_measured_by_volume(motor3d):
@@ -143,12 +144,35 @@ def test_job_3d_has_cells_solids_and_excitations(motor3d):
     assert (len(fixed["transforms"]), len(moving["transforms"])) == (24, 16)
     assert len(fixed["pieces"]) + len(moving["pieces"]) == 120
     top = objects.symmetric_items(motor3d)[0].Top
-    smat = int(motor3d.SmatIds[f"{objects.excitations(motor3d)[0].Name}|{top.Name}"])
+    (exc,) = objects.excitations(motor3d)
+    smat = int(motor3d.SmatIds[f"{exc.Name}|{top.Name}"])
+    name = objects.item_name(exc, top)  # as a non-symmetric Study names it: <excitation>_<body>
+    assert name == f"Coil01Ends_{objects.clean(top.Label)}"
     assert fixed["excitations"] == [
-        {"smat_id": smat, "name": "Coil01Ends", "files": [f"geometry/exc_{smat}_1.brep", f"geometry/exc_{smat}_2.brep"]}
+        {"smat_id": smat, "name": name, "files": [f"geometry/exc_{smat}_1.brep", f"geometry/exc_{smat}_2.brep"]}
     ]
     assert moving["excitations"] == []
     assert job["symmetric"]["slide"]["cross_divisions"] == 2
+
+
+def test_both_copies_of_an_internal_face_give_one_excitation_file(motor3d):
+    top = objects.symmetric_items(motor3d)[0].Top
+    shape = _top_shape(motor3d)
+    name, _, _ = _duplicates(shape)["Plane"]
+    tol = 1e-6 * shape.BoundBox.DiagonalLength
+    face = shape.getElement(name)
+    twin = next(
+        f"Face{i}"
+        for i, f in enumerate(shape.Faces, 1)
+        if f"Face{i}" != name and objects.coincident_faces(face, f, tol)
+    )
+    (exc,) = objects.excitations(motor3d)
+    exc.References = [(top, (name, twin))]
+    motor3d.Document.recompute()
+    with open(jobwriter.write_job(motor3d), encoding="utf-8") as fh:
+        job = json.load(fh)
+    (entry,) = job["symmetric"]["sides"][0]["excitations"]
+    assert len(entry["files"]) == 1
 
 
 def test_symmetric_3d_job_meshes_into_both_files(motor3d):
@@ -209,6 +233,53 @@ def test_shared_solid_face_without_a_view_is_undecided(motor3d):
     shape = _top_shape(motor3d)
     name = next(f"Face{i + 1}" for i in range(len(shape.Faces)) if len(_owners(shape, f"Face{i + 1}")) == 2)
     assert objects.piece_solid(shape, name, None, None) is None
+
+
+def _duplicates(shape):
+    """{surface kind: (face name, its isSame owner, the owner of the coincident copy)}: internal walls that are two
+    coincident faces, one per solid, as the Boolean Fragments of the motor leaves them."""
+    faces = shape.Faces
+    owners = [[k for k, s in enumerate(shape.Solids, 1) if any(f.isSame(g) for g in s.Faces)] for f in faces]
+    singles = [i for i, own in enumerate(owners) if len(own) == 1]
+    found = {}
+    for i in singles:
+        a = faces[i]
+        for j in singles:
+            b = faces[j]
+            if (
+                j != i
+                and abs(a.Area - b.Area) < 1e-6 * a.Area
+                and a.CenterOfMass.distanceToPoint(b.CenterOfMass) < 1e-6
+            ):
+                found.setdefault(type(a.Surface).__name__, (f"Face{i + 1}", owners[i][0], owners[j][0]))
+    return found
+
+
+def test_coincident_duplicate_face_has_both_solids(motor3d):
+    shape = _top_shape(motor3d)
+    found = _duplicates(shape)
+    assert {"Plane", "Cylinder"} <= set(found), found
+    for name, own, other in found.values():
+        assert own != other
+        assert sorted(objects.face_solids(shape, name)) == sorted([f"Solid{own}", f"Solid{other}"])
+        picked = shape.getElement(name).CenterOfMass
+        for owner in (own, other):  # the far side from the camera, from both view directions
+            view = shape.Solids[owner - 1].CenterOfMass - picked
+            assert objects.piece_solid(shape, name, picked, view) == f"Solid{owner}"
+        assert objects.piece_solid(shape, name, None, None) is None
+
+
+def test_sliding_interface_on_flat_tops_has_no_cylinder(motor3d):
+    """2D cells in a 3D Study: the tops have no height. The cylinder is not built; validation says why."""
+    doc = motor3d.Document
+    for cell in objects.cell_bodies(motor3d):
+        cell.Shape = Part.makeCompound([f for f in cell.Shape.Faces if f.BoundBox.ZMax < 1e-9])
+    doc.recompute()
+    (iface,) = objects.sliding_interfaces(motor3d)
+    iface.touch()
+    doc.recompute([iface])
+    assert "Invalid" not in iface.State and iface.Shape.isNull()
+    assert _has(motor3d, "has no solid")
 
 
 def test_curved_shared_face_with_a_pick_off_the_surface():

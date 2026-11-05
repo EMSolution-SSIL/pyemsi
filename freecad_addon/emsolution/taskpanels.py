@@ -125,9 +125,9 @@ def ask_solid(face, names):
 
 
 def selected_piece_solids(study):
-    """[(top, SolidN)] for a 3D symmetric Study: the solid of each clicked face of a Symmetric Mesh top. A face two
-    solids share is decided by the solid behind the click, seen from the 3D view; when that cannot be told the user
-    is asked, and a Cancel skips the pick."""
+    """([(top, SolidN)], cancelled) for a 3D symmetric Study: the solid of each clicked face of a Symmetric Mesh top.
+    A face of two solids is decided by the solid behind the click, seen from the 3D view; when that cannot be told
+    the user is asked, and a Cancel skips the pick (cancelled is then True)."""
     from . import geometry
 
     tops = {i.Top.Name for i in objects.symmetric_items(study) if i.Top is not None}
@@ -135,7 +135,7 @@ def selected_piece_solids(study):
         view = Gui.ActiveDocument.ActiveView.getViewDirection()
     except Exception:  # no 3D view: shared faces are asked about
         view = None
-    out = []
+    out, cancelled = [], False
     for sel in Gui.Selection.getSelectionEx():
         body = objects.pick_body(sel.Object)
         if body is None or body.Name not in tops:
@@ -151,9 +151,10 @@ def selected_piece_solids(study):
             if solid is None:
                 names = objects.face_solids(shape, sub)
                 solid = ask_solid(f"{objects.display_name(body)}.{sub}", names) if names else None
+                cancelled = cancelled or bool(names) and solid is None
             if solid is not None and (body, solid) not in out:
                 out.append((body, solid))
-    return out
+    return out, cancelled
 
 
 def selected_faces():
@@ -1466,8 +1467,10 @@ class MaterialPanel:
 
     def picks(self):
         """What the selection offers: faces (3D: their solids) of Symmetric Mesh tops, or whole bodies."""
+        self.cancelled = False
         if self.piece == "Solid":
-            return selected_piece_solids(self.study)
+            picks, self.cancelled = selected_piece_solids(self.study)
+            return picks
         if self.pieces:
             tops = {i.Top.Name for i in objects.symmetric_items(self.study) if i.Top is not None}
             return [(b, s) for b, s in selected_subs(("Face",)) if b.Name in tops]
@@ -1516,8 +1519,10 @@ class MaterialPanel:
         if not self.take(picks) and not picks:
             if not Gui.Selection.getSelectionEx():
                 warn("Nothing is selected. Pick geometry in the 3D view first.")
+            elif self.cancelled:
+                pass  # a Cancel in the question about a face of two solids
             elif self.piece == "Solid" and selected_subs(("Face",)):
-                pass  # a Cancel in the question about a shared face
+                warn("No solid of the drawing has the selected face: click a face of a Symmetric Mesh top.")
             elif self.pieces and selected_bodies():
                 warn(f"Materials go on the {self.piece.lower()}s (pieces) of the drawing: select faces.")
             else:

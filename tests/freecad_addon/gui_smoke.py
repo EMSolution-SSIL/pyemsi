@@ -1597,11 +1597,11 @@ def main():
     taskpanels.set_active_study(study3)
     top3 = study3.MainObjects[0]
 
-    def owners(face):
-        return [f"Solid{k}" for k, s in enumerate(top3.Shape.Solids, 1) if any(face.isSame(g) for g in s.Faces)]
+    def owners(face):  # face: a name like Face3; a shared face or one with a coincident copy has two
+        return objects.face_solids(top3.Shape, face)
 
-    single = next(f"Face{i}" for i, f in enumerate(top3.Shape.Faces, 1) if len(owners(f)) == 1)
-    shared = next(f"Face{i}" for i, f in enumerate(top3.Shape.Faces, 1) if len(owners(f)) == 2)
+    single = next(f"Face{i}" for i in range(1, len(top3.Shape.Faces) + 1) if len(owners(f"Face{i}")) == 1)
+    shared = next(f"Face{i}" for i in range(1, len(top3.Shape.Faces) + 1) if len(owners(f"Face{i}")) == 2)
     solid_asks, solid_answers = [], []
     real_ask_solid = taskpanels.ask_solid
     taskpanels.ask_solid = lambda face, names: (solid_asks.append((face, names)), solid_answers.pop(0))[1]
@@ -1610,7 +1610,7 @@ def main():
     move_answers.append(True)  # every solid already has a Material
     Gui.runCommand("EMS_Material")
     panel = material_panels.pop()
-    (want,) = owners(top3.Shape.getElement(single))
+    (want,) = owners(single)
     assert panel.current == [(top3, want)] and not solid_asks, (panel.current, solid_asks)
     assert any(w.text().startswith("Click a face of each solid") for w in panel.form.findChildren(QtWidgets.QLabel))
     assert panel.refs.item(0).text().endswith(want), panel.refs.item(0).text()
@@ -1622,16 +1622,18 @@ def main():
     assert objects.item_refs(made3) == [(top3, want)], objects.item_refs(made3)
     Gui.Selection.clearSelection()  # a shared face without a picked point: asked, the answer is taken
     Gui.Selection.addSelection(doc3.Name, top3.Name, shared)
-    solid_answers.append(owners(top3.Shape.getElement(shared))[1])
+    solid_answers.append(owners(shared)[1])
     move_answers.append(True)
     Gui.runCommand("EMS_Material")
     panel = material_panels.pop()
-    assert len(solid_asks) == 1 and solid_asks[0][1] == owners(top3.Shape.getElement(shared)), solid_asks
-    taken = owners(top3.Shape.getElement(shared))[1]
+    assert len(solid_asks) == 1 and solid_asks[0][1] == owners(shared), solid_asks
+    taken = owners(shared)[1]
     assert panel.current == [(top3, taken)] and panel.reject(), panel.current
-    solid_answers.append(None)  # Cancel skips the pick: no panel
+    solid_answers.append(None)  # Cancel skips the pick: no panel, no warning
+    warned_before = len(warned)
     Gui.runCommand("EMS_Material")
     assert not material_panels and not Gui.Control.activeDialog(), "a panel opened after Cancel"
+    assert len(warned) == warned_before, warned[warned_before:]
     taskpanels.ask_solid = real_ask_solid
     App.closeDocument(doc3.Name)
     App.setActiveDocument(doc.Name)

@@ -671,8 +671,9 @@ def _symmetric(study, main, moving, r):
             if not getattr(cell.Shape, have):
                 r.error(
                     f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} has no {kind.lower()}; a"
-                    f" cell body must be a {kind.lower()}. To cut a cell into blocks, put its {kind.lower()} and the"
-                    " cutting sketch in a Boolean Fragments and use that in the cell.",
+                    f" cell body must be a {kind.lower()}. To cut a cell into blocks, put its {kind.lower()} and"
+                    f" {'a cutting face or solid' if three else 'the cutting sketch'} in a Boolean Fragments and use"
+                    " that in the cell.",
                     item,
                     [(cell, "")],
                 )

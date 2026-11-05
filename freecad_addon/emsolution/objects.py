@@ -634,7 +634,10 @@ class SlidingInterface(_Named):
             _unplaced(obj)
             if study.Dimension == "3D":  # the cylinder over the z range of the tops
                 z0, z1 = _tops_z(study)
-                obj.Shape = Part.makeCylinder(obj.Radius.Value, z1 - z0, App.Vector(0, 0, z0)).Faces[0]
+                if z1 - z0 < 1e-6:  # flat tops (cells that are faces): no cylinder, validation says why
+                    obj.Shape = Part.Shape()
+                else:
+                    obj.Shape = Part.makeCylinder(obj.Radius.Value, z1 - z0, App.Vector(0, 0, z0)).Faces[0]
             else:
                 obj.Shape = Part.makeCompound([Part.makeCircle(obj.Radius.Value)])  # the full circle, no Air Region
             return
@@ -672,12 +675,14 @@ def _tops_z(study):
 def stale_sliding_cylinder(iface):
     """True if iface, a 3D symmetric Study's Rotational Sliding Interface, no longer spans the z range of the tops."""
     study = owner_study(iface)
-    if study is None or study.Dimension != "3D" or not is_symmetric(study) or iface.Shape.isNull():
+    if study is None or study.Dimension != "3D" or not is_symmetric(study):
         return False
     try:
         z0, z1 = _tops_z(study)
     except ValueError:
         return False
+    if iface.Shape.isNull():  # not built, or the tops were flat: stale once they have a height
+        return z1 - z0 >= 1e-6
     box = iface.Shape.BoundBox
     return abs(box.ZMin - z0) > 1e-6 or abs(box.ZMax - z1) > 1e-6
 
@@ -1043,17 +1048,39 @@ def piece_kind(study):
     return "Solid" if study.Dimension == "3D" else "Face"
 
 
+def _bounds(shape):
+    box = shape.BoundBox
+    return (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+
+
+def coincident_faces(a, b, tol):
+    """True if faces a and b lie on each other: the same box, area and centre within tol, and touching. A Boolean
+    Fragments often leaves an internal wall as two such faces, one per solid, instead of one shared face."""
+    if any(abs(p - q) > tol for p, q in zip(_bounds(a), _bounds(b))):
+        return False
+    if abs(a.Area - b.Area) > tol * max(1.0, a.Area) or a.CenterOfMass.distanceToPoint(b.CenterOfMass) > tol:
+        return False
+    return a.distToShape(b)[0] <= tol
+
+
 def face_solids(shape, face):
-    """[SolidN] of the solids of shape that have face (a name like Face3): one, or two for a face they share."""
+    """[SolidN] of the solids of shape that have face (a name like Face3) or a face coincident with it: one, or two
+    for an internal wall, whether the solids share the face or each has its own copy of it."""
     face_shape = shape.getElement(face)
-    return [f"Solid{k}" for k, solid in enumerate(shape.Solids, 1) if any(face_shape.isSame(f) for f in solid.Faces)]
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    return [
+        f"Solid{k}"
+        for k, solid in enumerate(shape.Solids, 1)
+        if any(face_shape.isSame(f) or coincident_faces(face_shape, f, tol) for f in solid.Faces)
+    ]
 
 
 def piece_solid(shape, face, picked, view_dir):
-    """The SolidN of shape that has face (a name like Face3). A face two solids share gives the one behind it, as seen
-    along view_dir from the picked point on it (the point a little further along must be inside); None when that
-    cannot be told: picked or view_dir is None, or neither solid holds the point. The 3D view picks on the
-    tessellation, off a curved face by a fraction of a millimetre: the point is first moved onto the face."""
+    """The SolidN of shape that has face (a name like Face3). A face of two solids (shared, or coincident with a face
+    of the other) gives the one behind it, as seen along view_dir from the picked point on it (the point a little
+    further along must be inside); None when that cannot be told: picked or view_dir is None, or neither solid holds
+    the point. The 3D view picks on the tessellation, off a curved face by a fraction of a millimetre: the point is
+    first moved onto the face."""
     import Part
 
     owners = face_solids(shape, face)

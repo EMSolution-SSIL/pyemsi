@@ -133,9 +133,11 @@ class AssignMaterial(_StudyCommand):
         tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
         solids = objects.is_symmetric(study) and objects.piece_kind(study) == "Solid"
         if solids:
-            pieces = taskpanels.selected_piece_solids(study)
+            pieces, cancelled = taskpanels.selected_piece_solids(study)
+            if not pieces and cancelled:
+                return  # a Cancel in the question about a face of two solids
             if not pieces and any(b.Name in tops for b, _ in taskpanels.selected_subs(("Face",))):
-                return  # a Cancel in the question about a shared face
+                return warn("No solid of the drawing has the selected face: click a face of a solid of the drawing.")
         else:
             pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
         if pieces:
