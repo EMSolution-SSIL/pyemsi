@@ -114,7 +114,7 @@ def _walk(obj):
         n = obj.Normal
         length = math.sqrt(n.x**2 + n.y**2 + n.z**2)
         if length == 0 or abs(n.z) > TOL * length:
-            raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis (2D, XY plane only)")
+            raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis")
         m = mirror_plane((obj.Base.x, obj.Base.y), (n.x / length, n.y / length))
         found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source")).items()}
     elif _is_array(obj):
@@ -210,7 +210,7 @@ def steps(top):
             n, b = obj.Normal, obj.Base
             length = math.hypot(n.x, n.y)
             if length == 0:
-                raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis (2D, XY plane only)")
+                raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis")
             nx, ny = n.x / length, n.y / length
             d = nx * b.x + ny * b.y  # the foot of the perpendicular from the origin, on the mirror line
             angle = math.degrees(math.atan2(-nx, ny)) % 180

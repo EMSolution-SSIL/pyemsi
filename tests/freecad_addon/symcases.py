@@ -52,17 +52,22 @@ def chain(doc, part, cells, mirror_deg, count):
     return frag
 
 
-def motor_doc(doc):
-    """Build the stator and rotor cells and their full-circle chains in doc."""
+def motor_doc(doc, height=0):
+    """Build the stator and rotor cells and their full-circle chains in doc. height > 0 extrudes every cell face
+    0..height in z, so the cells are solids (a 3D drawing)."""
+
+    def cell(name, face):
+        return feature(doc, name, face.extrude(V(0, 0, height)) if height else face)
+
     stator_cells = [
-        feature(doc, "StatorIronCell", sector(36, 60, 0, 15).cut(sector(37, 50, 10, 15)).Faces[0]),
-        feature(doc, "CoilCell", sector(37, 50, 10, 15)),
-        feature(doc, "StatorAirCell", sector(35, 36, 0, 15)),
+        cell("StatorIronCell", sector(36, 60, 0, 15).cut(sector(37, 50, 10, 15)).Faces[0]),
+        cell("CoilCell", sector(37, 50, 10, 15)),
+        cell("StatorAirCell", sector(35, 36, 0, 15)),
     ]
     rotor_cells = [
-        feature(doc, "RotorIronCell", sector(10, 30, 0, 22.5)),
-        feature(doc, "MagnetCell", sector(30, 34, 4.5, 22.5)),
-        feature(doc, "RotorAirCell", sector(30, 35, 0, 22.5).cut(sector(30, 34, 4.5, 22.5)).Faces[0]),
+        cell("RotorIronCell", sector(10, 30, 0, 22.5)),
+        cell("MagnetCell", sector(30, 34, 4.5, 22.5)),
+        cell("RotorAirCell", sector(30, 35, 0, 22.5).cut(sector(30, 34, 4.5, 22.5)).Faces[0]),
     ]
     stator_top = chain(doc, "Stator", stator_cells, 15, 12)
     rotor_top = chain(doc, "Rotor", rotor_cells, 22.5, 8)
@@ -72,6 +77,11 @@ def motor_doc(doc):
         "stator_top": stator_top,
         "rotor_top": rotor_top,
     }
+
+
+def motor_doc_3d(doc, height=10):
+    """motor_doc with every cell face extruded 0..height in z: the same chains, built from solids."""
+    return motor_doc(doc, height)
 
 
 def split_coil(doc, radius=43):
@@ -129,5 +139,41 @@ def motor_study(doc):
             groups.setdefault(_piece_name(face, part), []).append((top, f"Face{i + 1}"))
     for name in sorted(groups):
         objects.assign_pieces(study, name, groups[name], lib, 0)
+    doc.recompute()
+    return study
+
+
+def motor_study_3d(doc, height=10):
+    """A 3D Study with sliding motion on motor_doc_3d, like motor_study: a Material on each piece group (the pieces
+    are Solids) and the Excitation Coil01Ends on the two faces at z = height of the Coil01 solids."""
+    import json
+
+    from emsolution import objects
+
+    from .materialdata import STEEL, record
+
+    info = motor_doc_3d(doc, height)
+    study = objects.make_study(doc, "3D")
+    study.MainMode, study.MainObjects = "Manual", [info["stator_top"]]
+    study.MovingMode, study.MovingObjects = "Manual", [info["rotor_top"]]
+    study.MeshSizesGroup.DefaultMeshSize = 1.5  # finer than the thinnest cell (air, 1.7 mm): no coarse-mesh warning
+    study.Movement = "Sliding motion"
+    for top in (info["stator_top"], info["rotor_top"]):
+        objects.make_symmetric_mesh(study, top)
+    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL)))
+    groups = {}
+    for part, top in (("Stator", info["stator_top"]), ("Rotor", info["rotor_top"])):
+        for i, solid in enumerate(top.Shape.Solids):
+            groups.setdefault(_piece_name(solid, part), []).append((top, f"Solid{i + 1}"))
+    for name in sorted(groups):
+        objects.assign_pieces(study, name, groups[name], lib, 0)
+    top = info["stator_top"]
+    ends = [
+        (top, f"Face{i + 1}")
+        for i, face in enumerate(top.Shape.Faces)
+        if abs(face.CenterOfMass.z - height) < 1e-6 and _piece_name(face, "Stator") == "Coil01"
+    ]
+    objects.make_excitation(study, "Coil01Ends", ends)
     doc.recompute()
     return study

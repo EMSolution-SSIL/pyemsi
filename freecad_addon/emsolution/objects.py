@@ -628,10 +628,15 @@ class SlidingInterface(_Named):
         if air is None and study is not None and is_symmetric(study):
             if obj.Kind != "Rotational":
                 raise ValueError(f"Sliding Interface {display_name(obj)}: a symmetric Study slides Rotational only")
+            import FreeCAD as App
             import Part
 
             _unplaced(obj)
-            obj.Shape = Part.makeCompound([Part.makeCircle(obj.Radius.Value)])  # the full circle, no Air Region
+            if study.Dimension == "3D":  # the cylinder over the z range of the tops
+                z0, z1 = _tops_z(study)
+                obj.Shape = Part.makeCylinder(obj.Radius.Value, z1 - z0, App.Vector(0, 0, z0)).Faces[0]
+            else:
+                obj.Shape = Part.makeCompound([Part.makeCircle(obj.Radius.Value)])  # the full circle, no Air Region
             return
         if air is None:
             raise ValueError(f"Sliding Interface {display_name(obj)}: it needs an Air Region")
@@ -654,6 +659,12 @@ def _make_folder(study, prop, cls):
 
         taskpanels.attach_view_provider(folder)
     return folder
+
+
+def _tops_z(study):
+    """(zmin, zmax) of the tops of the Study's Symmetric Mesh items."""
+    boxes = [i.Top.Shape.BoundBox for i in symmetric_items(study) if i.Top is not None]
+    return min(b.ZMin for b in boxes), max(b.ZMax for b in boxes)
 
 
 def make_study(doc, dimension="3D", label=None, movement="No movement"):
@@ -1010,6 +1021,11 @@ def symmetric_items(study):
 
 def is_symmetric(study):
     return bool(symmetric_items(study))
+
+
+def piece_kind(study):
+    """What a piece of a symmetric Study is: a Face in 2D, a Solid in 3D."""
+    return "Solid" if study.Dimension == "3D" else "Face"
 
 
 def cell_bodies(study):
@@ -1369,6 +1385,8 @@ def surface_keys(study):
     if study.Dimension == "2D":
         return []  # 2D Studies have no excitations yet
     included = set(volume_keys(study))
+    if is_symmetric(study):  # excitations sit on the tops of the Symmetric Mesh items
+        included = {i.Top.Name for i in symmetric_items(study) if i.Top is not None}
     return list(
         dict.fromkeys(
             f"{e.Name}|{b.Name}" for e in excitations(study) for b, _ in subs_by_body(e) if b.Name in included

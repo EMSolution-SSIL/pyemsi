@@ -645,8 +645,10 @@ def _symmetric(study, main, moving, r):
     and _materials."""
     items = objects.symmetric_items(study)
     sliding = study.Movement == "Sliding motion"
-    if airshapes.study_plane(study) != "XY":
-        r.error("A Symmetric Mesh needs a 2D Study in the XY plane.")
+    three = study.Dimension == "3D"
+    kind = objects.piece_kind(study)
+    if not three and airshapes.study_plane(study) != "XY":
+        r.error("A Symmetric Mesh needs a 3D Study or a 2D Study in the XY plane.")
     for air in objects.air_regions(study):
         r.error(f"Air Region {objects.display_name(air)}: a Study with a Symmetric Mesh has no Air Region.", air)
     copies = {}  # item name -> number of copies of the cell
@@ -660,17 +662,18 @@ def _symmetric(study, main, moving, r):
             r.error(f"Symmetric Mesh {item.Label}: {e}", item)
             continue
         copies[item.Name] = len(transforms)
+        have = "Solids" if three else "Faces"
         for cell in cells:
-            if not cell.Shape.Faces:
+            if not getattr(cell.Shape, have):
                 r.error(
-                    f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} has no face; a cell body"
-                    " must be a face. To cut a cell into blocks, put its face and the cutting sketch in a Boolean"
-                    " Fragments and use that in the cell.",
+                    f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} has no {kind.lower()}; a"
+                    f" cell body must be a {kind.lower()}. To cut a cell into blocks, put its {kind.lower()} and the"
+                    " cutting sketch in a Boolean Fragments and use that in the cell.",
                     item,
                     [(cell, "")],
                 )
-        if all(cell.Shape.Faces for cell in cells):
-            _overlaps(item, cells, transforms, r)
+        if all(getattr(cell.Shape, have) for cell in cells):
+            _overlaps(item, cells, transforms, r, three)
     top_side = {}  # top Name -> "main" or "moving"
     for side, bodies in (("main", main), ("moving", moving if sliding else [])):
         names = {b.Name for b in bodies}
@@ -711,6 +714,15 @@ def _symmetric(study, main, moving, r):
                 [(b, "") for b in on],
             )
     cells = {b.Name for b in objects.cell_bodies(study)}
+    for e in objects.excitations(study):
+        on = [b for b, _ in objects.subs_by_body(e) if b.Name in cells]
+        for b in on:
+            r.error(
+                f"Excitation {e.Label} refers to {objects.display_name(b)}: copies are not where it is drawn."
+                " Pick the faces on the drawing.",
+                e,
+                [(b, "")],
+            )
     for m in objects.materials(study):
         if m.Body is not None and m.Body.Name in tops:
             r.error(
@@ -728,7 +740,7 @@ def _symmetric(study, main, moving, r):
             )
 
 
-def _overlaps(item, cells, transforms, r):
+def _overlaps(item, cells, transforms, r, three=False):
     """The copies of the cell may only touch (split-cell PRD R3). A cell body past the mirror line or the edge of the
     cell, or a Polar Array with too many copies, makes them overlap, and the mesher would fail with only a point.
     Any two copies overlap the way the cell overlaps one of its copies, so the cell is tested against each copy.
@@ -743,16 +755,24 @@ def _overlaps(item, cells, transforms, r):
                 if not mine.BoundBox.intersect(copy.BoundBox):
                     continue
                 common = mine.common(copy)
-                if common.Area <= 1e-6 * min(mine.Area, copy.Area):
+                if three:
+                    if common.Volume <= 1e-6 * min(mine.Volume, copy.Volume):
+                        continue  # they only touch
+                elif common.Area <= 1e-6 * min(mine.Area, copy.Area):
                     continue  # they only touch
                 if symmetry.det(m) < 0:
                     how = "a mirrored copy"
                 else:
                     how = f"a copy turned by {math.degrees(math.atan2(m[4], m[0])):.4g}°"
-                c = max(common.Faces, key=lambda f: f.Area).CenterOfMass
+                if three:
+                    c = max(common.Solids, key=lambda s: s.Volume).CenterOfMass
+                    where, size = f"({c.x:.6g}, {c.y:.6g}, {c.z:.6g})", f"{common.Volume:.3g} mm³"
+                else:
+                    c = max(common.Faces, key=lambda f: f.Area).CenterOfMass
+                    where, size = f"({c.x:.6g}, {c.y:.6g})", f"{common.Area:.3g} mm²"
                 r.error(
                     f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} overlaps {how} of"
-                    f" {objects.display_name(other)} near ({c.x:.6g}, {c.y:.6g}), by {common.Area:.3g} mm². The copies"
+                    f" {objects.display_name(other)} near {where}, by {size}. The copies"
                     " of a cell may only touch: keep every cell body inside the cell, between the Mirror's line and"
                     " the edge the Polar Array turns, and check the Polar Array's count and angle.",
                     item,
@@ -806,12 +826,18 @@ def _moved(m, tops, r):
             )
 
 
+def _parts(top, kind):
+    """The pieces of a top: its faces (2D) or solids (3D)."""
+    return top.Shape.Solids if kind == "Solid" else top.Shape.Faces
+
+
 def _pieces(study, item_of, top_side, r):
     """Every face of a top has exactly one assignment; an assignment keeps to one side and to tops. item_of: top
     Name -> its Symmetric Mesh item, which carries the coverage errors."""
     tops = {name: item.Top for name, item in item_of.items()}
     gone = {}  # top Name -> {assignment Label: [faces it names that the top no longer has]}
-    owners = {(name, f"Face{n}"): [] for name, top in tops.items() for n in range(1, len(top.Shape.Faces) + 1)}
+    kind = objects.piece_kind(study)
+    owners = {(name, f"{kind}{n}"): [] for name, top in tops.items() for n in range(1, len(_parts(top, kind)) + 1)}
     for m in objects.piece_assignments(study):
         sides = set()
         for body, subs in m.Pieces:
@@ -843,7 +869,7 @@ def _pieces(study, item_of, top_side, r):
             item_of[name],
         )
     for name, top in tops.items():
-        faces = [f"Face{n}" for n in range(1, len(top.Shape.Faces) + 1)]
+        faces = [f"{kind}{n}" for n in range(1, len(_parts(top, kind)) + 1)]
         none = [f for f in faces if not owners[(name, f)]]
         two = [f for f in faces if len(owners[(name, f)]) > 1]
         if none:
