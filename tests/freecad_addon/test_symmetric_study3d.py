@@ -1,16 +1,21 @@
 """Symmetric Mesh in a 3D Study: validation, solids as pieces, excitations on tops, the sliding cylinder.
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_symmetric_study3d.py"""
 
+import json
 import math
+import os
+import subprocess
+import sys
 
 import pytest
 
 import FreeCAD as App
 import Part
 
-from emsolution import objects
+from emsolution import jobwriter, objects
 
-from . import symcases
+from . import meshreport, symcases
+from .test_meshsym3d import mesh_check_3d, slide_nodes, surface_group
 from .test_symmetric_study import _has, _problems, _texts
 
 
@@ -126,3 +131,42 @@ def test_2d_motor_still_validates_clean(tmp_path):
     finally:
         for name in list(App.listDocuments()):
             App.closeDocument(name)
+
+
+def test_job_3d_has_cells_solids_and_excitations(motor3d):
+    with open(jobwriter.write_job(motor3d), encoding="utf-8") as fh:
+        job = json.load(fh)
+    assert "dimension" not in job and job["surfaces"] == []
+    assert [v["mat_id"] for v in job["volumes"]] == [1, 2, 3, 4, 5, 6]
+    fixed, moving = job["symmetric"]["sides"]
+    assert (fixed["side"], moving["side"]) == ("fixed", "moving")
+    assert (len(fixed["transforms"]), len(moving["transforms"])) == (24, 16)
+    assert len(fixed["pieces"]) + len(moving["pieces"]) == 120
+    top = objects.symmetric_items(motor3d)[0].Top
+    smat = int(motor3d.SmatIds[f"{objects.excitations(motor3d)[0].Name}|{top.Name}"])
+    assert fixed["excitations"] == [
+        {"smat_id": smat, "name": "Coil01Ends", "files": [f"geometry/exc_{smat}_1.brep", f"geometry/exc_{smat}_2.brep"]}
+    ]
+    assert moving["excitations"] == []
+    assert job["symmetric"]["slide"]["cross_divisions"] == 2
+
+
+def test_symmetric_3d_job_meshes_into_both_files(motor3d):
+    motor3d.MeshSizesGroup.DefaultMeshSize = 4  # coarser than the fixture: warnings are fine, errors are not
+    path = jobwriter.write_job(motor3d)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher.py")
+    r = subprocess.run([sys.executable, mesher, path, "--check"], capture_output=True, encoding="utf-8")
+    assert r.returncode == 0 and "CHECK OK" in r.stdout, r.stdout + r.stderr
+    r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    fixed_msh, rotor_msh = job["mesh_file"], job["rotor_file"]
+    ids = {p["mat_id"] for s in job["symmetric"]["sides"] for p in s["pieces"]}
+    assert set(meshreport.groups(fixed_msh)) | set(meshreport.groups(rotor_msh)) == ids
+    exc = job["symmetric"]["sides"][0]["excitations"][0]["smat_id"]
+    assert surface_group(fixed_msh, exc)[1] > 0 and surface_group(rotor_msh, exc) is None
+    assert len(slide_nodes(fixed_msh, 35)) > 0 and slide_nodes(fixed_msh, 35) == slide_nodes(rotor_msh, 35)
+    for msh in (fixed_msh, rotor_msh):
+        assert mesh_check_3d(msh, (35,), (0, 10))[1] == 0
+    assert meshreport._marker(rotor_msh, 1) is not None and meshreport._marker(fixed_msh, 1) is None

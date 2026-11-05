@@ -202,9 +202,17 @@ def write_symmetric(study, folder, ids):
                         pieces.append(
                             {"mat_id": int(study.MatIds[m.Name]), "name": objects.volume_name(m), "file": rel}
                         )
-            sides.append(
-                {"side": side, "cells": [ids[c.Name] for c in cells], "transforms": transforms, "pieces": pieces}
-            )
+            entry = {"side": side, "cells": [ids[c.Name] for c in cells], "transforms": transforms, "pieces": pieces}
+            if study.Dimension == "3D":  # each Excitation's faces on this top, one file per face
+                entry["excitations"] = []
+                for e in objects.excitations(study):
+                    for body, faces in objects.subs_by_body(e):
+                        if body.Name == item.Top.Name and faces:
+                            smat_id = int(study.SmatIds[f"{e.Name}|{body.Name}"])
+                            files = export_subs(folder, body, faces, f"exc_{smat_id}")
+                            name = objects.clean(objects.display_name(e))
+                            entry["excitations"].append({"smat_id": smat_id, "name": name, "files": files})
+            sides.append(entry)
     block = {"sides": sides}
     for iface in objects.sliding_interfaces(study):  # validation refuses a second one and any but Rotational
         block["slide"] = {
@@ -212,9 +220,10 @@ def write_symmetric(study, folder, ids):
             "kind": "rotational",
             "radius": iface.Radius.Value,
             "divisions": iface.Divisions,
-            "slide_mat_id": int(study.MatIds[iface.Name]),
-            "full": True,
         }
+        if study.Dimension == "3D":
+            block["slide"]["cross_divisions"] = iface.CrossDivisions
+        block["slide"].update(slide_mat_id=int(study.MatIds[iface.Name]), full=True)
     return block
 
 
