@@ -36,26 +36,42 @@ def plane_of(face):
     return None
 
 
-OUTSIDE = {"Part::Cut": "Tool", "Part::Mirroring": "Source"}  # the input whose volume the result leaves out
+# The input whose volume the result leaves out, by TypeId or, for a Python feature, by its Proxy class: a Cut's tool,
+# a mirror image's source and a Draft Clone's original (a copy placed elsewhere), a Part Join Cutout's tool.
+OUTSIDE = {"Part::Cut": "Tool", "Part::Mirroring": "Source", "Clone": "Objects", "FeatureCutout": "Tool"}
+
+
+def _kind(obj):
+    proxy = getattr(obj, "Proxy", None)
+    return type(proxy).__name__ if proxy is not None else obj.TypeId
+
+
+def _linked(item):
+    """The objects a link value names as a whole: an object, or (object, subnames) where a subname ending in "."
+    names an object inside it (a Link into a Part: "AirBox.") and one ending in an element ("Edge3") is a reference."""
+    if not isinstance(item, tuple):
+        return [item]
+    obj, subs = item[0], item[1] if len(item) > 1 else ()
+    subs = [subs] if isinstance(subs, str) else list(subs)
+    if not any(subs):
+        return [obj]
+    return [obj.getSubObject(s, retType=1) for s in subs if s and not s.rsplit(".", 1)[-1]]
 
 
 def _made_from(obj):
     """The objects whose volume obj holds: those it links as a whole. A link to an edge, face or vertex (a ruled
     surface's curves), an expression, a hidden back-link (a PartDesign feature's Body) and the input in OUTSIDE
     only shape or place obj."""
-    out, skip, found = obj.OutList, OUTSIDE.get(obj.TypeId), []
+    out, skip, found = obj.OutList, OUTSIDE.get(_kind(obj)), []
     for prop in obj.PropertiesList:
         kind = obj.getTypeIdOfProperty(prop)
         if prop == skip or not (kind.startswith("App::PropertyLink") or kind.startswith("App::PropertyXLink")):
             continue
         value = obj.getPropertyByName(prop)
         for item in value if isinstance(value, list) else [value]:
-            if isinstance(item, tuple):  # (object, sub-elements)
-                item, subs = item[0], item[1] if len(item) > 1 else ()
-                if any([subs] if isinstance(subs, str) else subs):
-                    continue
-            if isinstance(item, App.DocumentObject) and item in out:
-                found.append(item)
+            if not (isinstance(item, tuple) and item[0] in out) and item not in out:
+                continue
+            found += [o for o in _linked(item) if isinstance(o, App.DocumentObject)]
     return found
 
 
