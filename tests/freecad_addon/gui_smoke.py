@@ -1603,6 +1603,7 @@ def main():
     single = next(f"Face{i}" for i, f in enumerate(top3.Shape.Faces, 1) if len(owners(f)) == 1)
     shared = next(f"Face{i}" for i, f in enumerate(top3.Shape.Faces, 1) if len(owners(f)) == 2)
     solid_asks, solid_answers = [], []
+    real_ask_solid = taskpanels.ask_solid
     taskpanels.ask_solid = lambda face, names: (solid_asks.append((face, names)), solid_answers.pop(0))[1]
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc3.Name, top3.Name, single)
@@ -1631,6 +1632,7 @@ def main():
     solid_answers.append(None)  # Cancel skips the pick: no panel
     Gui.runCommand("EMS_Material")
     assert not material_panels and not Gui.Control.activeDialog(), "a panel opened after Cancel"
+    taskpanels.ask_solid = real_ask_solid
     App.closeDocument(doc3.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")

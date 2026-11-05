@@ -131,8 +131,11 @@ class AssignMaterial(_StudyCommand):
             return
         bodies = taskpanels.selected_bodies()
         tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
-        if objects.is_symmetric(study) and objects.piece_kind(study) == "Solid":
+        solids = objects.is_symmetric(study) and objects.piece_kind(study) == "Solid"
+        if solids:
             pieces = taskpanels.selected_piece_solids(study)
+            if not pieces and any(b.Name in tops for b, _ in taskpanels.selected_subs(("Face",))):
+                return  # a Cancel in the question about a shared face
         else:
             pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
         if pieces:
@@ -141,7 +144,10 @@ class AssignMaterial(_StudyCommand):
             return
         whole = [b for b in bodies if b.Name in tops]
         if whole:
-            return warn(f"Materials go on the faces (pieces) of {objects.display_name(whole[0])}: select faces first.")
+            name = objects.display_name(whole[0])
+            if solids:
+                return warn(f"Materials go on the solids (pieces) of {name}: click a face of each solid first.")
+            return warn(f"Materials go on the faces (pieces) of {name}: select faces first.")
         if not gate(study, bodies):  # with nothing selected, still refused without main geometry
             return
         if objects.is_symmetric(study):  # its Materials are on faces: the panel picks them

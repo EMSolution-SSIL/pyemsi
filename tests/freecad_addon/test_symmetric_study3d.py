@@ -205,7 +205,34 @@ def test_shared_face_gives_the_solid_behind_it(motor3d):
         assert objects.piece_solid(shape, name, picked, view) == f"Solid{owner}"
 
 
-def test_shared_face_without_a_view_is_undecided(motor3d):
+def test_shared_solid_face_without_a_view_is_undecided(motor3d):
     shape = _top_shape(motor3d)
     name = next(f"Face{i + 1}" for i in range(len(shape.Faces)) if len(_owners(shape, f"Face{i + 1}")) == 2)
     assert objects.piece_solid(shape, name, None, None) is None
+
+
+def test_curved_shared_face_with_a_pick_off_the_surface():
+    import math
+
+    import FreeCAD as App
+
+    radius = 36.0
+    inner = Part.makeCylinder(radius, 10, App.Vector(0, 0, 0), App.Vector(0, 0, 1), 15)
+    outer = Part.makeCylinder(radius + 10, 10, App.Vector(0, 0, 0), App.Vector(0, 0, 1), 15).cut(inner)
+    shape = inner.generalFuse([outer])[0]  # two solids sharing the cylinder wall
+    (name,) = [
+        f"Face{i + 1}"
+        for i, face in enumerate(shape.Faces)
+        if type(face.Surface).__name__ == "Cylinder" and len(_owners(shape, f"Face{i + 1}")) == 2
+    ]
+    face = shape.getElement(name)
+    centre = face.CenterOfMass  # on the chord side of the wall, as a pick on the tessellation is
+    assert abs(math.hypot(centre.x, centre.y) - radius) > 0.1
+    radial = App.Vector(centre.x, centre.y, 0).normalize()
+    on_surface = App.Vector(radial.x * radius, radial.y * radius, centre.z)
+    owners = _owners(shape, name)
+    inside = next(k for k in owners if shape.Solids[k - 1].isInside(on_surface - radial * 1e-3, 0, True))
+    outside = next(k for k in owners if shape.Solids[k - 1].isInside(on_surface + radial * 1e-3, 0, True))
+    assert inside != outside
+    assert objects.piece_solid(shape, name, centre, radial) == f"Solid{outside}"  # from the bore, looking out
+    assert objects.piece_solid(shape, name, centre, -radial) == f"Solid{inside}"  # from outside, looking in

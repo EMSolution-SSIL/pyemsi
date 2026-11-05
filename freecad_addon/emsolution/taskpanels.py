@@ -149,8 +149,7 @@ def selected_piece_solids(study):
             picked = points[k] if len(points) == len(subs) else None
             solid = objects.piece_solid(shape, sub, picked, view)
             if solid is None:
-                face = shape.getElement(sub)
-                names = [f"Solid{j + 1}" for j, s in enumerate(shape.Solids) if any(face.isSame(f) for f in s.Faces)]
+                names = objects.face_solids(shape, sub)
                 solid = ask_solid(f"{objects.display_name(body)}.{sub}", names) if names else None
             if solid is not None and (body, solid) not in out:
                 out.append((body, solid))
@@ -1517,6 +1516,8 @@ class MaterialPanel:
         if not self.take(picks) and not picks:
             if not Gui.Selection.getSelectionEx():
                 warn("Nothing is selected. Pick geometry in the 3D view first.")
+            elif self.piece == "Solid" and selected_subs(("Face",)):
+                pass  # a Cancel in the question about a shared face
             elif self.pieces and selected_bodies():
                 warn(f"Materials go on the {self.piece.lower()}s (pieces) of the drawing: select faces.")
             else:

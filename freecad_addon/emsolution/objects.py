@@ -1043,20 +1043,29 @@ def piece_kind(study):
     return "Solid" if study.Dimension == "3D" else "Face"
 
 
+def face_solids(shape, face):
+    """[SolidN] of the solids of shape that have face (a name like Face3): one, or two for a face they share."""
+    face_shape = shape.getElement(face)
+    return [f"Solid{k}" for k, solid in enumerate(shape.Solids, 1) if any(face_shape.isSame(f) for f in solid.Faces)]
+
+
 def piece_solid(shape, face, picked, view_dir):
     """The SolidN of shape that has face (a name like Face3). A face two solids share gives the one behind it, as seen
     along view_dir from the picked point on it (the point a little further along must be inside); None when that
-    cannot be told: picked or view_dir is None, or neither solid holds the point."""
-    face_shape = shape.getElement(face)
-    owners = [k for k, solid in enumerate(shape.Solids) if any(face_shape.isSame(f) for f in solid.Faces)]
+    cannot be told: picked or view_dir is None, or neither solid holds the point. The 3D view picks on the
+    tessellation, off a curved face by a fraction of a millimetre: the point is first moved onto the face."""
+    import Part
+
+    owners = face_solids(shape, face)
     if len(owners) == 1:
-        return f"Solid{owners[0] + 1}"
+        return owners[0]
     if len(owners) != 2 or picked is None or view_dir is None or view_dir.Length == 0:
         return None
+    on_face = shape.getElement(face).distToShape(Part.Vertex(picked))[1][0][0]
     step = type(view_dir)(view_dir).normalize() * (1e-4 * shape.BoundBox.DiagonalLength)
-    for k in owners:
-        if shape.Solids[k].isInside(picked + step, 0, True):
-            return f"Solid{k + 1}"
+    for name in owners:
+        if shape.Solids[int(name[5:]) - 1].isInside(on_face + step, 0, True):
+            return name
     return None
 
 
