@@ -34,14 +34,18 @@ def write_sector_solids(path, *sectors):
         gmsh.finalize()
 
 
-def write_face(path, sector=None, corners=None, z=0):
-    """One BREP holding one face: the add_sector face of sector (inner, outer, a0, a1) at height z, or the planar
-    polygon of corners [(x, y, z)]."""
+def write_face(path, sector=None, corners=None, z=0, wall=None):
+    """One BREP holding one face: the add_sector face of sector (inner, outer, a0, a1) at height z, the planar
+    polygon of corners [(x, y, z)], or the cylinder face of wall (radius, a0, a1, z0, z1)."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         occ = gmsh.model.occ
-        if sector:
+        if wall:
+            r, a0, a1, z0, z1 = wall
+            arc = occ.addCircle(0, 0, z0, r, angle1=math.radians(a0), angle2=math.radians(a1))
+            occ.extrude([(1, arc)], 0, 0, z1 - z0)
+        elif sector:
             occ.translate(add_sector(*sector), 0, 0, z)
         else:
             pts = [occ.addPoint(*p) for p in corners]
@@ -286,6 +290,14 @@ class MeshSym3DTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("excitation Exc", r.stderr)
         self.assertIn("cover", r.stderr)
+
+    def test_excitation_on_a_curved_face_lands(self):  # the outer cylinder face r = 30, 0..45°, z 0..10
+        r = self.ring_job(excitations=self.excitation(wall=(30, 0, 45, 0, 10)))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        name, count, area = surface_group(self.files()[0], 101)
+        self.assertEqual(name, "Exc")
+        self.assertGreater(count, 0)
+        self.assertAlmostEqual(area / (30 * math.pi / 4 * 10), 1, delta=1e-2)  # flat triangles: a little less
 
     def test_excitation_lines_are_reported(self):
         r = self.ring_job(excitations=self.excitation(sector=(20, 30, 0, 45), z=10))

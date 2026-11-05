@@ -133,7 +133,14 @@ def _cell_entities(side, dim):
 
 def _cell_patches(side, dim):
     """[_entity] of the boundary entities of the side's cell bodies (faces in 3D); none when it has no excitations."""
-    return [_entity(dim - 1, f) for f in _side_seams(side, dim)] if side.get("excitations") else []
+    if not side.get("excitations"):
+        return []
+    out = []
+    for f in _side_seams(side, dim):
+        e, conn, used, centres, area = _entity(dim - 1, f)
+        near = gmsh.model.getClosestPoint(dim - 1, f, [x for p in centres for x in p])[0]  # flat elements: off a curve
+        out.append((e, conn, used, [list(near[k : k + 3]) for k in range(0, len(near), 3)], area))
+    return out
 
 
 def _land(sides, cells, folder, dim):
@@ -208,18 +215,19 @@ def _land_surfaces(sides, patches, folder, dim):
             targets = [(k, t, gmsh.model.getBoundingBox(dim - 1, t)) for k, ts in enumerate(faces) for t in ts]
             areas = [sum(gmsh.model.occ.getMass(dim - 1, t) for t in ts) for ts in faces]
             covered = [0.0] * len(files)
-            seen, side_labels = set(), []
+            seen, side_labels = [], []  # (node count, centre of the nodes) of each landed copy
             for _, _, used, centres, area in ents:
+                mean = [sum(xyz[n][i] for n in used) / len(used) for i in range(3)]
                 copies = []
                 for m in side["transforms"]:
                     moved = [_apply(m, p) for p in centres]
                     hit = next((k for k, t, b in targets if _on_face(dim - 1, t, b, moved, tol)), None)
                     if hit is not None:
-                        key = tuple(sorted(tuple(round(v / tol) for v in _apply(m, xyz[n])) for n in used))
-                        if key in seen:
+                        here = _apply(m, mean)  # the same nodes moved: the same centre, so compared within tol
+                        if any(n == len(used) and math.dist(here, p) <= tol for n, p in seen):
                             hit = None
                         else:
-                            seen.add(key)
+                            seen.append((len(used), here))
                             covered[hit] += area
                     copies.append(None if hit is None else files[hit][0])
                 side_labels.append(copies)
