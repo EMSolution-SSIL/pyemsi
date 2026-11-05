@@ -60,12 +60,7 @@ def check(study):
     ]
     elements = [(s, b, [n for n in subs if n]) for s, b, subs in sized]
     elements = [el for el in elements if el[2]]
-    size = {}
-    for s, b, subs in sized:
-        if "" in subs:  # the whole body
-            size[b.Name] = min(size.get(b.Name, s.Size.Value), s.Size.Value)
-    default = study.MeshSizesGroup.DefaultMeshSize.Value
-    volumes = [(b, size.get(b.Name, default)) for b in bodies]
+    volumes = [(b, size) for b, size, _item in validation.body_sizes(study, bodies)]
     return volumes, surfaces, elements
 
 

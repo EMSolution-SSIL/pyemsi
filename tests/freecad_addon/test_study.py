@@ -1810,6 +1810,19 @@ print('RESTORE PASS')
         self.assertEqual(len(errors), 1, errors)
         self.assertTrue(errors[0].startswith("Bodies A and B overlap by 25 mm² near (7.5, 7.5, 0)."), errors[0])
 
+    def test_mesh_size_larger_than_a_thin_body_is_a_warning(self):
+        wire = self.doc.addObject("Part::Cylinder", "Wire")
+        wire.Radius, wire.Height = 0.45, 20
+        self.doc.recompute()
+        plate = self.box("Plate", 30)  # flat faces mesh at any size
+        plate.Height = 0.5
+        self.doc.recompute()
+        self.include(wire, plate)
+        (warning,) = [w for w in self.problems(validation.WARNING) if "thick" in w]
+        self.assertTrue(warning.startswith("Mesh size 5 mm is larger than Wire is thick (about 0.88 mm)"), warning)
+        objects.make_mesh_size(self.study, 0.5, [(wire, "")])
+        self.assertEqual([w for w in self.problems(validation.WARNING) if "thick" in w], [])
+
     def test_body_a_sketch_only_references_is_not_reported_as_skipped(self):
         coil = self.doc.addObject("Part::Feature", "Coil")
         coil.Shape = Part.makePlane(10, 10)

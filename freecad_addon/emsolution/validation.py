@@ -44,6 +44,18 @@ def meshed(study, bodies):
     return {b.Name for b in bodies} | {a.Name for a in objects.air_regions(study)}
 
 
+def body_sizes(study, bodies):
+    """[(body, size, item)]: the smallest whole-body Mesh Size on each body, else the default size. item is that Mesh
+    Size, or the Mesh Sizes folder for the default. The job writer uses the same sizes."""
+    found = {}
+    for s in objects.mesh_sizes(study):
+        for b, subs in objects.subs_by_body(s):
+            if "" in subs and (b.Name not in found or s.Size.Value < found[b.Name][0]):
+                found[b.Name] = (s.Size.Value, s)
+    settings = study.MeshSizesGroup
+    return [(b, *found.get(b.Name, (settings.DefaultMeshSize.Value, settings))) for b in bodies]
+
+
 class _Report:
     def __init__(self):
         self.problems = []
@@ -85,7 +97,9 @@ def validate(study):
             r.warning(
                 f"Material {m.Label} has pieces but the Study has no Symmetric Mesh: its pieces are not meshed.", m
             )
-    _transfinite(study, objects.cell_bodies(study) if symmetric else bodies, r)  # only the cells are meshed
+    meshed_bodies = objects.cell_bodies(study) if symmetric else bodies  # only the cells are meshed
+    _coarse(study, meshed_bodies, r)
+    _transfinite(study, meshed_bodies, r)
     _names(study, bodies, included, r)
     if not symmetric:
         _materials(study, r)
@@ -215,6 +229,37 @@ def _settings(study, included, r):
     for e in objects.transfinite_edges(study):
         if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
+
+
+def thickness(shape):
+    """About how thick a solid is, 4 V / A: the diameter of a long round wire."""
+    return 4 * shape.Volume / shape.Area if shape.Area > 0 else 0.0
+
+
+def _coarse(study, bodies, r):
+    """A 3D body thinner than its mesh size gets a few broken triangles on a curved face, and the 3D mesh often fails
+    with overlapping facets. Flat faces and 2D Studies mesh at any size. Only whole-body sizes count; smaller sizes on
+    faces or edges may still save it."""
+    if study.Dimension != "3D":
+        return
+    settings = study.MeshSizesGroup
+    for body, size, item in body_sizes(study, bodies):
+        shape = geometry.global_shape(body)
+        if all(f.Surface.TypeId == "Part::GeomPlane" for f in shape.Faces):
+            continue
+        size *= settings.SizeFactor
+        if settings.MaxSize.Value > 0:
+            size = min(size, settings.MaxSize.Value)
+        if settings.MinSize.Value > 0:
+            size = max(size, settings.MinSize.Value)
+        t = thickness(shape)
+        if size > 0 and 0 < t < size:
+            r.warning(
+                f"Mesh size {size:g} mm is larger than {objects.display_name(body)} is thick (about {t:.2g} mm):"
+                " the mesher may fail with overlapping facets. Add a smaller Mesh Size for it.",
+                item,
+                [(body, "")],
+            )
 
 
 def refresh_padding(study):
