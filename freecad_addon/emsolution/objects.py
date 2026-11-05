@@ -664,7 +664,22 @@ def _make_folder(study, prop, cls):
 def _tops_z(study):
     """(zmin, zmax) of the tops of the Study's Symmetric Mesh items."""
     boxes = [i.Top.Shape.BoundBox for i in symmetric_items(study) if i.Top is not None]
+    if not boxes:
+        raise ValueError("a Symmetric Mesh item needs a top object: the Sliding Interface spans its z range")
     return min(b.ZMin for b in boxes), max(b.ZMax for b in boxes)
+
+
+def stale_sliding_cylinder(iface):
+    """True if iface, a 3D symmetric Study's Rotational Sliding Interface, no longer spans the z range of the tops."""
+    study = owner_study(iface)
+    if study is None or study.Dimension != "3D" or not is_symmetric(study) or iface.Shape.isNull():
+        return False
+    try:
+        z0, z1 = _tops_z(study)
+    except ValueError:
+        return False
+    box = iface.Shape.BoundBox
+    return abs(box.ZMin - z0) > 1e-6 or abs(box.ZMax - z1) > 1e-6
 
 
 def make_study(doc, dimension="3D", label=None, movement="No movement"):

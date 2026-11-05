@@ -80,9 +80,7 @@ def test_excitation_on_a_cell_body_is_refused(motor3d):
     cell = next(b for b in objects.cell_bodies(motor3d) if b.Name == "CoilCell")
     (exc,) = objects.excitations(motor3d)
     exc.References = [(cell, "Face1")]
-    assert _has(motor3d, "Excitation", "CoilCell", "pick the faces on the drawing") or _has(
-        motor3d, "Excitation", "CoilCell", "Pick the faces on the drawing"
-    )
+    assert _has(motor3d, "Excitation Coil01Ends refers to CoilCell", "Pick the faces on the drawing")
 
 
 def test_sliding_interface_shape_is_the_cylinder(motor3d):
@@ -91,6 +89,26 @@ def test_sliding_interface_shape_is_the_cylinder(motor3d):
     (face,) = iface.Shape.Faces
     assert isinstance(face.Surface, Part.Cylinder) and face.Surface.Radius == pytest.approx(35)
     assert face.BoundBox.ZMin == pytest.approx(0) and face.BoundBox.ZMax == pytest.approx(10)
+
+
+def test_sliding_cylinder_follows_the_tops(motor3d):
+    """Moving the cells up 2 mm moves the tops; no link tells the interface, so validation refreshes it."""
+    doc = motor3d.Document
+    for cell in objects.cell_bodies(motor3d):
+        cell.Shape = Part.makeCompound([s.translated(App.Vector(0, 0, 2)) for s in cell.Shape.Solids])
+    doc.recompute()
+    (iface,) = objects.sliding_interfaces(motor3d)
+    assert iface.Shape.BoundBox.ZMax == pytest.approx(10)  # stale until validated
+    assert [t for t in _texts(motor3d) if "overlap" in t] == []
+    box = iface.Shape.BoundBox
+    assert box.ZMin == pytest.approx(2) and box.ZMax == pytest.approx(12)
+
+
+def test_tops_without_items_have_no_z_range(motor3d):
+    for item in objects.symmetric_items(motor3d):
+        item.Top = None
+    with pytest.raises(ValueError, match="needs a top object"):
+        objects._tops_z(motor3d)
 
 
 def test_divisions_must_fit_the_copy_count_3d(motor3d):

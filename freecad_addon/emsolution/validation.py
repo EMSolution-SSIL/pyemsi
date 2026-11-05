@@ -277,6 +277,10 @@ def refresh_padding(study):
         group = [air, *air.OutListRecursive]  # an object recomputed alone does not recompute what it depends on
         if any("Touched" in o.State for o in group):
             study.Document.recompute(group)
+    for iface in objects.sliding_interfaces(study):  # the tops are not linked: a new height or a moved top
+        if objects.stale_sliding_cylinder(iface):
+            iface.touch()
+            study.Document.recompute([iface])
 
 
 def _off_size(air, plane):
@@ -726,8 +730,8 @@ def _symmetric(study, main, moving, r):
     for m in objects.materials(study):
         if m.Body is not None and m.Body.Name in tops:
             r.error(
-                f"Material {m.Label}: {objects.display_name(m.Body)} gets its Materials through pieces (its faces),"
-                " not as a whole body. Delete this assignment.",
+                f"Material {m.Label}: {objects.display_name(m.Body)} gets its Materials through pieces"
+                f" (its {kind.lower()}s), not as a whole body. Delete this assignment.",
                 m,
                 [(m.Body, "")],
             )
@@ -864,8 +868,8 @@ def _pieces(study, item_of, top_side, r):
         _moved(m, tops, r)
     for name, labels in gone.items():
         r.error(
-            f"Pieces with no Material: the faces of {_listed(list(labels))} no longer exist on {tops[name].Label}"
-            " (did the array count or the cell change?). Reselect the pieces of these Materials.",
+            f"Pieces with no Material: the {kind.lower()}s of {_listed(list(labels))} no longer exist on"
+            f" {tops[name].Label} (did the array count or the cell change?). Reselect the pieces of these Materials.",
             item_of[name],
         )
     for name, top in tops.items():
