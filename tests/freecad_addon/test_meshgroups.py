@@ -271,6 +271,37 @@ def write_ring(path, inner, outer, z0, z1):
         gmsh.finalize()
 
 
+def write_cylinders(path, *cylinders):
+    """One BREP holding a solid per (x, y, z, height, radius), axis along Z."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for x, y, z, height, radius in cylinders:
+            gmsh.model.occ.addCylinder(x, y, z, 0, 0, height, radius)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def regions_of(path, id_):
+    """How many connected regions the tetrahedra of physical group id_ form."""
+    _, elements, _ = _physical_mesh(path, (id_,))
+    tets = elements[id_][4]
+    faces = np.vstack([np.sort(tets[:, local], axis=1) for local in meshfrozen.TRI_FACES[4]])
+    owner = np.tile(np.arange(len(tets)), 4)
+    inverse = np.unique(faces, axis=0, return_inverse=True)[1].ravel()
+    order = np.argsort(inverse, kind="stable")
+    twice = np.flatnonzero(np.diff(inverse[order]) == 0)
+    pairs = np.column_stack([owner[order[twice]], owner[order[twice + 1]]])
+    return len(np.unique(meshfrozen._components(len(tets), pairs)))
+
+
+def edges_in_three(path):
+    xyz, found = read_mesh(path)
+    return meshfrozen.boundary(xyz, [found], 2).over_used
+
+
 def contact_table_of(group, folder, dim):
     gmsh.initialize()
     try:
@@ -1035,6 +1066,209 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("limit of the tool", r.stderr)
         self.assertFalse(os.path.exists(self.mesh_file()))
+
+    def strand_group(self, cylinder, transforms, size=0.8):
+        """A 3D group of one cell, the cylinder (x, y, z, height, radius)."""
+        write_cylinders(self.geo("strand.brep"), cylinder)
+        job = {"volumes": [{"mat_id": 1, "name": "Strand", "file": "geometry/strand.brep", "size": size}]}
+        job.update(surfaces=[], sizes=[])
+        rows = [{"cell": 1, "file": None, "parts": [0] * len(transforms)}]
+        group = {"name": "Strands", "side": "fixed", "job": job, "cells": [1], "transforms": transforms}
+        return dict(group, parts=self.IRON, rows=rows)
+
+    STRANDS = [translation(8 * k) for k in range(3)]
+    STRAND = (0, 0, 0, 10, 1)  # z from 0 to 10
+    STRAND_BOX = (-5, -5, 0, 30, 10, 10)
+
+    def strands_in_air(self, **air):
+        return [self.strand_group(self.STRAND, self.STRANDS)], [self.air_3d(self.STRAND_BOX, **air)]
+
+    def test_strands_ending_on_the_air_end_planes(self):
+        frozen = frozen_facets(self.meshed([self.strand_group(self.STRAND, self.STRANDS)], dim=3))
+        strands, free = self.strands_in_air(size=3.0)
+        mesh = self.meshed(strands, free=free, dim=3)
+        kept, _ = boundary_of(mesh, 20)
+        ends = {f for f in frozen if all(abs(p[2]) < 1e-6 for p in f) or all(abs(p[2] - 10) < 1e-6 for p in f)}
+        self.assertTrue(ends)
+        self.assertLessEqual(frozen - ends, kept)
+        self.assertEqual(ends & kept, set())
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertAlmostEqual(volume(mesh) / (30 * 10 * 10), 1, delta=1e-6)
+
+    def test_air_ring_flush_against_the_copies(self):  # the air's inner face is exactly the copies' outer face
+        group = self.ring_3d(self.TWELVE, ())
+        group["job"]["volumes"][0]["size"] = 2.0
+        write_ring(self.geo("air.brep"), 20, 30, 0, 5)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=4.0)], "surfaces": [], "sizes": []}}
+        mesh = self.meshed([group], free=[free], dim=3)
+        self.assertAlmostEqual(shared_area(mesh, 7, 20) / (2 * math.pi * 20 * 5), 1, delta=1e-3)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_stator_running_the_full_height_splits_the_air(self):  # bore and outside, both in the Air group
+        group = self.ring_3d(self.TWELVE, ())
+        group["job"]["volumes"][0]["size"] = 2.0
+        mesh = self.meshed([group], free=[self.air_3d((-30, -30, 0, 60, 60, 5), size=5.0)], dim=3)
+        self.assertGreater(groups(mesh)[20][1], 0)
+        self.assertEqual(regions_of(mesh, 20), 2)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertAlmostEqual(volume(mesh) / (60 * 60 * 5), 1, delta=1e-6)
+
+    def test_copy_crossing_a_curved_face_is_refused(self):
+        write_cylinders(self.geo("air.brep"), (0, 0, -5, 15, 15))  # the ring's outer part is outside the cylinder
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=4.0)], "surfaces": [], "sizes": []}}
+        r = self.run_job([self.ring_3d(self.TWELVE, ())], free=[free], dim=3)
+        self.assert_refused(r, "limit of the tool")
+        self.assertIn("curved face", r.stderr)
+
+    def test_copies_covering_part_of_a_curved_face_are_refused(self):  # flush, but on half of the turn
+        write_ring(self.geo("air.brep"), 20, 30, 0, 5)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=4.0)], "surfaces": [], "sizes": []}}
+        r = self.run_job([self.ring_3d(self.TWELVE[:6], ())], free=[free], dim=3)
+        self.assert_refused(r, "limit of the tool")
+        self.assertIn("curved face", r.stderr)
+
+    def test_copy_passing_through_a_planar_face_is_refused(self):  # it does not end on the plane
+        r = self.run_job([self.ring_3d(self.TWELVE, ())], free=[self.air_3d((-30, -30, 1, 60, 60, 3))], dim=3)
+        self.assert_refused(r, "limit of the tool")
+
+    def test_strand_flush_against_the_air_from_outside(self):  # its end cap is the air's boundary
+        below = (0, 0, -5, 5, 1)
+        frozen = frozen_facets(self.meshed([self.strand_group(below, self.STRANDS)], dim=3))
+        strands = [self.strand_group(below, self.STRANDS)]
+        mesh = self.meshed(strands, free=[self.air_3d(self.STRAND_BOX, size=3.0)], dim=3)
+        kept, _ = boundary_of(mesh, 20)
+        caps = {f for f in frozen if all(abs(p[2]) < 1e-6 for p in f)}
+        self.assertTrue(caps)
+        self.assertLessEqual(caps, kept)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh) / (30 * 10 * 10), 1, delta=1e-6)
+
+    def test_copy_ending_on_the_face_between_two_free_bodies(self):  # end cap of the body it is in, flush for the other
+        group = self.box_group((-5, -2, -2, 5, 4, 4), [ID], size=1.0)
+        write_boxes(self.geo("a.brep"), (-20, -10, -10, 20, 20, 20))
+        write_boxes(self.geo("b.brep"), (0, -10, -10, 20, 20, 20))
+        bodies = [
+            {"mat_id": 20, "name": "AirA", "file": "geometry/a.brep", "size": 6.0},
+            {"mat_id": 21, "name": "AirB", "file": "geometry/b.brep", "size": 6.0},
+        ]
+        free = {"side": "fixed", "job": {"volumes": bodies, "surfaces": [], "sizes": []}}
+        mesh = self.meshed([group], free=[free], dim=3)
+        self.assertAlmostEqual(shared_area(mesh, 20, 21), 20 * 20 - 4 * 4, delta=1e-6)
+        self.assertAlmostEqual(shared_area(mesh, 7, 21), 4 * 4, delta=1e-6)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_excitation_on_a_face_with_holes(self):  # the rebuilt face keeps its physical group
+        write_face(self.geo("top.brep"), corners=[(-5, -5, 10), (25, -5, 10), (25, 5, 10), (-5, 5, 10)])
+        surface = {"smat_id": 50, "name": "Top", "mat_id": 20, "files": ["geometry/top.brep"]}
+        strands, free = self.strands_in_air(size=3.0, surfaces=[surface])
+        mesh = self.meshed(strands, free=free, dim=3)
+        name, count, face = surface_group(mesh, 50)
+        self.assertEqual(name, "Top")
+        self.assertGreater(count, 0)
+        self.assertAlmostEqual(face / (30 * 10 - 3 * math.pi), 1, delta=1e-2)
+
+    def test_mesh_size_on_a_face_with_holes_is_used(self):
+        strands, free = self.strands_in_air(size=4.0)
+        plain = groups(self.meshed(strands, free=free, dim=3))[20][1]
+        strands, free = self.strands_in_air(size=4.0)
+        write_face(self.geo("top.brep"), corners=[(-5, -5, 10), (25, -5, 10), (25, 5, 10), (-5, 5, 10)])
+        free[0]["job"]["sizes"] = [{"name": "Top", "size": 1.0, "files": ["geometry/top.brep"]}]
+        self.assertGreater(groups(self.meshed(strands, free=free, dim=3))[20][1], 1.5 * plain)
+
+    def test_size_of_a_free_object_with_holes_is_used(self):
+        strands, free = self.strands_in_air(size=1.5)
+        fine = groups(self.meshed(strands, free=free, dim=3))[20][1]
+        strands, free = self.strands_in_air(size=4.0)
+        self.assertGreater(fine, 2 * groups(self.meshed(strands, free=free, dim=3))[20][1])
+
+    def test_air_filling_the_bore_of_the_copies(self):  # its whole lateral face lies on theirs: dropped, nothing open
+        group = self.ring_3d(self.TWELVE, ())
+        write_cylinders(self.geo("air.brep"), (0, 0, 0, 5, 10))
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=2.0)], "surfaces": [], "sizes": []}}
+        mesh = self.meshed([group], free=[free], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh) / (math.pi * 10**2 * 5), 1, delta=2e-2)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_stator_flush_against_the_cylinder_of_the_air(self):  # the air's outer face is the copies' outer face too
+        group = self.ring_3d(self.TWELVE, ())
+        group["job"]["volumes"][0]["size"] = 2.0
+        write_cylinders(self.geo("air.brep"), (0, 0, 0, 5, 20))
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=4.0)], "surfaces": [], "sizes": []}}
+        mesh = self.meshed([group], free=[free], dim=3)
+        self.assertEqual(regions_of(mesh, 20), 1)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh) / (math.pi * 10**2 * 5), 1, delta=2e-2)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_copy_in_the_corner_of_the_air(self):  # its faces cover part of three of the air's, each touching its rim
+        group = self.box_group((0, 0, 0, 2, 2, 2), [ID], size=0.8)
+        mesh = self.meshed([group], free=[self.air_3d((0, 0, 0, 10, 10, 10), size=2.5)], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh), 10**3 - 2**3, delta=1e-6)
+        self.assertAlmostEqual(shared_area(mesh, 7, 20), 3 * 2 * 2, delta=1e-6)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_hex_copies_ending_on_a_planar_face(self):  # end caps that are quads are removed, lateral ones get pyramids
+        group = self.hex_group([translation(3 * k) for k in range(3)])
+        mesh = self.meshed([group], free=[self.air_3d((-3, -3, 0, 13, 7, 7), size=1.5)], dim=3)
+        self.assertLessEqual({4, 7}, set(boundary_of(mesh, 20)[1]))
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+
+    def test_hex_copies_flush_against_a_planar_face(self):  # the end caps, quads, carry pyramids into the air
+        group = self.hex_group([translation(3 * k) for k in range(3)])
+        mesh = self.meshed([group], free=[self.air_3d((-3, -3, 1, 13, 7, 7), size=1.5)], dim=3)
+        self.assertIn(7, set(boundary_of(mesh, 20)[1]))
+        self.assertAlmostEqual(shared_area(mesh, 7, 20), 3, delta=1e-6)  # the bases of the pyramids on the three caps
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_excitation_wholly_under_copies_is_refused(self):
+        write_face(self.geo("bottom.brep"), corners=[(-5, -5, 0), (25, -5, 0), (25, 5, 0), (-5, 5, 0)])
+        surface = {"smat_id": 50, "name": "Under", "mat_id": 20, "files": ["geometry/bottom.brep"]}
+        group = self.box_group((-5, -5, -5, 30, 10, 5), [ID], size=2.0)
+        free = self.air_3d(self.STRAND_BOX, size=3.0, surfaces=[surface])
+        self.assert_refused(self.run_job([group], free=[free], dim=3), "does not fit")
+
+    def rect_group(self, rect, transforms, size=1.0, file="cell_rect.brep"):
+        write_rects(self.geo(file), rect)
+        group = self.sector_group((10, 20, 0, 30), transforms, self.IRON, size=size)
+        group["job"]["bodies"][0]["file"] = f"geometry/{file}"
+        return group
+
+    def test_2d_copies_reaching_a_straight_edge_of_the_air(self):
+        group = self.rect_group((5, 0, 4, 6), [translation(10 * k) for k in range(3)])
+        write_rects(self.geo("air.brep"), (0, 0, 40, 20))
+        mesh = self.meshed([group], free=[self.air_2d(size=3.0)])
+        self.assertAlmostEqual(area(mesh) / (40 * 20), 1, delta=1e-3)
+        self.assertEqual(edges_in_three(mesh), 0)
+        self.assertEqual(sorted(groups(mesh)), [7, 20])
+
+    def test_2d_copies_flush_against_a_straight_edge_from_outside(self):
+        group = self.rect_group((5, -6, 4, 6), [translation(10 * k) for k in range(3)])
+        write_rects(self.geo("air.brep"), (0, 0, 40, 20))
+        mesh = self.meshed([group], free=[self.air_2d(size=3.0)])
+        self.assertAlmostEqual(area(mesh, 20) / (40 * 20), 1, delta=1e-6)
+        self.assertAlmostEqual(shared_area(mesh, 7, 20), 3 * 4, delta=1e-6)
+        self.assertEqual(edges_in_three(mesh), 0)
+
+    def test_2d_copy_over_a_whole_edge_of_the_air(self):  # the edge is dropped, the copy's edge bounds the air
+        group = self.rect_group((0, -6, 40, 6), [ID])
+        write_rects(self.geo("air.brep"), (0, 0, 40, 20))
+        mesh = self.meshed([group], free=[self.air_2d(size=3.0)])
+        self.assertAlmostEqual(shared_area(mesh, 7, 20), 40, delta=1e-6)
+        self.assertEqual(edges_in_three(mesh), 0)
+
+    def test_2d_air_filling_the_bore_of_the_copies(self):  # every edge dropped: the air has no surface of its own
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, size=1.0)
+        write_disc(self.geo("air.brep"), 10)
+        mesh = self.meshed([group], free=[self.air_2d(size=2.0)])
+        self.assertAlmostEqual(area(mesh, 20) / (math.pi * 10**2), 1, delta=5e-3)
+        self.assertEqual(edges_in_three(mesh), 0)
+
+    def test_2d_copy_covering_part_of_a_curved_edge_is_refused(self):
+        group = self.sector_group((50, 60, 0, 20), self.spaced(), self.IRON, size=2.0)
+        write_disc(self.geo("air.brep"), self.DISC)
+        r = self.run_job([group], free=[self.air_2d(size=4.0)])
+        self.assert_refused(r, "limit of the tool")
+        self.assertIn("curved face", r.stderr)
 
     DISC = 50
 

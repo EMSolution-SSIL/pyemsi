@@ -200,3 +200,30 @@ def test_mesh_region_leaves_the_options_as_they_were(model):
     V, facets = nested_cubes()
     meshfrozen.mesh_region(V, facets, np.arange(12), [np.arange(12, 24)], 0.5, 3)
     assert gmsh.option.getNumber("Mesh.Renumber") == 1 and gmsh.option.getNumber("Mesh.MeshSizeMax") == 7.0
+
+
+def test_on_surface(model):
+    """A chord of the lateral face, a rim triangle of the end cap and a facet of the top with its owner outside."""
+    gmsh.model.occ.addCylinder(0, 0, 0, 0, 0, 2, 1)
+    gmsh.model.occ.synchronize()
+    faces = [abs(t) for _, t in gmsh.model.getBoundary([(3, 1)], oriented=False)]
+    lateral = next(f for f in faces if gmsh.model.getType(2, f) == "Cylinder")
+    bottom = next(f for f in faces if gmsh.model.occ.getCenterOfMass(2, f)[2] < 0.5 and f != lateral)
+    top = next(f for f in faces if f not in (lateral, bottom))
+    ring = lambda a, z: (np.cos(a), np.sin(a), z)  # noqa: E731 - one rim point
+    V = np.array([ring(0, 0), ring(0.1, 0), ring(0.1, 2), ring(0.2, 0), (0, 0, 2), (0.5, 0, 2), (0, 0.5, 2)], float)
+    V = np.vstack([V, [(0, 0, 1), (0.1, 0, 1), (0, 0.1, 1)]])
+    facets = np.array([[0, 1, 2], [0, 1, 3], [4, 5, 6], [7, 8, 9]])
+    owners = np.array([(0.5, 0, 1), (0.5, 0, -1), (0.2, 0.2, 5), (0, 0, 1)], float)
+    on = meshfrozen.on_surface(V, facets, owners, faces, 3)
+    found = dict(zip(on.index.tolist(), zip(on.face.tolist(), on.inside.tolist())))
+    assert found == {0: (lateral, True), 1: (bottom, False), 2: (top, False)}  # the last facet lies on nothing
+
+
+def test_on_surface_of_a_line_in_2d(model):
+    gmsh.model.occ.addRectangle(0, 0, 0, 4, 2)
+    gmsh.model.occ.synchronize()
+    lines = [abs(t) for _, t in gmsh.model.getBoundary([(2, 1)], oriented=False)]
+    V = np.array([(1, 0, 0), (2, 0, 0), (1, 1, 0), (2, 1, 0)], float)
+    on = meshfrozen.on_surface(V, np.array([[0, 1], [2, 3]]), np.array([(1.5, 1, 0), (1.5, 2, 0)], float), lines, 2)
+    assert on.index.tolist() == [0] and on.inside.tolist() == [True]

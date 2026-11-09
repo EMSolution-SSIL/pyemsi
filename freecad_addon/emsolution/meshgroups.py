@@ -13,7 +13,7 @@ from contextlib import contextmanager
 import gmsh
 import numpy as np
 
-from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, MSH_VERSION
+from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, FIELD_LISTS, MSH_VERSION
 import meshfrozen
 import meshsym
 
@@ -32,6 +32,10 @@ Contact = namedtuple("Contact", "a b transform area count seam")
 # side (n: the nodes of the side's copies), node n + k added[k]; surfaces: {smat_id: (name, per type)}, the 2D elements
 # of its excitation faces, numbered the same way.
 FreeBody = namedtuple("FreeBody", "name added elements surfaces")
+# One OCC volume (face in 2D) of a free body, read before anything of its model changes. faces: its faces (lines in 2D);
+# frozen: {"tri"/"quad"/"edge": mask over the side's facets that bound it}: inside it, or flush against it from
+# outside; covered: {face: [the node rows of the frozen facets lying on it]}
+Survey = namedtuple("Survey", "body entity faces frozen covered")
 IDENTITY = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 
@@ -592,16 +596,6 @@ def _structured_names(free_job, dim):
     return names + [f["name"] for f in free_job.get("recombine_faces", [])]
 
 
-def _inside(dim, entity, points):
-    """For each of points[n, 3]: True when it lies inside the OCC entity."""
-    box = np.array(gmsh.model.getBoundingBox(dim, entity))
-    tol = 1e-6 * max(1.0, float(np.linalg.norm(box[3:] - box[:3])))
-    near = np.all(points >= box[:3] - tol, axis=1) & np.all(points <= box[3:] + tol, axis=1)
-    for k in np.flatnonzero(near):
-        near[k] = gmsh.model.isInside(dim, entity, points[k].tolist()) > 0
-    return near
-
-
 def _join_onto(W, xyz):
     """Number the nodes xyz among the nodes W: each one coincident with a node of W is that node, the others are
     appended. Returns (W with them, index[len(xyz)])."""
@@ -672,46 +666,428 @@ def _refuse_inside_a_copy(name, V, side, points, dim):
                 )
 
 
-def _mesh_free_entity(body, entity, side, V, dim):
+def _survey(body, entity, side, V, dim):
+    """What the frozen facets of the side are to one OCC volume (face in 2D) of a free body: see Survey. A facet on one
+    of its faces bounds it only when its owning element is outside it (flush against it); with the owner inside it is
+    an end cap, which the free object cannot touch. Either way the face leaves room (_leave_room)."""
+    faces = _boundary(dim, [(dim, entity)])
+    kinds = {"edge": (side.edge, side.edge_owner)}
+    if dim == 3:
+        kinds = {"tri": (side.tri, side.tri_owner), "quad": (side.quad, side.quad_owner)}
+    frozen, covered = {}, {}
+    for kind, (rows, owners) in kinds.items():
+        on = meshfrozen.on_surface(V, rows, owners, faces, dim)
+        mask = meshfrozen.inside(dim, entity, V[rows].mean(axis=1))
+        mask[on.index] = ~on.inside
+        frozen[kind] = mask
+        for k, face in zip(on.index.tolist(), on.face.tolist()):
+            covered.setdefault(face, []).append(rows[k])
+    return Survey(body, entity, faces, frozen, covered)
+
+
+class _Vertices:
+    """Points that coincide are one vertex: a frozen node and a corner of the free object can be the same place. tag
+    gives its OCC point, an existing corner of the free object when it is one, else a new point at the frozen node."""
+
+    def __init__(self, V, nodes, curves):
+        corners = {int(t) for c in curves for _, t in gmsh.model.getBoundary([(1, c)], oriented=False)}
+        corners = sorted(corners)
+        xyz = [V[nodes]] + [np.array(gmsh.model.getValue(0, t, [])).reshape(1, 3) for t in corners]
+        joined = np.vstack(xyz)
+        labels = meshfrozen.join_nodes(joined)[1]
+        self.of_node = dict(zip(nodes.tolist(), labels[: len(nodes)].tolist()))
+        self.of_point = dict(zip(corners, labels[len(nodes) :].tolist()))
+        self.xyz = dict(zip(labels.tolist(), joined))
+        self.tags = {label: t for t, label in self.of_point.items()}
+
+    def tag(self, label):
+        if label not in self.tags:
+            self.tags[label] = gmsh.model.occ.addPoint(*self.xyz[label].tolist())
+        return self.tags[label]
+
+
+PART_OF_CURVED = "a copy covers only part of a curved face or edge of it"
+
+
+def _tol():
+    box = gmsh.model.getBoundingBox(-1, -1)
+    return 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
+
+
+def _pieces(curve, nodes, pairs, vertices, V, tol):
+    """The curve cut at those of the frozen nodes that lie on it: [(a, b, frozen)], a and b vertex labels, frozen True
+    when the frozen edges pairs (sets of two vertex labels) hold that stretch. Empty when no frozen node lies on it
+    but its ends."""
+    box = np.array(gmsh.model.getBoundingBox(1, curve))
+    near = nodes[np.all((V[nodes] >= box[:3] - tol) & (V[nodes] <= box[3:] + tol), axis=1)]
+    corners = [int(t) for _, t in gmsh.model.getBoundary([(1, curve)], oriented=False)]
+    if not len(near):
+        return []
+    coords = gmsh.model.getClosestPoint(1, curve, V[near].ravel().tolist())[0]
+    close = np.linalg.norm(np.reshape(coords, (-1, 3)) - V[near], axis=1) <= tol
+    on = [k for k in np.flatnonzero(close) if gmsh.model.isInside(1, curve, V[near[k]].tolist())]
+    if not on:
+        return []
+    params = gmsh.model.getParametrization(1, curve, V[near].ravel().tolist())  # getClosestPoint's parameters are junk
+    labels = [vertices.of_node[int(near[k])] for k in sorted(on, key=lambda k: params[k])]
+    ends = [vertices.of_point[t] for t in corners]
+    closed = len(set(ends)) < 2
+    if closed:
+        chain = labels + labels[:1]
+    else:
+        start, stop = _ends_in_order(curve, corners, ends)
+        chain = [start] + [v for v in labels if v not in (start, stop)] + [stop]
+    pieces = [(a, b, {a, b} in pairs) for a, b in zip(chain, chain[1:]) if a != b]
+    if not closed and len(pieces) == 1 and not pieces[0][2]:
+        return []  # only its ends touch a frozen node
+    return pieces
+
+
+def _ends_in_order(curve, corners, ends):
+    params = gmsh.model.getParametrization(1, curve, [x for t in corners for x in gmsh.model.getValue(0, t, [])])
+    return ends if params[0] <= params[1] else ends[::-1]
+
+
+def _loops(edges):
+    """Close edges [(a, b, payload)] into loops: [[(a, b, payload)]], each walked in order. None when a vertex has not
+    exactly two of them (a copy touching another at one point on the face, or edges that do not close)."""
+    at = {}
+    for k, (a, b, _) in enumerate(edges):
+        at.setdefault(a, []).append(k)
+        at.setdefault(b, []).append(k)
+    if any(len(v) != 2 for v in at.values()):
+        return None
+    loops, seen = [], set()
+    for k in range(len(edges)):
+        if k in seen:
+            continue
+        start = vertex = edges[k][0]
+        current, loop = k, []
+        while True:
+            a, b, payload = edges[current]
+            vertex_next = b if a == vertex else a
+            loop.append((vertex, vertex_next, payload))
+            seen.add(current)
+            vertex = vertex_next
+            if vertex == start:
+                break
+            current = at[vertex][0] if at[vertex][1] == current else at[vertex][1]
+        loops.append(loop)
+    return loops
+
+
+def _plane_frame(face):
+    """Two orthonormal axes of the plane of face, as an array[2, 3]."""
+    lo, hi = gmsh.model.getParametrizationBounds(2, face)
+    n = np.array(gmsh.model.getNormal(face, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]))
+    u = np.cross(n, [1.0, 0.0, 0.0] if abs(n[0]) < 0.9 else [0.0, 1.0, 0.0])
+    u /= np.linalg.norm(u)
+    return np.array([u, np.cross(n, u)])
+
+
+def _ring_points(loop, vertices):
+    """The points of a loop of _loops, in order, with whole curves sampled."""
+    points = []
+    for a, b, payload in loop:
+        kind, ref = payload
+        if kind == "curve":
+            lo, hi = gmsh.model.getParametrizationBounds(1, ref)
+            params = np.linspace(lo[0], hi[0], 25)[: -1 if a == b else None]
+            samples = np.reshape(gmsh.model.getValue(1, ref, params.tolist()), (-1, 3))
+            if a != b and np.linalg.norm(samples[0] - vertices.xyz[a]) > np.linalg.norm(samples[-1] - vertices.xyz[a]):
+                samples = samples[::-1]
+            points.extend(samples[:-1] if a != b else samples)
+        else:
+            points.append(vertices.xyz[a])
+    return np.array(points)
+
+
+def _surfaces_of(face, loops, vertices):
+    """Which loops (of _loops) of the planar face bound which of its remaining pieces: [(outer, [holes])] in loop
+    numbers. A loop inside a hole bounds an island of the face (the bore of a ring of copies, say)."""
+    frame = _plane_frame(face)
+    rings, rows, start = [], [], 0
+    for loop in loops:
+        points = _ring_points(loop, vertices) @ frame.T
+        rings.append(np.column_stack([points, np.zeros(len(points))]))
+        count = len(points)
+        rows.append(np.column_stack([np.arange(count), np.roll(np.arange(count), -1)]) + start)
+        start += count
+    flat, facets = np.vstack(rings), np.vstack(rows)
+    shells, first = [], 0
+    for ring in rings:
+        shells.append(np.arange(first, first + len(ring)))
+        first += len(ring)
+    return meshfrozen.nest(flat, facets, shells)
+
+
+def _new_size_field(by_size, dim):
+    """One Constant field per {size: [entities of dimension dim]}, joined to the background Min field."""
+    field = gmsh.model.mesh.field
+    fmin = next(f for f in field.list() if field.getType(f) == "Min")
+    fields = [int(f) for f in field.getNumbers(fmin, "FieldsList")]
+    for size, tags in by_size.items():
+        f = field.add("Constant")
+        field.setNumber(f, "VIn", float(size))
+        field.setNumbers(f, FIELD_LISTS[dim], tags)
+        field.setNumber(f, "IncludeBoundary", 1)
+        fields.append(f)
+    field.setNumbers(fmin, "FieldsList", fields)
+
+
+def _carry_size_picks(replaced, dim):
+    """A Mesh Size picked on a face (line in 2D) that was replaced goes on to what replaced it."""
+    field = gmsh.model.mesh.field
+    for f in field.list():
+        if field.getType(f) != "Constant":
+            continue
+        old = [int(t) for t in field.getNumbers(f, FIELD_LISTS[dim])]
+        if any(t in replaced for t in old):
+            field.setNumbers(f, FIELD_LISTS[dim], [n for t in old for n in replaced.get(t, [t])])
+
+
+def _physical_groups_of(replaced, dim):
+    """[(physical tag, name, entity tags)] of the physical groups of dimension dim that hold a replaced entity."""
+    found = []
+    for _, tag in gmsh.model.getPhysicalGroups(dim):
+        members = [int(e) for e in gmsh.model.getEntitiesForPhysicalGroup(dim, tag)]
+        if any(e in replaced for e in members):
+            found.append((tag, gmsh.model.getPhysicalName(dim, tag), members))
+    return found
+
+
+def _carry_physical_groups(saved, replaced, dim):
+    """Put each physical group of saved back with its replaced entities swapped for what replaced them."""
+    for tag, name, members in saved:
+        gmsh.model.removePhysicalGroups([(dim, tag)])
+        new = [n for e in members for n in replaced.get(e, [e])]
+        if new:
+            gmsh.model.addPhysicalGroup(dim, new, tag, name=name)
+
+
+def _outer_edges(rows, name, V):
+    """The edges of the facets rows (a list of node rows of 3 or 4) that just one of them has: the boundary of the
+    region they cover. Three facets on an edge are not a region."""
+    edges = np.array([[r[k], r[(k + 1) % len(r)]] for r in (row.tolist() for row in rows) for k in range(len(r))])
+    unique, counts = np.unique(np.sort(edges, axis=1), axis=0, return_counts=True)
+    if (counts > 2).any():
+        raise _limit(name, "copies overlap on its surface", _text(V[unique[counts > 2][0]].mean(axis=0), 3))
+    return unique[counts == 1]
+
+
+def _open_lines(surveys, covered, names, V):
+    """2D: a line of the free object that frozen edges lie on leaves room for them: dropped when they cover it, split at
+    their end nodes otherwise, the pieces meshed as new lines. A curved line partly covered is a limit of the tool.
+    Returns {line: [its new lines]}."""
+    occ = gmsh.model.occ
+    tol = _tol()
+    nodes = np.unique(np.vstack([np.asarray(rows) for rows in covered.values()]))
+    vertices = _Vertices(V, nodes, list(covered))
+    sizes = {f: s.body["size"] for s in surveys for f in s.faces}
+    replaced, by_size = {}, {}
+    for line, rows in covered.items():
+        pairs = {frozenset(vertices.of_node[int(n)] for n in r) for r in rows}
+        pieces = [p for p in _pieces(line, nodes, pairs, vertices, V, tol) if not p[2]]
+        if pieces and gmsh.model.getType(1, line) != "Line":
+            raise _limit(names[line], PART_OF_CURVED, _text(V[rows[0]].mean(axis=0), 2))
+        replaced[line] = [occ.addLine(vertices.tag(a), vertices.tag(b)) for a, b, _ in pieces]
+        if replaced[line]:
+            by_size.setdefault(sizes[line], []).extend(replaced[line])
+    occ.synchronize()
+    if by_size:
+        _new_size_field(by_size, 1)
+    _carry_size_picks(replaced, 1)
+    return replaced
+
+
+def _open_faces(surveys, covered, names, V):
+    """3D: the faces that frozen facets lie on leave room for them, and so do the faces that share a curve with those. A
+    face wholly covered is dropped; a planar one partly covered is rebuilt with one hole per loop of the region's outer
+    edges, through the exact nodes of the copies (each polygon line one element), and a stretch of a bounding curve that
+    only reaches a frozen node is kept. A curved face partly covered, or next to a covered face without being covered
+    itself, is a limit of the tool. Returns {face: [the faces in its place]}, new tags after an occ.remove of the
+    volumes: their face lists come from the surveys, read first."""
+    tol = _tol()
+    faces = {f for s in surveys for f in s.faces}
+    outer = {f: _outer_edges(rows, names[f], V) for f, rows in covered.items()}
+    nodes = np.unique(np.vstack(list(outer.values())))
+    curves_of = {f: [abs(int(t)) for _, t in gmsh.model.getBoundary([(2, f)], oriented=False)] for f in faces}
+    curves = sorted({c for cs in curves_of.values() for c in cs})
+    seams = {c for c in curves if len(gmsh.model.getAdjacencies(1, c)[0]) < 2}  # bounds a single face: its seam
+    vertices = _Vertices(V, nodes, [c for c in curves if c not in seams])
+    every = {frozenset(vertices.of_node[int(n)] for n in e) for edges in outer.values() for e in edges}
+    pieces = {}
+    for c in curves:
+        if c not in seams:
+            cut = _pieces(c, nodes, every, vertices, V, tol)
+            if cut:
+                pieces[c] = cut
+    for c, cut in pieces.items():
+        if gmsh.model.getType(1, c) != "Line" and not all(frozen for _, _, frozen in cut):
+            owner = next(f for f in faces if c in curves_of[f])
+            where = _text(np.mean([vertices.xyz[a] for a, _, _ in cut], axis=0), 3)
+            raise _limit(names[owner], PART_OF_CURVED, where)
+    plans, dropped = {}, []
+    for f in sorted(faces):
+        cuts_a_curve = any(c in pieces for c in curves_of[f])
+        if f not in outer and not cuts_a_curve:
+            continue
+        mine = {frozenset(vertices.of_node[int(n)] for n in e) for e in outer.get(f, ())}
+        edges, along = [], set()
+        for c in curves_of[f]:
+            if c in seams:
+                continue
+            if c not in pieces:
+                ends = [vertices.of_point[int(t)] for _, t in gmsh.model.getBoundary([(1, c)], oriented=False)]
+                a, b = (ends[0], ends[-1]) if ends else (-c, -c)  # a closed curve is a loop on its own
+                edges.append((a, b, ("curve", c)))
+                continue
+            for a, b, frozen in pieces[c]:
+                if frozen and frozenset((a, b)) in mine:
+                    along.add(frozenset((a, b)))
+                else:
+                    edges.append((a, b, ("frozen" if frozen else "line", None)))
+        for pair in mine - along:  # the region's edges inside the face
+            a, b = sorted(pair)
+            edges.append((a, b, ("frozen", None)))
+        if not edges:
+            dropped.append(f)
+            continue
+        if gmsh.model.getType(2, f) != "Plane":
+            where = V[covered[f][0]].mean(axis=0) if f in covered else gmsh.model.occ.getCenterOfMass(2, f)
+            raise _limit(names[f], PART_OF_CURVED, _text(where, 3))
+        plans[f] = edges
+    return _rebuild(plans, dropped, surveys, vertices, names, V)
+
+
+def _rebuild(plans, dropped, surveys, vertices, names, V):
+    """Apply _open_faces: every free volume that has a face to change is taken out of the OCC model (not its faces),
+    each of those faces is removed and the planned ones are made again as plane surfaces, keeping physical groups and
+    sizes. Returns {face: [new faces]}."""
+    occ = gmsh.model.occ
+    replaced = {f: [] for f in dropped}
+    loops_of = {}
+    for f, edges in plans.items():
+        loops = _loops(edges)
+        if loops is None:  # two loops touching at a point
+            where = gmsh.model.occ.getCenterOfMass(2, f)
+            raise _limit(names[f], "copies touch each other at a point on a face of it", _text(where, 3))
+        loops_of[f] = loops
+    gone = set(plans) | set(dropped)
+    volumes = sorted({int(v) for f in gone for v in gmsh.model.getAdjacencies(2, f)[0]})
+    saved = _physical_groups_of(gone, 2)
+    occ.remove([(3, v) for v in volumes], recursive=False)
+    occ.remove([(2, f) for f in sorted(gone)], recursive=False)
+    polygon, lines = set(), {}
+
+    def line(a, b, frozen):
+        key = frozenset((a, b))
+        if key not in lines:
+            lines[key] = occ.addLine(vertices.tag(a), vertices.tag(b))
+        if frozen:
+            polygon.add(lines[key])
+        return lines[key]
+
+    for f, loops in loops_of.items():
+        wires = []
+        for loop in loops:
+            curves = [
+                payload[1] if payload[0] == "curve" else line(a, b, payload[0] == "frozen") for a, b, payload in loop
+            ]
+            wires.append(occ.addCurveLoop(curves))
+        replaced[f] = [
+            occ.addPlaneSurface([wires[outer]] + [wires[h] for h in holes])
+            for outer, holes in _surfaces_of(f, loops, vertices)
+        ]
+    occ.synchronize()
+    for tag in polygon:
+        gmsh.model.mesh.setTransfiniteCurve(tag, 2)
+    _carry_physical_groups(saved, replaced, 2)
+    _carry_size_picks(replaced, 2)
+    gone_volumes = set(volumes)
+    _carry_size_picks({v: [] for v in gone_volumes}, 3)  # a size field naming a volume that is gone would fail
+    by_size = {}
+    for s in surveys:
+        if s.entity in gone_volumes:
+            for f in s.faces:
+                by_size.setdefault(s.body["size"], set()).update(replaced.get(f, [f]))
+    if by_size:
+        _new_size_field({size: sorted(tags) for size, tags in by_size.items()}, 2)
+    return replaced
+
+
+def _leave_room(surveys, V, dim):
+    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines). Returns the surveys with the
+    faces they have now, for the model has changed."""
+    covered = {}
+    for s in surveys:
+        covered.update(s.covered)  # a face between two bodies has the same facets on it for both
+    if not covered:
+        return surveys
+    names = {f: s.body["name"] for s in surveys for f in s.faces}
+    replaced = (_open_faces if dim == 3 else _open_lines)(surveys, covered, names, V)
+    return [s._replace(faces=[n for f in s.faces for n in replaced.get(f, [f])]) for s in surveys]
+
+
+def _meets(faces, where, dim):
+    """What it is that an open surface near the point where shows: the copy crosses a curved face, or a planar one."""
+    if not faces:
+        return "a copy meets its surface"
+    nearest = min(
+        faces,
+        key=lambda f: math.dist(where, gmsh.model.getClosestPoint(dim - 1, f, list(map(float, where)))[0]),
+    )
+    if gmsh.model.getType(dim - 1, nearest) in ("Plane", "Line"):
+        return "a copy crosses its surface without ending on it"
+    return "a copy crosses a curved face of it"
+
+
+def _mesh_free_entity(survey, side, V, dim):
     """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
-    and the frozen facets of the side whose centroid is inside it bound one region or several (nest), each meshed by
+    and the frozen facets that bound it (survey.frozen) bound one region or several (nest), each meshed by
     mesh_region. Returns (W, elements, own): W is V with the apexes of the pyramids and the new nodes appended,
     elements numbered into it, own {face: {etype: connectivity}} the mesh of each of its own faces, for excitations."""
+    body, entity, faces = survey.body, survey.entity, survey.faces
     name = body["name"]
-    faces = _boundary(dim, [(dim, entity)])
     xyz, own = meshfrozen.read_model(dim - 1, {f: [f] for f in faces})
     facet_type = 2 if dim == 3 else 1
     pyramids = np.zeros((0, 5), dtype=np.int64)
     W = V
     quads = np.zeros((0, 4), dtype=np.int64)
     if dim == 3:
-        mask, quad_mask = _inside(3, entity, V[side.tri].mean(axis=1)), _inside(3, entity, V[side.quad].mean(axis=1))
+        mask, quad_mask = survey.frozen["tri"], survey.frozen["quad"]
         tris, quads = side.tri[mask], side.quad[quad_mask]
         _refuse_coincident(name, V, (tris, quads), dim)
         W, pyramids, sides = meshfrozen.quad_pyramids(V, quads)  # gmsh sees only their triangles
         frozen, needed = np.vstack([tris, sides]), tris
         owners = np.vstack([side.tri_owner[mask], np.repeat(side.quad_owner[quad_mask], 4, axis=0)])
     else:
-        mask = _inside(2, entity, V[side.edge].mean(axis=1))
+        mask = survey.frozen["edge"]
         frozen = needed = side.edge[mask]
         _refuse_coincident(name, V, (frozen,), dim)
         owners = side.edge_owner[mask]
     W, mine = _join_onto(W, xyz)
     own = {f: {t: mine[c] for t, c in per.items()} for f, per in own.items()}
-    surface = np.vstack([per[facet_type] for per in own.values() if facet_type in per])
+    pieces = [per[facet_type] for per in own.values() if facet_type in per]
+    surface = np.vstack(pieces) if pieces else np.zeros((0, facet_type + 1), dtype=np.int64)
     facets = np.vstack([surface, frozen])
     try:
         found = meshfrozen.shells(facets)
     except meshfrozen.FrozenError as err:
         where = W[err.nodes].mean(axis=0) if err.nodes is not None else W[facets[0]].mean(axis=0)
-        raise _limit(name, "a copy meets its surface", _text(where, dim)) from None
+        raise _limit(name, _meets(faces, where, dim), _text(where, dim)) from None
     regions = meshfrozen.nest(W, facets, found)
-    own_outers = [outer for outer, _ in regions if found[outer].min() < len(surface)]
-    if len(own_outers) > 1:  # an inner surface of the free object lies inside a copy: its inside is not free space
-        where = W[facets[found[own_outers[1]][0]]].mean(axis=0)
-        raise _limit(name, "an inner surface of it lies inside a copy", _text(where, dim))
+    # own surface inside a hole of the free object (a copy around a cavity): its inside is not free space. Removing
+    # copies may leave several regions with their own outer surfaces, but those do not lie inside one another
+    for outer, _ in regions:
+        if found[outer].min() >= len(surface):
+            continue
+        point = W[facets[found[outer][0]]].mean(axis=0)
+        if any(i != outer and meshfrozen.encloses(W, facets, found[i], point) for i, _ in enumerate(found)):
+            raise _limit(name, "an inner surface of it lies inside a copy", _text(point, dim))
     # after the checks above: a surface that crosses a copy is a limit of the tool, one wholly inside it does not fit
-    _refuse_inside_a_copy(name, V, side, W[surface[[0, len(surface) // 2, -1]]].mean(axis=1), dim)
+    if len(surface):
+        _refuse_inside_a_copy(name, V, side, W[surface[[0, len(surface) // 2, -1]]].mean(axis=1), dim)
     for outer, holes in regions:  # a frozen shell has the solid of its copies inside it only when it is a hole
         for shell, solid_inside in [(outer, False)] + [(h, True) for h in holes]:
             first = found[shell][0]
@@ -758,17 +1134,27 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
     start = len(V)
     with _scratch(f"free_{free['side']}"):
         build(dict(free_job), folder)
+        bodies = free_job["bodies" if dim == 2 else "volumes"]
+        surveys = [
+            _survey(b, int(e), side_boundary, V, dim)
+            for b in bodies
+            for e in gmsh.model.getEntitiesForPhysicalGroup(dim, b["mat_id"])
+        ]
+        surveys = _leave_room(surveys, V, dim)  # only now, and the volumes of the changed faces are gone from the model
         generate(dict(free_job, options=job.get("options", {})), dim - 1)
         surfaces = free_job.get("surfaces", [])
-        for body in free_job["bodies" if dim == 2 else "volumes"]:
+        for body in bodies:
             added, elements, excited, count = [], {}, {}, 0
-            for entity in gmsh.model.getEntitiesForPhysicalGroup(dim, body["mat_id"]):
-                W, per_type, own = _mesh_free_entity(body, int(entity), side_boundary, V, dim)
+            for survey in surveys:
+                if survey.body is not body:
+                    continue
+                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim)
                 shifted = {t: np.where(c >= start, c + count, c) for t, c in per_type.items()}
                 for etype, conn in shifted.items():
                     elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
+                alive = {tag for _, tag in gmsh.model.getPhysicalGroups(2)}  # gone when its faces are all under copies
                 for s in surfaces:
-                    if s["mat_id"] != body["mat_id"]:
+                    if s["mat_id"] != body["mat_id"] or s["smat_id"] not in alive:
                         continue
                     for face in gmsh.model.getEntitiesForPhysicalGroup(2, s["smat_id"]):
                         for etype, conn in own.get(int(face), {}).items():
@@ -777,6 +1163,12 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
                             per[etype] = np.vstack([per[etype], lifted]) if etype in per else lifted
                 added.append(W[start:])
                 count += len(W) - start
+            for s in surfaces:
+                if s["mat_id"] == body["mat_id"] and s["smat_id"] not in excited:
+                    raise JobError(
+                        f"free object {body['name']}: the face of the excitation {s['name']} is wholly under copies;"
+                        " the geometry does not fit"
+                    )
             out[body["mat_id"]] = FreeBody(body["name"], np.vstack(added or [np.zeros((0, 3))]), elements, excited)
     return out
 

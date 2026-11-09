@@ -1,6 +1,6 @@
 """Array operations on frozen meshes for the mesher process: read, copy with transforms, join nodes, find the
 boundary, close quads with pyramids, split a boundary into closed shells and mesh the region they bound. numpy only
-(plus gmsh in read_model and mesh_region); never imports FreeCAD."""
+(plus gmsh in read_model, on_surface, inside and mesh_region); never imports FreeCAD."""
 
 from collections import namedtuple
 from contextlib import contextmanager
@@ -33,6 +33,9 @@ QUAD_FACES = {
 EDGE_FACES = {2: [[0, 1], [1, 2], [2, 0]], 3: [[0, 1], [1, 2], [2, 3], [3, 0]]}
 
 Boundary = namedtuple("Boundary", "tri quad edge tri_owner quad_owner edge_owner over_used shared_area")
+# index: the rows of facets lying on a face; face: the tag of that face, for each; inside: whether its owning element
+# is inside the free object, for each
+OnFaces = namedtuple("OnFaces", "index face inside")
 
 
 class FrozenError(Exception):
@@ -180,6 +183,81 @@ def boundary(V, elements, dim):
         over_used,
         shared,
     )
+
+
+def inside(dim, entity, points):
+    """For each of points[n, 3]: True when it lies inside the OCC entity of the current gmsh model."""
+    import gmsh
+
+    box = np.array(gmsh.model.getBoundingBox(dim, entity))
+    tol = 1e-6 * max(1.0, float(np.linalg.norm(box[3:] - box[:3])))
+    near = np.all(points >= box[:3] - tol, axis=1) & np.all(points <= box[3:] + tol, axis=1)
+    for k in np.flatnonzero(near):
+        near[k] = gmsh.model.isInside(dim, entity, points[k].tolist()) > 0
+    return near
+
+
+def _free_entity(face_tags, dim):
+    """The entity of dimension dim of the current gmsh model whose whole boundary is face_tags. A face between two
+    bodies is above both, so the boundary is what tells them apart."""
+    import gmsh
+
+    wanted = {int(f) for f in face_tags}
+    above = set.intersection(*[{int(e) for e in gmsh.model.getAdjacencies(dim - 1, f)[0]} for f in wanted])
+    for entity in sorted(above):
+        faces = gmsh.model.getBoundary([(dim, entity)], combined=False, oriented=False)
+        if {abs(int(t)) for _, t in faces} == wanted:
+            return entity
+    raise ValueError(f"no entity of dimension {dim} has the faces {sorted(wanted)}")
+
+
+def on_surface(V, facets, owners, face_tags, dim):
+    """The frozen facets (rows of nodes into V; owners: the centre of each one's owning element) lying on a face
+    of the free object bounded by the faces face_tags (lines in 2D) of the current gmsh model. Returns OnFaces.
+    A facet lies on a face when all its nodes do, within a small tolerance, its centre projects inside the trimmed
+    face, and in 3D its normal roughly matches the face's: a facet may be a chord of a curved face, or a triangle of
+    an end cap with all its corners on a rim."""
+    import gmsh
+
+    V = np.asarray(V, dtype=float)
+    facets = np.asarray(facets, dtype=np.int64)
+    empty = OnFaces(np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), np.zeros(0, dtype=bool))
+    if not len(facets) or not len(face_tags):
+        return empty
+    model_box = np.array(gmsh.model.getBoundingBox(-1, -1))
+    tol = 1e-6 * max(1.0, float(np.linalg.norm(model_box[3:] - model_box[:3])))
+    fdim = dim - 1
+    centres = V[facets].mean(axis=1)
+    index, faces = [], []
+    assigned = np.zeros(len(facets), dtype=bool)
+    for face in face_tags:
+        box = np.array(gmsh.model.getBoundingBox(fdim, face))
+        in_box = np.all((V[facets] >= box[:3] - tol) & (V[facets] <= box[3:] + tol), axis=(1, 2))
+        near = np.flatnonzero(in_box & ~assigned)
+        if not len(near):
+            continue
+        nodes = np.unique(facets[near])
+        points = np.asarray(gmsh.model.getClosestPoint(fdim, face, V[nodes].ravel().tolist())[0]).reshape(-1, 3)
+        on = np.zeros(len(V), dtype=bool)
+        on[nodes[np.linalg.norm(points - V[nodes], axis=1) <= tol]] = True
+        for k in near[on[facets[near]].all(axis=1)]:
+            point, uv = gmsh.model.getClosestPoint(fdim, face, centres[k].tolist())
+            if gmsh.model.isInside(fdim, face, list(point)) != 1:
+                continue
+            if dim == 3:
+                row = facets[k]
+                cross = np.cross(V[row[2]] - V[row[0]], V[row[-1]] - V[row[1]])
+                normal = np.asarray(gmsh.model.getNormal(face, list(uv)))
+                if abs(float(cross @ normal)) < 0.7 * float(np.linalg.norm(cross)):
+                    continue
+            index.append(k)
+            faces.append(int(face))
+            assigned[k] = True
+    if not index:
+        return empty
+    index = np.array(index, dtype=np.int64)
+    entity = _free_entity(face_tags, dim)
+    return OnFaces(index, np.array(faces, dtype=np.int64), inside(dim, entity, np.asarray(owners)[index]))
 
 
 def quad_pyramids(V, quads):
