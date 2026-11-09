@@ -1,7 +1,7 @@
 """Gate meshes for an EMSolution solve: two group jobs written to JSON and meshed by mesher.py.
 
-(a) a small 3D motor: stator and rotor cells over z 0..L, Mirror z = 0 and Rotate Z, a Rotational sliding interface and
-    a free air ring outside the stator;
+(a) a small 3D motor: stator iron, coils and slot air over z 0..50, the air gap band, the rotor and a free air ring
+    over z 0..75 (all mirrored at z = 0, then rotated), a Rotational sliding interface (the ring is drawn over the stator);
 (b) hexahedral coils pressed on tetrahedral iron, in a free air cylinder (hexahedra, tetrahedra and pyramids).
 
 Run: pixi run -e addon python experiments/symmetric_rules/gate_meshes.py
@@ -205,7 +205,7 @@ def motor():
         piece(folder, "rotor_magnet", lambda: sector(30, 38, 3, 27, 0, T), 2, "Magnet", 5.0),
         piece(folder, "rotor_air", rotor_air, 3, "RotorAir", 4.0),
     ]
-    rotor_parts = [{"mat_id": 3, "name": "RotorIron"}, {"mat_id": 2, "name": "Air"}]
+    rotor_parts = [{"mat_id": 3, "name": "RotorIron"}, {"mat_id": 7, "name": "RotorAir"}]
     rotor_parts += [{"mat_id": 4, "name": "MagnetN"}, {"mat_id": 5, "name": "MagnetS"}]
     rotor_rows = [[0] * 24, [2 + c % 2 for c in turn], [1] * 24]
     groups = [
@@ -225,6 +225,10 @@ def motor():
     }
     total = run("a_motor_z_mirror_sliding", folder, job)
     vols = check_mesh(job["mesh_file"])
+    fixed_ids, moving_ids = (set(ids_of(job[k])) for k in ("mesh_file", "rotor_file"))
+    print(
+        f"   MAT_IDs fixed {sorted(fixed_ids)}, moving {sorted(moving_ids)}, in common {sorted(fixed_ids & moving_ids)}"
+    )
     pi = math.pi
     slot = 12 * 2 * L * (pi * (68**2 - (R + 2) ** 2) * 18 / 360 - pi * (66**2 - (R + 6) ** 2) * 14 / 360)
     band = pi * ((R + 2) ** 2 - R**2) * 2 * T
@@ -240,6 +244,16 @@ def sector_ring(inner, outer, z0, z1):
     whole = gmsh.model.occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, outer)
     hole = gmsh.model.occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, inner)
     gmsh.model.occ.cut([(3, whole)], [(3, hole)])
+
+
+def ids_of(path):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        return [t for _, t in gmsh.model.getPhysicalGroups(3)]
+    finally:
+        gmsh.finalize()
 
 
 def check_mesh(path, expect=None):
