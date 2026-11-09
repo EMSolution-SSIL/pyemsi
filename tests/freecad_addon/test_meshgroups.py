@@ -16,7 +16,7 @@ from emsolution import meshfrozen
 from .test_mesher import MESHER, write_line
 from .test_mesher2d import MESHER2D, write_arc, write_sectors
 from .test_meshsym import compose, mesh_check, mirror_line, rotation
-from .test_meshsym3d import write_sector_solids
+from .test_meshsym3d import surface_group, write_face, write_sector_solids
 from .meshreport import groups
 
 ID = rotation(0)
@@ -253,6 +253,70 @@ class GroupJobTest(unittest.TestCase):
         self.assertAlmostEqual(volume(mesh) / (math.pi * 300 * 10), 1, delta=1e-2)
         self.assertEqual(faces_in_three(mesh), 0)
         self.assertEqual(list(groups(mesh)), [7])
+
+    def ring_3d(self, transforms, tops):
+        """A 3D group: the solid sector (10, 20, 0, 30, 0, 5) copied by transforms, with the excitation Exc (SMAT_ID
+        101) on the top faces (z = 5) of the sectors starting at the angles tops."""
+        write_sector_solids(os.path.join(self.dir, "geometry", "cell3d.brep"), (10, 20, 0, 30, 0, 5))
+        files = []
+        for k, a in enumerate(tops):
+            write_face(os.path.join(self.dir, "geometry", f"exc_{k}.brep"), sector=(10, 20, a, a + 30), z=5)
+            files.append(f"geometry/exc_{k}.brep")
+        job = {
+            "volumes": [{"mat_id": 1, "name": "Cell", "file": "geometry/cell3d.brep", "size": 3.0}],
+            "surfaces": [],
+            "sizes": [],
+        }
+        return {
+            "name": "Ring",
+            "side": "fixed",
+            "job": job,
+            "cells": [1],
+            "transforms": transforms,
+            "parts": self.IRON,
+            "rows": [{"cell": 1, "file": None, "parts": [0] * len(transforms)}],
+            "excitations": [{"smat_id": 101, "name": "Exc", "files": files}],
+        }
+
+    def test_excitation_on_end_faces_of_copies(self):
+        group = self.ring_3d(self.TWELVE, (0, 60))
+        before = groups(self.meshed([self.ring_3d(self.TWELVE, ())], dim=3))
+        mesh = self.meshed([group], dim=3)
+        name, count, area = surface_group(mesh, 101)
+        self.assertEqual(name, "Exc")
+        self.assertGreater(count, 0)
+        self.assertAlmostEqual(area / (2 * math.pi * 300 / 12), 1, delta=1e-2)
+        self.assertEqual(groups(mesh), before)
+        self.assertIn("SMAT_ID    101  Exc", self.result.stdout)
+
+    def test_excitation_with_a_mirror(self):  # the mirrored copies are reversed; only the top at z = 5 is the face
+        transforms = [compose(rotation(30 * k), m) for k in range(12) for m in (ID, MIRROR_Z)]
+        mesh = self.meshed([self.ring_3d(transforms, (0, 60))], dim=3)
+        name, count, area = surface_group(mesh, 101)
+        self.assertEqual(name, "Exc")
+        self.assertAlmostEqual(area / (2 * math.pi * 300 / 12), 1, delta=1e-2)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(groups(mesh)[7][1], groups(self.meshed([self.ring_3d(transforms, ())], dim=3))[7][1])
+
+    def test_excitation_on_a_mirrored_copy_is_reversed(self):  # the copy at 30..60 degrees is the mirror of the cell
+        transforms = [compose(rotation(60 * k), m) for k in range(6) for m in (ID, mirror_line(30))]
+        mesh = self.meshed([self.ring_3d(transforms, (30,))], dim=3)
+        self.assertAlmostEqual(surface_group(mesh, 101)[2] / (math.pi * 300 / 12), 1, delta=1e-2)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(mesh)
+            tags, coords, _ = gmsh.model.mesh.getNodes()
+            xyz = {int(t): np.array(coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
+            down = 0
+            for e in gmsh.model.getEntitiesForPhysicalGroup(2, 101):
+                for etype, _, nodes in zip(*gmsh.model.mesh.getElements(2, e)):
+                    n = np.reshape(nodes, (-1, 3 if etype == 2 else 4))
+                    for a, b, c, *_ in n:
+                        down += np.cross(xyz[int(b)] - xyz[int(a)], xyz[int(c)] - xyz[int(a)])[2] <= 0
+        finally:
+            gmsh.finalize()
+        self.assertEqual(down, 0)  # the face normals point up, out of the solid, as for an unmirrored copy
 
     def test_groups_do_not_influence_each_other(self):
         a = lambda: self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, "A", size=2.0)  # noqa: E731
