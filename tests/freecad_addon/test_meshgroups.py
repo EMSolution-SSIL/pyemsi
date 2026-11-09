@@ -398,16 +398,18 @@ class GroupJobTest(unittest.TestCase):
         self.assertIn("must reach it", r.stderr)
         self.assertIn("moving side", r.stderr)
 
-    def slide_groups_3d(self, cross=4, rotor_outer=20):
+    def slide_groups_3d(self, cross=4, rotor_outer=20, top=5, mirror=True):
         """Cells over z 0..5 (sector 30°, radius 20 the circle) mirrored at z = 0 and rotated 12 times; z_range -5..5."""
         out = []
         for k, (name, side, sector, mat) in enumerate(
-            (("Stator", "fixed", (20, 30, 0, 30, 0, 5), 5), ("Rotor", "moving", (10, rotor_outer, 0, 30, 0, 5), 6))
+            (("Stator", "fixed", (20, 30, 0, 30, 0, top), 5), ("Rotor", "moving", (10, rotor_outer, 0, 30, 0, top), 6))
         ):
             rel = f"geometry/slide_{k}.brep"
             write_sector_solids(os.path.join(self.dir, rel), sector)
             job = {"volumes": [{"mat_id": 1, "name": "Cell", "file": rel, "size": 3.0}], "surfaces": [], "sizes": []}
-            transforms = [compose(rotation(30 * c), m) for c in range(12) for m in (ID, MIRROR_Z)]
+            transforms = [
+                compose(rotation(30 * c), m) for c in range(12) for m in ((ID, MIRROR_Z) if mirror else (ID,))
+            ]
             out.append(
                 {
                     "name": name,
@@ -438,6 +440,12 @@ class GroupJobTest(unittest.TestCase):
         r = self.run_job(groups_3d, slide=slide, dim=3)
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("off the grid", r.stderr)
+
+    def test_cell_short_of_the_z_range_is_refused(self):  # cells over z 0..3, z_range -5..5, turns 12, no mirror
+        groups_3d, slide = self.slide_groups_3d(top=3, mirror=False)
+        r = self.run_job(groups_3d, slide=slide, dim=3)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("do not reach over the whole cylinder", r.stderr)
 
     def test_3d_side_that_does_not_reach_is_refused(self):
         groups_3d, slide = self.slide_groups_3d(rotor_outer=19)

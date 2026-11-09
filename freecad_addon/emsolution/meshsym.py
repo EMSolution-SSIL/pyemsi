@@ -101,9 +101,8 @@ def _slide_faces_sym(slide, sides):
     share of the divisions of the full turn around Z (whole, its corners on the 360° / divisions grid from 0°) and its
     share of cross_divisions along Z over the height of the cylinder (its corners on that grid), with the "Left"
     triangles and corner order of 3D sliding (_slide_faces). The cells of every side must reach over the whole
-    cylinder: z_range of the slide when it has one, else the height of the faces found. A side with "turns" has that
-    many copies around Z (the others are mirrors along Z): its share of the circumference is 1 / turns, and the faces
-    of its cell cover the cell's own height."""
+    cylinder: all the copies of a side together cover z_range of the slide when it has one, else the height of the
+    faces found."""
     r, n, k, name = slide["radius"], slide["divisions"], slide["cross_divisions"], slide["name"]
     tol = 1e-6 * r
     faces = {side["side"]: _cylinder_faces(side, r, tol) for side in sides}
@@ -121,9 +120,7 @@ def _slide_faces_sym(slide, sides):
     )
     for side in sides:
         area = sum(gmsh.model.occ.getMass(2, f) for f in faces[side["side"]])
-        zs = [p[2] for f in faces[side["side"]] for p in corners[f]]
-        height = max(zs) - min(zs) if "turns" in side else z1 - z0
-        need = 2 * math.pi * r / side.get("turns", len(side["transforms"])) * height
+        need = 2 * math.pi * r / len(side["transforms"]) * (z1 - z0)
         if abs(area - need) > 1e-6 * need:
             raise JobError(
                 f"sliding interface {name}: the cells of the {side['side']} side do not reach over the whole cylinder"
