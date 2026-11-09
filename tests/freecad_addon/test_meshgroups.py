@@ -1181,6 +1181,42 @@ class GroupJobTest(unittest.TestCase):
         strands, free = self.strands_in_air(size=4.0)
         self.assertGreater(fine, 2 * groups(self.meshed(strands, free=free, dim=3))[20][1])
 
+    def cap_is_kept_at_a_curved_rim(self, group, air, air_volume, size):
+        """The mesh of group and a free cylinder air (x, y, z, height, radius) on its top end, whose lateral face the
+        copies reach only along its rim: their end caps at z = 0 stay frozen, the air is a valid mesh of its volume."""
+        frozen = frozen_facets(self.meshed([group()], dim=3))
+        write_cylinders(self.geo("air.brep"), air)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=size)], "surfaces": [], "sizes": []}}
+        mesh = self.meshed([group()], free=[free], dim=3)
+        kept, _ = boundary_of(mesh, 20)
+        caps = {f for f in frozen if all(abs(p[2]) < 1e-6 for p in f)}
+        self.assertTrue(caps)
+        self.assertLessEqual(caps, kept)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh) / air_volume, 1, delta=2e-2)
+        return mesh
+
+    def test_air_cylinder_on_a_copy(self):  # a whole end flush: the lateral face is reached only along its rim
+        group = lambda: self.strand_group((0, 0, -5, 5, 1), [ID], size=0.2)  # noqa: E731 - rebuilt for each run
+        self.cap_is_kept_at_a_curved_rim(group, (0, 0, 0, 5, 1), math.pi * 5, 0.3)
+
+    def test_air_cylinder_on_a_turned_copy(self):  # no node of the copy at the rim's own vertex: that one moves to one
+        group = lambda: self.strand_group((0, 0, -5, 5, 1), [rotation(17)], size=0.2)  # noqa: E731 - as above
+        self.cap_is_kept_at_a_curved_rim(group, (0, 0, 0, 5, 1), math.pi * 5, 0.3)
+
+    def sector_solid_group(self, sector, transforms, size=1.0):
+        write_sector_solids(self.geo("wedge.brep"), sector)
+        job = {"volumes": [{"mat_id": 1, "name": "Wedge", "file": "geometry/wedge.brep", "size": size}]}
+        job.update(surfaces=[], sizes=[])
+        rows = [{"cell": 1, "file": None, "parts": [0] * len(transforms)}]
+        group = {"name": "Wedges", "side": "fixed", "job": job, "cells": [1], "transforms": transforms}
+        return dict(group, parts=self.IRON, rows=rows)
+
+    def test_copy_ending_on_a_planar_end_reaching_part_of_the_rim(self):  # the rest of the rim is still the air's
+        group = lambda: self.sector_solid_group((3, 5, 0, 60, -3, 0), [ID, rotation(120)])  # noqa: E731 - as above
+        self.cap_is_kept_at_a_curved_rim(group, (0, 0, 0, 10, 5), math.pi * 25 * 10, 1.5)
+
     def test_air_filling_the_bore_of_the_copies(self):  # its whole lateral face lies on theirs: dropped, nothing open
         group = self.ring_3d(self.TWELVE, ())
         write_cylinders(self.geo("air.brep"), (0, 0, 0, 5, 10))

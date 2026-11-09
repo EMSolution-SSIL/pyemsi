@@ -700,6 +700,12 @@ class _Vertices:
         self.xyz = dict(zip(labels.tolist(), joined))
         self.tags = {label: t for t, label in self.of_point.items()}
 
+    def add(self, xyz):
+        """A new vertex at xyz. Returns its label."""
+        label = max(self.xyz) + 1
+        self.xyz[label] = np.asarray(xyz, dtype=float)
+        return label
+
     def tag(self, label):
         if label not in self.tags:
             self.tags[label] = gmsh.model.occ.addPoint(*self.xyz[label].tolist())
@@ -746,6 +752,54 @@ def _pieces(curve, nodes, pairs, vertices, V, tol):
 def _ends_in_order(curve, corners, ends):
     params = gmsh.model.getParametrization(1, curve, [x for t in corners for x in gmsh.model.getValue(0, t, [])])
     return ends if params[0] <= params[1] else ends[::-1]
+
+
+def _chords(curve, cut, vertices, size):
+    """A curve whose stretches cannot be separate OCC curves: its pieces (see _pieces) with each stretch no frozen edge
+    holds turned into straight chords of about size. Returns (those pieces, all marked frozen, as a planar face takes
+    them; the vertices in order along the curve; True when it is closed)."""
+    lo, hi = gmsh.model.getParametrizationBounds(1, curve)
+    period = hi[0] - lo[0]
+    closed = cut[0][0] == cut[-1][1]
+    out, order = [], []
+    for a, b, frozen in cut:
+        order.append(a)
+        if frozen:
+            out.append((a, b, True))
+            continue
+        ua, ub = gmsh.model.getParametrization(1, curve, [*vertices.xyz[a], *vertices.xyz[b]])
+        ub = ub + period if ub <= ua else ub
+        along = (np.linspace(ua, ub, 33) - lo[0]) % period + lo[0] if closed else np.linspace(ua, ub, 33)
+        samples = np.reshape(gmsh.model.getValue(1, curve, along.tolist()), (-1, 3))
+        steps = max(1, math.ceil(float(np.linalg.norm(np.diff(samples, axis=0), axis=1).sum()) / size))
+        chain = [a] + [vertices.add(samples[round(32 * k / steps)]) for k in range(1, steps)] + [b]
+        out += [(p, q, True) for p, q in zip(chain, chain[1:])]
+        order += chain[1:-1]
+    if not closed:
+        order.append(cut[-1][1])
+    return out, order, closed
+
+
+def _place_rim_nodes(rims):
+    """After the curves are meshed: put the nodes of each rim, (curve, its target points in order, closed), on its
+    targets. The rim was made transfinite with as many nodes. On a closed curve the node of its own vertex goes to the
+    nearest target: the vertex stays where it is in the face's parameters, and only the node's place changes."""
+    for curve, targets, closed in rims:
+        tags, _, params = gmsh.model.mesh.getNodes(1, curve, False, True)
+        tags = np.asarray(tags)[np.argsort(params)]
+        rest = targets[1:-1] if not closed else targets
+        if closed:
+            every = gmsh.model.mesh.getNodes(1, curve, True)[0]
+            vertex = next(int(t) for t in every if t not in set(tags.tolist()))
+            first = gmsh.model.mesh.getNode(vertex)[0]
+            k = int(np.argmin(np.linalg.norm(targets - first, axis=1)))
+            gmsh.model.mesh.setNode(vertex, targets[k].tolist(), [])
+            rest = np.vstack([targets[k + 1 :], targets[:k]])
+        if len(rest) != len(tags):
+            raise JobError(f"curve {curve}: gmsh made {len(tags)} inner nodes on a rim, {len(rest)} were asked for")
+        us = gmsh.model.getParametrization(1, curve, rest.ravel().tolist())
+        for tag, point, u in zip(tags.tolist(), rest.tolist(), us.tolist()):
+            gmsh.model.mesh.setNode(tag, point, [u])
 
 
 def _loops(edges):
@@ -904,9 +958,10 @@ def _open_faces(surveys, covered, names, V):
     """3D: the faces that frozen facets lie on leave room for them, and so do the faces that share a curve with those. A
     face wholly covered is dropped; a planar one partly covered is rebuilt with one hole per loop of the region's outer
     edges, through the exact nodes of the copies (each polygon line one element), and a stretch of a bounding curve that
-    only reaches a frozen node is kept. A curved face partly covered, or next to a covered face without being covered
-    itself, is a limit of the tool. Returns {face: [the faces in its place]}, new tags after an occ.remove of the
-    volumes: their face lists come from the surveys, read first."""
+    only reaches a frozen node is kept. A curved face the copies reach only along its rim keeps its surface and its
+    curves, whose mesh goes through the frozen nodes (_chords, _place_rim_nodes). A curved face partly covered is a limit
+    of the tool. Returns ({face: [the faces in its place]}, the rims for _place_rim_nodes); the new tags come after an
+    occ.remove of the volumes: their face lists come from the surveys, read first."""
     tol = _tol()
     faces = {f for s in surveys for f in s.faces}
     outer = {f: _outer_edges(rows, names[f], V) for f, rows in covered.items()}
@@ -922,15 +977,19 @@ def _open_faces(surveys, covered, names, V):
             cut = _pieces(c, nodes, every, vertices, V, tol)
             if cut:
                 pieces[c] = cut
-    for c, cut in pieces.items():
-        if gmsh.model.getType(1, c) != "Line" and not all(frozen for _, _, frozen in cut):
-            owner = next(f for f in faces if c in curves_of[f])
-            where = _text(np.mean([vertices.xyz[a] for a, _, _ in cut], axis=0), 3)
-            raise _limit(names[owner], PART_OF_CURVED, where)
+    kept_curved = {f for f in faces if f not in outer and gmsh.model.getType(2, f) != "Plane"}
+    sizes = {f: s.body["size"] for s in surveys for f in s.faces}
+    rims = []
+    for c, cut in list(pieces.items()):
+        on_kept = any(c in curves_of[f] for f in kept_curved)
+        if on_kept or gmsh.model.getType(1, c) != "Line":
+            size = min(sizes[f] for f in faces if c in curves_of[f])
+            pieces[c], order, closed = _chords(c, cut, vertices, size)
+            if on_kept:
+                rims.append((c, np.array([vertices.xyz[v] for v in order]), closed))
     plans, dropped = {}, []
     for f in sorted(faces):
-        cuts_a_curve = any(c in pieces for c in curves_of[f])
-        if f not in outer and not cuts_a_curve:
+        if f in kept_curved or (f not in outer and not any(c in pieces for c in curves_of[f])):
             continue
         mine = {frozenset(vertices.of_node[int(n)] for n in e) for e in outer.get(f, ())}
         edges, along = [], set()
@@ -954,13 +1013,12 @@ def _open_faces(surveys, covered, names, V):
             dropped.append(f)
             continue
         if gmsh.model.getType(2, f) != "Plane":
-            where = V[covered[f][0]].mean(axis=0) if f in covered else gmsh.model.occ.getCenterOfMass(2, f)
-            raise _limit(names[f], PART_OF_CURVED, _text(where, 3))
+            raise _limit(names[f], PART_OF_CURVED, _text(V[covered[f][0]].mean(axis=0), 3))
         plans[f] = edges
-    return _rebuild(plans, dropped, surveys, vertices, names, V)
+    return _rebuild(plans, dropped, surveys, vertices, names, rims), rims
 
 
-def _rebuild(plans, dropped, surveys, vertices, names, V):
+def _rebuild(plans, dropped, surveys, vertices, names, rims):
     """Apply _open_faces: every free volume that has a face to change is taken out of the OCC model (not its faces),
     each of those faces is removed and the planned ones are made again as plane surfaces, keeping physical groups and
     sizes. Returns {face: [new faces]}."""
@@ -1002,6 +1060,8 @@ def _rebuild(plans, dropped, surveys, vertices, names, V):
     occ.synchronize()
     for tag in polygon:
         gmsh.model.mesh.setTransfiniteCurve(tag, 2)
+    for curve, targets, closed in rims:
+        gmsh.model.mesh.setTransfiniteCurve(curve, len(targets) + (1 if closed else 0))
     _carry_physical_groups(saved, replaced, 2)
     _carry_size_picks(replaced, 2)
     gone_volumes = set(volumes)
@@ -1017,16 +1077,18 @@ def _rebuild(plans, dropped, surveys, vertices, names, V):
 
 
 def _leave_room(surveys, V, dim):
-    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines). Returns the surveys with the
-    faces they have now, for the model has changed."""
+    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines). Returns (the surveys with the
+    faces they have now, for the model has changed; the rims for _place_rim_nodes)."""
     covered = {}
     for s in surveys:
         covered.update(s.covered)  # a face between two bodies has the same facets on it for both
     if not covered:
-        return surveys
+        return surveys, []
     names = {f: s.body["name"] for s in surveys for f in s.faces}
-    replaced = (_open_faces if dim == 3 else _open_lines)(surveys, covered, names, V)
-    return [s._replace(faces=[n for f in s.faces for n in replaced.get(f, [f])]) for s in surveys]
+    replaced, rims = (
+        _open_faces(surveys, covered, names, V) if dim == 3 else (_open_lines(surveys, covered, names, V), [])
+    )
+    return [s._replace(faces=[n for f in s.faces for n in replaced.get(f, [f])]) for s in surveys], rims
 
 
 def _meets(faces, where, dim):
@@ -1140,8 +1202,12 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             for b in bodies
             for e in gmsh.model.getEntitiesForPhysicalGroup(dim, b["mat_id"])
         ]
-        surveys = _leave_room(surveys, V, dim)  # only now, and the volumes of the changed faces are gone from the model
-        generate(dict(free_job, options=job.get("options", {})), dim - 1)
+        surveys, rims = _leave_room(surveys, V, dim)  # only now: the volumes of the changed faces leave the model
+        settings = dict(free_job, options=job.get("options", {}))
+        if rims:  # gmsh keeps a mesh of the curves when asked for the surfaces next
+            generate(settings, 1)
+            _place_rim_nodes(rims)
+        generate(settings, dim - 1)
         surfaces = free_job.get("surfaces", [])
         for body in bodies:
             added, elements, excited, count = [], {}, {}, 0
