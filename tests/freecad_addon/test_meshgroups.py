@@ -19,6 +19,9 @@ from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
 from .test_meshsym3d import slide_nodes, surface_group, write_face, write_sector_solids
 from .meshreport import groups
 
+sys.path.insert(0, os.path.dirname(MESHER))  # meshgroups imports its neighbours by bare name, as in the mesher process
+import meshgroups  # noqa: E402 - needs the path above
+
 ID = rotation(0)
 MIRROR_Z = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1]
 
@@ -79,6 +82,125 @@ def volume(path):
 def faces_in_three(path):
     xyz, found = read_mesh(path)
     return meshfrozen.boundary(xyz, [found], 3).over_used
+
+
+def translation(x, y=0):
+    return [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, 0, 0, 0, 0, 1]
+
+
+def write_boxes(path, *boxes):
+    """One BREP holding a solid per (x, y, z, dx, dy, dz)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for box in boxes:
+            gmsh.model.occ.addBox(*box)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_rects(path, *rects):
+    """One BREP holding a face per (x, y, dx, dy)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for x, y, dx, dy in rects:
+            gmsh.model.occ.addRectangle(x, y, 0, dx, dy)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def _polar(r, degrees):
+    return r * math.cos(math.radians(degrees)), r * math.sin(math.radians(degrees))
+
+
+def _write_loop(path, edges):
+    """One BREP holding the plane face bounded by edges: (x, y) pairs joined by lines, or (start, centre, end) arcs."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        points = {}
+
+        def point(p):
+            key = (round(p[0], 9), round(p[1], 9))
+            if key not in points:
+                points[key] = occ.addPoint(p[0], p[1], 0)
+            return points[key]
+
+        curves = [
+            occ.addLine(point(e[0]), point(e[1]))
+            if len(e) == 2
+            else occ.addCircleArc(point(e[0]), point(e[1]), point(e[2]))
+            for e in edges
+        ]
+        occ.addPlaneSurface([occ.addCurveLoop(curves)])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_sector_split_seam(path, inner, outer, angle, split):
+    """The sector from 0 to angle between the radii; its side at angle is two lines that meet at radius split."""
+    start, end = _polar(inner, 0), _polar(outer, 0)
+    middle = _polar(split, angle)
+    arc_out = (end, (0, 0), _polar(outer, angle))
+    arc_in = (_polar(inner, angle), (0, 0), start)
+    _write_loop(path, [(start, end), arc_out, (_polar(outer, angle), middle), (middle, _polar(inner, angle)), arc_in])
+
+
+def write_sector_curved_seams(path, inner, outer, angle):
+    """A sector from 0 to angle whose two sides are the same circle arc, bulging towards increasing angle."""
+    bulge = (inner + outer) / 2
+    centre = (bulge, -(outer - inner))
+    turned = _polar(math.hypot(*centre), math.degrees(math.atan2(centre[1], centre[0])) + angle)
+    arc_out = (_polar(outer, 0), (0, 0), _polar(outer, angle))
+    arc_in = (_polar(inner, angle), (0, 0), _polar(inner, 0))
+    side_0 = (_polar(inner, 0), centre, _polar(outer, 0))
+    side_angle = (_polar(outer, angle), turned, _polar(inner, angle))
+    _write_loop(path, [side_0, arc_out, side_angle, arc_in])
+
+
+def _physical_mesh(path, ids):
+    """(xyz, {id: elements of dimension dim of that physical group}, dim): the nodes of ids together, so shared."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        dim = max(d for d, _ in gmsh.model.getEntities())
+        entities = {i: list(gmsh.model.getEntitiesForPhysicalGroup(dim, i)) for i in ids}
+        xyz, elements = meshfrozen.read_model(dim, entities)
+    finally:
+        gmsh.finalize()
+    return xyz, elements, dim
+
+
+def shared_area(path, a, b):
+    """The area (length in 2D) that the elements of physical groups a and b share."""
+    xyz, elements, dim = _physical_mesh(path, (a, b))
+    both = meshfrozen.boundary(xyz, [elements[a], elements[b]], dim).shared_area
+    return both - sum(meshfrozen.boundary(xyz, [elements[k]], dim).shared_area for k in (a, b))
+
+
+def free_length(path):
+    """The total length of the element edges used by one element, of a 2D mesh in one physical group."""
+    xyz, found = read_mesh(path)
+    edges = meshfrozen.boundary(xyz, [found], 2).edge
+    return float(np.linalg.norm(xyz[edges[:, 1]] - xyz[edges[:, 0]], axis=1).sum())
+
+
+def contact_table_of(group, folder, dim):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        return meshgroups.contact_table(group, group["job"], folder, dim)
+    finally:
+        gmsh.finalize()
 
 
 class GroupJobTest(unittest.TestCase):
@@ -452,6 +574,118 @@ class GroupJobTest(unittest.TestCase):
         r = self.run_job(groups_3d, slide=slide, dim=3)
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("must reach it", r.stderr)
+
+    def geo(self, name):
+        return os.path.join(self.dir, "geometry", name)
+
+    def two_cells(self, name, key, first, second, transforms, sizes):
+        """A group of two cells, each with its own part: 1 (MAT_ID 7) in BREP first, 2 (MAT_ID 8) in second, with the
+        sizes (size of 1, size of 2). A size that differs keeps the meshes of the two from matching by chance."""
+        job = {
+            key: [
+                {"mat_id": 1, "name": "Iron", "file": first, "size": sizes[0]},
+                {"mat_id": 2, "name": "Coil", "file": second, "size": sizes[1]},
+            ],
+            "sizes": [],
+        }
+        if key == "volumes":
+            job["surfaces"] = []
+        rows = [{"cell": c, "file": None, "parts": [c - 1] * len(transforms)} for c in (1, 2)]
+        parts = [{"mat_id": 7, "name": "Iron"}, {"mat_id": 8, "name": "Coil"}]
+        group = {"name": name, "side": "fixed", "job": job, "cells": [1, 2], "transforms": transforms}
+        return dict(group, parts=parts, rows=rows)
+
+    def test_plate_shares_nodes_with_two_copies_of_the_bar(self):
+        write_boxes(self.geo("bar.brep"), (0, 0, 0, 1, 1, 1), (1, 0, 1, 1, 1, 1))
+        write_boxes(self.geo("plate.brep"), (0, 1, 0, 1, 1, 2))
+        group = self.two_cells(
+            "Stack",
+            "volumes",
+            "geometry/bar.brep",
+            "geometry/plate.brep",
+            [translation(k) for k in range(4)],
+            (0.3, 0.5),
+        )
+        mesh = self.meshed([group], dim=3)
+        self.assertAlmostEqual(shared_area(mesh, 7, 8), 2.0 * 4 - 1.0, delta=1e-6)
+        self.assertEqual(list(groups(mesh)), [7, 8])  # the images are not in the mesh
+        self.assertAlmostEqual(volume(mesh), 16, delta=1e-6)
+
+    def test_seam_of_identical_wedges_needs_no_image(self):  # the sector of test_one_part_over_twelve_copies
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
+        contacts = contact_table_of(group, self.dir, 2)
+        self.assertTrue(contacts)
+        self.assertTrue(all(c.seam for c in contacts))
+        self.assertAlmostEqual(sum(c.area * c.count for c in contacts), 12 * 10, delta=1e-6)
+
+    def test_seam_that_does_not_match_is_refused(self):  # T-06: the 30° side of the sector is split at r 15
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
+        write_sector_split_seam(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30, 15)
+        r = self.run_job([group])
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("do not match", r.stderr)
+        self.assertFalse(os.path.exists(self.mesh_file()))
+
+    def test_bricks_share_nodes_with_two_copies_2d(self):  # the plate test in 2D: B straddles two copies of A
+        write_rects(self.geo("a.brep"), (0, 0, 2, 1))
+        write_rects(self.geo("b.brep"), (1, 1, 2, 1))
+        group = self.two_cells(
+            "Wall", "bodies", "geometry/a.brep", "geometry/b.brep", [translation(2 * k) for k in range(3)], (0.15, 0.4)
+        )
+        mesh = self.meshed([group])
+        self.assertAlmostEqual(shared_area(mesh, 7, 8), 5.0, delta=1e-6)  # 3 under its own copy, 2 under the next
+        self.assertEqual(mesh_check(mesh, ())[1], 0)
+
+    def test_bricks_around_a_closed_ring(self):  # curved contact, and both T and its inverse are in the table
+        write_sectors(self.geo("a.brep"), (10, 20, 0, 30))
+        write_sectors(self.geo("b.brep"), (20, 30, 15, 45))
+        group = self.two_cells("Ring", "bodies", "geometry/a.brep", "geometry/b.brep", self.TWELVE, (0.8, 2.0))
+        mesh = self.meshed([group])
+        self.assertAlmostEqual(shared_area(mesh, 7, 8) / (2 * math.pi * 20), 1, delta=1e-2)
+        self.assertEqual(mesh_check(mesh, ())[1], 0)
+
+    def test_a_cell_that_touches_its_own_copy_partly(self):  # a staircase of 3: step k sits on half of step k - 1
+        write_rects(self.geo("a.brep"), (0, 0, 2, 1))
+        group = self.sector_group((10, 20, 0, 30), [translation(k, k) for k in range(3)], self.IRON, size=0.3)
+        group["job"]["bodies"][0]["file"] = "geometry/a.brep"
+        mesh = self.meshed([group])
+        self.assertEqual(list(groups(mesh)), [7])
+        self.assertEqual(mesh_check(mesh, ())[1], 0)
+        # three bricks of 2 x 1 that share two half-edges: the free outline is 3 * 6 - 2 * 2 = 14
+        self.assertAlmostEqual(free_length(mesh), 14, delta=1e-6)
+
+    def test_contact_left_unpaired_is_refused_3d(
+        self,
+    ):  # pair_images off: the plate meets a copy that it does not match
+        write_boxes(self.geo("bar.brep"), (0, 0, 0, 1, 1, 1), (1, 0, 1, 1, 1, 1))
+        write_boxes(self.geo("plate.brep"), (0, 1, 0, 1, 1, 2))
+        group = self.two_cells(
+            "Stack",
+            "volumes",
+            "geometry/bar.brep",
+            "geometry/plate.brep",
+            [translation(k) for k in range(4)],
+            (0.3, 0.5),
+        )
+        r = self.run_job([group], dim=3, patch="meshgroups.pair_images = lambda *a, **k: None")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("do not match near", r.stderr)
+
+    def test_contact_the_method_cannot_pair_is_a_limit_of_the_tool(self):  # no face of the image finds its partner
+        write_rects(self.geo("a.brep"), (0, 0, 2, 1))
+        write_rects(self.geo("b.brep"), (1, 1, 2, 1))
+        group = self.two_cells(
+            "Wall", "bodies", "geometry/a.brep", "geometry/b.brep", [translation(2 * k) for k in range(3)], (0.15, 0.4)
+        )
+        r = self.run_job([group], patch="meshgroups.meshsym._apply = lambda m, p: [9e9] * 3")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("limit of the tool", r.stderr)
+
+    def test_curved_seam_is_not_refused(self):  # the mesh's chords are shorter than the arc they follow
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
+        write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, ())[1], 0)
 
 
 if __name__ == "__main__":
