@@ -283,29 +283,48 @@ def _winding_3d(point, corners):
     return float((2.0 * np.arctan2(top, under)).sum() / (4.0 * np.pi))
 
 
-def _winding_2d(point, ring):
-    """The winding number about point of the closed polygon ring[n, 2]."""
-    a, b = ring - point, np.roll(ring, -1, axis=0) - point
+def _winding_2d(point, start, end):
+    """The winding number about point[2] of the closed set of directed segments from start[n, 2] to end[n, 2]."""
+    a, b = start - point, end - point
     angle = np.arctan2(a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0], np.einsum("ij,ij->i", a, b))
     return float(angle.sum() / (2.0 * np.pi))
+
+
+def winding(V, facets, point):
+    """The winding number about point[3] of directed facets (triangles, or 2D edges) that together are closed. They
+    need not be one connected or manifold surface; the facets of a Boundary run outward, so it is 1 or -1 inside a
+    copy and 0 outside, in a cavity of one included."""
+    V = np.asarray(V, dtype=float)
+    facets = np.asarray(facets, dtype=np.int64)
+    point = np.asarray(point, dtype=float)
+    if facets.shape[1] == 3:
+        return _winding_3d(point, V[facets])
+    axes = np.sort(np.argsort(np.ptp(V[np.unique(facets)], axis=0))[1:])  # the plane of the drawing: XY or ZX
+    return _winding_2d(point[axes], V[facets[:, 0]][:, axes], V[facets[:, 1]][:, axes])
+
+
+def _directed(facets, shell):
+    """The facets of one shell made to agree: triangles turned alike, 2D edges chained into a loop."""
+    facets = np.asarray(facets, dtype=np.int64)
+    if facets.shape[1] == 3:
+        return _oriented(facets[shell])
+    loop = _chain(facets[shell])
+    return np.column_stack([loop, np.roll(loop, -1)])
+
+
+def encloses(V, facets, shell, point):
+    """True when the closed shell (indexes into facets) goes around point."""
+    return abs(winding(V, _directed(facets, shell), point)) > 0.5
 
 
 def nest(V, facets, shells):
     """Which shells bound which regions. shells: as returned by shells(facets). Returns [(outer, [inner, ...])], in
     shell numbers: a shell at even depth is the outer boundary of a region, one at odd depth a hole of its parent."""
     V = np.asarray(V, dtype=float)
-    facets = np.asarray(facets, dtype=np.int64)
-    if facets.shape[1] == 2:
-        axes = np.sort(np.argsort(np.ptp(V[np.unique(facets)], axis=0))[1:])  # the plane of the drawing: XY or ZX
-        rings = [V[_chain(facets[s])][:, axes] for s in shells]
-        points = [ring[:2].mean(axis=0) for ring in rings]
-        winding = _winding_2d
-    else:
-        rings = [V[_oriented(facets[s])] for s in shells]
-        points = [corners[0].mean(axis=0) for corners in rings]
-        winding = _winding_3d
+    rings = [_directed(facets, s) for s in shells]
+    points = [V[ring[0]].mean(axis=0) for ring in rings]
     count = len(rings)
-    around = [[j for j in range(count) if j != i and abs(winding(points[i], rings[j])) > 0.5] for i in range(count)]
+    around = [[j for j in range(count) if j != i and abs(winding(V, rings[j], points[i])) > 0.5] for i in range(count)]
     depth = [len(a) for a in around]
     regions = {i: [] for i in range(count) if depth[i] % 2 == 0}
     for i in range(count):

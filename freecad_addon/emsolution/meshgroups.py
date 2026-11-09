@@ -638,6 +638,40 @@ def _limit(name, reason, where):
     )
 
 
+def _refuse_coincident(name, V, parts, dim):
+    """Frozen facets of two groups that lie on each other (each group's own contacts have dropped out of its boundary)
+    would leave two shells touching: their meshes are not joined, and which is inside which cannot be told."""
+    if not any(len(p) for p in parts):
+        return
+    labels = meshfrozen.join_nodes(V)[1]
+    for part in parts:
+        if len(part):
+            _, inverse, counts = np.unique(
+                np.sort(labels[part], axis=1), axis=0, return_inverse=True, return_counts=True
+            )
+            twice = counts[inverse.ravel()] > 1
+            if twice.any():
+                raise JobError(
+                    f"free object {name}: copies of two groups touch near ({_text(V[part[twice][0]].mean(axis=0), dim)})"
+                    " inside it, which is not handled yet, a limit of the tool; put them in one group, or draw a"
+                    " normally meshed body between them"
+                )
+
+
+def _refuse_inside_a_copy(name, V, side, points, dim):
+    """A free body with a point of its surface inside the solid of a copy overlaps that copy. The whole surface of the
+    copies is used, with its facets running outward, so a cavity of a copy counts as outside. Clearly inside only: a
+    point on a copy's surface gives one half, and that is for the checks of the facets."""
+    every = [side.edge] if dim == 2 else [side.tri, side.quad[:, [0, 1, 2]], side.quad[:, [0, 2, 3]]]
+    every = np.vstack(every)
+    if len(every):
+        for point in points:
+            if abs(meshfrozen.winding(V, every, point)) > 0.75:
+                raise JobError(
+                    f"free object {name}: it lies inside a copy near ({_text(point, dim)}); the geometry does not fit"
+                )
+
+
 def _mesh_free_entity(body, entity, side, V, dim):
     """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
     and the frozen facets of the side whose centroid is inside it bound one region or several (nest), each meshed by
@@ -651,12 +685,17 @@ def _mesh_free_entity(body, entity, side, V, dim):
     W = V
     quads = np.zeros((0, 4), dtype=np.int64)
     if dim == 3:
-        tris = side.tri[_inside(3, entity, V[side.tri].mean(axis=1))]
-        quads = side.quad[_inside(3, entity, V[side.quad].mean(axis=1))]
+        mask, quad_mask = _inside(3, entity, V[side.tri].mean(axis=1)), _inside(3, entity, V[side.quad].mean(axis=1))
+        tris, quads = side.tri[mask], side.quad[quad_mask]
+        _refuse_coincident(name, V, (tris, quads), dim)
         W, pyramids, sides = meshfrozen.quad_pyramids(V, quads)  # gmsh sees only their triangles
         frozen, needed = np.vstack([tris, sides]), tris
+        owners = np.vstack([side.tri_owner[mask], np.repeat(side.quad_owner[quad_mask], 4, axis=0)])
     else:
-        frozen = needed = side.edge[_inside(2, entity, V[side.edge].mean(axis=1))]
+        mask = _inside(2, entity, V[side.edge].mean(axis=1))
+        frozen = needed = side.edge[mask]
+        _refuse_coincident(name, V, (frozen,), dim)
+        owners = side.edge_owner[mask]
     W, mine = _join_onto(W, xyz)
     own = {f: {t: mine[c] for t, c in per.items()} for f, per in own.items()}
     surface = np.vstack([per[facet_type] for per in own.values() if facet_type in per])
@@ -671,6 +710,15 @@ def _mesh_free_entity(body, entity, side, V, dim):
     if len(own_outers) > 1:  # an inner surface of the free object lies inside a copy: its inside is not free space
         where = W[facets[found[own_outers[1]][0]]].mean(axis=0)
         raise _limit(name, "an inner surface of it lies inside a copy", _text(where, dim))
+    # after the checks above: a surface that crosses a copy is a limit of the tool, one wholly inside it does not fit
+    _refuse_inside_a_copy(name, V, side, W[surface[[0, len(surface) // 2, -1]]].mean(axis=1), dim)
+    for outer, holes in regions:  # a frozen shell has the solid of its copies inside it only when it is a hole
+        for shell, solid_inside in [(outer, False)] + [(h, True) for h in holes]:
+            first = found[shell][0]
+            if found[shell].min() >= len(surface):
+                if meshfrozen.encloses(W, facets, found[shell], owners[first - len(surface)]) != solid_inside:
+                    where = _text(W[facets[first]].mean(axis=0), dim)
+                    raise _limit(name, "copies of its side overlap or touch each other", where)
     elements = {}
     if len(pyramids):
         elements[7] = pyramids

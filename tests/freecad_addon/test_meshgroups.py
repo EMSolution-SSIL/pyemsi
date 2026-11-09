@@ -231,6 +231,15 @@ def area(path, id_=None):
     return sum(float(meshfrozen._area(xyz, c).sum()) for c in found.values())
 
 
+def area_or_volume_of_air(path):
+    """The volume of the tetrahedra of physical group 20."""
+    xyz, elements, _ = _physical_mesh(path, (20,))
+    t = xyz[elements[20][4]]
+    return float(
+        np.abs(np.einsum("ij,ij->i", np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), t[:, 3] - t[:, 0])).sum() / 6
+    )
+
+
 def y_range(path):
     y = read_mesh(path)[0][:, 1]
     return round(float(y.min()), 6), round(float(y.max()), 6)
@@ -738,10 +747,10 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("do not match near", r.stderr)
 
-    def box_group(self, box, transforms, size=0.27):
+    def box_group(self, box, transforms, size=0.27, file="box.brep"):
         """A 3D group of one cell, the box (x, y, z, dx, dy, dz). 0.27 divides no side: opposite faces differ by chance."""
-        write_boxes(self.geo("box.brep"), box)
-        job = {"volumes": [{"mat_id": 1, "name": "Cell", "file": "geometry/box.brep", "size": size}]}
+        write_boxes(self.geo(file), box)
+        job = {"volumes": [{"mat_id": 1, "name": "Cell", "file": f"geometry/{file}", "size": size}]}
         job.update(surfaces=[], sizes=[])
         rows = [{"cell": 1, "file": None, "parts": [0] * len(transforms)}]
         return {
@@ -948,6 +957,54 @@ class GroupJobTest(unittest.TestCase):
         write_face(self.geo("top.brep"), corners=[(-8, -8, 8), (8, -8, 8), (8, 8, 8), (-8, 8, 8)])
         free["job"]["sizes"] = [{"name": "Top", "size": 1.0, "files": ["geometry/top.brep"]}]
         self.assertGreater(groups(self.meshed([self.cube()], free=[free], dim=3))[20][1], plain)
+
+    MIRROR_X = [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+    def assert_refused(self, result, text):
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(text, result.stderr)
+        self.assertFalse(os.path.exists(self.mesh_file()))
+
+    def test_two_groups_touching_inside_a_free_object_are_refused(self):  # the second is the mirror of the first
+        a = self.box_group((-2, -2, -2, 2, 4, 4), [ID], size=1.0, file="a_box.brep")
+        b = dict(self.box_group((-2, -2, -2, 2, 4, 4), [self.MIRROR_X], size=1.0, file="b_box.brep"), name="Other")
+        self.assert_refused(self.run_job([a, b], free=[self.air_3d(self.SIZED, size=4.0)], dim=3), "in one group")
+
+    def test_two_groups_touching_inside_a_free_object_are_refused_2d(self):
+        write_rects(self.geo("a_rect.brep"), (-2, -2, 2, 4))
+        a = self.sector_group((10, 20, 0, 30), [ID], self.IRON, size=1.0)
+        a["job"]["bodies"][0]["file"] = "geometry/a_rect.brep"
+        b = dict(self.sector_group((10, 20, 0, 30), [mirror_line(90)], self.IRON, size=1.0), name="Other")
+        b["job"]["bodies"][0]["file"] = "geometry/a_rect.brep"
+        write_rects(self.geo("air.brep"), (-8, -8, 16, 16))
+        self.assert_refused(self.run_job([a, b], free=[self.air_2d(size=4.0)]), "in one group")
+
+    def test_two_groups_touching_with_different_meshes_are_refused(self):  # no facet of one coincides with the other
+        a = self.box_group((-2, -2, -2, 2, 4, 4), [ID], size=1.0, file="a_box.brep")
+        b = dict(self.box_group((0, -2, -2, 2, 4, 4), [ID], size=0.7, file="b_box.brep"), name="Other")
+        self.assert_refused(self.run_job([a, b], free=[self.air_3d(self.SIZED, size=4.0)], dim=3), "limit of the tool")
+
+    def test_a_group_inside_the_solid_of_another_is_refused(self):  # its inside would be filled with air
+        a = self.box_group((-5, -5, -5, 10, 10, 10), [ID], size=3.0, file="a_box.brep")
+        b = dict(self.box_group((-1, -1, -1, 2, 2, 2), [ID], size=1.0, file="b_box.brep"), name="Other")
+        self.assert_refused(self.run_job([a, b], free=[self.air_3d(self.SIZED, size=4.0)], dim=3), "limit of the tool")
+
+    def test_free_object_inside_a_copy_is_refused(self):
+        group = self.box_group((-10, -10, -10, 20, 20, 20), [ID], size=6.0)
+        free = self.air_3d((-2, -2, -2, 4, 4, 4), size=2.0)
+        self.assert_refused(self.run_job([group], free=[free], dim=3), "does not fit")
+
+    def test_free_object_inside_a_copy_is_refused_2d(self):
+        write_rects(self.geo("big.brep"), (-10, -10, 20, 20))
+        group = self.sector_group((10, 20, 0, 30), [ID], self.IRON, size=6.0)
+        group["job"]["bodies"][0]["file"] = "geometry/big.brep"
+        write_rects(self.geo("air.brep"), (-2, -2, 4, 4))
+        self.assert_refused(self.run_job([group], free=[self.air_2d(size=2.0)]), "does not fit")
+
+    def test_free_object_in_the_bore_of_the_copies_is_meshed(self):  # inside the ring of copies, but not inside a copy
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[self.air_3d((-5, -5, 1, 10, 10, 3), size=2.0)], dim=3)
+        self.assertEqual(sorted(groups(mesh)), [7, 20])
+        self.assertAlmostEqual(area_or_volume_of_air(mesh), 10 * 10 * 3, delta=1e-6)
 
     def test_copy_around_a_cavity_of_the_free_object_is_refused(self):  # its cavity has no air, the cavity is not free
         gmsh.initialize()
