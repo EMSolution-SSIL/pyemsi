@@ -1217,6 +1217,89 @@ class GroupJobTest(unittest.TestCase):
         group = lambda: self.sector_solid_group((3, 5, 0, 60, -3, 0), [ID, rotation(120)])  # noqa: E731 - as above
         self.cap_is_kept_at_a_curved_rim(group, (0, 0, 0, 10, 5), math.pi * 25 * 10, 1.5)
 
+    def stator_and_band(self, top, stator_top=2):
+        """Half a stator (r 2..5, z 0..stator_top) and a thin band on its bore (r 1.5..2, z 0..top), copied around and
+        mirrored."""
+        write_sector_solids(self.geo("stator.brep"), (2, 5, 0, 30, 0, stator_top))
+        write_sector_solids(self.geo("band.brep"), (1.5, 2, 0, 30, 0, top))
+        transforms = [compose(rotation(30 * k), m) for k in range(12) for m in (ID, MIRROR_Z)]
+        files = "geometry/stator.brep", "geometry/band.brep"
+        return self.two_cells("Stator", "volumes", *files, transforms, (0.5, 0.4))
+
+    def test_air_ring_drawn_over_a_stator_and_its_band(self):  # its inner wall: under the band, or inside the copies
+        frozen = frozen_facets(self.meshed([self.stator_and_band(4)], dim=3))
+        write_ring(self.geo("air.brep"), 2, 8, -4, 4)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=1.0)], "surfaces": [], "sizes": []}}
+        mesh = self.meshed([self.stator_and_band(4)], free=[free], dim=3)
+        solid = math.pi * (5**2 - 2**2) * 4
+        self.assertAlmostEqual(area_or_volume_of_air(mesh) / (math.pi * (8**2 - 2**2) * 8 - solid), 1, delta=2e-2)
+        self.assertEqual(faces_in_three(mesh), 0)
+        kept, _ = boundary_of(mesh, 20)
+        bounding = {
+            f
+            for f in frozen
+            if all(math.hypot(p[0], p[1]) > 2 - 1e-6 for p in f) and not all(abs(abs(p[2]) - 4) < 1e-6 for p in f)
+        }
+        self.assertTrue(bounding)
+        self.assertLessEqual(bounding, kept)
+
+    def test_air_ring_whose_wall_is_wholly_a_contact(
+        self,
+    ):  # no frozen facet on the wall at all: it is inside the copies
+        write_ring(self.geo("air.brep"), 2, 8, -4, 4)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=1.0)], "surfaces": [], "sizes": []}}
+        mesh = self.meshed([self.stator_and_band(4, stator_top=4)], free=[free], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh) / (math.pi * (8**2 - 5**2) * 8), 1, delta=2e-2)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_free_object_exactly_on_a_copy_is_refused(self):  # every face is taken and nothing of it is left to mesh
+        group = self.box_group((-2, -2, -2, 4, 4, 4), [ID], size=1.0)
+        self.assert_refused(
+            self.run_job([group], free=[self.air_3d((-2, -2, -2, 4, 4, 4), size=2.0)], dim=3), "does not fit"
+        )
+
+    def test_air_ring_with_a_free_part_of_its_wall_is_refused(self):  # the band stops at z = 3, the wall goes on to 4
+        write_ring(self.geo("air.brep"), 2, 8, -4, 4)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=1.0)], "surfaces": [], "sizes": []}}
+        r = self.run_job([self.stator_and_band(3)], free=[free], dim=3)
+        self.assert_refused(r, "limit of the tool")
+        self.assertIn("curved face", r.stderr)
+
+    def block_and_band(self):
+        """A block inside the air and a thin band outside it, on the air's wall x = 0, the block on the band."""
+        write_boxes(self.geo("block.brep"), (0, 2, 3, 4, 6, 4))
+        write_boxes(self.geo("band.brep"), (-0.5, 0, 0, 0.5, 10, 10))
+        files = "geometry/block.brep", "geometry/band.brep"
+        return self.two_cells("Block", "volumes", *files, [ID], (1.0, 0.8))
+
+    def test_box_of_air_drawn_over_a_block_and_its_band(self):  # the planar wall: no hole where the block sits
+        frozen = frozen_facets(self.meshed([self.block_and_band()], dim=3))
+        mesh = self.meshed([self.block_and_band()], free=[self.air_3d((0, 0, 0, 10, 10, 10), size=2.5)], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh), 10**3 - 4 * 6 * 4, delta=1e-6)
+        self.assertEqual(faces_in_three(mesh), 0)
+        kept, _ = boundary_of(mesh, 20)
+        bounding = {f for f in frozen if all(p[0] > -1e-6 for p in f)}
+        self.assertTrue(bounding)
+        self.assertLessEqual(bounding, kept)
+
+    def test_2d_air_drawn_over_a_block_and_its_band(self):  # the same on a line of the air
+        write_rects(self.geo("block.brep"), (0, 3, 4, 4))
+        write_rects(self.geo("band.brep"), (-0.5, 0, 0.5, 10))
+        group = self.two_cells("Block", "bodies", "geometry/block.brep", "geometry/band.brep", [ID], (1.0, 0.8))
+        write_rects(self.geo("air.brep"), (0, 0, 10, 10))
+        mesh = self.meshed([group], free=[self.air_2d(size=2.5)])
+        self.assertAlmostEqual(area(mesh, 20), 10**2 - 4 * 4, delta=1e-6)
+        self.assertEqual(edges_in_three(mesh), 0)
+
+    def test_2d_air_whose_edge_is_wholly_a_contact(self):  # no frozen edge on that line of the air
+        write_rects(self.geo("block.brep"), (0, 0, 4, 10))
+        write_rects(self.geo("band.brep"), (-0.5, 0, 0.5, 10))
+        group = self.two_cells("Block", "bodies", "geometry/block.brep", "geometry/band.brep", [ID], (1.0, 0.8))
+        write_rects(self.geo("air.brep"), (0, 0, 10, 10))
+        mesh = self.meshed([group], free=[self.air_2d(size=2.5)])
+        self.assertAlmostEqual(area(mesh, 20), 10**2 - 4 * 10, delta=1e-6)
+        self.assertEqual(edges_in_three(mesh), 0)
+
     def test_air_filling_the_bore_of_the_copies(self):  # its whole lateral face lies on theirs: dropped, nothing open
         group = self.ring_3d(self.TWELVE, ())
         write_cylinders(self.geo("air.brep"), (0, 0, 0, 5, 10))

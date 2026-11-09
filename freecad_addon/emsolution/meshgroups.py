@@ -2,6 +2,7 @@
 give every copy the part its row names. Runs in the mesher process (mesher2d.run_job and mesher.run_job call run for a
 job whose "symmetric" has "groups"); dim is 2 (faces) or 3 (solids). Never import FreeCAD here."""
 
+import itertools
 import json
 import math
 import os
@@ -652,12 +653,16 @@ def _refuse_coincident(name, V, parts, dim):
                 )
 
 
+def _copies_surface(side, dim):
+    """The whole surface of the copies of a side as triangles (edges in 2D), running outward, for meshfrozen.winding."""
+    return np.vstack([side.edge] if dim == 2 else [side.tri, side.quad[:, [0, 1, 2]], side.quad[:, [0, 2, 3]]])
+
+
 def _refuse_inside_a_copy(name, V, side, points, dim):
     """A free body with a point of its surface inside the solid of a copy overlaps that copy. The whole surface of the
     copies is used, with its facets running outward, so a cavity of a copy counts as outside. Clearly inside only: a
     point on a copy's surface gives one half, and that is for the checks of the facets."""
-    every = [side.edge] if dim == 2 else [side.tri, side.quad[:, [0, 1, 2]], side.quad[:, [0, 2, 3]]]
-    every = np.vstack(every)
+    every = _copies_surface(side, dim)
     if len(every):
         for point in points:
             if abs(meshfrozen.winding(V, every, point)) > 0.75:
@@ -929,19 +934,58 @@ def _outer_edges(rows, name, V):
     return unique[counts == 1]
 
 
-def _open_lines(surveys, covered, names, V):
-    """2D: a line of the free object that frozen edges lie on leaves room for them: dropped when they cover it, split at
-    their end nodes otherwise, the pieces meshed as new lines. A curved line partly covered is a limit of the tool.
+def _taken(face, rows, solid, V, dim, tol):
+    """True when no part of the face (line in 2D) is free: every point of a grid over it is on one of its frozen facets
+    rows, or on or inside the copies, whose whole surface is solid. A narrow free part the grid misses leaves the shell
+    of the free object open, and that is refused."""
+    own = np.asarray(rows, dtype=np.int64).reshape(-1, 2) if dim == 2 else _triangles(rows)
+    lo, hi = gmsh.model.getParametrizationBounds(dim - 1, face)
+    count = 64 if dim == 2 else 24
+    steps = [[lo[k] + (hi[k] - lo[k]) * (i + 0.5) / count for i in range(count)] for k in range(dim - 1)]
+    found = False
+    for uv in itertools.product(*steps):
+        if dim == 3 and not gmsh.model.isInside(2, face, list(uv), parametric=True):
+            continue
+        found = True
+        point = np.array(gmsh.model.getValue(dim - 1, face, list(uv)))
+        if len(own) and meshfrozen.on_facets(V, own, point, tol):
+            continue
+        if not len(solid) or abs(meshfrozen.winding(V, solid, point)) <= 0.1:  # one half on a facet, one inside
+            return False
+    return found
+
+
+def _triangles(rows):
+    """The node rows of 3 or 4 of frozen facets as triangles[n, 3]."""
+    tris = [t for row in rows for t in ([row[:3]] if len(row) == 3 else [row[[0, 1, 2]], row[[0, 2, 3]]])]
+    return np.array(tris, dtype=np.int64).reshape(-1, 3)
+
+
+def _open_lines(surveys, covered, names, V, side):
+    """2D: a line of the free object that frozen edges lie on leaves room for them: dropped when no part of it is free
+    (_taken), split at their end nodes otherwise, the pieces meshed as new lines. A curved line partly covered is a
+    limit of the tool. A line with no frozen edge on it that ends on one and lies inside the copies is dropped too.
     Returns {line: [its new lines]}."""
     occ = gmsh.model.occ
     tol = _tol()
     nodes = np.unique(np.vstack([np.asarray(rows) for rows in covered.values()]))
-    vertices = _Vertices(V, nodes, list(covered))
+    every = sorted({f for s in surveys for f in s.faces})
+    vertices = _Vertices(V, nodes, every)
     sizes = {f: s.body["size"] for s in surveys for f in s.faces}
+    solid = _copies_surface(side, 2)
+    frozen_labels = set(vertices.of_node.values())
     replaced, by_size = {}, {}
+    for line in every:
+        if line in covered:
+            continue
+        ends = {vertices.of_point[int(t)] for _, t in gmsh.model.getBoundary([(1, line)], oriented=False)}
+        if ends & frozen_labels and _taken(line, [], solid, V, 2, tol):
+            replaced[line] = []
     for line, rows in covered.items():
         pairs = {frozenset(vertices.of_node[int(n)] for n in r) for r in rows}
         pieces = [p for p in _pieces(line, nodes, pairs, vertices, V, tol) if not p[2]]
+        if pieces and _taken(line, rows, solid, V, 2, tol):
+            pieces = []
         if pieces and gmsh.model.getType(1, line) != "Line":
             raise _limit(names[line], PART_OF_CURVED, _text(V[rows[0]].mean(axis=0), 2))
         replaced[line] = [occ.addLine(vertices.tag(a), vertices.tag(b)) for a, b, _ in pieces]
@@ -954,9 +998,10 @@ def _open_lines(surveys, covered, names, V):
     return replaced
 
 
-def _open_faces(surveys, covered, names, V):
+def _open_faces(surveys, covered, names, V, side):
     """3D: the faces that frozen facets lie on leave room for them, and so do the faces that share a curve with those. A
-    face wholly covered is dropped; a planar one partly covered is rebuilt with one hole per loop of the region's outer
+    face with no free part (_taken: under frozen facets or inside the copies) is dropped; a planar one with a free part
+    is rebuilt with one hole per loop of the region's outer
     edges, through the exact nodes of the copies (each polygon line one element), and a stretch of a bounding curve that
     only reaches a frozen node is kept. A curved face the copies reach only along its rim keeps its surface and its
     curves, whose mesh goes through the frozen nodes (_chords, _place_rim_nodes). A curved face partly covered is a limit
@@ -977,7 +1022,10 @@ def _open_faces(surveys, covered, names, V):
             cut = _pieces(c, nodes, every, vertices, V, tol)
             if cut:
                 pieces[c] = cut
-    kept_curved = {f for f in faces if f not in outer and gmsh.model.getType(2, f) != "Plane"}
+    solid = _copies_surface(side, 3)
+    touched = sorted(f for f in faces if f in outer or any(c in pieces for c in curves_of[f]))
+    taken = {f for f in touched if _taken(f, covered.get(f, []), solid, V, 3, tol)}
+    kept_curved = {f for f in faces if f not in outer and f not in taken and gmsh.model.getType(2, f) != "Plane"}
     sizes = {f: s.body["size"] for s in surveys for f in s.faces}
     rims = []
     for c, cut in list(pieces.items()):
@@ -989,6 +1037,9 @@ def _open_faces(surveys, covered, names, V):
                 rims.append((c, np.array([vertices.xyz[v] for v in order]), closed))
     plans, dropped = {}, []
     for f in sorted(faces):
+        if f in taken:
+            dropped.append(f)
+            continue
         if f in kept_curved or (f not in outer and not any(c in pieces for c in curves_of[f])):
             continue
         mine = {frozenset(vertices.of_node[int(n)] for n in e) for e in outer.get(f, ())}
@@ -1076,7 +1127,7 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims):
     return replaced
 
 
-def _leave_room(surveys, V, dim):
+def _leave_room(surveys, V, dim, side):
     """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines). Returns (the surveys with the
     faces they have now, for the model has changed; the rims for _place_rim_nodes)."""
     covered = {}
@@ -1086,7 +1137,9 @@ def _leave_room(surveys, V, dim):
         return surveys, []
     names = {f: s.body["name"] for s in surveys for f in s.faces}
     replaced, rims = (
-        _open_faces(surveys, covered, names, V) if dim == 3 else (_open_lines(surveys, covered, names, V), [])
+        _open_faces(surveys, covered, names, V, side)
+        if dim == 3
+        else (_open_lines(surveys, covered, names, V, side), [])
     )
     return [s._replace(faces=[n for f in s.faces for n in replaced.get(f, [f])]) for s in surveys], rims
 
@@ -1133,6 +1186,8 @@ def _mesh_free_entity(survey, side, V, dim):
     pieces = [per[facet_type] for per in own.values() if facet_type in per]
     surface = np.vstack(pieces) if pieces else np.zeros((0, facet_type + 1), dtype=np.int64)
     facets = np.vstack([surface, frozen])
+    if not len(facets):  # every face of it is taken, and nothing of the copies bounds it: it is all inside them
+        raise JobError(f"free object {name}: it lies wholly inside copies; the geometry does not fit")
     try:
         found = meshfrozen.shells(facets)
     except meshfrozen.FrozenError as err:
@@ -1202,7 +1257,9 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             for b in bodies
             for e in gmsh.model.getEntitiesForPhysicalGroup(dim, b["mat_id"])
         ]
-        surveys, rims = _leave_room(surveys, V, dim)  # only now: the volumes of the changed faces leave the model
+        surveys, rims = _leave_room(
+            surveys, V, dim, side_boundary
+        )  # only now: the volumes of the changed faces leave the model
         settings = dict(free_job, options=job.get("options", {}))
         if rims:  # gmsh keeps a mesh of the curves when asked for the surfaces next
             generate(settings, 1)

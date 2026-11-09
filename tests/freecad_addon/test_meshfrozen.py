@@ -227,3 +227,18 @@ def test_on_surface_of_a_line_in_2d(model):
     V = np.array([(1, 0, 0), (2, 0, 0), (1, 1, 0), (2, 1, 0)], float)
     on = meshfrozen.on_surface(V, np.array([[0, 1], [2, 3]]), np.array([(1.5, 1, 0), (1.5, 2, 0)], float), lines, 2)
     assert on.index.tolist() == [0] and on.inside.tolist() == [True]
+
+
+def test_on_facets_takes_a_point_over_a_chord():  # a point of a curved wall is off the flat facet by the sagitta
+    V = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], float)
+    tri = np.array([[0, 1, 2]])
+    assert meshfrozen.on_facets(V, tri, np.array([0.25, 0.25, 0.05]), 1e-6)
+    assert not meshfrozen.on_facets(V, tri, np.array([0.25, 0.25, 0.5]), 1e-6)  # too far off its plane
+    assert not meshfrozen.on_facets(V, tri, np.array([0.8, 0.8, 0.0]), 1e-6)  # beside the triangle
+
+
+def test_on_facets_of_edges_in_2d():
+    V = np.array([(0, 0, 0), (2, 0, 0)], float)
+    edge = np.array([[0, 1]])
+    assert meshfrozen.on_facets(V, edge, np.array([1.0, 0.1, 0.0]), 1e-6)
+    assert not meshfrozen.on_facets(V, edge, np.array([3.0, 0.0, 0.0]), 1e-6)

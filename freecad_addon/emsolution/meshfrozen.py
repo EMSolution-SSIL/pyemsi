@@ -260,6 +260,30 @@ def on_surface(V, facets, owners, face_tags, dim):
     return OnFaces(index, np.array(faces, dtype=np.int64), inside(dim, entity, np.asarray(owners)[index]))
 
 
+def on_facets(V, facets, point, tol):
+    """True when point lies on one of facets: triangles (rows of 3) or 2D edges (rows of 2). It may be off a facet by a
+    fifth of the facet's longest side, so a point of a curved face counts as on the flat facet that is a chord of it."""
+    V = np.asarray(V, dtype=float)
+    facets = np.asarray(facets, dtype=np.int64)
+    point = np.asarray(point, dtype=float)
+    a, e0 = V[facets[:, 0]], V[facets[:, 1]] - V[facets[:, 0]]
+    to = point - a
+    if facets.shape[1] == 2:
+        t = np.clip(np.einsum("ij,ij->i", to, e0) / np.einsum("ij,ij->i", e0, e0), 0.0, 1.0)
+        off = np.linalg.norm(to - t[:, None] * e0, axis=1)
+        return bool((off <= np.maximum(tol, 0.2 * np.linalg.norm(e0, axis=1))).any())
+    e1 = V[facets[:, 2]] - a
+    d00, d01, d11 = (np.einsum("ij,ij->i", p, q) for p, q in ((e0, e0), (e0, e1), (e1, e1)))
+    d20, d21 = np.einsum("ij,ij->i", to, e0), np.einsum("ij,ij->i", to, e1)
+    under = d00 * d11 - d01 * d01
+    v, w = (d11 * d20 - d01 * d21) / under, (d00 * d21 - d01 * d20) / under
+    normal = np.cross(e0, e1)
+    normal /= np.linalg.norm(normal, axis=1)[:, None]
+    off = np.abs(np.einsum("ij,ij->i", to, normal))
+    longest = np.sqrt(np.maximum(d00, d11))
+    return bool(((v >= -1e-3) & (w >= -1e-3) & (v + w <= 1 + 1e-3) & (off <= np.maximum(tol, 0.2 * longest))).any())
+
+
 def quad_pyramids(V, quads):
     """Close each outward-oriented quad with a pyramid on the outside. The apex is the centroid plus the outward
     normal times 0.3 * sqrt(area). Returns (V2, pyramids[n, 5], tris[4n, 3]): V with the apexes appended, the
