@@ -9,14 +9,15 @@ from collections import namedtuple
 import gmsh
 import numpy as np
 
-from meshcommon import JobError, generate, import_brep, publish, MSH_VERSION
+from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, MSH_VERSION
 import meshfrozen
 import meshsym
 
 POOR = 0.1  # an element whose min SICN is below this is reported as poor
 
 # elements: {(row index, copy): {etype: ndarray}}; patches: [(excitation, {etype: ndarray})] of the landed copies
-Copied = namedtuple("Copied", "V elements patches")
+# reached: the group has an arc (2D) or a face (3D) on the sliding interface
+Copied = namedtuple("Copied", "V elements patches reached", defaults=[False])
 # split and surfaces: {side: {id: (name, [entity tags])}} of model "full", for the bodies and the excitation surfaces
 Model = namedtuple("Model", "split surfaces")
 
@@ -56,13 +57,27 @@ def _by_row(group, folder, dim):
     return out
 
 
-def mesh_cell(group, job, folder, build, dim):
+def _slide_cell(group, slide, dim):
+    """Make the cell's arcs (2D) or faces (3D) on the sliding interface transfinite. Returns True when it has any: a
+    group with none is left alone (the slide functions refuse such a side)."""
+    r = slide["radius"]
+    if dim == 2:
+        reached = any(meshsym._on_arc(c, r, 1e-6 * r) for c in meshsym._side_seams(group, 2))
+    else:
+        reached = bool(meshsym._cylinder_faces(group, r, 1e-6 * r))
+    if reached:
+        (meshsym._slide_arcs if dim == 2 else meshsym._slide_faces_sym)(slide, [group])
+    return reached
+
+
+def mesh_cell(group, job, folder, build, dim, slide=None):
     """Mesh the cell of a group in a model of its own (removed at the end) and copy it by the group's transforms.
-    Returns Copied: the joined nodes V, the elements of each (row, copy), and the cell boundary patches that land on an
-    excitation, copied with their copy."""
+    Returns Copied: the joined nodes V, the elements of each (row, copy), the cell boundary patches that land on an
+    excitation, copied with their copy, and whether the cell reaches the sliding interface slide."""
     gmsh.model.add(f"cell_{group['name']}")
     try:
         build(dict(group["job"]), folder)
+        reached = _slide_cell(group, slide, dim) if slide else False
         meshsym._periodic([group], dim)
         generate(dict(group["job"], options=job.get("options", {})), dim)
         by_row = _by_row(group, folder, dim)
@@ -86,7 +101,7 @@ def mesh_cell(group, job, folder, build, dim):
             if dim == 2 and np.linalg.det(np.reshape(group["transforms"][c], (4, 4))[:3, :3]) < 0:
                 conn = {t: a[:, ::-1] for t, a in conn.items()}  # lines: reversed like a mirrored element
             copied.append((x, conn))
-    return Copied(V, elements, copied)
+    return Copied(V, elements, copied, reached)
 
 
 def _where(V, elements, dim):
@@ -130,11 +145,10 @@ def mesh(job, folder, build, dim):
     symmetric = job["symmetric"]
     if symmetric.get("free"):
         raise JobError("free bodies in a group job are not supported yet")
-    if symmetric.get("slide"):
-        raise JobError("a sliding interface in a group job is not supported yet")
+    slide = symmetric.get("slide")
     copied = []
     for group in symmetric["groups"]:
-        one = mesh_cell(group, job, folder, build, dim)
+        one = mesh_cell(group, job, folder, build, dim, slide)
         every = list(one.elements.values())
         if meshfrozen.boundary(one.V, every, dim).over_used:
             where = _where(one.V, every, dim)
@@ -142,6 +156,19 @@ def mesh(job, folder, build, dim):
                 f"the copies of {group['name']} do not fit: a face has more than two elements near ({where})"
             )
         copied.append(one)
+    sides = [{"side": s} for s in ("fixed", "moving")]
+    if slide:
+        for side in sides:
+            if not any(one.reached for group, one in zip(symmetric["groups"], copied) if group["side"] == side["side"]):
+                what = (
+                    "the cell of the {} side has no arc on the sliding circle"
+                    if dim == 2
+                    else "the cells of the {} side have no face on the sliding cylinder"
+                )
+                raise JobError(
+                    f"sliding interface {slide['name']}: {what.format(side['side'])} (radius {slide['radius']:g} mm);"
+                    " both sides must reach it"
+                )
     gmsh.model.add("full")
     entities = {}  # (dim, side, id) -> (name, _Entity)
     offset = 0
@@ -173,6 +200,8 @@ def mesh(job, folder, build, dim):
                 members.setdefault(id_, (name, []))[1].extend(ents)
         for id_, (name, ents) in sorted(members.items()):
             gmsh.model.addPhysicalGroup(d, ents, id_, name=name)
+    if slide:
+        (meshsym._on_circle if dim == 2 else meshsym._on_cylinder)(slide, sides, split)
     return Model(split, surfaces)
 
 
@@ -207,24 +236,37 @@ def _poor(model, dim):
 
 def run(job_path, build, dim=2):
     """Read the job, mesh and copy the cells of its groups with build(job, folder), write mesh.unv and replace
-    job["mesh_file"] with the finished .msh. Returns the job, with the poor elements per part in job["poor"]."""
+    job["mesh_file"] (and job["rotor_file"] when sliding: the moving side) with the finished .msh. Returns the job, with
+    the poor elements per part in job["poor"]."""
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
     msh = os.path.join(folder, "mesh.msh")
+    outputs = [(msh, job["mesh_file"])]
+    slide = job["symmetric"].get("slide")
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         model = mesh(job, folder, build, dim)
         job["poor"] = _poor(model, dim)
+        point = (meshsym._marker if dim == 2 else meshsym._marker_line)(slide) if slide else None
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         gmsh.write(os.path.join(folder, "mesh.unv"))
-        gmsh.write(msh)
+        if slide:
+            outputs.append((os.path.join(folder, "rotor.msh"), job["rotor_file"]))
+            for side, (path, _) in zip(("fixed", "moving"), outputs):
+                parts = [(dim, ents, id_, name) for id_, (name, ents) in sorted(model.split.get(side, {}).items())]
+                parts += [(dim - 1, e, id_, n) for id_, (n, e) in sorted(model.surfaces.get(side, {}).items())]
+                if side == "moving":
+                    parts.append((dim - 2, [point], slide["slide_mat_id"], slide["name"]))
+                write_split(parts, path)
+        else:
+            gmsh.write(msh)
     finally:
         gmsh.finalize()
-    publish([(msh, job["mesh_file"])])
+    publish(outputs)
     return job
 
 
@@ -236,6 +278,11 @@ def report(job):
     lines = [f"MAT_ID  {id_:>6}  {name}" for id_, name in seen]
     excited = {(x["smat_id"], x["name"]): None for g in groups for x in g.get("excitations", [])}
     lines += [f"SMAT_ID {id_:>6}  {name}" for id_, name in excited]
+    slide = job["symmetric"].get("slide")
+    if slide:
+        lines += slide_report({"slides": [slide]})
     lines += [f"Poor elements  {name}  {poor} of {total}" for name, poor, total in job.get("poor", []) if poor]
     lines.append(f"Wrote {job['mesh_file']}")
+    if slide:
+        lines.append(f"Wrote {job['rotor_file']}")
     return lines

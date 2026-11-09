@@ -45,6 +45,14 @@ def _corners(dim, tag):
     return [gmsh.model.getValue(0, t, []) for _, t in points]
 
 
+def _on_arc(c, r, tol):
+    """True when curve c is an arc of the circle of radius r about Z: both its ends and its middle lie on it."""
+    ends = _ends(c)
+    lo, hi = gmsh.model.getParametrizationBounds(1, c)
+    mid = gmsh.model.getValue(1, c, [(lo[0] + hi[0]) / 2])
+    return len(ends) == 2 and all(abs(math.hypot(p[0], p[1]) - r) <= tol for p in ends + [mid])
+
+
 def _slide_arcs(slide, sides):
     """Make the cells' arcs on the sliding circle transfinite: each gets its share of the divisions of the full turn,
     which must be whole, and both its ends must lie on the 360° / divisions grid that starts at 0°. The cell of every
@@ -53,11 +61,9 @@ def _slide_arcs(slide, sides):
     tol = 1e-6 * r
     arcs = set()
     for c in sorted({c for side in sides for c in _side_seams(side, 2)}):
-        ends = _ends(c)
-        lo, hi = gmsh.model.getParametrizationBounds(1, c)
-        mid = gmsh.model.getValue(1, c, [(lo[0] + hi[0]) / 2])
-        if len(ends) != 2 or any(abs(math.hypot(p[0], p[1]) - r) > tol for p in ends + [mid]):
+        if not _on_arc(c, r, tol):
             continue
+        ends = _ends(c)
         share = n * math.degrees(gmsh.model.occ.getMass(1, c) / r) / 360
         a0, a1 = sorted(_angle(p) for p in ends)
         if any(abs(x - round(x)) > 1e-6 for x in (share, n * a0 / 360, n * a1 / 360)):
@@ -95,7 +101,9 @@ def _slide_faces_sym(slide, sides):
     share of the divisions of the full turn around Z (whole, its corners on the 360° / divisions grid from 0°) and its
     share of cross_divisions along Z over the height of the cylinder (its corners on that grid), with the "Left"
     triangles and corner order of 3D sliding (_slide_faces). The cells of every side must reach over the whole
-    cylinder."""
+    cylinder: z_range of the slide when it has one, else the height of the faces found. A side with "turns" has that
+    many copies around Z (the others are mirrors along Z): its share of the circumference is 1 / turns, and the faces
+    of its cell cover the cell's own height."""
     r, n, k, name = slide["radius"], slide["divisions"], slide["cross_divisions"], slide["name"]
     tol = 1e-6 * r
     faces = {side["side"]: _cylinder_faces(side, r, tol) for side in sides}
@@ -107,10 +115,15 @@ def _slide_faces_sym(slide, sides):
             )
     tags = sorted({f for fs in faces.values() for f in fs})
     corners = {f: _corners(2, f) for f in tags}
-    z0, z1 = min(p[2] for f in tags for p in corners[f]), max(p[2] for f in tags for p in corners[f])
+    z0, z1 = slide.get("z_range") or (
+        min(p[2] for f in tags for p in corners[f]),
+        max(p[2] for f in tags for p in corners[f]),
+    )
     for side in sides:
         area = sum(gmsh.model.occ.getMass(2, f) for f in faces[side["side"]])
-        need = 2 * math.pi * r / len(side["transforms"]) * (z1 - z0)
+        zs = [p[2] for f in faces[side["side"]] for p in corners[f]]
+        height = max(zs) - min(zs) if "turns" in side else z1 - z0
+        need = 2 * math.pi * r / side.get("turns", len(side["transforms"])) * height
         if abs(area - need) > 1e-6 * need:
             raise JobError(
                 f"sliding interface {name}: the cells of the {side['side']} side do not reach over the whole cylinder"

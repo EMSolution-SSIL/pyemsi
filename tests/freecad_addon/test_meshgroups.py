@@ -15,8 +15,8 @@ import numpy as np
 from emsolution import meshfrozen
 from .test_mesher import MESHER, write_line
 from .test_mesher2d import MESHER2D, write_arc, write_sectors
-from .test_meshsym import compose, mesh_check, mirror_line, rotation
-from .test_meshsym3d import surface_group, write_face, write_sector_solids
+from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
+from .test_meshsym3d import slide_nodes, surface_group, write_face, write_sector_solids
 from .meshreport import groups
 
 ID = rotation(0)
@@ -95,6 +95,9 @@ class GroupJobTest(unittest.TestCase):
     def mesh_file(self):
         return os.path.join(self.dir, "pre_geom2D.msh")
 
+    def rotor_file(self):
+        return os.path.join(self.dir, "rotor_mesh2D.msh")
+
     def sector_group(self, sector, transforms, parts, name="Stator", size=2.0, rows=None, extra=None, side="fixed"):
         """A group of one cell: the annular sector (inner, outer, a0, a1); rows default to one row, copy c taking
         parts[c % len(parts)]."""
@@ -129,6 +132,7 @@ class GroupJobTest(unittest.TestCase):
             job["symmetric"]["free"] = list(free)
         if slide:
             job["symmetric"]["slide"] = slide
+            job["rotor_file"] = self.rotor_file()
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
@@ -349,6 +353,97 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("CHECK OK", r.stdout)
         self.assertFalse(os.path.exists(self.mesh_file()))
+
+    def slide_groups(self, stator_outer=60, rotor_outer=35):
+        """Stator r 35..60 (12 copies, mirrored at 15°) and rotor r 10..rotor_outer (8 copies); the circle is r 35."""
+        stator = self.sector_group((35, stator_outer, 0, 15), chain(15, 30, 12), [{"mat_id": 5, "name": "Stator"}])
+        rotor = self.sector_group(
+            (10, rotor_outer, 0, 22.5), chain(22.5, 45, 8), [{"mat_id": 6, "name": "Rotor"}], "Rotor", side="moving"
+        )
+        return stator, rotor
+
+    SLIDE_2D = {
+        "name": "Slide",
+        "kind": "rotational",
+        "radius": 35.0,
+        "divisions": 144,
+        "slide_mat_id": 7,
+        "full": True,
+    }
+
+    def test_sliding_2d_two_sides(self):  # today's stator and rotor as two groups, 144 divisions
+        r = self.run_job(list(self.slide_groups()), slide=self.SLIDE_2D)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.mesh_file(), self.rotor_file()
+        self.assertEqual(len(slide_nodes(fixed, 35)), 144)
+        self.assertEqual(sorted(slide_nodes(fixed, 35)), sorted(slide_nodes(rotor, 35)))
+        self.assertEqual([mesh_check(f, ())[1] for f in (fixed, rotor)], [0, 0])
+        self.assertEqual(sorted(groups(fixed)), [5])
+        self.assertEqual(sorted(groups(rotor)), [6])
+        self.assertIn("SLIDE_NDIV 144", r.stdout)
+        self.assertIn(f"Wrote {rotor}", r.stdout)
+
+    def test_two_groups_on_a_side_only_one_reaches(self):  # a group that stays clear of the circle
+        stator, rotor = self.slide_groups()
+        far_parts = [{"mat_id": 9, "name": "Far"}]
+        far = self.sector_group((70, 80, 0, 45), [rotation(45 * k) for k in range(8)], far_parts, "Far")
+        r = self.run_job([stator, far, rotor], slide=self.SLIDE_2D)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(sorted(groups(self.mesh_file())), [5, 9])
+        self.assertEqual(sorted(slide_nodes(self.mesh_file(), 35)), sorted(slide_nodes(self.rotor_file(), 35)))
+
+    def test_side_that_does_not_reach_is_refused(self):
+        r = self.run_job(list(self.slide_groups(rotor_outer=34.5)), slide=self.SLIDE_2D)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("must reach it", r.stderr)
+        self.assertIn("moving side", r.stderr)
+
+    def slide_groups_3d(self, cross=4, rotor_outer=20):
+        """Cells over z 0..5 (sector 30°, radius 20 the circle) mirrored at z = 0 and rotated 12 times; z_range -5..5."""
+        out = []
+        for k, (name, side, sector, mat) in enumerate(
+            (("Stator", "fixed", (20, 30, 0, 30, 0, 5), 5), ("Rotor", "moving", (10, rotor_outer, 0, 30, 0, 5), 6))
+        ):
+            rel = f"geometry/slide_{k}.brep"
+            write_sector_solids(os.path.join(self.dir, rel), sector)
+            job = {"volumes": [{"mat_id": 1, "name": "Cell", "file": rel, "size": 3.0}], "surfaces": [], "sizes": []}
+            transforms = [compose(rotation(30 * c), m) for c in range(12) for m in (ID, MIRROR_Z)]
+            out.append(
+                {
+                    "name": name,
+                    "side": side,
+                    "job": job,
+                    "cells": [1],
+                    "transforms": transforms,
+                    "parts": [{"mat_id": mat, "name": name}],
+                    "rows": [{"cell": 1, "file": None, "parts": [0] * len(transforms)}],
+                    "turns": 12,
+                }
+            )
+        slide = {"name": "Slide", "kind": "rotational", "radius": 20.0, "divisions": 144, "cross_divisions": cross}
+        return out, dict(slide, slide_mat_id=7, full=True, z_range=[-5, 5])
+
+    def test_sliding_3d_with_z_mirror(self):  # cells over z 0..5, Mirror z = 0, Rotate, z_range [-5, 5], cross 4
+        groups_3d, slide = self.slide_groups_3d()
+        r = self.run_job(groups_3d, slide=slide, dim=3)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.mesh_file(), self.rotor_file()
+        self.assertEqual(len(slide_nodes(fixed, 20)), 144 * 5)
+        self.assertEqual(sorted(slide_nodes(fixed, 20)), sorted(slide_nodes(rotor, 20)))
+        self.assertEqual(z_range(fixed), (-5, 5))
+        self.assertEqual(sorted(groups(rotor)), [6])
+
+    def test_cross_divisions_off_the_mirror_are_refused(self):  # cross 3 with the mirror at the middle
+        groups_3d, slide = self.slide_groups_3d(cross=3)
+        r = self.run_job(groups_3d, slide=slide, dim=3)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("off the grid", r.stderr)
+
+    def test_3d_side_that_does_not_reach_is_refused(self):
+        groups_3d, slide = self.slide_groups_3d(rotor_outer=19)
+        r = self.run_job(groups_3d, slide=slide, dim=3)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("must reach it", r.stderr)
 
 
 if __name__ == "__main__":
