@@ -219,6 +219,28 @@ def _images_needed(contacts):
     return keep
 
 
+def _split_cell(group, x, contacts, folder, dim):
+    """In the current model: cell x fragmented with its _cuts and everything else in the model removed. Returns (x's
+    dimtags now, True when that gave it more faces)."""
+    occ = gmsh.model.occ
+    cells = _cell_shapes(group, group["job"], folder, dim)
+    occ.synchronize()
+    boxes = np.array([_box(tags) for tags in cells.values()])
+    tol = 1e-6 * max(1.0, math.dist(boxes[:, :3].min(axis=0), boxes[:, 3:].max(axis=0)))
+    before = len(_boundary(dim, cells[x]))
+    tools = _cuts(cells, x, contacts, dim, tol)
+    keep = cells[x]
+    if tools:
+        _, per_input = occ.fragment(cells[x], tools)
+        keep = [dt for part in per_input[: len(cells[x])] for dt in part]
+    for other, tags in cells.items():
+        if other != x:
+            occ.remove(tags, recursive=True)
+    occ.remove([dt for dt in occ.getEntities(dim) if dt not in set(keep)], recursive=True)
+    occ.synchronize()
+    return keep, len(_boundary(dim, keep)) != before
+
+
 def _write_moved(source, m, target, dim):
     with _scratch("image"):
         tags = import_brep(source, dim)
@@ -238,25 +260,19 @@ def prepare_images(group, contacts, folder, dim):
     key = "bodies" if dim == 2 else "volumes"
     entries = [dict(e) for e in group["job"][key]]
     by_id = {e["mat_id"]: e for e in entries}
+    structured = {b["mat_id"] for b in (group["job"].get("transfinite") or {}).get("bodies", [])}
+    for x in sorted(structured & ({c.a for c in needed} | {c.b for c in needed})):
+        with _scratch("split"):
+            if _split_cell(group, x, contacts, folder, dim)[1]:
+                raise JobError(
+                    f"group {group['name']}: the structured cell {by_id[x]['name']} would have to be split where a copy"
+                    " touches part of its face; meshing that is not handled yet, a limit of the tool, not of the drawing"
+                )
     where = tempfile.mkdtemp(prefix="images_", dir=folder)
     relative = os.path.basename(where)
     for a in sorted({c.a for c in needed}):
         with _scratch("split"):
-            cells = _cell_shapes(group, group["job"], folder, dim)
-            gmsh.model.occ.synchronize()
-            boxes = np.array([_box(tags) for tags in cells.values()])
-            tol = 1e-6 * max(1.0, math.dist(boxes[:, :3].min(axis=0), boxes[:, 3:].max(axis=0)))
-            tools = _cuts(cells, a, contacts, dim, tol)
-            if tools:
-                _, per_input = gmsh.model.occ.fragment(cells[a], tools)
-                keep = {dt for part in per_input[: len(cells[a])] for dt in part}
-            else:
-                keep = set(cells[a])
-            for other, tags in cells.items():  # only the split cell goes to the file
-                if other != a:
-                    gmsh.model.occ.remove(tags, recursive=True)
-            gmsh.model.occ.remove([dt for dt in gmsh.model.occ.getEntities(dim) if dt not in keep], recursive=True)
-            gmsh.model.occ.synchronize()
+            _split_cell(group, a, contacts, folder, dim)  # only the split cell is left to go to the file
             by_id[a]["file"] = f"{relative}/split_{a}.brep"
             gmsh.write(os.path.join(folder, by_id[a]["file"]))
     images, next_id = [], max(by_id) + 1
@@ -273,6 +289,17 @@ def prepare_images(group, contacts, folder, dim):
 
 def _faces_of(dim, body):
     return _boundary(dim, [(dim, e) for e in gmsh.model.getEntitiesForPhysicalGroup(dim, body)])
+
+
+def _copied_from(dim, entity, master):
+    """True when the mesh of entity is a copy, directly or through others, of the mesh of master."""
+    while True:
+        above = int(gmsh.model.mesh.getPeriodic(dim, [entity])[0])
+        if above == entity:
+            return False
+        if above == master:
+            return True
+        entity = above
 
 
 def pair_images(group, images, dim):
@@ -297,7 +324,8 @@ def pair_images(group, images, dim):
                 (s for s, (q, p) in sources.items() if abs(q - mass) <= tol and math.dist(p, centre) <= tol), None
             )
             if partner is not None:
-                gmsh.model.mesh.setPeriodic(dim - 1, [f], [partner], m)
+                if not _copied_from(dim - 1, partner, f):  # _periodic may have made it the other way round
+                    gmsh.model.mesh.setPeriodic(dim - 1, [f], [partner], m)
             elif real & {int(e) for e in gmsh.model.getAdjacencies(dim - 1, f)[0]}:
                 raise JobError(
                     f"group {group['name']}: a contact near ({', '.join(f'{v:.6g}' for v in centre[:dim])}) splits the"
@@ -399,7 +427,7 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
             group = prepare_images(group, contacts, folder, dim)
         build(dict(group["job"]), folder)
         reached = _slide_cell(group, slide, dim) if slide else False
-        meshsym._periodic([group], dim)
+        meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
         pair_images(group, group.get("images", []), dim)
         generate(dict(group["job"], options=job.get("options", {})), dim)
         expected = _expected_area(group, contacts, dim) if contacts else 0.0
@@ -432,6 +460,16 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
 def _crosses(contact):
     """True for a contact between two copies, False for one within a copy."""
     return _key(contact.transform) != _key(IDENTITY)
+
+
+def _seam_transforms(contacts):
+    """Each transform between copies that touch, and its inverse: meshsym._periodic pairs a seam only from its lower
+    tag to its higher one, so it needs both directions; a relative transform need not be one of the group's own."""
+    needed = {}
+    for c in filter(_crosses, contacts or ()):
+        for m in (c.transform, _inverse(c.transform)):
+            needed.setdefault(_key(m), m)
+    return list(needed.values())
 
 
 def _near_contact(group, contacts, V, free, dim, folder):

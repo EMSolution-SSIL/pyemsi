@@ -194,6 +194,13 @@ def free_length(path):
     return float(np.linalg.norm(xyz[edges[:, 1]] - xyz[edges[:, 0]], axis=1).sum())
 
 
+def free_area(path):
+    """The total area of the element faces used by one element, of a 3D mesh."""
+    xyz, found = read_mesh(path)
+    b = meshfrozen.boundary(xyz, [found], 3)
+    return float(meshfrozen._area(xyz, b.tri).sum() + meshfrozen._area(xyz, b.quad).sum())
+
+
 def contact_table_of(group, folder, dim):
     gmsh.initialize()
     try:
@@ -654,9 +661,7 @@ class GroupJobTest(unittest.TestCase):
         # three bricks of 2 x 1 that share two half-edges: the free outline is 3 * 6 - 2 * 2 = 14
         self.assertAlmostEqual(free_length(mesh), 14, delta=1e-6)
 
-    def test_contact_left_unpaired_is_refused_3d(
-        self,
-    ):  # pair_images off: the plate meets a copy that it does not match
+    def test_contact_left_unpaired_is_refused_3d(self):  # nothing paired: the plate does not match its copy
         write_boxes(self.geo("bar.brep"), (0, 0, 0, 1, 1, 1), (1, 0, 1, 1, 1, 1))
         write_boxes(self.geo("plate.brep"), (0, 1, 0, 1, 1, 2))
         group = self.two_cells(
@@ -667,9 +672,61 @@ class GroupJobTest(unittest.TestCase):
             [translation(k) for k in range(4)],
             (0.3, 0.5),
         )
-        r = self.run_job([group], dim=3, patch="meshgroups.pair_images = lambda *a, **k: None")
+        off = "lambda *a, **k: None"
+        r = self.run_job([group], dim=3, patch=f"meshgroups.pair_images = {off}; meshgroups.meshsym._periodic = {off}")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("do not match near", r.stderr)
+
+    def box_group(self, box, transforms, size=0.27):
+        """A 3D group of one cell, the box (x, y, z, dx, dy, dz). 0.27 divides no side: opposite faces differ by chance."""
+        write_boxes(self.geo("box.brep"), box)
+        job = {"volumes": [{"mat_id": 1, "name": "Cell", "file": "geometry/box.brep", "size": size}]}
+        job.update(surfaces=[], sizes=[])
+        rows = [{"cell": 1, "file": None, "parts": [0] * len(transforms)}]
+        return {
+            "name": "Boxes",
+            "side": "fixed",
+            "job": job,
+            "cells": [1],
+            "transforms": transforms,
+            "parts": self.IRON,
+            "rows": rows,
+        }
+
+    def test_seams_of_copies_towards_minus_x(self):  # the direction the transforms run in must not matter
+        mesh = self.meshed([self.box_group((0, 0, 0, 1, 1, 1), [translation(-k) for k in range(3)])], dim=3)
+        self.assertAlmostEqual(free_area(mesh), 3 * 6 - 2 * 2, delta=1e-6)
+
+    def test_seam_of_copies_that_only_two_of_them_have(self):  # offsets 0, 2, 3: the relative +1 is not in the list
+        mesh = self.meshed([self.box_group((0, 0, 0, 1, 1, 1), [translation(k) for k in (0, 2, 3)])], dim=3)
+        self.assertAlmostEqual(free_area(mesh), 3 * 6 - 2, delta=1e-6)
+
+    def test_staircase_3d_either_way(self):  # the image's face on the source is a seam of the cell, in both directions
+        for sign in (1, -1):
+            with self.subTest(sign=sign):
+                transforms = [translation(sign * k, sign * k) for k in range(3)]
+                mesh = self.meshed([self.box_group((0, 0, 0, 2, 1, 1), transforms)], dim=3)
+                self.assertAlmostEqual(free_area(mesh), 3 * 10 - 2 * 2, delta=1e-6)
+
+    def test_seam_whose_transform_is_not_in_the_list(self):  # copies at 0, +2, -2: copies 1 and 2 touch at relative -4
+        write_rects(self.geo("a.brep"), (0, 0, 1, 1))
+        write_rects(self.geo("b.brep"), (3, 0, 1, 1))
+        transforms = [translation(0), translation(2), translation(-2)]
+        group = self.two_cells("Row", "bodies", "geometry/a.brep", "geometry/b.brep", transforms, (0.15, 0.4))
+        self.assertAlmostEqual(shared_area(self.meshed([group]), 7, 8), 3.0, delta=1e-6)
+
+    def test_structured_cell_that_an_image_splits_is_a_limit_of_the_tool(self):
+        write_rects(self.geo("a.brep"), (0, 0, 2, 1))
+        write_rects(self.geo("b.brep"), (1, 1, 2, 1))
+        group = self.two_cells(
+            "Wall", "bodies", "geometry/a.brep", "geometry/b.brep", [translation(2 * k) for k in range(3)], (0.15, 0.4)
+        )
+        group["job"]["transfinite"] = {"bodies": [{"name": "Iron", "mat_id": 1, "corner_files": []}], "edges": []}
+        r = self.run_job([group])
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("limit of the tool", r.stderr)
+        self.assertIn("Iron", r.stderr)
+        self.assertEqual([n for n in os.listdir(self.dir) if n.startswith("images_")], [])
 
     def test_contact_the_method_cannot_pair_is_a_limit_of_the_tool(self):  # no face of the image finds its partner
         write_rects(self.geo("a.brep"), (0, 0, 2, 1))
