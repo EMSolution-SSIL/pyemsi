@@ -28,6 +28,10 @@ Model = namedtuple("Model", "split surfaces")
 # T(a) touches b over area (length in 2D), T = transform (16 floats): for count pairs of copies, counted once per pair.
 # seam: the contact is made of whole faces of both, so the seams of meshsym._periodic cover it.
 Contact = namedtuple("Contact", "a b transform area count seam")
+# A free body after meshing. added: its new nodes; elements: {etype: connectivity}, node i < n the frozen node i of the
+# side (n: the nodes of the side's copies), node n + k added[k]; surfaces: {smat_id: (name, per type)}, the 2D elements
+# of its excitation faces, numbered the same way.
+FreeBody = namedtuple("FreeBody", "name added elements surfaces")
 IDENTITY = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 
@@ -553,14 +557,216 @@ class _Entity:
             gmsh.model.mesh.addElementsByType(tag, etype, [], np.vstack(parts).ravel().tolist())
 
 
+def _add_free(entities, free_bodies, offset, copied, dim):
+    """Add the free bodies (and their excitation surfaces) to the entities of model "full": their new nodes are numbered
+    from offset, after every node of the groups; their frozen nodes are nodes of the groups."""
+    V = np.vstack([one.V for one in copied] + [entry[4].added for entry in free_bodies] + [np.zeros((0, 3))])
+    owned = np.zeros(len(V), dtype=bool)
+    owned[: sum(len(one.V) for one in copied)] = True  # those are the groups' nodes
+    base = offset
+    for side, n, tags, mat_id, body in free_bodies:
+
+        def numbered(conn):  # node i < n is the frozen node i of the side, the others are the new ones
+            out = conn - n + base
+            frozen = conn < n
+            out[frozen] = tags[conn[frozen]]
+            return out
+
+        _, entity = entities.setdefault((dim, side, mat_id), (body.name, _Entity()))
+        entity.add(0, V, owned, {t: numbered(c) for t, c in body.elements.items()})
+        for smat_id, (name, per_type) in body.surfaces.items():
+            _, entity = entities.setdefault((dim - 1, side, smat_id), (name, _Entity()))
+            entity.add(0, V, owned, {t: numbered(c) for t, c in per_type.items()})
+        base += len(body.added)
+
+
+def _text(p, dim):
+    return ", ".join(f"{float(v):.6g}" for v in p[:dim])
+
+
+def _structured_names(free_job, dim):
+    """The names of the free bodies the free job asks for a structured or recombined mesh."""
+    by_id = {b["mat_id"]: b["name"] for b in free_job["bodies" if dim == 2 else "volumes"]}
+    names = [b["name"] for b in (free_job.get("transfinite") or {}).get("bodies", [])]
+    names += [by_id[m] for m in free_job.get("recombine", [])]
+    return names + [f["name"] for f in free_job.get("recombine_faces", [])]
+
+
+def _inside(dim, entity, points):
+    """For each of points[n, 3]: True when it lies inside the OCC entity."""
+    box = np.array(gmsh.model.getBoundingBox(dim, entity))
+    tol = 1e-6 * max(1.0, float(np.linalg.norm(box[3:] - box[:3])))
+    near = np.all(points >= box[:3] - tol, axis=1) & np.all(points <= box[3:] + tol, axis=1)
+    for k in np.flatnonzero(near):
+        near[k] = gmsh.model.isInside(dim, entity, points[k].tolist()) > 0
+    return near
+
+
+def _join_onto(W, xyz):
+    """Number the nodes xyz among the nodes W: each one coincident with a node of W is that node, the others are
+    appended. Returns (W with them, index[len(xyz)])."""
+    count, labels = meshfrozen.join_nodes(np.vstack([W, xyz]))
+    first = np.full(count, -1, dtype=np.int64)
+    first[labels[::-1]] = np.arange(len(labels))[::-1]
+    index = first[labels[len(W) :]]  # the lowest member of each joined node: the node of W when there is one
+    fresh = index >= len(W)
+    unique, inverse = np.unique(index[fresh], return_inverse=True)
+    index[fresh] = len(W) + inverse.ravel()
+    return np.vstack([W, xyz[unique - len(W)]]), index
+
+
+def _missing(needed, have):
+    """The rows of needed, sets of nodes, that are in no row of have."""
+    first, second = np.sort(needed, axis=1), np.sort(have, axis=1)
+    rows = np.unique(np.vstack([first, second]), axis=0, return_inverse=True)[1].ravel()
+    return needed[~np.isin(rows[: len(first)], rows[len(first) :])]
+
+
+def _turn_like_the_face(face, W, elements):
+    """2D: every element of elements turned to the orientation of the free OCC face it came from."""
+    lo, hi = gmsh.model.getParametrizationBounds(2, face)
+    normal = np.array(gmsh.model.getNormal(face, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]))
+    for etype, conn in elements.items():
+        a, b, c = W[conn[:, 0]], W[conn[:, 1]], W[conn[:, 2]]
+        wrong = np.einsum("ij,j->i", np.cross(b - a, c - a), normal) < 0
+        conn[wrong] = conn[wrong][:, meshfrozen.FLIP[etype]]
+
+
+def _limit(name, reason, where):
+    return JobError(
+        f"free object {name}: {reason} near ({where}); this is not handled yet, a limit of the tool, not of the drawing"
+    )
+
+
+def _mesh_free_entity(body, entity, side, V, dim):
+    """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
+    and the frozen facets of the side whose centroid is inside it bound one region or several (nest), each meshed by
+    mesh_region. Returns (W, elements, own): W is V with the apexes of the pyramids and the new nodes appended,
+    elements numbered into it, own {face: {etype: connectivity}} the mesh of each of its own faces, for excitations."""
+    name = body["name"]
+    faces = _boundary(dim, [(dim, entity)])
+    xyz, own = meshfrozen.read_model(dim - 1, {f: [f] for f in faces})
+    facet_type = 2 if dim == 3 else 1
+    pyramids = np.zeros((0, 5), dtype=np.int64)
+    W = V
+    quads = np.zeros((0, 4), dtype=np.int64)
+    if dim == 3:
+        tris = side.tri[_inside(3, entity, V[side.tri].mean(axis=1))]
+        quads = side.quad[_inside(3, entity, V[side.quad].mean(axis=1))]
+        W, pyramids, sides = meshfrozen.quad_pyramids(V, quads)  # gmsh sees only their triangles
+        frozen, needed = np.vstack([tris, sides]), tris
+    else:
+        frozen = needed = side.edge[_inside(2, entity, V[side.edge].mean(axis=1))]
+    W, mine = _join_onto(W, xyz)
+    own = {f: {t: mine[c] for t, c in per.items()} for f, per in own.items()}
+    surface = np.vstack([per[facet_type] for per in own.values() if facet_type in per])
+    facets = np.vstack([surface, frozen])
+    try:
+        found = meshfrozen.shells(facets)
+    except meshfrozen.FrozenError as err:
+        where = W[err.nodes].mean(axis=0) if err.nodes is not None else W[facets[0]].mean(axis=0)
+        raise _limit(name, "a copy meets its surface", _text(where, dim)) from None
+    regions = meshfrozen.nest(W, facets, found)
+    own_outers = [outer for outer, _ in regions if found[outer].min() < len(surface)]
+    if len(own_outers) > 1:  # an inner surface of the free object lies inside a copy: its inside is not free space
+        where = W[facets[found[own_outers[1]][0]]].mean(axis=0)
+        raise _limit(name, "an inner surface of it lies inside a copy", _text(where, dim))
+    elements = {}
+    if len(pyramids):
+        elements[7] = pyramids
+    for outer, holes in regions:
+        try:
+            W, region = meshfrozen.mesh_region(W, facets, found[outer], [found[h] for h in holes], body["size"], dim)
+        except Exception as err:  # gmsh could not mesh around them, or moved a frozen node
+            where = W[facets[found[outer][0]]].mean(axis=0)
+            raise _limit(name, f"the mesh around the copies failed ({err})", _text(where, dim)) from None
+        for etype, conn in region.items():
+            elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
+    if dim == 2:
+        _turn_like_the_face(entity, W, elements)
+    whole = meshfrozen.boundary(W, [elements], dim)
+    if whole.over_used:
+        raise _limit(name, "a face has more than two elements", _where(W, [elements], dim))
+    for wanted, have in ((np.vstack([surface, needed]), whole.tri if dim == 3 else whole.edge), (quads, whole.quad)):
+        lost = _missing(wanted, have)
+        if len(lost):
+            where = _text(W[lost[0]].mean(axis=0), dim)
+            raise _limit(name, "the elements around the copies did not keep a face", where)
+    return W, elements, own
+
+
+def mesh_free(free, side_boundary, V, job, folder, build, dim):
+    """Mesh the free bodies of one side around the frozen facets of its copies. free: an entry of symmetric["free"];
+    side_boundary: the Boundary of the side's copies, node numbers into V. Returns {mat_id: FreeBody}: FreeBody.added
+    are the new nodes, numbered after those of V, and the frozen nodes keep their numbers."""
+    free_job = free["job"]
+    names = _structured_names(free_job, dim)
+    if names:
+        raise JobError(
+            f"free object {names[0]}: a Transfinite or Recombine setting on a free object is not handled yet, a limit"
+            " of the tool, not of the drawing"
+        )
+    out = {}
+    start = len(V)
+    with _scratch(f"free_{free['side']}"):
+        build(dict(free_job), folder)
+        generate(dict(free_job, options=job.get("options", {})), dim - 1)
+        surfaces = free_job.get("surfaces", [])
+        for body in free_job["bodies" if dim == 2 else "volumes"]:
+            added, elements, excited, count = [], {}, {}, 0
+            for entity in gmsh.model.getEntitiesForPhysicalGroup(dim, body["mat_id"]):
+                W, per_type, own = _mesh_free_entity(body, int(entity), side_boundary, V, dim)
+                shifted = {t: np.where(c >= start, c + count, c) for t, c in per_type.items()}
+                for etype, conn in shifted.items():
+                    elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
+                for s in surfaces:
+                    if s["mat_id"] != body["mat_id"]:
+                        continue
+                    for face in gmsh.model.getEntitiesForPhysicalGroup(2, s["smat_id"]):
+                        for etype, conn in own.get(int(face), {}).items():
+                            lifted = np.where(conn >= start, conn + count, conn)
+                            per = excited.setdefault(s["smat_id"], (s["name"], {}))[1]
+                            per[etype] = np.vstack([per[etype], lifted]) if etype in per else lifted
+                added.append(W[start:])
+                count += len(W) - start
+            out[body["mat_id"]] = FreeBody(body["name"], np.vstack(added or [np.zeros((0, 3))]), elements, excited)
+    return out
+
+
+def _side_pool(side, groups_, copied, wholes, offsets):
+    """The copies of one side as one mesh: (V, the pooled Boundary, tags: full-model node number of each node of V)."""
+    members = [k for k, g in enumerate(groups_) if g["side"] == side]
+    V = np.vstack([np.zeros((0, 3))] + [copied[k].V for k in members])
+    starts = np.cumsum([0] + [len(copied[k].V) for k in members])
+    tags = np.concatenate([np.zeros(0, dtype=np.int64)] + [offsets[k] + np.arange(len(copied[k].V)) for k in members])
+
+    def facets(field, width):
+        return np.vstack(
+            [np.zeros((0, width), dtype=np.int64)] + [getattr(wholes[k], field) + s for k, s in zip(members, starts)]
+        )
+
+    def owners(field):
+        return np.vstack([np.zeros((0, 3))] + [getattr(wholes[k], field) for k in members])
+
+    pool = meshfrozen.Boundary(
+        facets("tri", 3),
+        facets("quad", 4),
+        facets("edge", 2),
+        owners("tri_owner"),
+        owners("quad_owner"),
+        owners("edge_owner"),
+        sum(wholes[k].over_used for k in members),
+        sum(wholes[k].shared_area for k in members),
+    )
+    return V, pool, tags
+
+
 def mesh(job, folder, build, dim):
-    """Mesh the cell of every group, copy it, check the copies and put them all in model "full" (current): one entity
-    per (side, MAT_ID) and per (side, SMAT_ID). Returns a Model."""
+    """Mesh the cell of every group, copy it, check the copies, mesh the free objects around them and put them all in
+    model "full" (current): one entity per (side, MAT_ID) and per (side, SMAT_ID). Returns a Model."""
     symmetric = job["symmetric"]
-    if symmetric.get("free"):
-        raise JobError("free bodies in a group job are not supported yet")
     slide = symmetric.get("slide")
-    copied = []
+    copied, wholes = [], []
     for group in symmetric["groups"]:
         one = mesh_cell(group, job, folder, build, dim, slide)
         every = list(one.elements.values())
@@ -573,6 +779,7 @@ def mesh(job, folder, build, dim):
         if one.contacts is not None:
             _check_contacts(group, one, whole, dim, folder)
         copied.append(one)
+        wholes.append(whole)
     sides = [{"side": s} for s in ("fixed", "moving")]
     if slide:
         for side in sides:
@@ -586,6 +793,12 @@ def mesh(job, folder, build, dim):
                     f"sliding interface {slide['name']}: {what.format(side['side'])} (radius {slide['radius']:g} mm);"
                     " both sides must reach it"
                 )
+    offsets = np.cumsum([0] + [len(one.V) for one in copied[:-1]]) if copied else np.zeros(0, dtype=np.int64)
+    free_bodies = []  # (side, len(V of the side), full-model number of each node of V, mat_id, FreeBody)
+    for free in symmetric.get("free", []):
+        V, pool, tags = _side_pool(free["side"], symmetric["groups"], copied, wholes, offsets)
+        for mat_id, body in mesh_free(free, pool, V, job, folder, build, dim).items():
+            free_bodies.append((free["side"], len(V), tags, mat_id, body))
     gmsh.model.add("full")
     entities = {}  # (dim, side, id) -> (name, _Entity)
     offset = 0
@@ -599,6 +812,7 @@ def mesh(job, folder, build, dim):
             _, entity = entities.setdefault((dim - 1, group["side"], x["smat_id"]), (x["name"], _Entity()))
             entity.add(offset, one.V, owned, per_type)
         offset += len(one.V)
+    _add_free(entities, free_bodies, offset, copied, dim)
     split, surfaces = {}, {}
     ordered = sorted(entities.items())
     for tag, ((d, _, _), (_, entity)) in enumerate(ordered, 1):
@@ -691,9 +905,14 @@ def report(job):
     """The lines run_job prints: one MAT_ID line per part, one SMAT_ID line per excitation, the poor elements of each
     part that has any, the file written."""
     groups = job["symmetric"]["groups"]
+    free = job["symmetric"].get("free", [])
     seen = {(p["mat_id"], p["name"]): None for g in groups for p in g["parts"]}
+    seen.update(
+        ((b["mat_id"], b["name"]), None) for f in free for b in f["job"].get("volumes", f["job"].get("bodies", []))
+    )
     lines = [f"MAT_ID  {id_:>6}  {name}" for id_, name in seen]
     excited = {(x["smat_id"], x["name"]): None for g in groups for x in g.get("excitations", [])}
+    excited.update(((s["smat_id"], s["name"]), None) for f in free for s in f["job"].get("surfaces", []))
     lines += [f"SMAT_ID {id_:>6}  {name}" for id_, name in excited]
     slide = job["symmetric"].get("slide")
     if slide:

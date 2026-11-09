@@ -1,5 +1,6 @@
-"""Array operations on frozen meshes: copy with transforms, node join, boundary, quad pyramids (numpy only)."""
+"""Array operations on frozen meshes: copy with transforms, node join, boundary, quad pyramids, shells and regions."""
 
+import gmsh
 import numpy as np
 import pytest
 
@@ -53,3 +54,149 @@ def test_boundary_of_two_squares_in_2d():
     V, out = meshfrozen.copy_mesh(xy, {"a": {3: np.arange(4)[None]}}, [ID, SHIFT])
     b = meshfrozen.boundary(V, list(out.values()), 2)
     assert len(b.edge) == 6 and b.shared_area == pytest.approx(1.0)
+
+
+TET = np.array([(0, 2, 1), (0, 1, 3), (0, 3, 2), (1, 2, 3)])
+CUBE_TRIS = np.array(
+    [
+        (0, 2, 1),
+        (0, 3, 2),
+        (4, 5, 6),
+        (4, 6, 7),
+        (0, 1, 5),
+        (0, 5, 4),
+        (2, 3, 7),
+        (2, 7, 6),
+        (1, 2, 6),
+        (1, 6, 5),
+        (3, 0, 4),
+        (3, 4, 7),
+    ]
+)
+
+
+def square(half, first):
+    """The corners of a square about the origin, and its four edges numbered from node first."""
+    corners = [(-half, -half, 0), (half, -half, 0), (half, half, 0), (-half, half, 0)]
+    return corners, [(first + k, first + (k + 1) % 4) for k in range(4)]
+
+
+def nested_cubes():
+    """Nodes and triangles of a cube of side 3 around a unit cube; the cube of side 3 has facets 0 to 11."""
+    V = np.vstack([3.0 * CUBE - 1.0, CUBE])
+    return V, np.vstack([CUBE_TRIS, CUBE_TRIS + 8])
+
+
+def test_shells_of_two_separate_tetrahedra():
+    found = meshfrozen.shells(np.vstack([TET, TET + 4]))
+    assert [sorted(s.tolist()) for s in found] == [[0, 1, 2, 3], [4, 5, 6, 7]]
+
+
+def test_open_surface_is_refused():
+    with pytest.raises(meshfrozen.FrozenError):
+        meshfrozen.shells(TET[1:])
+
+
+def test_edge_of_three_faces_is_refused():
+    with pytest.raises(meshfrozen.FrozenError):
+        meshfrozen.shells(np.vstack([TET, [(0, 1, 9), (0, 9, 1), (0, 1, 8)]]))
+
+
+def test_node_used_three_times_is_refused_in_2d():
+    with pytest.raises(meshfrozen.FrozenError):
+        meshfrozen.shells(np.array([(0, 1), (1, 2), (2, 0), (0, 3), (3, 4), (4, 0), (0, 5)]))
+
+
+def test_loops_in_2d_are_found_by_nodes():
+    edges = np.array(square(1, 0)[1] + square(2, 4)[1])
+    assert [sorted(s.tolist()) for s in meshfrozen.shells(edges)] == [[0, 1, 2, 3], [4, 5, 6, 7]]
+
+
+def test_cube_inside_a_cube_nests():
+    V, facets = nested_cubes()
+    found = meshfrozen.shells(facets)
+    assert len(found) == 2
+    assert meshfrozen.nest(V, facets, found) == [(0, [1])]
+
+
+def test_nest_does_not_need_the_facets_oriented_alike():  # a surface from gmsh is oriented face by face
+    V, facets = nested_cubes()
+    facets[[0, 1, 5, 13]] = facets[[0, 1, 5, 13]][:, ::-1]
+    assert meshfrozen.nest(V, facets, meshfrozen.shells(facets)) == [(0, [1])]
+
+
+def test_ring_gives_two_regions():  # three nested squares: the inner region is a new outer boundary
+    V, edges = [], []
+    for half in (3, 2, 1):
+        corners, sides = square(half, len(V))
+        V += corners
+        edges += sides
+    edges = np.array(edges)
+    assert meshfrozen.nest(np.array(V, float), edges, meshfrozen.shells(edges)) == [(0, [1]), (2, [])]
+
+
+def test_nest_in_the_zx_plane():
+    V, edges = [], []
+    for half in (2, 1):
+        corners, sides = square(half, len(V))
+        V += [(x, 0.0, y) for x, y, _ in corners]
+        edges += sides
+    edges = np.array(edges)
+    assert meshfrozen.nest(np.array(V, float), edges, meshfrozen.shells(edges)) == [(0, [1])]
+
+
+@pytest.fixture
+def model():
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.model.add("test")
+    yield
+    gmsh.finalize()
+
+
+def tet_volume(V, tets):
+    t = V[tets]
+    return float(
+        np.abs(np.einsum("ij,ij->i", np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), t[:, 3] - t[:, 0])).sum() / 6
+    )
+
+
+def test_mesh_region_3d_keeps_the_frozen_nodes_and_faces(model):
+    V, facets = nested_cubes()
+    V2, per_type = meshfrozen.mesh_region(V, facets, np.arange(12), [np.arange(12, 24)], 0.5, 3)
+    assert np.array_equal(V2[: len(V)], V)
+    assert list(per_type) == [4]
+    b = meshfrozen.boundary(V2, [per_type], 3)
+    assert b.over_used == 0
+    assert {tuple(sorted(row)) for row in b.tri.tolist()} == {tuple(sorted(row)) for row in facets.tolist()}
+    assert tet_volume(V2, per_type[4]) == pytest.approx(27 - 1)
+
+
+def test_mesh_region_3d_takes_only_the_nodes_of_its_shells(model):  # the other nodes keep their numbers and places
+    V, facets = nested_cubes()
+    V = np.vstack([V, [(50.0, 50.0, 50.0)]])
+    V2, per_type = meshfrozen.mesh_region(V, facets, np.arange(12), [], 0.7, 3)
+    assert np.array_equal(V2[: len(V)], V)
+    assert tet_volume(V2, per_type[4]) == pytest.approx(27)
+    assert not set(range(8, len(V))) & set(np.unique(per_type[4]).tolist())
+
+
+def test_mesh_region_2d_is_a_polygon_with_holes(model):
+    corners, edges = square(3, 0)
+    inner, holes = square(1, 4)
+    V = np.array([(x, 0.0, z) for x, z, _ in corners + inner], float)  # the plane y = 0, as in a ZX Study
+    facets = np.array(edges + holes)
+    V2, per_type = meshfrozen.mesh_region(V, facets, np.arange(4), [np.arange(4, 8)], 0.8, 2)
+    assert np.array_equal(V2[: len(V)], V) and set(per_type) == {2}
+    b = meshfrozen.boundary(V2, [per_type], 2)
+    assert {tuple(sorted(e)) for e in b.edge.tolist()} == {tuple(sorted(e)) for e in facets.tolist()}
+    assert float(meshfrozen._area(V2, per_type[2]).sum()) == pytest.approx(36 - 4)
+    assert np.abs(V2[:, 1]).max() == 0
+
+
+def test_mesh_region_leaves_the_options_as_they_were(model):
+    gmsh.option.setNumber("Mesh.Renumber", 1)
+    gmsh.option.setNumber("Mesh.MeshSizeMax", 7.0)
+    V, facets = nested_cubes()
+    meshfrozen.mesh_region(V, facets, np.arange(12), [np.arange(12, 24)], 0.5, 3)
+    assert gmsh.option.getNumber("Mesh.Renumber") == 1 and gmsh.option.getNumber("Mesh.MeshSizeMax") == 7.0

@@ -15,8 +15,9 @@ import numpy as np
 from emsolution import meshfrozen
 from .test_mesher import MESHER, write_line
 from .test_mesher2d import MESHER2D, write_arc, write_sectors
+from .test_mesher2d import write_rects as write_plane_rects
 from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
-from .test_meshsym3d import slide_nodes, surface_group, write_face, write_sector_solids
+from .test_meshsym3d import mesh_check_3d, slide_nodes, surface_group, write_face, write_sector_solids
 from .meshreport import groups
 
 sys.path.insert(0, os.path.dirname(MESHER))  # meshgroups imports its neighbours by bare name, as in the mesher process
@@ -199,6 +200,66 @@ def free_area(path):
     xyz, found = read_mesh(path)
     b = meshfrozen.boundary(xyz, [found], 3)
     return float(meshfrozen._area(xyz, b.tri).sum() + meshfrozen._area(xyz, b.quad).sum())
+
+
+def _facet_keys(xyz, b):
+    """The facets of a Boundary, each as its sorted rounded corner coordinates: comparable between meshes."""
+    return {
+        tuple(sorted(tuple(np.round(p, 6) + 0.0) for p in xyz[f])) for facets in (b.tri, b.quad, b.edge) for f in facets
+    }
+
+
+def frozen_facets(path):
+    """The facets on the outside of the whole mesh of a job with no free object."""
+    xyz, found = read_mesh(path)
+    return _facet_keys(xyz, meshfrozen.boundary(xyz, [found], 3 if any(t > 3 for t in found) else 2))
+
+
+def boundary_of(path, id_):
+    """(the facets used by one element among the elements of physical group id_, its elements)."""
+    xyz, elements, dim = _physical_mesh(path, (id_,))
+    return _facet_keys(xyz, meshfrozen.boundary(xyz, [elements[id_]], dim)), elements[id_]
+
+
+def area(path, id_=None):
+    """The total area of the elements of physical group id_, or of the whole 2D mesh."""
+    if id_ is None:
+        xyz, found = read_mesh(path)
+    else:
+        xyz, elements, _ = _physical_mesh(path, (id_,))
+        found = elements[id_]
+    return sum(float(meshfrozen._area(xyz, c).sum()) for c in found.values())
+
+
+def y_range(path):
+    y = read_mesh(path)[0][:, 1]
+    return round(float(y.min()), 6), round(float(y.max()), 6)
+
+
+def write_disc(path, r):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.occ.addDisk(0, 0, 0, r, r)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_ring(path, inner, outer, z0, z1):
+    """One BREP holding the solid ring between the radii, from z0 to z1."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        whole = occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, outer)
+        hole = occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, inner)
+        occ.cut([(3, whole)], [(3, hole)])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
 
 
 def contact_table_of(group, folder, dim):
@@ -743,6 +804,246 @@ class GroupJobTest(unittest.TestCase):
         write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)
         mesh = self.meshed([group])
         self.assertEqual(mesh_check(mesh, ())[1], 0)
+
+    AIR = {"mat_id": 20, "name": "Air", "file": "geometry/air.brep", "size": 6.0}
+
+    def air_3d(self, *boxes, surfaces=(), size=6.0, side="fixed"):
+        """A free job of one body, the solid boxes (x, y, z, dx, dy, dz), named Air (MAT_ID 20)."""
+        write_boxes(self.geo("air.brep"), *boxes)
+        return {"side": side, "job": {"volumes": [dict(self.AIR, size=size)], "surfaces": list(surfaces), "sizes": []}}
+
+    def air_2d(self, size=6.0, side="fixed"):
+        return {"side": side, "job": {"bodies": [dict(self.AIR, size=size)], "sizes": []}}
+
+    BOX = (-30, -30, -5, 60, 60, 15)
+
+    def test_box_of_air_around_rotated_copies(self):  # the free box is drawn right over the copied solids
+        ring = lambda: self.ring_3d(self.TWELVE, ())  # noqa: E731
+        frozen = frozen_facets(self.meshed([ring()], dim=3))
+        mesh = self.meshed([ring()], free=[self.air_3d(self.BOX)], dim=3)
+        kept, _ = boundary_of(mesh, 20)
+        self.assertLessEqual(frozen, kept)
+        self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+        self.assertEqual(groups(mesh)[20][0], "Air")
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertAlmostEqual(volume(mesh) / (60 * 60 * 15), 1, delta=1e-6)
+        self.assertIn("MAT_ID      20  Air", self.result.stdout)
+
+    def test_mirrored_copies_in_free_air(self):  # mirrored copies have their elements reversed
+        transforms = [compose(rotation(30 * k), m) for k in range(12) for m in (ID, MIRROR_Z)]
+        mesh = self.meshed([self.ring_3d(transforms, ())], free=[self.air_3d((-30, -30, -10, 60, 60, 20))], dim=3)
+        self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertAlmostEqual(volume(mesh) / (60 * 60 * 20), 1, delta=1e-6)
+
+    def hex_group(self, transforms):
+        """A structured, recombined unit box, 3 divisions a side: every element a hexahedron."""
+        write_boxes(self.geo("hex.brep"), (0, 0, 0, 1, 1, 1))
+        pts = [(i, j, k) for i in (0, 1) for j in (0, 1) for k in (0, 1)]
+        lines = [(p, q) for a, p in enumerate(pts) for q in pts[a + 1 :] if sum(abs(u - v) for u, v in zip(p, q)) == 1]
+        files = []
+        for k, (p, q) in enumerate(lines):
+            write_line(self.geo(f"hedge_{k}.brep"), p, q)
+            files.append(f"geometry/hedge_{k}.brep")
+        edge = {"name": "E", "nodes": 4, "distribution": "Uniform", "coef": 1.0, "files": files}
+        job = {
+            "volumes": [{"mat_id": 1, "name": "Core", "file": "geometry/hex.brep", "size": 0.5}],
+            "surfaces": [],
+            "sizes": [],
+            "transfinite": {"bodies": [{"name": "Core", "mat_id": 1, "corner_files": []}], "edges": [edge]},
+            "recombine": [1],
+        }
+        return {
+            "name": "Hex",
+            "side": "fixed",
+            "job": job,
+            "cells": [1],
+            "transforms": transforms,
+            "parts": self.IRON,
+            "rows": [{"cell": 1, "file": None, "parts": [0] * len(transforms)}],
+        }
+
+    def test_hex_copies_get_pyramids(self):  # gmsh sees only the triangles of the pyramids the tool built
+        transforms = [translation(3 * k) for k in range(3)]
+        frozen = frozen_facets(self.meshed([self.hex_group(transforms)], dim=3))
+        mesh = self.meshed([self.hex_group(transforms)], free=[self.air_3d((-3, -3, -3, 13, 7, 7), size=1.5)], dim=3)
+        kept, elements = boundary_of(mesh, 20)
+        self.assertLessEqual({4, 7}, set(elements))  # tetrahedra and pyramids
+        self.assertLessEqual(frozen, kept)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+
+    def far_group(self):
+        write_boxes(self.geo("far.brep"), (200, 200, 200, 4, 4, 4))
+        job = {"volumes": [{"mat_id": 1, "name": "Far", "file": "geometry/far.brep", "size": 2.0}]}
+        job.update(surfaces=[], sizes=[])
+        parts = [{"mat_id": 9, "name": "Far"}]
+        rows = [{"cell": 1, "file": None, "parts": [0]}]
+        return {
+            "name": "Far",
+            "side": "fixed",
+            "job": job,
+            "cells": [1],
+            "transforms": [ID],
+            "parts": parts,
+            "rows": rows,
+        }
+
+    def test_shell_outside_the_free_body_is_left_out(self):  # a second group far from the air
+        without = groups(self.meshed([self.ring_3d(self.TWELVE, ())], free=[self.air_3d(self.BOX)], dim=3))[20][1]
+        both = [self.ring_3d(self.TWELVE, ()), self.far_group()]
+        found = groups(self.meshed(both, free=[self.air_3d(self.BOX)], dim=3))
+        self.assertEqual(found[20][1], without)
+        self.assertEqual(found[9][1], groups(self.meshed([self.far_group()], dim=3))[9][1])
+
+    def test_free_object_and_excitation_on_its_face(self):
+        write_face(self.geo("outer.brep"), corners=[(-30, -30, 10), (30, -30, 10), (30, 30, 10), (-30, 30, 10)])
+        surface = {"smat_id": 50, "name": "Outer", "mat_id": 20, "files": ["geometry/outer.brep"]}
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[self.air_3d(self.BOX, surfaces=[surface])], dim=3)
+        name, count, face = surface_group(mesh, 50)
+        self.assertEqual(name, "Outer")
+        self.assertGreater(count, 0)
+        self.assertAlmostEqual(face, 60 * 60, delta=1e-6)
+        self.assertIn("SMAT_ID     50  Outer", self.result.stdout)
+
+    def test_two_free_bodies_touching(self):  # two boxes side by side, a copy inside each
+        write_boxes(self.geo("cubes.brep"), (-12, -2, -2, 4, 4, 4))
+        job = {"volumes": [{"mat_id": 1, "name": "Cube", "file": "geometry/cubes.brep", "size": 1.5}]}
+        job.update(surfaces=[], sizes=[])
+        transforms = [ID, translation(20)]
+        group = {
+            "name": "Cubes",
+            "side": "fixed",
+            "job": job,
+            "cells": [1],
+            "transforms": transforms,
+            "parts": self.IRON,
+            "rows": [{"cell": 1, "file": None, "parts": [0, 0]}],
+        }
+        write_boxes(self.geo("a.brep"), (-20, -10, -10, 20, 20, 20))
+        write_boxes(self.geo("b.brep"), (0, -10, -10, 20, 20, 20))
+        bodies = [
+            {"mat_id": 20, "name": "AirA", "file": "geometry/a.brep", "size": 6.0},
+            {"mat_id": 21, "name": "AirB", "file": "geometry/b.brep", "size": 6.0},
+        ]
+        free = {"side": "fixed", "job": {"volumes": bodies, "surfaces": [], "sizes": []}}
+        mesh = self.meshed([group], free=[free], dim=3)
+        self.assertAlmostEqual(shared_area(mesh, 20, 21), 20 * 20, delta=1e-6)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual({k: v[0] for k, v in groups(mesh).items() if k >= 20}, {20: "AirA", 21: "AirB"})
+
+    def cube(self):
+        return self.box_group((-2, -2, -2, 4, 4, 4), [ID], size=2.0)
+
+    SIZED = (-8, -8, -8, 16, 16, 16)
+
+    def test_free_size_is_used(self):  # size 1 against size 4
+        fine = groups(self.meshed([self.cube()], free=[self.air_3d(self.SIZED, size=1.0)], dim=3))[20][1]
+        coarse = groups(self.meshed([self.cube()], free=[self.air_3d(self.SIZED, size=4.0)], dim=3))[20][1]
+        self.assertGreater(fine, 2 * coarse)
+
+    def test_mesh_size_on_a_free_face_is_used(self):  # build's size fields act on the free surface mesh
+        plain = groups(self.meshed([self.cube()], free=[self.air_3d(self.SIZED, size=4.0)], dim=3))[20][1]
+        free = self.air_3d(self.SIZED, size=4.0)
+        write_face(self.geo("top.brep"), corners=[(-8, -8, 8), (8, -8, 8), (8, 8, 8), (-8, 8, 8)])
+        free["job"]["sizes"] = [{"name": "Top", "size": 1.0, "files": ["geometry/top.brep"]}]
+        self.assertGreater(groups(self.meshed([self.cube()], free=[free], dim=3))[20][1], plain)
+
+    def test_copy_around_a_cavity_of_the_free_object_is_refused(self):  # its cavity has no air, the cavity is not free
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            whole = gmsh.model.occ.addBox(-30, -30, -30, 60, 60, 60)
+            cavity = gmsh.model.occ.addBox(-2, -2, -2, 4, 4, 4)
+            gmsh.model.occ.cut([(3, whole)], [(3, cavity)])
+            gmsh.model.occ.synchronize()
+            gmsh.write(self.geo("air.brep"))
+        finally:
+            gmsh.finalize()
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=8.0)], "surfaces": [], "sizes": []}}
+        r = self.run_job([self.box_group((-5, -5, -5, 10, 10, 10), [ID], size=4.0)], free=[free], dim=3)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("limit of the tool", r.stderr)
+
+    def test_structured_free_object_is_a_limit_of_the_tool(self):
+        free = self.air_3d(self.BOX)
+        free["job"]["transfinite"] = {"bodies": [{"name": "Air", "mat_id": 20, "corner_files": []}], "edges": []}
+        r = self.run_job([self.ring_3d(self.TWELVE, ())], free=[free], dim=3)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("limit of the tool", r.stderr)
+        self.assertIn("Air", r.stderr)
+
+    def test_copy_through_the_free_surface_is_a_limit_of_the_tool(self):  # never a silent wrong mesh
+        r = self.run_job([self.ring_3d(self.TWELVE, ())], free=[self.air_3d((-30, -30, 2, 60, 60, 15))], dim=3)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("limit of the tool", r.stderr)
+        self.assertFalse(os.path.exists(self.mesh_file()))
+
+    DISC = 50
+
+    def spaced(self):
+        return [rotation(30 * k) for k in range(12)]
+
+    def test_2d_disc_with_holes(self):  # 2D copies inside a drawn disc
+        write_disc(self.geo("air.brep"), self.DISC)
+        mesh = self.meshed([self.sector_group((20, 30, 0, 20), self.spaced(), self.IRON)], free=[self.air_2d(size=2.0)])
+        self.assertAlmostEqual(area(mesh) / (math.pi * self.DISC**2), 1, delta=1e-3)
+        self.assertEqual(mesh_check(mesh, [self.DISC])[1:], (0, 0))
+        self.assertEqual(sorted(groups(mesh)), [7, 20])
+
+    def test_2d_free_air_shares_the_nodes_of_the_copies(self):
+        write_disc(self.geo("air.brep"), self.DISC)
+        mesh = self.meshed([self.sector_group((20, 30, 0, 20), self.spaced(), self.IRON)], free=[self.air_2d()])
+        outline = 12 * (2 * 10 + math.radians(20) * (20 + 30))
+        self.assertAlmostEqual(shared_area(mesh, 7, 20) / outline, 1, delta=1e-2)
+
+    def test_2d_ring_of_copies_gives_bore_and_outside(self):  # copies form an annulus: two regions, one Air group
+        write_disc(self.geo("air.brep"), 30)
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, size=1.0)
+        mesh = self.meshed([group], free=[self.air_2d(size=1.0)])
+        self.assertAlmostEqual(area(mesh, 20) / (math.pi * (30**2 - 20**2 + 10**2)), 1, delta=1e-3)
+        self.assertEqual(mesh_check(mesh, [30])[1:], (0, 0))
+        self.assertEqual(sorted(groups(mesh)), [7, 20])
+
+    def test_zx_copies_in_free_air(self):  # 2D ZX job: Mirror z = 0, a drawn rectangle of air
+        write_plane_rects(self.geo("zx.brep"), [(2, 1, 2, 2)], plane="ZX")
+        write_plane_rects(self.geo("air.brep"), [(0, -6, 10, 12)], plane="ZX")
+        group = self.sector_group((10, 20, 0, 30), [ID, MIRROR_Z], self.IRON, size=0.5)
+        group["job"]["bodies"][0]["file"] = "geometry/zx.brep"
+        mesh = self.meshed([group], free=[self.air_2d(size=1.5)])
+        self.assertEqual(y_range(mesh), (0, 0))
+        self.assertAlmostEqual(area(mesh) / 120, 1, delta=1e-3)
+        self.assertEqual(sorted(groups(mesh)), [7, 20])
+        xyz, found = read_mesh(mesh)
+        t = xyz[found[2]]
+        normals = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+        self.assertEqual(len(np.unique(np.sign(normals[:, 1]))), 1)  # copies and air are turned the same way
+
+    def test_free_air_on_the_moving_side(self):  # a free job takes the boundary of its own side only
+        stator = self.sector_group((35, 45, 0, 20), self.spaced(), [{"mat_id": 5, "name": "S"}])
+        rotor = self.sector_group((10, 15, 0, 20), self.spaced(), [{"mat_id": 6, "name": "R"}], "Rotor", side="moving")
+        write_disc(self.geo("air.brep"), 30)  # holds the rotor's copies; the stator's are outside it
+        mesh = self.meshed([stator, rotor], free=[self.air_2d(side="moving")])
+        rotor_area = 12 * math.radians(20) / 2 * (15**2 - 10**2)
+        self.assertAlmostEqual(area(mesh, 20) / (math.pi * 30**2 - rotor_area), 1, delta=1e-2)
+
+    def test_sliding_with_free_air_outside_the_band(self):  # Task 3's motor, plus copies in a free ring outside it
+        groups_3d, slide = self.slide_groups_3d()
+        write_sector_solids(self.geo("coil.brep"), (35, 40, 0, 20, -3, 3))
+        job = {"volumes": [{"mat_id": 1, "name": "Coil", "file": "geometry/coil.brep", "size": 3.0}]}
+        job.update(surfaces=[], sizes=[])
+        rows = [{"cell": 1, "file": None, "parts": [0] * 12}]
+        parts = [{"mat_id": 8, "name": "Coil"}]
+        coil = {"name": "Coil", "side": "fixed", "job": job, "cells": [1], "transforms": self.spaced()}
+        groups_3d.append(dict(coil, parts=parts, rows=rows))
+        write_ring(self.geo("air.brep"), 32, 44, -5, 5)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=4.0)], "surfaces": [], "sizes": []}}
+        r = self.run_job(groups_3d, free=[free], slide=slide, dim=3)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.mesh_file(), self.rotor_file()
+        self.assertEqual(sorted(slide_nodes(fixed, 20)), sorted(slide_nodes(rotor, 20)))
+        self.assertIn("Air", {v[0] for v in groups(fixed).values()})
+        self.assertEqual(faces_in_three(fixed), 0)
 
 
 if __name__ == "__main__":
