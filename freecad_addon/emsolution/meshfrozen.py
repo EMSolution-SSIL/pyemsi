@@ -269,9 +269,9 @@ def on_facets(V, facets, point, tol):
     a, e0 = V[facets[:, 0]], V[facets[:, 1]] - V[facets[:, 0]]
     to = point - a
     if facets.shape[1] == 2:
-        t = np.clip(np.einsum("ij,ij->i", to, e0) / np.einsum("ij,ij->i", e0, e0), 0.0, 1.0)
+        t = np.einsum("ij,ij->i", to, e0) / np.einsum("ij,ij->i", e0, e0)
         off = np.linalg.norm(to - t[:, None] * e0, axis=1)
-        return bool((off <= np.maximum(tol, 0.2 * np.linalg.norm(e0, axis=1))).any())
+        return bool(((t >= -1e-3) & (t <= 1 + 1e-3) & (off <= np.maximum(tol, 0.2 * np.linalg.norm(e0, axis=1)))).any())
     e1 = V[facets[:, 2]] - a
     d00, d01, d11 = (np.einsum("ij,ij->i", p, q) for p, q in ((e0, e0), (e0, e1), (e1, e1)))
     d20, d21 = np.einsum("ij,ij->i", to, e0), np.einsum("ij,ij->i", to, e1)

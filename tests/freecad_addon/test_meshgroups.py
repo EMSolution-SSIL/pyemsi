@@ -1300,6 +1300,46 @@ class GroupJobTest(unittest.TestCase):
         self.assertAlmostEqual(area(mesh, 20), 10**2 - 4 * 10, delta=1e-6)
         self.assertEqual(edges_in_three(mesh), 0)
 
+    def teeth(self, count, pitch, width):
+        """Teeth under the air's wall z = 0, slots between them: the wall is free only in the slots."""
+        box = ((pitch - width) / 2, 0, -0.5, width, 10, 0.5)
+        return self.box_group(box, [translation(pitch * k) for k in range(count)], size=0.6)
+
+    def test_slots_of_a_regular_array_on_a_planar_wall(self):  # the pitch divides any regular grid over the wall
+        mesh = self.meshed([self.teeth(12, 1.0, 0.7)], free=[self.air_3d((0, 0, 0, 12, 10, 10), size=2.0)], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh), 1200, delta=1e-6)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_slots_of_an_irregular_array_on_a_planar_wall(self):  # the control of the regular array
+        mesh = self.meshed([self.teeth(7, 12 / 7, 1.0)], free=[self.air_3d((0, 0, 0, 12, 10, 10), size=2.0)], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh), 1200, delta=1e-6)
+
+    def two_bands(self, low, high):
+        write_boxes(self.geo("b1.brep"), (-0.5, 0, 0, 0.5, 10, low))
+        write_boxes(self.geo("b2.brep"), (-0.5, 0, high, 0.5, 10, 10 - high))
+        return self.two_cells("B", "volumes", "geometry/b1.brep", "geometry/b2.brep", [ID], (1.0, 0.8))
+
+    def test_narrow_free_slit_on_a_planar_wall(self):
+        mesh = self.meshed([self.two_bands(4.95, 5.05)], free=[self.air_3d((0, 0, 0, 10, 10, 10), size=2.5)], dim=3)
+        self.assertAlmostEqual(area_or_volume_of_air(mesh), 1000, delta=1e-6)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+    def test_2d_narrow_free_gap_on_a_straight_edge(self):
+        write_rects(self.geo("b1.brep"), (-0.5, 0, 0.5, 4.99))
+        write_rects(self.geo("b2.brep"), (-0.5, 5.01, 0.5, 4.99))
+        group = self.two_cells("B", "bodies", "geometry/b1.brep", "geometry/b2.brep", [ID], (1.0, 0.8))
+        write_rects(self.geo("air.brep"), (0, 0, 10, 10))
+        mesh = self.meshed([group], free=[self.air_2d(size=2.5)])
+        self.assertAlmostEqual(area(mesh, 20), 100, delta=1e-6)
+        self.assertEqual(edges_in_three(mesh), 0)
+
+    def test_narrow_free_strip_on_a_curved_wall_is_refused(self):  # a grid over the wall misses it, the edge does not
+        write_ring(self.geo("air.brep"), 2, 8, -4, 4)
+        free = {"side": "fixed", "job": {"volumes": [dict(self.AIR, size=1.0)], "surfaces": [], "sizes": []}}
+        r = self.run_job([self.stator_and_band(3.95)], free=[free], dim=3)
+        self.assert_refused(r, "limit of the tool")
+        self.assertIn("curved face", r.stderr)
+
     def test_air_filling_the_bore_of_the_copies(self):  # its whole lateral face lies on theirs: dropped, nothing open
         group = self.ring_3d(self.TWELVE, ())
         write_cylinders(self.geo("air.brep"), (0, 0, 0, 5, 10))

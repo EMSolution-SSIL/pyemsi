@@ -935,9 +935,10 @@ def _outer_edges(rows, name, V):
 
 
 def _taken(face, rows, solid, V, dim, tol):
-    """True when no part of the face (line in 2D) is free: every point of a grid over it is on one of its frozen facets
-    rows, or on or inside the copies, whose whole surface is solid. A narrow free part the grid misses leaves the shell
-    of the free object open, and that is refused."""
+    """True when no part of the face (line in 2D) is free: every point of a grid over it, and a point just past every
+    outer edge of its frozen facets rows (_free_beside), is on one of those facets or on or inside the copies, whose
+    whole surface is solid. A free part always borders the covered region, so a gap between facets is found whatever
+    its width and whether or not the grid falls in it; the grid finds a free part that holds no facet at all."""
     own = np.asarray(rows, dtype=np.int64).reshape(-1, 2) if dim == 2 else _triangles(rows)
     lo, hi = gmsh.model.getParametrizationBounds(dim - 1, face)
     count = 64 if dim == 2 else 24
@@ -947,12 +948,58 @@ def _taken(face, rows, solid, V, dim, tol):
         if dim == 3 and not gmsh.model.isInside(2, face, list(uv), parametric=True):
             continue
         found = True
-        point = np.array(gmsh.model.getValue(dim - 1, face, list(uv)))
-        if len(own) and meshfrozen.on_facets(V, own, point, tol):
-            continue
-        if not len(solid) or abs(meshfrozen.winding(V, solid, point)) <= 0.1:  # one half on a facet, one inside
+        if _is_free(np.array(gmsh.model.getValue(dim - 1, face, list(uv))), own, solid, V, tol):
             return False
-    return found
+    return found and not _free_beside(face, rows, own, solid, V, dim, tol)
+
+
+def _is_free(point, own, solid, V, tol):
+    """True when point is not on one of the facets own, nor on or inside the copies (one half on a facet, one inside)."""
+    if len(own) and meshfrozen.on_facets(V, own, point, tol):
+        return False
+    return not len(solid) or abs(meshfrozen.winding(V, solid, point)) <= 0.1
+
+
+def _free_beside(face, rows, own, solid, V, dim, tol):
+    """True when the point just past some outer edge (in 2D, end node) of the frozen facets rows on face is free. An
+    edge along the face's own rim has nothing of the face past it, or only the sliver between a chord and the curve."""
+    sides = {}
+    for row in rows:
+        nodes = row.tolist()
+        for k, n in enumerate(nodes):
+            side = (n,) if dim == 2 else tuple(sorted((n, nodes[(k + 1) % len(nodes)])))
+            sides[side] = None if side in sides else row
+    for side, row in sides.items():
+        if row is None:
+            continue
+        middle = V[list(side)].mean(axis=0)
+        outward = middle - V[row].mean(axis=0)
+        if dim == 3:
+            along = V[side[1]] - V[side[0]]
+            outward -= along * (outward @ along) / (along @ along)
+        reach = float(np.linalg.norm(outward))
+        beyond = middle + outward / reach * max(10 * tol, 5e-3 * reach)
+        point = gmsh.model.getClosestPoint(dim - 1, face, beyond.tolist())[0]
+        if gmsh.model.isInside(dim - 1, face, list(point)) and _is_free(point, own, solid, V, tol):
+            if not _on_rim(face, side, V, dim, tol):
+                return True
+    return False
+
+
+def _on_rim(face, side, V, dim, tol):
+    """True when the outer edge side (nodes; one node in 2D) of a covered region runs along a bounding curve of face (in
+    2D: the node is an end of the line)."""
+    bounds = [abs(int(t)) for _, t in gmsh.model.getBoundary([(dim - 1, face)], oriented=False)]
+    if dim == 2:
+        return any(np.linalg.norm(V[side[0]] - gmsh.model.getValue(0, t, [])) <= tol for t in bounds)
+    ends = V[list(side)]
+    middle, length = ends.mean(axis=0), float(np.linalg.norm(ends[1] - ends[0]))
+    for curve in bounds:
+        near = np.reshape(gmsh.model.getClosestPoint(1, curve, [*ends.ravel(), *middle])[0], (-1, 3))
+        off = np.linalg.norm(near - np.vstack([ends, middle]), axis=1)
+        if off[0] <= tol and off[1] <= tol and off[2] <= max(tol, 0.2 * length):
+            return True
+    return False
 
 
 def _triangles(rows):
