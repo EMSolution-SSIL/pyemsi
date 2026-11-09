@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 import gmsh
+import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MESHER = os.path.join(HERE, "..", "..", "freecad_addon", "emsolution", "mesher.py")
@@ -173,7 +174,7 @@ def fresh(name):
 def motor():
     """(a) 12 slots, 12 poles, sliding cylinder R 40, stack 2 x 50 mm."""
     folder = fresh("a_motor_z_mirror_sliding")
-    L, R = 50, 40
+    L, R, T = 50, 40, 75  # stack half-length, sliding radius, half-height of the band, rotor and air
     transforms = [compose(rotation(30 * c), m) for c in range(12) for m in (ID, MIRROR_Z)]
     turn = [c for c in range(12) for _ in (0, 1)]  # the rotation of each transform
 
@@ -186,7 +187,7 @@ def motor():
         cut(slot, sector(R + 6, 66, 8, 22, 0, L))
 
     stator = [
-        piece(folder, "stator_gap", lambda: sector(R, R + 2, 0, 30, 0, L), 1, "Gap", 2.0),
+        piece(folder, "stator_gap", lambda: sector(R, R + 2, 0, 30, 0, T), 1, "Gap", 2.0),
         piece(folder, "stator_iron", stator_iron, 2, "StatorIron", 7.0),
         piece(folder, "stator_slot_air", slot_air, 3, "SlotAir", 5.0),
         piece(folder, "stator_coil", lambda: sector(R + 6, 66, 8, 22, 0, L), 4, "Coil", 5.0),
@@ -196,13 +197,13 @@ def motor():
     stator_rows = [[1] * 24, [0] * 24, [1] * 24, [2 + c for c in turn]]
 
     def rotor_air():
-        air = sector(30, R, 0, 30, 0, L)
-        cut(air, sector(30, 38, 3, 27, 0, L))
+        air = sector(30, R, 0, 30, 0, T)
+        cut(air, sector(30, 38, 3, 27, 0, T))
 
     rotor = [
-        piece(folder, "rotor_iron", lambda: sector(10, 30, 0, 30, 0, L), 1, "RotorIron", 8.0),
-        piece(folder, "rotor_magnet", lambda: sector(30, 38, 3, 27, 0, L), 2, "Magnet", 4.0),
-        piece(folder, "rotor_air", rotor_air, 3, "RotorAir", 3.0),
+        piece(folder, "rotor_iron", lambda: sector(10, 30, 0, 30, 0, T), 1, "RotorIron", 10.0),
+        piece(folder, "rotor_magnet", lambda: sector(30, 38, 3, 27, 0, T), 2, "Magnet", 5.0),
+        piece(folder, "rotor_air", rotor_air, 3, "RotorAir", 4.0),
     ]
     rotor_parts = [{"mat_id": 3, "name": "RotorIron"}, {"mat_id": 2, "name": "Air"}]
     rotor_parts += [{"mat_id": 4, "name": "MagnetN"}, {"mat_id": 5, "name": "MagnetS"}]
@@ -211,9 +212,9 @@ def motor():
         group("Stator", "fixed", stator, transforms, stator_parts, stator_rows, turns=12),
         group("Rotor", "moving", rotor, transforms, rotor_parts, rotor_rows, turns=12),
     ]
-    ring = piece(folder, "air_ring", lambda: flanged_ring(80, 110, R + 2, L, 25), 2, "Air", 14.0)
-    slide = {"name": "Slide", "kind": "rotational", "radius": float(R), "divisions": 144, "cross_divisions": 10}
-    slide.update(slide_mat_id=6, full=True, z_range=[-L, L])
+    ring = piece(folder, "air_ring", lambda: sector_ring(R + 2, 110, -T, T), 2, "Air", 16.0)
+    slide = {"name": "Slide", "kind": "rotational", "radius": float(R), "divisions": 144, "cross_divisions": 30}
+    slide.update(slide_mat_id=6, full=True, z_range=[-T, T])
     free = {"side": "fixed", "job": {"volumes": [ring], "surfaces": [], "sizes": []}}
     job = {
         "model_name": "Model",
@@ -222,19 +223,62 @@ def motor():
         "options": {},
         "symmetric": {"groups": groups, "free": [free], "slide": slide},
     }
-    return run("a_motor_z_mirror_sliding", folder, job)
+    total = run("a_motor_z_mirror_sliding", folder, job)
+    vols = check_mesh(job["mesh_file"])
+    pi = math.pi
+    slot = 12 * 2 * L * (pi * (68**2 - (R + 2) ** 2) * 18 / 360 - pi * (66**2 - (R + 6) ** 2) * 14 / 360)
+    band = pi * ((R + 2) ** 2 - R**2) * 2 * T
+    ring = pi * (110**2 - (R + 2) ** 2) * 2 * T - pi * (80**2 - (R + 2) ** 2) * 2 * L
+    want = ring + band + slot
+    print(
+        f"   Air volume {vols['Air']:.0f}, wanted (ring - stator cells + band + slot air) {want:.0f}: {vols['Air'] / want:.4f}"
+    )
+    return total
 
 
-def flanged_ring(inner, outer, flange, half, extra):
-    """The air outside the stack: a ring r inner..outer over z -half..half, flush with the stack's outer face, with a
-    flange r flange..outer extending extra beyond each end (so no curved face is covered only in part)."""
-    occ = gmsh.model.occ
-    pts = [(inner, -half), (flange, -half), (flange, -half - extra), (outer, -half - extra)]
-    pts += [(outer, half + extra), (flange, half + extra), (flange, half), (inner, half)]
-    ids = [occ.addPoint(r, 0, z) for r, z in pts]
-    lines = [occ.addLine(ids[k], ids[(k + 1) % len(ids)]) for k in range(len(ids))]
-    face = occ.addPlaneSurface([occ.addCurveLoop(lines)])
-    occ.revolve([(2, face)], 0, 0, 0, 0, 0, 1, 2 * math.pi)
+def sector_ring(inner, outer, z0, z1):
+    whole = gmsh.model.occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, outer)
+    hole = gmsh.model.occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, inner)
+    gmsh.model.occ.cut([(3, whole)], [(3, hole)])
+
+
+def check_mesh(path, expect=None):
+    """Print the volume of each physical group (tetrahedra only) and the faces held by 3 or more elements
+    (triangles of tetrahedra and pyramids)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        nodes, xyz, _ = gmsh.model.mesh.getNodes()
+        at = np.zeros((int(nodes.max()) + 1, 3))
+        at[nodes.astype(int)] = np.reshape(xyz, (-1, 3))
+        faces, vols = [], {}
+        for dim, tag in gmsh.model.getPhysicalGroups(3):
+            total = 0.0
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(dim, tag):
+                types, _, conn = gmsh.model.mesh.getElements(dim, ent)
+                for t, c in zip(types, conn):
+                    if t == 4:
+                        c = np.reshape(c, (-1, 4)).astype(int)
+                        p = at[c]
+                        total += (
+                            abs(
+                                np.einsum("ij,ij->i", np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), p[:, 3] - p[:, 0])
+                            ).sum()
+                            / 6
+                        )
+                        for k in ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)):
+                            faces.append(np.sort(c[:, k], axis=1))
+                    elif t == 7:
+                        c = np.reshape(c, (-1, 5)).astype(int)
+                        for k in ((0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4)):
+                            faces.append(np.sort(c[:, k], axis=1))
+            vols[gmsh.model.getPhysicalName(dim, tag)] = total
+        _, counts = np.unique(np.vstack(faces), axis=0, return_counts=True)
+        print(f"   faces in 3 or more elements: {int((counts > 2).sum())}")
+        return vols
+    finally:
+        gmsh.finalize()
 
 
 def hex_coils():
@@ -281,7 +325,9 @@ def hex_coils():
             "free": [{"side": "fixed", "job": {"volumes": [air], "surfaces": [], "sizes": []}}],
         },
     }
-    return run("b_hex_coils_on_iron", folder, job)
+    total = run("b_hex_coils_on_iron", folder, job)
+    check_mesh(job["mesh_file"])
+    return total
 
 
 if __name__ == "__main__":
