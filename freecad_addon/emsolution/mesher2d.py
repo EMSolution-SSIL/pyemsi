@@ -32,6 +32,7 @@ from meshcommon import (
     slide_split,
 )
 import meshsym
+import meshgroups
 
 
 def _on_bodies(dim, tag, faces):
@@ -147,18 +148,25 @@ def build(job, folder):
 
 
 def _symmetric(job_path):
+    """The module that meshes the job's cells and copies them: meshgroups for a job with symmetric groups, meshsym for
+    one with symmetric sides, None for a job that is not symmetric."""
     with open(job_path, encoding="utf-8") as fh:
-        return "symmetric" in json.load(fh)
+        symmetric = json.load(fh).get("symmetric")
+    if symmetric is None:
+        return None
+    return meshgroups if "groups" in symmetric else meshsym
 
 
 def check_job(job_path, build):
-    """--check: a symmetric job meshes and copies its cell to run its checks (meshsym.check)."""
-    (meshsym.check if _symmetric(job_path) else check)(job_path, build)
+    """--check: a symmetric job meshes and copies its cell to run its checks (meshsym.check, meshgroups.check)."""
+    module = _symmetric(job_path)
+    (module.check if module else check)(job_path, build)
 
 
 def run_job(job_path):
-    if _symmetric(job_path):  # mesh the cell and copy it
-        print("\n".join(meshsym.report(meshsym.run(job_path, build))))
+    module = _symmetric(job_path)
+    if module:  # mesh the cell and copy it
+        print("\n".join(module.report(module.run(job_path, build))))
         return
     job = run(job_path, build, 2)
     for item in job["bodies"] + air_items(job):
