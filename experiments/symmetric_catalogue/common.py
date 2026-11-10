@@ -142,3 +142,57 @@ def v_rotor(doc, study, lib, name="Rotor"):
 
 def coil_sector(k, slots, pole_pairs):
     return ((k * pole_pairs * 360 + 30 * slots) % (360 * slots)) // (60 * slots)
+
+
+# --- whole strands: skew is part of the drawn strand (spec 2, anti-goals) ----------------------------------------------
+
+
+def strand(centre, r, z0, z1, n=40, points=24):
+    """A whole round strand of radius r about the centre line centre(z) (a Vector at height z) from z0 to z1: a ruled
+    loft through n + 1 sections at even heights. Each section is where the plane of its height cuts the tube of radius
+    r round the line (the circle normal to the line, slid along it into that plane: an ellipse, interpolated through
+    points points), so the ends are flat at z0 and z1 and lie on the end planes of a wire's air, with no boolean on
+    the loft (those fail on these surfaces). The sections start on a frame carried along the line (each start direction
+    the last one made normal to the line), so the loft's seam does not twist."""
+    wires, u = [], V(1, 0, 0)
+    for i in range(n + 1):
+        z = z0 + (z1 - z0) * i / n
+        c, h = centre(z), (z1 - z0) / n / 10
+        t = centre(z + h) - centre(z - h)
+        t.normalize()
+        u = u - t * u.dot(t)
+        u.normalize()
+        w = t.cross(u)
+        a, b = u - t * (u.z / t.z), w - t * (w.z / t.z)  # u and w slid along t into the plane of height z
+        angles = [2 * math.pi * k / points for k in range(points)]
+        ring = [c + a * (r * math.cos(f)) + b * (r * math.sin(f)) for f in angles]
+        curve = Part.BSplineCurve()
+        curve.interpolate(ring, PeriodicFlag=True)
+        wires.append(Part.Wire(curve.toShape()))
+    out = Part.makeLoft(wires, True, True)
+    assert len(out.Solids) == 1 and out.Solids[0].isValid(), "the strand is not one valid solid"
+    return out.Solids[0]
+
+
+def twisted(rb, rho, a0, phi, psi, length, r, n=40):
+    """The catalogue's whole strand of a twisted bundle, z 0..length: its centre sits rho from the bundle's axis at
+    a0 + psi * z / length degrees (the strand's skew in the bundle), and the bundle's axis rb from the wire's axis,
+    turned phi * z / length degrees about Z (the bundle's skew round the wire)."""
+    if rb == 0 and rho == 0:
+        return Part.makeCylinder(r, length)
+
+    def centre(z):
+        f, g = math.radians(phi * z / length), math.radians(psi * z / length + a0)
+        x, y = rb + rho * math.cos(g), rho * math.sin(g)
+        return V(x * math.cos(f) - y * math.sin(f), x * math.sin(f) + y * math.cos(f), z)
+
+    return strand(centre, r, 0, length, n)
+
+
+def wire_air(study, lib, radius, length, size=None, z0=0.0):
+    """The drawn air of a wire: a cylinder of radius about Z from z0 over length, in the Main geometry (free air, spec
+    4.4). Strands that run the whole length end on its end planes."""
+    air = symcases.add_free(study, "FreeAir", Part.makeCylinder(radius, length, V(0, 0, z0)), lib["Air"])
+    if size:
+        sizes(study, [(air, size)])
+    return air

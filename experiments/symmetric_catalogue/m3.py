@@ -119,6 +119,25 @@ def m3_03():
     return skewed("M3_03", cells_for)
 
 
+def m3_03_static():
+    """The rotor of M3-03 alone, as the catalogue draws it: one slice of iron (R 8..25) and magnet (R 25..27.5,
+    -18..18°), Rotate Z 45° x 8, then the screw step (turn 6° and move up a slice, x 3) as a motion rule; a pole's
+    three magnet slices are one part (across rule 2). Static, in a drawn air cylinder, no stator and no sliding: this
+    row checks that the engine takes a screw step (spec 2: only its panel entry is Later)."""
+    doc, study = new_study("M3_03s", "3D", "No movement", 2.0)
+    lib = symcases.libraries(study)
+    cells = [
+        symcases.feature(doc, "RotorIron", extruded(sector(8, 25, -22.5, 22.5), 0, SLICE)),
+        symcases.feature(doc, "Magnet", extruded(sector(25, 27.5, -18, 18), 0, SLICE)),
+    ]
+    screw = motion(symmetry.translation([0, 0, SLICE]), symmetry.rotation_about([0, 0, 0], [0, 0, 1], SKEW), count=3)
+    rows = {1: {"mode": "across", "across": [1]}}
+    make_group(study, "Rotor", cells, [rotate(45, 8), screw], [lib["Steel"], lib["Steel"]], rows)
+    air = symcases.add_free(study, "FreeAir", Part.makeCylinder(34, L + 8, V(0, 0, -4)), lib["Air"])
+    sizes(study, [(air, 3.0)])
+    return study
+
+
 def m3_03_cells():
     """What a user does with the panel instead: the three slices drawn as cell objects, each turned 6° and raised a
     slice from the one below, with Rotate Z 45° x 8 only. A pole's three magnet slices are one part (one name in
@@ -172,7 +191,11 @@ def axial(name, moving):
     (z 7.2..9) and a magnet (0..18°, z 5..7.2), Mirror y = 0, Rotate Z 45° x 8, Mirror z = 0 (the other rotor); the back
     iron one part per rotor, the magnet across the y mirror. moving: the rotors slide behind an Axial gap interface at
     z = 4.5, with the air of the gap a copied disc on each side (4..4.5 and 4.5..5); else the air is one drawn
-    cylinder over everything."""
+    cylinder over everything.
+
+    The moving Study is not a valid sliding drawing: its gap discs are unstructured, and the mirrored rotor would need
+    two interfaces (z = 4.5 and z = -4.5) where it has one. It is there only to show that Validate refuses Axial
+    sliding, which comes first."""
     doc, study = new_study(name, "3D", "Sliding motion" if moving else "No movement", 1.5)
     lib = symcases.libraries(study)
     cells = [
@@ -330,6 +353,7 @@ CASES = [
     ("M3-01", m3_01, "meshes"),
     ("M3-02", sl.m3_02, "meshes"),
     ("M3-03", m3_03, ("refused", "Rule 2 (motion) is not a rotation about Z")),
+    ("M3-03-static", m3_03_static, "meshes"),
     ("M3-03-cells", m3_03_cells, ("refused", "would have to be split where a copy touches part of its face")),
     ("M3-03-band", m3_03_band, "meshes"),
     ("M3-04", m3_04, ("refused", "slides Rotational only")),
