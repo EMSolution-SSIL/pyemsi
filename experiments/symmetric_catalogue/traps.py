@@ -161,14 +161,14 @@ def t_05():
 
 
 def t_06():
-    """A yoke sector (R 30..45, 0..30°) whose edge on the 0° line is split at R 40 and whose edge on the 30° line is
-    not, Rotate Z 30° x 12: a seam split on one side only. The seams are not paired (their lengths differ), so each is
-    meshed on its own and the mesher refuses when the nodes do not meet (spec 7.2, step 6). Mesh size 1.5: at 1.0 both
-    sides get a node at every whole radius, the copies join by chance and the mesh is right (checked: no boundary
-    edge off R 30 and R 45, no doubled node)."""
+    """A yoke sector (R 30..45, 0..30°) whose edge on the 0° line is split at R 40.37 and whose edge on the 30° line
+    is not, Rotate Z 30° x 12: a seam split on one side only. The seams are not paired (their lengths differ), so each
+    is meshed on its own and the mesher refuses when the nodes do not meet (spec 7.2, step 6). The split radius is
+    not a multiple of any reasonable mesh size, so the 0° side always has a node at 40.37 that the 30° side lacks,
+    whatever the size (a whole radius such as 40 lined up by chance at size 1.0)."""
     doc, study = new_study("T_06", "2D", "No movement", 1.5)
     lib = symcases.libraries(study)
-    yoke = symcases.feature(doc, "Yoke", outline((30, 0), (30, 30), (45, 30), (45, 0), (40, 0)))
+    yoke = symcases.feature(doc, "Yoke", outline((30, 0), (30, 30), (45, 30), (45, 0), (40.37, 0)))
     assert len(yoke.Shape.Edges) == 5
     make_group(study, "Stator", [yoke], [rotate(30, 12)], [lib["Steel"]])
     return study
