@@ -114,6 +114,29 @@ def test_cell_in_a_moved_part_is_copied_from_where_it_shows(study, stator):
     assert stator.Shape.BoundBox.ZMax == pytest.approx(5)
 
 
+def test_drawing_follows_a_moved_part_on_validate(study, stator):
+    """Cells links the cells only: moving the App::Part they sit in does not mark the group for recompute."""
+    doc = study.Document
+    part = doc.addObject("App::Part", "Holder")
+    for cell in stator.Cells:
+        part.addObject(cell)
+    doc.recompute()
+    part.Placement = App.Placement(App.Vector(0, 0, 5), App.Rotation())
+    doc.recompute()
+    assert objects.stale_drawing(stator)
+    validation.refresh_padding(study)
+    assert stator.Shape.BoundBox.ZMin == pytest.approx(5)
+    assert not objects.stale_drawing(stator)
+
+
+def test_winding_table_names_each_copy_by_its_slot(stator):
+    """Both halves of a mirrored coil are in one slot: the slot comes from the angle of the copy's centre."""
+    names = objects.winding_table(stator, 1, STATOR_RULES[1], 12, 1, span=6)
+    assert len(names) == 24 and names[:6] == ["A+", "A+", "C-", "C-", "C-", "C-"]
+    coils = objects.winding_table(stator, 1, STATOR_RULES[1], 12, 1, per_coil=True, layer="whole")
+    assert coils[:4] == ["Coil01", "Coil01", "Coil02", "Coil02"] and coils[-1] == "Coil12"
+
+
 def test_group_survives_save_and_reopen(study, stator, tmp_path):
     objects.set_rows(stator, [{**r, "mode": "table", "table": ["A"] * 24} for r in objects.rows_of(stator)])
     study.Document.recompute()

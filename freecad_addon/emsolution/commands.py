@@ -363,6 +363,32 @@ class AddSymmetricMesh(_StudyCommand):
         _create(study, "Add Symmetric Mesh", lambda: objects.make_symmetric_mesh(study, top))
 
 
+class AddSymmetricGroup(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("symmetricmesh"),
+            "MenuText": "Symmetric Group",
+            "ToolTip": "Mesh the selected cell objects once and copy them by mirror, rotation and translation rules",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        cells = [b for b in taskpanels.selected_bodies() if not objects.is_study_object(b)]
+        doc = study.Document
+        doc.openTransaction("Add Symmetric Group")  # stays open until OK or Cancel
+        try:
+            obj = objects.make_symmetric_group(study, cells)
+            doc.recompute()
+            panel = taskpanels.SymmetricGroupPanel(obj, new=True)
+        except Exception:
+            doc.abortTransaction()
+            doc.recompute()
+            raise
+        Gui.Control.showDialog(panel)
+
+
 class ValidateStudy(_StudyCommand):
     def GetResources(self):
         return {
@@ -412,6 +438,7 @@ COMMANDS = {
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
     "EMS_SymmetricMesh": AddSymmetricMesh(),
+    "EMS_SymmetricGroup": AddSymmetricGroup(),
     "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),
 }

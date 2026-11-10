@@ -672,6 +672,8 @@ class FolderView:
             pass
         elif isinstance(item.Proxy, objects.SymmetricMesh):
             Gui.Control.showDialog(SymmetricMeshPanel(item))
+        elif isinstance(item.Proxy, objects.SymmetricGroup):
+            Gui.Control.showDialog(SymmetricGroupPanel(item))
         elif isinstance(item.Proxy, objects.AirRegion):
             Gui.Control.showDialog(AirRegionPanel(item))
         elif isinstance(item.Proxy, objects.SlidingInterface):
@@ -1021,8 +1023,22 @@ class ViewProviderItem(_ViewProvider):
             Gui.Control.showDialog(MaterialPanel(obj))
         elif isinstance(obj.Proxy, objects.SymmetricMesh):
             Gui.Control.showDialog(SymmetricMeshPanel(obj))
+        elif isinstance(obj.Proxy, objects.SymmetricGroup):  # saved with this view provider before it had its own
+            Gui.Control.showDialog(SymmetricGroupPanel(obj))
         else:
             Gui.Control.showDialog(ItemPanel(obj))
+        return True
+
+
+class ViewProviderGroup(_ViewProvider):
+    """A Symmetric Group: its drawing is shown by the shape's own view provider, so clicks land on its faces."""
+
+    def getIcon(self):
+        return icon("symmetricmesh")
+
+    def doubleClicked(self, vobj):
+        if not Gui.Control.activeDialog():  # another panel's selection gate must not outlive it
+            Gui.Control.showDialog(SymmetricGroupPanel(vobj.Object))
         return True
 
 
@@ -1039,6 +1055,8 @@ def attach_view_provider(obj):
         return ViewProviderAir(obj.ViewObject)
     if isinstance(proxy, objects.SlidingInterface):
         return ViewProviderSlidingInterface(obj.ViewObject)
+    if isinstance(proxy, objects.SymmetricGroup):
+        return ViewProviderGroup(obj.ViewObject)
     if isinstance(proxy, objects._Proxy):  # Material, Excitation and the mesh items
         return ViewProviderItem(obj.ViewObject)
     return None
@@ -1662,6 +1680,563 @@ class SymmetricMeshPanel:
     def reject(self):
         Gui.Control.closeDialog()
         return True
+
+
+PART_MODES = [
+    ("one", "One part"),
+    ("each", "Each copy separate"),
+    ("across", "Merged across ticked rules"),
+    ("table", "Table"),
+]
+
+
+def _num(v):
+    return f"{round(v, 6) + 0.0:g}"
+
+
+def _vector_text(v):
+    return "(" + ", ".join(_num(c) for c in v) + ")"
+
+
+def rule_text(n, rule):
+    """One line for rule n (from 1): "2. Rotate 30° × 12 about (0, 0, 1) through (0, 0, 0)"."""
+    kind = rule["kind"]
+    if kind == "mirror":
+        return f"{n}. Mirror in the plane through {_vector_text(rule['point'])}, normal {_vector_text(rule['normal'])}"
+    if kind == "rotate":
+        axis, point = _vector_text(rule["axis"]), _vector_text(rule["point"])
+        return f"{n}. Rotate {_num(rule['step'])}° × {rule['count']} about {axis} through {point}"
+    if kind == "translate":
+        return f"{n}. Translate {_vector_text(rule['vector'])} × {rule['count']}"
+    return f"{n}. Motion × {rule['count']}"
+
+
+def _number_box(minimum=-1e6, maximum=1e6, suffix=""):
+    box = QtWidgets.QDoubleSpinBox()
+    box.setDecimals(10)  # a normal at 15° or a step of 360/7 rounded to 6 places leaves the copies micrometres off
+    box.setRange(minimum, maximum)
+    box.setSuffix(suffix)
+    box.setKeyboardTracking(False)  # a value is written when typed in, not at every key
+    return box
+
+
+def ask_proposal(proposals):
+    """The index of the proposal of rules_from_chain to take, or None on Cancel."""
+    texts = [
+        f"{', '.join(b.Label for b in p.cells)}: {len(p.rules)} rules, {symmetry.copy_count(p.rules)} copies"
+        for p in proposals
+    ]
+    text, ok = QtWidgets.QInputDialog.getItem(
+        Gui.getMainWindow(), "Read from drawing", "The drawing copies these bodies differently. Take:", texts, 0, False
+    )
+    return texts.index(text) if ok else None
+
+
+class SymmetricGroupPanel:
+    """Edit a Symmetric Group: its cell objects, what the copies of each become, and the ordered rules that copy them.
+    Every change is written as it is made and the drawing recomputed, so the 3D view shows the copies, inside one
+    transaction: OK commits it and makes a Material per new part, Cancel undoes it. new: obj was just made inside the
+    command's open transaction, so Cancel removes it."""
+
+    def __init__(self, obj, new=False):
+        self.obj, self.new = obj, new
+        self.study = study = objects.owner_study(obj)
+        self.doc = obj.Document
+        if objects.stale_drawing(obj):  # a container of a cell was moved; outside the transaction, so Cancel keeps it
+            obj.touch()
+            self.doc.recompute()
+        if not new:  # a new item's transaction is already open
+            self.doc.openTransaction("Edit " + obj.Label)
+        highlight.clear()
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle(obj.Label)
+        layout = QtWidgets.QVBoxLayout(self.form)
+        top = QtWidgets.QFormLayout()
+        layout.addLayout(top)
+        top.addRow(QtWidgets.QLabel("Study: " + study.Label))
+        hint = QtWidgets.QLabel(
+            "Select the cell objects and click Use selection, then add the rules. Each rule copies everything made"
+            " before it; the drawing in the 3D view shows every copy."
+        )
+        hint.setWordWrap(True)
+        top.addRow(hint)
+        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
+        top.addRow("Name", self.name)
+        self.side = QtWidgets.QComboBox()
+        self.side.addItems(obj.getEnumerationsOfProperty("Side"))
+        self.side.setCurrentText(obj.Side)
+        self.side_label = QtWidgets.QLabel("Side")
+        top.addRow(self.side_label, self.side)
+        sliding = study.Movement == "Sliding motion"
+        self.side.setVisible(sliding)
+        self.side_label.setVisible(sliding)
+        self.side.currentTextChanged.connect(self.write_side)
+
+        cells = QtWidgets.QGroupBox("Cell objects and what their copies become")
+        cells_layout = QtWidgets.QVBoxLayout(cells)
+        self.rows = QtWidgets.QTableWidget()
+        self.rows.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.rows.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.rows.verticalHeader().setVisible(False)
+        self.rows.itemChanged.connect(self.write_tick)
+        self.rows.currentCellChanged.connect(lambda *_: self.show_state())
+        cells_layout.addWidget(self.rows)
+        self.use_selection = QtWidgets.QPushButton("Use selection")
+        self.use_selection.setToolTip("The selected bodies become the cell objects")
+        self.read_drawing = QtWidgets.QPushButton("Read from drawing")
+        self.read_drawing.setToolTip("Select the top of a Mirror / Polar Array drawing: its cell bodies and rules")
+        self.table_button = QtWidgets.QPushButton("Table…")
+        self.table_button.setToolTip("Name the part of each copy of the selected row, or generate a winding")
+        cells_layout.addLayout(self._buttons(self.use_selection, self.read_drawing, self.table_button))
+        layout.addWidget(cells)
+
+        rules = QtWidgets.QGroupBox("Rules, in the order they apply")
+        rules_layout = QtWidgets.QVBoxLayout(rules)
+        self.rules = QtWidgets.QListWidget()
+        self.rules.currentRowChanged.connect(lambda _row: self.show_rule())
+        rules_layout.addWidget(self.rules)
+        self.add_mirror = QtWidgets.QPushButton("Mirror")
+        self.add_rotate = QtWidgets.QPushButton("Rotate")
+        self.add_translate = QtWidgets.QPushButton("Translate")
+        rules_layout.addLayout(
+            self._buttons(QtWidgets.QLabel("Add"), self.add_mirror, self.add_rotate, self.add_translate)
+        )
+        self.remove_rule = QtWidgets.QPushButton("Remove")
+        self.rule_up = QtWidgets.QPushButton("Up")
+        self.rule_down = QtWidgets.QPushButton("Down")
+        rules_layout.addLayout(self._buttons(self.remove_rule, self.rule_up, self.rule_down))
+        self.editor = QtWidgets.QWidget()
+        fields = QtWidgets.QFormLayout(self.editor)
+        fields.setContentsMargins(0, 0, 0, 0)
+        self.point = [_number_box(suffix=" mm") for _ in range(3)]
+        self.point_label = QtWidgets.QLabel("Point")
+        fields.addRow(self.point_label, self._buttons(*self.point))
+        self.direction = [_number_box() for _ in range(3)]
+        self.direction_label = QtWidgets.QLabel("Normal")
+        fields.addRow(self.direction_label, self._buttons(*self.direction))
+        self.step = _number_box(-360, 360, "°")
+        self.step_label = QtWidgets.QLabel("Step")
+        fields.addRow(self.step_label, self.step)
+        self.count = QtWidgets.QSpinBox()
+        self.count.setRange(2, 1000000)
+        self.count.setKeyboardTracking(False)
+        self.count_label = QtWidgets.QLabel("Count")
+        fields.addRow(self.count_label, self.count)
+        rules_layout.addWidget(self.editor)
+        layout.addWidget(rules)
+
+        self.summary = QtWidgets.QLabel()
+        layout.addWidget(self.summary)
+        self.problem = QtWidgets.QLabel()
+        self.problem.setWordWrap(True)
+        self.problem.setStyleSheet("color: #c0392b")
+        layout.addWidget(self.problem)
+
+        self.use_selection.clicked.connect(self.take_selection)
+        self.read_drawing.clicked.connect(self.read_chain)
+        self.table_button.clicked.connect(self.open_table)
+        self.add_mirror.clicked.connect(lambda: self.add_rule("mirror"))
+        self.add_rotate.clicked.connect(lambda: self.add_rule("rotate"))
+        self.add_translate.clicked.connect(lambda: self.add_rule("translate"))
+        self.remove_rule.clicked.connect(self.drop_rule)
+        self.rule_up.clicked.connect(lambda: self.move_rule(-1))
+        self.rule_down.clicked.connect(lambda: self.move_rule(1))
+        for box in self.point + self.direction + [self.step]:
+            box.valueChanged.connect(lambda _value: self.write_rule())
+        self.count.valueChanged.connect(lambda _value: self.write_rule())
+        self.refresh(0)
+
+    @staticmethod
+    def _buttons(*widgets):
+        row = QtWidgets.QHBoxLayout()
+        for w in widgets:
+            row.addWidget(w)
+        return row
+
+    def plane(self):
+        """ "" in 3D, else the plane of the cell objects ("XY" or "ZX"), as Validate takes it."""
+        return "" if self.study.Dimension == "3D" else airshapes.plane_of_bodies(self.obj.Cells)
+
+    # ---- showing
+
+    def refresh(self, rule=None):
+        """Show the group again; rule: the row of the rule list to select (else the current one)."""
+        rules = objects.rules_of(self.obj)
+        current = self.rules.currentRow() if rule is None else rule
+        self.rules.blockSignals(True)
+        self.rules.clear()
+        self.rules.addItems([rule_text(n, r) for n, r in enumerate(rules, 1)])
+        self.rules.setCurrentRow(min(current, len(rules) - 1))
+        self.rules.blockSignals(False)
+        self.fill_rows()
+        self.show_rule()
+        self.show_state()
+
+    def fill_rows(self):
+        rows, count = objects.rows_of(self.obj), len(objects.rules_of(self.obj))
+        current = self.rows.currentRow()
+        self.rows.blockSignals(True)
+        self.rows.clear()
+        self.rows.setColumnCount(2 + count)
+        self.rows.setHorizontalHeaderLabels(["Object", "Parts"] + [str(n) for n in range(1, count + 1)])
+        for n in range(count):
+            self.rows.horizontalHeaderItem(2 + n).setToolTip(
+                f"Merged across rule {n + 1}: copies that differ only in the ticked rules are one part"
+            )
+        self.rows.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            label = QtWidgets.QTableWidgetItem(objects.row_label(self.obj, row))
+            label.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+            self.rows.setItem(r, 0, label)
+            mode = QtWidgets.QComboBox()
+            for key, text in PART_MODES:
+                mode.addItem(text, key)
+            mode.setCurrentIndex(max(mode.findData(row.get("mode", "one")), 0))
+            mode.currentIndexChanged.connect(lambda _index, r=r, box=mode: self.write_mode(r, box.currentData()))
+            self.rows.setCellWidget(r, 1, mode)
+            for n in range(count):
+                tick = QtWidgets.QTableWidgetItem()
+                tick.setCheckState(QtCore.Qt.Checked if n in row.get("across", []) else QtCore.Qt.Unchecked)
+                self.rows.setItem(r, 2 + n, tick)
+            self.show_ticks(r, row.get("mode"))
+        self.rows.resizeColumnsToContents()
+        if 0 <= current < len(rows):
+            self.rows.setCurrentCell(current, 0)
+        self.rows.blockSignals(False)
+
+    def show_ticks(self, r, mode):
+        """The ticks of row r can be clicked only when its copies are merged across ticked rules."""
+        flags = QtCore.Qt.ItemIsUserCheckable | (QtCore.Qt.ItemIsEnabled if mode == "across" else QtCore.Qt.NoItemFlags)
+        blocked = self.rows.blockSignals(True)
+        for column in range(2, self.rows.columnCount()):
+            self.rows.item(r, column).setFlags(flags)
+        self.rows.blockSignals(blocked)
+
+    def show_rule(self):
+        """The editor shows the selected rule's values; nothing is written while they are filled in."""
+        rules, i = objects.rules_of(self.obj), self.rules.currentRow()
+        rule = rules[i] if 0 <= i < len(rules) else None
+        self.editor.setEnabled(rule is not None)
+        kind = rule["kind"] if rule else "mirror"
+        direction = {"mirror": "normal", "rotate": "axis", "translate": "vector"}.get(kind)
+        boxes = self.point + self.direction + [self.step, self.count]
+        for box in boxes:
+            box.blockSignals(True)
+        if rule is not None:
+            for box, value in zip(self.point, rule.get("point", [0, 0, 0])):
+                box.setValue(value)
+            for box, value in zip(self.direction, rule.get(direction, [0, 0, 0]) if direction else [0, 0, 0]):
+                box.setValue(value)
+            self.step.setValue(rule.get("step", 0))
+            self.count.setValue(int(rule.get("count", 2)))
+        for box in boxes:
+            box.blockSignals(False)
+        self.direction_label.setText((direction or "normal").capitalize())
+        for widgets, shown in (
+            ([self.point_label, *self.point], kind in ("mirror", "rotate")),
+            ([self.direction_label, *self.direction], direction is not None),
+            ([self.step_label, self.step], kind == "rotate"),
+            ([self.count_label, self.count], kind != "mirror"),
+        ):
+            for w in widgets:
+                w.setVisible(shown)
+
+    def rules_ok(self):
+        try:
+            return not symmetry.rule_problems(objects.rules_of(self.obj), self.plane())
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            return False
+
+    def show_state(self):
+        """The number of copies and parts, what Validate will say about the group, and whether the selected row has
+        a table to fill."""
+        prefix = f"Symmetric Group {self.obj.Label}: "
+        texts = [p.text.removeprefix(prefix) for p in validation.group_problems(self.obj)]
+        self.problem.setText("\n".join(texts))
+        self.problem.setVisible(bool(texts))
+        if self.rules_ok():
+            n = symmetry.copy_count(objects.rules_of(self.obj))
+            parts = len(objects.study_parts(self.study, [self.obj]))
+            self.summary.setText(f"{n} {'copy' if n == 1 else 'copies'}, {parts} {'part' if parts == 1 else 'parts'}")
+        else:
+            self.summary.setText("No drawing until the rules are fixed.")
+        r, rows = self.rows.currentRow(), objects.rows_of(self.obj)
+        self.table_button.setEnabled(0 <= r < len(rows) and rows[r].get("mode") == "table")
+
+    # ---- writing
+
+    def apply(self, rule=None):
+        """Recompute the drawing and show it; rule: as for refresh."""
+        self.doc.recompute()
+        self.refresh(rule)
+
+    def write_side(self, side):
+        self.obj.Side = side
+        self.apply()
+
+    def write_cells(self, cells):
+        self.obj.Cells = list(cells)
+        objects.sync_rows(self.obj)
+        self.apply()
+
+    def write_mode(self, r, mode):
+        rows = objects.rows_of(self.obj)
+        rows[r]["mode"] = mode
+        objects.set_rows(self.obj, rows)
+        self.show_ticks(r, mode)
+        self.rows.setCurrentCell(r, 0)
+        self.doc.recompute()
+        self.show_state()
+
+    def write_tick(self, item):
+        if item.column() < 2:
+            return
+        rows, rule = objects.rows_of(self.obj), item.column() - 2
+        across = set(rows[item.row()].get("across", [])) - {rule}
+        if item.checkState() == QtCore.Qt.Checked:
+            across.add(rule)
+        rows[item.row()]["across"] = sorted(across)
+        objects.set_rows(self.obj, rows)
+        self.doc.recompute()
+        self.show_state()
+
+    def renumber(self, moved):
+        """Keep the ticks on their rules: moved maps an old rule index to its new one, a removed rule to None."""
+        rows = objects.rows_of(self.obj)
+        for row in rows:
+            row["across"] = sorted(moved[i] for i in row.get("across", []) if moved.get(i) is not None)
+        objects.set_rows(self.obj, rows)
+
+    def default_rule(self, kind):
+        """A new rule the Study's plane allows: in a ZX Study mirrors and translations are along Z."""
+        along_z = self.plane() == "ZX"
+        if kind == "mirror":
+            return {"kind": "mirror", "point": [0, 0, 0], "normal": [0, 0, 1] if along_z else [0, 1, 0]}
+        if kind == "rotate":
+            return {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 90.0, "count": 4}
+        return {"kind": "translate", "vector": [0, 0, 10] if along_z else [10, 0, 0], "count": 2}
+
+    def add_rule(self, kind):
+        rules = objects.rules_of(self.obj) + [self.default_rule(kind)]
+        objects.set_rules(self.obj, rules)
+        self.apply(len(rules) - 1)
+
+    def drop_rule(self):
+        rules, i = objects.rules_of(self.obj), self.rules.currentRow()
+        if not 0 <= i < len(rules):
+            return warn("Select a rule first.")
+        del rules[i]
+        self.renumber({k: (k if k < i else k - 1) for k in range(len(rules) + 1) if k != i})
+        objects.set_rules(self.obj, rules)
+        self.apply(max(0, min(i, len(rules) - 1)))
+
+    def move_rule(self, step):
+        rules, i = objects.rules_of(self.obj), self.rules.currentRow()
+        j = i + step
+        if not (0 <= i < len(rules) and 0 <= j < len(rules)):
+            return
+        rules[i], rules[j] = rules[j], rules[i]
+        self.renumber({k: k for k in range(len(rules))} | {i: j, j: i})
+        objects.set_rules(self.obj, rules)
+        self.apply(j)
+
+    def write_rule(self):
+        rules, i = objects.rules_of(self.obj), self.rules.currentRow()
+        if not 0 <= i < len(rules):
+            return
+        rule = rules[i]
+        point, direction = [b.value() for b in self.point], [b.value() for b in self.direction]
+        if rule["kind"] == "mirror":
+            rule.update(point=point, normal=direction)
+        elif rule["kind"] == "rotate":
+            rule.update(point=point, axis=direction, step=self.step.value(), count=self.count.value())
+        elif rule["kind"] == "translate":
+            rule.update(vector=direction, count=self.count.value())
+        else:
+            rule["count"] = self.count.value()
+        objects.set_rules(self.obj, rules)
+        self.apply(i)
+
+    def take_selection(self):
+        picked = [b for b in selected_bodies() if not objects.is_study_object(b)]
+        if not picked:
+            return warn("Select the cell objects in the tree or the 3D view first.")
+        self.write_cells(picked)
+
+    def read_chain(self):
+        """Cell objects and rules from a Mirror / Polar Array drawing; a drawing whose bodies have other copies gives
+        a choice, and the rest is left for another group."""
+        picked = Gui.Selection.getSelection()
+        if len(picked) != 1:
+            return warn("Select the top object of a Mirror / Polar Array drawing (its Fragments, Compound or Array).")
+        try:
+            proposals = symmetry.rules_from_chain(picked[0])
+        except symmetry.SymmetryError as exc:
+            return warn(str(exc))
+        choice = 0 if len(proposals) == 1 else ask_proposal(proposals)
+        if choice is None:
+            return
+        taken = proposals[choice]
+        self.obj.Cells = taken.cells
+        objects.sync_rows(self.obj)
+        self.renumber({})  # the rules are new: no tick stands
+        objects.set_rules(self.obj, taken.rules)
+        self.apply(0)
+        left = [b.Label for p in proposals if p is not taken for b in p.cells]
+        if left:
+            warn(
+                f"These bodies are copied differently and were left out: {', '.join(left)}. Read them into a group of their own."
+            )
+
+    def open_table(self):
+        r, rows = self.rows.currentRow(), objects.rows_of(self.obj)
+        if not (0 <= r < len(rows) and rows[r].get("mode") == "table"):
+            return warn("Select a row whose parts are named by a Table.")
+        if not self.rules_ok():
+            return warn("Fix the rules first: the table has a line per copy.")
+        if TableDialog(self.obj, r).exec() == QtWidgets.QDialog.Accepted:
+            self.apply()
+
+    # ---- closing
+
+    def accept(self):
+        if not self.obj.Cells:
+            warn("Select the cell objects and click Use selection.")
+            return False
+        name = self.name.text().strip()
+        if name:
+            self.obj.Label = name
+        removed = objects.sync_parts(self.study) if self.rules_ok() else []  # parts follow once the rules can be read
+        for cell in self.obj.Cells:  # the drawing shows them
+            cell.Visibility = False
+        self.doc.commitTransaction()
+        self.doc.recompute()
+        Gui.Control.closeDialog()
+        if removed:
+            warn("The parts of these Materials are gone, so the Materials were removed: " + ", ".join(removed) + ".")
+        return True
+
+    def reject(self):
+        self.doc.abortTransaction()  # removes a new group, undoes the edits of an old one
+        self.doc.recompute()
+        Gui.Control.closeDialog()
+        return True
+
+
+def ask_winding(dialog):
+    """Show the winding dialog; True on OK."""
+    return dialog.exec() == QtWidgets.QDialog.Accepted
+
+
+class WindingDialog(QtWidgets.QDialog):
+    """The inputs of a three-phase winding: slots, pole pairs, coil span, which layer the row is, and whether each
+    coil is a part of its own (else one part per phase and direction)."""
+
+    LAYERS = [("top", "Top layer"), ("bottom", "Bottom layer"), ("whole", "Whole coil")]
+
+    def __init__(self, slots, parent=None):
+        super().__init__(parent or Gui.getMainWindow())
+        self.setWindowTitle("Generate winding")
+        layout = QtWidgets.QFormLayout(self)
+        self.slots = QtWidgets.QSpinBox()
+        self.slots.setRange(1, 100000)
+        self.slots.setValue(slots)
+        layout.addRow("Slots", self.slots)
+        self.pole_pairs = QtWidgets.QSpinBox()
+        self.pole_pairs.setRange(1, 10000)
+        layout.addRow("Pole pairs", self.pole_pairs)
+        self.span = QtWidgets.QSpinBox()
+        self.span.setRange(1, 100000)
+        self.span.setToolTip("Slots from the top side of a coil to its bottom side; 1 for a concentrated winding")
+        layout.addRow("Coil span", self.span)
+        self.layer = QtWidgets.QComboBox()
+        for key, text in self.LAYERS:
+            self.layer.addItem(text, key)
+        layout.addRow("This object is the", self.layer)
+        self.per_coil = QtWidgets.QCheckBox("One part per coil (else one per phase and direction: A+, A-, ...)")
+        layout.addRow(self.per_coil)
+        self.pole_pairs.valueChanged.connect(lambda _value: self.full_pitch())
+        self.slots.valueChanged.connect(lambda _value: self.full_pitch())
+        self.full_pitch()
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+    def full_pitch(self):
+        self.span.setValue(max(1, self.slots.value() // (2 * self.pole_pairs.value())))
+
+    def values(self):
+        return {
+            "slots": self.slots.value(),
+            "pole_pairs": self.pole_pairs.value(),
+            "span": self.span.value(),
+            "per_coil": self.per_coil.isChecked(),
+            "layer": self.layer.currentData(),
+        }
+
+
+class TableDialog(QtWidgets.QDialog):
+    """The part name of every copy of one row of a Symmetric Group, a line per copy; copies with the same name are one
+    part, across the group's objects too. generate fills it with a three-phase winding. OK writes it to the row."""
+
+    def __init__(self, item, row, parent=None):
+        super().__init__(parent or Gui.getMainWindow())
+        self.item, self.row = item, row
+        self.rules = objects.rules_of(item)
+        data = objects.rows_of(item)[row]
+        n = symmetry.copy_count(self.rules)
+        names = [str(s) for s in data.get("table", [])][:n]
+        names += [""] * (n - len(names))
+        self.setWindowTitle("Parts of " + objects.row_label(item, data))
+        layout = QtWidgets.QVBoxLayout(self)
+        note = QtWidgets.QLabel(
+            "A part name for each copy. Copies with the same name are one part, also across the group's objects."
+            " The copy numbers in brackets count each rule's steps, the first rule fastest."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        self.table = QtWidgets.QTableWidget(n, 2)
+        self.table.setHorizontalHeaderLabels(["Copy", "Part"])
+        self.table.verticalHeader().setVisible(False)
+        for k, index in enumerate(symmetry.copies(self.rules)):
+            copy = QtWidgets.QTableWidgetItem(f"{k + 1}  ({', '.join(str(i) for i in index)})")
+            copy.setFlags(QtCore.Qt.ItemIsEnabled)
+            self.table.setItem(k, 0, copy)
+            self.table.setItem(k, 1, QtWidgets.QTableWidgetItem(names[k]))
+        self.table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.table)
+        self.generate = QtWidgets.QPushButton("Generate winding…")
+        self.generate.clicked.connect(self.generate_winding)
+        if self.rotation() is None:
+            self.generate.setEnabled(False)
+            self.generate.setToolTip("A winding needs a rotation rule: the slots are found about its axis.")
+        layout.addWidget(self.generate, 0, QtCore.Qt.AlignLeft)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def rotation(self):
+        """The first rotation rule: the winding's slots are about its axis."""
+        return next((r for r in self.rules if r["kind"] == "rotate"), None)
+
+    def names(self):
+        return [self.table.item(k, 1).text().strip() for k in range(self.table.rowCount())]
+
+    def generate_winding(self):
+        rule = self.rotation()
+        dialog = WindingDialog(int(rule["count"]), self)
+        if ask_winding(dialog):
+            names = objects.winding_table(self.item, self.row, rule, **dialog.values())
+            for k, name in enumerate(names):
+                self.table.item(k, 1).setText(name)
+
+    def accept(self):
+        rows = objects.rows_of(self.item)
+        rows[self.row]["table"] = self.names()
+        objects.set_rows(self.item, rows)
+        super().accept()
 
 
 def field_value(box):

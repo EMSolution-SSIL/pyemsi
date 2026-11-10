@@ -1022,6 +1022,23 @@ def row_shape(item, row):
     return pieces[row["solid"]] if row["solid"] < len(pieces) else None
 
 
+def stale_drawing(item):
+    """True if the drawing's first copy is not where the cells are now: an App::Part holding a cell was moved, which
+    Cells (links to the cells only) does not report. A drawing that is empty or a cell that is gone is not stale."""
+    rows = rows_of(item)
+    pieces = _pieces(item.Shape) if not item.Shape.isNull() else []
+    if not rows or len(pieces) < len(rows):
+        return False
+    for piece, row in zip(pieces, rows):
+        shape = row_shape(item, row)
+        if shape is None:
+            return False
+        tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+        if any(abs(p - q) > tol for p, q in zip(_bounds(piece), _bounds(shape))):
+            return True
+    return False
+
+
 def row_label(item, row):
     """The name of a row: its cell's, with the solid's number when the cell has several rows."""
     cell = item.Document.getObject(row["cell"])
@@ -1136,6 +1153,21 @@ def set_row_material(study, item, row, lib):
         if m is not None:
             m.LibraryMaterial = lib
             m.Label = assignment_label(m)
+
+
+def winding_table(item, row, rule, slots, pole_pairs, span=1, per_coil=False, layer="top"):
+    """The part name of every copy of a row from a three-phase winding (see winding.py): the slot of a copy is the
+    angle of its centre about the rotation rule's axis. layer: "top" or "bottom" of a two-layer winding, or "whole"
+    for an object that is a whole coil."""
+    from . import winding
+
+    c = row_shape(item, rows_of(item)[row]).CenterOfMass
+    centres = [symmetry.apply(t, (c.x, c.y, c.z)) for t in group_transforms(item)]
+    if layer == "whole":
+        by_slot = winding.whole_coils(slots, pole_pairs, per_coil)
+    else:
+        by_slot = winding.two_layer(slots, pole_pairs, span, per_coil)[0 if layer == "top" else 1]
+    return winding.by_copy(by_slot, winding.slot_of(centres, rule["point"], rule["axis"], slots))
 
 
 def make_material(study):

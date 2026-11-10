@@ -25,6 +25,7 @@ KINDS = {
     "Recombine": ("#0b9eb3", "Q", "Recombine"),
     "Excitation": ("#d6249f", "X", "Excitation"),
     "SymmetricMesh": ("#8d6e3f", "Y", "Symmetric mesh"),
+    "SymmetricGroup": ("#8d6e3f", "Y", "Symmetric group"),
 }
 # the other items shown with an item are those of its group: materials with materials, mesh items with mesh items
 GROUPS = {"Material": "material", "Excitation": "excitation"}
@@ -104,6 +105,7 @@ def build(focus, others, refs, values):
     tags, badges = [], {}
     # a symmetric Study's cell bodies are hidden: the drawing built from them shows their place
     cells = {c.Name: i.Top for i in objects.symmetric_items(study) if i.Top is not None for c in i.Cells}
+    cells.update({c.Name: g for g in objects.symmetric_groups(study) for c in g.Cells})
     group = GROUPS.get(kind_of(focus[0]), "mesh")
     items = [
         o

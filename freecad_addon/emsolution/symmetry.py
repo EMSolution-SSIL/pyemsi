@@ -2,8 +2,10 @@
 
 The user draws a cell and builds the whole 2D geometry from it with Part Mirror, Draft Polar Array and Part
 Compound / Boolean Fragments. read_chain walks that chain from its top object down to the cell bodies and returns
-where every copy of the cell lies. Transforms are 4x4 affine, row major (16 floats), in global positions. No GUI code."""
+where every copy of the cell lies; rules_from_chain reads the same chain as ordered rules for a Symmetric Group.
+Transforms are 4x4 affine, row major (16 floats), in global positions. No GUI code."""
 
+import collections
 import itertools
 import math
 
@@ -285,23 +287,37 @@ def _below(obj, prop):
     return value
 
 
-def _walk(obj):
-    """{body name: (body, transforms)}: where each cell body below obj has been copied to, in obj's shape."""
+def _vec(v):
+    return [v.x, v.y, v.z]
+
+
+def _mirror_of(obj, any_axis):
+    """The motion of a Part Mirror; any_axis: its plane may lie any way, else it must contain Z."""
+    n = obj.Normal
+    length = math.sqrt(n.x**2 + n.y**2 + n.z**2)
+    if length == 0:
+        raise SymmetryError(f"{_name(obj)}: the mirror normal is zero")
+    if any_axis:
+        return _mirror(_vec(obj.Base), _vec(n))
+    if abs(n.z) > TOL * length:
+        raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis")
+    return mirror_plane((obj.Base.x, obj.Base.y), (n.x / length, n.y / length))
+
+
+def _walk(obj, any_axis=False):
+    """{body name: (body, transforms)}: where each cell body below obj has been copied to, in obj's shape.
+    any_axis: mirror planes and array axes may lie any way, else they must contain or be Z."""
     if obj.TypeId == "Part::Compound":
-        found = _merge(_walk(o) for o in _below(obj, "Links"))
+        found = _merge(_walk(o, any_axis) for o in _below(obj, "Links"))
     elif obj.TypeId == "Part::Mirroring":
-        n = obj.Normal
-        length = math.sqrt(n.x**2 + n.y**2 + n.z**2)
-        if length == 0 or abs(n.z) > TOL * length:
-            raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis")
-        m = mirror_plane((obj.Base.x, obj.Base.y), (n.x / length, n.y / length))
-        found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source")).items()}
+        m = _mirror_of(obj, any_axis)
+        found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source"), any_axis).items()}
     elif _is_array(obj):
-        found = _array(obj)
+        found = _array(obj, any_axis)
     elif _cuts_a_cell(obj):
         return {obj.Name: (obj, [ID])}  # a cell body, like a leaf
     elif _is_fragments(obj):
-        found = _merge(_walk(o) for o in _below(obj, "Objects"))
+        found = _merge(_walk(o, any_axis) for o in _below(obj, "Objects"))
     elif _is_leaf(obj):
         return {obj.Name: (obj, [ID])}  # its shape already carries its own Placement
     else:
@@ -310,44 +326,58 @@ def _walk(obj):
     return {k: (b, [compose(p, t) for t in ts]) for k, (b, ts) in found.items()}
 
 
-def _array_step(obj):
-    """(copies, turn between copies in degrees) of a polar array about +Z or -Z."""
+def _array_step(obj, any_axis=False):
+    """(copies, turn between copies in degrees) of a polar array: about +Z or -Z, or with any_axis about its own
+    axis (right-handed, as Draft turns)."""
     n, angle = int(obj.NumberPolar), float(obj.Angle)
     if n < 1 or (n == 1 and angle != 360):
         raise SymmetryError(f"{_name(obj)}: a polar array needs at least 2 copies (it has {n})")
     step = angle / n if angle == 360 else angle / (n - 1)  # Draft's rule: only exactly 360 is a full turn
-    return n, step if obj.Axis.z > 0 else -step
+    return n, step if any_axis or obj.Axis.z > 0 else -step
 
 
-def _array(obj):
+def _array(obj, any_axis=False):
     if obj.ArrayType != "polar":
         raise SymmetryError(f"{_name(obj)}: only polar arrays are supported")
     axis = obj.Axis
-    if abs(axis.x) > TOL or abs(axis.y) > TOL or abs(axis.z) < TOL:
+    if any_axis and axis.Length < TOL:
+        raise SymmetryError(f"{_name(obj)}: the array axis is zero")
+    if not any_axis and (abs(axis.x) > TOL or abs(axis.y) > TOL or abs(axis.z) < TOL):
         raise SymmetryError(f"{_name(obj)}: the array axis must be Z")
     if abs(obj.IntervalAxis.x) > TOL or abs(obj.IntervalAxis.y) > TOL or abs(obj.IntervalAxis.z) > TOL:
         raise SymmetryError(f"{_name(obj)}: the array interval along the axis must be zero")
-    n, step = _array_step(obj)
-    sub = _walk(_below(obj, "Base"))
+    n, step = _array_step(obj, any_axis)
+    sub = _walk(_below(obj, "Base"), any_axis)
     c = obj.Center
-    return {
-        k: (b, [compose(rotation(i * step, c.x, c.y), t) for i in range(n) for t in ts]) for k, (b, ts) in sub.items()
-    }
+
+    def turn(deg):
+        return rotation_about(_vec(c), _vec(axis), deg) if any_axis else rotation(deg, c.x, c.y)
+
+    return {k: (b, [compose(turn(i * step), t) for i in range(n) for t in ts]) for k, (b, ts) in sub.items()}
 
 
-def read_chain(top):
+def _unique(ts):
+    """{key: transform} of ts, each copy once."""
+    out = {}
+    for t in ts:
+        out.setdefault(_key(t), t)
+    return out
+
+
+def _outer(top):
+    """The placement of the containers (App::Part) that the chain's top sits in."""
+    return top.getGlobalPlacement().multiply(top.Placement.inverse())
+
+
+def read_chain(top, any_axis=False):
     """(cell bodies in first-seen order, transforms) of the chain whose top object is top.
 
-    The transforms are those of the first cell body, identity first; every cell body must have the same set."""
-    found = _walk(top)
+    The transforms are those of the first cell body, identity first; every cell body must have the same set.
+    any_axis: mirror planes and array axes may lie any way (the reading helper), else they must contain or be Z."""
+    found = _walk(top, any_axis)
     if not found:
         raise SymmetryError(f"{_name(top)} holds no cell body")
-    sets = {}
-    for name, (body, ts) in found.items():
-        unique = {}
-        for t in ts:
-            unique.setdefault(_key(t), t)
-        sets[name] = unique
+    sets = {name: _unique(ts) for name, (body, ts) in found.items()}
     first = next(iter(sets.values()))
     for name, unique in sets.items():
         if unique.keys() != first.keys():
@@ -359,11 +389,106 @@ def read_chain(top):
     transforms = [first[ident]] if ident in first else []
     transforms += [t for k, t in first.items() if k != ident]
     # the chain sits in its containers (App::Part): move the transforms into the global frame of global_shape
-    outer = top.getGlobalPlacement().multiply(top.Placement.inverse())
+    outer = _outer(top)
     if not outer.isIdentity():
         c, back = list(outer.toMatrix().A), list(outer.inverse().toMatrix().A)
         transforms = [ID if _key(t) == ident else compose(c, t, back) for t in transforms]
     return [b for b, _ in found.values()], transforms
+
+
+# ---- reading rules from a chain
+
+
+Proposal = collections.namedtuple("Proposal", "cells rules")
+MAX_ORDERS = 6  # steps of one body whose orders are all tried
+
+
+def _step_objects(obj):
+    """{body name: [Mirror and Polar Array objects on its ways up to obj]}, the ones nearest the body first. Call after
+    _walk, which refuses what a chain cannot hold."""
+    if obj.TypeId == "Part::Mirroring" or _is_array(obj):
+        below = _step_objects(_below(obj, "Source" if obj.TypeId == "Part::Mirroring" else "Base"))
+        return {k: [*steps, obj] for k, steps in below.items()}
+    if obj.TypeId == "Part::Compound" or (_is_fragments(obj) and not _cuts_a_cell(obj)):
+        out = {}
+        for kid in _below(obj, "Links" if obj.TypeId == "Part::Compound" else "Objects"):
+            for k, steps in _step_objects(kid).items():
+                have = out.setdefault(k, [])
+                have += [s for s in steps if s.Name not in {h.Name for h in have}]
+        return out
+    return {obj.Name: []}
+
+
+def _clean(v):
+    return [round(c, 9) + 0.0 for c in v]
+
+
+def _step_rule(obj, outer):
+    """The rule of a Mirror or Polar Array object, in global positions (outer: the containers' placement)."""
+    if obj.TypeId == "Part::Mirroring":
+        normal = _unit(_vec(outer.Rotation.multVec(obj.Normal)))
+        return {"kind": "mirror", "point": _clean(_vec(outer.multVec(obj.Base))), "normal": _clean(normal)}
+    n, step = _array_step(obj, any_axis=True)
+    axis = _unit(_vec(outer.Rotation.multVec(obj.Axis)))
+    point = _clean(_vec(outer.multVec(obj.Center)))
+    return {"kind": "rotate", "point": point, "axis": _clean(axis), "step": round(step, 9) + 0.0, "count": n}
+
+
+def _same_copies(a, b, tol=1e-6):
+    """True if the transforms a and b are the same copies, each once."""
+
+    def has(ts, t):
+        return any(max(abs(x - y) for x, y in zip(s, t)) < tol for s in ts)
+
+    return len(a) == len(b) and all(has(b, t) for t in a) and all(has(a, t) for t in b)
+
+
+def _fitting_rules(steps, outer, chain):
+    """The rules of steps, in the first order whose copies are chain's; None if no order is."""
+    rules = [_step_rule(s, outer) for s in steps]
+    orders = itertools.permutations(range(len(rules))) if len(rules) <= MAX_ORDERS else [range(len(rules))]
+    for order in orders:
+        ordered = [rules[i] for i in order]
+        if copy_count(ordered) == len(chain) and _same_copies(transforms(ordered), chain):
+            return ordered
+    return None
+
+
+def rules_from_chain(top):
+    """[Proposal(cells, rules)] for the chain whose top object is top, in global positions: one per set of copies its
+    cell bodies have, so branches with other copies are other proposals. Mirror planes and array axes may lie any way.
+    SymmetryError explains a set of copies that no ordered list of the chain's steps gives exactly."""
+    found = _walk(top, any_axis=True)
+    if not found:
+        raise SymmetryError(f"{_name(top)} holds no cell body")
+    steps = _step_objects(top)
+    outer = _outer(top)
+    c, back = list(outer.toMatrix().A), list(outer.inverse().toMatrix().A)
+    sets = {}  # copy keys -> [body names]
+    for name, (_, ts) in found.items():
+        sets.setdefault(frozenset(_unique(ts)), []).append(name)
+    out = []
+    for names in sets.values():
+        cells = [found[n][0] for n in names]
+        chain = [compose(c, t, back) for t in _unique(found[names[0]][1]).values()]
+        rules = _fitting_rules(steps[names[0]], outer, chain)
+        if rules is None:
+            labels = ", ".join(b.Label for b in cells)
+            if not any(max(abs(x - y) for x, y in zip(t, ID)) < 1e-6 for t in chain):
+                raise SymmetryError(
+                    f"{labels}: none of the {len(chain)} copies the chain makes is the body where it is drawn, as a"
+                    " Placement in the chain moves them all. Rules start from the drawn cell: reset that Placement, or"
+                    " enter the rules by hand."
+                )
+            used = ", ".join(s.Label for s in steps[names[0]]) or "none"
+            made = copy_count([_step_rule(s, outer) for s in steps[names[0]]])
+            raise SymmetryError(
+                f"{labels}: the chain makes {len(chain)} copies, and no ordered list of rules made of its steps"
+                f" ({used}) gives exactly these: they make {made}. A Mirror or Polar Array that copies only part of"
+                " what the steps before it made cannot be read as a rule. Enter the rules by hand."
+            )
+        out.append(Proposal(cells, rules))
+    return out
 
 
 def _num(v):

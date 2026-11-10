@@ -1638,6 +1638,132 @@ def main():
     App.closeDocument(doc3.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric mesh ok")
+    # Symmetric Group: the command on the stator cells, rules through the panel's buttons, a live drawing.
+    import math
+
+    group_doc = App.newDocument("Groups")
+    group_info = symcases.motor_doc(group_doc)  # the cells and, for Read from drawing, their chains
+    group_study = objects.make_study(group_doc, "2D")
+    App.setActiveDocument(group_doc.Name)
+    taskpanels.set_active_study(group_study)
+    group_panels, tables, windings = [], [], []
+    real_group_panel = taskpanels.SymmetricGroupPanel
+
+    class RecordedGroupPanel(real_group_panel):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            group_panels.append(self)
+
+    taskpanels.SymmetricGroupPanel = RecordedGroupPanel
+    stator_cells = group_info["stator_cells"]
+
+    def run_group_command():
+        Gui.Selection.clearSelection()
+        for cell in stator_cells:
+            Gui.Selection.addSelection(group_doc.Name, cell.Name)
+        Gui.runCommand("EMS_SymmetricGroup")
+        return group_panels.pop()
+
+    undo, visible = list(group_doc.UndoNames), [c.Visibility for c in stator_cells]
+    panel = run_group_command()
+    (group,) = objects.symmetric_groups(group_study)
+    assert panel.new and Gui.Control.activeDialog() and list(group.Cells) == stator_cells, list(group.Cells)
+    assert os.path.exists(group.ViewObject.Proxy.getIcon()), group.ViewObject.Proxy.getIcon()
+    assert panel.side.isHidden(), "the side shows without Sliding motion"
+    faces = [len(group.Shape.Faces)]
+    assert faces == [3] and panel.summary.text() == "1 copy, 3 parts", (faces, panel.summary.text())
+    panel.add_mirror.click()
+    faces.append(len(group.Shape.Faces))
+    panel.direction[0].setValue(-math.sin(math.radians(15)))  # the mirror at the cell's 15° edge
+    panel.direction[1].setValue(math.cos(math.radians(15)))
+    panel.add_rotate.click()  # 90° × 4 to start with
+    faces.append(len(group.Shape.Faces))
+    panel.step.setValue(30)
+    assert "covers 120 degrees" in panel.problem.text(), panel.problem.text()
+    panel.count.setValue(12)
+    faces.append(len(group.Shape.Faces))
+    assert faces == [3, 6, 24, 72], faces
+    assert panel.summary.text() == "24 copies, 3 parts" and panel.problem.isHidden(), panel.summary.text()
+    assert [r["kind"] for r in objects.rules_of(group)] == ["mirror", "rotate"], objects.rules_of(group)
+    panel.rule_up.click()  # the order is visible: rotate first, then mirror, and back
+    assert objects.rules_of(group)[0]["kind"] == "rotate" and panel.rules.currentRow() == 0
+    panel.rule_down.click()
+    assert objects.rules_of(group)[1]["count"] == 12 and len(group.Shape.Faces) == 72
+    # A row's parts named by a table: generate a winding.
+    coil = [r["cell"] for r in objects.rows_of(group)].index("CoilCell")
+    mode = panel.rows.cellWidget(coil, 1)
+    mode.setCurrentIndex(mode.findData("table"))
+    assert objects.rows_of(group)[coil]["mode"] == "table" and panel.table_button.isEnabled()
+    assert "table of CoilCell has 0 names" in panel.problem.text(), panel.problem.text()
+
+    def drive_table(dialog):
+        tables.append(dialog)
+        dialog.generate.click()
+        dialog.accept()
+        return dialog.result()
+
+    def drive_winding(dialog):
+        windings.append(dialog)
+        dialog.pole_pairs.setValue(2)
+        return True
+
+    taskpanels.TableDialog.exec = drive_table
+    taskpanels.ask_winding = drive_winding
+    panel.table_button.click()
+    del taskpanels.TableDialog.exec
+    assert windings[0].slots.value() == 12 and windings[0].span.value() == 3, windings[0].values()
+    names = [tables[0].table.item(k, 1).text() for k in range(tables[0].table.rowCount())]
+    assert len(names) == 24 and all(names) and objects.rows_of(group)[coil]["table"] == names, names
+    assert panel.summary.text() == "24 copies, 8 parts" and panel.problem.isHidden(), panel.summary.text()
+    # Cancel removes the new group.
+    panel.reject()
+    assert not objects.symmetric_groups(group_study) and list(group_doc.UndoNames) == undo, list(group_doc.UndoNames)
+    assert not Gui.Control.activeDialog() and [c.Visibility for c in stator_cells] == visible, "Cancel left something"
+    # Read from drawing fills the cells and the rules; OK makes a Material per part and hides the cells.
+    panel = run_group_command()
+    (group,) = objects.symmetric_groups(group_study)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(group_doc.Name, group_info["stator_top"].Name)
+    panel.read_drawing.click()
+    assert list(group.Cells) == stator_cells and len(group.Shape.Faces) == 72, list(group.Cells)
+    assert [r["kind"] for r in objects.rules_of(group)] == ["mirror", "rotate"], objects.rules_of(group)
+    assert panel.rules.count() == 2 and panel.summary.text() == "24 copies, 3 parts", panel.summary.text()
+    panel.name.setText("Stator group")
+    assert panel.accept() and not Gui.Control.activeDialog()
+    assert group.Label == "Stator group" and group_doc.UndoNames[0] == "Add Symmetric Group", group_doc.UndoNames
+    assert len(objects.part_assignments(group_study)) == 3, [m.Label for m in objects.part_assignments(group_study)]
+    assert not any(c.Visibility for c in stator_cells) and group.Visibility, "the cells are not hidden"
+    # Double-click reopens it; a part that goes takes its Material along, and the panel says so.
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    assert not panel.new and Gui.Control.activeDialog() and panel.rules.count() == 2
+    mode = panel.rows.cellWidget(coil, 1)
+    mode.setCurrentIndex(mode.findData("each"))
+    assert panel.summary.text() == "24 copies, 26 parts", panel.summary.text()
+    assert panel.accept() and group_doc.UndoNames[0] == "Edit Stator group", group_doc.UndoNames
+    assert len(objects.part_assignments(group_study)) == 26, len(objects.part_assignments(group_study))
+    assert log[-1].startswith("refused: The parts of these Materials are gone") and "CoilCell" in log[-1], log[-1]
+    sizes_view = taskpanels.FolderView(group_study.MeshSizesGroup)
+    undo = list(group_doc.UndoNames)
+    sizes_view.open_item([r[0] for r in sizes_view.rows].index(group), 0)
+    panel = group_panels.pop()
+    assert Gui.Control.activeDialog() and panel.reject() and list(group_doc.UndoNames) == undo, "Mesh Sizes panel"
+    # Moving the App::Part that holds the cells: Cells links the cells only, so the drawing stays where it was until
+    # the panel (or Validate) brings it along.
+    holder = group_doc.addObject("App::Part", "Holder")
+    for cell in stator_cells:
+        holder.addObject(cell)
+    group_doc.recompute()
+    holder.Placement = App.Placement(App.Vector(0, 0, 5), App.Rotation())
+    group_doc.recompute()
+    assert objects.stale_drawing(group) and group.Shape.BoundBox.ZMin == 0, group.Shape.BoundBox
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    assert panel.reject() and abs(group.Shape.BoundBox.ZMin - 5) < 1e-9, group.Shape.BoundBox
+    taskpanels.SymmetricGroupPanel = real_group_panel
+    App.closeDocument(group_doc.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("symmetric group ok")
     App.closeDocument(doc.Name)
 
     label_doc = App.newDocument("Labels")

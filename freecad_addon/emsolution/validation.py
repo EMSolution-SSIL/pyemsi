@@ -290,6 +290,7 @@ def _coarse(study, bodies, r):
 def refresh_padding(study):
     """Padding mode Air Regions follow the Study's bodies as they are now: a body added to a container source, edited
     since the last recompute or moved with a container counts. Recomputes the air and what it depends on, no more.
+    Sliding Interfaces and the drawings of Symmetric Groups that no link keeps up to date are recomputed too.
     Validate and Run Mesh call it."""
     objects.refresh_sized_by(study)
     plane = None
@@ -306,6 +307,10 @@ def refresh_padding(study):
         if objects.stale_sliding_cylinder(iface):
             iface.touch()
             study.Document.recompute([iface])
+    for item in objects.symmetric_groups(study):  # a moved container of a cell is not linked either
+        if objects.stale_drawing(item):
+            item.touch()
+            study.Document.recompute([item])
 
 
 def _off_size(air, plane):
@@ -1022,6 +1027,15 @@ def _group_rows(study, item, rules, r):
                 first = next(i for i, name in enumerate(table, 1) if not str(name).strip())
                 r.error(prefix + f"the table of {label} has an empty name (copy {first}).", item)
     return ok
+
+
+def group_problems(item):
+    """What Validate says about one group's rules and rows, for its panel: [Problem], errors first."""
+    study = objects.owner_study(item)
+    r = _Report()
+    plane = "" if study.Dimension == "3D" else airshapes.plane_of_bodies(item.Cells)
+    _group_rows(study, item, _group_rules(item, plane, r), r)
+    return sorted(r.problems, key=lambda p: p.severity != ERROR)
 
 
 def _free_cells(main, moving, groups, r):
