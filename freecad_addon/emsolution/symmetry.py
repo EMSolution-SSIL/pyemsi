@@ -41,6 +41,37 @@ def det(m):
     )
 
 
+def inverse(m):
+    """The inverse of the affine transform m."""
+    a, d = m, det(m)
+    r = [
+        [a[5] * a[10] - a[6] * a[9], a[2] * a[9] - a[1] * a[10], a[1] * a[6] - a[2] * a[5]],
+        [a[6] * a[8] - a[4] * a[10], a[0] * a[10] - a[2] * a[8], a[2] * a[4] - a[0] * a[6]],
+        [a[4] * a[9] - a[5] * a[8], a[1] * a[8] - a[0] * a[9], a[0] * a[5] - a[1] * a[4]],
+    ]
+    r = [[v / d for v in row] for row in r]
+    off = [-sum(r[i][k] * a[4 * k + 3] for k in range(3)) for i in range(3)]
+    return [*r[0], off[0], *r[1], off[1], *r[2], off[2], 0, 0, 0, 1]
+
+
+def relative_transforms(rules):
+    """The identity, then every other relative transform T_i^-1 T_j (i < j) of the copies T the rules make, each once
+    (by rounded key): copy j lies as copy i would if the cell were moved by it. When each rule's motion maps the set
+    of copies onto itself (they form a group: say a mirror in a plane through the rotation axis and whole turns), the
+    copies are closed under products and inverses, so the list is transforms(rules) itself, found in one pass per
+    rule; other rules need every pair."""
+    ts = transforms(rules)
+    if all(_same_copies((compose(rule_matrix(r), t) for t in ts), ts) for r in rules):
+        return ts
+    out = {_key(ID): ID}
+    for i, first in enumerate(ts):
+        back = inverse(first)
+        for second in ts[i + 1 :]:
+            r = compose(back, second)
+            out.setdefault(_key(r), r)
+    return list(out.values())
+
+
 # ---- rules: ordered mirror, rotation and translation steps
 
 
@@ -198,8 +229,8 @@ def rule_problems(rules, plane):
 def rule_warnings(rules):
     out = []
     for n, r in enumerate(rules, 1):
-        if r["kind"] == "rotate" and abs(r["step"] * r["count"] - 360) > 1e-6:
-            out.append(f"Rule {n}: the rotation covers {r['step'] * r['count']:g} degrees, not 360.")
+        if r["kind"] == "rotate" and abs(abs(r["step"] * r["count"]) - 360) > 1e-6:
+            out.append(f"Rule {n}: the rotation covers {abs(r['step'] * r['count']):g} degrees, not 360.")
     return out
 
 

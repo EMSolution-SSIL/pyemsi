@@ -20,7 +20,9 @@ from emsolution.symmetry import (
     copies,
     copy_count,
     det,
+    inverse,
     part_names,
+    relative_transforms,
     rotation_about,
     rule_matrix,
     rule_problems,
@@ -106,6 +108,32 @@ def test_any_3d_axis_is_accepted():
 
 def test_rotation_that_does_not_close_warns():
     assert "360" in " ".join(rule_warnings([ROT(30, 11)])) and rule_warnings([ROT(30, 12)]) == []
+
+
+def test_a_full_turn_the_other_way_does_not_warn():
+    assert rule_warnings([ROT(-10, 36)]) == []
+    assert "350" in " ".join(rule_warnings([ROT(-10, 35)]))
+
+
+def test_relative_transforms_of_closed_rules_are_the_copies():
+    rules = [MIRROR_X0, ROT(90, 4)]
+    assert relative_transforms(rules) == transforms(rules)
+    assert relative_transforms([]) == [ID]
+
+
+def test_relative_transforms_of_open_rules_hold_every_pair():
+    """Mirror in a line off the rotation centre, then a quarter turn twice: copies 1 and 3 are related by neither
+    copy's transform, but by T1^-1 T3."""
+    rules = [{"kind": "mirror", "point": [1, 0.75, 0], "normal": [2, 1.5, 0]}, ROT(90, 2)]
+    ts = transforms(rules)
+    found = relative_transforms(rules)
+    assert found[0] == pytest.approx(ID)
+    assert compose(inverse(ts[3]), ts[3]) == pytest.approx(ID)
+    for i in range(len(ts)):
+        for j in range(i + 1, len(ts)):
+            r = compose(inverse(ts[i]), ts[j])
+            assert any(max(abs(a - b) for a, b in zip(r, t)) < 1e-9 for t in found), (i, j)
+    assert len(found) > len(ts)
 
 
 def test_part_names():

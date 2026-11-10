@@ -646,6 +646,35 @@ def test_free_transfinite_says_it_is_a_limit_of_the_tool(study):
     assert found and "limit of the tool" in found[0], texts(study)
 
 
+def test_copies_that_overlap_each_other_but_not_the_cell_are_refused(tmp_path):
+    """A mirror whose line neither passes through nor is square to the rotation's centre: the rules do not close, so
+    copies 1 and 3 overlap each other by half their area although no copy overlaps the drawn cell."""
+    doc = App.newDocument("SymOpen")
+    try:
+        face = Part.Face(Part.makePolygon([V(1, 1, 0), V(3, 1, 0), V(3, 2, 0), V(1, 2, 0), V(1, 1, 0)]))
+        cell = symcases.feature(doc, "Cell", face)
+        study = objects.make_study(doc, "2D")
+        lib = symcases.libraries(study)
+        rules = [
+            {"kind": "mirror", "point": [1, 0.75, 0], "normal": [2, 1.5, 0]},
+            {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 90, "count": 2},
+        ]
+        item = symcases.group(study, "G", [cell], rules, rows={"Cell": {"mode": "each"}})
+        objects.sync_parts(study)
+        objects.set_row_material(study, item, 0, lib["Steel"])
+        doc.recompute()
+        doc.saveAs(str(tmp_path / "t.FCStd"))
+        faces = item.Shape.Faces
+        assert faces[1].common(faces[3]).Area == pytest.approx(1.0)
+        found = [t for t in texts(study) if "overlaps" in t]
+        assert found and "Symmetric Group G" in found[0] and "1 mm²" in found[0], texts(study)
+        assert "copy 2 of cell body Cell overlaps copy 4 of Cell" in found[0], found[0]
+        assert faces[1].common(faces[3]).CenterOfMass.Length == pytest.approx(0, abs=1e-9)
+        assert "near (0, 0)" in found[0], found[0]  # where the two copies lie, not where the cell is drawn
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def test_the_overlap_message_does_not_talk_of_mirrors_or_arrays(study, stator):
     ready(study)
     break_step_smaller_than_cell(study, stator)
