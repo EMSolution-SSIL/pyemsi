@@ -959,7 +959,7 @@ def _group_plane(study, cells, free, r):
     if len(planes) > 1:
         names = " and ".join(f"{objects.display_name(b)} ({p})" for p, b in planes.items())
         r.error(f"2D geometry must share one plane: {names} are in different planes.")
-    return next(iter(planes), "XY")
+    return airshapes.plane_of_bodies([*cells, *free])
 
 
 def _group_rules(item, plane, r):
@@ -1123,22 +1123,6 @@ def _contact(sa, sb, three, tol):
     return False
 
 
-def _z_motion(m):
-    """ "turn" for a rotation about Z through the origin, "mirror" for a mirror in a plane that contains Z or a mirror
-    of z = const, None for any other motion."""
-    t = symmetry.TOL
-    if any(abs(m[i]) > t for i in (2, 6, 8, 9)):
-        return None
-    if abs(m[10] - 1) < t:  # Z stays: a turn or a mirror about Z, both through the origin
-        if any(abs(m[i]) > t for i in (3, 7, 11)):
-            return None
-        return "turn" if symmetry.det(m) > 0 else "mirror"
-    if abs(m[10] + 1) < t:  # z flips: only a mirror of z = const leaves x and y alone
-        same = abs(m[0] - 1) < t and abs(m[5] - 1) < t and abs(m[1]) < t and abs(m[4]) < t
-        return "mirror" if same and abs(m[3]) < t and abs(m[7]) < t else None
-    return None
-
-
 def _radial_range(box):
     """The least and the greatest distance from the Z axis that a bounding box reaches."""
     dx = 0 if box.XMin <= 0 <= box.XMax else min(abs(box.XMin), abs(box.XMax))
@@ -1228,9 +1212,8 @@ def _group_sliding(study, groups, ruled, free, plane, r):
             rules = ruled.get(item.Name)
             if rules is None:
                 continue
-            turns = 1
             for n, rule in enumerate(rules, 1):
-                move = _z_motion(symmetry.rule_matrix(rule))
+                move = symmetry.z_motion(symmetry.rule_matrix(rule))
                 if move is None:
                     r.error(
                         f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} reaches it, but Rule {n}"
@@ -1239,8 +1222,7 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                         " a limit of the tool.",
                         iface,
                     )
-                elif move == "turn":
-                    turns *= symmetry.rule_count(rule)
+            turns = symmetry.turns_about_z(rules)
             if turns > 1 and iface.Divisions % turns:
                 r.error(
                     f"Sliding Interface {iface.Label}: the divisions ({iface.Divisions}) must be a multiple of the"

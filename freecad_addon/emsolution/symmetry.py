@@ -106,6 +106,31 @@ def rule_count(rule):
     return 2 if rule["kind"] == "mirror" else int(rule["count"])
 
 
+def z_motion(m):
+    """ "turn" for a rotation about Z through the origin, "mirror" for a mirror in a plane that contains Z or a mirror
+    of z = const, None for any other motion."""
+    t = TOL
+    if any(abs(m[i]) > t for i in (2, 6, 8, 9)):
+        return None
+    if abs(m[10] - 1) < t:  # Z stays: a turn or a mirror about Z, both through the origin
+        if any(abs(m[i]) > t for i in (3, 7, 11)):
+            return None
+        return "turn" if det(m) > 0 else "mirror"
+    if abs(m[10] + 1) < t:  # z flips: only a mirror of z = const leaves x and y alone
+        same = abs(m[0] - 1) < t and abs(m[5] - 1) < t and abs(m[1]) < t and abs(m[4]) < t
+        return "mirror" if same and abs(m[3]) < t and abs(m[7]) < t else None
+    return None
+
+
+def turns_about_z(rules):
+    """The copies a group makes around Z: the product of the counts of its rotations about Z through the origin."""
+    turns = 1
+    for rule in rules:
+        if z_motion(rule_matrix(rule)) == "turn":
+            turns *= rule_count(rule)
+    return turns
+
+
 def copy_count(rules):
     n = 1
     for r in rules:

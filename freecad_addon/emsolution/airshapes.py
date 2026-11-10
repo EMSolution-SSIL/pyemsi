@@ -11,16 +11,27 @@ from . import geometry, objects
 TOL = 1e-6
 
 
-def study_plane(study):
-    """ "3D" for a 3D Study; for 2D the plane of the first main-geometry face ("XY" or "ZX"), "XY" if there is none."""
-    if study.Dimension == "3D":
-        return "3D"
-    for body in geometry.region(study, "Main")[0]:
+def plane_of_bodies(bodies):
+    """The plane ("XY" or "ZX") of the first face of bodies that lies in one, "XY" if none does."""
+    for body in bodies:
         for face in geometry.global_shape(body).Faces:
             found = geometry.plane_of(face)
             if found:
                 return found
     return "XY"
+
+
+def study_plane(study):
+    """ "3D" for a 3D Study; for 2D the plane of the first main-geometry face ("XY" or "ZX"), "XY" if there is none. A
+    Study of Symmetric Groups looks at the cell objects, then at the free objects: validation takes the same answer."""
+    if study.Dimension == "3D":
+        return "3D"
+    if not objects.is_grouped(study):
+        return plane_of_bodies(geometry.region(study, "Main")[0])
+    main, moving, _ = geometry.setup(study)
+    cells = objects.cell_bodies(study)
+    named = {b.Name for b in cells}
+    return plane_of_bodies(cells + [b for b in {b.Name: b for b in main + moving}.values() if b.Name not in named])
 
 
 def air_shape(air, plane):

@@ -3,15 +3,20 @@ Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_symmet
 
 import json
 import math
+import os
+import subprocess
+import sys
 
 import pytest
 
 import FreeCAD as App
 import Part
 
-from emsolution import geometry, objects
+from emsolution import airshapes, geometry, jobwriter, objects, symmetry, validation
 
-from . import symcases
+from . import meshreport, symcases
+from .test_meshsym import mesh_check
+from .test_meshsym3d import surface_group
 
 # the stator cell (0..15 degrees) mirrored about its edge at 15 degrees, then turned 12 times by 30 degrees
 STATOR_RULES = [
@@ -722,3 +727,262 @@ def test_mesh_size_on_the_drawing_of_a_group_is_refused(study, stator):
     objects.make_mesh_size(study, 1.5, [(stator, "")])
     found = [t for t in texts(study) if "copies are not meshed" in t]
     assert found and "Put it on the cell objects" in found[0], texts(study)
+
+
+# ---- writing the job (spec section 8)
+
+
+def load_job(study):
+    with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def run_mesher(study, job_path):
+    mesher = os.path.join(
+        os.path.dirname(jobwriter.__file__), "mesher2d.py" if study.Dimension == "2D" else "mesher.py"
+    )
+    return subprocess.run([sys.executable, mesher, job_path], capture_output=True, encoding="utf-8", errors="replace")
+
+
+def outer_ring():
+    """Free air around the stator (r 60): a ring from r 62 to r 90."""
+    return Part.Face(Part.Wire(Part.makeCircle(90))).cut(Part.Face(Part.Wire(Part.makeCircle(62)))).Faces[0]
+
+
+def mat_ids(study, side):
+    return {int(study.MatIds[m.Name]) for m in objects.part_assignments(study) if m.PartKey.startswith(side + "|")}
+
+
+def test_job_holds_a_mini_job_per_group(study, stator):
+    sliding(study)
+    ready(study)
+    job = load_job(study)
+    block = job["symmetric"]
+    assert [g["name"] for g in block["groups"]] == ["Stator", "Rotor"]
+    stator_job, rotor_job = block["groups"]
+    assert [g["side"] for g in block["groups"]] == ["fixed", "moving"]
+    assert len(stator_job["transforms"]) == 24 and len(rotor_job["transforms"]) == 16
+    assert stator_job["transforms"][0] == symmetry.ID
+    assert stator_job["cells"] == [1, 2, 3]
+    assert [b["mat_id"] for b in stator_job["job"]["bodies"]] == [1, 2, 3]
+    assert [b["name"] for b in stator_job["job"]["bodies"]] == ["StatorIronCell", "CoilCell", "StatorAirCell"]
+    assert "bodies" not in job and "sizes" not in job and "volumes" not in job
+    assert job["dimension"] == "2D" and job["rotor_file"] == jobwriter.rotor_file(study)
+    (iface,) = objects.sliding_interfaces(study)
+    assert block["slide"]["radius"] == 35 and block["slide"]["name"] == objects.volume_name(iface)
+    assert block["slide"]["slide_mat_id"] == int(study.MatIds[iface.Name])
+    for g in block["groups"]:
+        for body in g["job"]["bodies"]:
+            assert os.path.exists(os.path.join(jobwriter.scratch_folder(study), body["file"]))
+    assert len({b["file"] for g in block["groups"] for b in g["job"]["bodies"]}) == 6  # no two groups share a file
+
+
+def test_row_parts_index_the_group_parts(study, stator):
+    six_copies(stator, {"CoilCell": ["A+", "B+"] * 3})
+    ready(study)
+    (group,) = load_job(study)["symmetric"]["groups"]
+    ids = {objects.volume_name(m): int(study.MatIds[m.Name]) for m in objects.part_assignments(study)}
+    assert [p["name"] for p in group["parts"]] == [
+        "StatorIronCell",
+        "A_",
+        "B_",
+        "StatorAirCell",
+    ]  # names are cleaned for the mesh
+    assert all(p["mat_id"] == ids[p["name"]] for p in group["parts"])
+    iron, coil, air = group["rows"]
+    assert (iron["cell"], coil["cell"], air["cell"]) == (1, 2, 3)
+    assert coil["parts"] == [1, 2, 1, 2, 1, 2] and iron["parts"] == [0] * 6 and air["parts"] == [3] * 6
+    assert iron["file"] is None and coil["file"] is None
+
+
+def test_a_cell_with_several_rows_has_a_file_per_row(study):
+    cell = symcases.feature(
+        study.Document,
+        "TwoBlocks",
+        Part.makeCompound([symcases.sector(70, 80, 0, 10), symcases.sector(70, 80, 10, 20)]),
+    )
+    objects.make_symmetric_group(study, [cell], name="Blocks")
+    study.Document.recompute()
+    ready(study)
+    assert texts(study) == []
+    blocks = load_job(study)["symmetric"]["groups"][1]
+    assert blocks["name"] == "Blocks" and blocks["cells"] == [1]
+    assert [r["cell"] for r in blocks["rows"]] == [1, 1] and all(r["file"] for r in blocks["rows"])
+    assert blocks["rows"][0]["file"] != blocks["rows"][1]["file"]
+    folder = jobwriter.scratch_folder(study)
+    areas = [Part.read(os.path.join(folder, r["file"])).Area for r in blocks["rows"]]
+    assert all(abs(a - symcases.sector(70, 80, 0, 10).Area) < 1e-6 for a in areas)
+
+
+def test_free_bodies_go_to_free_with_final_mat_ids(study, stator):
+    sliding(study)
+    ready(study)
+    free_body(study, "FreeAir", outer_ring())
+    free_body(study, "Bore", Part.Face(Part.Wire(Part.makeCircle(8))), side="Moving")
+    study.Document.recompute()
+    job = load_job(study)
+    free = {f["side"]: f["job"] for f in job["symmetric"]["free"]}
+    assert sorted(free) == ["fixed", "moving"]
+    (air,) = free["fixed"]["bodies"]
+    (bore,) = free["moving"]["bodies"]
+    assert air["mat_id"] == int(study.MatIds["FreeAir"]) and air["name"] == "FreeAir"
+    assert bore["mat_id"] == int(study.MatIds["Bore"])
+    assert os.path.exists(os.path.join(jobwriter.scratch_folder(study), air["file"]))
+    assert air["file"] != bore["file"] and free["fixed"]["sizes"] == []
+
+
+def test_a_study_without_free_bodies_has_no_free(study, stator):
+    ready(study)
+    assert "free" not in load_job(study)["symmetric"]
+
+
+def test_z_range_and_turns_with_sliding(study_3d, tmp_path):
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
+    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    ready(study_3d)
+    study_3d.Document.saveAs(str(tmp_path / "t3.FCStd"))
+    block = load_job(study_3d)["symmetric"]
+    assert block["slide"]["z_range"] == [-10, 10] and block["slide"]["cross_divisions"] == 2
+    assert [g["turns"] for g in block["groups"]] == [12, 16]
+    assert [len(g["transforms"]) for g in block["groups"]] == [48, 32]
+
+
+def test_turns_are_the_rotations_about_z_only():
+    assert symmetry.turns_about_z(STATOR_RULES) == 12
+    assert symmetry.turns_about_z([*STATOR_RULES, MIRROR_Z]) == 12
+    assert (
+        symmetry.turns_about_z([{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 90, "count": 4}]) == 1
+    )
+    assert symmetry.turns_about_z([]) == 1
+
+
+def test_no_turns_and_no_z_range_without_sliding(study, stator):
+    ready(study)
+    block = load_job(study)["symmetric"]
+    assert "slide" not in block and "turns" not in block["groups"][0]
+
+
+def test_2d_sliding_has_turns_but_no_z_range(study, stator):
+    sliding(study)
+    ready(study)
+    block = load_job(study)["symmetric"]
+    assert "z_range" not in block["slide"] and [g["turns"] for g in block["groups"]] == [12, 16]
+
+
+def test_mesh_settings_go_with_their_cell(study, stator):
+    ready(study)
+    coil = study.Document.getObject("CoilCell")
+    free = free_body(study, "FreeAir", outer_ring())
+    objects.make_mesh_size(study, 1.5, [(coil, "")])
+    objects.make_mesh_size(study, 0.9, [(coil, "Edge1")])
+    objects.make_mesh_size(study, 3.5, [(free, "")])
+    objects.make_transfinite_body(study, [coil])
+    objects.make_transfinite_edges(study, 6, [(coil, f"Edge{i}") for i in (1, 2, 3, 4)])
+    objects.make_recombine(study, [coil])
+    study.Document.recompute()
+    assert texts(study) == []
+    job = load_job(study)
+    assert "transfinite" not in job and "recombine" not in job and "sizes" not in job
+    (group,) = job["symmetric"]["groups"]
+    cell = group["job"]
+    assert [(b["name"], b["size"]) for b in cell["bodies"]][1] == ("CoilCell", 1.5)
+    assert cell["recombine"] == [2]
+    (entry,) = cell["transfinite"]["bodies"]
+    assert entry["mat_id"] == 2 and len(cell["transfinite"]["edges"][0]["files"]) == 4
+    assert [len(s["files"]) for s in cell["sizes"]] == [1] and cell["sizes"][0]["size"] == 0.9
+    (free_job,) = [f["job"] for f in job["symmetric"]["free"]]
+    assert free_job["bodies"][0]["size"] == 3.5
+    assert "transfinite" not in free_job and "recombine" not in free_job
+
+
+def test_study_plane_of_a_study_of_groups_is_the_validation_plane():
+    doc = App.newDocument("SymGroupsPlane")
+    try:
+        cell = symcases.feature(doc, "Cell", Part.makePlane(10, 5, V(0, 0, 1), V(0, -1, 0), V(1, 0, 0)))
+        study = objects.make_study(doc, "2D")
+        objects.make_symmetric_group(study, [cell], rules=[MIRROR_Z])
+        doc.recompute()
+        assert airshapes.study_plane(study) == "ZX"
+        r = validation._Report()
+        assert validation._group_plane(study, [cell], [], r) == "ZX" and not r.problems
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_a_zx_study_of_groups_runs(tmp_path):
+    doc = App.newDocument("SymGroupsZXRun")
+    try:
+        cell = symcases.feature(doc, "Cell", Part.makePlane(10, 5, V(0, 0, 1), V(0, -1, 0), V(1, 0, 0)))
+        study = objects.make_study(doc, "2D")
+        objects.make_symmetric_group(study, [cell], rules=[MIRROR_Z])
+        doc.recompute()
+        ready(study)
+        doc.saveAs(str(tmp_path / "zx.FCStd"))
+        path = jobwriter.write_job(study)
+        with open(path, encoding="utf-8") as fh:
+            body = json.load(fh)["symmetric"]["groups"][0]["job"]["bodies"][0]
+        shape = Part.read(os.path.join(os.path.dirname(path), body["file"]))
+        assert all(abs(v.Point.y) < 1e-9 for v in shape.Vertexes)
+        r = run_mesher(study, path)
+        assert r.returncode == 0, r.stderr
+        assert sorted(meshreport.groups(jobwriter.mesh_file(study))) == sorted(mat_ids(study, "fixed"))
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_group_motor_runs_end_to_end_2d(study, stator):
+    sliding(study)
+    ready(study)
+    free_body(study, "FreeAir", outer_ring())
+    study.Document.recompute()
+    r = run_mesher(study, jobwriter.write_job(study))
+    assert r.returncode == 0, r.stderr
+    free = int(study.MatIds["FreeAir"])
+    fixed, moving = jobwriter.mesh_file(study), jobwriter.rotor_file(study)
+    assert set(meshreport.groups(fixed)) == mat_ids(study, "fixed") | {free}
+    assert set(meshreport.groups(moving)) == mat_ids(study, "moving")
+    assert [mesh_check(f, ())[1] for f in (fixed, moving)] == [0, 0]
+
+
+def test_group_motor_runs_end_to_end_3d(study_3d, tmp_path):
+    (stator,) = objects.symmetric_groups(study_3d)
+    study_3d.MeshSizesGroup.DefaultMeshSize = 1.5
+    objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
+    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    ready(study_3d)
+    study_3d.Document.saveAs(str(tmp_path / "t3.FCStd"))
+    r = run_mesher(study_3d, jobwriter.write_job(study_3d))
+    assert r.returncode == 0, r.stderr
+    assert set(meshreport.groups(jobwriter.mesh_file(study_3d))) == mat_ids(study_3d, "fixed")
+    assert set(meshreport.groups(jobwriter.rotor_file(study_3d))) == mat_ids(study_3d, "moving")
+
+
+def test_excitation_on_the_drawing_is_copied(study_3d, tmp_path):
+    (stator,) = objects.symmetric_groups(study_3d)
+    study_3d.MeshSizesGroup.DefaultMeshSize = 1.5
+    ready(study_3d)
+    ends = [
+        f"Face{i}"
+        for i, face in enumerate(stator.Shape.Faces, 1)
+        if abs(face.CenterOfMass.z - 10) < 1e-6 and objects.element_owner(stator, f"Face{i}") == (1, 0)
+    ]
+    assert ends
+    exc = objects.make_excitation(study_3d, "Coil", [(stator, f) for f in ends])
+    study_3d.Document.recompute()
+    study_3d.Document.saveAs(str(tmp_path / "t3.FCStd"))
+    path = jobwriter.write_job(study_3d)
+    with open(path, encoding="utf-8") as fh:
+        (group,) = json.load(fh)["symmetric"]["groups"]
+    smat = int(study_3d.SmatIds[f"{exc.Name}|{stator.Name}"])
+    (entry,) = group["excitations"]
+    assert entry["smat_id"] == smat and entry["name"] == objects.item_name(exc, stator)
+    assert len(entry["files"]) == len(ends)
+    r = run_mesher(study_3d, path)
+    assert r.returncode == 0, r.stderr
+    name, count, _ = surface_group(jobwriter.mesh_file(study_3d), smat)
+    assert name == entry["name"] and count > 0
