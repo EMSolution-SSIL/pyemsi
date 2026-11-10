@@ -52,9 +52,8 @@ def chain(doc, part, cells, mirror_deg, count):
     return frag
 
 
-def motor_doc(doc, height=0):
-    """Build the stator and rotor cells and their full-circle chains in doc. height > 0 extrudes every cell face
-    0..height in z, so the cells are solids (a 3D drawing)."""
+def motor_cells(doc, height=0):
+    """The stator and rotor cell objects, no chain objects. height > 0 extrudes every cell face 0..height in z."""
 
     def cell(name, face):
         return feature(doc, name, face.extrude(V(0, 0, height)) if height else face)
@@ -69,6 +68,20 @@ def motor_doc(doc, height=0):
         cell("MagnetCell", sector(30, 34, 4.5, 22.5)),
         cell("RotorAirCell", sector(30, 35, 0, 22.5).cut(sector(30, 34, 4.5, 22.5)).Faces[0]),
     ]
+    return stator_cells, rotor_cells
+
+
+def group_motor_doc(doc, height=0):
+    """motor_doc's cell objects with no chain objects: the cells a Symmetric Group is made of."""
+    stator_cells, rotor_cells = motor_cells(doc, height)
+    doc.recompute()
+    return {"stator_cells": stator_cells, "rotor_cells": rotor_cells}
+
+
+def motor_doc(doc, height=0):
+    """Build the stator and rotor cells and their full-circle chains in doc. height > 0 extrudes every cell face
+    0..height in z, so the cells are solids (a 3D drawing)."""
+    stator_cells, rotor_cells = motor_cells(doc, height)
     stator_top = chain(doc, "Stator", stator_cells, 15, 12)
     rotor_top = chain(doc, "Rotor", rotor_cells, 22.5, 8)
     return {
@@ -84,9 +97,8 @@ def motor_doc_3d(doc, height=10):
     return motor_doc(doc, height)
 
 
-def split_coil(doc, radius=43):
-    """Cut motor_doc's CoilCell into an inner and an outer block at radius, the way a user does: a Boolean Fragments
-    of the coil face and an arc across it, put in the stator cell in the coil's place. Returns the Fragments."""
+def coil_fragments(doc, radius=43):
+    """A Boolean Fragments of CoilCell and an arc across it at radius: the coil cut into an inner and an outer block."""
 
     def p(a):
         return V(radius * math.cos(math.radians(a)), radius * math.sin(math.radians(a)), 0)
@@ -96,6 +108,15 @@ def split_coil(doc, radius=43):
     frag = BOPTools.SplitFeatures.makeBooleanFragments(name="CoilFragments")
     frag.Objects = [coil, divider]
     frag.Mode = "Standard"
+    doc.recompute()
+    return frag
+
+
+def split_coil(doc, radius=43):
+    """Cut motor_doc's CoilCell into an inner and an outer block at radius, the way a user does: a Boolean Fragments
+    of the coil face and an arc across it, put in the stator cell in the coil's place. Returns the Fragments."""
+    coil = doc.getObject("CoilCell")
+    frag = coil_fragments(doc, radius)
     cell = doc.getObject("StatorCell")
     cell.Links = [frag if o.Name == coil.Name else o for o in cell.Links]
     doc.recompute()

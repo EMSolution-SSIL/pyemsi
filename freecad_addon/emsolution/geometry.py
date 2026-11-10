@@ -171,7 +171,7 @@ def region(study, name):
     else:
         roots = []
     resolved, errors = collect(roots, study.Dimension)
-    if not resolved and not errors:
+    if not resolved and not errors and not objects.is_grouped(study):  # a group's cells are its geometry
         errors.append("No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree.")
     return resolved, errors
 

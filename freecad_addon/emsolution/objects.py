@@ -270,6 +270,41 @@ class SymmetricMesh(_Proxy):
         obj.Cells, obj.Steps = cells, steps
 
 
+class SymmetricGroup(_Proxy):
+    """Cell objects meshed once, with an ordered list of rules that copy them. Rules and Rows are JSON text (see
+    rules_of, rows_of); Shape is the drawing of every copy, a compound that no boolean touches."""
+
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.setEditorMode("Placement", 2)  # hidden: the drawing is in global coordinates
+        add = obj.addProperty
+        add("App::PropertyLinkListGlobal", "Cells", "EMSolution", "Cell objects: the only ones meshed")
+        add("App::PropertyString", "Rules", "EMSolution", "Copy rules, JSON")
+        add("App::PropertyString", "Rows", "EMSolution", "One row per solid (face) of each cell object, JSON")
+        obj.Rules = obj.Rows = "[]"
+        add("App::PropertyEnumeration", "Side", "EMSolution", "Fixed or moving side of a Sliding Interface")
+        obj.Side = ["Fixed", "Moving"]
+        for prop in ("Rules", "Rows"):
+            obj.setEditorMode(prop, 2)  # hidden: edit in the panel
+
+    def execute(self, obj):
+        import FreeCAD as App
+        import Part
+
+        _unplaced(obj)
+        shapes = []
+        rules = rules_of(obj)
+        try:
+            if symmetry.copy_count(rules) <= symmetry.MAX_DRAWN:
+                moves = symmetry.transforms(rules)
+                rows = [row_shape(obj, row) for row in rows_of(obj)]
+                if all(s is not None for s in rows):  # a cell that is gone leaves the drawing empty
+                    shapes = [s.transformed(App.Matrix(*m)) for m in moves for s in rows]
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            shapes = []  # rules that cannot be read: validation says so
+        obj.Shape = Part.makeCompound(shapes)
+
+
 class LibraryMaterial(_Proxy):
     """A Study copy of a material: canonical ems_material JSON, edited in the Study."""
 
@@ -902,6 +937,110 @@ def make_symmetric_mesh(study, top):
     return obj
 
 
+def make_symmetric_group(study, cells, rules=(), name="Symmetric Group", side="Fixed"):
+    """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row per solid
+    (face in 2D) of every cell."""
+    obj = study.Document.addObject("Part::FeaturePython", "SymmetricGroup")
+    SymmetricGroup(obj)
+    obj.Label = name
+    obj.Cells = list(cells)
+    obj.Side = side
+    set_rules(obj, rules)
+    sync_rows(obj)
+    study.MeshSizesGroup.addObject(obj)
+    obj.recompute()
+    if getattr(obj, "ViewObject", None) is not None:  # GUI running
+        from . import taskpanels
+
+        taskpanels.attach_view_provider(obj)
+    return obj
+
+
+def symmetric_groups(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SymmetricGroup)]
+
+
+def is_grouped(study):
+    return bool(symmetric_groups(study))
+
+
+def rules_of(item):
+    return json.loads(item.Rules or "[]")
+
+
+def rows_of(item):
+    return json.loads(item.Rows or "[]")
+
+
+def set_rules(item, rules):
+    item.Rules = json.dumps(list(rules))
+
+
+def set_rows(item, rows):
+    item.Rows = json.dumps(list(rows))
+
+
+def _pieces(shape):
+    """The solids of shape, or its faces when it has none (2D)."""
+    return shape.Solids if shape.Solids else shape.Faces
+
+
+def sync_rows(item):
+    """Gives each solid (face in 2D) of each cell a row, in the order of the cells, keeping the rows that exist.
+    A row's solid is the 0-based index into the cell's Solids (Faces in 2D)."""
+    from . import geometry
+
+    old = {(r["cell"], r["solid"]): r for r in rows_of(item)}
+    rows = []
+    for cell in item.Cells:
+        for i in range(len(_pieces(geometry.global_shape(cell)))):
+            default = {"cell": cell.Name, "solid": i, "mode": "one", "across": [], "table": [], "material": ""}
+            rows.append(old.get((cell.Name, i), default))
+    set_rows(item, rows)
+
+
+def group_transforms(item):
+    """The transform of every copy, in the order of symmetry.copies."""
+    return symmetry.transforms(rules_of(item))
+
+
+def row_shape(item, row):
+    """The solid (face in 2D) a row stands for, where the user sees it; None when its cell or solid is gone."""
+    from . import geometry
+
+    cell = item.Document.getObject(row["cell"])
+    if cell is None or not hasattr(cell, "Shape") or cell.Shape.isNull():
+        return None
+    pieces = _pieces(geometry.global_shape(cell))
+    return pieces[row["solid"]] if row["solid"] < len(pieces) else None
+
+
+def row_label(item, row):
+    """The name of a row: its cell's, with the solid's number when the cell has several rows."""
+    cell = item.Document.getObject(row["cell"])
+    label = clean(display_name(cell)) if cell is not None else row["cell"]
+    if sum(r["cell"] == row["cell"] for r in rows_of(item)) > 1:
+        label += f"_{row['solid'] + 1}"
+    return label
+
+
+def row_parts(item, row):
+    """The part name of every copy of a row."""
+    return symmetry.part_names(row, rules_of(item), row_label(item, row))
+
+
+def element_owner(item, sub):
+    """(row, copy), both 0-based, that a "SolidN" or "FaceN" of the drawing belongs to; None when none does."""
+    shape, n = item.Shape, len(rows_of(item))
+    if not n or not shape.Faces:
+        return None
+    if sub.startswith("Face") and shape.Solids:
+        owners = face_solids(shape, sub)
+        sub = owners[0] if owners else ""
+    index = int(re.sub(r"\D", "", sub) or 0) - 1
+    return (index % n, index // n) if 0 <= index < len(_pieces(shape)) else None
+
+
 def assign_pieces(study, name, pieces, lib, potential):
     """Add an assignment named name for pieces [(body, "FaceN")], which need not be whole bodies."""
     m = _add(study, "MaterialsGroup", Material, name)
@@ -1097,8 +1236,12 @@ def piece_solid(shape, face, picked, view_dir):
 
 
 def cell_bodies(study):
-    """The leaves (cell bodies) of every Symmetric Mesh item whose chain reads, once each."""
+    """The leaves (cell bodies) of every Symmetric Mesh item whose chain reads, and the cells of every Symmetric
+    Group, once each."""
     found = {}
+    for item in symmetric_groups(study):
+        for body in item.Cells:
+            found.setdefault(body.Name, body)
     for item in symmetric_items(study):
         try:
             cells, _ = symmetry.read_chain(item.Top) if item.Top is not None else ([], [])
@@ -1118,6 +1261,8 @@ def to_cells(study, refs, whole=False):
     from . import geometry
 
     chains = {}
+    for item in symmetric_groups(study):  # a group is a chain: its drawing, copied from its cells
+        chains[item.Name] = ([(c, geometry.global_shape(c)) for c in item.Cells], group_transforms(item))
     for item in symmetric_items(study):
         try:
             if item.Top is not None:
@@ -1269,7 +1414,16 @@ def structured_faces(body, faces):
 
 
 def is_item(obj):
-    proxies = (Material, Excitation, MeshSize, TransfiniteBody, TransfiniteEdges, Recombine, SymmetricMesh)
+    proxies = (
+        Material,
+        Excitation,
+        MeshSize,
+        TransfiniteBody,
+        TransfiniteEdges,
+        Recombine,
+        SymmetricMesh,
+        SymmetricGroup,
+    )
     return isinstance(getattr(obj, "Proxy", None), proxies)
 
 
@@ -1279,7 +1433,7 @@ def item_refs(item):
         if item.Body is None:
             return [(b, s) for b, subs in item.Pieces for s in subs]
         return [(item.Body, "")]
-    if isinstance(item.Proxy, SymmetricMesh):
+    if isinstance(item.Proxy, (SymmetricMesh, SymmetricGroup)):
         return [(b, "") for b in item.Cells]
     refs = [(b, s) for b, subs in item.References for s in subs]
     if isinstance(item.Proxy, TransfiniteBody):
@@ -1357,6 +1511,8 @@ def _size_text(item):
         return "recombine"
     if isinstance(item.Proxy, SymmetricMesh):
         return "symmetric"
+    if isinstance(item.Proxy, SymmetricGroup):
+        return "symmetric group"
     bump = f" {item.BumpCoefficient:g}" if item.Distribution == "Bump" else ""
     return f"{item.Elements} el, {item.Distribution}{bump}"
 
@@ -1374,7 +1530,8 @@ def bodies_without_material(study):
     Materials are on their pieces."""
     have = assignment_of(study)
     tops = {i.Top.Name for i in symmetric_items(study) if i.Top is not None}
-    return [b for b in assignable(study) if b.Name not in have and b.Name not in tops]
+    groups = {g.Name for g in symmetric_groups(study)}  # their Materials are on their parts
+    return [b for b in assignable(study) if b.Name not in have and b.Name not in tops and b.Name not in groups]
 
 
 def _main_bodies(study):
@@ -1394,8 +1551,8 @@ def study_bodies(study):
 
 
 def assignable(study):
-    """What can get a Material: the main- and moving-geometry bodies, then the Air Regions."""
-    return study_bodies(study) + air_regions(study)
+    """What can get a Material: the main- and moving-geometry bodies, then the Air Regions and Symmetric Groups."""
+    return study_bodies(study) + air_regions(study) + symmetric_groups(study)
 
 
 NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: tick it in the Study panel's geometry tree."
@@ -1403,7 +1560,7 @@ NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: tick it in the Study
 
 def assignment_problem(study, bodies):
     """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
-    if not _main_bodies(study):
+    if not _main_bodies(study) and not is_grouped(study):
         return NO_MAIN_GEOMETRY
     main = {b.Name for b in assignable(study) + cell_bodies(study)}
     outside = list(dict.fromkeys(display_name(b) for b in bodies if b.Name not in main))
