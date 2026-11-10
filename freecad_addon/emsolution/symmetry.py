@@ -4,10 +4,12 @@ The user draws a cell and builds the whole 2D geometry from it with Part Mirror,
 Compound / Boolean Fragments. read_chain walks that chain from its top object down to the cell bodies and returns
 where every copy of the cell lies. Transforms are 4x4 affine, row major (16 floats), in global positions. No GUI code."""
 
+import itertools
 import math
 
 ID = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 TOL = 1e-9
+MAX_DRAWN = 5000
 
 
 class SymmetryError(Exception):
@@ -49,6 +51,158 @@ def det(m):
     return (
         a[0] * (a[5] * a[10] - a[6] * a[9]) - a[1] * (a[4] * a[10] - a[6] * a[8]) + a[2] * (a[4] * a[9] - a[5] * a[8])
     )
+
+
+# ---- rules: ordered mirror, rotation and translation steps
+
+
+def _unit(v):
+    n = math.sqrt(sum(c * c for c in v))
+    return [c / n for c in v]
+
+
+def _norm(v):
+    return math.sqrt(sum(c * c for c in v))
+
+
+def translation(v):
+    """Move by the vector v."""
+    return [1, 0, 0, v[0], 0, 1, 0, v[1], 0, 0, 1, v[2], 0, 0, 0, 1]
+
+
+def rotation_about(point, axis, deg):
+    """Turn by deg about the axis (any direction) through point."""
+    x, y, z = _unit(axis)
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    t = 1 - c
+    r = [t * x * x + c, t * x * y - s * z, t * x * z + s * y, t * x * y + s * z, t * y * y + c, t * y * z - s * x]
+    r += [t * x * z - s * y, t * y * z + s * x, t * z * z + c]
+    p = point
+    off = [p[i] - (r[3 * i] * p[0] + r[3 * i + 1] * p[1] + r[3 * i + 2] * p[2]) for i in range(3)]
+    return [*r[0:3], off[0], *r[3:6], off[1], *r[6:9], off[2], 0, 0, 0, 1]
+
+
+def _mirror(point, normal):
+    n = _unit(normal)
+    d = 2 * sum(a * b for a, b in zip(n, point))
+    m = [(1.0 if i == j else 0.0) - 2 * n[i] * n[j] for i in range(3) for j in range(3)]
+    return [*m[0:3], d * n[0], *m[3:6], d * n[1], *m[6:9], d * n[2], 0, 0, 0, 1]
+
+
+def rule_matrix(rule):
+    """The rigid motion G of one rule."""
+    kind = rule["kind"]
+    if kind == "mirror":
+        return _mirror(rule["point"], rule["normal"])
+    if kind == "rotate":
+        return rotation_about(rule["point"], rule["axis"], rule["step"])
+    if kind == "translate":
+        return translation(rule["vector"])
+    return [float(v) for v in rule["matrix"]]
+
+
+def rule_count(rule):
+    """Copies a rule makes, the original included."""
+    return 2 if rule["kind"] == "mirror" else int(rule["count"])
+
+
+def copy_count(rules):
+    n = 1
+    for r in rules:
+        n *= rule_count(r)
+    return n
+
+
+def copies(rules):
+    """Index of every copy in each rule: the first rule is the fastest, the all-zero copy (the drawn cell) is first."""
+    counts = [rule_count(r) for r in rules]
+    return [tuple(reversed(i)) for i in itertools.product(*[range(n) for n in reversed(counts)])]
+
+
+def transforms(rules):
+    """The transform of every copy, in the order of copies(): Rm^im after ... after R1^i1."""
+    powers = []
+    for r in rules:
+        g, ps = rule_matrix(r), [ID]
+        for _ in range(rule_count(r) - 1):
+            ps.append(compose(g, ps[-1]))
+        powers.append(ps)
+    return [compose(*[powers[k][i] for k, i in reversed(list(enumerate(idx)))]) for idx in copies(rules)]
+
+
+def _rule_problem(n, rule, plane):
+    """What is wrong with one rule (numbered n from 1), or None."""
+    kind = rule["kind"]
+    who = f"Rule {n}"
+    if kind != "mirror" and not (isinstance(rule.get("count"), int) and rule["count"] >= 2):
+        return f"{who}: the count must be 2 or more."
+    if kind == "mirror" and _norm(rule["normal"]) < TOL:
+        return f"{who}: the mirror normal is zero."
+    if kind == "rotate" and _norm(rule["axis"]) < TOL:
+        return f"{who}: the rotation axis is zero."
+    if kind == "translate" and _norm(rule["vector"]) < TOL:
+        return f"{who}: the translation vector is zero."
+    if plane == "XY":
+        if kind == "mirror" and abs(rule["normal"][2]) > TOL * _norm(rule["normal"]):
+            return f"{who}: the mirror normal must lie in the XY plane."
+        if kind == "rotate" and _norm(rule["axis"][:2]) > TOL * _norm(rule["axis"]):
+            return f"{who}: in 2D the rotation axis must be parallel to Z."
+        if kind == "translate" and abs(rule["vector"][2]) > TOL:
+            return f"{who}: the translation must lie in the XY plane."
+        if kind == "motion" and any(abs(rule["matrix"][i]) > TOL for i in (2, 6, 8, 9, 11)):
+            return f"{who}: the motion must stay in the XY plane."
+    if plane == "ZX":
+        if kind == "mirror" and _norm(rule["normal"][:2]) > TOL * _norm(rule["normal"]):
+            return f"{who}: in an axisymmetric Study the mirror normal must be along Z."
+        if kind in ("rotate", "motion"):
+            return f"{who}: a rotation is not possible in an axisymmetric Study."
+        if kind == "translate" and _norm(rule["vector"][:2]) > TOL:
+            return f"{who}: in an axisymmetric Study the translation must be along Z."
+    return None
+
+
+def rule_problems(rules, plane):
+    """Reasons the rules cannot be used. plane is '' (3D), 'XY' or 'ZX'."""
+    out = []
+    counts_ok = all(r["kind"] == "mirror" or (isinstance(r.get("count"), int) and r["count"] >= 2) for r in rules)
+    too_many = counts_ok and copy_count(rules) > MAX_DRAWN
+    if too_many:
+        out.append(f"The rules make {copy_count(rules)} copies, more than the {MAX_DRAWN} allowed.")
+    out += [p for p in (_rule_problem(n, r, plane) for n, r in enumerate(rules, 1)) if p]
+    if not out:
+        keys = [_key(t) for t in transforms(rules)]
+        if len(set(keys)) < len(keys):
+            out.append("Some copies are identical: a rule repeats another or comes back to the start too early.")
+    return out
+
+
+def rule_warnings(rules):
+    out = []
+    for n, r in enumerate(rules, 1):
+        if r["kind"] == "rotate" and abs(r["step"] * r["count"] - 360) > 1e-6:
+            out.append(f"Rule {n}: the rotation covers {r['step'] * r['count']:g} degrees, not 360.")
+    return out
+
+
+# ---- parts
+
+
+def part_names(row, rules, label):
+    """The part name of every copy of one cell object."""
+    mode = row.get("mode", "one")
+    idx = copies(rules)
+    if mode == "each":
+        return [f"{label}_{i + 1}" for i in range(len(idx))]
+    if mode == "table":
+        return list(row["table"])
+    if mode == "across":
+        across = set(row.get("across", []))
+        rest = [tuple(v for k, v in enumerate(i) if k not in across) for i in idx]
+        number = {}
+        for r in rest:
+            number.setdefault(r, len(number) + 1)
+        return [f"{label}_{number[r]}" for r in rest]
+    return [label] * len(idx)
 
 
 def _placement(obj):
