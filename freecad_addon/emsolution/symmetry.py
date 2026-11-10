@@ -146,15 +146,21 @@ def copies(rules):
     return [tuple(reversed(i)) for i in itertools.product(*[range(n) for n in reversed(counts)])]
 
 
-def transforms(rules):
-    """The transform of every copy, in the order of copies(): Rm^im after ... after R1^i1."""
+def _each_transform(rules):
+    """transforms(rules), one at a time: a caller may stop at the first that does not fit."""
     powers = []
     for r in rules:
         g, ps = rule_matrix(r), [ID]
         for _ in range(rule_count(r) - 1):
             ps.append(compose(g, ps[-1]))
         powers.append(ps)
-    return [compose(*[powers[k][i] for k, i in reversed(list(enumerate(idx)))]) for idx in copies(rules)]
+    for idx in copies(rules):
+        yield compose(*[powers[k][i] for k, i in reversed(list(enumerate(idx)))])
+
+
+def transforms(rules):
+    """The transform of every copy, in the order of copies(): Rm^im after ... after R1^i1."""
+    return list(_each_transform(rules))
 
 
 def _rule_problem(n, rule, plane):
@@ -434,22 +440,55 @@ def _step_rule(obj, outer):
     return {"kind": "rotate", "point": point, "axis": _clean(axis), "step": round(step, 9) + 0.0, "count": n}
 
 
+GRID = 1e-4  # cell size of the transform lookup; a match must be closer than the tolerance, far below it
+GRID_SHIFT = 0.3183  # keeps 0, 1 and 0.5 off the cell borders
+
+
+def _grid_keys(t, tol):
+    """The lookup cells a transform within tol of t can lie in: its own, and across a border it is within tol of."""
+    options = []
+    for v in t:
+        s = v / GRID + GRID_SHIFT
+        cell = math.floor(s)
+        near = [cell - 1] if s - cell < tol / GRID else [cell + 1] if s - cell > 1 - tol / GRID else []
+        options.append([cell, *near])
+    return itertools.product(*options)
+
+
 def _same_copies(a, b, tol=1e-6):
-    """True if the transforms a and b are the same copies, each once."""
-
-    def has(ts, t):
-        return any(max(abs(x - y) for x, y in zip(s, t)) < tol for s in ts)
-
-    return len(a) == len(b) and all(has(b, t) for t in a) and all(has(a, t) for t in b)
+    """True if the transforms a (any iterable, read until the first that b lacks) are those of the list b, each once.
+    A grid lookup keeps this linear in the number of copies."""
+    index = {}
+    for i, t in enumerate(b):
+        index.setdefault(next(_grid_keys(t, 0)), []).append(i)
+    used, n = set(), 0
+    for t in a:
+        hit = next(
+            (
+                i
+                for key in _grid_keys(t, tol)
+                for i in index.get(key, ())
+                if i not in used and max(abs(x - y) for x, y in zip(t, b[i])) < tol
+            ),
+            None,
+        )
+        if hit is None:
+            return False
+        used.add(hit)
+        n += 1
+    return n == len(b)
 
 
 def _fitting_rules(steps, outer, chain):
-    """The rules of steps, in the first order whose copies are chain's; None if no order is."""
+    """The rules of steps, in the first order whose copies are chain's; None if no order is. The number of copies is
+    the same in every order, so a wrong number is refused at once, and a wrong order at its first stray copy."""
     rules = [_step_rule(s, outer) for s in steps]
+    if copy_count(rules) != len(chain):
+        return None
     orders = itertools.permutations(range(len(rules))) if len(rules) <= MAX_ORDERS else [range(len(rules))]
     for order in orders:
         ordered = [rules[i] for i in order]
-        if copy_count(ordered) == len(chain) and _same_copies(transforms(ordered), chain):
+        if _same_copies(_each_transform(ordered), chain):
             return ordered
     return None
 
@@ -468,8 +507,11 @@ def rules_from_chain(top):
     for name, (_, ts) in found.items():
         sets.setdefault(frozenset(_unique(ts)), []).append(name)
     out = []
-    for names in sets.values():
+    for key, names in sets.items():
         cells = [found[n][0] for n in names]
+        if len(key) > MAX_DRAWN:
+            labels = ", ".join(b.Label for b in cells)
+            raise SymmetryError(f"{labels}: the chain makes {len(key)} copies, more than the {MAX_DRAWN} allowed.")
         chain = [compose(c, t, back) for t in _unique(found[names[0]][1]).values()]
         rules = _fitting_rules(steps[names[0]], outer, chain)
         if rules is None:

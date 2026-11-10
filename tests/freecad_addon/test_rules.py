@@ -1,15 +1,20 @@
 """The rule engine: ordered mirror, rotation and translation rules become rigid transforms and part names."""
 
 import math
+import time
 
 import pytest
 
 import FreeCAD as App
+import Draft
 
 from emsolution.symmetry import (
+    GRID,
+    GRID_SHIFT,
     ID,
     MAX_DRAWN,
     SymmetryError,
+    _same_copies,
     apply,
     compose,
     copies,
@@ -209,3 +214,47 @@ def test_chain_that_is_no_rule_list_is_explained(motor):
     doc.recompute()
     with pytest.raises(SymmetryError, match=r"StatorIronCell.*25 copies.*ordered list of rules"):
         rules_from_chain(frag)
+
+
+def test_large_chain_reads_quickly():
+    """4000 copies: comparing the copies of each order of steps with the chain's must not be quadratic."""
+    doc = App.newDocument("LargeChain")
+    try:
+        cell = symcases.feature(doc, "Tiny", symcases.sector(60, 61, 0, 0.05))
+        array = Draft.make_polar_array(cell, number=4000, angle=360)
+        doc.recompute()
+        start = time.perf_counter()
+        (p,) = rules_from_chain(array)
+        assert p.rules[0]["count"] == 4000 and time.perf_counter() - start < 5
+        odd = doc.addObject("Part::Mirroring", "OddMirror")  # 4001 copies, which no order of two steps makes
+        odd.Source, odd.Normal = cell, App.Vector(0, 1, 0)
+        both = doc.addObject("Part::Compound", "Both")
+        both.Links = [array, odd]
+        doc.recompute()
+        start = time.perf_counter()
+        with pytest.raises(SymmetryError, match="4001 copies"):
+            rules_from_chain(both)
+        assert time.perf_counter() - start < 5
+        array.NumberPolar = MAX_DRAWN + 1
+        doc.recompute()
+        with pytest.raises(SymmetryError, match=f"{MAX_DRAWN + 1} copies, more than"):
+            rules_from_chain(array)
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_copies_are_compared_in_linear_time():
+    chain = transforms([ROT(360 / 4000, 4000)])
+    start = time.perf_counter()
+    assert _same_copies(iter(reversed(chain)), chain)
+    assert not _same_copies(chain[:-1] + [chain[0]], chain)  # one copy twice, one missing
+    assert not _same_copies(chain[:-1], chain)
+    assert time.perf_counter() - start < 5
+
+
+def test_copies_within_the_tolerance_across_a_grid_border_match():
+    t = list(ID)
+    t[3] = (1 - GRID_SHIFT) * GRID - 1e-8  # x offset just below a cell border, its match just above it
+    u = list(t)
+    u[3] += 2e-8
+    assert _same_copies([u], [t]) and not _same_copies([[*u[:3], u[3] + 1e-5, *u[4:]]], [t])
