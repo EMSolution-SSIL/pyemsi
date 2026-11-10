@@ -63,6 +63,27 @@ def import_brep(path, *dims):
     return tags
 
 
+def plane_normal(normal):
+    """The side a 2D mesh is seen from, for a face in the XY or the ZX plane with this normal: +Z in XY, -Y in ZX (x to
+    the right and z up, as the add-on draws ZX shapes). Seen from it, every element is counterclockwise."""
+    return (0.0, -1.0, 0.0) if abs(normal[1]) > abs(normal[2]) else (0.0, 0.0, 1.0)
+
+
+def face_normal(tag):
+    """The normal of the plane face tag as it is turned (a face drawn clockwise is turned to -Z)."""
+    lo, hi = gmsh.model.getParametrizationBounds(2, tag)
+    return gmsh.model.getNormal(tag, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2])
+
+
+def orient_faces():
+    """2D: mesh every face counterclockwise seen from plane_normal, whichever way it was drawn. Gmsh meshes a face the
+    way it is turned, and that is not something the user controls or sees."""
+    for _, tag in gmsh.model.getEntities(2):
+        n = face_normal(tag)
+        if sum(a * b for a, b in zip(n, plane_normal(n))) < 0:
+            gmsh.model.mesh.setReverse(2, tag)
+
+
 def _note(text):
     """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view."""
     print(f"NOTE: {text}", file=sys.stderr)

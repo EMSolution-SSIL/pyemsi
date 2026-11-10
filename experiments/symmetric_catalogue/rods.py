@@ -38,8 +38,8 @@ def rect(x1, y1, x2, y2):
 def half_disc(centre_deg, radius, r, side, ccw=True):
     """Half the disc of radius r centred radius from the origin at centre_deg: the half on side +1 (towards larger
     angles) or -1 of the line through the origin at centre_deg, its diameter on that line. Drawn counterclockwise,
-    so that the face is turned to +Z: keep it so. A clockwise face (ccw False, the R-06-clockwise row) is turned to -Z
-    and hits tool defect D3 (Validate passes and the mesher writes inverted triangles); counterclockwise avoids it."""
+    so that the face is turned to +Z. A clockwise face (ccw False, the R-06-clockwise row) is turned to -Z; the mesher
+    meshes it counterclockwise all the same (tool defect D3, fixed)."""
     c = P(radius, centre_deg)
     u = V(math.cos(math.radians(centre_deg)), math.sin(math.radians(centre_deg)), 0)
     w = V(-u.y, u.x, 0) * side
@@ -169,7 +169,7 @@ def r_06(name="R_06", ccw=True):
 
 def r_06_clockwise():
     """R-06 with the ring-2 half at 30° drawn clockwise (its face turned to -Z). The design takes it (a face is a face),
-    so it should mesh; today it hits tool defect D3: Validate passes and the mesher writes inverted triangles."""
+    so it meshes, every triangle counterclockwise (tool defect D3, fixed: it gave inverted triangles silently)."""
     return r_06("R_06cw", ccw=False)
 
 

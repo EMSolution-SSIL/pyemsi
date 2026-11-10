@@ -14,7 +14,7 @@ import numpy as np
 
 from emsolution import meshfrozen
 from .test_mesher import MESHER, write_line
-from .test_mesher2d import MESHER2D, write_arc, write_sectors
+from .test_mesher2d import MESHER2D, clockwise, turn_over, write_arc, write_sectors
 from .test_mesher2d import write_rects as write_plane_rects
 from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
 from .test_meshsym3d import mesh_check_3d, slide_nodes, surface_group, write_face, write_sector_solids
@@ -1550,6 +1550,26 @@ class GroupJobTest(unittest.TestCase):
         t = xyz[found[2]]
         normals = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
         self.assertEqual(len(np.unique(np.sign(normals[:, 1]))), 1)  # copies and air are turned the same way
+
+    def test_cell_and_free_air_drawn_clockwise_are_meshed_counterclockwise(self):  # +Z in XY; -Y in ZX: x right, z up
+        for plane, normal in (("XY", (0, 0, 1)), ("ZX", (0, -1, 0))):
+            with self.subTest(plane=plane):
+                if plane == "XY":
+                    write_sectors(self.geo("cell.brep"), (10, 20, -30, 0))
+                    turn_over(self.geo("cell.brep"), centre=(0, 0, 0))  # the sector 0..30°, turned to -Z
+                    write_plane_rects(self.geo("air.brep"), [(-30, -30, 60, 60)])
+                    transforms = [compose(rotation(60 * k), m) for k in range(6) for m in (ID, mirror_line(30))]
+                else:
+                    write_plane_rects(self.geo("cell.brep"), [(2, 1, 2, 2)], plane="ZX")
+                    turn_over(self.geo("cell.brep"))
+                    write_plane_rects(self.geo("air.brep"), [(0, -6, 10, 12)], plane="ZX")
+                    transforms = [ID, MIRROR_Z]
+                turn_over(self.geo("air.brep"))
+                group = self.sector_group((10, 20, 0, 30), transforms, self.IRON, size=1.0)
+                group["job"]["bodies"][0]["file"] = "geometry/cell.brep"
+                cells = self.meshed([group])
+                self.assertEqual(clockwise(cells, normal), 0)
+                self.assertEqual(clockwise(self.meshed([group], free=[self.air_2d(size=2.0)]), normal), 0)
 
     def test_free_air_on_the_moving_side(self):  # a free job takes the boundary of its own side only
         stator = self.sector_group((35, 45, 0, 20), self.spaced(), [{"mat_id": 5, "name": "S"}])

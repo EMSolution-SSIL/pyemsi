@@ -30,6 +30,7 @@ from meshcommon import (
     slide_report,
     import_brep,
     slide_split,
+    orient_faces,
 )
 import meshgroups
 
@@ -87,6 +88,7 @@ def build(job, folder):
     else:
         _, out_map = gmsh.model.occ.fragment(inputs[:1], inputs[1:])
     gmsh.model.occ.synchronize()
+    orient_faces()
 
     body_faces = {}  # MAT_ID -> list of final 2D tags
     owner = {}  # final 2D tag -> body name

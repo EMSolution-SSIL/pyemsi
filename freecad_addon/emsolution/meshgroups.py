@@ -16,6 +16,7 @@ import numpy as np
 
 from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, FIELD_LISTS, MSH_VERSION
 from meshcommon import _note
+from meshcommon import face_normal, plane_normal
 import meshfrozen
 import meshsym
 
@@ -618,10 +619,10 @@ def _missing(needed, have):
     return needed[~np.isin(rows[: len(first)], rows[len(first) :])]
 
 
-def _turn_like_the_face(face, W, elements):
-    """2D: every element of elements turned to the orientation of the free OCC face it came from."""
-    lo, hi = gmsh.model.getParametrizationBounds(2, face)
-    normal = np.array(gmsh.model.getNormal(face, [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]))
+def _turn_counterclockwise(face, W, elements):
+    """2D: every element of elements turned counterclockwise seen from the plane of the free OCC face it came from
+    (plane_normal), whichever way that face was drawn."""
+    normal = np.array(plane_normal(face_normal(face)))
     for etype, conn in elements.items():
         a, b, c = W[conn[:, 0]], W[conn[:, 1]], W[conn[:, 2]]
         wrong = np.einsum("ij,j->i", np.cross(b - a, c - a), normal) < 0
@@ -1272,7 +1273,7 @@ def _mesh_free_entity(survey, side, V, dim):
         for etype, conn in region.items():
             elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
     if dim == 2:
-        _turn_like_the_face(entity, W, elements)
+        _turn_counterclockwise(entity, W, elements)
     whole = meshfrozen.boundary(W, [elements], dim)
     if whole.over_used:
         raise _limit(name, "a face has more than two elements", _where(W, [elements], dim))

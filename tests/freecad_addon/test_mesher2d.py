@@ -117,6 +117,58 @@ def write_arc(path, r, a0, a1):
         gmsh.finalize()
 
 
+def turn_over(path, centre=None):
+    """Rewrite the BREP at path with its faces turned over: half a turn about the line through centre (default: the
+    middle of their box) along X for faces in z = 0, along Z for faces in y = 0. Each normal then points the other
+    way, as for a face drawn clockwise."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        faces = gmsh.model.occ.importShapes(path)
+        gmsh.model.occ.synchronize()
+        x0, y0, z0, x1, y1, z1 = gmsh.model.getBoundingBox(-1, -1)
+        cx, cy, cz = centre or ((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
+        axis = (0, 0, 1) if y1 - y0 < 1e-9 else (1, 0, 0)
+        gmsh.model.occ.rotate(faces, cx, cy, cz, *axis, math.pi)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def clockwise(path, normal):
+    """The 2D elements of a mesh file that are not counterclockwise seen from normal: a corner whose two edges turn
+    the other way, or not at all."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        xyz = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+        bad = 0
+        for typ in gmsh.model.mesh.getElementTypes(2):
+            corners = gmsh.model.mesh.getElementProperties(typ)[5]
+            etags, enodes = gmsh.model.mesh.getElementsByType(typ)
+            per = len(enodes) // len(etags)
+            for k in range(len(etags)):
+                p = [xyz[int(n)] for n in enodes[k * per : k * per + corners]]
+                turns = [
+                    sum(c * w for c, w in zip(_turn(p[i - 1], p[i], p[(i + 1) % corners]), normal))
+                    for i in range(corners)
+                ]
+                bad += min(turns) <= 0
+    finally:
+        gmsh.finalize()
+    return bad
+
+
+def _turn(a, b, c):
+    """(b - a) x (c - b)."""
+    u = [b[i] - a[i] for i in range(3)]
+    v = [c[i] - b[i] for i in range(3)]
+    return u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]
+
+
 def read_nodes(path):
     """{node tag: (x, y, z)} of a mesh file."""
     gmsh.initialize()
@@ -311,6 +363,23 @@ class Mesher2DTest(unittest.TestCase):
         for y in coords[1::3]:
             self.assertAlmostEqual(y, 0.0, places=9)
         self.assertGreater(max(coords[2::3]), 0.9)  # the square really stands along z
+
+    def test_a_face_drawn_clockwise_is_meshed_counterclockwise(self):  # +Z in XY; -Y in ZX: x right, z up
+        for plane, normal in (("XY", (0, 0, 1)), ("ZX", (0, -1, 0))):
+            for recombine, tf in ((None, None), ([2], None), ([2], "structured")):
+                with self.subTest(plane=plane, recombine=recombine, tf=tf):
+                    write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)], plane=plane)
+                    write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)], plane=plane)
+                    turn_over(self.geo("vol_2.brep"))
+                    if tf:
+                        lines = square_lines(1)
+                        if plane == "ZX":
+                            lines = [((p[0], 0, p[1]), (q[0], 0, q[1])) for p, q in lines]
+                        tf = {"bodies": self.structured(("B", 2)), "edges": [self.edge_item("tedge", lines, 4)]}
+                    bodies = [self.body(1, "A", "vol_1.brep"), self.body(2, "B", "vol_2.brep")]
+                    r = self.run_job(bodies, recombine=recombine, transfinite=tf)
+                    self.assertEqual(r.returncode, 0, r.stderr)
+                    self.assertEqual(clockwise(os.path.join(self.dir, "pre_geom2D.msh"), normal), 0)
 
     def test_options_are_applied(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
