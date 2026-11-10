@@ -364,8 +364,8 @@ class Mesher2DTest(unittest.TestCase):
             self.assertAlmostEqual(y, 0.0, places=9)
         self.assertGreater(max(coords[2::3]), 0.9)  # the square really stands along z
 
-    def test_a_face_drawn_clockwise_is_meshed_counterclockwise(self):  # +Z in XY; -Y in ZX: x right, z up
-        for plane, normal in (("XY", (0, 0, 1)), ("ZX", (0, -1, 0))):
+    def test_a_face_drawn_clockwise_is_meshed_counterclockwise(self):  # +Z in XY, +Y (+theta) in ZX
+        for plane, normal in (("XY", (0, 0, 1)), ("ZX", (0, 1, 0))):
             for recombine, tf in ((None, None), ([2], None), ([2], "structured")):
                 with self.subTest(plane=plane, recombine=recombine, tf=tf):
                     write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)], plane=plane)

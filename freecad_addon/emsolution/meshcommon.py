@@ -64,9 +64,11 @@ def import_brep(path, *dims):
 
 
 def plane_normal(normal):
-    """The side a 2D mesh is seen from, for a face in the XY or the ZX plane with this normal: +Z in XY, -Y in ZX (x to
-    the right and z up, as the add-on draws ZX shapes). Seen from it, every element is counterclockwise."""
-    return (0.0, -1.0, 0.0) if abs(normal[1]) > abs(normal[2]) else (0.0, 0.0, 1.0)
+    """The side a 2D mesh is seen from, for a face in the XY or the ZX plane with this normal: +Z in XY, +Y in ZX. Seen
+    from it, every element is counterclockwise. These are EMSolution's positive directions, z and theta (+Y on the
+    half plane x > 0): a face element is positive when its node order turns, by the right-hand rule, to z (theta)
+    (EMSolutionDocs/files/handbook/additional_input/1_2D_to_3D.rst)."""
+    return (0.0, 1.0, 0.0) if abs(normal[1]) > abs(normal[2]) else (0.0, 0.0, 1.0)
 
 
 def face_normal(tag):

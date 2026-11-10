@@ -3,6 +3,8 @@
 import json
 import math
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -14,6 +16,7 @@ import pytest
 from emsolution import airshapes, objects, validation, jobwriter, studymaterials
 
 from .materialdata import AIR, STEEL, record
+from .test_mesher2d import clockwise
 
 
 class AirTest(unittest.TestCase):
@@ -292,6 +295,24 @@ class AirTest(unittest.TestCase):
         air.StartAngle, air.EndAngle = 90, 30
         text = f"Air Region {air.Label}: the end angle must be larger than the start angle (at most 360\N{DEGREE SIGN} more)."
         self.assertEqual(self.air_problems(), [text])
+
+    def test_2d_air_shapes_mesh_counterclockwise(self):  # an XY Sector is drawn turned to -Z; +Y (+theta) in ZX
+        cases = [
+            ("XY", App.Vector(0, 0, 1), dict(InnerRadius=0, OuterRadius=30, StartAngle=0, EndAngle=90)),
+            ("ZX", App.Vector(0, 1, 0), dict(OuterRadius=30)),
+        ]
+        for plane, normal, sector in cases:
+            with self.subTest(plane=plane):
+                self.study_2d(normal)
+                for air in objects.air_regions(self.study):
+                    self.doc.removeObject(air.Name)
+                objects.make_air_region(self.study, "Sector", **sector)
+                self.doc.recompute()
+                path = jobwriter.write_job(self.study)
+                mesher = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+                r = subprocess.run([sys.executable, mesher, path], capture_output=True, encoding="utf-8")
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(clockwise(jobwriter.mesh_file(self.study), (normal.x, normal.y, normal.z)), 0)
 
     def air_job(self):
         """Write the job of one 10 mm box inside an Air Region; returns the job."""

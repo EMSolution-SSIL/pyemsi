@@ -1551,20 +1551,19 @@ class GroupJobTest(unittest.TestCase):
         normals = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
         self.assertEqual(len(np.unique(np.sign(normals[:, 1]))), 1)  # copies and air are turned the same way
 
-    def test_cell_and_free_air_drawn_clockwise_are_meshed_counterclockwise(self):  # +Z in XY; -Y in ZX: x right, z up
-        for plane, normal in (("XY", (0, 0, 1)), ("ZX", (0, -1, 0))):
+    def test_cell_and_free_air_drawn_clockwise_are_meshed_counterclockwise(self):  # +Z in XY, +Y (+theta) in ZX
+        for plane, normal in (("XY", (0, 0, 1)), ("ZX", (0, 1, 0))):
             with self.subTest(plane=plane):
                 if plane == "XY":
                     write_sectors(self.geo("cell.brep"), (10, 20, -30, 0))
                     turn_over(self.geo("cell.brep"), centre=(0, 0, 0))  # the sector 0..30°, turned to -Z
                     write_plane_rects(self.geo("air.brep"), [(-30, -30, 60, 60)])
+                    turn_over(self.geo("air.brep"))
                     transforms = [compose(rotation(60 * k), m) for k in range(6) for m in (ID, mirror_line(30))]
-                else:
+                else:  # write_plane_rects turns a ZX rectangle to -Y: the wrong side
                     write_plane_rects(self.geo("cell.brep"), [(2, 1, 2, 2)], plane="ZX")
-                    turn_over(self.geo("cell.brep"))
                     write_plane_rects(self.geo("air.brep"), [(0, -6, 10, 12)], plane="ZX")
                     transforms = [ID, MIRROR_Z]
-                turn_over(self.geo("air.brep"))
                 group = self.sector_group((10, 20, 0, 30), transforms, self.IRON, size=1.0)
                 group["job"]["bodies"][0]["file"] = "geometry/cell.brep"
                 cells = self.meshed([group])
