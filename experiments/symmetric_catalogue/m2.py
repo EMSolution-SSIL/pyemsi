@@ -325,8 +325,8 @@ def m2_13():
     mats = [lib["Air"], lib["Steel"], lib["Steel"]]
     polarity = table("MagN" if k % 2 == 0 else "MagS" for k in range(34))
     make_group(study, "Outer rotor", cells, [rotate(pitch, 34)], mats, {1: polarity}, "Moving")
-    objects.make_sliding_interface(study, "Rotational", Radius=22.5, Divisions=168)
-    objects.make_sliding_interface(study, "Rotational", Radius=33, Divisions=714)
+    objects.make_sliding_interface(study, "Rotational", Radius=22.5, Divisions=168, Label="Inner sliding")
+    objects.make_sliding_interface(study, "Rotational", Radius=33, Divisions=714, Label="Outer sliding")
     return study
 
 

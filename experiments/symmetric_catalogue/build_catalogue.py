@@ -58,4 +58,9 @@ if __name__ == "__main__":
         print(f"{name:14s} {verdict:8s} expected {expected:30s} {'matches' if ok else 'NO MATCH':8s} {detail}")
     bad = [r[0] for r in rows if not r[3]]
     print(f"\n{len(rows) - len(bad)} of {len(rows)} match" + (f"; not matching: {', '.join(bad)}" if bad else ""))
-    sys.exit(1 if bad else 0)
+    unknown = [n for n in wanted if n not in {c[0] for c in cases()}]
+    if unknown:
+        print(f"No such case: {', '.join(unknown)}")
+    if not rows:
+        print("No case ran.")
+    sys.exit(1 if bad or unknown or not rows else 0)
