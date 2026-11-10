@@ -218,6 +218,7 @@ class Material(_Proxy):
         obj.addProperty("App::PropertyLinkGlobal", "Body", "EMSolution", "Body made of this material")
         self.add_group_name(obj)
         self.add_pieces(obj)
+        self.add_part(obj)
         obj.addProperty("App::PropertyLink", "LibraryMaterial", "EMSolution", "Material from the Material Library")
         obj.addProperty("App::PropertyIntegerConstraint", "Potential", "EMSolution", "POTENTIAL: 0 total, 1+ reduced")
         obj.Potential = (0, 0, 1000000, 1)
@@ -237,8 +238,14 @@ class Material(_Proxy):
             )
             obj.setEditorMode("PieceCentres", 2)
 
+    @staticmethod
+    def add_part(obj):
+        if not hasattr(obj, "PartKey"):
+            obj.addProperty("App::PropertyString", "PartKey", "EMSolution", "Part of a Symmetric Group: side|name")
+
     def onDocumentRestored(self, obj):
         self.add_pieces(obj)  # assignments saved before pieces existed
+        self.add_part(obj)
         if not hasattr(obj, "GroupName"):  # saved before Materials were named: keep the mesh name they had
             name = display_name(obj.Body) if obj.Body is not None else obj.Label
             self.add_group_name(obj)
@@ -1055,6 +1062,82 @@ def assign_pieces(study, name, pieces, lib, potential):
     return m
 
 
+def part_key(study, item, name):
+    """The key of a part: its side, "fixed" or "moving" (all fixed without Sliding motion), and its name."""
+    side = item.Side.lower() if study.Movement == "Sliding motion" else "fixed"
+    return f"{side}|{name}"
+
+
+def study_parts(study):
+    """{key: [(item, row index, copy), ...]} of every part of the Study's groups, in drawing order."""
+    parts = {}
+    for item in symmetric_groups(study):
+        for r, row in enumerate(rows_of(item)):
+            for copy, name in enumerate(row_parts(item, row)):
+                parts.setdefault(part_key(study, item, name), []).append((item, r, copy))
+    return parts
+
+
+def part_assignments(study):
+    return [m for m in materials(study) if getattr(m, "PartKey", "")]
+
+
+def part_refs(m):
+    """[(group, "SolidN")] (FaceN in 2D) of the copies of a part assignment."""
+    refs = []
+    for item, r, copy in study_parts(owner_study(m)).get(m.PartKey, []):
+        kind = "Solid" if item.Shape.Solids else "Face"
+        refs.append((item, f"{kind}{copy * len(rows_of(item)) + r + 1}"))
+    return refs
+
+
+def _row_library(study, row):
+    """The Material Library entry a row names (by object name), or None."""
+    return study.Document.getObject(row["material"]) if row.get("material") else None
+
+
+def sync_parts(study):
+    """One assignment per part: new parts get one (named after the part, with their row's library material), parts
+    that are gone lose theirs. Returns the names of the removed assignments."""
+    parts = study_parts(study)
+    have = {m.PartKey: m for m in part_assignments(study)}
+    removed = []
+    for key, m in have.items():
+        if key not in parts:
+            removed.append(display_name(m))
+            study.Document.removeObject(m.Name)
+    for key, ((item, r, _), *_) in parts.items():
+        if key in have:
+            continue
+        base = name = key.partition("|")[2]
+        n = 1
+        while name_taken(study, name):
+            n += 1
+            name = f"{base}_{n}"
+        m = _add(study, "MaterialsGroup", Material, name)
+        m.PartKey = key
+        m.LibraryMaterial = _row_library(study, rows_of(item)[r])
+        m.Label = assignment_label(m)
+        if getattr(m, "ViewObject", None) is not None:  # GUI running
+            from . import taskpanels
+
+            taskpanels.attach_view_provider(m)
+    return removed
+
+
+def set_row_material(study, item, row, lib):
+    """Give a row's library material (None for none) to the row and to every part of it."""
+    rows = rows_of(item)
+    rows[row]["material"] = lib.Name if lib is not None else ""
+    set_rows(item, rows)
+    have = {m.PartKey: m for m in part_assignments(study)}
+    for name in row_parts(item, rows[row]):
+        m = have.get(part_key(study, item, name))
+        if m is not None:
+            m.LibraryMaterial = lib
+            m.Label = assignment_label(m)
+
+
 def make_material(study):
     """An empty Material for the Material panel to fill; the panel holds the transaction that removes it on Cancel."""
     m = _add(study, "MaterialsGroup", Material, "")
@@ -1430,6 +1513,8 @@ def is_item(obj):
 def item_refs(item):
     """[(body, sub)] of a Material, Excitation, Mesh Size, Recombine or transfinite item; sub "" = the whole body."""
     if isinstance(item.Proxy, Material):
+        if getattr(item, "PartKey", ""):
+            return part_refs(item)
         if item.Body is None:
             return [(b, s) for b, subs in item.Pieces for s in subs]
         return [(item.Body, "")]
@@ -1454,7 +1539,7 @@ def material_rows(study):
             rows.append((m, item_refs(m), [display_name(m), lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
         return rows
     have = assignment_of(study)
-    main = assignable(study)
+    main = [b for b in assignable(study) if not isinstance(getattr(b, "Proxy", None), SymmetricGroup)]
     inside = {b.Name for b in main}
     rows = []
     for b in main + [m.Body for m in have.values() if m.Body.Name not in inside]:
@@ -1462,6 +1547,9 @@ def material_rows(study):
         lib = m.LibraryMaterial.Label if m and m.LibraryMaterial else NO_MATERIAL
         name = display_name(b) if b.Name in inside else f"{display_name(b)} (not in main geometry)"
         rows.append((b, [(b, "")], [name, lib, _id_text(study, b), str(m.Potential) if m else ""]))
+    for m in part_assignments(study):  # the parts of the Symmetric Groups
+        lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
+        rows.append((m, item_refs(m), [display_name(m), lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
     return rows
 
 
@@ -1583,7 +1671,9 @@ def air_keys(study):
 def volume_keys(study):
     """MAT_ID keys: bodies, Air Regions (or their halves), then the Sliding Interfaces' SLIDE_MAT_IDs when sliding.
     A symmetric Study has the piece assignments instead of the bodies and Air Regions."""
-    if is_symmetric(study):
+    if is_grouped(study):
+        keys = [m.Name for m in part_assignments(study)] + [b.Name for b in study_bodies(study)]
+    elif is_symmetric(study):
         keys = [m.Name for m in piece_assignments(study)]  # one MAT_ID per assignment; no bodies, no Air Region
     else:
         keys = [b.Name for b in study_bodies(study)] + air_keys(study)
@@ -1610,7 +1700,9 @@ def surface_keys(study):
     if study.Dimension == "2D":
         return []  # 2D Studies have no excitations yet
     included = set(volume_keys(study))
-    if is_symmetric(study):  # excitations sit on the tops of the Symmetric Mesh items
+    if is_grouped(study):  # excitations sit on the groups and on the free bodies
+        included |= {g.Name for g in symmetric_groups(study)}
+    elif is_symmetric(study):  # excitations sit on the tops of the Symmetric Mesh items
         included = {i.Top.Name for i in symmetric_items(study) if i.Top is not None}
     return list(
         dict.fromkeys(
