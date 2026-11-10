@@ -315,6 +315,11 @@ shells it contains.
 - The surface must be covered by copied cell objects on both sides. **A free object may not touch it.** So air near the
   gap is a copied cell object (a band, reaching the full height of the drawing), and free air lies outside that band.
 - Node grid, marker line and the "only the nodes have to match" rule are as in the 3D spec.
+- **Quads on the sliding surface are the normal case in 3D (the user's rule).** Users give the air that forms the sliding
+  surface a Transfinite Body and a Recombine, on the cell as for any object, so both sides of the surface are quads and the
+  air next to it is hexahedra. This must work with every rule the interface allows, the Z mirror included. A body must have
+  5 or 6 faces to be structured, so the structured layer is its own cell object, clear of whatever would split its faces
+  (teeth, stack ends); the air between it and those is a separate, unstructured cell object.
 - A Z mirror is new with sliding, and two places in `meshsym` assume all copies are around Z: `_slide_faces_sym` computes
   the needed area as 2πr / copies, and takes the z range from the cell's faces. They must use the rotation count and the
   full height of the drawing. The check in `validation._interfaces` that divisions are a multiple of the copies must use
@@ -395,6 +400,7 @@ arms in two radial layers with the layer change at a rounded nose. `Part.makeLof
 - Litz wires are varied, mainly 3D, no slices, double skew included. R-10 dropped.
 - Some cells structured and others unstructured must work together, in 2D and 3D.
 - The examples are only examples: the logic must be general, not specific to them.
+- The air forming the sliding surface is structured and recombined, so the sliding surfaces of rotor and stator are quads.
 
 ## 12. Decided by me (Claude), not by the user; check these
 
