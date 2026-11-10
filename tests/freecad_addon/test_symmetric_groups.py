@@ -669,3 +669,56 @@ def test_free_objects_are_checked_as_ordinary_bodies(study):
     free_body(study, "One", Part.makePlane(10, 10, V(100, 0, 0)))
     free_body(study, "Two", Part.makePlane(10, 10, V(105, 0, 0)))
     assert any("overlap" in t and "One" in t and "Two" in t for t in texts(study)), texts(study)
+
+
+# ---- fix round 1
+
+
+def test_a_group_crossing_the_interface_is_refused(study):
+    sliding(study)
+    ready(study)
+    study.Document.getObject("StatorAirCell").Shape = symcases.sector(33, 36, 0, 15)  # across r = 35
+    study.Document.recompute()
+    found = [t for t in texts(study) if "Sliding Interface" in t and "crosses it" in t]
+    assert found and "Stator" in found[0], texts(study)
+
+
+def test_a_group_crossing_the_interface_still_gets_its_rules_checked(study_3d):  # T-07
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 180, "count": 2}])
+    study_3d.Document.getObject("StatorAirCell").Shape = symcases.sector(33, 36, 0, 15).extrude(V(0, 0, 10))
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    study_3d.Document.recompute()
+    assert any("about Z" in t for t in texts(study_3d)), texts(study_3d)
+
+
+@pytest.mark.parametrize("missing,side", [("Rotor", "moving"), ("Stator", "fixed")])
+def test_sliding_needs_a_group_reaching_the_interface_on_each_side(study, stator, missing, side):
+    sliding(study)
+    ready(study)
+    assert texts(study) == []
+    study.Document.removeObject(next(g for g in objects.symmetric_groups(study) if g.Label == missing).Name)
+    objects.sync_parts(study)
+    assert any(f"on the {side} side reaches it" in t for t in texts(study)), texts(study)
+
+
+def test_a_contact_check_that_fails_is_reported(study, stator, monkeypatch):
+    from emsolution import validation
+
+    def fails(*args):
+        raise Part.OCCError("forced")
+
+    ready(study)
+    rotor_group(study)  # same side as the stator: their air cells meet
+    ready(study)
+    monkeypatch.setattr(validation, "_contact", fails)
+    assert not any("one group, or draw" in t for t in texts(study))
+    assert any("Could not check contact between" in t and "Stator" in t for t in texts(study, "warning"))
+
+
+def test_mesh_size_on_the_drawing_of_a_group_is_refused(study, stator):
+    ready(study)
+    objects.make_mesh_size(study, 1.5, [(stator, "")])
+    found = [t for t in texts(study) if "copies are not meshed" in t]
+    assert found and "Put it on the cell objects" in found[0], texts(study)

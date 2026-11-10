@@ -1063,7 +1063,8 @@ def _elements(group):
 
 
 def _touch_groups(a, b, three, r):
-    """Copies of two groups on one side may neither overlap nor touch over an area (a length, in 2D)."""
+    """Copies of two groups on one side may neither overlap nor touch over an area (a length, in 2D). A pair OCC cannot
+    compute is reported as a warning, not taken as clear."""
     if a.Shape.isNull() or b.Shape.isNull() or not a.Shape.BoundBox.intersect(b.Shape.BoundBox):
         return
 
@@ -1073,20 +1074,22 @@ def _touch_groups(a, b, three, r):
     mine, tol = _elements(a)
     others, _ = _elements(b)
     unit = "mm³" if three else "mm²"
+    failed = None  # where the first pair OCC failed on lies
     for sa, box_a in mine:
         for sb, box_b in others:
             if not box_a.intersect(box_b):
                 continue
             try:
                 common = sa.common(sb)
-            except Exception:  # OCC refuses some pairs; the mesher still reports it
-                continue
-            if measure(common) > 1e-6 * min(measure(sa), measure(sb)):
-                c = max(common.Solids if three else common.Faces, key=measure).CenterOfMass
-                text = f"overlap by {measure(common):.3g} {unit} near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g})"
-            elif _contact(sa, sb, three, tol):
-                text = "touch"
-            else:
+                if measure(common) > 1e-6 * min(measure(sa), measure(sb)):
+                    c = max(common.Solids if three else common.Faces, key=measure).CenterOfMass
+                    text = f"overlap by {measure(common):.3g} {unit} near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g})"
+                elif _contact(sa, sb, three, tol):
+                    text = "touch"
+                else:
+                    continue
+            except Part.OCCError:
+                failed = failed or sa.CenterOfMass
                 continue
             r.error(
                 f"Copies of Symmetric Group {a.Label} and Symmetric Group {b.Label} {text}, and both are on the same"
@@ -1095,10 +1098,18 @@ def _touch_groups(a, b, three, r):
                 [(a, ""), (b, "")],
             )
             return
+    if failed is not None:
+        r.warning(
+            f"Could not check contact between Symmetric Group {a.Label} and Symmetric Group {b.Label} near"
+            f" ({failed.x:.6g}, {failed.y:.6g}, {failed.z:.6g}); check the drawing. Copies of two groups on one side"
+            " may not touch.",
+            b,
+            [(a, ""), (b, "")],
+        )
 
 
 def _contact(sa, sb, three, tol):
-    """True if two shapes that do not overlap share a face (an edge, in 2D) of positive size."""
+    """True if two shapes that do not overlap share a face (an edge, in 2D) of positive size. May raise Part.OCCError."""
     first, second = (sa.Faces, sb.Faces) if three else (sa.Edges, sb.Edges)
     for ea in first:
         box = ea.BoundBox
@@ -1106,10 +1117,7 @@ def _contact(sa, sb, three, tol):
         for eb in second:
             if not box.intersect(eb.BoundBox):
                 continue
-            try:
-                common = ea.common(eb)
-            except Exception:
-                continue
+            common = ea.common(eb)
             if (sum(f.Area for f in common.Faces) if three else sum(e.Length for e in common.Edges)) > tol:
                 return True
     return False
@@ -1139,39 +1147,54 @@ def _radial_range(box):
     return math.hypot(dx, dy), far
 
 
-def _reaches(group, radius, three):
-    """True if the drawing of a group has a face (an edge, in 2D) on the cylinder (circle) of this radius about Z,
-    found by the distance of sampled points to it."""
+def _tools(radius, box, three):
+    """(the cylinder face or circle, the solid or disc inside it) of the interface, as long as the box in z."""
+    if three:
+        base = App.Vector(0, 0, box.ZMin - 1)
+        return Part.makeCylinder(radius, box.ZLength + 2, base).Faces[0], Part.makeCylinder(
+            radius, box.ZLength + 2, base
+        )
+    return Part.makeCircle(radius), Part.Face(Part.Wire(Part.makeCircle(radius)))
+
+
+def _meets(piece, tools, radius, three):
+    """How a solid (face in 2D) lies to the interface: None when clear of it, "touches" when it has a face (an edge) on
+    it or ends on it, "crosses" when it has material on both sides."""
+    near, far = _radial_range(piece.BoundBox)
     tol = 1e-6 * max(1.0, radius)
-    for piece in group.Shape.Faces if three else group.Shape.Edges:
-        near, far = _radial_range(piece.BoundBox)
-        if far < radius - tol or near > radius + tol:
-            continue
-        if three:
-            u0, u1, v0, v1 = piece.ParameterRange
-            points = [
-                piece.valueAt(u0 + a * (u1 - u0), v0 + b * (v1 - v0)) for a in (0.2, 0.5, 0.8) for b in (0.2, 0.5, 0.8)
-            ]
-        else:
-            first, last = piece.FirstParameter, piece.LastParameter
-            points = [piece.valueAt(first + a * (last - first)) for a in (0.1, 0.3, 0.5, 0.7, 0.9)]
-        if all(abs(math.hypot(p.x, p.y) - radius) < tol for p in points):
-            return True
-    return False
+    if far < radius - tol or near > radius + tol:
+        return None
+    surface, inner = tools
+    try:
+        if piece.distToShape(surface)[0] >= tol:
+            return None
+        size = piece.Volume if three else piece.Area
+        inside, outside = piece.common(inner), piece.cut(inner)
+    except Part.OCCError:
+        return "touches"  # near it, and the rules are checked
+    if all((s.Volume if three else s.Area) > 1e-6 * size for s in (inside, outside)):
+        return "crosses"
+    return "touches"
 
 
 def _on_interface(shape, radius, three):
     """True if a body crosses the cylinder (circle) of this radius about Z, or has a face on it."""
-    box = shape.BoundBox
-    near, far = _radial_range(box)
-    tol = 1e-6 * max(1.0, radius)
-    if far < radius - tol or near > radius + tol:
-        return False
-    if three:
-        surface = Part.makeCylinder(radius, box.ZLength + 2, App.Vector(0, 0, box.ZMin - 1)).Faces[0]
-    else:
-        surface = Part.makeCircle(radius)
-    return shape.distToShape(surface)[0] < tol
+    return _meets(shape, _tools(radius, shape.BoundBox, three), radius, three) is not None
+
+
+def _reach(group, radius, three):
+    """How the drawing of a group lies to the interface: None, "touches" or "crosses" (any one solid that does)."""
+    shape = group.Shape
+    if shape.isNull() or not (shape.Solids or shape.Faces):
+        return None
+    tools = _tools(radius, shape.BoundBox, three)
+    found = None
+    for piece in shape.Solids if three else shape.Faces:
+        how = _meets(piece, tools, radius, three)
+        if how == "crosses":
+            return how
+        found = found or how
+    return found
 
 
 def _group_sliding(study, groups, ruled, free, plane, r):
@@ -1189,9 +1212,21 @@ def _group_sliding(study, groups, ruled, free, plane, r):
         if iface.Kind != "Rotational":
             continue  # _interfaces says so
         radius = iface.Radius.Value
+        sides = set()  # the sides a group reaches the interface on
         for item in groups:
+            how = _reach(item, radius, three)
+            if how is None:
+                continue
+            sides.add(objects.part_key(study, item, "").partition("|")[0])
+            if how == "crosses":
+                r.error(
+                    f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} crosses it. A group may only end"
+                    " on the sliding surface: split the cell objects at it.",
+                    iface,
+                    [(item, "")],
+                )
             rules = ruled.get(item.Name)
-            if rules is None or not _reaches(item, radius, three):
+            if rules is None:
                 continue
             turns = 1
             for n, rule in enumerate(rules, 1):
@@ -1210,6 +1245,14 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                 r.error(
                     f"Sliding Interface {iface.Label}: the divisions ({iface.Divisions}) must be a multiple of the"
                     f" {turns} turns of {item.Label}'s cell objects.",
+                    iface,
+                )
+        for side in ("fixed", "moving"):
+            if side not in sides:
+                r.error(
+                    f"Sliding Interface {iface.Label}: no Symmetric Group on the {side} side reaches it. Cell objects"
+                    " of groups must cover the sliding surface on both sides (a limit of the tool: free objects may"
+                    " not touch it).",
                     iface,
                 )
         for body in free:
@@ -1303,6 +1346,17 @@ def _groups(study, main, moving, r):
         for b in drawn[i + 1 :]:
             if objects.part_key(study, a, "") == objects.part_key(study, b, ""):  # the same side
                 _touch_groups(a, b, three, r)
+    names = {g.Name for g in groups}
+    settings = objects.mesh_sizes(study) + objects.transfinite_bodies(study) + objects.transfinite_edges(study)
+    for item in settings + objects.recombine_items(study):
+        on = [b for b, _ in objects.subs_by_body(item) if b.Name in names]
+        if on:
+            r.error(
+                f"{_kind(item)} {item.Label} refers to {_listed([objects.display_name(b) for b in on])}: copies are not"
+                " meshed. Put it on the cell objects instead.",
+                item,
+                [(b, "") for b in on],
+            )
     _group_sliding(study, groups, ruled, free, plane, r)
     _free_transfinite(study, free, r)
     _part_materials(study, drawn, r)
