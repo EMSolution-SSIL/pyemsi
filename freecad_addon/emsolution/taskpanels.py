@@ -1673,6 +1673,7 @@ class SymmetricGroupPanel:
 
     def __init__(self, obj, new=False):
         self.obj, self.new = obj, new
+        self.first_cells = [c.Name for c in obj.Cells]  # the cells OK shows again if they leave the group
         self.study = study = objects.owner_study(obj)
         self.doc = obj.Document
         if objects.stale_drawing(obj):  # a container of a cell was moved; outside the transaction, so Cancel keeps it
@@ -2039,9 +2040,17 @@ class SymmetricGroupPanel:
         name = self.name.text().strip()
         if name:
             self.obj.Label = name
-        removed = objects.sync_parts(self.study) if self.rules_ok() else []  # parts follow once the rules can be read
-        for cell in self.obj.Cells:  # the drawing shows them
-            cell.Visibility = False
+        refused = validation.errors(validation.group_problems(self.obj))
+        removed = [] if refused else objects.sync_parts(self.study)  # parts follow once Validate takes the group
+        self.doc.recompute()  # the drawing, before the cells are hidden behind it
+        drawn = not self.obj.Shape.isNull() and bool(self.obj.Shape.Faces)
+        for cell in self.obj.Cells:  # the drawing shows them; with no drawing (rules to fix) they show themselves
+            cell.Visibility = not drawn
+        taken = {c.Name for g in objects.symmetric_groups(self.study) for c in g.Cells}
+        for name in self.first_cells:  # out of the group: no drawing shows them any more
+            cell = self.doc.getObject(name)
+            if cell is not None and name not in taken:
+                cell.Visibility = True
         self.doc.commitTransaction()
         self.doc.recompute()
         Gui.Control.closeDialog()

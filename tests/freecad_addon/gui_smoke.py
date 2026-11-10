@@ -1640,6 +1640,55 @@ def main():
     sizes_view.open_item([r[0] for r in sizes_view.rows].index(group), 0)
     panel = group_panels.pop()
     assert Gui.Control.activeDialog() and panel.reject() and list(group_doc.UndoNames) == undo, "Mesh Sizes panel"
+    # OK on a group Validate would refuse: a table not filled in keeps the Materials of the row's parts.
+    said = len(log)
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    mode = panel.rows.cellWidget(coil, 1)
+    mode.setCurrentIndex(mode.findData("table"))
+    assert "table of CoilCell has 0 names" in panel.problem.text(), panel.problem.text()
+    assert panel.accept() and len(objects.part_assignments(group_study)) == 26, "OK removed the Materials of a table"
+    assert len(log) == said, log[said:]
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    mode = panel.rows.cellWidget(coil, 1)
+    mode.setCurrentIndex(mode.findData("each"))
+    assert panel.accept() and len(objects.part_assignments(group_study)) == 26 and len(log) == said, log[said:]
+    # Broken rules leave the drawing empty: OK shows the cells instead of hiding the model; fixed, it hides them again.
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    panel.rules.setCurrentRow(0)
+    normal = [b.value() for b in panel.direction]
+    for box in panel.direction:
+        box.setValue(0)
+    assert "mirror normal is zero" in panel.problem.text() and not group.Shape.Faces, panel.problem.text()
+    assert panel.accept() and all(c.Visibility for c in stator_cells), "OK hid the cells of an empty drawing"
+    assert len(objects.part_assignments(group_study)) == 26 and len(log) == said, log[said:]
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    panel.rules.setCurrentRow(0)
+    for box, value in zip(panel.direction, normal):
+        box.setValue(value)
+    assert len(group.Shape.Faces) == 72 and panel.problem.isHidden(), panel.problem.text()
+    assert panel.accept() and not any(c.Visibility for c in stator_cells), "the cells are not hidden again"
+    # A cell taken out of the group shows again: no drawing shows it any more.
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    Gui.Selection.clearSelection()
+    for cell in stator_cells[:2]:
+        Gui.Selection.addSelection(group_doc.Name, cell.Name)
+    panel.use_selection.click()
+    assert list(group.Cells) == stator_cells[:2], list(group.Cells)
+    assert panel.accept() and stator_cells[2].Visibility, "the cell taken out of the group stays hidden"
+    assert not any(c.Visibility for c in stator_cells[:2]), "the cells left in the group are not hidden"
+    group.ViewObject.Proxy.doubleClicked(group.ViewObject)
+    panel = group_panels.pop()
+    Gui.Selection.clearSelection()
+    for cell in stator_cells:
+        Gui.Selection.addSelection(group_doc.Name, cell.Name)
+    panel.use_selection.click()
+    assert panel.accept() and not any(c.Visibility for c in stator_cells) and list(group.Cells) == stator_cells
+    log.append("group panel OK follows Validate ok")
     # Moving the App::Part that holds the cells: Cells links the cells only, so the drawing stays where it was until
     # the panel (or Validate) brings it along.
     holder = group_doc.addObject("App::Part", "Holder")
