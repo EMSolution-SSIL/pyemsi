@@ -232,16 +232,16 @@ def _images_needed(contacts):
     return keep
 
 
-def _split_cell(group, x, contacts, folder, dim):
-    """In the current model: cell x fragmented with its _cuts and everything else in the model removed. Returns (x's
-    dimtags now, True when that gave it more faces)."""
+def _split_cell(group, x, contacts, folder, dim, points=()):
+    """In the current model: cell x fragmented with its _cuts and the vertices points (on its edges, see _unmatched),
+    and everything else in the model removed. Returns (x's dimtags now, True when that gave it more faces)."""
     occ = gmsh.model.occ
     cells = _cell_shapes(group, group["job"], folder, dim)
     occ.synchronize()
     boxes = np.array([_box(tags) for tags in cells.values()])
     tol = 1e-6 * max(1.0, math.dist(boxes[:, :3].min(axis=0), boxes[:, 3:].max(axis=0)))
     before = len(_boundary(dim, cells[x]))
-    tools = _cuts(cells, x, contacts, dim, tol)
+    tools = _cuts(cells, x, contacts, dim, tol) + [(0, occ.addPoint(*p)) for p in points]
     keep = cells[x]
     if tools:
         _, per_input = occ.fragment(cells[x], tools)
@@ -250,6 +250,8 @@ def _split_cell(group, x, contacts, folder, dim):
         if other != x:
             occ.remove(tags, recursive=True)
     occ.remove([dt for dt in occ.getEntities(dim) if dt not in set(keep)], recursive=True)
+    occ.synchronize()
+    occ.remove([(0, t) for _, t in gmsh.model.getEntities(0) if not len(gmsh.model.getAdjacencies(0, t)[0])])
     occ.synchronize()
     return keep, len(_boundary(dim, keep)) != before
 
@@ -262,18 +264,27 @@ def _write_moved(source, m, target, dim):
         gmsh.write(target)
 
 
-def prepare_images(group, contacts, folder, dim):
+def prepare_images(group, contacts, folder, dim, points=None):
     """A new group, with the images that the contacts not covered by seams need. Each source cell is split along all its
     contacts first, so that its faces pair one to one with those of its image; its image is then added to the job as
     a new body. group["cells"] is unchanged, so an image is meshed but never copied. group["images"] lists them for
-    pair_images: {"id", "source", "transform"}; their BREPs are in group["images_folder"], for mesh_cell to delete."""
+    pair_images: {"id", "source", "transform"}; their BREPs are in group["images_folder"], for mesh_cell to delete.
+    points: {cell: [vertices]} that _unmatched found missing; such a cell is split too, with them on its edges."""
     needed = _images_needed(contacts)
-    if not needed:
+    points = points or {}
+    if not needed and not points:
         return group
     key = "bodies" if dim == 2 else "volumes"
     entries = [dict(e) for e in group["job"][key]]
     by_id = {e["mat_id"]: e for e in entries}
     structured = {b["mat_id"] for b in (group["job"].get("transfinite") or {}).get("bodies", [])}
+    stuck = sorted(structured & set(points))
+    if stuck:
+        raise JobError(
+            f"group {group['name']}: the structured cell {by_id[stuck[0]]['name']} would need a mesh node on its edge"
+            " where an edge of a copy ends on it; meshing that is not handled yet, a limit of the tool, not of the"
+            " drawing"
+        )
     for x in sorted(structured & ({c.a for c in needed} | {c.b for c in needed})):
         with _scratch("split"):
             if _split_cell(group, x, contacts, folder, dim)[1]:
@@ -283,12 +294,13 @@ def prepare_images(group, contacts, folder, dim):
                 )
     where = tempfile.mkdtemp(prefix="images_", dir=folder)
     relative = os.path.basename(where)
-    for a in sorted({c.a for c in needed}):
-        with _scratch("split"):
-            _split_cell(group, a, contacts, folder, dim)  # only the split cell is left to go to the file
+    for a in sorted({c.a for c in needed} | set(points)):
+        with _scratch("split"):  # only the split cell is left to go to the file
+            _split_cell(group, a, contacts, folder, dim, points.get(a, ()))
             by_id[a]["file"] = f"{relative}/split_{a}.brep"
             gmsh.write(os.path.join(folder, by_id[a]["file"]))
     images, next_id = [], max(by_id) + 1
+    needed = list({(c.a, _key(c.transform)): c for c in needed}.values())  # one image per source and transform
     for k, c in enumerate(needed):
         file = f"{relative}/image_{k}.brep"
         _write_moved(os.path.join(folder, by_id[c.a]["file"]), c.transform, os.path.join(folder, file), dim)
@@ -315,14 +327,19 @@ def _copied_from(dim, entity, master):
         entity = above
 
 
-def pair_images(group, images, dim):
-    """After build: mesh each face of every image as a copy of the face of its source that it was moved from, paired
-    by centre of mass. A face of both image and source is a seam of the cell: meshsym._periodic has it. A face on a real
-    cell that finds no partner cannot be copied, and that is a limit of this method, not a fault in the drawing."""
-    occ = gmsh.model.occ
+def _model_tol():
     box = gmsh.model.getBoundingBox(-1, -1)
-    tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
+    return 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
+
+
+def _image_faces(group, images, dim):
+    """After build: [(image, f, partner, on_real)] for each face f of an image that is not a face of its source, with
+    the face of the source it was moved from (paired by area and centre of mass) or None, and whether f lies on a real
+    cell. The image is not copied: only its faces on a real cell need the source's mesh."""
+    occ = gmsh.model.occ
+    tol = _model_tol()
     real = {int(e) for c in group["cells"] for e in gmsh.model.getEntitiesForPhysicalGroup(dim, c)}
+    out = []
     for image in images:
         m = image["transform"]
         sources = {
@@ -336,14 +353,76 @@ def pair_images(group, images, dim):
             partner = next(
                 (s for s, (q, p) in sources.items() if abs(q - mass) <= tol and math.dist(p, centre) <= tol), None
             )
-            if partner is not None:
-                if not _copied_from(dim - 1, partner, f):  # _periodic may have made it the other way round
-                    gmsh.model.mesh.setPeriodic(dim - 1, [f], [partner], m)
-            elif real & {int(e) for e in gmsh.model.getAdjacencies(dim - 1, f)[0]}:
-                raise JobError(
-                    f"group {group['name']}: a contact near ({', '.join(f'{v:.6g}' for v in centre[:dim])}) splits the"
-                    " copy of a cell differently from the cell itself; this is a limit of the tool, not of the drawing"
-                )
+            on_real = bool(real & {int(e) for e in gmsh.model.getAdjacencies(dim - 1, f)[0]})
+            out.append((image, f, partner, on_real))
+    return out
+
+
+def pair_images(group, images, dim):
+    """After build: mesh each face of every image as a copy of the face of its source that it was moved from
+    (_image_faces). A face of both image and source is a seam of the cell: meshsym._periodic has it. A face on a real
+    cell that finds no partner cannot be copied, and that is a limit of this method, not a fault in the drawing. A face
+    on no real cell whose corners differ from its partner's (the build put a vertex on it) is left alone: gmsh would
+    refuse to copy it, and nothing needs it."""
+    tol = _model_tol()
+    for image, f, partner, on_real in _image_faces(group, images, dim):
+        if partner is None and on_real:
+            centre = gmsh.model.occ.getCenterOfMass(dim - 1, f)
+            raise JobError(
+                f"group {group['name']}: a contact near ({', '.join(f'{v:.6g}' for v in centre[:dim])}) splits the"
+                " copy of a cell differently from the cell itself; this is a limit of the tool, not of the drawing"
+            )
+        if partner is None or not (on_real or meshsym._corners_match(partner, f, image["transform"], tol, dim - 1)):
+            continue
+        if not _copied_from(dim - 1, partner, f):  # _periodic may have made it the other way round
+            gmsh.model.mesh.setPeriodic(dim - 1, [f], [partner], image["transform"])
+
+
+def _cell_of(face, cells, dim):
+    """The cell (physical id) of a real cell volume that face bounds, or None."""
+    return next((cells[int(v)] for v in gmsh.model.getAdjacencies(dim - 1, face)[0] if int(v) in cells), None)
+
+
+def _unmatched(group, contacts, dim):
+    """3D, after build: {cell: [points]}, the vertices that cells lack for the faces whose meshes must be copies of each
+    other to have the same corners, as gmsh needs. The build's fragment puts a vertex where an edge of another object
+    ends on a face's edge (or two cuts of _cuts meet), and its twin, the face it is copied from or to, has none there.
+    The pairs: the seams of meshsym._periodic, faces c, d of cells with T(c) covering d for a transform T between
+    copies that touch, and the faces of images on real cells with their sources' (_image_faces). A vertex missing on
+    a source's face is given to the source: its images then have it too. In 2D a vertex splits a seam: none is
+    added (the seam then finds no twin, and the copies are refused where they do not match)."""
+    if dim != 3:
+        return {}
+    tol = _model_tol()
+    cells = {int(v): c for c in group["cells"] for v in gmsh.model.getEntitiesForPhysicalGroup(dim, c)}
+    out = {}
+
+    def add(cell, p):
+        if cell is not None and not any(math.dist(p, q) <= tol for q in out.get(cell, [])):
+            out.setdefault(cell, []).append([float(v) for v in p])
+
+    seams = meshsym._side_seams(group, dim)
+    mass = {f: gmsh.model.occ.getMass(dim - 1, f) for f in seams}
+    transforms = _seam_transforms(contacts)  # with each its inverse: c < d covers both ways
+    for c, d in itertools.combinations(seams, 2):
+        if abs(mass[c] - mass[d]) > tol:
+            continue
+        for m in transforms:
+            if meshsym._twin(c, d, m, tol, dim - 1):
+                on_d, on_c = meshsym._missing_corners(c, d, m, tol, dim - 1)
+                for q in on_d:
+                    add(_cell_of(c, cells, dim), meshsym._apply(_inverse(m), q))
+                for p in on_c:
+                    add(_cell_of(d, cells, dim), meshsym._apply(m, p))
+    for image, f, partner, on_real in _image_faces(group, group.get("images", []), dim):
+        if partner is not None and on_real:
+            m = image["transform"]
+            on_f, on_partner = meshsym._missing_corners(partner, f, m, tol, dim - 1)
+            for q in on_f:
+                add(image["source"], meshsym._apply(_inverse(m), q))
+            for p in on_partner:
+                add(image["source"], p)
+    return out
 
 
 def _expected_area(group, contacts, dim):
@@ -427,6 +506,47 @@ def _slide_cell(group, slide, dim):
     return reached
 
 
+def _drop_images(group):
+    if "images_folder" in group:
+        shutil.rmtree(group["images_folder"], ignore_errors=True)
+
+
+ROUNDS = 8  # _build_cell: builds at most, each adding the vertices the one before found missing
+
+
+def _build_cell(group, contacts, folder, build, dim):
+    """Build the cell job in the current model with the images its contacts need (prepare_images), and return that
+    group. While _unmatched finds vertices that the cells lack, they are added to the cells and the model is built
+    again: a vertex added can land on another face, so this takes a few rounds. None found anew, or still some after
+    ROUNDS, is refused as a limit of the tool, at the place of a vertex."""
+    name, points = gmsh.model.getCurrent(), {}
+    for _ in range(ROUNDS):
+        here = prepare_images(group, contacts, folder, dim, points)
+        try:
+            build(dict(here["job"]), folder)
+            missing = _unmatched(here, contacts, dim)
+        except BaseException:
+            _drop_images(here)
+            raise
+        tol = _model_tol()
+        new = [(c, p) for c, ps in missing.items() for p in ps if all(math.dist(p, q) > tol for q in points.get(c, []))]
+        if not new:
+            if missing:
+                break
+            return here
+        for c, p in new:
+            points.setdefault(c, []).append(p)
+        _drop_images(here)
+        gmsh.model.remove()
+        gmsh.model.add(name)
+    where = ", ".join(f"{v:.6g}" for v in next(iter(missing.values()))[0][:dim])
+    _drop_images(here)
+    raise JobError(
+        f"group {group['name']}: the copies of the cell need mesh nodes near ({where}) that the cell cannot be given;"
+        " meshing that is not handled yet, a limit of the tool, not of the drawing"
+    )
+
+
 def mesh_cell(group, job, folder, build, dim, slide=None):
     """Mesh the cell of a group in a model of its own (removed at the end) and copy it by the group's transforms.
     Returns Copied: the joined nodes V, the elements of each (row, copy), the cell boundary patches that land on an
@@ -437,12 +557,23 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
     try:
         if len(group["transforms"]) > 1 or len(group["cells"]) > 1:
             contacts = contact_table(group, group["job"], folder, dim)
-            group = prepare_images(group, contacts, folder, dim)
-        build(dict(group["job"]), folder)
+            group = _build_cell(group, contacts, folder, build, dim)
+        else:
+            build(dict(group["job"]), folder)
         reached = _slide_cell(group, slide, dim) if slide else False
-        meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
-        pair_images(group, group.get("images", []), dim)
-        generate(dict(group["job"], options=job.get("options", {})), dim)
+        try:
+            meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
+            pair_images(group, group.get("images", []), dim)
+            generate(dict(group["job"], options=job.get("options", {})), dim)
+        except JobError:
+            raise
+        except Exception:  # gmsh's own error, which names no place the user can find
+            if contacts is None:
+                raise
+            raise JobError(
+                f"group {group['name']}: the faces where the cell touches its copies could not be given the same mesh;"
+                " meshing that is not handled yet, a limit of the tool, not of the drawing"
+            ) from None
         expected = _expected_area(group, contacts, dim) if contacts else 0.0
         by_row = _by_row(group, folder, dim)
         cell_patches = meshsym._cell_patches(group, dim)
@@ -451,8 +582,7 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
         pxyz, patches = meshfrozen.read_model(dim - 1, {j: [p[0]] for j, p in enumerate(cell_patches)})
     finally:
         gmsh.model.remove()
-        if "images_folder" in group:
-            shutil.rmtree(group["images_folder"], ignore_errors=True)
+        _drop_images(group)
     frozen = {("row", k): v for k, v in bodies.items()}
     for j, per_type in patches.items():  # the patch nodes are cell nodes: they follow the bodies' joined nodes
         frozen[("patch", j)] = {t: c + len(xyz) for t, c in per_type.items()}

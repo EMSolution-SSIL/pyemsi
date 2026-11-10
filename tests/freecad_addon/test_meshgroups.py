@@ -935,6 +935,63 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(faces_in_three(mesh), 0)
         self.assertEqual(z_range(mesh), (-3, 3))
 
+    def rod_group(self, transforms, size=0.5):
+        """A 3D group of one cell, the rod of radius 2 over z 0..3."""
+        write_cylinders(self.geo("rod.brep"), (0, 0, 0, 3, 2))
+        group = self.box_group((0, 0, 0, 1, 1, 1), transforms, size=size)
+        group["job"]["volumes"][0]["file"] = "geometry/rod.brep"
+        return group
+
+    LENS = {  # each puts the copy 2 off the rod's axis, its end on the rod's end: they share a lens with curved edges
+        "translation x + 2, z + 3": [1, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1, 3, 0, 0, 0, 1],
+        "half turn about X, x + 2": [1, 0, 0, 2, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1],
+        "glide: mirror z = 0, x + 2": [1, 0, 0, 2, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1],
+    }
+
+    def test_rod_touching_its_copy_over_a_lens(self):  # D1: the faces and the vertices of a lens contact
+        lens = 8 * math.pi / 3 - math.sqrt(12)
+        exact = 2 * (12 * math.pi + 8 * math.pi) - 2 * lens  # two rods, less the lens on each
+        for name, m in self.LENS.items():
+            with self.subTest(name):
+                mesh = self.meshed([self.rod_group([ID, m])], dim=3)
+                self.assertEqual(faces_in_three(mesh), 0)
+                self.assertAlmostEqual(free_area(mesh) / exact, 1, delta=0.02)  # unshared, the lens would add 8 %
+
+    def test_vertices_the_copies_cannot_settle_are_a_limit_of_the_tool(self):  # one build, and a vertex is missing
+        group = self.rod_group([ID, self.LENS["half turn about X, x + 2"]])
+        r = self.run_job([group], dim=3, patch="meshgroups.ROUNDS = 1")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("need mesh nodes near", r.stderr)
+        self.assertIn("limit of the tool", r.stderr)
+        self.assertEqual([n for n in os.listdir(self.dir) if n.startswith("images_")], [])
+
+    def test_gmsh_error_on_the_copied_faces_is_a_limit_of_the_tool(self):  # never gmsh's own words
+        group = self.rod_group([ID, self.LENS["translation x + 2, z + 3"]])
+        boom = "lambda *a: (_ for _ in ()).throw(Exception('Different number of points (5 vs 4)'))"
+        r = self.run_job([group], dim=3, patch=f"meshgroups.gmsh.model.mesh.setPeriodic = {boom}")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        (error,) = [x for x in r.stderr.splitlines() if x.startswith("ERROR:")]
+        self.assertIn("group Boxes", error)
+        self.assertIn("limit of the tool", error)
+        self.assertNotIn("Different number", error)
+
+    def test_one_image_per_source_and_transform(self):  # a copy of A lies on part of A and part of B
+        write_boxes(self.geo("a.brep"), (0, 0, 0, 1, 1, 1))
+        write_boxes(self.geo("b.brep"), (1, 0, 0, 1, 1, 1))
+        up = [1, 0, 0, 0.5, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1]
+        group = self.two_cells("Steps", "volumes", "geometry/a.brep", "geometry/b.brep", [ID, up], (0.3, 0.4))
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            contacts = meshgroups.contact_table(group, group["job"], self.dir, 3)
+            images = meshgroups.prepare_images(group, contacts, self.dir, 3)["images"]
+        finally:
+            gmsh.finalize()
+        self.assertEqual(sorted(i["source"] for i in images), [1, 2])
+        mesh = self.meshed([group], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertAlmostEqual(free_area(mesh), 2 * 10 - 2 * 1.5, delta=1e-6)
+
     def test_curved_seam_is_not_refused(self):  # the mesh's chords are shorter than the arc they follow
         group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
         write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)

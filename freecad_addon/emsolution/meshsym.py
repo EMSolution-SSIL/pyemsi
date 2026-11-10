@@ -143,19 +143,46 @@ def _slide_faces_sym(slide, sides):
         _slide_faces(dict(slide, cross_divisions=cross), f"sliding interface {name}", [f], round(share), None, done)
 
 
-def _same(c, d, m, tol, dim):
-    """True when seam c (a curve when dim is 1, a face when 2) moved by the transform m is seam d: the same length or
-    area, the same corner points, and points of c moved lie on d."""
+def _inside_points(dim, t):
+    """Points of entity t on a grid over its parametric box that are inside its trimming (a face's box reaches past
+    it); its centre of mass when none is."""
+    lo, hi = gmsh.model.getParametrizationBounds(dim, t)
+    steps = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875)
+    grid = [[a] for a in steps] if dim == 1 else [[a, b] for a in steps for b in steps]
+    uvs = [[lo[i] + (hi[i] - lo[i]) * f[i] for i in range(dim)] for f in grid]
+    out = [list(gmsh.model.getValue(dim, t, uv)) for uv in uvs if dim == 1 or gmsh.model.isInside(dim, t, uv, True)]
+    return out or [list(gmsh.model.occ.getCenterOfMass(dim, t))]
+
+
+def _twin(c, d, m, tol, dim):
+    """True when seam c (a curve when dim is 1, a face when 2) moved by the transform m covers seam d: the same length
+    or area, and points inside c moved lie inside d. Their corners may still differ (see _same)."""
     if abs(gmsh.model.occ.getMass(dim, c) - gmsh.model.occ.getMass(dim, d)) > tol:
         return False
-    corners_d = _corners(dim, d)
-    if any(min(math.dist(_apply(m, p), q) for q in corners_d) > tol for p in _corners(dim, c)):
-        return False
-    lo, hi = gmsh.model.getParametrizationBounds(dim, c)
-    xyz = gmsh.model.getValue(dim, c, [lo[i] + (hi[i] - lo[i]) * f for f in (0.25, 0.5, 0.75) for i in range(dim)])
-    moved = [v for k in range(0, len(xyz), 3) for v in _apply(m, xyz[k : k + 3])]
-    near = gmsh.model.getClosestPoint(dim, d, moved)[0]
-    return all(math.dist(moved[k : k + 3], near[k : k + 3]) <= tol for k in range(0, len(moved), 3))
+    moved = [_apply(m, p) for p in _inside_points(dim, c)]
+    return _on_face(dim, d, gmsh.model.getBoundingBox(dim, d), moved, tol)
+
+
+def _missing_corners(c, d, m, tol, dim):
+    """(the corners of d that no corner of c moved by m reaches, the corners of c whose move reaches none of d)."""
+    corners_c, corners_d = _corners(dim, c), _corners(dim, d)
+    moved = [_apply(m, p) for p in corners_c]
+    return (
+        [q for q in corners_d if min((math.dist(p, q) for p in moved), default=math.inf) > tol],
+        [p for p, n in zip(corners_c, moved) if min((math.dist(n, q) for q in corners_d), default=math.inf) > tol],
+    )
+
+
+def _corners_match(c, d, m, tol, dim):
+    """True when the corners of c moved by m are those of d, one to one: gmsh copies a mesh only between such."""
+    return len(_corners(dim, c)) == len(_corners(dim, d)) and not any(_missing_corners(c, d, m, tol, dim))
+
+
+def _same(c, d, m, tol, dim):
+    """True when seam c moved by the transform m is seam d: _twin, with _corners_match. A face's parametric box reaches
+    past its trimming, so _twin tests points inside it: two faces of one plane with the same area and some corners in
+    common (the two pieces of a disc that a lens cut off) are not the same."""
+    return _corners_match(c, d, m, tol, dim) and _twin(c, d, m, tol, dim)
 
 
 def _periodic(sides, dim):
