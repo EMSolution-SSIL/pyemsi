@@ -921,6 +921,20 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("limit of the tool", r.stderr)
 
+    def test_round_faces_on_a_mirror_seam(self):  # a rod in the round hole of a ring, both ending on Mirror z = 0
+        write_ring(self.geo("ring.brep"), 2, 5, 0, 3)
+        write_cylinders(self.geo("rod.brep"), (0, 0, 0, 3, 2))
+        group = self.two_cells("Rod", "volumes", "geometry/ring.brep", "geometry/rod.brep", [ID, MIRROR_Z], (0.9, 0.7))
+        # occ.mirror makes BSplines of the moved copy, and OCC's area of those is a few per mille off
+        mirrored = {(c.a, c.b): c for c in contact_table_of(group, self.dir, 3) if meshgroups._crosses(c)}
+        self.assertEqual(sorted(mirrored), [(1, 1), (2, 2)])
+        self.assertAlmostEqual(mirrored[1, 1].area, math.pi * (25 - 4), delta=1e-9)
+        self.assertAlmostEqual(mirrored[2, 2].area, math.pi * 4, delta=1e-9)
+        self.assertTrue(mirrored[1, 1].seam and mirrored[2, 2].seam)
+        mesh = self.meshed([group], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(z_range(mesh), (-3, 3))
+
     def test_curved_seam_is_not_refused(self):  # the mesh's chords are shorter than the arc they follow
         group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
         write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)

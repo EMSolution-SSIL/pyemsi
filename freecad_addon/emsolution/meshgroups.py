@@ -149,25 +149,27 @@ def _whole(references, pieces, dim, tol):
 def _shared(cells, a, b, m, dim, tol):
     """In the current model, fragment cell a moved by m with cell b, both copies. Returns (shared, seam, junk):
     shared, the faces (curves in 2D) between them as dimtags; seam, True when these are whole faces of both; junk, what
-    the caller must give to _drop afterwards. A piece of volume they have in common (an overlap) shares no faces."""
+    the caller must give to _drop afterwards. A piece of volume they have in common (an overlap) shares no faces.
+    A mirror turns the moved copy into BSplines, whose area OCC gets wrong by up to a few per mille on a curved
+    surface or edge: so fixed goes first in the fragment, for the shared faces to keep its exact surfaces, and the
+    pieces are checked against cell a itself, moved back, not against the moved copy."""
     occ = gmsh.model.occ
-    reference = occ.copy(cells[a])
-    _place(reference, m)
     moved = occ.copy(cells[a])
     _place(moved, m)
     fixed = occ.copy(cells[b])
-    out, per_input = occ.fragment(moved, fixed)
+    out, per_input = occ.fragment(fixed, moved)
     occ.synchronize()
     tops = [
         {(d, t) for dimtags in part for d, t in dimtags if d == dim}
-        for part in (per_input[: len(moved)], per_input[len(moved) :])
+        for part in (per_input[: len(fixed)], per_input[len(fixed) :])
     ]
     overlap = tops[0] & tops[1]
     common = set(_boundary(dim, tops[0] - overlap)) & set(_boundary(dim, tops[1] - overlap))
     shared = [(dim - 1, t) for t in sorted(common) if occ.getMass(dim - 1, t) > tol]
     pieces = [(occ.getMass(d, t), _point_on(d, t)) for d, t in shared]
-    seam = _whole(_boundary(dim, reference), pieces, dim, tol) and _whole(_boundary(dim, cells[b]), pieces, dim, tol)
-    return shared, seam, out + reference
+    back = [(area, meshsym._apply(_inverse(m), p)) for area, p in pieces]
+    seam = _whole(_boundary(dim, cells[a]), back, dim, tol) and _whole(_boundary(dim, cells[b]), pieces, dim, tol)
+    return shared, seam, out
 
 
 def _drop(junk):
