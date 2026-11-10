@@ -9,6 +9,8 @@ import collections
 import itertools
 import math
 
+import numpy as np
+
 ID = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 TOL = 1e-9
 MAX_DRAWN = 5000
@@ -55,22 +57,73 @@ def inverse(m):
     return [*r[0], off[0], *r[1], off[1], *r[2], off[2], 0, 0, 0, 1]
 
 
-def relative_transforms(rules):
-    """The identity, then every other relative transform T_i^-1 T_j (i < j) of the copies T the rules make, each once
-    (by rounded key): copy j lies as copy i would if the cell were moved by it. When each rule's motion maps the set
-    of copies onto itself (they form a group: say a mirror in a plane through the rotation axis and whole turns), the
-    copies are closed under products and inverses, so the list is transforms(rules) itself, found in one pass per
-    rule; other rules need every pair."""
+def relative_transforms(rules, box=None):
+    """The transforms of relative_pairs(rules, box)."""
+    return [m for m, _, _ in relative_pairs(rules, box)]
+
+
+def relative_pairs(rules, box=None):
+    """[(m, i, j)]: the identity as (ID, 0, 0), then every other relative transform m = T_i^-1 T_j (i < j) of the
+    copies T the rules make, each once (by rounded key) with the first pair (i, j) that gives it: copy j lies as copy i
+    would if the cell were moved by m. box (xmin, ymin, zmin, xmax, ymax, zmax), the bounding box of the drawn cells,
+    keeps only the pairs whose copies' boxes (box moved by T, boxed again) meet. Copies that overlap lie in their
+    boxes, so those boxes meet: no overlap is lost, and every pair that gives the m of an overlap meets, so its first
+    pair is kept too.
+    When each rule's motion maps the set of copies onto itself (they form a group: say a mirror in a plane through the
+    rotation axis and whole turns), the copies are closed under products and inverses, so every T_i^-1 T_j is a copy's
+    own T_k and the list is the copies (T_k, 0, k), found in one pass per rule. Other rules need the pairs, found by a
+    sweep over the boxes and formed with numpy."""
     ts = transforms(rules)
+    mats = np.array(ts, dtype=float).reshape(-1, 4, 4)
     if all(_same_copies((compose(rule_matrix(r), t) for t in ts), ts) for r in rules):
-        return ts
-    out = {_key(ID): ID}
-    for i, first in enumerate(ts):
-        back = inverse(first)
-        for second in ts[i + 1 :]:
-            r = compose(back, second)
-            out.setdefault(_key(r), r)
+        if box is None:
+            return [(t, 0, k) for k, t in enumerate(ts)]
+        lows, highs = _boxes(mats, box)
+        meet = np.all((lows <= highs[0]) & (lows[0] <= highs), axis=1)  # copy k's box meets the drawn cells'
+        return [(t, 0, k) for k, t in enumerate(ts) if meet[k]]
+    if box is None:
+        firsts, seconds = np.triu_indices(len(ts), 1)
+    else:
+        firsts, seconds = _meeting(mats, box)
+    out, backs = {_key(ID): (ID, 0, 0)}, np.linalg.inv(mats)
+    for start in range(0, len(firsts), 100000):  # a bounded block of products at a time
+        a, b = firsts[start : start + 100000], seconds[start : start + 100000]
+        rel = np.matmul(backs[a], mats[b]).reshape(-1, 16)
+        _, first = np.unique(np.round(rel, 9) + 0.0, axis=0, return_index=True)
+        for f in np.sort(first):
+            m = rel[f].tolist()
+            out.setdefault(_key(m), (m, int(a[f]), int(b[f])))
     return list(out.values())
+
+
+def _boxes(mats, box):
+    """(lows, highs), n x 3: the bounding box of box moved by each transform of mats (n x 4 x 4), a little enlarged."""
+    corners = np.array([[x, y, z, 1.0] for x in box[0::3] for y in box[1::3] for z in box[2::3]])
+    moved = np.einsum("nij,kj->nki", mats[:, :3, :], corners)
+    tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
+    return moved.min(axis=1) - tol, moved.max(axis=1) + tol
+
+
+def _meeting(mats, box):
+    """(i, j) arrays of the pairs i < j of copies whose boxes meet, in the order of i then j, by a sort and sweep along
+    the axis the boxes spread most on."""
+    lows, highs = _boxes(mats, box)
+    axis = int(np.argmax(np.ptp(lows, axis=0)))
+    order = np.argsort(lows[:, axis], kind="stable")
+    lo, hi = lows[order], highs[order]
+    ends = np.searchsorted(lo[:, axis], hi[:, axis], side="right")
+    found = []
+    for a in range(len(order)):
+        b = np.arange(a + 1, ends[a])
+        b = b[np.all((lo[b] <= hi[a]) & (lo[a] <= hi[b]), axis=1)]
+        if len(b):
+            found.append(np.stack([np.full(len(b), order[a]), order[b]]))
+    if not found:
+        return np.empty(0, dtype=int), np.empty(0, dtype=int)
+    pairs = np.concatenate(found, axis=1)
+    i, j = pairs.min(axis=0), pairs.max(axis=0)
+    k = np.lexsort((j, i))
+    return i[k], j[k]
 
 
 # ---- rules: ordered mirror, rotation and translation steps

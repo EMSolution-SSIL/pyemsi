@@ -683,10 +683,16 @@ def _overlaps(item, cells, rules, r, three=False):
     """The copies of the cell objects of group item may only touch (split-cell PRD R3). A cell object past a mirror's
     plane, or a rotation with too many copies, makes them overlap, and the mesher would fail with only a point.
     Copies i and j overlap the way the cell overlaps its copy by T_i^-1 T_j, so the cell is tested against each such
-    relative transform once (symmetry.relative_transforms; for rules that close, those are the copies' own
-    transforms), and in its own place two cell objects may only touch too. Reports the first overlap found."""
+    relative transform once (symmetry.relative_pairs; for rules that close, those are the copies' own transforms),
+    of the copies whose bounding boxes meet, and in its own place two cell objects may only touch too. Reports the
+    first overlap found."""
     shapes = [(cell, geometry.global_shape(cell)) for cell in cells]
-    for m in symmetry.relative_transforms(rules):
+    if not shapes:
+        return
+    box = shapes[0][1].BoundBox
+    for _, shape in shapes[1:]:
+        box.add(shape.BoundBox)
+    for m, i, j in symmetry.relative_pairs(rules, (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)):
         same = all(abs(a - b) < symmetry.TOL for a, b in zip(m, symmetry.ID))
         for k, (other, shape) in enumerate(shapes):
             copy = shape if same else shape.transformed(App.Matrix(*m))
@@ -703,9 +709,7 @@ def _overlaps(item, cells, rules, r, three=False):
                     c, size = max(common.Solids, key=lambda s: s.Volume).CenterOfMass, f"{common.Volume:.3g} mm³"
                 else:
                     c, size = max(common.Faces, key=lambda f: f.Area).CenterOfMass, f"{common.Area:.3g} mm²"
-                ts = [] if same else symmetry.transforms(rules)
-                i, j = _pair(ts, m) if ts else (0, 0)
-                at = symmetry.apply(ts[i], (c.x, c.y, c.z)) if i else (c.x, c.y, c.z)  # where the copies lie
+                at = symmetry.apply(symmetry.transforms(rules)[i], (c.x, c.y, c.z)) if i else (c.x, c.y, c.z)
                 x, y, z = (round(v, 9) + 0.0 for v in at)
                 where = f"({x:.6g}, {y:.6g}, {z:.6g})" if three else f"({x:.6g}, {y:.6g})"
                 who = f"cell body {objects.display_name(cell)}"
@@ -732,16 +736,6 @@ def _overlaps(item, cells, rules, r, three=False):
                     list({b.Name: (b, "") for b in (cell, other)}.values()),
                 )
                 return
-
-
-def _pair(ts, m):
-    """The first copies (i, j), i < j, with T_i^-1 T_j = m: copy 0 and the copy m itself when m is one of ts."""
-    for i, first in enumerate(ts):
-        back = symmetry.inverse(first)
-        for j in range(i + 1, len(ts)):
-            if max(abs(a - b) for a, b in zip(symmetry.compose(back, ts[j]), m)) < 1e-6:
-                return i, j
-    return 0, 0
 
 
 def _interfaces(study, sliding, r):

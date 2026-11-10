@@ -8,6 +8,7 @@ import pytest
 import FreeCAD as App
 import Draft
 
+from emsolution import symmetry
 from emsolution.symmetry import (
     GRID,
     GRID_SHIFT,
@@ -134,6 +135,67 @@ def test_relative_transforms_of_open_rules_hold_every_pair():
             r = compose(inverse(ts[i]), ts[j])
             assert any(max(abs(a - b) for a, b in zip(r, t)) < 1e-9 for t in found), (i, j)
     assert len(found) > len(ts)
+
+
+OFF_AXIS = {"kind": "mirror", "point": [1, 0.75, 0], "normal": [2, 1.5, 0]}  # its plane misses the rotation axis
+
+
+def _copy_box(t, box):
+    """The bounding box (lows, highs) of the box moved by t."""
+    corners = [apply(t, (x, y, z)) for x in box[0::3] for y in box[1::3] for z in box[2::3]]
+    return [min(c[k] for c in corners) for k in range(3)], [max(c[k] for c in corners) for k in range(3)]
+
+
+def test_relative_pairs_keep_every_pair_whose_copies_boxes_meet():
+    """Open rules (an off-axis mirror, 8 turns of 45 degrees, 3 steps along Z): with the cells' bounding box, every
+    T_i^-1 T_j whose copies' boxes meet is in the list, with the first such pair (i, j), and copies far apart are not
+    paired, so no overlap is lost and far fewer pairs are formed."""
+    rules = [OFF_AXIS, ROT(45, 8), {"kind": "translate", "vector": [0, 0, 10], "count": 3}]
+    box = (30, 0, 0, 50, 15, 10)
+    ts = transforms(rules)
+    found = symmetry.relative_pairs(rules, box)
+    assert found[0] == (ID, 0, 0)
+    for m, i, j in found[1:]:
+        assert i < j and compose(inverse(ts[i]), ts[j]) == pytest.approx(m, abs=1e-9)
+    boxes = [_copy_box(t, box) for t in ts]
+    meet = 0
+    for i in range(len(ts)):
+        for j in range(i + 1, len(ts)):
+            (lo_a, hi_a), (lo_b, hi_b) = boxes[i], boxes[j]
+            if all(lo_a[k] <= hi_b[k] and lo_b[k] <= hi_a[k] for k in range(3)):
+                meet += 1
+                r = compose(inverse(ts[i]), ts[j])
+                hits = [f for f in found if max(abs(a - b) for a, b in zip(r, f[0])) < 1e-9]
+                assert hits and (hits[0][1], hits[0][2]) <= (i, j), (i, j)
+    assert 0 < meet and len(found) < len(relative_transforms(rules))
+
+
+def test_relative_pairs_of_closed_rules_are_the_copies_whose_boxes_meet_the_cell():
+    rules = [MIRROR_X0, ROT(90, 4)]
+    ts = transforms(rules)
+    assert symmetry.relative_pairs(rules) == [(t, 0, k) for k, t in enumerate(ts)]
+    near = symmetry.relative_pairs(rules, (0, 1, 0, 2, 2, 0))  # a rectangle on the mirror plane, clear of the axis
+    assert near[0] == (ID, 0, 0) and len(near) == 3  # itself, its mirror image and one turned mirror image
+    assert all(m == ts[k] and i == 0 for m, i, k in near)
+
+
+@pytest.mark.parametrize(
+    "rules,box",
+    [
+        ([MIRROR_X0, ROT(7.5, 48), {"kind": "translate", "vector": [0, 0, 10], "count": 10}], (30, 0, 0, 50, 3.3, 10)),
+        ([{"kind": "translate", "vector": [1, 0, 0], "count": 2000}], (0, 0, 0, 1, 1, 0)),
+        ([OFF_AXIS, ROT(7.2, 50), {"kind": "translate", "vector": [0, 0, 10], "count": 50}], (30, 0, 0, 50, 3.1, 10)),
+        ([{"kind": "translate", "vector": [1, 0, 0], "count": 5000}], (0, 0, 0, 1, 1, 0)),
+    ],
+    ids=["960", "2000", "5000-turned", "5000"],
+)
+def test_relative_pairs_of_many_open_copies_are_quick(rules, box):
+    """Validate runs this on the GUI thread, and Mesh again: forming every pair took 14 s at 960 copies and minutes
+    at MAX_DRAWN. The bound is generous; it takes well under a second."""
+    start = time.perf_counter()
+    found = symmetry.relative_pairs(rules, box)
+    assert time.perf_counter() - start < 5
+    assert found[0] == (ID, 0, 0) and len(found) > 1
 
 
 def test_part_names():
