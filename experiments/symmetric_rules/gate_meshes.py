@@ -104,6 +104,34 @@ def box_edges(x, y, z, dx, dy, dz):
     return out
 
 
+def structured_layer(folder, name, r0, r1, top, mat_id, label, arcs=12, ups=15):
+    """A one-element-thick structured layer: the sector r0..r1, 0..30 degrees, z 0..top, as its own cell object of 6
+    faces. Returns (volume entry, transfinite edges): arcs divisions per cell around Z, 1 across, ups along z."""
+    vol = piece(folder, name, lambda: sector(r0, r1, 0, 30, 0, top), mat_id, label, 2.0)
+    pt = lambda r, a, z: (r * math.cos(math.radians(a)), r * math.sin(math.radians(a)), z)  # noqa: E731
+    files = {"Arc": [], "Radial": [], "Up": []}
+
+    def add(kind, build):
+        rel = f"geometry/{name}_{kind}_{len(files[kind])}.brep"
+        brep(os.path.join(folder, rel), build)
+        files[kind].append(rel)
+
+    occ = lambda: gmsh.model.occ  # noqa: E731
+    for r in (r0, r1):
+        for z in (0, top):
+            add("Arc", lambda r=r, z=z: occ().addCircle(0, 0, z, r, angle1=0, angle2=math.pi / 6))
+    for a in (0, 30):
+        for z in (0, top):
+            add("Radial", lambda a=a, z=z: occ().addLine(occ().addPoint(*pt(r0, a, z)), occ().addPoint(*pt(r1, a, z))))
+        for r in (r0, r1):
+            add("Up", lambda a=a, r=r: occ().addLine(occ().addPoint(*pt(r, a, 0)), occ().addPoint(*pt(r, a, top))))
+    nodes = {"Arc": arcs + 1, "Radial": 2, "Up": ups + 1}
+    edges = [
+        dict(name=f"{label}{k}", nodes=nodes[k], distribution="Uniform", coef=1.0, files=f) for k, f in files.items()
+    ]
+    return vol, edges
+
+
 def group(name, side, volumes, transforms, parts, rows, turns=None):
     cells = list(range(1, len(volumes) + 1))
     job = {"volumes": volumes, "surfaces": [], "sizes": []}
@@ -187,32 +215,42 @@ def motor():
         cut(slot, sector(R + 6, 66, 8, 22, 0, L))
 
     stator = [
-        piece(folder, "stator_gap", lambda: sector(R, R + 2, 0, 30, 0, T), 1, "Gap", 2.0),
+        piece(folder, "stator_gap", lambda: sector(R + 1, R + 2, 0, 30, 0, T), 1, "Gap", 2.0),
         piece(folder, "stator_iron", stator_iron, 2, "StatorIron", 7.0),
         piece(folder, "stator_slot_air", slot_air, 3, "SlotAir", 5.0),
         piece(folder, "stator_coil", lambda: sector(R + 6, 66, 8, 22, 0, L), 4, "Coil", 5.0),
     ]
+    layer, stator_edges = structured_layer(folder, "stator_layer", R, R + 1, T, 5, "StatorLayer")
+    stator.append(layer)
     stator_parts = [{"mat_id": 1, "name": "StatorIron"}, {"mat_id": 2, "name": "Air"}]
     stator_parts += [{"mat_id": 11 + c, "name": f"Coil_{c + 1:02d}"} for c in range(12)]
-    stator_rows = [[1] * 24, [0] * 24, [1] * 24, [2 + c for c in turn]]
+    stator_rows = [[1] * 24, [0] * 24, [1] * 24, [2 + c for c in turn], [1] * 24]
 
     def rotor_air():
-        air = sector(30, R, 0, 30, 0, T)
+        air = sector(30, R - 1, 0, 30, 0, T)
         cut(air, sector(30, 38, 3, 27, 0, T))
 
     rotor = [
         piece(folder, "rotor_iron", lambda: sector(10, 30, 0, 30, 0, T), 1, "RotorIron", 10.0),
-        piece(folder, "rotor_magnet", lambda: sector(30, 38, 3, 27, 0, T), 2, "Magnet", 5.0),
-        piece(folder, "rotor_air", rotor_air, 3, "RotorAir", 4.0),
+        piece(folder, "rotor_magnet", lambda: sector(30, 38, 3, 27, 0, T), 2, "Magnet", 6.0),
+        piece(folder, "rotor_air", rotor_air, 3, "RotorAir", 5.0),
     ]
+    layer, rotor_edges = structured_layer(folder, "rotor_layer", R - 1, R, T, 4, "RotorLayer")
+    rotor.append(layer)
     rotor_parts = [{"mat_id": 3, "name": "RotorIron"}, {"mat_id": 7, "name": "RotorAir"}]
     rotor_parts += [{"mat_id": 4, "name": "MagnetN"}, {"mat_id": 5, "name": "MagnetS"}]
-    rotor_rows = [[0] * 24, [2 + c % 2 for c in turn], [1] * 24]
+    rotor_rows = [[0] * 24, [2 + c % 2 for c in turn], [1] * 24, [1] * 24]
     groups = [
         group("Stator", "fixed", stator, transforms, stator_parts, stator_rows, turns=12),
         group("Rotor", "moving", rotor, transforms, rotor_parts, rotor_rows, turns=12),
     ]
-    ring = piece(folder, "air_ring", lambda: sector_ring(R + 2, 110, -T, T), 2, "Air", 16.0)
+    for g, edges, mat in ((groups[0], stator_edges, 5), (groups[1], rotor_edges, 4)):
+        g["job"]["transfinite"] = {
+            "bodies": [{"name": g["job"]["volumes"][-1]["name"], "mat_id": mat, "corner_files": []}],
+            "edges": edges,
+        }
+        g["job"]["recombine"] = [mat]
+    ring = piece(folder, "air_ring", lambda: sector_ring(R + 2, 110, -T, T), 2, "Air", 20.0)
     slide = {"name": "Slide", "kind": "rotational", "radius": float(R), "divisions": 144, "cross_divisions": 30}
     slide.update(slide_mat_id=6, full=True, z_range=[-T, T])
     free = {"side": "fixed", "job": {"volumes": [ring], "surfaces": [], "sizes": []}}
@@ -237,6 +275,9 @@ def motor():
     print(
         f"   Air volume {vols['Air']:.0f}, wanted (ring - stator cells + band + slot air) {want:.0f}: {vols['Air'] / want:.4f}"
     )
+    for path in (job["mesh_file"], job["rotor_file"]):
+        quads, tris = cylinder_faces(path, R)
+        print(f"   faces on the sliding cylinder, {os.path.basename(path)}: {quads} quads, {tris} triangles")
     return total
 
 
@@ -244,6 +285,40 @@ def sector_ring(inner, outer, z0, z1):
     whole = gmsh.model.occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, outer)
     hole = gmsh.model.occ.addCylinder(0, 0, z0, 0, 0, z1 - z0, inner)
     gmsh.model.occ.cut([(3, whole)], [(3, hole)])
+
+
+FACES = {  # volume element type -> (corner indices of its triangle faces, of its quad faces)
+    4: ([(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)], []),
+    5: ([], [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]),
+    6: ([(0, 1, 2), (3, 4, 5)], [(0, 1, 4, 3), (1, 2, 5, 4), (0, 2, 5, 3)]),
+    7: ([(0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4)], [(0, 1, 2, 3)]),
+}
+
+
+def cylinder_faces(path, r):
+    """(quads, triangles): the element faces with all their nodes on the cylinder of radius r about Z."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        nodes, xyz, _ = gmsh.model.mesh.getNodes()
+        at = np.zeros((int(nodes.max()) + 1, 3))
+        at[nodes.astype(int)] = np.reshape(xyz, (-1, 3))
+        on = np.abs(np.hypot(at[:, 0], at[:, 1]) - r) < 1e-6 * r
+        found = {4: set(), 3: set()}
+        for typ, (tris, quads) in FACES.items():
+            _, conn = gmsh.model.mesh.getElementsByType(typ)
+            if not len(conn):
+                continue
+            conn = np.reshape(conn, (-1, gmsh.model.mesh.getElementProperties(typ)[3])).astype(int)
+            for size, faces in ((3, tris), (4, quads)):
+                for f in faces:
+                    c = conn[:, list(f)]
+                    c = c[on[c].all(axis=1)]
+                    found[size].update(map(tuple, np.sort(c, axis=1)))
+        return len(found[4]), len(found[3])
+    finally:
+        gmsh.finalize()
 
 
 def ids_of(path):
@@ -256,9 +331,13 @@ def ids_of(path):
         gmsh.finalize()
 
 
+def tet_volume(p):
+    """The summed volume of the tetrahedra p[n, 4, 3]."""
+    return abs(np.einsum("ij,ij->i", np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), p[:, 3] - p[:, 0])).sum() / 6
+
+
 def check_mesh(path, expect=None):
-    """Print the volume of each physical group (tetrahedra only) and the faces held by 3 or more elements
-    (triangles of tetrahedra and pyramids)."""
+    """Print the faces (triangles and quads) held by 3 or more elements; return the volume of each physical group."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
@@ -266,7 +345,7 @@ def check_mesh(path, expect=None):
         nodes, xyz, _ = gmsh.model.mesh.getNodes()
         at = np.zeros((int(nodes.max()) + 1, 3))
         at[nodes.astype(int)] = np.reshape(xyz, (-1, 3))
-        faces, vols = [], {}
+        faces, quads, vols = [], [], {}
         for dim, tag in gmsh.model.getPhysicalGroups(3):
             total = 0.0
             for ent in gmsh.model.getEntitiesForPhysicalGroup(dim, tag):
@@ -275,21 +354,25 @@ def check_mesh(path, expect=None):
                     if t == 4:
                         c = np.reshape(c, (-1, 4)).astype(int)
                         p = at[c]
-                        total += (
-                            abs(
-                                np.einsum("ij,ij->i", np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), p[:, 3] - p[:, 0])
-                            ).sum()
-                            / 6
-                        )
+                        total += tet_volume(p)
                         for k in ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)):
                             faces.append(np.sort(c[:, k], axis=1))
+                    elif t == 5:
+                        c = np.reshape(c, (-1, 8)).astype(int)
+                        for k in ((0, 1, 2, 6), (0, 2, 3, 6), (0, 3, 7, 6), (0, 7, 4, 6), (0, 4, 5, 6), (0, 5, 1, 6)):
+                            total += tet_volume(at[c[:, k]])
+                        for k in ((0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
+                            quads.append(np.sort(c[:, k], axis=1))
                     elif t == 7:
                         c = np.reshape(c, (-1, 5)).astype(int)
+                        for k in ((0, 1, 2, 4), (0, 2, 3, 4)):
+                            total += tet_volume(at[c[:, k]])
                         for k in ((0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4)):
                             faces.append(np.sort(c[:, k], axis=1))
+                        quads.append(np.sort(c[:, :4], axis=1))
             vols[gmsh.model.getPhysicalName(dim, tag)] = total
-        _, counts = np.unique(np.vstack(faces), axis=0, return_counts=True)
-        print(f"   faces in 3 or more elements: {int((counts > 2).sum())}")
+        over = sum(int((np.unique(np.vstack(f), axis=0, return_counts=True)[1] > 2).sum()) for f in (faces, quads) if f)
+        print(f"   faces in 3 or more elements: {over}")
         return vols
     finally:
         gmsh.finalize()
