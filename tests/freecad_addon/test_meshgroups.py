@@ -665,6 +665,89 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(z_range(fixed), (-5, 5))
         self.assertEqual(sorted(groups(rotor)), [6])
 
+    def write_arc_at(self, name, r, a0, a1, z):
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.model.occ.addCircle(0, 0, z, r, angle1=math.radians(a0), angle2=math.radians(a1))
+            gmsh.model.occ.synchronize()
+            gmsh.write(self.geo(name))
+        finally:
+            gmsh.finalize()
+
+    def structured_layer(self, k, inner, outer, top=5, arcs=12, ups=2):
+        """A group of one cell: the sector inner..outer, 0..30 degrees, z 0..top, structured and recombined (arcs, 1
+        and ups divisions), mirrored at z = 0 and rotated 12 times; its job gets a transfinite body and a recombine."""
+        write_sector_solids(self.geo(f"layer_{k}.brep"), (inner, outer, 0, 30, 0, top))
+        files = {"Arc": [], "Radial": [], "Up": []}
+        count = 0
+        for r in (inner, outer):
+            for z in (0, top):
+                for a0, a1 in ((0, 30),):
+                    self.write_arc_at(f"arc_{k}_{count}.brep", r, a0, a1, z)
+                    files["Arc"].append(f"geometry/arc_{k}_{count}.brep")
+                    count += 1
+        pt = lambda r, a, z: (r * math.cos(math.radians(a)), r * math.sin(math.radians(a)), z)  # noqa: E731
+        for a in (0, 30):
+            for z in (0, top):
+                write_line(self.geo(f"rad_{k}_{count}.brep"), pt(inner, a, z), pt(outer, a, z))
+                files["Radial"].append(f"geometry/rad_{k}_{count}.brep")
+                count += 1
+            for r in (inner, outer):
+                write_line(self.geo(f"up_{k}_{count}.brep"), pt(r, a, 0), pt(r, a, top))
+                files["Up"].append(f"geometry/up_{k}_{count}.brep")
+                count += 1
+        nodes = {"Arc": arcs + 1, "Radial": 2, "Up": ups + 1}
+        edges = [dict(name=n, nodes=nodes[n], distribution="Uniform", coef=1.0, files=f) for n, f in files.items()]
+        job = {
+            "volumes": [{"mat_id": 1, "name": "Layer", "file": f"geometry/layer_{k}.brep", "size": 2.0}],
+            "surfaces": [],
+            "sizes": [],
+            "transfinite": {"bodies": [{"name": "Layer", "mat_id": 1, "corner_files": []}], "edges": edges},
+            "recombine": [1],
+        }
+        transforms = [compose(rotation(30 * c), m) for c in range(12) for m in (ID, MIRROR_Z)]
+        return {
+            "name": f"Layer{k}",
+            "side": "fixed" if k == 0 else "moving",
+            "job": job,
+            "cells": [1],
+            "transforms": transforms,
+            "parts": [{"mat_id": 5 + k, "name": f"Layer{k}"}],
+            "rows": [{"cell": 1, "file": None, "parts": [0] * len(transforms)}],
+            "turns": 12,
+        }
+
+    def test_sliding_3d_quads_on_the_cylinder(self):  # a structured air layer on each side: hexahedra, quads on r = 20
+        groups_3d = [self.structured_layer(0, 20, 21), self.structured_layer(1, 19, 20)]
+        slide = {"name": "Slide", "kind": "rotational", "radius": 20.0, "divisions": 144, "cross_divisions": 4}
+        slide.update(slide_mat_id=7, full=True, z_range=[-5, 5])
+        r = self.run_job(groups_3d, slide=slide, dim=3)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fixed, rotor = self.mesh_file(), self.rotor_file()
+        for path, inner in ((fixed, 20), (rotor, 19)):
+            xyz, found = read_mesh(path)
+            self.assertEqual(set(found), {5})  # hexahedra only
+            on = np.abs(np.hypot(xyz[:, 0], xyz[:, 1]) - 20) < 1e-6
+            # a hexahedron face is 4 nodes; a face on the cylinder is a quad of 4 nodes on it
+            quads = {
+                tuple(sorted(f))
+                for h in found[5]
+                for f in (
+                    h[[0, 1, 2, 3]],
+                    h[[4, 5, 6, 7]],
+                    h[[0, 1, 5, 4]],
+                    h[[1, 2, 6, 5]],
+                    h[[2, 3, 7, 6]],
+                    h[[3, 0, 4, 7]],
+                )
+                if on[f].all()
+            }
+            self.assertEqual(len(quads), 144 * 4)
+            self.assertEqual(faces_in_three(path), 0)
+        self.assertEqual(len(slide_nodes(fixed, 20)), 144 * 5)
+        self.assertEqual(sorted(slide_nodes(fixed, 20)), sorted(slide_nodes(rotor, 20)))
+
     def test_cross_divisions_off_the_mirror_are_refused(self):  # cross 3 with the mirror at the middle
         groups_3d, slide = self.slide_groups_3d(cross=3)
         r = self.run_job(groups_3d, slide=slide, dim=3)
