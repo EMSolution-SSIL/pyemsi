@@ -7,6 +7,7 @@ import math
 import pytest
 
 import FreeCAD as App
+import Part
 
 from emsolution import geometry, objects
 
@@ -384,3 +385,287 @@ def test_excitation_on_a_group_is_kept():
         assert f"{exc.Name}|{item.Name}" in study.SmatIds
     finally:
         App.closeDocument(doc.Name)
+
+
+# ---- Validate Study (spec section 6)
+
+V = App.Vector
+ROTATE_Z = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 22.5, "count": 16}
+MIRROR_Z = {"kind": "mirror", "point": [0, 0, 0], "normal": [0, 0, 1]}
+
+
+def problems(study, severity="error"):
+    from emsolution import validation
+
+    return [p for p in validation.validate(study) if severity is None or p.severity == severity]
+
+
+def texts(study, severity="error"):
+    return [p.text for p in problems(study, severity)]
+
+
+def ready(study):
+    """Every row gets a library material and every part an assignment: the Study validates clean."""
+    lib = library(study)
+    for item in objects.symmetric_groups(study):
+        for r in range(len(objects.rows_of(item))):
+            objects.set_row_material(study, item, r, lib)
+    objects.sync_parts(study)
+    study.Document.recompute()
+
+
+def rotor_group(study, rules=(ROTATE_Z,), side="Fixed"):
+    cells = [study.Document.getObject(n) for n in ("RotorIronCell", "MagnetCell", "RotorAirCell")]
+    return objects.make_symmetric_group(study, cells, rules=rules, name="Rotor", side=side)
+
+
+def sliding(study):
+    study.Movement = "Sliding motion"
+    rotor = rotor_group(study, side="Moving")
+    iface = objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    return rotor, iface
+
+
+@pytest.fixture
+def study_3d():
+    doc = App.newDocument("SymGroups3dV")
+    info = symcases.group_motor_doc(doc, height=10)
+    study = objects.make_study(doc, "3D")
+    objects.make_symmetric_group(study, info["stator_cells"], rules=STATOR_RULES, name="Stator")
+    doc.recompute()
+    yield study
+    App.closeDocument(doc.Name)
+
+
+def free_body(study, name, shape, side="Main"):
+    body = symcases.feature(study.Document, name, shape)
+    setattr(study, side + "Mode", "Manual")
+    setattr(study, side + "Objects", [*getattr(study, side + "Objects"), body])
+    study.Document.recompute()
+    return body
+
+
+def test_the_ready_study_validates_clean(study):
+    ready(study)
+    assert [(p.severity, p.text) for p in problems(study, None)] == []
+
+
+def break_zero_normal(study, stator):
+    objects.set_rules(stator, [{"kind": "mirror", "point": [0, 0, 0], "normal": [0, 0, 0]}])
+
+
+def break_2d_axis(study, stator):
+    objects.set_rules(stator, [{**ROTATE_Z, "axis": [1, 0, 0]}])
+
+
+def break_same_mirror_twice(study, stator):
+    objects.set_rules(stator, [MIRROR_X0, MIRROR_X0])
+
+
+def break_coil_past_the_line(study, stator):
+    coil = study.Document.getObject("CoilCell")
+    coil.Shape = symcases.sector(37, 50, 10, 17)
+    study.Document.getObject("StatorIronCell").Shape = symcases.sector(36, 60, 0, 15).cut(coil.Shape).Faces[0]
+
+
+def break_step_smaller_than_cell(study, stator):
+    objects.set_rules(stator, [{"kind": "translate", "vector": [5, 0, 0], "count": 3}])
+
+
+def break_groups_touch(study, stator):
+    rotor_group(study)  # no Sliding motion: both groups are on the fixed side, and their air cells meet at r = 35
+
+
+def break_part_without_material(study, stator):
+    next(iter(objects.part_assignments(study))).LibraryMaterial = None
+
+
+def break_name_on_both_sides(study, stator):
+    rotor, _ = sliding(study)
+    for item, n in ((stator, 24), (rotor, 16)):
+        rows = objects.rows_of(item)
+        objects.set_rows(item, [{**rows[0], "mode": "table", "table": ["A+"] * n}, *rows[1:]])
+    ready(study)
+
+
+def break_table_wrong_length(study, stator):
+    objects.set_rows(stator, [{**r, "mode": "table", "table": ["A"] * 5} for r in objects.rows_of(stator)])
+
+
+def break_empty_table_name(study, stator):
+    objects.set_rows(stator, [{**r, "mode": "table", "table": ["A"] * 23 + [""]} for r in objects.rows_of(stator)])
+
+
+def break_body_in_two_groups(study, stator):
+    objects.make_symmetric_group(study, [study.Document.getObject("CoilCell")], rules=[], name="Second")
+
+
+def break_cell_also_in_main(study, stator):
+    study.MainMode, study.MainObjects = "Manual", [study.Document.getObject("CoilCell")]
+
+
+def break_air_region(study, stator):
+    objects.make_air_region(study, "Box")
+
+
+def break_free_crosses_sliding(study, stator):
+    sliding(study)
+    free_body(study, "Gap", symcases.sector(30, 40, 0, 90))
+
+
+def break_free_transfinite(study, stator):
+    body = free_body(study, "Plate", Part.makePlane(10, 10, V(100, 0, 0)))
+    objects.make_transfinite_body(study, [body])
+
+
+def break_deleted_cell(study, stator):
+    study.Document.removeObject("CoilCell")
+
+
+def break_names_equal_in_mesh(study, stator):
+    rows = objects.rows_of(stator)
+    tables = {0: ["A+"] * 24, 1: ["A_"] * 24}
+    objects.set_rows(
+        stator, [{**r, "mode": "table", "table": tables[i]} if i in tables else r for i, r in enumerate(rows)]
+    )
+
+
+@pytest.mark.parametrize(
+    "case,phrase",
+    [
+        (break_zero_normal, "normal"),
+        (break_2d_axis, "axis"),
+        (break_same_mirror_twice, "identical"),
+        (break_coil_past_the_line, "overlaps"),  # T-04
+        (break_step_smaller_than_cell, "overlaps"),  # T-05
+        (break_groups_touch, "one group, or draw"),
+        (break_part_without_material, "no Material"),
+        (break_name_on_both_sides, "both sides"),
+        (break_table_wrong_length, "table"),
+        (break_empty_table_name, "table"),
+        (break_body_in_two_groups, "two groups"),
+        (break_cell_also_in_main, "Main"),
+        (break_air_region, "Air Region"),
+        (break_free_crosses_sliding, "Sliding Interface"),
+        (break_free_transfinite, "Transfinite"),
+        (break_deleted_cell, "was deleted"),  # Review Focus 3
+        (break_names_equal_in_mesh, "in the mesh"),  # Review Focus 5
+    ],
+)
+def test_refused(study, stator, case, phrase):
+    ready(study)
+    case(study, stator)
+    study.Document.recompute()
+    assert any(phrase in t for t in texts(study)), texts(study)
+
+
+def test_cell_without_solid_is_refused(study_3d):
+    study_3d.Document.getObject("CoilCell").Shape = symcases.sector(37, 50, 10, 15)
+    study_3d.Document.recompute()
+    assert any("has no solid" in t for t in texts(study_3d)), texts(study_3d)
+
+
+def test_sliding_axis_x_is_refused_naming_the_rule(study_3d):  # T-07
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 180, "count": 2}])
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    study_3d.Document.recompute()
+    found = [t for t in texts(study_3d) if "about Z" in t]
+    assert found and "Rule 1" in found[0] and "limit of the tool" in found[0], texts(study_3d)
+
+
+def test_free_transfinite_says_it_is_a_limit_of_the_tool(study):
+    ready(study)
+    break_free_transfinite(study, None)
+    found = [t for t in texts(study) if "free object" in t]
+    assert found and "limit of the tool" in found[0], texts(study)
+
+
+def test_the_overlap_message_does_not_talk_of_mirrors_or_arrays(study, stator):
+    ready(study)
+    break_step_smaller_than_cell(study, stator)
+    (found,) = [t for t in texts(study) if "overlaps" in t]
+    assert "Symmetric Group Stator" in found and "Polar Array" not in found and "Mirror's line" not in found
+
+
+def test_divisions_are_a_multiple_of_the_turns_about_z(study, stator):
+    sliding(study)
+    ready(study)
+    assert texts(study) == []
+    iface = objects.sliding_interfaces(study)[0]
+    iface.Divisions = 100  # not a multiple of the 12 turns of the stator
+    assert any("multiple" in t and "Stator" in t for t in texts(study)), texts(study)
+
+
+def test_rotation_that_does_not_close_is_a_warning(study, stator):
+    objects.set_rules(stator, [{**ROTATE_Z, "step": 30, "count": 6}])
+    ready(study)
+    assert texts(study) == []
+    assert any("not 360" in t for t in texts(study, "warning"))
+
+
+@pytest.mark.parametrize("vector", [[30, 0, 0], [0, 30, 0], [0, 0, 10]])
+def test_translation_through_any_axis_validates(study_3d, vector):
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [{"kind": "translate", "vector": vector, "count": 2}])
+    ready(study_3d)
+    assert texts(study_3d) == []
+
+
+def test_free_air_and_copies_validate(study):
+    ready(study)
+    free_body(study, "FreeAir", Part.Face(Part.Wire(Part.makeCircle(80))))
+    assert texts(study) == []  # the free air may be drawn right over the copies; a missing Material only warns
+    assert any("No material" in t and "FreeAir" in t for t in texts(study, "warning"))
+
+
+def test_x_axis_rules_validate_without_sliding(study_3d):
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 180, "count": 2}])
+    ready(study_3d)
+    assert texts(study_3d) == []
+
+
+def test_z_mirror_with_sliding_validates(study_3d):
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
+    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    ready(study_3d)
+    assert texts(study_3d) == []
+
+
+def test_zx_study_with_a_z_mirror_validates():
+    doc = App.newDocument("SymGroupsZX")
+    try:
+        cell = symcases.feature(doc, "Cell", Part.makePlane(10, 5, V(0, 0, 1), V(0, -1, 0), V(1, 0, 0)))
+        study = objects.make_study(doc, "2D")
+        objects.make_symmetric_group(study, [cell], rules=[MIRROR_Z])
+        doc.recompute()
+        ready(study)
+        assert texts(study) == []
+    finally:
+        App.closeDocument(doc.Name)
+
+
+@pytest.mark.skip(reason="the older Symmetric Mesh item is refused with 'older version' after Task 16")
+def test_old_item_is_refused(study):
+    pass
+
+
+def test_mesh_size_on_a_cell_object_and_excitation_on_the_drawing_are_fine(study_3d):
+    (stator,) = objects.symmetric_groups(study_3d)
+    study_3d.MeshSizesGroup.DefaultMeshSize = 1.5  # finer than the thinnest cell: no coarse-mesh warning
+    ready(study_3d)
+    objects.make_mesh_size(study_3d, 1.5, [(study_3d.Document.getObject("CoilCell"), "")])
+    objects.make_excitation(study_3d, "Coil", [(stator, "Face2")])
+    assert [(p.severity, p.text) for p in problems(study_3d, None)] == []
+
+
+def test_free_objects_are_checked_as_ordinary_bodies(study):
+    ready(study)
+    free_body(study, "One", Part.makePlane(10, 10, V(100, 0, 0)))
+    free_body(study, "Two", Part.makePlane(10, 10, V(105, 0, 0)))
+    assert any("overlap" in t and "One" in t and "Two" in t for t in texts(study)), texts(study)

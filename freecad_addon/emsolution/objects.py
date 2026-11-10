@@ -1068,10 +1068,10 @@ def part_key(study, item, name):
     return f"{side}|{name}"
 
 
-def study_parts(study):
-    """{key: [(item, row index, copy), ...]} of every part of the Study's groups, in drawing order."""
+def study_parts(study, items=None):
+    """{key: [(item, row index, copy), ...]} of every part of the Study's groups (or of items), in drawing order."""
     parts = {}
-    for item in symmetric_groups(study):
+    for item in symmetric_groups(study) if items is None else items:
         for r, row in enumerate(rows_of(item)):
             for copy, name in enumerate(row_parts(item, row)):
                 parts.setdefault(part_key(study, item, name), []).append((item, r, copy))

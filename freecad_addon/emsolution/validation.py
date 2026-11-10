@@ -5,6 +5,7 @@ import math
 from dataclasses import dataclass, field
 
 import FreeCAD as App
+import Part
 
 from . import airshapes, geometry, objects, symmetry
 
@@ -78,17 +79,25 @@ def validate(study):
     main, moving, setup_errors = geometry.setup(study)
     for text in setup_errors:
         r.error(text)
+    grouped = objects.is_grouped(study)
     bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
+    if grouped:  # the cell objects of a group are not ordinary bodies; what is left is the free objects
+        bodies = free_bodies(study, main, moving)
     included = {b.Name for b in bodies}
     with_air = meshed(study, bodies)
     symmetric = objects.is_symmetric(study)
-    if symmetric:  # mesh settings may sit on the cell bodies, which are not in the main geometry
+    if symmetric or grouped:  # mesh settings may sit on the cell bodies, which are not in the main geometry
         with_air |= {b.Name for b in objects.cell_bodies(study)}
+    if grouped:  # excitations may sit on the drawing of a group
+        with_air |= {g.Name for g in objects.symmetric_groups(study)}
+        included |= {g.Name for g in objects.symmetric_groups(study)}
     _skipped_picks(study, r)
     _body_overlaps(bodies, study.Dimension, r)
     _links(study, with_air, r)
     _settings(study, with_air, r)
-    if symmetric:
+    if grouped:
+        _groups(study, main, moving, r)
+    elif symmetric:
         _symmetric(study, main, moving, r)
     else:
         _air(study, bodies, {b.Name for b in moving}, r)
@@ -97,13 +106,24 @@ def validate(study):
             r.warning(
                 f"Material {m.Label} has pieces but the Study has no Symmetric Mesh: its pieces are not meshed.", m
             )
-    meshed_bodies = objects.cell_bodies(study) if symmetric else bodies  # only the cells are meshed
+    meshed_bodies = bodies  # a Symmetric Mesh meshes its cells; with groups the cells come besides the free objects
+    if grouped:
+        meshed_bodies = bodies + objects.cell_bodies(study)
+    elif symmetric:
+        meshed_bodies = objects.cell_bodies(study)
     _coarse(study, meshed_bodies, r)
     _transfinite(study, meshed_bodies, r)
     _names(study, bodies, included, r)
-    if not symmetric:
+    if grouped or not symmetric:
         _materials(study, r)
     return r.problems
+
+
+def free_bodies(study, main, moving):
+    """The bodies of the main and moving geometry that are not cell objects of a group, once each: the ones meshed as
+    ordinary bodies."""
+    cells = {b.Name for b in objects.cell_bodies(study)}
+    return [b for b in {b.Name: b for b in main + moving}.values() if b.Name not in cells]
 
 
 def _skipped_picks(study, r):
@@ -168,7 +188,11 @@ def _kind(item):
 def _links(study, included, r):
     """Items left empty by a deleted body, bodies outside the main geometry, sub-elements a body no longer has."""
     items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: no excitations yet
-    items += [i for i in study.MeshSizesGroup.Group if not isinstance(i.Proxy, objects.SymmetricMesh)]
+    items += [
+        i
+        for i in study.MeshSizesGroup.Group
+        if not isinstance(i.Proxy, (objects.SymmetricMesh, objects.SymmetricGroup))
+    ]
     for item in items:
         kind, by_body = _kind(item), objects.subs_by_body(item)
         if not by_body:
@@ -213,7 +237,8 @@ def _links(study, included, r):
                                 [(b, "")],
                             )
     for m in objects.materials(study):
-        if m.Body is None and not len(getattr(m, "Pieces", [])):  # an assignment of pieces has no body
+        # an assignment of pieces or of a part has no body
+        if m.Body is None and not len(getattr(m, "Pieces", [])) and not getattr(m, "PartKey", ""):
             r.warning(f"Material assignment {m.Label} has no body (was it deleted?). Delete the assignment.", m)
 
 
@@ -604,7 +629,11 @@ def _on_face(body, face, vertex):
 
 
 def _names(study, bodies, included, r):
-    if objects.is_symmetric(study):  # the piece assignments are the volumes; no bodies, no Air Region
+    grouped = objects.is_grouped(study)
+    if grouped:  # the parts are the volumes, then the free objects
+        names = [objects.volume_name(m) for m in objects.part_assignments(study)]
+        names += [objects.region_name(study, b) for b in bodies]
+    elif objects.is_symmetric(study):  # the piece assignments are the volumes; no bodies, no Air Region
         names = [objects.volume_name(m) for m in objects.piece_assignments(study)]
     else:
         names = [objects.region_name(study, b) for b in bodies]
@@ -621,7 +650,9 @@ def _names(study, bodies, included, r):
     dups = sorted({n for n in names if names.count(n) > 1})
     if dups:
         r.error(
-            "These group names are the same after removing special characters: "
+            "These group names are the same"
+            + (" in the mesh" if grouped else "")
+            + " after removing special characters: "
             + ", ".join(dups)
             + ". Rename the items or bodies."
         )
@@ -749,7 +780,8 @@ def _overlaps(item, cells, transforms, r, three=False):
     """The copies of the cell may only touch (split-cell PRD R3). A cell body past the mirror line or the edge of the
     cell, or a Polar Array with too many copies, makes them overlap, and the mesher would fail with only a point.
     Any two copies overlap the way the cell overlaps one of its copies, so the cell is tested against each copy.
-    Reports the first overlap found."""
+    Reports the first overlap found. item is a Symmetric Group or an older Symmetric Mesh item."""
+    group = isinstance(item.Proxy, objects.SymmetricGroup)
     shapes = [(cell, geometry.global_shape(cell)) for cell in cells]
     for m in transforms:
         if all(abs(a - b) < symmetry.TOL for a, b in zip(m, symmetry.ID)):
@@ -767,6 +799,8 @@ def _overlaps(item, cells, transforms, r, three=False):
                     continue  # they only touch
                 if symmetry.det(m) < 0:
                     how = "a mirrored copy"
+                elif group:
+                    how = _moved_by(m)
                 else:
                     how = f"a copy turned by {math.degrees(math.atan2(m[4], m[0])):.4g}°"
                 if three:
@@ -775,11 +809,20 @@ def _overlaps(item, cells, transforms, r, three=False):
                 else:
                     c = max(common.Faces, key=lambda f: f.Area).CenterOfMass
                     where, size = f"({c.x:.6g}, {c.y:.6g})", f"{common.Area:.3g} mm²"
+                if group:
+                    advice = (
+                        " The copies of a cell object may only touch: keep every cell object clear of its own copies,"
+                        " and check the rules (a mirror's plane, a rotation's step and count, a translation's vector)."
+                    )
+                else:
+                    advice = (
+                        " The copies of a cell may only touch: keep every cell body inside the cell, between the"
+                        " Mirror's line and the edge the Polar Array turns, and check the Polar Array's count and angle."
+                    )
                 r.error(
-                    f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} overlaps {how} of"
-                    f" {objects.display_name(other)} near {where}, by {size}. The copies"
-                    " of a cell may only touch: keep every cell body inside the cell, between the Mirror's line and"
-                    " the edge the Polar Array turns, and check the Polar Array's count and angle.",
+                    f"{'Symmetric Group' if group else 'Symmetric Mesh'} {item.Label}: cell body"
+                    f" {objects.display_name(cell)} overlaps {how} of {objects.display_name(other)} near {where},"
+                    f" by {size}." + advice,
                     item,
                     list({b.Name: (b, "") for b in (cell, other)}.values()),
                 )
@@ -887,3 +930,379 @@ def _pieces(study, item_of, top_side, r):
         if two:
             names = [f"{top.Label}.{f} ({', '.join(m.Label for m in owners[(name, f)])})" for f in two]
             r.error(f"Pieces with two Materials: {_listed(names)}.", item_of[name], [(top, f) for f in two])
+
+
+# ---- Symmetric Groups (spec section 6)
+
+
+def _moved_by(m):
+    """How a copy that is no mirror lies: moved by a vector, or turned by an angle."""
+    if all(abs(m[i] - symmetry.ID[i]) < symmetry.TOL for i in (0, 1, 2, 4, 5, 6, 8, 9, 10)):
+        return f"a copy moved by ({m[3]:.6g}, {m[7]:.6g}, {m[11]:.6g})"
+    angle = math.degrees(math.acos(max(-1.0, min(1.0, (m[0] + m[5] + m[10] - 1) / 2))))
+    return f"a copy turned by {angle:.4g}°"
+
+
+def _group_plane(study, cells, free, r):
+    """ "" in 3D; in 2D the plane ("XY" or "ZX") of the cell objects and the free objects, which must share one."""
+    if study.Dimension == "3D":
+        return ""
+    planes = {}  # plane -> the first body in it
+    for body in [*cells, *free]:
+        for face in geometry.global_shape(body).Faces:
+            found = geometry.plane_of(face)
+            if found is None:
+                text = "2D faces must lie in the XY plane (z = 0) or the ZX plane (y = 0)."
+                r.error(f"{objects.display_name(body)}: {text}", body, [(body, "")])
+                break
+            planes.setdefault(found, body)
+    if len(planes) > 1:
+        names = " and ".join(f"{objects.display_name(b)} ({p})" for p, b in planes.items())
+        r.error(f"2D geometry must share one plane: {names} are in different planes.")
+    return next(iter(planes), "XY")
+
+
+def _group_rules(item, plane, r):
+    """The rules of a group, or None after saying what is wrong with them."""
+    prefix = f"Symmetric Group {item.Label}: "
+    try:
+        rules = objects.rules_of(item)
+        found = symmetry.rule_problems(rules, plane)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, AttributeError):
+        r.error(prefix + "the rules cannot be read. Open the group and set its rules again.", item)
+        return None
+    for text in found:
+        r.error(prefix + text, item)
+    if found:
+        return None
+    for text in symmetry.rule_warnings(rules):
+        r.warning(prefix + text, item)
+    return rules
+
+
+def _group_rows(study, item, rules, r):
+    """Every cell object of a group has a solid (face in 2D) and its rows, and no table is of the wrong length or has an
+    empty name. True when the cell objects can be drawn."""
+    three = study.Dimension == "3D"
+    kind = "solid" if three else "face"
+    prefix = f"Symmetric Group {item.Label}: "
+    ok = True
+    rows = objects.rows_of(item)
+    gone = list(dict.fromkeys(row["cell"] for row in rows if item.Document.getObject(row["cell"]) is None))
+    for name in gone:
+        r.error(prefix + f"cell object {name} was deleted. Open the group and pick its cell objects again.", item)
+        ok = False
+    for cell in item.Cells:
+        shape = geometry.global_shape(cell)
+        label = objects.display_name(cell)
+        if not (shape.Solids if three else shape.Faces):
+            cut = "a cutting face or solid" if three else "the cutting sketch"
+            r.error(
+                prefix + f"cell object {label} has no {kind}; a cell object must be a {kind}. To cut a cell into"
+                f" blocks, put its {kind} and {cut} in a Boolean Fragments and use that in the group.",
+                item,
+                [(cell, "")],
+            )
+            ok = False
+        elif not any(row["cell"] == cell.Name for row in rows):
+            r.error(prefix + f"cell object {label} has no part rows. Open the group.", item)
+            ok = False
+        elif any(row["cell"] == cell.Name and row["solid"] >= len(objects._pieces(shape)) for row in rows):
+            r.error(prefix + f"cell object {label} has fewer {kind}s than the group has rows for.", item)
+            ok = False
+    if rules is not None:
+        n = symmetry.copy_count(rules)
+        for row in rows:
+            if row.get("mode") != "table":
+                continue
+            label, table = objects.row_label(item, row), row["table"]
+            if len(table) != n:
+                r.error(prefix + f"the table of {label} has {len(table)} names, the group makes {n} copies.", item)
+            elif not all(str(name).strip() for name in table):
+                first = next(i for i, name in enumerate(table, 1) if not str(name).strip())
+                r.error(prefix + f"the table of {label} has an empty name (copy {first}).", item)
+    return ok
+
+
+def _free_cells(main, moving, groups, r):
+    """A cell object is in one group only and not in the main or moving geometry."""
+    owners = {}
+    for item in groups:
+        for cell in item.Cells:
+            owners.setdefault(cell.Name, (cell, []))[1].append(item)
+    for cell, items in owners.values():
+        if len(items) > 1:
+            r.error(
+                f"Cell object {objects.display_name(cell)} is in two groups: {', '.join(i.Label for i in items)}."
+                " A body can be in one group only.",
+                items[1],
+                [(cell, "")],
+            )
+    for where, bodies in (("Main", main), ("Moving", moving)):
+        for body in bodies:
+            if body.Name in owners:
+                item = owners[body.Name][1][0]
+                r.error(
+                    f"{objects.display_name(body)} is a cell object of Symmetric Group {item.Label} and is also in the"
+                    f" {where} geometry. Take it out of the {where} geometry: a group meshes its cell objects itself.",
+                    item,
+                    [(body, "")],
+                )
+
+
+def _elements(group):
+    """[(solid or face, its bounding box a little enlarged)] of a group's drawing, and that tolerance."""
+    shape = group.Shape
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    out = []
+    for piece in shape.Solids or shape.Faces:
+        box = piece.BoundBox
+        box.enlarge(tol)
+        out.append((piece, box))
+    return out, tol
+
+
+def _touch_groups(a, b, three, r):
+    """Copies of two groups on one side may neither overlap nor touch over an area (a length, in 2D)."""
+    if a.Shape.isNull() or b.Shape.isNull() or not a.Shape.BoundBox.intersect(b.Shape.BoundBox):
+        return
+
+    def measure(shape):
+        return shape.Volume if three else shape.Area
+
+    mine, tol = _elements(a)
+    others, _ = _elements(b)
+    unit = "mm³" if three else "mm²"
+    for sa, box_a in mine:
+        for sb, box_b in others:
+            if not box_a.intersect(box_b):
+                continue
+            try:
+                common = sa.common(sb)
+            except Exception:  # OCC refuses some pairs; the mesher still reports it
+                continue
+            if measure(common) > 1e-6 * min(measure(sa), measure(sb)):
+                c = max(common.Solids if three else common.Faces, key=measure).CenterOfMass
+                text = f"overlap by {measure(common):.3g} {unit} near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g})"
+            elif _contact(sa, sb, three, tol):
+                text = "touch"
+            else:
+                continue
+            r.error(
+                f"Copies of Symmetric Group {a.Label} and Symmetric Group {b.Label} {text}, and both are on the same"
+                " side. Put them in one group, or draw a normally meshed body between them.",
+                b,
+                [(a, ""), (b, "")],
+            )
+            return
+
+
+def _contact(sa, sb, three, tol):
+    """True if two shapes that do not overlap share a face (an edge, in 2D) of positive size."""
+    first, second = (sa.Faces, sb.Faces) if three else (sa.Edges, sb.Edges)
+    for ea in first:
+        box = ea.BoundBox
+        box.enlarge(tol)
+        for eb in second:
+            if not box.intersect(eb.BoundBox):
+                continue
+            try:
+                common = ea.common(eb)
+            except Exception:
+                continue
+            if (sum(f.Area for f in common.Faces) if three else sum(e.Length for e in common.Edges)) > tol:
+                return True
+    return False
+
+
+def _z_motion(m):
+    """ "turn" for a rotation about Z through the origin, "mirror" for a mirror in a plane that contains Z or a mirror
+    of z = const, None for any other motion."""
+    t = symmetry.TOL
+    if any(abs(m[i]) > t for i in (2, 6, 8, 9)):
+        return None
+    if abs(m[10] - 1) < t:  # Z stays: a turn or a mirror about Z, both through the origin
+        if any(abs(m[i]) > t for i in (3, 7, 11)):
+            return None
+        return "turn" if symmetry.det(m) > 0 else "mirror"
+    if abs(m[10] + 1) < t:  # z flips: only a mirror of z = const leaves x and y alone
+        same = abs(m[0] - 1) < t and abs(m[5] - 1) < t and abs(m[1]) < t and abs(m[4]) < t
+        return "mirror" if same and abs(m[3]) < t and abs(m[7]) < t else None
+    return None
+
+
+def _radial_range(box):
+    """The least and the greatest distance from the Z axis that a bounding box reaches."""
+    dx = 0 if box.XMin <= 0 <= box.XMax else min(abs(box.XMin), abs(box.XMax))
+    dy = 0 if box.YMin <= 0 <= box.YMax else min(abs(box.YMin), abs(box.YMax))
+    far = math.hypot(max(abs(box.XMin), abs(box.XMax)), max(abs(box.YMin), abs(box.YMax)))
+    return math.hypot(dx, dy), far
+
+
+def _reaches(group, radius, three):
+    """True if the drawing of a group has a face (an edge, in 2D) on the cylinder (circle) of this radius about Z,
+    found by the distance of sampled points to it."""
+    tol = 1e-6 * max(1.0, radius)
+    for piece in group.Shape.Faces if three else group.Shape.Edges:
+        near, far = _radial_range(piece.BoundBox)
+        if far < radius - tol or near > radius + tol:
+            continue
+        if three:
+            u0, u1, v0, v1 = piece.ParameterRange
+            points = [
+                piece.valueAt(u0 + a * (u1 - u0), v0 + b * (v1 - v0)) for a in (0.2, 0.5, 0.8) for b in (0.2, 0.5, 0.8)
+            ]
+        else:
+            first, last = piece.FirstParameter, piece.LastParameter
+            points = [piece.valueAt(first + a * (last - first)) for a in (0.1, 0.3, 0.5, 0.7, 0.9)]
+        if all(abs(math.hypot(p.x, p.y) - radius) < tol for p in points):
+            return True
+    return False
+
+
+def _on_interface(shape, radius, three):
+    """True if a body crosses the cylinder (circle) of this radius about Z, or has a face on it."""
+    box = shape.BoundBox
+    near, far = _radial_range(box)
+    tol = 1e-6 * max(1.0, radius)
+    if far < radius - tol or near > radius + tol:
+        return False
+    if three:
+        surface = Part.makeCylinder(radius, box.ZLength + 2, App.Vector(0, 0, box.ZMin - 1)).Faces[0]
+    else:
+        surface = Part.makeCircle(radius)
+    return shape.distToShape(surface)[0] < tol
+
+
+def _group_sliding(study, groups, ruled, free, plane, r):
+    """Sliding with groups (spec 7.5): a group that reaches the interface may only turn about Z through the origin or
+    mirror in a plane that contains Z or in z = const; its turns divide the Divisions; no free object touches it."""
+    three = study.Dimension == "3D"
+    sliding = study.Movement == "Sliding motion"
+    _interfaces(study, [], {}, sliding, r)
+    if not sliding:
+        return
+    if plane == "ZX":
+        r.error("Sliding motion is not supported in a ZX (axisymmetric) Study.")
+        return
+    for iface in objects.sliding_interfaces(study):
+        if iface.Kind != "Rotational":
+            continue  # _interfaces says so
+        radius = iface.Radius.Value
+        for item in groups:
+            rules = ruled.get(item.Name)
+            if rules is None or not _reaches(item, radius, three):
+                continue
+            turns = 1
+            for n, rule in enumerate(rules, 1):
+                move = _z_motion(symmetry.rule_matrix(rule))
+                if move is None:
+                    r.error(
+                        f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} reaches it, but Rule {n}"
+                        f" ({rule['kind']}) is not a rotation about Z through the origin, a mirror in a plane"
+                        " containing Z or a mirror of z = const. Only these keep the sliding surface whole; this is"
+                        " a limit of the tool.",
+                        iface,
+                    )
+                elif move == "turn":
+                    turns *= symmetry.rule_count(rule)
+            if turns > 1 and iface.Divisions % turns:
+                r.error(
+                    f"Sliding Interface {iface.Label}: the divisions ({iface.Divisions}) must be a multiple of the"
+                    f" {turns} turns of {item.Label}'s cell objects.",
+                    iface,
+                )
+        for body in free:
+            if _on_interface(geometry.global_shape(body), radius, three):
+                r.error(
+                    f"Free object {objects.display_name(body)} crosses or touches Sliding Interface {iface.Label}."
+                    " The sliding surface must be covered by cell objects of groups on both sides: draw the air next"
+                    " to it as a cell object, and keep free objects clear of it.",
+                    iface,
+                    [(body, "")],
+                )
+
+
+def _part_materials(study, readable, r):
+    """Every part has a Material; a part name is on one side of a Sliding Interface only. readable: the groups whose
+    rules and rows could be read."""
+    parts = objects.study_parts(study, readable)
+    have = {m.PartKey: m for m in objects.part_assignments(study)}
+    sliding = study.Movement == "Sliding motion"
+
+    def named(key):
+        return key.partition("|")[2] + (" (moving)" if sliding and key.startswith("moving|") else "")
+
+    spelled = {}  # the name as the mesh has it -> {part name: the first group that has it}
+    for key, copies in parts.items():
+        name = key.partition("|")[2]
+        spelled.setdefault(objects.clean(name), {}).setdefault(name, copies[0][0])
+    for clashing in spelled.values():
+        if len(clashing) > 1:
+            r.error(
+                f"These part names are the same in the mesh, after removing special characters: {', '.join(sorted(clashing))}."
+                " Rename them in the group's table.",
+                next(iter(clashing.values())),
+            )
+    missing = [key for key in parts if key not in have or have[key].LibraryMaterial is None]
+    if missing:
+        r.error(
+            f"Parts with no Material: {_listed([named(k) for k in missing])}. Open the group and choose their Material.",
+            parts[missing[0]][0][0],
+        )
+    if len(readable) == len(objects.symmetric_groups(study)):
+        for key, m in have.items():
+            if key not in parts:
+                r.warning(f"Material {m.Label} is for part {named(key)}, which no group makes any more. Delete it.", m)
+    if sliding:
+        fixed = {k.partition("|")[2] for k in parts if k.startswith("fixed|")}
+        both = sorted(fixed & {k.partition("|")[2] for k in parts if k.startswith("moving|")})
+        if both:
+            interfaces = objects.sliding_interfaces(study)
+            r.error(
+                f"Part names on both sides of the Sliding Interface: {_listed(both)}. The moving side needs IDs of"
+                " its own: give its parts other names.",
+                interfaces[0] if interfaces else None,
+            )
+
+
+def _free_transfinite(study, free, r):
+    """A free object cannot be structured (spec 4.4): the mesher cannot yet put a structured mesh around copies."""
+    names = {b.Name for b in free}
+    for t in objects.transfinite_bodies(study):
+        on = [b for b, _ in objects.subs_by_body(t) if b.Name in names]
+        if on:
+            r.error(
+                f"Transfinite Body {t.Label} refers to free object {_listed([objects.display_name(b) for b in on])}:"
+                " a free object cannot be structured yet (a limit of the tool, not a fault in the model). Make it a"
+                " cell object of a group, or take it out of the item.",
+                t,
+                [(b, "") for b in on],
+            )
+
+
+def _groups(study, main, moving, r):
+    """A Study with Symmetric Groups (spec section 6). The free objects, the bodies of the main and moving geometry that
+    are in no group, are checked as ordinary bodies by validate."""
+    groups = objects.symmetric_groups(study)
+    three = study.Dimension == "3D"
+    free = free_bodies(study, main, moving)
+    for air in objects.air_regions(study):
+        r.error(f"Air Region {objects.display_name(air)}: a Study with Symmetric Groups has no Air Region.", air)
+    plane = _group_plane(study, objects.cell_bodies(study), free, r)
+    _free_cells(main, moving, groups, r)
+    ruled, drawn = {}, []  # group Name -> its rules; the groups whose rules and rows can be read
+    for item in groups:
+        rules = _group_rules(item, plane, r)
+        if rules is not None:
+            ruled[item.Name] = rules
+        if _group_rows(study, item, rules, r) and rules is not None:
+            drawn.append(item)
+            _overlaps(item, item.Cells, objects.group_transforms(item), r, three)
+    for i, a in enumerate(drawn):
+        for b in drawn[i + 1 :]:
+            if objects.part_key(study, a, "") == objects.part_key(study, b, ""):  # the same side
+                _touch_groups(a, b, three, r)
+    _group_sliding(study, groups, ruled, free, plane, r)
+    _free_transfinite(study, free, r)
+    _part_materials(study, drawn, r)
