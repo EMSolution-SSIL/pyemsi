@@ -683,22 +683,25 @@ def _overlaps(item, cells, rules, r, three=False):
     """The copies of the cell objects of group item may only touch (split-cell PRD R3). A cell object past a mirror's
     plane, or a rotation with too many copies, makes them overlap, and the mesher would fail with only a point.
     Copies i and j overlap the way the cell overlaps its copy by T_i^-1 T_j, so the cell is tested against each such
-    relative transform once (symmetry.relative_pairs; for rules that close, those are the copies' own transforms),
-    of the copies whose bounding boxes meet, and in its own place two cell objects may only touch too. Reports the
-    first overlap found."""
+    relative transform once (symmetry.relative_transforms; for rules that close, those are the copies' own
+    transforms), only those that move a point of the cells' box into it, and in its own place two cell objects may only
+    touch too. Reports the first overlap found. The boxes are exact (_box): a tessellated shape's BoundBox can be
+    smaller than the shape."""
     shapes = [(cell, geometry.global_shape(cell)) for cell in cells]
+    shapes = [(cell, shape, _box(shape)) for cell, shape in shapes]
     if not shapes:
         return
-    box = shapes[0][1].BoundBox
-    for _, shape in shapes[1:]:
-        box.add(shape.BoundBox)
-    for m, i, j in symmetry.relative_pairs(rules, (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)):
+    boxes = [b for _, _, b in shapes]
+    box = (*(min(b[k] for b in boxes) for k in range(3)), *(max(b[k] for b in boxes) for k in range(3, 6)))
+    for m in symmetry.relative_transforms(rules, box):
         same = all(abs(a - b) < symmetry.TOL for a, b in zip(m, symmetry.ID))
-        for k, (other, shape) in enumerate(shapes):
-            copy = shape if same else shape.transformed(App.Matrix(*m))
-            for cell, mine in shapes[:k] if same else shapes:
-                if not mine.BoundBox.intersect(copy.BoundBox):
+        for k, (other, shape, other_box) in enumerate(shapes):
+            moved, copy = (other_box if same else symmetry.moved_box(m, other_box)), None
+            for cell, mine, mine_box in shapes[:k] if same else shapes:
+                if not symmetry.boxes_meet(mine_box, moved):
                     continue
+                if copy is None:
+                    copy = shape if same else shape.transformed(App.Matrix(*m))
                 common = mine.common(copy)
                 if three:
                     if common.Volume <= 1e-6 * min(mine.Volume, copy.Volume):
@@ -709,7 +712,9 @@ def _overlaps(item, cells, rules, r, three=False):
                     c, size = max(common.Solids, key=lambda s: s.Volume).CenterOfMass, f"{common.Volume:.3g} mm³"
                 else:
                     c, size = max(common.Faces, key=lambda f: f.Area).CenterOfMass, f"{common.Area:.3g} mm²"
-                at = symmetry.apply(symmetry.transforms(rules)[i], (c.x, c.y, c.z)) if i else (c.x, c.y, c.z)
+                ts = symmetry.transforms(rules)
+                i, j = (0, 0) if same else symmetry.first_pair(ts, m)
+                at = symmetry.apply(ts[i], (c.x, c.y, c.z)) if i else (c.x, c.y, c.z)  # where the copies lie
                 x, y, z = (round(v, 9) + 0.0 for v in at)
                 where = f"({x:.6g}, {y:.6g}, {z:.6g})" if three else f"({x:.6g}, {y:.6g})"
                 who = f"cell body {objects.display_name(cell)}"
@@ -738,6 +743,12 @@ def _overlaps(item, cells, rules, r, three=False):
                 return
 
 
+def _box(shape):
+    """(xmin, ymin, zmin, xmax, ymax, zmax) of shape from its geometry, not from its triangles."""
+    b = shape.optimalBoundingBox(False, False)
+    return (b.XMin, b.YMin, b.ZMin, b.XMax, b.YMax, b.ZMax)
+
+
 def _interfaces(study, sliding, r):
     """Sliding Interfaces of a Study with Symmetric Groups: one, Rotational; _group_sliding checks the rest."""
     interfaces = objects.sliding_interfaces(study)
@@ -748,7 +759,11 @@ def _interfaces(study, sliding, r):
     if not interfaces:
         r.error("Sliding motion needs at least one Sliding Interface.")
     for i in interfaces[1:]:
-        r.error(f"A Study with a Symmetric Group has only one Sliding Interface: delete {i.Label}.", i)
+        r.error(
+            "A Study with a Symmetric Group has only one Sliding Interface: more than one is not handled yet, a limit"
+            f" of the tool, not of the drawing. Delete {i.Label}.",
+            i,
+        )
     for i in interfaces:
         if i.Kind != "Rotational":
             r.error(
@@ -1014,7 +1029,11 @@ def _on_interface(shape, radius, three):
 
 def _reach(group, radius, three):
     """How the drawing of a group lies to the interface: None, "touches" or "crosses" (any one solid that does)."""
-    shape = group.Shape
+    return _shape_reach(group.Shape, radius, three)
+
+
+def _shape_reach(shape, radius, three):
+    """How a shape lies to the interface: None, "touches" or "crosses" (any one solid, face in 2D, that does)."""
     if shape.isNull() or not (shape.Solids or shape.Faces):
         return None
     tools = _tools(radius, shape.BoundBox, three)
@@ -1025,6 +1044,11 @@ def _reach(group, radius, three):
             return how
         found = found or how
     return found
+
+
+def _drawn_cross(cell, radius, three):
+    """True if a cell object, where it is drawn, crosses the interface."""
+    return _shape_reach(geometry.global_shape(cell), radius, three) == "crosses"
 
 
 def _about_z(rule):
@@ -1055,7 +1079,9 @@ def _group_sliding(study, groups, ruled, free, plane, r):
             sides.add(objects.part_key(study, item, "").partition("|")[0])
             rules = ruled.get(item.Name)
             off_z = [(n, rule) for n, rule in enumerate(rules or [], 1) if not _about_z(rule)]
-            if how == "crosses" and not off_z:  # copies of a rule refused below cross it however the cells are drawn
+            if how == "crosses" and off_z and not any(_drawn_cross(c, radius, three) for c in item.Cells):
+                how = "touches"  # only copies made by a rule refused below cross it: splitting the cells would not help
+            if how == "crosses":
                 r.error(
                     f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} crosses it. A group may only end"
                     " on the sliding surface: split the cell objects at it.",

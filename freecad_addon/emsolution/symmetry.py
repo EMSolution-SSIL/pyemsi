@@ -14,6 +14,8 @@ import numpy as np
 ID = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 TOL = 1e-9
 MAX_DRAWN = 5000
+STRUCTURE_LIMIT = 2_000_000  # steps y1^-1 L^d y2 above which relative_transforms sweeps the pairs of copies instead
+BLOCK = 100_000  # transforms formed at once by numpy
 
 
 class SymmetryError(Exception):
@@ -58,42 +60,118 @@ def inverse(m):
 
 
 def relative_transforms(rules, box=None):
-    """The transforms of relative_pairs(rules, box)."""
-    return [m for m, _, _ in relative_pairs(rules, box)]
-
-
-def relative_pairs(rules, box=None):
-    """[(m, i, j)]: the identity as (ID, 0, 0), then every other relative transform m = T_i^-1 T_j (i < j) of the
-    copies T the rules make, each once (by rounded key) with the first pair (i, j) that gives it: copy j lies as copy i
-    would if the cell were moved by m. box (xmin, ymin, zmin, xmax, ymax, zmax), the bounding box of the drawn cells,
-    keeps only the pairs whose copies' boxes (box moved by T, boxed again) meet. Copies that overlap lie in their
-    boxes, so those boxes meet: no overlap is lost, and every pair that gives the m of an overlap meets, so its first
-    pair is kept too.
+    """The identity, then relative transforms m = T_i^-1 T_j (i < j) of the copies T the rules make, each once (by
+    rounded key): copy j lies as copy i would if the cell were moved by m. Without box, all of them. With box (xmin,
+    ymin, zmin, xmax, ymax, zmax), the bounding box of the drawn cells, at least every m that moves a point of the box
+    into the box. Two copies overlap only where the cells overlap their copies by T_i^-1 T_j, and that m moves a point
+    of the box into it, so no overlap is lost (first_pair names the copies).
     When each rule's motion maps the set of copies onto itself (they form a group: say a mirror in a plane through the
-    rotation axis and whole turns), the copies are closed under products and inverses, so every T_i^-1 T_j is a copy's
-    own T_k and the list is the copies (T_k, 0, k), found in one pass per rule. Other rules need the pairs, found by a
-    sweep over the boxes and formed with numpy."""
+    rotation axis and whole turns), every T_i^-1 T_j is a copy's own T_k, so the list is the copies whose boxes meet the
+    cells'. Otherwise the first rules that close make a group G, and every copy is L^a y g: g in G, y a copy of the
+    rules between, L the last rule. Then T_i^-1 T_j = g1^-1 (y1^-1 L^d y2) g2 = (g1^-1 s g1)(g1^-1 g2): the steps s
+    are few (d, not a and b, counts) and pruned by the box of all of G's copies, then conjugated by G and multiplied by
+    G, so the pairs of copies are never visited. When the rules between have too many copies for that, the pairs whose
+    copies' boxes meet are found by a sweep."""
     ts = transforms(rules)
-    mats = np.array(ts, dtype=float).reshape(-1, 4, 4)
-    if all(_same_copies((compose(rule_matrix(r), t) for t in ts), ts) for r in rules):
-        if box is None:
-            return [(t, 0, k) for k, t in enumerate(ts)]
-        lows, highs = _boxes(mats, box)
-        meet = np.all((lows <= highs[0]) & (lows[0] <= highs), axis=1)  # copy k's box meets the drawn cells'
-        return [(t, 0, k) for k, t in enumerate(ts) if meet[k]]
-    if box is None:
-        firsts, seconds = np.triu_indices(len(ts), 1)
-    else:
-        firsts, seconds = _meeting(mats, box)
-    out, backs = {_key(ID): (ID, 0, 0)}, np.linalg.inv(mats)
-    for start in range(0, len(firsts), 100000):  # a bounded block of products at a time
-        a, b = firsts[start : start + 100000], seconds[start : start + 100000]
-        rel = np.matmul(backs[a], mats[b]).reshape(-1, 16)
-        _, first = np.unique(np.round(rel, 9) + 0.0, axis=0, return_index=True)
-        for f in np.sort(first):
-            m = rel[f].tolist()
-            out.setdefault(_key(m), (m, int(a[f]), int(b[f])))
+    mats = _mats(ts)
+    if _closes(rules, ts):
+        return [t for t, keep in zip(ts, _onto(mats, box)) if keep]
+    k = next(n for n in range(len(rules) - 1, -1, -1) if _closes(rules[:n]))
+    mid = _mats(transforms(rules[k:-1]))
+    if len(mid) ** 2 * rule_count(rules[-1]) > STRUCTURE_LIMIT:
+        return _from_pairs(mats, *(np.triu_indices(len(ts), 1) if box is None else _meeting(mats, box)))
+    return _structured(_mats(transforms(rules[:k])), mid, rules[-1], box)
+
+
+def _mats(ts):
+    return np.array(ts, dtype=float).reshape(-1, 4, 4)
+
+
+def _closes(rules, ts=None):
+    """True if each rule's motion maps the copies the rules make onto themselves."""
+    ts = transforms(rules) if ts is None else ts
+    return all(_same_copies((compose(rule_matrix(r), t) for t in ts), ts) for r in rules)
+
+
+def _distinct(mats):
+    """mats (n x 4 x 4) each once by rounded value, in the order they first come."""
+    if not len(mats):
+        return mats
+    _, first = np.unique(np.round(mats.reshape(-1, 16), 9) + 0.0, axis=0, return_index=True)
+    return mats[np.sort(first)]
+
+
+def _from_pairs(mats, firsts, seconds):
+    """The identity, then mats[i]^-1 mats[j] of the pairs (firsts, seconds), each once, in the order of the pairs."""
+    out, backs = {_key(ID): ID}, np.linalg.inv(mats)
+    for start in range(0, len(firsts), BLOCK):  # a bounded block of products at a time
+        rel = _distinct(np.matmul(backs[firsts[start : start + BLOCK]], mats[seconds[start : start + BLOCK]]))
+        for m in rel.reshape(-1, 16).tolist():
+            out.setdefault(_key(m), m)
     return list(out.values())
+
+
+def _structured(group, mid, last, box):
+    """relative_transforms of copies L^a y g (g of group, y of mid, L the rule last), from the steps y1^-1 L^d y2."""
+    block = None
+    if box is not None:
+        lows, highs = _boxes(group, box)
+        block = (*lows.min(axis=0), *highs.max(axis=0))  # holds every copy of the cells that group makes
+    powers = [ID]
+    for _ in range(rule_count(last) - 1):
+        powers.append(compose(rule_matrix(last), powers[-1]))
+    powers, backs = _mats(powers), np.linalg.inv(mid)
+    d = np.repeat(np.arange(len(powers)), len(mid))
+    steps = []
+    for y, back in enumerate(backs):
+        s = np.matmul(np.matmul(back, powers)[:, None], mid[None]).reshape(-1, 4, 4)  # y^-1 L^d y2, d slowest
+        s = s[(d > 0) | (np.tile(np.arange(len(mid)), len(powers)) >= y)]  # d = 0: y2 after y, as i < j
+        steps.append(s[_onto(s, block)])  # the copies of the block by y1 and by L^d y2 must meet
+    steps = _distinct(np.concatenate(steps))
+    inverse_group = np.linalg.inv(group)
+    out, chunk = {_key(ID): ID}, max(1, BLOCK // len(group))
+    for start in range(0, len(steps), chunk):
+        conj = np.matmul(np.matmul(inverse_group[None], steps[start : start + chunk, None]), group[None])
+        conj = _distinct(conj.reshape(-1, 4, 4))
+        for c in range(0, len(conj), chunk):
+            ms = np.matmul(conj[c : c + chunk, None], group[None]).reshape(-1, 4, 4)
+            for m in _distinct(ms[_onto(ms, box)]).reshape(-1, 16).tolist():
+                out.setdefault(_key(m), m)
+    return list(out.values())
+
+
+def first_pair(ts, m, tol=1e-6):
+    """The first copies (i, j), i < j, with T_i^-1 T_j = m (T_j = T_i m), or (0, 0). A grid lookup keeps this linear."""
+    index = {}
+    for j, t in enumerate(ts):
+        index.setdefault(next(_grid_keys(t, 0)), []).append(j)
+    moved = np.matmul(_mats(ts), np.array(m, dtype=float).reshape(4, 4)).reshape(-1, 16).tolist()
+    for i, t in enumerate(moved):
+        for key in _grid_keys(t, tol):
+            for j in index.get(key, ()):
+                if j > i and max(abs(a - b) for a, b in zip(t, ts[j])) < tol:
+                    return i, j
+    return 0, 0
+
+
+def _onto(mats, box):
+    """For each transform of mats (n x 4 x 4), False only if it moves no point of the box into the box (their boxes
+    are apart); all True without a box."""
+    if box is None:
+        return np.ones(len(mats), dtype=bool)
+    lows, highs = _boxes(mats, box)
+    return np.all((lows <= np.array(box[3:])) & (np.array(box[:3]) <= highs), axis=1)
+
+
+def moved_box(m, box):
+    """The bounding box (xmin, ymin, zmin, xmax, ymax, zmax) of the box moved by m, a little enlarged."""
+    lows, highs = _boxes(_mats([m]), box)
+    return (*lows[0].tolist(), *highs[0].tolist())
+
+
+def boxes_meet(a, b):
+    """True if two boxes (xmin, ymin, zmin, xmax, ymax, zmax) share a point."""
+    return all(a[k] <= b[k + 3] and b[k] <= a[k + 3] for k in range(3))
 
 
 def _boxes(mats, box):

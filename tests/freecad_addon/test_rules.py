@@ -1,6 +1,8 @@
 """The rule engine: ordered mirror, rotation and translation rules become rigid transforms and part names."""
 
+import itertools
 import math
+import random
 import time
 
 import pytest
@@ -138,64 +140,147 @@ def test_relative_transforms_of_open_rules_hold_every_pair():
 
 
 OFF_AXIS = {"kind": "mirror", "point": [1, 0.75, 0], "normal": [2, 1.5, 0]}  # its plane misses the rotation axis
+MIRROR_Y0 = {"kind": "mirror", "point": [0, 0, 0], "normal": [0, 1, 0]}
 
 
-def _copy_box(t, box):
-    """The bounding box (lows, highs) of the box moved by t."""
-    corners = [apply(t, (x, y, z)) for x in box[0::3] for y in box[1::3] for z in box[2::3]]
-    return [min(c[k] for c in corners) for k in range(3)], [max(c[k] for c in corners) for k in range(3)]
+def UP(n, step=10):
+    return {"kind": "translate", "vector": [0, 0, step], "count": n}
 
 
-def test_relative_pairs_keep_every_pair_whose_copies_boxes_meet():
-    """Open rules (an off-axis mirror, 8 turns of 45 degrees, 3 steps along Z): with the cells' bounding box, every
-    T_i^-1 T_j whose copies' boxes meet is in the list, with the first such pair (i, j), and copies far apart are not
-    paired, so no overlap is lost and far fewer pairs are formed."""
-    rules = [OFF_AXIS, ROT(45, 8), {"kind": "translate", "vector": [0, 0, 10], "count": 3}]
-    box = (30, 0, 0, 50, 15, 10)
+def _sector_box(step, height=10):
+    """The box of a sector from the axis to R 50, of half a rotation step (it is mirrored first), z 0..height."""
+    return (0, 0, 0, 50, 50 * math.sin(math.radians(step / 2)), height)
+
+
+def _close(a, b):
+    return max(abs(x - y) for x, y in zip(a, b)) < 1e-7
+
+
+def _moves_into(r, box):
+    """True if r moves one of a 5 x 5 x 5 grid of points of the box into the box."""
+    grid = [[box[k] + f * (box[k + 3] - box[k]) for f in (0, 0.25, 0.5, 0.75, 1)] for k in range(3)]
+    for p in itertools.product(*grid):
+        q = apply(r, p)
+        if all(box[k] - 1e-7 <= q[k] <= box[k + 3] + 1e-7 for k in range(3)):
+            return True
+    return False
+
+
+def _check(rules, box):
+    """relative_transforms(rules, box) against every pair i < j: each listed m is a T_i^-1 T_j and first_pair gives the
+    first pair that does, and every T_i^-1 T_j that moves a point of the box into it is listed. Returns the list."""
     ts = transforms(rules)
-    found = symmetry.relative_pairs(rules, box)
-    assert found[0] == (ID, 0, 0)
-    for m, i, j in found[1:]:
-        assert i < j and compose(inverse(ts[i]), ts[j]) == pytest.approx(m, abs=1e-9)
-    boxes = [_copy_box(t, box) for t in ts]
-    meet = 0
-    for i in range(len(ts)):
-        for j in range(i + 1, len(ts)):
-            (lo_a, hi_a), (lo_b, hi_b) = boxes[i], boxes[j]
-            if all(lo_a[k] <= hi_b[k] and lo_b[k] <= hi_a[k] for k in range(3)):
-                meet += 1
-                r = compose(inverse(ts[i]), ts[j])
-                hits = [f for f in found if max(abs(a - b) for a, b in zip(r, f[0])) < 1e-9]
-                assert hits and (hits[0][1], hits[0][2]) <= (i, j), (i, j)
-    assert 0 < meet and len(found) < len(relative_transforms(rules))
+    pairs = [(i, j, compose(inverse(ts[i]), ts[j])) for i in range(len(ts)) for j in range(i + 1, len(ts))]
+    found = relative_transforms(rules, box)
+    assert _close(found[0], ID)
+    for m in found[1:]:
+        assert symmetry.first_pair(ts, m) == next((i, j) for i, j, r in pairs if _close(r, m))
+    for i, j, r in pairs:
+        if _moves_into(r, box):
+            assert any(_close(r, m) for m in found), (i, j)
+    return found
 
 
-def test_relative_pairs_of_closed_rules_are_the_copies_whose_boxes_meet_the_cell():
+CHECKED = {
+    "closed": ([MIRROR_X0, ROT(90, 4)], (0, 1, 0, 2, 2, 0)),
+    "closed-then-turns-and-steps": ([OFF_AXIS, ROT(45, 8), UP(3)], (30, 0, 0, 50, 15, 10)),
+    "sector-to-the-axis": ([MIRROR_Y0, ROT(30, 12), UP(4)], _sector_box(30)),
+    "steps-then-a-mirror": ([{"kind": "translate", "vector": [3, 1, 0], "count": 6}, OFF_AXIS], (0, 0, 0, 4, 2, 0)),
+    "turns-about-x-then-steps": (
+        [ROT(90, 4, axis=(1, 0, 0), point=(0, 5, 0)), {"kind": "translate", "vector": [7, 0, 0], "count": 5}],
+        (0, 0, 0, 8, 3, 2),
+    ),
+}
+
+
+@pytest.mark.parametrize("name", CHECKED)
+def test_relative_transforms_hold_every_relative_that_can_overlap(name):
+    rules, box = CHECKED[name]
+    found = _check(rules, box)
+    assert len(found) > 1
+
+
+def test_relative_transforms_drop_relatives_that_cannot_overlap():
+    rules, box = CHECKED["closed-then-turns-and-steps"]
+    assert 1 < len(relative_transforms(rules, box)) < len(relative_transforms(rules))
+
+
+def test_relative_transforms_by_sweeping_pairs_hold_the_same(monkeypatch):
+    """With more steps than STRUCTURE_LIMIT, the pairs of copies are swept instead; the list still holds them all."""
+    monkeypatch.setattr(symmetry, "STRUCTURE_LIMIT", 0)
+    for name in ("closed-then-turns-and-steps", "sector-to-the-axis", "turns-about-x-then-steps"):
+        _check(*CHECKED[name])
+
+
+def test_relative_transforms_of_random_rules_hold_every_relative_that_can_overlap():
+    """Random mirrors, turns and steps, any planes and axes, and turns and mirrors about Z that close."""
+    rng = random.Random(7)
+
+    def unit():
+        v = [rng.gauss(0, 1) for _ in range(3)]
+        return [c / math.sqrt(sum(x * x for x in v)) for c in v]
+
+    def rule():
+        kind = rng.choice(["mirror", "rotate", "translate", "zrot", "zmirror"])
+        p = [rng.uniform(-20, 20) for _ in range(3)]
+        if kind == "mirror":
+            return {"kind": "mirror", "point": p, "normal": unit()}
+        if kind == "zmirror":
+            a = rng.uniform(0, math.pi)
+            return {"kind": "mirror", "point": [0, 0, 0], "normal": [math.cos(a), math.sin(a), 0]}
+        if kind == "zrot":
+            n = rng.randint(2, 6)
+            return ROT(360 / n, n)
+        if kind == "rotate":
+            return {"kind": "rotate", "point": p, "axis": unit(), "step": rng.choice([30, 45, 90, 37]), "count": 3}
+        return {"kind": "translate", "vector": [rng.uniform(-15, 15) for _ in range(3)], "count": rng.randint(2, 3)}
+
+    done = 0
+    while done < 40:
+        rules = [rule() for _ in range(rng.randint(1, 3))]
+        if copy_count(rules) > 40 or rule_problems(rules, ""):
+            continue
+        low = [rng.uniform(-30, 30) for _ in range(3)]
+        box = (*low, *(a + rng.choice([0.0, rng.uniform(0.1, 40)]) for a in low))
+        _check(rules, box)
+        ts, everything = transforms(rules), relative_transforms(rules)  # without a box: every relative
+        for i in range(len(ts)):
+            for j in range(i + 1, len(ts)):
+                assert any(_close(compose(inverse(ts[i]), ts[j]), m) for m in everything), (rules, i, j)
+        done += 1
+
+
+def test_relative_transforms_of_closed_rules_are_the_copies_whose_boxes_meet_the_cell():
     rules = [MIRROR_X0, ROT(90, 4)]
     ts = transforms(rules)
-    assert symmetry.relative_pairs(rules) == [(t, 0, k) for k, t in enumerate(ts)]
-    near = symmetry.relative_pairs(rules, (0, 1, 0, 2, 2, 0))  # a rectangle on the mirror plane, clear of the axis
-    assert near[0] == (ID, 0, 0) and len(near) == 3  # itself, its mirror image and one turned mirror image
-    assert all(m == ts[k] and i == 0 for m, i, k in near)
+    near = relative_transforms(rules, (0, 1, 0, 2, 2, 0))  # a rectangle on the mirror plane, clear of the axis
+    assert len(near) == 3 and all(m in ts for m in near)  # itself, its mirror image and one turned mirror image
+    assert near[0] == ID and symmetry.first_pair(ts, near[1])[0] == 0
 
 
 @pytest.mark.parametrize(
     "rules,box",
     [
-        ([MIRROR_X0, ROT(7.5, 48), {"kind": "translate", "vector": [0, 0, 10], "count": 10}], (30, 0, 0, 50, 3.3, 10)),
+        ([MIRROR_X0, ROT(7.5, 48), UP(10)], (30, 0, 0, 50, 3.3, 10)),
         ([{"kind": "translate", "vector": [1, 0, 0], "count": 2000}], (0, 0, 0, 1, 1, 0)),
-        ([OFF_AXIS, ROT(7.2, 50), {"kind": "translate", "vector": [0, 0, 10], "count": 50}], (30, 0, 0, 50, 3.1, 10)),
+        ([OFF_AXIS, ROT(7.2, 50), UP(50)], (30, 0, 0, 50, 3.1, 10)),
         ([{"kind": "translate", "vector": [1, 0, 0], "count": 5000}], (0, 0, 0, 1, 1, 0)),
+        ([MIRROR_Y0, ROT(3.75, 96), UP(10)], _sector_box(3.75)),
+        ([MIRROR_Y0, ROT(1.44, 250), UP(10)], _sector_box(1.44)),
+        ([MIRROR_Y0, ROT(2.88, 125), UP(20)], _sector_box(2.88)),
+        ([{"kind": "translate", "vector": [0.01, -0.01, 0], "count": 5000}], (0, 0, 0, 100, 100, 0)),
+        ([ROT(1, 360), UP(10, 1)], (0, -0.1, 0, 100, 0.1, 1)),
     ],
-    ids=["960", "2000", "5000-turned", "5000"],
+    ids=["960", "2000", "5000-turned", "5000", "sector-1920", "sector-5000", "sector-5000-20", "bars-5000", "spokes"],
 )
-def test_relative_pairs_of_many_open_copies_are_quick(rules, box):
-    """Validate runs this on the GUI thread, and Mesh again: forming every pair took 14 s at 960 copies and minutes
-    at MAX_DRAWN. The bound is generous; it takes well under a second."""
+def test_relative_transforms_of_many_open_copies_are_quick(rules, box):
+    """Validate runs this on the GUI thread, and Mesh again. Forming every pair took 14 s at 960 copies and minutes at
+    MAX_DRAWN; sweeping the pairs whose boxes meet still took 9 s for 5000 sectors that reach the axis (all of a layer
+    meet there) and 21 s for 5000 long bars side by side. The bound is generous; each takes well under a second."""
     start = time.perf_counter()
-    found = symmetry.relative_pairs(rules, box)
-    assert time.perf_counter() - start < 5
-    assert found[0] == (ID, 0, 0) and len(found) > 1
+    found = relative_transforms(rules, box)
+    assert time.perf_counter() - start < 3
+    assert found[0] == ID and len(found) > 1
 
 
 def test_part_names():

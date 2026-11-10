@@ -6,6 +6,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -795,14 +796,26 @@ def test_a_group_crossing_the_interface_is_refused(study):
 
 
 def test_a_group_crossing_the_interface_still_gets_its_rules_checked(study_3d):  # T-07
-    """A rule about X is refused for the interface, and the crossing is not reported besides: copies turned about X
-    lie across the cylinder about Z however the cells are drawn (T-07), so splitting cell objects would not help."""
     (stator,) = objects.symmetric_groups(study_3d)
     objects.set_rules(stator, [{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 180, "count": 2}])
     study_3d.Document.getObject("StatorAirCell").Shape = symcases.sector(33, 36, 0, 15).extrude(V(0, 0, 10))
     study_3d.Movement = "Sliding motion"
     objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     study_3d.Document.recompute()
+    assert any("about Z" in t for t in texts(study_3d)), texts(study_3d)
+    assert any("crosses it" in t for t in texts(study_3d)), texts(study_3d)  # the drawn air cell crosses
+
+
+def test_copies_turned_about_x_across_the_interface_are_not_said_to_cross(study_3d):  # T-07
+    """A rule about X is refused for the interface. Its copies lie across the cylinder about Z though the cell objects
+    are drawn clear of it: the crossing is not reported besides, as splitting the cell objects would not help."""
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 90, "count": 4}])
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    study_3d.Document.recompute()
+    assert validation._reach(stator, 35, True) == "crosses"
+    assert not any(validation._drawn_cross(c, 35, True) for c in stator.Cells)
     assert any("about Z" in t for t in texts(study_3d)), texts(study_3d)
     assert not any("crosses it" in t for t in texts(study_3d)), texts(study_3d)
 
@@ -864,6 +877,122 @@ def test_touching_groups_say_it_is_a_limit_of_the_tool(study, stator):  # M3-08
     found = [t for t in texts(study) if "one group, or draw" in t]
     assert found and " touch, " in found[0], texts(study)
     assert "touch directly are not handled yet, a limit of the tool" in found[0], found[0]
+
+
+# ---- last round, fix round 1
+
+
+def test_a_drawn_cell_across_the_interface_is_reported_beside_a_refused_rule(study_3d):
+    """A step along Z is refused for the interface, and the air cell is drawn across r = 35 besides: both are said,
+    as the cell object itself has to be split whatever the rules."""
+    (stator,) = objects.symmetric_groups(study_3d)
+    objects.set_rules(stator, [*STATOR_RULES, {"kind": "translate", "vector": [0, 0, 10], "count": 2}])
+    study_3d.Document.getObject("StatorAirCell").Shape = symcases.sector(33, 36, 0, 15).extrude(V(0, 0, 10))
+    study_3d.Movement = "Sliding motion"
+    objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    study_3d.Document.recompute()
+    found = texts(study_3d)
+    assert any("Rule 3 (translate) is not a rotation about Z" in t for t in found), found
+    assert any("Symmetric Group Stator crosses it" in t for t in found), found
+
+
+def test_a_tessellated_cell_overlapping_its_copy_is_refused(tmp_path):
+    """A tessellated shape's BoundBox lies inside its triangles, below the true circle: a disk R 10 moved by a little
+    less than 20 overlaps its copy, though the BoundBoxes are apart. The exact box finds it."""
+    doc = App.newDocument("SymTess")
+    try:
+        disk = Part.Face(Part.Wire(Part.makeCircle(10)))
+        disk.rotate(V(), V(0, 0, 1), 37)
+        disk.tessellate(0.5)
+        cell = symcases.feature(doc, "Disk", disk)
+        shrink = 10 - geometry.global_shape(cell).BoundBox.YMax
+        assert shrink > 1e-3
+        study = objects.make_study(doc, "2D")
+        gap = 20 - 1.5 * shrink
+        rules = [{"kind": "translate", "vector": [0, gap, 0], "count": 2}]
+        item = symcases.group(study, "G", [cell], rules)
+        doc.recompute()
+        r = validation._Report()
+        validation._overlaps(item, [cell], rules, r)
+        assert [p.text for p in r.problems if "overlaps a copy moved by" in p.text], [p.text for p in r.problems]
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_two_far_copies_that_overlap_are_found_though_far_pairs_are_dropped(tmp_path):
+    """A block x 0..4, Translate (10, 0) x 20, then Mirror x = 100.5: the mirrored copy of block a lies at x
+    197 - 10a..201 - 10a, over block 20 - a by 1 mm². The drawn cell overlaps no copy, most pairs are far apart and
+    dropped, and the first overlapping pair is copies 2 and 40 (blocks 1 and the mirror of block 19)."""
+    doc = App.newDocument("SymFar")
+    try:
+        cell = symcases.feature(doc, "Cell", Part.makePlane(4, 1))
+        study = objects.make_study(doc, "2D")
+        lib = symcases.libraries(study)
+        rules = [
+            {"kind": "translate", "vector": [10, 0, 0], "count": 20},
+            {"kind": "mirror", "point": [100.5, 0, 0], "normal": [1, 0, 0]},
+        ]
+        item = symcases.group(study, "G", [cell], rules, rows={"Cell": {"mode": "each"}})
+        objects.sync_parts(study)
+        objects.set_row_material(study, item, 0, lib["Steel"])
+        doc.recompute()
+        doc.saveAs(str(tmp_path / "t.FCStd"))
+        box = (0, 0, 0, 4, 1, 0)
+        assert len(symmetry.relative_transforms(rules, box)) < len(symmetry.relative_transforms(rules)) / 4
+        found = [t for t in texts(study) if "overlaps" in t]
+        assert found and "copy 2 of cell body Cell overlaps copy 40 of Cell" in found[0], texts(study)
+        assert "by 1 mm²" in found[0], found[0]
+        faces = item.Shape.Faces
+        assert faces[1].common(faces[39]).Area == pytest.approx(1.0)
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_overlaps_of_5000_sectors_that_reach_the_axis_are_checked_quickly():
+    """Mirror, 250 turns and 10 steps along Z of a sector from the axis: every copy of a layer meets the others on the
+    axis, and Validate took 12 s (on the GUI thread, and again on Mesh). The bound is generous."""
+    doc = App.newDocument("SymAxis")
+    try:
+        half = 360 / 250 / 2
+        a = math.radians(half)
+        wire = Part.Wire(
+            [
+                Part.makeLine(V(0, 0, 0), V(50, 0, 0)),
+                Part.makeCircle(50, V(0, 0, 0), V(0, 0, 1), 0, half),
+                Part.makeLine(V(50 * math.cos(a), 50 * math.sin(a), 0), V(0, 0, 0)),
+            ]
+        )
+        cell = symcases.feature(doc, "Sector", Part.Face(wire).extrude(V(0, 0, 10)))
+        study = objects.make_study(doc, "3D")
+        rules = [
+            {"kind": "mirror", "point": [0, 0, 0], "normal": [0, 1, 0]},
+            {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 2 * half, "count": 250},
+            {"kind": "translate", "vector": [0, 0, 10], "count": 10},
+        ]
+        item = symcases.group(study, "G", [cell], [])  # no drawing of the 5000 copies
+        r = validation._Report()
+        start = time.perf_counter()
+        validation._overlaps(item, [cell], rules, r, True)
+        assert time.perf_counter() - start < 8
+        assert r.problems == []
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_one_sliding_interface_says_more_is_a_limit_of_the_tool(study):  # M2-13
+    sliding(study)
+    ready(study)
+    objects.make_sliding_interface(study, "Rotational", Radius=36, Divisions=144, CrossDivisions=2)
+    found = [t for t in texts(study) if "only one Sliding Interface" in t]
+    assert found and "more than one is not handled yet, a limit of the tool" in found[0], texts(study)
+    assert "Delete Sliding Interface" in found[0], found[0]
+
+
+def test_a_linear_interface_in_a_symmetric_study_says_it_is_a_limit_of_the_tool(study):
+    _, iface = sliding(study)
+    iface.Kind = "Linear"
+    with pytest.raises(ValueError, match="slides Rotational only. Linear sliding with Symmetric Groups is not handled"):
+        iface.Proxy.execute(iface)
 
 
 # ---- writing the job (spec section 8)

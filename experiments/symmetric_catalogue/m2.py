@@ -430,7 +430,7 @@ CASES = [
     ("M2-11", m2_11, "meshes"),
     ("M2-12", m2_12, "meshes"),
     ("M2-12-sliding", m2_12_sliding, ("refused", "must cover the circle")),
-    ("M2-13", m2_13, ("refused", "only one Sliding Interface")),
+    ("M2-13", m2_13, ("refused", "only one Sliding Interface: more than one is not handled yet, a limit of the tool")),
     (
         "M2-14",
         m2_14,

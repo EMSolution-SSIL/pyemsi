@@ -639,7 +639,10 @@ class SlidingInterface(_Named):
         study = owner_study(obj)
         if air is None and study is not None and is_grouped(study):
             if obj.Kind != "Rotational":
-                raise ValueError(f"Sliding Interface {display_name(obj)}: a symmetric Study slides Rotational only")
+                raise ValueError(
+                    f"Sliding Interface {display_name(obj)}: a symmetric Study slides Rotational only. {obj.Kind}"
+                    " sliding with Symmetric Groups is not handled yet, a limit of the tool, not of the drawing."
+                )
             import FreeCAD as App
             import Part
 
