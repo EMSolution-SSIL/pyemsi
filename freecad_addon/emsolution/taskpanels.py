@@ -2019,7 +2019,8 @@ class SymmetricGroupPanel:
         left = [b.Label for p in proposals if p is not taken for b in p.cells]
         if left:
             warn(
-                f"These bodies are copied differently and were left out: {', '.join(left)}. Read them into a group of their own."
+                f"These bodies are copied differently and were left out: {', '.join(left)}. Read them into a group of"
+                " their own."
             )
 
     def open_table(self):

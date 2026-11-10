@@ -3,7 +3,7 @@
 import json
 import os
 
-from . import airshapes, geometry, objects, symmetry, validation
+from . import airshapes, geometry, objects, validation
 from .geometry import global_shape
 
 
@@ -325,8 +325,6 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
         "parts": parts,
         "rows": written,
     }
-    if study.Movement == "Sliding motion":
-        entry["turns"] = symmetry.turns_about_z(objects.rules_of(item))
     if study.Dimension == "3D":  # each Excitation's faces on this drawing, one file per face
         entry["excitations"] = []
         for exc, body, faces in surfaces:

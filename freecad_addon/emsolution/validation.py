@@ -1102,8 +1102,8 @@ def _part_materials(study, readable, r):
     for clashing in spelled.values():
         if len(clashing) > 1:
             r.error(
-                f"These part names are the same in the mesh, after removing special characters: {', '.join(sorted(clashing))}."
-                " Rename them in the group's table.",
+                "These part names are the same in the mesh, after removing special characters:"
+                f" {', '.join(sorted(clashing))}. Rename them in the group's table.",
                 next(iter(clashing.values())),
             )
     missing = [key for key in parts if key not in have or have[key].LibraryMaterial is None]

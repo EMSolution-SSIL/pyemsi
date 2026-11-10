@@ -1323,11 +1323,12 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
                 shifted = {t: np.where(c >= start, c + count, c) for t, c in per_type.items()}
                 for etype, conn in shifted.items():
                     elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
-                alive = {tag for _, tag in gmsh.model.getPhysicalGroups(2)}  # gone when its faces are all under copies
+                # an excitation's group is gone when its faces are all under copies
+                alive = {tag for _, tag in gmsh.model.getPhysicalGroups(dim - 1)}
                 for s in surfaces:
                     if s["mat_id"] != body["mat_id"] or s["smat_id"] not in alive:
                         continue
-                    for face in gmsh.model.getEntitiesForPhysicalGroup(2, s["smat_id"]):
+                    for face in gmsh.model.getEntitiesForPhysicalGroup(dim - 1, s["smat_id"]):
                         for etype, conn in own.get(int(face), {}).items():
                             lifted = np.where(conn >= start, conn + count, conn)
                             per = excited.setdefault(s["smat_id"], (s["name"], {}))[1]

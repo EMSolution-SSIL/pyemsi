@@ -1,11 +1,13 @@
 """Gate meshes for an EMSolution solve: two group jobs written to JSON and meshed by mesher.py.
 
 (a) a small 3D motor: stator iron, coils and slot air over z 0..50, the air gap band, the rotor and a free air ring
-    over z 0..75 (all mirrored at z = 0, then rotated), a Rotational sliding interface (the ring is drawn over the stator);
+    over z 0..75 (all mirrored at z = 0, then rotated), a Rotational sliding interface (the ring is drawn over the
+    stator);
 (b) hexahedral coils pressed on tetrahedral iron, in a free air cylinder (hexahedra, tetrahedra and pyramids).
 
 Run: pixi run -e addon python experiments/symmetric_rules/gate_meshes.py
-Output: C:\\Users\\hamed\\Desktop\\delme\\rules_gate\\<mesh>\\ (job.json, geometry/*.brep, pre_geom.msh, rotor_mesh.msh, mesh.unv)
+Output: C:\\Users\\hamed\\Desktop\\delme\\rules_gate\\<mesh>\\
+    (job.json, geometry/*.brep, pre_geom.msh, rotor_mesh.msh, mesh.unv)
 """
 
 import collections
@@ -132,14 +134,12 @@ def structured_layer(folder, name, r0, r1, top, mat_id, label, arcs=12, ups=15):
     return vol, edges
 
 
-def group(name, side, volumes, transforms, parts, rows, turns=None):
+def group(name, side, volumes, transforms, parts, rows):
     cells = list(range(1, len(volumes) + 1))
     job = {"volumes": volumes, "surfaces": [], "sizes": []}
     rows = [{"cell": c, "file": None, "parts": r} for c, r in zip(cells, rows)]
     out = {"name": name, "side": side, "job": job, "cells": cells, "transforms": transforms, "parts": parts}
     out["rows"] = rows
-    if turns:
-        out["turns"] = turns
     return out
 
 
@@ -241,8 +241,8 @@ def motor():
     rotor_parts += [{"mat_id": 4, "name": "MagnetN"}, {"mat_id": 5, "name": "MagnetS"}]
     rotor_rows = [[0] * 24, [2 + c % 2 for c in turn], [1] * 24, [1] * 24]
     groups = [
-        group("Stator", "fixed", stator, transforms, stator_parts, stator_rows, turns=12),
-        group("Rotor", "moving", rotor, transforms, rotor_parts, rotor_rows, turns=12),
+        group("Stator", "fixed", stator, transforms, stator_parts, stator_rows),
+        group("Rotor", "moving", rotor, transforms, rotor_parts, rotor_rows),
     ]
     for g, edges, mat in ((groups[0], stator_edges, 5), (groups[1], rotor_edges, 4)):
         g["job"]["transfinite"] = {
@@ -273,7 +273,8 @@ def motor():
     ring = pi * (110**2 - (R + 2) ** 2) * 2 * T - pi * (80**2 - (R + 2) ** 2) * 2 * L
     want = ring + band + slot
     print(
-        f"   Air volume {vols['Air']:.0f}, wanted (ring - stator cells + band + slot air) {want:.0f}: {vols['Air'] / want:.4f}"
+        f"   Air volume {vols['Air']:.0f}, wanted (ring - stator cells + band + slot air) {want:.0f}:"
+        f" {vols['Air'] / want:.4f}"
     )
     for path in (job["mesh_file"], job["rotor_file"]):
         quads, tris = cylinder_faces(path, R)

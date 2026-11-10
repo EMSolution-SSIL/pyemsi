@@ -650,7 +650,6 @@ class GroupJobTest(unittest.TestCase):
                     "transforms": transforms,
                     "parts": [{"mat_id": mat, "name": name}],
                     "rows": [{"cell": 1, "file": None, "parts": [0] * len(transforms)}],
-                    "turns": 12,
                 }
             )
         slide = {"name": "Slide", "kind": "rotational", "radius": 20.0, "divisions": 144, "cross_divisions": cross}
@@ -716,7 +715,6 @@ class GroupJobTest(unittest.TestCase):
             "transforms": transforms,
             "parts": [{"mat_id": 5 + k, "name": f"Layer{k}"}],
             "rows": [{"cell": 1, "file": None, "parts": [0] * len(transforms)}],
-            "turns": 12,
         }
 
     def test_sliding_3d_quads_on_the_cylinder(self):  # a structured air layer on each side: hexahedra, quads on r = 20

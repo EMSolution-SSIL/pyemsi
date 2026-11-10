@@ -942,7 +942,7 @@ def test_a_study_without_free_bodies_has_no_free(study, stator):
     assert "free" not in load_job(study)["symmetric"]
 
 
-def test_z_range_and_turns_with_sliding(study_3d, tmp_path):
+def test_z_range_with_sliding(study_3d, tmp_path):
     (stator,) = objects.symmetric_groups(study_3d)
     objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
     rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
@@ -952,8 +952,8 @@ def test_z_range_and_turns_with_sliding(study_3d, tmp_path):
     study_3d.Document.saveAs(str(tmp_path / "t3.FCStd"))
     block = load_job(study_3d)["symmetric"]
     assert block["slide"]["z_range"] == [-10, 10] and block["slide"]["cross_divisions"] == 2
-    assert [g["turns"] for g in block["groups"]] == [12, 16]
     assert [len(g["transforms"]) for g in block["groups"]] == [48, 32]
+    assert not any("turns" in g for g in block["groups"])  # validation checks the turns; the mesher has no use for them
 
 
 def test_turns_are_the_rotations_about_z_only():
@@ -965,17 +965,17 @@ def test_turns_are_the_rotations_about_z_only():
     assert symmetry.turns_about_z([]) == 1
 
 
-def test_no_turns_and_no_z_range_without_sliding(study, stator):
+def test_no_z_range_without_sliding(study, stator):
     ready(study)
     block = load_job(study)["symmetric"]
-    assert "slide" not in block and "turns" not in block["groups"][0]
+    assert "slide" not in block
 
 
-def test_2d_sliding_has_turns_but_no_z_range(study, stator):
+def test_2d_sliding_has_no_z_range(study, stator):
     sliding(study)
     ready(study)
     block = load_job(study)["symmetric"]
-    assert "z_range" not in block["slide"] and [g["turns"] for g in block["groups"]] == [12, 16]
+    assert "z_range" not in block["slide"] and not any("turns" in g for g in block["groups"])
 
 
 def test_mesh_settings_go_with_their_cell(study, stator):

@@ -1,7 +1,8 @@
 """Symmetric Groups: the copies that ordered mirror, rotation and translation rules make, and the parts they belong to.
 
 A drawing built with Part Mirror, Draft Polar Array and Part Compound / Boolean Fragments can fill a group:
-rules_from_chain walks that chain from its top object down to the cell bodies and reads it as ordered rules. Mirror planes and array axes may lie any way.
+rules_from_chain walks that chain from its top object down to the cell bodies and reads it as ordered rules. Mirror
+planes and array axes may lie any way.
 Transforms are 4x4 affine, row major (16 floats), in global positions. No GUI code."""
 
 import collections
@@ -289,7 +290,7 @@ def _is_leaf(obj):
 
 def _cuts_a_cell(obj):
     """A Boolean Fragments with something below it but no Mirror or Polar Array: it cuts cell faces into blocks, so it
-    is one cell body with several faces, as a Fragments body is in a Study without a Symmetric Mesh."""
+    is one cell body with several faces, as a Fragments body is in a Study without a Symmetric Group."""
     copies = any(o.TypeId == "Part::Mirroring" or _is_array(o) for o in obj.OutListRecursive)
     return _is_fragments(obj) and bool(obj.Objects) and not copies
 
@@ -338,7 +339,7 @@ def _walk(obj):
     elif _is_leaf(obj):
         return {obj.Name: (obj, [ID])}  # its shape already carries its own Placement
     else:
-        raise SymmetryError(f"{_name(obj)} is not supported in a Symmetric Mesh chain")
+        raise SymmetryError(f"{_name(obj)} is not supported in a Symmetric Group chain")
     p = _placement(obj)
     return {k: (b, [compose(p, t) for t in ts]) for k, (b, ts) in found.items()}
 

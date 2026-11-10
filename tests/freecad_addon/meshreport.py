@@ -30,9 +30,10 @@ def quality(msh_path, copied=()):
     """What a mesh file holds and whether it is sound, from the physical groups of its highest dimension:
     {"dim", "types": {type name: count}, "inverted", "faces_in_three", "kept", "boundary"}. Inverted: an element
     with a corner whose tetrahedron (3D) or triangle (2D, against the normal of the drawing's plane, +Z for XY) is not
-    positive; a ZX drawing is held to the orientation most of its elements have. faces_in_three: facets (faces in 3D, edges in 2D)
-    shared by 3 or more elements. kept: the facets on the surface of the elements of the MAT_IDs copied that another
-    element shares. boundary: the facets used by one element, as (MAT_ID, centre, outward normal, size) arrays."""
+    positive; a ZX drawing is held to the orientation most of its elements have. faces_in_three: facets (faces in 3D,
+    edges in 2D) shared by 3 or more elements. kept: the facets on the surface of the elements of the MAT_IDs copied
+    that another element shares. boundary: the facets used by one element, as (MAT_ID, centre, outward normal, size)
+    arrays."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
