@@ -341,9 +341,9 @@ def mesh_and_read(study, timeout=None):
         return types.SimpleNamespace(ok=False, refused=refused, seconds=time.time() - start)
     out = read_mesh(study)
     out.ok, out.refused, out.poor = True, "", []
-    for line in r.stdout.splitlines():
-        if line.startswith("Poor elements"):
-            name, poor, _, total = line[len("Poor elements") :].split()
+    for line in r.stderr.splitlines():
+        if line.startswith("NOTE: Poor elements"):
+            name, poor, _, total = line[len("NOTE: Poor elements") :].split()[:4]
             out.poor.append((name, int(poor), int(total)))
     out.seconds = time.time() - start
     return out

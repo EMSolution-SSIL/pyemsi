@@ -574,8 +574,9 @@ class GroupJobTest(unittest.TestCase):
     def test_report_names_poor_elements_per_part(self):
         r = self.run_job([self.sector_group((10, 20, 0, 30), self.TWELVE, self.TWO)], patch="meshgroups.POOR = 2.0")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("Poor elements  North", r.stdout)
-        self.assertIn("Poor elements  South", r.stdout)
+        self.assertIn("NOTE: Poor elements  North", r.stderr)  # the runner shows NOTE: lines to the user
+        self.assertIn("NOTE: Poor elements  South", r.stderr)
+        self.assertNotIn("Poor elements", r.stdout)
         self.assertIn("MAT_ID       7  North", r.stdout)
 
     def test_check_writes_nothing(self):

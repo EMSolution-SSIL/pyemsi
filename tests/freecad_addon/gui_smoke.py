@@ -52,6 +52,7 @@ def main():
     warned = []  # commands' warnings; panels' warnings go to the log as "refused: ..."
     commands.warn = lambda text: warned.append(text)
     taskpanels.warn = lambda text: log.append("refused: " + text)
+    runner.notify = lambda text: log.append("notified: " + text)  # a finished run's message box
     opened = []  # panels the mesh commands opened for their new item
 
     class RecordedPanel(taskpanels.ItemPanel):

@@ -27,6 +27,16 @@ def python_exe():
     return exe
 
 
+def notify(text):
+    """Tell the user something about a finished run; the GUI smoke test replaces it."""
+    QtWidgets.QMessageBox.information(Gui.getMainWindow(), "EMSolution", text)
+
+
+def notes_text(notes):
+    """The message for the notes of a mesh run: what the mesher fixed by itself, and the poor elements per part."""
+    return "The mesh is loaded. The mesher noted:\n\n" + "\n".join("• " + n for n in notes)
+
+
 def start(study):
     global _run
     try:
@@ -107,15 +117,16 @@ class MeshRun:
 
     def _finished(self, code, _status):
         self._close()
-        parent = Gui.getMainWindow()
         if self.cancelled:
-            QtWidgets.QMessageBox.information(parent, "EMSolution", "Meshing cancelled.")
+            notify("Meshing cancelled.")
         elif code != 0:
             QtWidgets.QMessageBox.critical(
-                parent, "EMSolution", self.error or f"The mesher stopped with exit code {code}."
+                Gui.getMainWindow(), "EMSolution", self.error or f"The mesher stopped with exit code {code}."
             )
         else:
             self.load_result()
+            if self.notes:  # NOTE: lines, as runner.check passes them on (spec section 6: poor elements are warned)
+                notify(notes_text(self.notes))
 
     def load_result(self):
         import Fem

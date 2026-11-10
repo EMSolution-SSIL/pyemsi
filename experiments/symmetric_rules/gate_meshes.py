@@ -185,7 +185,7 @@ def run(label, folder, job):
             by_type.update(found)
         print("   total: " + ", ".join(f"{k} {v}" for k, v in sorted(by_type.items())) + f"  = {sum(by_type.values())}")
         total += sum(by_type.values())
-    for line in r.stdout.splitlines():
+    for line in r.stderr.splitlines():  # a NOTE: line
         if "Poor elements" in line:
             print(line)
     print(f"{label}: {total} volume elements")

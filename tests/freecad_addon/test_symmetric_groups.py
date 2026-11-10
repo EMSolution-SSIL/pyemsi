@@ -1103,3 +1103,22 @@ def test_excitation_on_a_cell_object_is_refused(study_3d):
     objects.make_excitation(study_3d, "Coil", [(coil, "Face2")])
     found = [t for t in texts(study_3d) if "Excitation Coil" in t and "Pick the faces on the drawing" in t]
     assert found and "CoilCell" in found[0], texts(study_3d)
+
+
+def test_a_finished_mesh_run_shows_the_mesher_notes(monkeypatch):
+    """The poor elements are a NOTE: line of the mesher (test_meshgroups); the runner shows the notes once the mesh is
+    loaded, and says nothing more when there are none."""
+    from emsolution import runner
+
+    shown = []
+    monkeypatch.setattr(runner, "notify", shown.append)
+
+    class Run:
+        cancelled, error = False, ""
+        _close = load_result = lambda self: None
+
+    run = Run()
+    for notes in ([], ["Poor elements  North  3 of 120 have a minimum SICN below 0.1"]):
+        run.notes = notes
+        runner.MeshRun._finished(run, 0, None)
+    assert len(shown) == 1 and "Poor elements  North  3 of 120" in shown[0], shown

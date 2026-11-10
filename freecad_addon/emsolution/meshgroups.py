@@ -15,6 +15,7 @@ import gmsh
 import numpy as np
 
 from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, FIELD_LISTS, MSH_VERSION
+from meshcommon import _note
 import meshfrozen
 import meshsym
 
@@ -1491,6 +1492,9 @@ def run(job_path, build, dim=2):
         gmsh.model.add(job["model_name"])
         model = mesh(job, folder, build, dim)
         job["poor"] = _poor(model, dim)
+        for name, poor, total in job["poor"]:
+            if poor:  # a NOTE: line, which the runner shows when the mesh is loaded (spec section 6: warned)
+                _note(f"Poor elements  {name}  {poor} of {total} have a minimum SICN below {POOR}")
         point = (meshsym._marker if dim == 2 else meshsym._marker_line)(slide) if slide else None
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
@@ -1512,8 +1516,8 @@ def run(job_path, build, dim=2):
 
 
 def report(job):
-    """The lines run_job prints: one MAT_ID line per part, one SMAT_ID line per excitation, the poor elements of each
-    part that has any, the file written."""
+    """The lines run_job prints: one MAT_ID line per part, one SMAT_ID line per excitation, the file written. The poor
+    elements of a part are a note of run's (stderr), not a line here."""
     groups = job["symmetric"]["groups"]
     free = job["symmetric"].get("free", [])
     seen = {(p["mat_id"], p["name"]): None for g in groups for p in g["parts"]}
@@ -1527,7 +1531,6 @@ def report(job):
     slide = job["symmetric"].get("slide")
     if slide:
         lines += slide_report({"slides": [slide]})
-    lines += [f"Poor elements  {name}  {poor} of {total}" for name, poor, total in job.get("poor", []) if poor]
     lines.append(f"Wrote {job['mesh_file']}")
     if slide:
         lines.append(f"Wrote {job['rotor_file']}")
