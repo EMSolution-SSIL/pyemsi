@@ -795,6 +795,8 @@ def test_a_group_crossing_the_interface_is_refused(study):
 
 
 def test_a_group_crossing_the_interface_still_gets_its_rules_checked(study_3d):  # T-07
+    """A rule about X is refused for the interface, and the crossing is not reported besides: copies turned about X
+    lie across the cylinder about Z however the cells are drawn (T-07), so splitting cell objects would not help."""
     (stator,) = objects.symmetric_groups(study_3d)
     objects.set_rules(stator, [{"kind": "rotate", "point": [0, 0, 0], "axis": [1, 0, 0], "step": 180, "count": 2}])
     study_3d.Document.getObject("StatorAirCell").Shape = symcases.sector(33, 36, 0, 15).extrude(V(0, 0, 10))
@@ -802,6 +804,7 @@ def test_a_group_crossing_the_interface_still_gets_its_rules_checked(study_3d): 
     objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     study_3d.Document.recompute()
     assert any("about Z" in t for t in texts(study_3d)), texts(study_3d)
+    assert not any("crosses it" in t for t in texts(study_3d)), texts(study_3d)
 
 
 @pytest.mark.parametrize("missing,side", [("Rotor", "moving"), ("Stator", "fixed")])
@@ -833,6 +836,34 @@ def test_mesh_size_on_the_drawing_of_a_group_is_refused(study, stator):
     objects.make_mesh_size(study, 1.5, [(stator, "")])
     found = [t for t in texts(study) if "copies are not meshed" in t]
     assert found and "Put it on the cell objects" in found[0], texts(study)
+
+
+# ---- last round: a refusal that is a limit of the tool says so (spec section 1)
+
+
+def test_an_empty_table_name_says_removing_a_copy_is_a_limit_of_the_tool(study, stator):  # M2-09
+    ready(study)
+    break_empty_table_name(study, stator)
+    found = [t for t in texts(study) if "empty name" in t]
+    assert found and "(copy 24)" in found[0], texts(study)
+    assert "removing a copy is not handled yet, a limit of the tool" in found[0], found[0]
+
+
+def test_linear_sliding_with_a_group_says_it_is_a_limit_of_the_tool(study):  # M2-14, M3-04
+    _, iface = sliding(study)
+    ready(study)
+    iface.Kind = "Linear"
+    found = [t for t in texts(study) if "slides Rotational only" in t]
+    assert found and "not handled yet, a limit of the tool" in found[0], texts(study)
+
+
+def test_touching_groups_say_it_is_a_limit_of_the_tool(study, stator):  # M3-08
+    ready(study)
+    break_groups_touch(study, stator)
+    ready(study)
+    found = [t for t in texts(study) if "one group, or draw" in t]
+    assert found and " touch, " in found[0], texts(study)
+    assert "touch directly are not handled yet, a limit of the tool" in found[0], found[0]
 
 
 # ---- writing the job (spec section 8)

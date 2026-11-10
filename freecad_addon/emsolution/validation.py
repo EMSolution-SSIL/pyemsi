@@ -751,7 +751,11 @@ def _interfaces(study, sliding, r):
         r.error(f"A Study with a Symmetric Group has only one Sliding Interface: delete {i.Label}.", i)
     for i in interfaces:
         if i.Kind != "Rotational":
-            r.error(f"Sliding Interface {i.Label}: a Study with a Symmetric Group slides Rotational only.", i)
+            r.error(
+                f"Sliding Interface {i.Label}: a Study with a Symmetric Group slides Rotational only. {i.Kind} sliding"
+                " with Symmetric Groups is not handled yet, a limit of the tool, not of the drawing.",
+                i,
+            )
 
 
 # ---- Symmetric Groups (spec section 6)
@@ -842,7 +846,12 @@ def _group_rows(study, item, rules, r):
                 r.error(prefix + f"the table of {label} has {len(table)} names, the group makes {n} copies.", item)
             elif not all(str(name).strip() for name in table):
                 first = next(i for i, name in enumerate(table, 1) if not str(name).strip())
-                r.error(prefix + f"the table of {label} has an empty name (copy {first}).", item)
+                r.error(
+                    prefix + f"the table of {label} has an empty name (copy {first}). An empty name would leave that"
+                    " copy out, and removing a copy is not handled yet, a limit of the tool, not of the drawing: give"
+                    " every copy a name.",
+                    item,
+                )
     return ok
 
 
@@ -922,9 +931,15 @@ def _touch_groups(a, b, three, r):
             except Part.OCCError:
                 failed = failed or sa.CenterOfMass
                 continue
+            advice = "Put them in one group, or draw a normally meshed body between them."
+            if text == "touch":
+                advice = (
+                    "Two groups that touch directly are not handled yet, a limit of the tool, not of the drawing: put"
+                    " them in one group, or draw a normally meshed body between them."
+                )
             r.error(
                 f"Copies of Symmetric Group {a.Label} and Symmetric Group {b.Label} {text}, and both are on the same"
-                " side. Put them in one group, or draw a normally meshed body between them.",
+                f" side. {advice}",
                 b,
                 [(a, ""), (b, "")],
             )
@@ -1012,6 +1027,11 @@ def _reach(group, radius, three):
     return found
 
 
+def _about_z(rule):
+    """True for a rule that keeps a sliding surface about Z whole (symmetry.z_motion)."""
+    return symmetry.z_motion(symmetry.rule_matrix(rule)) is not None
+
+
 def _group_sliding(study, groups, ruled, free, plane, r):
     """Sliding with groups (spec 7.5): a group that reaches the interface may only turn about Z through the origin or
     mirror in a plane that contains Z or in z = const; its turns divide the Divisions; no free object touches it."""
@@ -1033,26 +1053,25 @@ def _group_sliding(study, groups, ruled, free, plane, r):
             if how is None:
                 continue
             sides.add(objects.part_key(study, item, "").partition("|")[0])
-            if how == "crosses":
+            rules = ruled.get(item.Name)
+            off_z = [(n, rule) for n, rule in enumerate(rules or [], 1) if not _about_z(rule)]
+            if how == "crosses" and not off_z:  # copies of a rule refused below cross it however the cells are drawn
                 r.error(
                     f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} crosses it. A group may only end"
                     " on the sliding surface: split the cell objects at it.",
                     iface,
                     [(item, "")],
                 )
-            rules = ruled.get(item.Name)
             if rules is None:
                 continue
-            for n, rule in enumerate(rules, 1):
-                move = symmetry.z_motion(symmetry.rule_matrix(rule))
-                if move is None:
-                    r.error(
-                        f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} reaches it, but Rule {n}"
-                        f" ({rule['kind']}) is not a rotation about Z through the origin, a mirror in a plane"
-                        " containing Z or a mirror of z = const. Only these keep the sliding surface whole; this is"
-                        " a limit of the tool.",
-                        iface,
-                    )
+            for n, rule in off_z:
+                r.error(
+                    f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} reaches it, but Rule {n}"
+                    f" ({rule['kind']}) is not a rotation about Z through the origin, a mirror in a plane"
+                    " containing Z or a mirror of z = const. Only these keep the sliding surface whole; this is"
+                    " a limit of the tool.",
+                    iface,
+                )
             turns = symmetry.turns_about_z(rules)
             if turns > 1 and iface.Divisions % turns:
                 r.error(

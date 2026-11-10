@@ -356,12 +356,27 @@ CASES = [
     ("M3-03-static", m3_03_static, "meshes"),
     ("M3-03-cells", m3_03_cells, ("refused", "would have to be split where a copy touches part of its face")),
     ("M3-03-band", m3_03_band, "meshes"),
-    ("M3-04", m3_04, ("refused", "slides Rotational only")),
+    (
+        "M3-04",
+        m3_04,
+        (
+            "refused",
+            "slides Rotational only. Axial gap sliding with Symmetric Groups is not handled yet, a limit of the tool",
+        ),
+    ),
     ("M3-04-static", m3_04_static, "meshes"),
     ("M3-05", m3_05, "meshes"),
     ("M3-06", m3_06, "meshes"),
     ("M3-07", sl.m3_07, "meshes"),
-    ("M3-08", m3_08, ("refused", "Put them in one group, or draw a normally meshed body between them")),
+    (
+        "M3-08",
+        m3_08,
+        (
+            "refused",
+            "touch directly are not handled yet, a limit of the tool, not of the drawing: put them in one group, or"
+            " draw a normally meshed body between them",
+        ),
+    ),
     ("M3-09", m3_09, "meshes"),
     ("M3-10", sl.m3_10, "meshes"),
     ("M3-12", sl.m3_12, "meshes"),

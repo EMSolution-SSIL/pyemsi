@@ -123,6 +123,18 @@ def warned(phrase):
     return check
 
 
+def not_said(phrase):
+    """A check: no problem Validate gives has phrase."""
+
+    def check(study):
+        objects.sync_parts(study)
+        study.Document.recompute()
+        hit = [p.text for p in validation.validate(study) if phrase in p.text]
+        return not hit, f"'{phrase}' " + (f"said: {' | '.join(hit)}" if hit else "not said")
+
+    return check
+
+
 # --- T-04 and T-05: copies that overlap -------------------------------------------------------------------------------
 
 
@@ -211,5 +223,5 @@ CASES = [
     ("T-04", t_04, ("refused", "overlaps a mirrored copy")),
     ("T-05", t_05, ("refused", "overlaps a copy turned by")),
     ("T-06", t_06, ("refused", "do not match")),
-    ("T-07", t_07, ("refused", "Rule 1 (rotate) is not a rotation about Z")),
+    ("T-07", t_07, ("refused", "Rule 1 (rotate) is not a rotation about Z"), not_said("crosses it")),
 ]
