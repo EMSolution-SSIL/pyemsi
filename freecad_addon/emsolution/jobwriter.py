@@ -52,8 +52,6 @@ def check(study):
         free = validation.free_bodies(study, main, moving)
         bodies = free + objects.cell_bodies(study)
         surface_on = {b.Name for b in free} | {g.Name for g in objects.symmetric_groups(study)}
-    elif objects.is_symmetric(study):
-        bodies = objects.cell_bodies(study)  # only the cells are meshed
     else:
         bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
     included = surface_on if surface_on is not None else {b.Name for b in bodies}
@@ -193,56 +191,6 @@ def _distinct_faces(body, faces):
         if not any(objects.coincident_faces(face, shape.getElement(k), tol) for k in kept):
             kept.append(name)
     return kept
-
-
-def write_symmetric(study, folder, ids):
-    """The job["symmetric"] block: per side the cells (local ids), copy transforms and pieces; the slide if sliding."""
-    main, moving, _ = geometry.setup(study)
-    sliding = study.Movement == "Sliding motion"
-    items = objects.symmetric_items(study)
-    assignments = objects.piece_assignments(study)
-    sides, count = [], 0
-    for side, bodies in (("fixed", main), ("moving", moving if sliding else [])):
-        names = {b.Name for b in bodies}
-        for item in items:
-            if item.Top.Name not in names:
-                continue
-            cells, transforms = symmetry.read_chain(item.Top)
-            pieces = []
-            for m in assignments:
-                for body, subs in m.Pieces:
-                    if body.Name != item.Top.Name:
-                        continue
-                    for sub in subs:
-                        count += 1
-                        rel = f"geometry/piece_{count}.brep"
-                        global_shape(body).getElement(sub).exportBrep(os.path.join(folder, rel))
-                        pieces.append(
-                            {"mat_id": int(study.MatIds[m.Name]), "name": objects.volume_name(m), "file": rel}
-                        )
-            entry = {"side": side, "cells": [ids[c.Name] for c in cells], "transforms": transforms, "pieces": pieces}
-            if study.Dimension == "3D":  # each Excitation's faces on this top, one file per face
-                entry["excitations"] = []
-                for e in objects.excitations(study):
-                    for body, faces in objects.subs_by_body(e):
-                        if body.Name == item.Top.Name and faces:
-                            smat_id = int(study.SmatIds[f"{e.Name}|{body.Name}"])
-                            files = export_subs(folder, body, _distinct_faces(body, faces), f"exc_{smat_id}")
-                            name = objects.item_name(e, body)
-                            entry["excitations"].append({"smat_id": smat_id, "name": name, "files": files})
-            sides.append(entry)
-    block = {"sides": sides}
-    for iface in objects.sliding_interfaces(study):  # validation refuses a second one and any but Rotational
-        block["slide"] = {
-            "name": objects.volume_name(iface),
-            "kind": "rotational",
-            "radius": iface.Radius.Value,
-            "divisions": iface.Divisions,
-        }
-        if study.Dimension == "3D":
-            block["slide"]["cross_divisions"] = iface.CrossDivisions
-        block["slide"].update(slide_mat_id=int(study.MatIds[iface.Name]), full=True)
-    return block
 
 
 def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
@@ -452,13 +400,9 @@ def write_job(study):
         if sliding:
             job["rotor_file"] = rotor_file(study)
     else:
-        symmetric = objects.is_symmetric(study)
-        if symmetric:  # the cells get local ids 1..n; the pieces carry the MAT_IDs
-            ids = {body.Name: n for n, (body, _) in enumerate(volumes, 1)}
-        else:
-            ids = {body.Name: int(study.MatIds[body.Name]) for body, _ in volumes}
+        ids = {body.Name: int(study.MatIds[body.Name]) for body, _ in volumes}
         job.update(_body_job(study, folder, volumes, surfaces, elements, ids))
-        for air in [] if symmetric else objects.air_regions(study):  # validation allows one
+        for air in objects.air_regions(study):  # validation allows one
             rel = "geometry/air.brep"
             meshed_shape(air).exportBrep(os.path.join(folder, rel))
             if sliding:  # the two sides get their own IDs and names
@@ -477,11 +421,7 @@ def write_job(study):
                     "file": rel,
                     "size": air_size(study),
                 }
-        if symmetric:
-            job["symmetric"] = write_symmetric(study, folder, ids)
-            if sliding:
-                job["rotor_file"] = rotor_file(study)
-        elif sliding:
+        if sliding:
             job["moving"] = [int(study.MatIds[b.Name]) for b in geometry.setup(study)[1]]
             write_slides(study, folder, job)
     path = os.path.join(folder, "job.json")

@@ -1,5 +1,6 @@
-"""The spike motor as FreeCAD objects, for the Symmetric Mesh tests: a stator cell (0..15 deg) and a rotor cell
-(0..22.5 deg), each built up to the full circle the way a user would (Mirror, Polar Array, Boolean Fragments)."""
+"""The spike motor as FreeCAD objects, for the Symmetric Group tests: a stator cell (0..15 deg) and a rotor cell
+(0..22.5 deg), as Studies of Symmetric Groups (motor_study), or built up to the full circle the way a user draws it
+(Mirror, Polar Array, Boolean Fragments: motor_doc) for the reading helper."""
 
 import math
 
@@ -136,63 +137,87 @@ def _piece_name(face, part):
     return "Magnet" + "NS"[int(a // 45) % 2] if r < 32.5 else "RotorAir"
 
 
-def motor_study(doc):
-    """A 2D Study with sliding motion on motor_doc: Main = stator, Moving = rotor, one Symmetric Mesh item each, a
-    Rotational Sliding Interface at R 35 (144 divisions, no Air Region) and a Material per piece group."""
+def mirror_rule(deg):
+    """Mirror in the plane through Z at deg degrees, as Part Mirror does with the normal (-sin, cos, 0)."""
+    return {
+        "kind": "mirror",
+        "point": [0, 0, 0],
+        "normal": [-math.sin(math.radians(deg)), math.cos(math.radians(deg)), 0],
+    }
+
+
+def rotate_rule(step, count):
+    return {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": step, "count": count}
+
+
+STATOR_RULES = [mirror_rule(15), rotate_rule(30, 12)]  # the rules of chain(doc, "Stator", ..., 15, 12)
+ROTOR_RULES = [mirror_rule(22.5), rotate_rule(45, 8)]
+
+
+def name_parts(item, part):
+    """Every row of group item becomes a table: each copy is named as _piece_name names its place in the drawing."""
+    from emsolution import objects
+
+    rows = []
+    for row in objects.rows_of(item):
+        shape = objects.row_shape(item, row)
+        names = [_piece_name(shape.transformed(App.Matrix(*t)), part) for t in objects.group_transforms(item)]
+        rows.append({**row, "mode": "table", "table": names})
+    objects.set_rows(item, rows)
+
+
+def _groups_study(doc, dimension, height=0):
+    """motor_cells in a Study with sliding motion: the stator and the rotor each a Symmetric Group with the rules of
+    their chain (motor_doc), parts named as the old piece groups were, a Rotational Sliding Interface at R 35 (144
+    divisions, no Air Region) and the library material Steel on every part."""
     import json
 
     from emsolution import objects
 
     from .materialdata import STEEL, record
 
-    info = motor_doc(doc)
-    study = objects.make_study(doc, "2D")
-    study.MainMode, study.MainObjects = "Manual", [info["stator_top"]]
-    study.MovingMode, study.MovingObjects = "Manual", [info["rotor_top"]]
+    stator_cells, rotor_cells = motor_cells(doc, height)
+    doc.recompute()
+    study = objects.make_study(doc, dimension)
     study.Movement = "Sliding motion"
-    for top in (info["stator_top"], info["rotor_top"]):
-        objects.make_symmetric_mesh(study, top)
-    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144)
     lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL)))
-    groups = {}
-    for part, top in (("Stator", info["stator_top"]), ("Rotor", info["rotor_top"])):
-        for i, face in enumerate(top.Shape.Faces):
-            groups.setdefault(_piece_name(face, part), []).append((top, f"Face{i + 1}"))
-    for name in sorted(groups):
-        objects.assign_pieces(study, name, groups[name], lib, 0)
+    for part, cells, rules, side in (
+        ("Stator", stator_cells, STATOR_RULES, "Fixed"),
+        ("Rotor", rotor_cells, ROTOR_RULES, "Moving"),
+    ):
+        item = objects.make_symmetric_group(study, cells, rules=rules, name=part, side=side)
+        name_parts(item, part)
+        for r in range(len(cells)):
+            objects.set_row_material(study, item, r, lib)
+    objects.sync_parts(study)
+    doc.recompute()
+    return study
+
+
+def motor_study(doc):
+    """A 2D Study with sliding motion: the stator and rotor cells as two Symmetric Groups (Fixed and Moving) with the
+    rules of their chains, a Rotational Sliding Interface at R 35 (144 divisions, no Air Region) and a Material per
+    part."""
+    from emsolution import objects
+
+    study = _groups_study(doc, "2D")
+    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144)
     doc.recompute()
     return study
 
 
 def motor_study_3d(doc, height=10):
-    """A 3D Study with sliding motion on motor_doc_3d, like motor_study: a Material on each piece group (the pieces
-    are Solids) and the Excitation Coil01Ends on the two faces at z = height of the Coil01 solids."""
-    import json
-
+    """motor_study with every cell extruded 0..height in z: a 3D Study, and the Excitation Coil01Ends on the two faces
+    of the drawing at z = height of the Coil01 copies."""
     from emsolution import objects
 
-    from .materialdata import STEEL, record
-
-    info = motor_doc_3d(doc, height)
-    study = objects.make_study(doc, "3D")
-    study.MainMode, study.MainObjects = "Manual", [info["stator_top"]]
-    study.MovingMode, study.MovingObjects = "Manual", [info["rotor_top"]]
+    study = _groups_study(doc, "3D", height)
     study.MeshSizesGroup.DefaultMeshSize = 1.5  # finer than the thinnest cell (air, 1.7 mm): no coarse-mesh warning
-    study.Movement = "Sliding motion"
-    for top in (info["stator_top"], info["rotor_top"]):
-        objects.make_symmetric_mesh(study, top)
     objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
-    lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL)))
-    groups = {}
-    for part, top in (("Stator", info["stator_top"]), ("Rotor", info["rotor_top"])):
-        for i, solid in enumerate(top.Shape.Solids):
-            groups.setdefault(_piece_name(solid, part), []).append((top, f"Solid{i + 1}"))
-    for name in sorted(groups):
-        objects.assign_pieces(study, name, groups[name], lib, 0)
-    top = info["stator_top"]
+    stator = objects.symmetric_groups(study)[0]
     ends = [
-        (top, f"Face{i + 1}")
-        for i, face in enumerate(top.Shape.Faces)
+        (stator, f"Face{i + 1}")
+        for i, face in enumerate(stator.Shape.Faces)
         if abs(face.CenterOfMass.z - height) < 1e-6 and _piece_name(face, "Stator") == "Coil01"
     ]
     objects.make_excitation(study, "Coil01Ends", ends)

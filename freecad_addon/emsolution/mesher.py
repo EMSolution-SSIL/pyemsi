@@ -1,6 +1,6 @@
 """Job file -> Gmsh .msh at job["mesh_file"] + mesh.unv beside the job. Runs in its own process.
 Sliding motion: the fixed side goes to job["mesh_file"], the moving side to job["rotor_file"].
-A job with a "symmetric" key meshes only the cell and copies it (meshsym.py).
+A job with a "symmetric" key meshes only the cells of its Symmetric Groups and copies them (meshgroups.py).
 Never import FreeCAD here.
 
 Usage: python mesher.py <job.json> [--check]   (--check: geometry checks only, nothing written)
@@ -31,7 +31,6 @@ from meshcommon import (
     import_brep,
     slide_split,
 )
-import meshsym
 import meshgroups
 
 
@@ -152,28 +151,22 @@ def build(job, folder):
 
 
 def _symmetric(job_path):
-    """The module that meshes the job's cells and copies them: meshgroups for a job with symmetric groups, meshsym for
-    one with symmetric sides, None for a job that is not symmetric."""
+    """True for a job with Symmetric Groups: meshgroups meshes their cells and copies them."""
     with open(job_path, encoding="utf-8") as fh:
-        symmetric = json.load(fh).get("symmetric")
-    if symmetric is None:
-        return None
-    return meshgroups if "groups" in symmetric else meshsym
+        return "symmetric" in json.load(fh)
 
 
 def check_job(job_path, build):
-    """--check: a symmetric job meshes and copies its cell to run its checks (meshsym.check, meshgroups.check)."""
-    module = _symmetric(job_path)
-    if module:
-        module.check(job_path, build, 3)
+    """--check: a symmetric job meshes and copies its cells to run its checks (meshgroups.check)."""
+    if _symmetric(job_path):
+        meshgroups.check(job_path, build, 3)
     else:
         check(job_path, build)
 
 
 def run_job(job_path):
-    module = _symmetric(job_path)
-    if module:  # mesh the cell and copy it
-        print("\n".join(module.report(module.run(job_path, build, 3))))
+    if _symmetric(job_path):  # mesh the cells and copy them
+        print("\n".join(meshgroups.report(meshgroups.run(job_path, build, 3))))
         return
     job = run(job_path, build, 3)
     for item in job["volumes"] + air_items(job):

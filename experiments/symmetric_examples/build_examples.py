@@ -1,9 +1,9 @@
-"""Build the Symmetric Mesh example files, one folder each, and mesh them headless.
+"""Build the Symmetric Group example files, one folder each, and mesh them headless.
 Run from the repo root: pixi run -e addon python experiments/symmetric_examples/build_examples.py [--challenges]
 
 It uses the add-on that FreeCAD loads, through the Mod folder link that `pixi run -e addon install-addon` makes. So the
-files are built and meshed by the same code you try them with in the GUI. Point the link at the clone that has the
-Symmetric Mesh (the pyemsi-sym worktree, or this checkout once feature/symmetric-mesh is checked out here)."""
+files are built and meshed by the same code you try them with in the GUI. Point the link at a clone that has the
+Symmetric Group."""
 
 import json
 import math
@@ -14,13 +14,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDON = os.path.realpath(os.path.join(os.environ["APPDATA"], "FreeCAD", "v1-1", "Mod", "EMSolution"))
-if not os.path.exists(os.path.join(ADDON, "emsolution", "symmetry.py")):
-    sys.exit(f"FreeCAD's add-on link points at {ADDON}, which has no Symmetric Mesh. Run install-addon in that clone.")
+if "def make_symmetric_group" not in open(os.path.join(ADDON, "emsolution", "objects.py"), encoding="utf-8").read():
+    sys.exit(f"FreeCAD's add-on link points at {ADDON}, which has no Symmetric Group. Run install-addon in that clone.")
 sys.path.insert(0, ADDON)
 
 import FreeCAD as App  # noqa: E402 - after the add-on path
 import Part  # noqa: E402
-import Draft  # noqa: E402
 from BOPTools import SplitFeatures  # noqa: E402
 
 import gmsh  # noqa: E402
@@ -55,27 +54,18 @@ def feature(doc, name, shape):
     return obj
 
 
-def chain(doc, part, cells, mirror_deg, count):
-    """The user's steps: Compound(cell bodies) -> Mirror about the line at mirror_deg -> Compound(cell, mirror) ->
-    Draft Polar Array (count x 360/count) -> Boolean Fragments. Only the Fragments (the top) stays visible."""
-    cell = doc.addObject("Part::Compound", f"{part}Cell")
-    cell.Links = cells
-    mirror = doc.addObject("Part::Mirroring", f"{part}Mirror")
-    mirror.Source = cell
-    mirror.Normal = V(-math.sin(math.radians(mirror_deg)), math.cos(math.radians(mirror_deg)), 0)
-    pitch = doc.addObject("Part::Compound", f"{part}Pitch")
-    pitch.Links = [cell, mirror]
-    doc.recompute()
-    array = Draft.make_polar_array(pitch, number=count, angle=360)
-    array.Label = f"{part}Array"
-    doc.recompute()
-    top = SplitFeatures.makeBooleanFragments(name=f"{part}Fragments")
-    top.Objects = [array]
-    doc.recompute()
-    for o in top.OutListRecursive:
-        if hasattr(o, "Visibility"):
-            o.Visibility = False  # clicks land on the top; the cell bodies are still in the tree
-    return top
+def mirror(deg):
+    """Mirror in the plane through Z at deg degrees: the edge of a cell drawn from 0 to deg."""
+    return {
+        "kind": "mirror",
+        "point": [0, 0, 0],
+        "normal": [-math.sin(math.radians(deg)), math.cos(math.radians(deg)), 0],
+    }
+
+
+def rotate(count, step=None):
+    """count copies about Z, step degrees apart (a full turn by default)."""
+    return {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": step or 360 / count, "count": count}
 
 
 def stator_cells(doc, split=False):
@@ -138,39 +128,50 @@ def library(study):
     return out
 
 
-def new_doc(name, sliding=False):
+def new_doc(name):
     folder = os.path.join(HERE, name)
     os.makedirs(folder, exist_ok=True)
     doc = App.newDocument(name)
     return doc, os.path.join(folder, name + ".FCStd")
 
 
-def study_on(doc, main, moving=None, size=2.0):
-    study = objects.make_study(doc, "2D", "Study")
-    study.MainMode, study.MainObjects = "Manual", [main]
-    if moving is not None:
-        study.MovingMode, study.MovingObjects = "Manual", [moving]
-        study.Movement = "Sliding motion"
-    else:
-        study.Movement = "No movement"
+def new_study(doc, sliding=False, size=2.0):
+    """A 2D Study with no main geometry: the groups bring their own cells."""
+    study = objects.make_study(doc, "2D", "Study", "Sliding motion" if sliding else "No movement")
     study.MeshSizesGroup.DefaultMeshSize = size
-    for top in [main] + ([moving] if moving is not None else []):
-        objects.make_symmetric_mesh(study, top)
     return study
+
+
+def group(study, name, cells, rules, name_of, side="Fixed"):
+    """A Symmetric Group of cells, copied by rules. name_of(face) names the part of each copy of each row: a table
+    per row, as the group panel's table dialog fills it. The cells are hidden; the drawing shows them all."""
+    doc = study.Document
+    doc.recompute()
+    item = objects.make_symmetric_group(study, cells, rules=rules, name=name, side=side)
+    rows = []
+    for row in objects.rows_of(item):
+        shape = objects.row_shape(item, row)
+        names = [name_of(shape.transformed(App.Matrix(*t))) for t in objects.group_transforms(item)]
+        rows.append({**row, "mode": "table", "table": names})
+    objects.set_rows(item, rows)
+    for cell in cells:
+        cell.Visibility = False
+    doc.recompute()
+    return item
+
+
+def give_materials(study, lib):
+    """A Material per part (the group panel's OK makes them), with the library material material_lib gives its name."""
+    objects.sync_parts(study)
+    parts = objects.part_assignments(study)
+    mats = material_lib(lib, {m.GroupName for m in parts})
+    for m in parts:
+        objects.apply_part_material(m, m.GroupName, mats[m.GroupName], 0)
 
 
 def where(face):
     c = face.CenterOfMass
     return math.hypot(c.x, c.y), math.degrees(math.atan2(c.y, c.x)) % 360
-
-
-def assign_by(study, top, name_of, lib):
-    """One Material per name that name_of(face) gives the faces of top; lib: {Material name: library material}."""
-    groups = {}
-    for i, face in enumerate(top.Shape.Faces, 1):
-        groups.setdefault(name_of(face), []).append((top, f"Face{i}"))
-    for name in sorted(groups):
-        objects.assign_pieces(study, name, groups[name], lib[name], 0)
 
 
 def stator_piece(face, split=False):
@@ -212,7 +213,7 @@ def block(body, r1, r2):
 
 
 def on_top(top, cell_edges):
-    """The same edges, picked on the top in the cell's own place (what a click on the Fragments gives)."""
+    """The same edges, picked on the drawing of group top in the cell's own place (what a click there gives)."""
     out = []
     for body, sub in cell_edges:
         e = body.Shape.getElement(sub)
@@ -229,32 +230,26 @@ def on_top(top, cell_edges):
 
 def motor():
     doc, path = new_doc("1_motor_sliding")
-    stator = chain(doc, "Stator", stator_cells(doc), 15, 12)
-    rotor = chain(doc, "Rotor", rotor_cells(doc), 22.5, 8)
-    study = study_on(doc, stator, rotor)
+    study = new_study(doc, sliding=True)
+    group(study, "Stator", stator_cells(doc), [mirror(15), rotate(12)], stator_piece)
+    group(study, "Rotor", rotor_cells(doc), [mirror(22.5), rotate(8)], rotor_piece, side="Moving")
     objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144)
-    lib = library(study)
-    names = {stator_piece(f) for f in stator.Shape.Faces} | {rotor_piece(f) for f in rotor.Shape.Faces}
-    mats = material_lib(lib, names)
-    assign_by(study, stator, stator_piece, mats)
-    assign_by(study, rotor, rotor_piece, mats)
+    give_materials(study, library(study))
     return doc, study, path
 
 
-# --- 2: the stator alone, a structured coil set from picks on the Fragments -----------------------------------------
+# --- 2: the stator alone, a structured coil set from picks on the drawing ------------------------------------------
 
 
 def stator_structured():
     doc, path = new_doc("2_stator_structured")
-    cells = stator_cells(doc)
-    stator = chain(doc, "Stator", cells, 15, 12)
-    study = study_on(doc, stator)
-    lib = library(study)
-    assign_by(study, stator, stator_piece, material_lib(lib, {stator_piece(f) for f in stator.Shape.Faces}))
+    study = new_study(doc)
+    stator = group(study, "Stator", stator_cells(doc), [mirror(15), rotate(12)], stator_piece)
+    give_materials(study, library(study))
     coil = doc.getObject("CoilCell")
     arcs = [(coil, f"Edge{i}") for i, e in enumerate(coil.Shape.Edges, 1) if isinstance(e.Curve, Part.Circle)]
     radials = [(coil, f"Edge{i}") for i, e in enumerate(coil.Shape.Edges, 1) if not isinstance(e.Curve, Part.Circle)]
-    # picked on the Fragments, as a click there does: each becomes the edge of every cell body that has it
+    # picked on the drawing, as a click there does: each becomes the edge of every cell object that has it
     objects.make_transfinite_edges(study, 4, objects.to_cells(study, on_top(stator, arcs))).Label = "coil arcs 4 el"
     objects.make_transfinite_edges(study, 8, objects.to_cells(study, on_top(stator, radials))).Label = "coil sides 8 el"
     objects.make_transfinite_body(study, [coil])
@@ -267,12 +262,9 @@ def stator_structured():
 
 def split_coil():
     doc, path = new_doc("3_split_coil")
-    cells = stator_cells(doc, split=True)
-    stator = chain(doc, "Stator", cells, 15, 12)
-    study = study_on(doc, stator)
-    lib = library(study)
-    names = {stator_piece(f, True) for f in stator.Shape.Faces}
-    assign_by(study, stator, lambda f: stator_piece(f, True), material_lib(lib, names))
+    study = new_study(doc)
+    group(study, "Stator", stator_cells(doc, split=True), [mirror(15), rotate(12)], lambda f: stator_piece(f, True))
+    give_materials(study, library(study))
     frag = doc.getObject("CoilFragments")
     outer = block(frag, 43, 50)
     edges = edges_of(frag, outer)
@@ -284,74 +276,94 @@ def split_coil():
     return doc, study, path
 
 
-# --- 4: your split-cell drawing from the PRD -----------------------------------------------------------------------
+# --- 4: your split-cell drawing from the PRD, saved with the older Symmetric Mesh item ------------------------------
 
 
 def your_test_file():
-    """experiments/symmetric_spike/test.FCStd of feature/symmetric-mesh (the PRD's reproduction), copied."""
+    """experiments/symmetric_spike/test.FCStd (the PRD's reproduction), copied and moved to a Symmetric Group the way a
+    user does: Read from drawing on its Fragments, then delete the older item and its Materials, take the Fragments out
+    of the main geometry and give the parts their Materials."""
     src = os.path.join(ADDON, "..", "experiments", "symmetric_spike", "test.FCStd")
     folder = os.path.join(HERE, "4_prd_test_file")
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, "4_prd_test_file.FCStd")
-    if not os.path.exists(path):
-        shutil.copy(src, path)
+    shutil.copy(src, path)
     doc = App.openDocument(path)
     doc.recompute()
-    return doc, objects.studies(doc)[0], path
+    study = objects.studies(doc)[0]
+    (old,) = objects.old_items(study)
+    (proposal,) = symmetry.rules_from_chain(old.Top)  # what Read from drawing proposes
+    for m in objects.materials(study):
+        doc.removeObject(m.Name)
+    doc.removeObject(old.Name)
+    study.MainMode, study.MainObjects = "Manual", []
+    names = {"coil_face_cell": "coil", "stator_air_cell": "stator_air", "core_cell": "core"}
+    item = objects.make_symmetric_group(study, proposal.cells, rules=proposal.rules, name="Stator")
+    rows = []
+    for row in objects.rows_of(item):  # one part per coil copy and slot side, one for the air, one for the core
+        label = doc.getObject(row["cell"]).Label
+        if label == "coil_face_cell":
+            rows.append({**row, "mode": "each"})
+        else:
+            rows.append({**row, "mode": "table", "table": [names[label]] * symmetry.copy_count(proposal.rules)})
+    objects.set_rows(item, rows)
+    doc.recompute()
+    objects.sync_parts(study)
+    libs = {lib.Label.split(" ")[0]: lib for lib in objects.library_materials(study)}  # Dry, M-36, Copper
+    for m in objects.part_assignments(study):
+        lib = libs["Dry" if m.GroupName == "stator_air" else "M-36" if m.GroupName == "core" else "Copper"]
+        objects.apply_part_material(m, m.GroupName, lib, 0)
+    return doc, study, path
 
 
-# --- 5: a cell body past the mirror line (R3 of the split-cell PRD, not done) ---------------------------------------
+# --- 5: a cell object past the mirror's plane -----------------------------------------------------------------------
 
 
 def coil_past_mirror():
-    """The coil is drawn 10..17 deg in a 0..15 deg cell: it reaches 2 deg past the mirror line, so it overlaps its own
-    mirrored copy. Validate Study's own checks pass; only the mesher check finds it, with a point and no body name."""
+    """The coil is drawn 10..17 deg in a 0..15 deg cell: it reaches 2 deg past the mirror's plane, so it overlaps its
+    own mirrored copy. Validate Study refuses it and says where."""
     doc, path = new_doc("5_coil_past_mirror_line")
+    study = new_study(doc)
     coil = feature(doc, "CoilCell", sector(37, 50, 10, 17))
     iron = feature(doc, "StatorIronCell", sector(36, 60, 0, 15).cut(coil.Shape).Faces[0])
     air = feature(doc, "StatorAirCell", sector(35, 36, 0, 15))
-    stator = chain(doc, "Stator", [iron, coil, air], 15, 12)
-    study = study_on(doc, stator)
-    lib = library(study)
 
     def piece(face):
         if abs(face.Area - coil.Shape.Area) < 1e-6:
             return f"Coil{int((where(face)[1] + 5) // 30) % 12 + 1:02d}"
         return stator_piece(face)
 
-    assign_by(study, stator, piece, material_lib(lib, {piece(f) for f in stator.Shape.Faces}))
+    group(study, "Stator", [iron, coil, air], [mirror(15), rotate(12)], piece)
+    give_materials(study, library(study))
     return doc, study, path
 
 
-# --- 6: 13 copies of a 30 deg slot pitch (R3 again) ----------------------------------------------------------------
+# --- 6: 13 copies of a 30 deg slot pitch --------------------------------------------------------------------------
 
 
 def thirteen_copies():
-    """The stator of example 2's drawing, but the Polar Array makes 13 copies of the 30 deg pitch: each copy overlaps
-    the next by 2.3 deg, and the Fragments cuts the cell bodies there. Materials are set on the 13-copy pieces."""
+    """The stator of example 2, but the rotation makes 13 copies of the 30 deg pitch: each copy overlaps the next by
+    2.3 deg. Validate Study refuses it and says where."""
     doc, path = new_doc("6_thirteen_copies")
-    stator = chain(doc, "Stator", stator_cells(doc), 15, 13)
-    study = study_on(doc, stator)
-    lib = library(study)
-    assign_by(study, stator, stator_piece, material_lib(lib, {stator_piece(f) for f in stator.Shape.Faces}))
+    study = new_study(doc)
+    group(study, "Stator", stator_cells(doc), [mirror(15), rotate(13)], stator_piece)
+    give_materials(study, library(study))
     return doc, study, path
 
 
-# --- 7: a cell cut by drawing each block as its own face (R2 of the split-cell PRD) ---------------------------------
+# --- 7: a cell cut by drawing each block as its own face ------------------------------------------------------------
 
 
 def coil_two_faces():
-    """Example 3 drawn the other way (R2): the coil is two faces sharing the arc at r 43, both straight in the cell."""
+    """Example 3 drawn the other way: the coil is two faces sharing the arc at r 43, two cell objects of the group."""
     doc, path = new_doc("7_coil_two_faces")
+    study = new_study(doc)
     iron = feature(doc, "StatorIronCell", sector(36, 60, 0, 15).cut(sector(37, 50, 10, 15)).Faces[0])
     outer = feature(doc, "CoilOuterCell", sector(43, 50, 10, 15))
     inner = feature(doc, "CoilInnerCell", sector(37, 43, 10, 15))
     air = feature(doc, "StatorAirCell", sector(35, 36, 0, 15))
-    stator = chain(doc, "Stator", [iron, outer, inner, air], 15, 12)
-    study = study_on(doc, stator)
-    lib = library(study)
-    names = {stator_piece(f, True) for f in stator.Shape.Faces}
-    assign_by(study, stator, lambda f: stator_piece(f, True), material_lib(lib, names))
+    group(study, "Stator", [iron, outer, inner, air], [mirror(15), rotate(12)], lambda f: stator_piece(f, True))
+    give_materials(study, library(study))
     return doc, study, path
 
 
@@ -359,11 +371,11 @@ def coil_two_faces():
 
 
 def outline(study):
-    """The edges of the tops that bound one face only: the outside of the drawing (and the sliding circle)."""
+    """The outside of each group's drawing (and the sliding circle): the edges of all its copies fused into one."""
     out = []
-    for item in objects.symmetric_items(study):
-        shape = item.Top.Shape
-        out += [e for e in shape.Edges if len(shape.ancestorsOfType(e, Part.Face)) == 1]
+    for item in objects.symmetric_groups(study):
+        faces = item.Shape.Faces
+        out += faces[0].multiFuse(faces[1:]).removeSplitter().Edges
     return out
 
 
@@ -427,19 +439,24 @@ def mesh(study, title):
 def challenges():
     """The README's challenges, built and meshed on throwaway copies, to check what it promises."""
 
+    def stator(study):
+        return objects.symmetric_groups(study)[0]
+
     def eleven_slots(doc, study):
-        doc.getObjectsByLabel("StatorArray")[0].NumberPolar = 11
+        item = stator(study)
+        objects.set_rules(item, [mirror(15), rotate(11, 30)])
 
     def divisions_100(doc, study):
         objects.sliding_interfaces(study)[0].Divisions = 100
 
     def no_coil05(doc, study):
-        doc.removeObject(next(m for m in objects.materials(study) if m.Label == "Coil05").Name)
+        doc.removeObject(next(m for m in objects.materials(study) if m.GroupName == "Coil05").Name)
 
     def bolt_hole(doc, study):
         hole = feature(doc, "BoltHole", Part.Face(Part.Wire(Part.makeCircle(1.5, polar(55, 7.5)))))
-        top = doc.getObject("StatorFragments")
-        top.Objects = list(top.Objects) + [hole]
+        item = stator(study)
+        item.Cells = [*item.Cells, hole]
+        objects.sync_rows(item)
 
     def outer_arc_5(doc, study):
         coil = doc.getObject("CoilCell")
@@ -448,7 +465,7 @@ def challenges():
             for i, e in enumerate(coil.Shape.Edges, 1)
             if isinstance(e.Curve, Part.Circle) and e.Curve.Radius > 49
         ]
-        moved = objects.to_cells(study, on_top(doc.getObject("StatorFragments"), outer))
+        moved = objects.to_cells(study, on_top(stator(study), outer))
         item = objects.transfinite_edges(study)[0]
         gone = {(b.Name, s) for b, s in moved}
         item.References = [(b, s) for b, subs in item.References for s in subs if (b.Name, s) not in gone]
@@ -471,18 +488,18 @@ def challenges():
         objects.make_transfinite_edges(study, 3, [r for r in rest if r not in arc]).Label = "inner sides 3 el"
 
     def divider_in_the_cell(doc, study):
-        cell = doc.getObject("StatorCell")
-        cell.Links = list(cell.Links) + [doc.getObject("CoilDivider")]
+        item = stator(study)
+        item.Cells = [*item.Cells, doc.getObject("CoilDivider")]
 
     for build, change, title in [
-        (motor, eleven_slots, "1 + StatorArray 11 copies"),
+        (motor, eleven_slots, "1 + the stator turned 11 times"),
         (motor, divisions_100, "1 + Divisions 100"),
         (motor, no_coil05, "1 + Material Coil05 deleted"),
         (motor, bolt_hole, "1 + a bolt hole in one tooth"),
         (stator_structured, outer_arc_5, "2 + outer coil arc 5 el"),
         (split_coil, inner_block_too, "3 + inner block structured, no edge counts"),
         (split_coil, inner_block_solved, "3 + inner block structured, solved"),
-        (split_coil, divider_in_the_cell, "3 + the divider sketch put in the cell"),
+        (split_coil, divider_in_the_cell, "3 + the divider sketch put in the group"),
     ]:
         doc, study, path = build()
         doc.recompute()
@@ -509,7 +526,7 @@ if __name__ == "__main__":
         doc, study, path = build()
         doc.recompute()
         doc.saveAs(path)
-        cells = [c.Label for i in objects.symmetric_items(study) for c in symmetry.read_chain(i.Top)[0]]
+        cells = [c.Label for g in objects.symmetric_groups(study) for c in g.Cells]
         print("saved", path, "| cells:", cells)
         mesh(study, doc.Name)
         App.closeDocument(doc.Name)

@@ -133,30 +133,8 @@ class AssignMaterial(_StudyCommand):
         groups = {g.Name: g for g in objects.symmetric_groups(study)}
         if groups and self.open_part(study, groups, bodies):
             return
-        tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
-        solids = objects.is_symmetric(study) and objects.piece_kind(study) == "Solid"
-        if solids:
-            pieces, cancelled = taskpanels.selected_piece_solids(study)
-            if not pieces and cancelled:
-                return  # a Cancel in the question about a face of two solids
-            if not pieces and any(b.Name in tops for b, _ in taskpanels.selected_subs(("Face",))):
-                return warn("No solid of the drawing has the selected face: click a face of a solid of the drawing.")
-        else:
-            pieces = [(b, s) for b, s in taskpanels.selected_faces() if b.Name in tops]
-        if pieces:
-            if gate(study, [b for b, _ in pieces]):
-                taskpanels.open_material_panel(study, pieces)
-            return
-        whole = [b for b in bodies if b.Name in tops]
-        if whole:
-            name = objects.display_name(whole[0])
-            if solids:
-                return warn(f"Materials go on the solids (pieces) of {name}: click a face of each solid first.")
-            return warn(f"Materials go on the faces (pieces) of {name}: select faces first.")
         if not gate(study, bodies):  # with nothing selected, still refused without main geometry
             return
-        if objects.is_symmetric(study):  # its Materials are on faces: the panel picks them
-            bodies = []
         air = objects.air_material(study, bodies[0]) if len(bodies) == 1 and taskpanels.is_air(bodies[0]) else None
         if air is not None:  # an Air Region keeps its Material: edit that one
             Gui.Control.showDialog(taskpanels.MaterialPanel(air))
@@ -373,26 +351,6 @@ class AddRecombine(_StudyCommand):
             _create_and_edit(study, "Add Recombine", make)
 
 
-class AddSymmetricMesh(_StudyCommand):
-    def GetResources(self):
-        return {
-            "Pixmap": icon("symmetricmesh"),
-            "MenuText": "Symmetric Mesh",
-            "ToolTip": "Mesh one cell of a Mirror / Polar Array drawing and copy the mesh around",
-        }
-
-    def Activated(self):
-        study = assignment_study()
-        if study is None:
-            return
-        picked = Gui.Selection.getSelection()
-        names = {b.Name for b in objects.study_bodies(study)}
-        if len(picked) != 1 or picked[0].Name not in names:
-            return warn("Select the object built from the cell (the Fragments or Array) first.")
-        top = picked[0]
-        _create(study, "Add Symmetric Mesh", lambda: objects.make_symmetric_mesh(study, top))
-
-
 class AddSymmetricGroup(_StudyCommand):
     def GetResources(self):
         return {
@@ -467,7 +425,6 @@ COMMANDS = {
     "EMS_TransfiniteBody": AddTransfiniteBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
-    "EMS_SymmetricMesh": AddSymmetricMesh(),
     "EMS_SymmetricGroup": AddSymmetricGroup(),
     "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),

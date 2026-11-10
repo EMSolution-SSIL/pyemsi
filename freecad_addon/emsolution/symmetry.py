@@ -1,8 +1,8 @@
-"""Symmetric Mesh: read the copy transforms from the objects the user drew the full geometry with.
+"""Symmetric Groups: the copies that ordered mirror, rotation and translation rules make, and the parts they belong to.
 
-The user draws a cell and builds the whole 2D geometry from it with Part Mirror, Draft Polar Array and Part
-Compound / Boolean Fragments. read_chain walks that chain from its top object down to the cell bodies and returns
-where every copy of the cell lies; rules_from_chain reads the same chain as ordered rules for a Symmetric Group.
+A drawing built with Part Mirror, Draft Polar Array and Part Compound / Boolean Fragments can fill a group: read_chain
+walks that chain from its top object down to the cell bodies and returns where every copy of the cell lies, and
+rules_from_chain reads the same chain as ordered rules. Mirror planes and array axes may lie any way.
 Transforms are 4x4 affine, row major (16 floats), in global positions. No GUI code."""
 
 import collections
@@ -19,19 +19,6 @@ class SymmetryError(Exception):
 
 
 # ---- transforms
-
-
-def rotation(deg, cx=0.0, cy=0.0):
-    """Turn by deg about the z axis through (cx, cy)."""
-    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
-    return [c, -s, 0, cx - c * cx + s * cy, s, c, 0, cy - s * cx - c * cy, 0, 0, 1, 0, 0, 0, 0, 1]
-
-
-def mirror_plane(base, normal):
-    """Mirror about the plane through base with the (unit) normal; the normal has no z component."""
-    nx, ny = normal[0], normal[1]
-    d = 2 * (nx * base[0] + ny * base[1])
-    return [1 - 2 * nx * nx, -2 * nx * ny, 0, d * nx, -2 * nx * ny, 1 - 2 * ny * ny, 0, d * ny, 0, 0, 1, 0, 0, 0, 0, 1]
 
 
 def compose(*ms):
@@ -297,33 +284,27 @@ def _vec(v):
     return [v.x, v.y, v.z]
 
 
-def _mirror_of(obj, any_axis):
-    """The motion of a Part Mirror; any_axis: its plane may lie any way, else it must contain Z."""
+def _mirror_of(obj):
+    """The motion of a Part Mirror; its plane may lie any way."""
     n = obj.Normal
-    length = math.sqrt(n.x**2 + n.y**2 + n.z**2)
-    if length == 0:
+    if n.Length == 0:
         raise SymmetryError(f"{_name(obj)}: the mirror normal is zero")
-    if any_axis:
-        return _mirror(_vec(obj.Base), _vec(n))
-    if abs(n.z) > TOL * length:
-        raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis")
-    return mirror_plane((obj.Base.x, obj.Base.y), (n.x / length, n.y / length))
+    return _mirror(_vec(obj.Base), _vec(n))
 
 
-def _walk(obj, any_axis=False):
-    """{body name: (body, transforms)}: where each cell body below obj has been copied to, in obj's shape.
-    any_axis: mirror planes and array axes may lie any way, else they must contain or be Z."""
+def _walk(obj):
+    """{body name: (body, transforms)}: where each cell body below obj has been copied to, in obj's shape."""
     if obj.TypeId == "Part::Compound":
-        found = _merge(_walk(o, any_axis) for o in _below(obj, "Links"))
+        found = _merge(_walk(o) for o in _below(obj, "Links"))
     elif obj.TypeId == "Part::Mirroring":
-        m = _mirror_of(obj, any_axis)
-        found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source"), any_axis).items()}
+        m = _mirror_of(obj)
+        found = {k: (b, [compose(m, t) for t in ts]) for k, (b, ts) in _walk(_below(obj, "Source")).items()}
     elif _is_array(obj):
-        found = _array(obj, any_axis)
+        found = _array(obj)
     elif _cuts_a_cell(obj):
         return {obj.Name: (obj, [ID])}  # a cell body, like a leaf
     elif _is_fragments(obj):
-        found = _merge(_walk(o, any_axis) for o in _below(obj, "Objects"))
+        found = _merge(_walk(o) for o in _below(obj, "Objects"))
     elif _is_leaf(obj):
         return {obj.Name: (obj, [ID])}  # its shape already carries its own Placement
     else:
@@ -332,34 +313,27 @@ def _walk(obj, any_axis=False):
     return {k: (b, [compose(p, t) for t in ts]) for k, (b, ts) in found.items()}
 
 
-def _array_step(obj, any_axis=False):
-    """(copies, turn between copies in degrees) of a polar array: about +Z or -Z, or with any_axis about its own
-    axis (right-handed, as Draft turns)."""
+def _array_step(obj):
+    """(copies, turn between copies in degrees) of a polar array, about its own axis (right-handed, as Draft turns)."""
     n, angle = int(obj.NumberPolar), float(obj.Angle)
     if n < 1 or (n == 1 and angle != 360):
         raise SymmetryError(f"{_name(obj)}: a polar array needs at least 2 copies (it has {n})")
     step = angle / n if angle == 360 else angle / (n - 1)  # Draft's rule: only exactly 360 is a full turn
-    return n, step if any_axis or obj.Axis.z > 0 else -step
+    return n, step
 
 
-def _array(obj, any_axis=False):
+def _array(obj):
     if obj.ArrayType != "polar":
         raise SymmetryError(f"{_name(obj)}: only polar arrays are supported")
-    axis = obj.Axis
-    if any_axis and axis.Length < TOL:
+    if obj.Axis.Length < TOL:
         raise SymmetryError(f"{_name(obj)}: the array axis is zero")
-    if not any_axis and (abs(axis.x) > TOL or abs(axis.y) > TOL or abs(axis.z) < TOL):
-        raise SymmetryError(f"{_name(obj)}: the array axis must be Z")
     if abs(obj.IntervalAxis.x) > TOL or abs(obj.IntervalAxis.y) > TOL or abs(obj.IntervalAxis.z) > TOL:
         raise SymmetryError(f"{_name(obj)}: the array interval along the axis must be zero")
-    n, step = _array_step(obj, any_axis)
-    sub = _walk(_below(obj, "Base"), any_axis)
-    c = obj.Center
-
-    def turn(deg):
-        return rotation_about(_vec(c), _vec(axis), deg) if any_axis else rotation(deg, c.x, c.y)
-
-    return {k: (b, [compose(turn(i * step), t) for i in range(n) for t in ts]) for k, (b, ts) in sub.items()}
+    n, step = _array_step(obj)
+    sub = _walk(_below(obj, "Base"))
+    c, axis = _vec(obj.Center), _vec(obj.Axis)
+    turns = [rotation_about(c, axis, i * step) for i in range(n)]
+    return {k: (b, [compose(turn, t) for turn in turns for t in ts]) for k, (b, ts) in sub.items()}
 
 
 def _unique(ts):
@@ -375,12 +349,11 @@ def _outer(top):
     return top.getGlobalPlacement().multiply(top.Placement.inverse())
 
 
-def read_chain(top, any_axis=False):
+def read_chain(top):
     """(cell bodies in first-seen order, transforms) of the chain whose top object is top.
 
-    The transforms are those of the first cell body, identity first; every cell body must have the same set.
-    any_axis: mirror planes and array axes may lie any way (the reading helper), else they must contain or be Z."""
-    found = _walk(top, any_axis)
+    The transforms are those of the first cell body, identity first; every cell body must have the same set."""
+    found = _walk(top)
     if not found:
         raise SymmetryError(f"{_name(top)} holds no cell body")
     sets = {name: _unique(ts) for name, (body, ts) in found.items()}
@@ -434,7 +407,7 @@ def _step_rule(obj, outer):
     if obj.TypeId == "Part::Mirroring":
         normal = _unit(_vec(outer.Rotation.multVec(obj.Normal)))
         return {"kind": "mirror", "point": _clean(_vec(outer.multVec(obj.Base))), "normal": _clean(normal)}
-    n, step = _array_step(obj, any_axis=True)
+    n, step = _array_step(obj)
     axis = _unit(_vec(outer.Rotation.multVec(obj.Axis)))
     point = _clean(_vec(outer.multVec(obj.Center)))
     return {"kind": "rotate", "point": point, "axis": _clean(axis), "step": round(step, 9) + 0.0, "count": n}
@@ -497,7 +470,7 @@ def rules_from_chain(top):
     """[Proposal(cells, rules)] for the chain whose top object is top, in global positions: one per set of copies its
     cell bodies have, so branches with other copies are other proposals. Mirror planes and array axes may lie any way.
     SymmetryError explains a set of copies that no ordered list of the chain's steps gives exactly."""
-    found = _walk(top, any_axis=True)
+    found = _walk(top)
     if not found:
         raise SymmetryError(f"{_name(top)} holds no cell body")
     steps = _step_objects(top)
@@ -547,21 +520,35 @@ def _chain_steps(obj):
     return [s for k in kids for s in _chain_steps(k)]
 
 
+def _point_text(v):
+    return "(" + ", ".join(_num(c) for c in _vec(v)) + ")"
+
+
 def steps(top):
-    """One line per Mirror and Polar Array below top, in the order they are applied (the cell first), e.g.
-    "mirror (0, 0) 15°" or "rotate (0, 0) 30° × 12". Raises SymmetryError like read_chain."""
+    """One line per Mirror and Polar Array below top, in the order they are applied (the cell first). A mirror plane
+    that contains Z and an array about Z read as in the XY plane, "mirror (0, 0) 15°" or "rotate (0, 0) 30° × 12";
+    the others name their plane or axis, "mirror (0, 0, 5) normal (0, 0, 1)" or "rotate (0, 0, 0) axis (1, 0, 0)
+    180° × 2". Raises SymmetryError like read_chain."""
     out = []
     for obj in reversed(list(dict.fromkeys(_chain_steps(top)))):
         if obj.TypeId == "Part::Mirroring":
             n, b = obj.Normal, obj.Base
+            if n.Length == 0:
+                raise SymmetryError(f"{_name(obj)}: the mirror normal is zero")
+            if abs(n.z) > TOL * n.Length:
+                out.append(f"mirror {_point_text(b)} normal {_point_text(n * (1 / n.Length))}")
+                continue
             length = math.hypot(n.x, n.y)
-            if length == 0:
-                raise SymmetryError(f"{_name(obj)}: the mirror plane must contain the Z axis")
             nx, ny = n.x / length, n.y / length
             d = nx * b.x + ny * b.y  # the foot of the perpendicular from the origin, on the mirror line
             angle = math.degrees(math.atan2(-nx, ny)) % 180
             out.append(f"mirror ({_num(d * nx)}, {_num(d * ny)}) {_num(angle)}°")
         else:
             n, step = _array_step(obj)
-            out.append(f"rotate ({_num(obj.Center.x)}, {_num(obj.Center.y)}) {_num(step)}° × {n}")
+            a = obj.Axis
+            if abs(a.x) > TOL * a.Length or abs(a.y) > TOL * a.Length or a.Length < TOL:
+                out.append(f"rotate {_point_text(obj.Center)} axis {_point_text(a)} {_num(step)}° × {n}")
+                continue
+            turn = step if a.z > 0 else -step  # read about +Z
+            out.append(f"rotate ({_num(obj.Center.x)}, {_num(obj.Center.y)}) {_num(turn)}° × {n}")
     return out

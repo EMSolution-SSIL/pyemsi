@@ -53,7 +53,6 @@ def stator(study):
 def test_drawing_has_a_solid_per_row_per_copy(study, stator):
     assert len(stator.Shape.Faces) == 3 * 24
     assert objects.is_grouped(study)
-    assert not objects.is_symmetric(study)
     assert stator.Label == "Stator"
     assert stator.Side == "Fixed"
 
@@ -528,6 +527,10 @@ def break_coil_past_the_line(study, stator):
     study.Document.getObject("StatorIronCell").Shape = symcases.sector(36, 60, 0, 15).cut(coil.Shape).Faces[0]
 
 
+def break_cells_overlap_in_place(study, stator):
+    study.Document.getObject("CoilCell").Shape = symcases.sector(37, 52, 10, 15)  # into the iron above the slot
+
+
 def break_step_smaller_than_cell(study, stator):
     objects.set_rules(stator, [{"kind": "translate", "vector": [5, 0, 0], "count": 3}])
 
@@ -598,6 +601,7 @@ def break_names_equal_in_mesh(study, stator):
         (break_same_mirror_twice, "identical"),
         (break_coil_past_the_line, "overlaps"),  # T-04
         (break_step_smaller_than_cell, "overlaps"),  # T-05
+        (break_cells_overlap_in_place, "StatorIronCell overlaps CoilCell near"),
         (break_groups_touch, "one group, or draw"),
         (break_part_without_material, "no Material"),
         (break_name_on_both_sides, "both sides"),
@@ -710,9 +714,27 @@ def test_zx_study_with_a_z_mirror_validates():
         App.closeDocument(doc.Name)
 
 
-@pytest.mark.skip(reason="the older Symmetric Mesh item is refused with 'older version' after Task 16")
-def test_old_item_is_refused(study):
-    pass
+def test_old_item_is_refused(study, tmp_path):
+    """A document saved with the older Symmetric Mesh item opens; Validate asks for a Symmetric Group in its place, and
+    the Study's groups are checked as usual."""
+    ready(study)
+    doc = study.Document
+    top = symcases.feature(doc, "OldTop", symcases.sector(36, 60, 0, 15))
+    old = doc.addObject("App::FeaturePython", "SymmetricMesh")  # as the older version saved it
+    old.Proxy = objects.SymmetricMesh()
+    old.addProperty("App::PropertyLinkGlobal", "Top", "EMSolution", "")
+    old.Top, old.Label = top, "Old"
+    study.MeshSizesGroup.addObject(old)
+    name, path = old.Name, str(tmp_path / "old.FCStd")
+    doc.saveAs(path)
+    App.closeDocument(doc.Name)
+    again = objects.find_study(App.openDocument(path))
+    found = problems(again)
+    assert [p.text for p in found] == [
+        "Symmetric Mesh Old is from an older version. Add a Symmetric Group; Read from drawing fills it from OldTop."
+    ]
+    assert found[0].item.Name == name
+    assert [row[2][1] for row in objects.mesh_size_rows(again)] == ["symmetric group", "older version"]
 
 
 def test_mesh_size_on_a_cell_object_and_excitation_on_the_drawing_are_fine(study_3d):

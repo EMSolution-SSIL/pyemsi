@@ -1,27 +1,21 @@
-"""Symmetric mesh: mesh the cell, copy the mesh by the transforms and give every copy the MAT_ID of the drawn piece it
-lands on. Runs in the mesher process (mesher2d.run_job and mesher.run_job call run for a job with a "symmetric" key);
-dim is 2 (faces) or 3 (solids). Never import FreeCAD here."""
+"""Helpers of the group mesher (meshgroups.py) on a cell meshed in gmsh: its seams and their periodic copies, the
+excitation patches that land on a face, the sliding circle or cylinder and its marker. "side" is a dict with the cells
+("cells": physical ids), their copies ("transforms") and, for the sliding checks, its "side" name. Runs in the mesher
+process; dim is 2 (faces) or 3 (solids). Never import FreeCAD here."""
 
-import json
 import math
 import os
 from collections import Counter
 
 import gmsh
 
-from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, MSH_VERSION
+from meshcommon import JobError, import_brep
 from meshcommon import _slide_faces
 
 
 def _apply(m, p):
     """Point p moved by the 4x4 row-major affine transform m."""
     return [sum(m[4 * i + k] * v for k, v in enumerate((*p, 1))) for i in range(3)]
-
-
-def _det(m):
-    return (
-        m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8])
-    )
 
 
 def _angle(p):
@@ -201,11 +195,6 @@ def _entity(dim, e):
     return e, conn, used, centres, gmsh.model.occ.getMass(dim, e)
 
 
-def _cell_entities(side, dim):
-    """[_entity] of the side's cell bodies."""
-    return [_entity(dim, e) for id_ in side["cells"] for e in gmsh.model.getEntitiesForPhysicalGroup(dim, id_)]
-
-
 def _cell_patches(side, dim):
     """[_entity] of the boundary entities of the side's cell bodies (faces in 3D); none when it has no excitations."""
     if not side.get("excitations"):
@@ -216,46 +205,6 @@ def _cell_patches(side, dim):
         near = gmsh.model.getClosestPoint(dim - 1, f, [x for p in centres for x in p])[0]  # flat elements: off a curve
         out.append((e, conn, used, [list(near[k : k + 3]) for k in range(0, len(near), 3)], area))
     return out
-
-
-def _land(sides, cells, folder, dim):
-    """labels[side][cell entity][copy] = index of the side's piece that copy lands on. The copies must cover every
-    piece exactly (by area in 2D, by volume in 3D), or the drawing is not symmetric."""
-    measure, unit = ("an area", "mm²") if dim == 2 else ("a volume", "mm³")
-    current = gmsh.model.getCurrent()
-    gmsh.model.add("pieces")
-    try:
-        labels = []
-        for side, ents in zip(sides, cells):
-            pieces = side["pieces"]
-            faces = [[t for _, t in import_brep(os.path.join(folder, p["file"]), dim)] for p in pieces]
-            gmsh.model.occ.synchronize()
-            areas = [sum(gmsh.model.occ.getMass(dim, t) for t in ts) for ts in faces]
-            covered = [0.0] * len(pieces)
-            side_labels = []
-            for _, _, _, centres, area in ents:
-                copies = []
-                for m in side["transforms"]:
-                    moved = [_apply(m, p) for p in centres]
-                    flat = [x for p in moved for x in p]
-                    hits = [k for k, ts in enumerate(faces) if sum(gmsh.model.isInside(dim, t, flat) for t in ts) == 3]
-                    if len(hits) != 1:
-                        where = ", ".join(f"{v:.6g}" for v in moved[0][:dim])
-                        raise JobError(f"copy lands outside the drawing near ({where})")
-                    covered[hits[0]] += area
-                    copies.append(hits[0])
-                side_labels.append(copies)
-            for p, area, got in zip(pieces, areas, covered):
-                if abs(got - area) > 1e-6 * area:
-                    raise JobError(
-                        f"not symmetric: piece {p['name']} ({p['file']}) has {measure} of {area:.6g} {unit}, "
-                        f"but the copies of the cell landing on it cover {got:.6g} {unit}"
-                    )
-            labels.append(side_labels)
-        return labels
-    finally:
-        gmsh.model.remove()
-        gmsh.model.setCurrent(current)
 
 
 def _on_face(dim, t, box, points, tol):
@@ -319,63 +268,6 @@ def _land_surfaces(sides, patches, folder, dim):
         gmsh.model.setCurrent(current)
 
 
-def _copy(sides, cells, labels, dim, patches=None, surface_labels=None):
-    """Model "full": every side's cell entities copied by that side's transforms, each copy a discrete entity in the
-    physical group of its piece's MAT_ID; the cell boundary patches that land on an excitation (surface_labels) copied
-    with them into the physical group of its SMAT_ID; mirrored copies reversed, shared nodes merged.
-    Returns (split, surfaces): {side: {mat_id: (name, entities)}} and {side: {smat_id: (name, entities)}}."""
-    patches = patches or [[] for _ in sides]
-    surface_labels = surface_labels or [[] for _ in sides]
-    tags, coords, _ = gmsh.model.mesh.getNodes()
-    xyz = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
-    shift = int(max(tags))
-    gmsh.model.add("full")
-    split, surfaces, mirrored, entity, face, offset = {}, {}, [], 0, 0, 0
-    for side, ents, side_labels, faces, face_labels in zip(sides, cells, labels, patches, surface_labels):
-        groups = split.setdefault(side["side"], {})
-        excited = surfaces.setdefault(side["side"], {})
-        for c, m in enumerate(side["transforms"]):
-            owned = set()
-            for (_, conn, used, _, _), copies in zip(ents, side_labels):
-                entity += 1
-                gmsh.model.addDiscreteEntity(dim, entity)
-                mine = [n for n in used if n not in owned]  # nodes the copy's earlier entities did not add
-                owned.update(mine)
-                moved = [v for n in mine for v in _apply(m, xyz[n])]
-                gmsh.model.mesh.addNodes(dim, entity, [n + offset for n in mine], moved)
-                for typ, nodes in conn.items():
-                    gmsh.model.mesh.addElementsByType(entity, typ, [], [n + offset for n in nodes])
-                piece = side["pieces"][copies[c]]
-                groups.setdefault(piece["mat_id"], (piece["name"], []))[1].append(entity)
-                if _det(m) < 0:
-                    mirrored.append((dim, entity))
-            for (_, conn, _, _, _), copies in zip(faces, face_labels):
-                x = copies[c]
-                if x is None:
-                    continue
-                face += 1  # its nodes are nodes of this copy's bodies: the same offset
-                gmsh.model.addDiscreteEntity(dim - 1, face)
-                for typ, nodes in conn.items():
-                    gmsh.model.mesh.addElementsByType(face, typ, [], [n + offset for n in nodes])
-                excited.setdefault(x["smat_id"], (x["name"], []))[1].append(face)
-                if _det(m) < 0:
-                    mirrored.append((dim - 1, face))
-            offset += shift
-    if mirrored:
-        gmsh.model.mesh.reverse(mirrored)
-    gmsh.model.mesh.removeDuplicateNodes()
-    gmsh.model.mesh.renumberNodes()
-    gmsh.model.mesh.renumberElements()
-    for d, by_side in ((dim, split), (dim - 1, surfaces)):
-        members = {}
-        for groups in by_side.values():
-            for id_, (name, ents) in groups.items():
-                members.setdefault(id_, (name, []))[1].extend(ents)
-        for id_, (name, ents) in sorted(members.items()):
-            gmsh.model.addPhysicalGroup(d, ents, id_, name=name)
-    return split, surfaces
-
-
 def _marker(slide):
     """The slide point: a discrete point entity holding one point element on the node at (radius, 0)."""
     r = slide["radius"]
@@ -426,53 +318,6 @@ def _side_facets(split, side, dim):
     return facets
 
 
-def _outline(side, folder, points, dim):
-    """For each point, the set of entities of the outer boundary of the side's pieces (their union) it lies on:
-    curves in 2D, faces in 3D."""
-    current = gmsh.model.getCurrent()
-    gmsh.model.add("outline")
-    try:
-        parts = [dt for p in side["pieces"] for dt in import_brep(os.path.join(folder, p["file"]), dim)]
-        if len(parts) > 1:
-            gmsh.model.occ.fragment(parts[:1], parts[1:])
-        gmsh.model.occ.synchronize()
-        box = gmsh.model.getBoundingBox(-1, -1)
-        tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
-        flat = [v for p in points for v in p]
-        on = [set() for _ in points]
-        for _, c in gmsh.model.getEntities(dim - 1):
-            if len(gmsh.model.getAdjacencies(dim - 1, c)[0]) != 1:  # between two pieces, or loose
-                continue
-            near = gmsh.model.getClosestPoint(dim - 1, c, flat)[0]  # on a plane's face: anywhere on the plane
-            b = gmsh.model.getBoundingBox(dim - 1, c)
-            for k, p in enumerate(points):
-                inside = all(b[i] - tol <= p[i] <= b[i + 3] + tol for i in range(3))
-                if inside and math.dist(p, near[3 * k : 3 * k + 3]) <= tol:
-                    on[k].add(c)
-        return on
-    finally:
-        gmsh.model.remove()
-        gmsh.model.setCurrent(current)
-
-
-def _conform(sides, split, folder, dim):
-    """Every mesh edge (2D) or element face (3D) that only one element of a side uses lies on the outer boundary of
-    the side's pieces: the copies meet node to node everywhere else."""
-    tags, coords, _ = gmsh.model.mesh.getNodes()
-    xyz = {int(t): list(coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
-    for side in sides:
-        loose = [f for f, k in _side_facets(split, side, dim).items() if k == 1]
-        nodes = sorted({n for f in loose for n in f})
-        on = dict(zip(nodes, _outline(side, folder, [xyz[n] for n in nodes], dim)))
-        bad = next((f for f in loose if not set.intersection(*(on[n] for n in f))), None)
-        if bad is not None:
-            where = ", ".join(f"{sum(xyz[n][i] for n in bad) / len(bad):.6g}" for i in range(dim))
-            raise JobError(
-                f"the copies of the cell do not match near ({where}) on the {side['side']} side: their"
-                " meshes meet there without sharing nodes"
-            )
-
-
 def _on_circle(slide, sides, split):
     """Each side has exactly one node on the sliding circle at each of the divisions grid angles."""
     r, n, name = slide["radius"], slide["divisions"], slide["name"]
@@ -511,89 +356,3 @@ def _on_cylinder(slide, sides, split):
                 f"sliding interface {name}: the {side['side']} side has {len(pts)} nodes on the cylinder (radius {r:g}"
                 f" mm) where it needs one on each of the {n} × {k + 1} grid points; its copies must cover the cylinder"
             )
-
-
-def _mesh(job, folder, build, dim):
-    """Mesh the cell to dimension dim (gmsh initialized, model added), check it and copy it; model "full" is current.
-    Returns (sides, slide, split, surfaces)."""
-    sides, slide = job["symmetric"]["sides"], job["symmetric"].get("slide")
-    build(job, folder)  # one model holds the cells of both sides
-    if slide:
-        (_slide_arcs if dim == 2 else _slide_faces_sym)(slide, sides)
-    _periodic(sides, dim)
-    generate(job, dim)
-    cells = [_cell_entities(side, dim) for side in sides]
-    labels = _land(sides, cells, folder, dim)
-    patches = [_cell_patches(side, dim) for side in sides]
-    surface_labels = _land_surfaces(sides, patches, folder, dim) if any(patches) else None
-    split, surfaces = _copy(sides, cells, labels, dim, patches, surface_labels)
-    _conform(sides, split, folder, dim)
-    if slide:
-        (_on_circle if dim == 2 else _on_cylinder)(slide, sides, split)
-    return sides, slide, split, surfaces
-
-
-def check(job_path, build, dim=2):
-    """--check of a symmetric job: mesh the cell, copy it and run every check, nothing written."""
-    folder = os.path.dirname(os.path.abspath(job_path))
-    with open(job_path, encoding="utf-8") as fh:
-        job = json.load(fh)
-    gmsh.initialize()
-    try:
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add(job["model_name"])
-        _mesh(job, folder, build, dim)
-    finally:
-        gmsh.finalize()
-    print("CHECK OK")
-
-
-def run(job_path, build, dim=2):
-    """Read the job, mesh its cell to dimension dim with build(job, folder), copy it per side, write mesh.unv and
-    replace job["mesh_file"] (and job["rotor_file"] when sliding: the moving side) with the finished .msh. Returns the
-    job."""
-    folder = os.path.dirname(os.path.abspath(job_path))
-    with open(job_path, encoding="utf-8") as fh:
-        job = json.load(fh)
-    msh = os.path.join(folder, "mesh.msh")
-    outputs = [(msh, job["mesh_file"])]
-    gmsh.initialize()
-    try:
-        gmsh.option.setNumber("General.Terminal", 1)
-        gmsh.model.add(job["model_name"])
-        _, slide, split, surfaces = _mesh(job, folder, build, dim)
-        point = (_marker if dim == 2 else _marker_line)(slide) if slide else None
-        gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
-        gmsh.option.setNumber("Mesh.Binary", 0)
-        gmsh.write(os.path.join(folder, "mesh.unv"))
-        if slide:
-            outputs.append((os.path.join(folder, "rotor.msh"), job["rotor_file"]))
-            for side, (path, _) in zip(("fixed", "moving"), outputs):
-                groups = [(dim, ents, id_, name) for id_, (name, ents) in sorted(split.get(side, {}).items())]
-                groups += [(dim - 1, ents, id_, name) for id_, (name, ents) in sorted(surfaces.get(side, {}).items())]
-                if side == "moving":
-                    groups.append((dim - 2, [point], slide["slide_mat_id"], slide["name"]))
-                write_split(groups, path)
-        else:
-            gmsh.write(msh)
-    finally:
-        gmsh.finalize()
-    publish(outputs)
-    return job
-
-
-def report(job):
-    """The lines run_job prints: one MAT_ID line per piece assignment, one SMAT_ID line per excitation, the slide
-    values, the files written."""
-    slide = job["symmetric"].get("slide")
-    sides = job["symmetric"]["sides"]
-    seen = {(p["mat_id"], p["name"]): None for s in sides for p in s["pieces"]}
-    lines = [f"MAT_ID  {id_:>6}  {name}" for id_, name in seen]
-    excited = {(x["smat_id"], x["name"]): None for s in sides for x in s.get("excitations", [])}
-    lines += [f"SMAT_ID {id_:>6}  {name}" for id_, name in excited]
-    if slide:
-        lines += slide_report({"slides": [slide]})
-    lines.append(f"Wrote {job['mesh_file']}")
-    if slide:
-        lines.append(f"Wrote {job['rotor_file']}")
-    return lines

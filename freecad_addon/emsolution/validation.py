@@ -85,38 +85,40 @@ def validate(study):
         bodies = free_bodies(study, main, moving)
     included = {b.Name for b in bodies}
     with_air = meshed(study, bodies)
-    symmetric = objects.is_symmetric(study)
-    if symmetric or grouped:  # mesh settings may sit on the cell bodies, which are not in the main geometry
+    if grouped:  # mesh settings may sit on the cell objects, outside the main geometry; excitations on a drawing
         with_air |= {b.Name for b in objects.cell_bodies(study)}
-    if grouped:  # excitations may sit on the drawing of a group
         with_air |= {g.Name for g in objects.symmetric_groups(study)}
         included |= {g.Name for g in objects.symmetric_groups(study)}
+    _old_items(study, r)
     _skipped_picks(study, r)
     _body_overlaps(bodies, study.Dimension, r)
     _links(study, with_air, r)
     _settings(study, with_air, r)
     if grouped:
         _groups(study, main, moving, r)
-    elif symmetric:
-        _symmetric(study, main, moving, r)
     else:
         _air(study, bodies, {b.Name for b in moving}, r)
         _slides(study, main, moving, r)
-        for m in objects.piece_assignments(study):
-            r.warning(
-                f"Material {m.Label} has pieces but the Study has no Symmetric Mesh: its pieces are not meshed.", m
-            )
-    meshed_bodies = bodies  # a Symmetric Mesh meshes its cells; with groups the cells come besides the free objects
-    if grouped:
-        meshed_bodies = bodies + objects.cell_bodies(study)
-    elif symmetric:
-        meshed_bodies = objects.cell_bodies(study)
+    meshed_bodies = bodies + objects.cell_bodies(study)  # with groups, the cells come besides the free objects
     _coarse(study, meshed_bodies, r)
     _transfinite(study, meshed_bodies, r)
     _names(study, bodies, included, r)
-    if grouped or not symmetric:
-        _materials(study, r)
+    _materials(study, r)
     return r.problems
+
+
+def old_item_text(item):
+    """What to do with a Symmetric Mesh item of an older version, which is not meshed."""
+    top = getattr(item, "Top", None)
+    return (
+        f"Symmetric Mesh {item.Label} is from an older version. Add a Symmetric Group; Read from drawing fills it"
+        f" from {top.Label if top is not None else 'its Mirror / Polar Array chain'}."
+    )
+
+
+def _old_items(study, r):
+    for item in objects.old_items(study):
+        r.error(old_item_text(item), item)
 
 
 def free_bodies(study, main, moving):
@@ -237,8 +239,8 @@ def _links(study, included, r):
                                 [(b, "")],
                             )
     for m in objects.materials(study):
-        # an assignment of pieces or of a part has no body
-        if m.Body is None and not len(getattr(m, "Pieces", [])) and not getattr(m, "PartKey", ""):
+        # the assignment of a part has no body
+        if m.Body is None and not getattr(m, "PartKey", ""):
             r.warning(f"Material assignment {m.Label} has no body (was it deleted?). Delete the assignment.", m)
 
 
@@ -638,8 +640,6 @@ def _names(study, bodies, included, r):
     if grouped:  # the parts are the volumes, then the free objects
         names = [objects.volume_name(m) for m in objects.part_assignments(study)]
         names += [objects.region_name(study, b) for b in bodies]
-    elif objects.is_symmetric(study):  # the piece assignments are the volumes; no bodies, no Air Region
-        names = [objects.volume_name(m) for m in objects.piece_assignments(study)]
     else:
         names = [objects.region_name(study, b) for b in bodies]
         names += [objects.key_name(study, k) for k in objects.air_keys(study)]  # Air, or Air_fixed and Air_moving
@@ -679,121 +679,17 @@ def _listed(names, limit=8):
     return ", ".join(names[:limit]) + (f" and {len(names) - limit} more" if len(names) > limit else "")
 
 
-def _symmetric(study, main, moving, r):
-    """A Study with Symmetric Mesh items (spec sections 6 and 7): one item per side, XY plane, no Air Region, Materials
-    on the pieces of the tops, Rotational Sliding Interfaces whose divisions fit the copies. Replaces _air, _slides
-    and _materials."""
-    items = objects.symmetric_items(study)
-    sliding = study.Movement == "Sliding motion"
-    three = study.Dimension == "3D"
-    kind = objects.piece_kind(study)
-    if not three and airshapes.study_plane(study) != "XY":
-        r.error("A Symmetric Mesh needs a 3D Study or a 2D Study in the XY plane.")
-    for air in objects.air_regions(study):
-        r.error(f"Air Region {objects.display_name(air)}: a Study with a Symmetric Mesh has no Air Region.", air)
-    copies = {}  # item name -> number of copies of the cell
-    for item in items:
-        if item.Top is None:
-            r.error(f"Symmetric Mesh {item.Label} has no top object. Pick the object that builds the drawing.", item)
-            continue
-        try:
-            cells, transforms = symmetry.read_chain(item.Top)
-        except symmetry.SymmetryError as e:
-            r.error(f"Symmetric Mesh {item.Label}: {e}", item)
-            continue
-        copies[item.Name] = len(transforms)
-        have = "Solids" if three else "Faces"
-        for cell in cells:
-            if not getattr(cell.Shape, have):
-                r.error(
-                    f"Symmetric Mesh {item.Label}: cell body {objects.display_name(cell)} has no {kind.lower()}; a"
-                    f" cell body must be a {kind.lower()}. To cut a cell into blocks, put its {kind.lower()} and"
-                    f" {'a cutting face or solid' if three else 'the cutting sketch'} in a Boolean Fragments and use"
-                    " that in the cell.",
-                    item,
-                    [(cell, "")],
-                )
-        if all(getattr(cell.Shape, have) for cell in cells):
-            _overlaps(item, cells, transforms, r, three)
-    top_side = {}  # top Name -> "main" or "moving"
-    for side, bodies in (("main", main), ("moving", moving if sliding else [])):
-        names = {b.Name for b in bodies}
-        mine = [i for i in items if i.Top is not None and i.Top.Name in names]
-        for item in mine[1:]:
-            r.error(
-                f"A Study has only one Symmetric Mesh per side: {item.Label} is a second one in the {side} geometry.",
-                item,
-            )
-        tops = {i.Top.Name for i in mine}
-        extra = [b for b in bodies if b.Name not in tops]
-        if extra:
-            r.error(
-                f"A Study has only one Symmetric Mesh per side: the {side} geometry must be the top object of one Symmetric Mesh"
-                f" item and nothing else, not {_listed([objects.display_name(b) for b in extra])}.",
-                mine[0] if mine else None,
-                [(b, "") for b in extra],
-            )
-        top_side.update({name: side for name in tops})
-    for item in items:
-        if item.Top is not None and item.Top.Name not in top_side:
-            r.error(
-                f"A Study has only one Symmetric Mesh per side: the top of {item.Label} is in neither the main nor the moving"
-                " geometry.",
-                item,
-            )
-    tops = {i.Top.Name: i.Top for i in items if i.Top is not None}
-    _interfaces(study, items, copies, sliding, r)
-    _pieces(study, {i.Top.Name: i for i in items if i.Top is not None}, top_side, r)
-    settings = objects.mesh_sizes(study) + objects.transfinite_bodies(study) + objects.transfinite_edges(study)
-    for item in settings + objects.recombine_items(study):
-        on = [b for b, _ in objects.subs_by_body(item) if b.Name in tops]
-        if on:
-            r.error(
-                f"{_kind(item)} {item.Label} refers to {_listed([objects.display_name(b) for b in on])}: copies are not"
-                " meshed. Put it on the cell bodies instead.",
-                item,
-                [(b, "") for b in on],
-            )
-    cells = {b.Name for b in objects.cell_bodies(study)}
-    for e in objects.excitations(study):
-        on = [b for b, _ in objects.subs_by_body(e) if b.Name in cells]
-        for b in on:
-            r.error(
-                f"Excitation {e.Label} refers to {objects.display_name(b)}: copies are not where it is drawn."
-                " Pick the faces on the drawing.",
-                e,
-                [(b, "")],
-            )
-    for m in objects.materials(study):
-        if m.Body is not None and m.Body.Name in tops:
-            r.error(
-                f"Material {m.Label}: {objects.display_name(m.Body)} gets its Materials through pieces"
-                f" (its {kind.lower()}s), not as a whole body. Delete this assignment.",
-                m,
-                [(m.Body, "")],
-            )
-        elif m.Body is not None and m.Body.Name in cells:
-            r.warning(
-                f"Material {m.Label} is not used: the Materials of a Symmetric Mesh come from the pieces of the top"
-                " object, not from its cell bodies.",
-                m,
-                [(m.Body, "")],
-            )
-
-
 def _overlaps(item, cells, transforms, r, three=False):
-    """The copies of the cell may only touch (split-cell PRD R3). A cell body past the mirror line or the edge of the
-    cell, or a Polar Array with too many copies, makes them overlap, and the mesher would fail with only a point.
-    Any two copies overlap the way the cell overlaps one of its copies, so the cell is tested against each copy.
-    Reports the first overlap found. item is a Symmetric Group or an older Symmetric Mesh item."""
-    group = isinstance(item.Proxy, objects.SymmetricGroup)
+    """The copies of the cell objects of group item may only touch (split-cell PRD R3). A cell object past a mirror's
+    plane, or a rotation with too many copies, makes them overlap, and the mesher would fail with only a point.
+    Any two copies overlap the way the cell overlaps one of its copies, so the cell is tested against each copy, and
+    in its own place two cell objects may only touch too. Reports the first overlap found."""
     shapes = [(cell, geometry.global_shape(cell)) for cell in cells]
     for m in transforms:
-        if all(abs(a - b) < symmetry.TOL for a, b in zip(m, symmetry.ID)):
-            continue
-        for other, shape in shapes:
-            copy = shape.transformed(App.Matrix(*m))
-            for cell, mine in shapes:
+        same = all(abs(a - b) < symmetry.TOL for a, b in zip(m, symmetry.ID))
+        for k, (other, shape) in enumerate(shapes):
+            copy = shape if same else shape.transformed(App.Matrix(*m))
+            for cell, mine in shapes[:k] if same else shapes:
                 if not mine.BoundBox.intersect(copy.BoundBox):
                     continue
                 common = mine.common(copy)
@@ -802,40 +698,36 @@ def _overlaps(item, cells, transforms, r, three=False):
                         continue  # they only touch
                 elif common.Area <= 1e-6 * min(mine.Area, copy.Area):
                     continue  # they only touch
-                if symmetry.det(m) < 0:
-                    how = "a mirrored copy"
-                elif group:
-                    how = _moved_by(m)
-                else:
-                    how = f"a copy turned by {math.degrees(math.atan2(m[4], m[0])):.4g}°"
                 if three:
                     c = max(common.Solids, key=lambda s: s.Volume).CenterOfMass
                     where, size = f"({c.x:.6g}, {c.y:.6g}, {c.z:.6g})", f"{common.Volume:.3g} mm³"
                 else:
                     c = max(common.Faces, key=lambda f: f.Area).CenterOfMass
                     where, size = f"({c.x:.6g}, {c.y:.6g})", f"{common.Area:.3g} mm²"
-                if group:
+                if same:
+                    what = objects.display_name(other)
                     advice = (
-                        " The copies of a cell object may only touch: keep every cell object clear of its own copies,"
-                        " and check the rules (a mirror's plane, a rotation's step and count, a translation's vector)."
+                        "Cell objects may only touch: make them with Part Slice or Boolean Fragments, or cut one out"
+                        " of the other."
                     )
                 else:
+                    how = "a mirrored copy" if symmetry.det(m) < 0 else _moved_by(m)
+                    what = f"{how} of {objects.display_name(other)}"
                     advice = (
-                        " The copies of a cell may only touch: keep every cell body inside the cell, between the"
-                        " Mirror's line and the edge the Polar Array turns, and check the Polar Array's count and angle."
+                        "The copies of a cell object may only touch: keep every cell object clear of its own copies,"
+                        " and check the rules (a mirror's plane, a rotation's step and count, a translation's vector)."
                     )
                 r.error(
-                    f"{'Symmetric Group' if group else 'Symmetric Mesh'} {item.Label}: cell body"
-                    f" {objects.display_name(cell)} overlaps {how} of {objects.display_name(other)} near {where},"
-                    f" by {size}." + advice,
+                    f"Symmetric Group {item.Label}: cell body {objects.display_name(cell)} overlaps {what} near"
+                    f" {where}, by {size}. {advice}",
                     item,
                     list({b.Name: (b, "") for b in (cell, other)}.values()),
                 )
                 return
 
 
-def _interfaces(study, items, copies, sliding, r):
-    """Sliding Interfaces of a symmetric Study: Rotational, with divisions a whole number per copy of every cell."""
+def _interfaces(study, sliding, r):
+    """Sliding Interfaces of a Study with Symmetric Groups: one, Rotational; _group_sliding checks the rest."""
     interfaces = objects.sliding_interfaces(study)
     if not sliding:
         for i in interfaces:
@@ -844,97 +736,10 @@ def _interfaces(study, items, copies, sliding, r):
     if not interfaces:
         r.error("Sliding motion needs at least one Sliding Interface.")
     for i in interfaces[1:]:
-        r.error(f"A Study with a Symmetric Mesh has only one Sliding Interface: delete {i.Label}.", i)
+        r.error(f"A Study with a Symmetric Group has only one Sliding Interface: delete {i.Label}.", i)
     for i in interfaces:
         if i.Kind != "Rotational":
-            r.error(f"Sliding Interface {i.Label}: a Study with a Symmetric Mesh slides Rotational only.", i)
-            continue
-        for item in items:
-            n = copies.get(item.Name)
-            if n and i.Divisions % n:
-                r.error(
-                    f"Sliding Interface {i.Label}: the divisions ({i.Divisions}) must be a multiple of the {n} copies"
-                    f" of {item.Label}'s cell.",
-                    i,
-                )
-
-
-def _moved(m, tops, r):
-    """Warn for each piece of m whose face is no longer where it was when assigned: FreeCAD renumbers the faces when
-    the drawing changes, and FaceN may now be another piece."""
-    stored = list(getattr(m, "PieceCentres", []))
-    pieces = [(b, s) for b, subs in m.Pieces for s in subs]
-    if len(stored) != len(pieces):  # an older document, or Pieces edited by hand
-        return
-    for (body, sub), was in zip(pieces, stored):
-        if body.Name not in tops or not _has(body, sub):
-            continue  # reported elsewhere
-        shape = geometry.global_shape(body)
-        if shape.getElement(sub).CenterOfMass.distanceToPoint(was) > 1e-6 * shape.BoundBox.DiagonalLength:
-            r.warning(
-                f"piece {body.Label}.{sub} of {objects.display_name(m)} has moved:"
-                " remove and add it again in its Material's panel",
-                m,
-                [(body, sub)],
-            )
-
-
-def _parts(top, kind):
-    """The pieces of a top: its faces (2D) or solids (3D)."""
-    return top.Shape.Solids if kind == "Solid" else top.Shape.Faces
-
-
-def _pieces(study, item_of, top_side, r):
-    """Every face of a top has exactly one assignment; an assignment keeps to one side and to tops. item_of: top
-    Name -> its Symmetric Mesh item, which carries the coverage errors."""
-    tops = {name: item.Top for name, item in item_of.items()}
-    gone = {}  # top Name -> {assignment Label: [faces it names that the top no longer has]}
-    kind = objects.piece_kind(study)
-    owners = {(name, f"{kind}{n}"): [] for name, top in tops.items() for n in range(1, len(_parts(top, kind)) + 1)}
-    for m in objects.piece_assignments(study):
-        sides = set()
-        for body, subs in m.Pieces:
-            if body.Name not in tops:
-                r.error(
-                    f"Material {m.Label}: {objects.display_name(body)} is not a Symmetric Mesh top; pieces go on the"
-                    " top object.",
-                    m,
-                    [(body, s) for s in subs],
-                )
-                continue
-            sides.add(top_side.get(body.Name))
-            for sub in subs:
-                if (body.Name, sub) in owners:
-                    owners[(body.Name, sub)].append(m)
-                else:  # FreeCAD marks a face that no longer exists with a leading "?"
-                    gone.setdefault(body.Name, {}).setdefault(m.Label, []).append(sub.lstrip("?"))
-        if len(sides - {None}) > 1:
-            r.error(
-                f"Material {m.Label} holds pieces of both sides of the Sliding Interface; the moving side needs IDs"
-                " of its own. Use two Materials.",
-                m,
-            )
-        _moved(m, tops, r)
-    for name, labels in gone.items():
-        r.error(
-            f"Pieces with no Material: the {kind.lower()}s of {_listed(list(labels))} no longer exist on"
-            f" {tops[name].Label} (did the array count or the cell change?). Reselect the pieces of these Materials.",
-            item_of[name],
-        )
-    for name, top in tops.items():
-        faces = [f"{kind}{n}" for n in range(1, len(_parts(top, kind)) + 1)]
-        none = [f for f in faces if not owners[(name, f)]]
-        two = [f for f in faces if len(owners[(name, f)]) > 1]
-        if none:
-            r.error(
-                f"Pieces with no Material: {_listed([f'{top.Label}.{f}' for f in none])}."
-                f" Every piece of {top.Label} needs one (did the array count change?).",
-                item_of[name],
-                [(top, f) for f in none],
-            )
-        if two:
-            names = [f"{top.Label}.{f} ({', '.join(m.Label for m in owners[(name, f)])})" for f in two]
-            r.error(f"Pieces with two Materials: {_listed(names)}.", item_of[name], [(top, f) for f in two])
+            r.error(f"Sliding Interface {i.Label}: a Study with a Symmetric Group slides Rotational only.", i)
 
 
 # ---- Symmetric Groups (spec section 6)
@@ -1200,7 +1005,7 @@ def _group_sliding(study, groups, ruled, free, plane, r):
     mirror in a plane that contains Z or in z = const; its turns divide the Divisions; no free object touches it."""
     three = study.Dimension == "3D"
     sliding = study.Movement == "Sliding motion"
-    _interfaces(study, [], {}, sliding, r)
+    _interfaces(study, sliding, r)
     if not sliding:
         return
     if plane == "ZX":
@@ -1361,6 +1166,21 @@ def _groups(study, main, moving, r):
                 " Pick the faces on the drawing.",
                 e,
                 [(b, "")],
+            )
+    for m in objects.materials(study):
+        if m.Body is not None and m.Body.Name in names:
+            r.error(
+                f"Material {m.Label}: Symmetric Group {objects.display_name(m.Body)} gets its Materials through its"
+                " parts, not as a whole body. Delete this assignment.",
+                m,
+                [(m.Body, "")],
+            )
+        elif m.Body is not None and m.Body.Name in cells:
+            r.warning(
+                f"Material {m.Label} is not used: the Materials of a Symmetric Group come from its parts, not from its"
+                " cell objects.",
+                m,
+                [(m.Body, "")],
             )
     _group_sliding(study, groups, ruled, free, plane, r)
     _free_transfinite(study, free, r)

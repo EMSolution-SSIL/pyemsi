@@ -1,4 +1,5 @@
-"""Reading the copy transforms from the Mirror / Polar Array / Boolean Fragments chain of a symmetric drawing."""
+"""Reading the copy transforms from the Mirror / Polar Array / Boolean Fragments chain of a drawing: the reading
+helper of a Symmetric Group."""
 
 import pytest
 
@@ -95,18 +96,26 @@ def test_leaves_with_different_copies_are_refused(motor):
         symmetry.read_chain(motor["stator_top"])
 
 
-def test_mirror_out_of_plane_is_refused(motor):
+def test_mirror_out_of_plane_reads(motor):
+    """A mirror plane that does not contain Z reads like any other: the mirror of z = 0 here."""
     mirror = motor["doc"].getObject("StatorMirror")
     mirror.Normal = App.Vector(0, 0, 1)
-    with pytest.raises(symmetry.SymmetryError, match="StatorMirror"):
-        symmetry.read_chain(motor["stator_top"])
+    cells, transforms = symmetry.read_chain(motor["stator_top"])
+    assert len(transforms) == 24 and sum(symmetry.det(t) < 0 for t in transforms) == 12
+    assert symmetry.apply(transforms[1], (1, 2, 3)) == pytest.approx([1, 2, -3])
+    assert symmetry.steps(motor["stator_top"]) == ["mirror (0, 0, 0) normal (0, 0, 1)", "rotate (0, 0) 30° × 12"]
 
 
-def test_array_axis_other_than_z_is_refused(motor):
+def test_array_axis_other_than_z_reads(motor):
+    """An array about X turns the pitch about X: half a turn takes (0, 1, 0) to (0, -1, 0)."""
     array = motor["doc"].getObjectsByLabel("StatorArray")[0]
     array.Axis = App.Vector(1, 0, 0)
-    with pytest.raises(symmetry.SymmetryError, match="StatorArray"):
-        symmetry.read_chain(motor["stator_top"])
+    array.NumberPolar = 2
+    _, transforms = symmetry.read_chain(motor["stator_top"])
+    assert len(transforms) == 4
+    turned = [t for t in transforms if symmetry.det(t) > 0 and t != symmetry.ID]
+    assert [symmetry.apply(t, (0, 1, 0)) for t in turned] == [pytest.approx([0, -1, 0], abs=1e-9)]
+    assert symmetry.steps(motor["stator_top"])[1] == "rotate (0, 0, 0) axis (1, 0, 0) 180° × 2"
 
 
 def test_cell_bodies_made_from_other_objects_are_leaves(motor):

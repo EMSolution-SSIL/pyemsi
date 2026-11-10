@@ -210,14 +210,13 @@ class _Named(_Proxy):
 
 
 class Material(_Proxy):
-    """An assignment: one body (assign()) or faces of a symmetric drawing (assign_pieces()), its Material Library
-    entry and its potential region."""
+    """An assignment: one body (assign()) or a part of a Symmetric Group (sync_parts()), its Material Library entry and
+    its potential region. Pieces and PieceCentres, on Materials saved by the older Symmetric Mesh, are ignored."""
 
     def __init__(self, obj):
         obj.Proxy = self
         obj.addProperty("App::PropertyLinkGlobal", "Body", "EMSolution", "Body made of this material")
         self.add_group_name(obj)
-        self.add_pieces(obj)
         self.add_part(obj)
         obj.addProperty("App::PropertyLink", "LibraryMaterial", "EMSolution", "Material from the Material Library")
         obj.addProperty("App::PropertyIntegerConstraint", "Potential", "EMSolution", "POTENTIAL: 0 total, 1+ reduced")
@@ -229,22 +228,11 @@ class Material(_Proxy):
         obj.addProperty("App::PropertyString", "GroupName", "EMSolution", "Name used in the mesh group names")
 
     @staticmethod
-    def add_pieces(obj):
-        if not hasattr(obj, "Pieces"):
-            obj.addProperty("App::PropertyLinkSubListGlobal", "Pieces", "EMSolution", "Faces made of this material")
-        if not hasattr(obj, "PieceCentres"):
-            obj.addProperty(
-                "App::PropertyVectorList", "PieceCentres", "EMSolution", "Where each piece was when assigned (mm)"
-            )
-            obj.setEditorMode("PieceCentres", 2)
-
-    @staticmethod
     def add_part(obj):
         if not hasattr(obj, "PartKey"):
             obj.addProperty("App::PropertyString", "PartKey", "EMSolution", "Part of a Symmetric Group: side|name")
 
     def onDocumentRestored(self, obj):
-        self.add_pieces(obj)  # assignments saved before pieces existed
         self.add_part(obj)
         if not hasattr(obj, "GroupName"):  # saved before Materials were named: keep the mesh name they had
             name = display_name(obj.Body) if obj.Body is not None else obj.Label
@@ -255,26 +243,8 @@ class Material(_Proxy):
 
 
 class SymmetricMesh(_Proxy):
-    """Mesh the cell, copy the mesh: Top is the object that builds the full drawing (Boolean Fragments, Compound,
-    Polar Array or Mirror). Cells and Steps show what the chain was read as."""
-
-    def __init__(self, obj):
-        obj.Proxy = self
-        obj.addProperty("App::PropertyLinkGlobal", "Top", "EMSolution", "Top object of the Mirror / Polar Array chain")
-        obj.addProperty("App::PropertyLinkListGlobal", "Cells", "EMSolution", "Cell bodies: the only ones meshed")
-        obj.addProperty("App::PropertyStringList", "Steps", "EMSolution", "Copy steps, in the order they are applied")
-        obj.setEditorMode("Cells", 1)
-        obj.setEditorMode("Steps", 1)
-
-    def execute(self, obj):
-        cells, steps = [], []
-        if obj.Top is not None:
-            try:
-                cells, _ = symmetry.read_chain(obj.Top)
-                steps = symmetry.steps(obj.Top)
-            except symmetry.SymmetryError:
-                cells, steps = [], []
-        obj.Cells, obj.Steps = cells, steps
+    """The Symmetric Mesh item of an older version, which read its copies from the Mirror / Polar Array chain below its
+    Top. It is kept so that those documents open: Validate asks for a Symmetric Group in its place."""
 
 
 class SymmetricGroup(_Proxy):
@@ -667,16 +637,16 @@ class SlidingInterface(_Named):
 
         air = air_of(obj)
         study = owner_study(obj)
-        if air is None and study is not None and is_symmetric(study):
+        if air is None and study is not None and is_grouped(study):
             if obj.Kind != "Rotational":
                 raise ValueError(f"Sliding Interface {display_name(obj)}: a symmetric Study slides Rotational only")
             import FreeCAD as App
             import Part
 
             _unplaced(obj)
-            if study.Dimension == "3D":  # the cylinder over the z range of the tops
-                z0, z1 = _tops_z(study)
-                if z1 - z0 < 1e-6:  # flat tops (cells that are faces): no cylinder, validation says why
+            if study.Dimension == "3D":  # the cylinder over the z range of the drawings
+                z0, z1 = _drawings_z(study)
+                if z1 - z0 < 1e-6:  # flat drawings (cells that are faces): no cylinder, validation says why
                     obj.Shape = Part.Shape()
                 else:
                     obj.Shape = Part.makeCylinder(obj.Radius.Value, z1 - z0, App.Vector(0, 0, z0)).Faces[0]
@@ -706,24 +676,21 @@ def _make_folder(study, prop, cls):
     return folder
 
 
-def _tops_z(study):
-    """(zmin, zmax) of the tops of the Study's Symmetric Mesh items."""
-    boxes = [i.Top.Shape.BoundBox for i in symmetric_items(study) if i.Top is not None]
+def _drawings_z(study):
+    """(zmin, zmax) of the drawings of the Study's Symmetric Groups; (0, 0) when no drawing has a shape."""
+    boxes = [g.Shape.BoundBox for g in symmetric_groups(study) if not g.Shape.isNull() and g.Shape.Faces]
     if not boxes:
-        raise ValueError("a Symmetric Mesh item needs a top object: the Sliding Interface spans its z range")
+        return 0.0, 0.0
     return min(b.ZMin for b in boxes), max(b.ZMax for b in boxes)
 
 
 def stale_sliding_cylinder(iface):
-    """True if iface, a 3D symmetric Study's Rotational Sliding Interface, no longer spans the z range of the tops."""
+    """True if iface, a 3D grouped Study's Rotational Sliding Interface, no longer spans the z range of the drawings."""
     study = owner_study(iface)
-    if study is None or study.Dimension != "3D" or not is_symmetric(study):
+    if study is None or study.Dimension != "3D" or not is_grouped(study) or air_of(iface) is not None:
         return False
-    try:
-        z0, z1 = _tops_z(study)
-    except ValueError:
-        return False
-    if iface.Shape.isNull():  # not built, or the tops were flat: stale once they have a height
+    z0, z1 = _drawings_z(study)
+    if iface.Shape.isNull():  # not built, or the drawings were flat: stale once they have a height
         return z1 - z0 >= 1e-6
     box = iface.Shape.BoundBox
     return abs(box.ZMin - z0) > 1e-6 or abs(box.ZMax - z1) > 1e-6
@@ -936,14 +903,6 @@ def make_mesh_size(study, size, refs):
     return obj
 
 
-def make_symmetric_mesh(study, top):
-    """Adds a Symmetric Mesh item reading the chain below top."""
-    obj = _add(study, "MeshSizesGroup", SymmetricMesh, "Symmetric Mesh")
-    obj.Top = top
-    obj.recompute()
-    return obj
-
-
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group", side="Fixed"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row per solid
     (face in 2D) of every cell."""
@@ -969,6 +928,11 @@ def symmetric_groups(study):
 
 def is_grouped(study):
     return bool(symmetric_groups(study))
+
+
+def old_items(study):
+    """The Symmetric Mesh items of an older version that the Study still holds."""
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SymmetricMesh)]
 
 
 def rules_of(item):
@@ -1063,20 +1027,6 @@ def element_owner(item, sub):
         sub = owners[0] if owners else ""
     index = int(re.sub(r"\D", "", sub) or 0) - 1
     return (index % n, index // n) if 0 <= index < len(_pieces(shape)) else None
-
-
-def assign_pieces(study, name, pieces, lib, potential):
-    """Add an assignment named name for pieces [(body, "FaceN")], which need not be whole bodies."""
-    m = _add(study, "MaterialsGroup", Material, name)
-    m.Pieces = list(pieces)
-    m.PieceCentres = piece_centres(m)
-    m.LibraryMaterial, m.Potential = lib, potential
-    set_material_name(m, name)
-    if getattr(m, "ViewObject", None) is not None:  # GUI running
-        from . import taskpanels
-
-        taskpanels.attach_view_provider(m)
-    return m
 
 
 def part_key(study, item, name):
@@ -1234,42 +1184,16 @@ def emptied_by(study, refs, own=None):
     return [m for m in owners if all(_key(r) in taking for r in item_refs(m))]
 
 
-def _set_pieces(m, refs, centres):
-    """Pieces = refs [(body, "FaceN")]; centres: (body Name, sub) -> stored centre, the others are measured now."""
-    m.Pieces = list(refs)
-    now = piece_centres(m)
-    m.PieceCentres = [centres.get(_key(r), c) for r, c in zip(item_refs(m), now)]
-
-
-def apply_material(study, m, name, lib, potential, refs, kept=frozenset()):
-    """Make m cover refs (a whole body [(body, "")] or faces [(body, "FaceN")]), taking them from other Materials,
-    which are removed when left empty. Faces in kept, (body Name, sub), keep the centre m stored for them; the others
-    are measured now. No transaction: the caller holds it."""
-    whole = [r for r in refs if r[1] == ""]
-    if whole and (len(whole) > 1 or len(refs) > 1):
-        raise ValueError("a Material covers one whole body or faces, not both")
-    taking = {_key(r) for r in refs}
+def apply_material(study, m, name, lib, potential, refs):
+    """Make m cover refs, one whole body [(body, "")], taking it from the Material that had it, which is removed. No
+    transaction: the caller holds it."""
+    if len(refs) != 1 or refs[0][1] != "":
+        raise ValueError("a Material covers one whole body")
     for other in emptied_by(study, refs, own=m):
         study.Document.removeObject(other.Name)
-    for other in dict.fromkeys(o for _, o in material_owners(study, refs, own=m)):
-        left = [r for r in item_refs(other) if _key(r) not in taking]  # only piece Materials get here
-        stored = dict(zip(map(_key, item_refs(other)), other.PieceCentres))
-        _set_pieces(other, left, stored)
-    if whole:
-        m.Body = refs[0][0]
-    else:
-        stored = dict(zip(map(_key, item_refs(m)), getattr(m, "PieceCentres", [])))
-        m.Body = None  # a whole-body Material left from before the drawing was symmetric
-        _set_pieces(m, refs, {k: v for k, v in stored.items() if k in kept})
+    m.Body = refs[0][0]
     m.LibraryMaterial, m.Potential = lib, potential
     set_material_name(m, name)
-
-
-def piece_centres(m):
-    """Global centre of mass of each piece of the assignment m, in the order of its flattened Pieces."""
-    from . import geometry
-
-    return [geometry.global_shape(b).getElement(s).CenterOfMass for b, subs in m.Pieces for s in subs]
 
 
 def make_transfinite_body(study, bodies, corners=()):
@@ -1310,19 +1234,6 @@ def excitations(study):
 
 def mesh_sizes(study):
     return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, MeshSize)]
-
-
-def symmetric_items(study):
-    return [o for o in study.MeshSizesGroup.Group if isinstance(o.Proxy, SymmetricMesh)]
-
-
-def is_symmetric(study):
-    return bool(symmetric_items(study))
-
-
-def piece_kind(study):
-    """What a piece of a symmetric Study is: a Face in 2D, a Solid in 3D."""
-    return "Solid" if study.Dimension == "3D" else "Face"
 
 
 def _bounds(shape):
@@ -1374,40 +1285,25 @@ def piece_solid(shape, face, picked, view_dir):
 
 
 def cell_bodies(study):
-    """The leaves (cell bodies) of every Symmetric Mesh item whose chain reads, and the cells of every Symmetric
-    Group, once each."""
+    """The cell objects of every Symmetric Group, once each."""
     found = {}
     for item in symmetric_groups(study):
         for body in item.Cells:
-            found.setdefault(body.Name, body)
-    for item in symmetric_items(study):
-        try:
-            cells, _ = symmetry.read_chain(item.Top) if item.Top is not None else ([], [])
-        except symmetry.SymmetryError:
-            continue
-        for body in cells:
             found.setdefault(body.Name, body)
     return list(found.values())
 
 
 def to_cells(study, refs, whole=False):
-    """Mesh setting picks [(body, sub)] with those on the top of a Symmetric Mesh item moved to the cell: a face,
-    edge or vertex of any copy becomes the cell bodies' own ones that the copy came from (whole: the cell bodies).
-    An edge two cell bodies share is the edge of both, so it gives one pick on each: a structured body counts it.
-    Picks on other bodies, a whole top, or a sub-element no copy comes from stay as they are; validation explains
+    """Mesh setting picks [(body, sub)] with those on the drawing of a Symmetric Group moved to the cell: a face, edge
+    or vertex of any copy becomes the cell objects' own ones that the copy came from (whole: the cell objects).
+    An edge two cell objects share is the edge of both, so it gives one pick on each: a structured body counts it.
+    Picks on other bodies, a whole drawing, or a sub-element no copy comes from stay as they are; validation explains
     those."""
     from . import geometry
 
     chains = {}
-    for item in symmetric_groups(study):  # a group is a chain: its drawing, copied from its cells
+    for item in symmetric_groups(study):  # its drawing, copied from its cells
         chains[item.Name] = ([(c, geometry.global_shape(c)) for c in item.Cells], group_transforms(item))
-    for item in symmetric_items(study):
-        try:
-            if item.Top is not None:
-                cells, transforms = symmetry.read_chain(item.Top)
-                chains[item.Top.Name] = ([(c, geometry.global_shape(c)) for c in cells], transforms)
-        except symmetry.SymmetryError:
-            continue
     out = []
     for body, sub in refs:
         found = _cell_of(chains[body.Name], geometry.global_shape(body), sub) if sub and body.Name in chains else []
@@ -1416,8 +1312,8 @@ def to_cells(study, refs, whole=False):
 
 
 def _cell_of(chain, shape, sub):
-    """[(cell body, sub-element name)] that a copy step puts onto sub of shape, the top: every cell body that has
-    that element, for the first copy that has one; [] if none does."""
+    """[(cell body, sub-element name)] that a copy puts onto sub of shape, the drawing: every cell body that has that
+    element, for the first copy that has one; [] if none does."""
     import FreeCAD as App
 
     cells, transforms = chain
@@ -1441,11 +1337,6 @@ def _coincide(a, b, tol):
     if hasattr(a, "Point") and hasattr(b, "Point"):  # vertices
         return (a.Point - b.Point).Length < tol
     return (a.CenterOfMass - b.CenterOfMass).Length < tol and abs(a.Mass - b.Mass) < tol * max(1.0, a.Mass)
-
-
-def piece_assignments(study):
-    """The assignments made of pieces: they have no Body."""
-    return [m for m in materials(study) if m.Body is None and len(getattr(m, "Pieces", [])) > 0]
 
 
 def transfinite_bodies(study):
@@ -1559,7 +1450,6 @@ def is_item(obj):
         TransfiniteBody,
         TransfiniteEdges,
         Recombine,
-        SymmetricMesh,
         SymmetricGroup,
     )
     return isinstance(getattr(obj, "Proxy", None), proxies)
@@ -1570,11 +1460,11 @@ def item_refs(item):
     if isinstance(item.Proxy, Material):
         if getattr(item, "PartKey", ""):
             return part_refs(item)
-        if item.Body is None:
-            return [(b, s) for b, subs in item.Pieces for s in subs]
-        return [(item.Body, "")]
-    if isinstance(item.Proxy, (SymmetricMesh, SymmetricGroup)):
+        return [(item.Body, "")] if item.Body is not None else []
+    if isinstance(item.Proxy, SymmetricGroup):
         return [(b, "") for b in item.Cells]
+    if isinstance(item.Proxy, SymmetricMesh):
+        return []  # an older version's item: Validate says so
     refs = [(b, s) for b, subs in item.References for s in subs]
     if isinstance(item.Proxy, TransfiniteBody):
         refs += [(b, s) for b, subs in item.Corners for s in subs]
@@ -1584,15 +1474,9 @@ def item_refs(item):
 def material_rows(study):
     """Rows for the Materials panel: (body, refs, [body, material, MAT_ID, POTENTIAL]).
 
-    Every main- and moving-geometry body and Air Region, then bodies outside them that still have an assignment.
-    A symmetric Study lists its piece assignments instead: (assignment, its pieces, [name, ...]).
+    Every main- and moving-geometry body and Air Region, then bodies outside them that still have an assignment, then
+    the part assignments of the Symmetric Groups: (assignment, its copies, [name, ...]).
     """
-    if is_symmetric(study):
-        rows = []
-        for m in piece_assignments(study):
-            lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
-            rows.append((m, item_refs(m), [display_name(m), lib, study.MatIds.get(m.Name, "–"), str(m.Potential)]))
-        return rows
     have = assignment_of(study)
     main = [b for b in assignable(study) if not isinstance(getattr(b, "Proxy", None), SymmetricGroup)]
     inside = {b.Name for b in main}
@@ -1653,7 +1537,7 @@ def _size_text(item):
     if isinstance(item.Proxy, Recombine):
         return "recombine"
     if isinstance(item.Proxy, SymmetricMesh):
-        return "symmetric"
+        return "older version"
     if isinstance(item.Proxy, SymmetricGroup):
         return "symmetric group"
     bump = f" {item.BumpCoefficient:g}" if item.Distribution == "Bump" else ""
@@ -1669,12 +1553,11 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Main-geometry bodies and Air Regions without an assignment; not the tops of Symmetric Mesh items, whose
-    Materials are on their pieces."""
+    """Main-geometry bodies and Air Regions without an assignment; not the Symmetric Groups, whose Materials are on
+    their parts."""
     have = assignment_of(study)
-    tops = {i.Top.Name for i in symmetric_items(study) if i.Top is not None}
-    groups = {g.Name for g in symmetric_groups(study)}  # their Materials are on their parts
-    return [b for b in assignable(study) if b.Name not in have and b.Name not in tops and b.Name not in groups]
+    groups = {g.Name for g in symmetric_groups(study)}
+    return [b for b in assignable(study) if b.Name not in have and b.Name not in groups]
 
 
 def _main_bodies(study):
@@ -1725,11 +1608,9 @@ def air_keys(study):
 
 def volume_keys(study):
     """MAT_ID keys: bodies, Air Regions (or their halves), then the Sliding Interfaces' SLIDE_MAT_IDs when sliding.
-    A symmetric Study has the piece assignments instead of the bodies and Air Regions."""
+    A Study with Symmetric Groups has the part assignments, then the free bodies, and no Air Region."""
     if is_grouped(study):
         keys = [m.Name for m in part_assignments(study)] + [b.Name for b in study_bodies(study)]
-    elif is_symmetric(study):
-        keys = [m.Name for m in piece_assignments(study)]  # one MAT_ID per assignment; no bodies, no Air Region
     else:
         keys = [b.Name for b in study_bodies(study)] + air_keys(study)
     if study.Movement == "Sliding motion":
@@ -1757,8 +1638,6 @@ def surface_keys(study):
     included = set(volume_keys(study))
     if is_grouped(study):  # excitations sit on the groups and on the free bodies
         included |= {g.Name for g in symmetric_groups(study)}
-    elif is_symmetric(study):  # excitations sit on the tops of the Symmetric Mesh items
-        included = {i.Top.Name for i in symmetric_items(study) if i.Top is not None}
     return list(
         dict.fromkeys(
             f"{e.Name}|{b.Name}" for e in excitations(study) for b, _ in subs_by_body(e) if b.Name in included

@@ -76,18 +76,16 @@ def is_air(body):
 
 
 def drawing_names(study):
-    """Names of the drawings a click can land on: the tops of Symmetric Mesh items and the Symmetric Groups."""
-    tops = {i.Top.Name for i in objects.symmetric_items(study) if i.Top is not None}
-    return tops | {g.Name for g in objects.symmetric_groups(study)}
+    """Names of the drawings a click can land on: the Symmetric Groups."""
+    return {g.Name for g in objects.symmetric_groups(study)}
 
 
 def selected_face_picks(study, vertices):
     """[(body, sub)] for a 2D structured item: a body picked as a whole is (body, ""); each clicked FaceN is
     (body, FaceN), or (body, "") when the body has one face (any click on it, an edge or vertex too);
     clicked vertices too when vertices.
-    A click on a Symmetric Mesh top or a Symmetric Group's drawing is moved to the cell: a face of a copy is that
-    block of the cell body, and a vertex is a corner of the cell bodies that have it, those this selection picks if
-    it picks any of them."""
+    A click on a Symmetric Group's drawing is moved to the cell: a face of a copy is that block of the cell object,
+    and a vertex is a corner of the cell objects that have it, those this selection picks if it picks any of them."""
     tops = drawing_names(study)
     out, top_corners = [], []
     for sel in Gui.Selection.getSelectionEx():
@@ -131,16 +129,11 @@ def ask_solid(face, names):
     return name if ok else None
 
 
-def selected_piece_solids(study):
-    """([(top, SolidN)], cancelled) for a 3D symmetric Study: the solid of each clicked face of a Symmetric Mesh top.
-    A face of two solids is decided by the solid behind the click, seen from the 3D view; when that cannot be told
-    the user is asked, and a Cancel skips the pick (cancelled is then True)."""
-    return _picked_solids({i.Top.Name for i in objects.symmetric_items(study) if i.Top is not None})
-
-
 def selected_group_pieces(study):
-    """([(group, SolidN)], cancelled) for the faces clicked on a Symmetric Group's drawing, as selected_piece_solids
-    does; in 2D a click is on a face of the drawing, which is a piece itself: ([(group, FaceN)], False)."""
+    """([(group, SolidN)], cancelled) for the faces clicked on a Symmetric Group's drawing: the solid of each clicked
+    face. A face of two solids is decided by the solid behind the click, seen from the 3D view; when that cannot be
+    told the user is asked, and a Cancel skips the pick (cancelled is then True). In 2D a click is on a face of the
+    drawing, which is a piece itself: ([(group, FaceN)], False)."""
     return _picked_solids({g.Name for g in objects.symmetric_groups(study)})
 
 
@@ -629,7 +622,7 @@ class FolderView:
         if len(items) == 1:
             self.edit_row_material(items[0])
         elif any(isinstance(getattr(i, "Proxy", None), objects.Material) for i in items):  # edited one at a time
-            warn("Select one row: the Materials of symmetric parts and pieces are edited one at a time.")
+            warn("Select one row: the Materials of the parts of Symmetric Groups are edited one at a time.")
         else:
             ask_bulk_assignment(self.study, items)
             self.fill()
@@ -691,7 +684,7 @@ class FolderView:
         elif Gui.Control.activeDialog():  # the panel's selection gate must not outlive it
             pass
         elif isinstance(item.Proxy, objects.SymmetricMesh):
-            Gui.Control.showDialog(SymmetricMeshPanel(item))
+            warn(validation.old_item_text(item))
         elif isinstance(item.Proxy, objects.SymmetricGroup):
             Gui.Control.showDialog(SymmetricGroupPanel(item))
         elif isinstance(item.Proxy, objects.AirRegion):
@@ -1041,8 +1034,8 @@ class ViewProviderItem(_ViewProvider):
             pass
         elif isinstance(obj.Proxy, objects.Material):
             Gui.Control.showDialog(MaterialPanel(obj))
-        elif isinstance(obj.Proxy, objects.SymmetricMesh):
-            Gui.Control.showDialog(SymmetricMeshPanel(obj))
+        elif isinstance(obj.Proxy, objects.SymmetricMesh):  # an older version's item: nothing to edit
+            warn(validation.old_item_text(obj))
         elif isinstance(obj.Proxy, objects.SymmetricGroup):  # saved with this view provider before it had its own
             Gui.Control.showDialog(SymmetricGroupPanel(obj))
         else:
@@ -1132,17 +1125,17 @@ class ItemGate:
 
 
 def picked_bodies(study):
-    """Whole bodies picked: a click anywhere on a body picks it, and a click on a face of a Symmetric Mesh top or a
-    Symmetric Group's drawing picks the cell body that face is a copy of."""
+    """Whole bodies picked: a click anywhere on a body picks it, and a click on a face of a Symmetric Group's drawing
+    picks the cell body that face is a copy of."""
     tops = drawing_names(study)
     faces = [(b, s) for b, s in selected_subs(("Face",)) if b.Name in tops]
     clicked = {b.Name for b, _ in faces}
-    cells = [(b, "") for b, _ in objects.to_cells(study, faces, whole=True)]  # one no copy explains: the whole top
+    cells = [(b, "") for b, _ in objects.to_cells(study, faces, whole=True)]  # one no copy explains: the drawing
     return list(dict.fromkeys([(b, "") for b in selected_bodies() if b.Name not in clicked] + cells))
 
 
 def mesh_picks(study, kinds):
-    """Picked sub-elements named kinds[i]N, those on a Symmetric Mesh top moved to the cell."""
+    """Picked sub-elements named kinds[i]N, those on a Symmetric Group's drawing moved to the cell."""
     return objects.to_cells(study, selected_subs(kinds))
 
 
@@ -1392,8 +1385,8 @@ ONE_BODY = (
 
 
 class MaterialPanel:
-    """Edit a Material: its name, library material, POTENTIAL and what it covers, one body or Air Region, or faces
-    of a symmetric drawing. Picking what another Material covers moves it here, after asking.
+    """Edit a Material: its name, library material, POTENTIAL and what it covers, one body or Air Region. Picking
+    what another Material covers moves it here, after asking.
     The Material of a part of a Symmetric Group (PartKey set) edits name, library material and POTENTIAL only: its
     list shows its copies, and "All parts of this object" gives the chosen library material to every part of the
     object the part is a copy of (row: (group, row), default the part's first copy).
@@ -1409,15 +1402,10 @@ class MaterialPanel:
         self.held = new or self.part  # the panel holds the transaction its OK commits
         if self.part:
             obj.Document.openTransaction("Edit " + obj.Label)
-        self.pieces = objects.is_symmetric(study)  # a symmetric Study's Materials are on pieces of the drawing
-        self.piece = objects.piece_kind(study) if self.pieces else ""  # "Face" in 2D, "Solid" in 3D
         self.air = obj.Body if obj.Body is not None and is_air(obj.Body) else None
         self.current = objects.item_refs(obj)
-        if self.pieces:  # a whole-body Material left from before the drawing was symmetric: its faces only
-            self.current = [r for r in self.current if r[1]]
-        self.kept = {_key(r) for r in self.current}  # faces that keep the centre stored for them
         highlight.clear()  # the list's selected rows are highlighted instead
-        self.gate = ItemGate(study, ("Face",) if self.pieces else ANY_SUB, not self.pieces)
+        self.gate = ItemGate(study, ANY_SUB, True)
         if not self.part:  # a part takes no picks
             Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.form = QtWidgets.QWidget()
@@ -1427,10 +1415,6 @@ class MaterialPanel:
         region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"
         if self.part:
             text = "This is the Material of a part of a Symmetric Group; its copies are listed below."
-        elif self.piece == "Solid":
-            text = "Click a face of each solid of the drawing in the 3D view; its solid is taken."
-        elif self.pieces:
-            text = "Click faces of the drawing in the 3D view."
         elif study.Dimension == "2D":
             text = "Click a region in the 3D view, or select a body or the Air Region in the tree."
         else:
@@ -1460,9 +1444,7 @@ class MaterialPanel:
         self.refs = QtWidgets.QListWidget()
         self.refs.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.refs.itemSelectionChanged.connect(self.highlight_rows)
-        layout.addRow(
-            "Copies" if self.part else {"Face": "Faces", "Solid": "Solids"}.get(self.piece, "Body"), self.refs
-        )
+        layout.addRow("Copies" if self.part else "Body", self.refs)
         self.add_button = add = QtWidgets.QPushButton("Add selection")
         self.remove_button = remove = QtWidgets.QPushButton("Remove")
         add.clicked.connect(self.add_selection)
@@ -1531,14 +1513,7 @@ class MaterialPanel:
         highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
 
     def picks(self):
-        """What the selection offers: faces (3D: their solids) of Symmetric Mesh tops, or whole bodies."""
-        self.cancelled = False
-        if self.piece == "Solid":
-            picks, self.cancelled = selected_piece_solids(self.study)
-            return picks
-        if self.pieces:
-            tops = {i.Top.Name for i in objects.symmetric_items(self.study) if i.Top is not None}
-            return [(b, s) for b, s in selected_subs(("Face",)) if b.Name in tops]
+        """What the selection offers: whole bodies."""
         return [(b, "") for b in selected_bodies()]
 
     def take(self, picks):
@@ -1556,25 +1531,20 @@ class MaterialPanel:
         picks = list({_key(p): p for p in picks if _key(p) not in have}.values())
         if not picks:
             return False
-        if not self.pieces and len(picks) > 1:
+        if len(picks) > 1:
             warn(ONE_BODY)
             return False
         owned = objects.material_owners(self.study, picks, own=self.obj)
         if owned:
-            current = self.current + picks if self.pieces else picks
-            gone = objects.emptied_by(self.study, current, own=self.obj)
+            gone = objects.emptied_by(self.study, picks, own=self.obj)
             name = self.name.text().strip() if self.typed else ""
-            name = name or objects.suggest_name(self.study, current, self.lib(), self.obj, gone) or "this Material"
-            if not confirm_move(owned_text(owned, self.piece.lower() or "body", f'"{name}"')):
-                skipped = {_key(r) for r, _ in owned}
-                picks = [p for p in picks if _key(p) not in skipped]
-                if not picks:
-                    return False
-        self.current = self.current + picks if self.pieces else picks
-        if not self.pieces:  # an Air Region's Material is named after it
-            self.air = picks[0][0] if is_air(picks[0][0]) else None
-            self.name.setReadOnly(self.air is not None)
-            self.air_note.setVisible(self.air is not None)
+            name = name or objects.suggest_name(self.study, picks, self.lib(), self.obj, gone) or "this Material"
+            if not confirm_move(owned_text(owned, "body", f'"{name}"')):
+                return False
+        self.current = picks
+        self.air = picks[0][0] if is_air(picks[0][0]) else None  # an Air Region's Material is named after it
+        self.name.setReadOnly(self.air is not None)
+        self.air_note.setVisible(self.air is not None)
         self.refresh()
         self.suggest()
         return True
@@ -1584,18 +1554,11 @@ class MaterialPanel:
         if not self.take(picks) and not picks:
             if not Gui.Selection.getSelectionEx():
                 warn("Nothing is selected. Pick geometry in the 3D view first.")
-            elif self.cancelled:
-                pass  # a Cancel in the question about a face of two solids
-            elif self.piece == "Solid" and selected_subs(("Face",)):
-                warn("No solid of the drawing has the selected face: click a face of a Symmetric Mesh top.")
-            elif self.pieces and selected_bodies():
-                warn(f"Materials go on the {self.piece.lower()}s (pieces) of the drawing: select faces.")
             else:
                 warn("Nothing new to add.")
 
     def remove(self):
         rows = {i.row() for i in self.refs.selectedIndexes()}
-        self.kept -= {_key(r) for i, r in enumerate(self.current) if i in rows}  # re-added: measured again
         self.current = [r for i, r in enumerate(self.current) if i not in rows]
         self.refresh()
         self.suggest()
@@ -1630,7 +1593,7 @@ class MaterialPanel:
             if self.part:
                 objects.apply_part_material(self.obj, name, lib, self.potential.value())
             else:
-                objects.apply_material(self.study, self.obj, name, lib, self.potential.value(), self.current, self.kept)
+                objects.apply_material(self.study, self.obj, name, lib, self.potential.value(), self.current)
         except Exception:
             doc.abortTransaction()
             self.close()
@@ -1648,86 +1611,6 @@ class MaterialPanel:
             doc.abortTransaction()  # removes the new Material, or undoes what a part's panel changed
             doc.recompute()
         self.close()
-        Gui.Control.closeDialog()
-        return True
-
-
-class SymmetricMeshPanel:
-    """A Symmetric Mesh item: its name and the object built from the cell; the cell bodies and copy steps found
-    under that object are shown, as the mesh will use them."""
-
-    def __init__(self, obj):
-        self.obj = obj
-        self.top = obj.Top
-        study = objects.owner_study(obj)
-        self.form = QtWidgets.QWidget()
-        self.form.setWindowTitle(obj.Label)
-        layout = QtWidgets.QFormLayout(self.form)
-        layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
-        hint = QtWidgets.QLabel(
-            "Only the cell bodies are meshed; the mesh is copied by the steps below."
-            " To use another object, select it (the Fragments or Array) and click Use selection."
-        )
-        hint.setWordWrap(True)
-        layout.addRow(hint)
-        self.name = QtWidgets.QLineEdit(objects.display_name(obj))
-        layout.addRow("Name", self.name)
-        self.top_label = QtWidgets.QLabel()
-        use = QtWidgets.QPushButton("Use selection")
-        use.clicked.connect(self.use_selection)
-        top_row = QtWidgets.QHBoxLayout()
-        top_row.addWidget(self.top_label, 1)
-        top_row.addWidget(use)
-        layout.addRow("Built from", top_row)
-        self.steps = QtWidgets.QListWidget()
-        layout.addRow("Copy steps", self.steps)
-        self.cells = QtWidgets.QListWidget()
-        layout.addRow("Cell bodies", self.cells)
-        self.problem = QtWidgets.QLabel()
-        self.problem.setWordWrap(True)
-        self.problem.setStyleSheet("color: #c0392b")
-        layout.addRow(self.problem)
-        self.refresh()
-
-    def refresh(self):
-        self.top_label.setText(self.top.Label if self.top is not None else "— none —")
-        self.steps.clear()
-        self.cells.clear()
-        self.problem.clear()
-        if self.top is None:
-            return
-        try:
-            cells, _ = symmetry.read_chain(self.top)
-            self.steps.addItems(symmetry.steps(self.top))
-        except symmetry.SymmetryError as exc:
-            self.problem.setText(str(exc))
-            return
-        self.cells.addItems([b.Label for b in cells])
-
-    def use_selection(self):
-        study = objects.owner_study(self.obj)
-        picked = [s.Object for s in Gui.Selection.getSelectionEx()]
-        sides = {b.Name for b in objects.study_bodies(study)}
-        if len(picked) != 1 or picked[0].Name not in sides:
-            warn("Select the object built from the cell (the Fragments or Array) first.")
-            return
-        self.top = picked[0]
-        self.refresh()
-
-    def accept(self):
-        doc = self.obj.Document
-        doc.openTransaction("Edit " + self.obj.Label)
-        name = self.name.text().strip()
-        if name:
-            self.obj.Label = name
-        if self.top != self.obj.Top:
-            self.obj.Top = self.top
-        doc.commitTransaction()
-        doc.recompute()
-        Gui.Control.closeDialog()
-        return True
-
-    def reject(self):
         Gui.Control.closeDialog()
         return True
 

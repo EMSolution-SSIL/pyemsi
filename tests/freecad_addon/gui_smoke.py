@@ -1384,7 +1384,7 @@ def main():
     assert again_air.ViewObject.Transparency == 50, "an existing view provider was made again"
     App.closeDocument(again.Name)
     log.append("view providers attached on open ok")
-    # Symmetric Mesh: the command on the stator's Fragments, and Materials on faces of it.
+    # The motor as two Symmetric Groups: the Materials panel of its parts, and picks on the stator's drawing.
     import sys
 
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -1394,129 +1394,51 @@ def main():
     sym_study = symcases.motor_study(sym_doc)
     App.setActiveDocument(sym_doc.Name)
     taskpanels.set_active_study(sym_study)
-    stator_top = sym_study.MainObjects[0]
-    for item in objects.symmetric_items(sym_study):  # the command makes them again
-        sym_doc.removeObject(item.Name)
-    Gui.Selection.clearSelection()
-    Gui.runCommand("EMS_SymmetricMesh")
-    assert warned[-1] == "Select the object built from the cell (the Fragments or Array) first.", warned[-1]
-    Gui.Selection.addSelection(sym_doc.Name, "StatorIronCell")  # a cell body is not the top
-    Gui.runCommand("EMS_SymmetricMesh")
-    assert not objects.symmetric_items(sym_study), "a Symmetric Mesh item on a cell"
-    Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name)
-    Gui.runCommand("EMS_SymmetricMesh")
-    (sym_item,) = objects.symmetric_items(sym_study)
-    assert sym_item.Top == stator_top and len(sym_item.Steps) == 2, (sym_item.Top, list(sym_item.Steps))
-    assert sym_doc.UndoNames[0] == "Add Symmetric Mesh", sym_doc.UndoNames
-    # Materials: faces of the top open the panel with them (taken from their Materials), a whole top is refused.
-    Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face1")
-    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face2")
-    before = len(objects.piece_assignments(sym_study))
-    move_answers.append(True)  # every face of the drawing already has a Material
-    Gui.runCommand("EMS_Material")
-    panel = material_panels.pop()
-    assert panel.current == [(stator_top, "Face1"), (stator_top, "Face2")], panel.current
-    assert panel.name.text().startswith("Steel"), panel.name.text()
-    assert moves[-1].startswith("These already belong to other Materials:\n• "), moves[-1]
-    assert "Face1 (in " in moves[-1] and "A face can have only one Material. Move them" in moves[-1], moves[-1]
-    gone = objects.emptied_by(sym_study, panel.current, own=panel.obj)
-    panel.name.setText("Smoke pieces")
-    panel.name_typed("Smoke pieces")
-    assert panel.accept()
-    (made,) = [m for m in objects.piece_assignments(sym_study) if m.GroupName == "Smoke pieces"]
-    assert len(objects.piece_assignments(sym_study)) == before + 1 - len(gone), [m.Label for m in gone]
-    assert made.Label == "Smoke pieces: Steel" and sym_doc.UndoNames[0] == "Assign material", sym_doc.UndoNames
-    assert objects.item_refs(made) == [(stator_top, "Face1"), (stator_top, "Face2")], objects.item_refs(made)
-    made.ViewObject.Proxy.doubleClicked(made.ViewObject)  # the selection is editable: remove a face
-    panel = material_panels.pop()
-    panel.refs.item(1).setSelected(True)
-    panel.remove()
-    assert panel.accept() and objects.item_refs(made) == [(stator_top, "Face1")], objects.item_refs(made)
-    sym_doc.undo()
-    assert len(objects.item_refs(made)) == 2, "undo did not bring the face back"
-    Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name)
-    Gui.runCommand("EMS_Material")
-    assert not material_panels and warned[-1].startswith("Materials go on the faces"), warned[-1]
-    # The item: a tree icon that exists; a double-click (tree or Mesh Sizes panel) opens its panel.
-    assert os.path.exists(sym_item.ViewObject.Proxy.getIcon()), sym_item.ViewObject.Proxy.getIcon()
-    sym_panels = []
-    real_sym_panel = taskpanels.SymmetricMeshPanel
-
-    class RecordedSymPanel(real_sym_panel):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            sym_panels.append(self)
-
-    taskpanels.SymmetricMeshPanel = RecordedSymPanel
-    sym_item.ViewObject.Proxy.doubleClicked(sym_item.ViewObject)
-    panel = sym_panels.pop()
-    assert Gui.Control.activeDialog() and panel.top_label.text() == stator_top.Label, panel.top_label.text()
-    assert panel.steps.count() == 2 and panel.cells.count() == 3, (panel.steps.count(), panel.cells.count())
-    Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(sym_doc.Name, "StatorIronCell")  # not the Study's geometry: refused
-    panel.use_selection()
-    assert log[-1].startswith("refused: Select the object built from the cell"), log[-1]
-    panel.name.setText("Stator symmetry")
-    panel.accept()
-    assert sym_item.Label == "Stator symmetry" and sym_item.Top == stator_top, (sym_item.Label, sym_item.Top)
-    assert sym_doc.UndoNames[0].startswith("Edit ") and not Gui.Control.activeDialog(), sym_doc.UndoNames
-    sizes_view = taskpanels.FolderView(sym_study.MeshSizesGroup)
-    sizes_view.open_item([r[0] for r in sizes_view.rows].index(sym_item), 0)
-    panel = sym_panels.pop()
-    assert Gui.Control.activeDialog(), "no panel from the Mesh Sizes panel"
-    panel.reject()
-    assert not Gui.Control.activeDialog()
-    taskpanels.SymmetricMeshPanel = real_sym_panel
-    # Materials panel of a symmetric Study: no top listed without material; a row opens its Material's panel.
-    objects.make_symmetric_mesh(sym_study, sym_study.MovingObjects[0])  # the rotor's, removed above
+    stator_top = objects.symmetric_groups(sym_study)[0]  # its drawing is the full stator
+    # Materials panel of a grouped Study: no drawing listed without material; a row opens its part's Material.
     mat_view = taskpanels.FolderView(sym_study.MaterialsGroup)
     asked_before = len(asked)
     assert mat_view.missing.isHidden(), mat_view.missing.text()
     mat_view.open_item(0, 0)
     panel = material_panels.pop()
     first = mat_view.rows[0][0]
-    assert panel.obj == first and not panel.new, panel.obj.Label
+    assert panel.obj == first and panel.part and not panel.new, panel.obj.Label
     panel.potential.setValue(3)
     assert panel.accept()
     assert first.Potential == 3 and sym_doc.UndoNames[0].startswith("Edit "), (first.Potential, sym_doc.UndoNames)
     mat_view.table.selectRow(1)
     mat_view.assign_rows()
     panel = material_panels.pop()
-    assert panel.obj == mat_view.rows[1][0], "Assign… on a piece row"
+    assert panel.obj == mat_view.rows[1][0], "Assign… on a part row"
     assert panel.reject()
-    mat_view.table.selectAll()  # several piece rows: one panel edits one Material, so none is opened
+    mat_view.table.selectAll()  # several part rows: one panel edits one Material, so none is opened
     count = len(material_panels)
     mat_view.assign_rows()
-    assert len(material_panels) == count and not Gui.Control.activeDialog(), "Assign… on several piece rows"
+    assert len(material_panels) == count and not Gui.Control.activeDialog(), "Assign… on several part rows"
     assert log[-1].startswith("refused: Select one row"), log[-1]
     first.ViewObject.Proxy.doubleClicked(first.ViewObject)
     panel = material_panels.pop()
     panel.potential.setValue(5)
-    assert panel.accept() and first.Potential == 5, "double-click on a piece assignment in the tree"
+    assert panel.accept() and first.Potential == 5, "double-click on a part assignment in the tree"
     assert len(asked) == asked_before, asked  # never the several-bodies dialog
-    # apply_material failing half way: the transaction is aborted, nothing is left behind.
-    real_apply = objects.apply_material
+    # apply_part_material failing half way: the panel's transaction is aborted, nothing is left changed.
+    real_apply = objects.apply_part_material
 
     def failing(*args):
         real_apply(*args)
-        raise RuntimeError("smoke: apply_material failed")
+        raise RuntimeError("smoke: apply_part_material failed")
 
-    objects.apply_material = failing
-    undo, count = list(sym_doc.UndoNames), len(objects.piece_assignments(sym_study))
-    Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face1")
-    move_answers.append(True)
-    Gui.runCommand("EMS_Material")
+    objects.apply_part_material = failing
+    undo, potential = list(sym_doc.UndoNames), first.Potential
+    first.ViewObject.Proxy.doubleClicked(first.ViewObject)
     panel = material_panels.pop()
+    panel.potential.setValue(9)
     try:
         panel.accept()
     except RuntimeError:
         pass
-    objects.apply_material = real_apply
-    assert len(objects.piece_assignments(sym_study)) == count, "a failed assignment was left behind"
+    objects.apply_part_material = real_apply
+    assert first.Potential == potential, "a failed edit was left behind"
     assert not sym_doc.HasPendingTransaction and list(sym_doc.UndoNames) == undo, list(sym_doc.UndoNames)
     assert not Gui.Control.activeDialog(), "the failed panel stayed open"
     # The panel failing as it opens: the new Material's transaction is aborted.
@@ -1537,7 +1459,7 @@ def main():
     # Item panels let the cell bodies be picked: the mesh settings belong on them.
     for air in (True, False):
         assert "CoilCell" in taskpanels.ItemGate(sym_study, ("Edge",), False, air).main, "gate: cell body"
-    # Picks on the Fragments point at the cell: the panels' pickers and the commands.
+    # Picks on the drawing point at the cell: the panels' pickers and the commands.
     cells = {b.Name for b in objects.cell_bodies(sym_study)}
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sym_doc.Name, stator_top.Name, "Face40")  # a face of some copy
@@ -1580,7 +1502,10 @@ def main():
     assert overlay.tags or overlay.badges, "no labels on the hidden cell"
     labels.clear()
     # A cell cut by a Boolean Fragments: a face click on a copy of one block is that block of the cell body.
-    frag = symcases.split_coil(sym_doc)
+    frag = symcases.coil_fragments(sym_doc)
+    stator_top.Cells = [frag if c.Name == "CoilCell" else c for c in stator_top.Cells]
+    objects.sync_rows(stator_top)
+    sym_doc.recompute()
     outer = symcases.sector(43, 50, 10, 15).Area
     copy = next(f"Face{i}" for i, f in enumerate(stator_top.Shape.Faces, 1) if abs(f.Area - outer) < 1e-6)
     block = next(f"Face{i}" for i, f in enumerate(frag.Shape.Faces, 1) if abs(f.Area - outer) < 1e-6)
@@ -1589,55 +1514,19 @@ def main():
     for cls in (objects.TransfiniteBody, objects.Recombine):
         picks = [(b.Name, s) for b, s in taskpanels.ITEM_PICKS_2D[cls][0](sym_study)]
         assert picks == [(frag.Name, block)], picks
+    # An older version's Symmetric Mesh item opens as a warning, not a panel.
+    old = sym_doc.addObject("App::FeaturePython", "SymmetricMesh")
+    old.Proxy = objects.SymmetricMesh()
+    old.Label = "Old"
+    sym_study.MeshSizesGroup.addObject(old)
+    taskpanels.attach_view_provider(old)
+    old.ViewObject.Proxy.doubleClicked(old.ViewObject)
+    assert not Gui.Control.activeDialog(), "a panel for the older item"
+    assert log[-1].startswith("refused: Symmetric Mesh Old is from an older version"), log[-1]
+    Gui.Selection.removeSelectionGate()  # the item panels closed above with closeDialog left their gates
     App.closeDocument(sym_doc.Name)
-    # 3D: a click on a face of the drawing takes its solid; a face two solids share asks (stubbed here).
-    doc3 = App.newDocument("Symmetric3D")
-    study3 = symcases.motor_study_3d(doc3)
-    App.setActiveDocument(doc3.Name)
-    taskpanels.set_active_study(study3)
-    top3 = study3.MainObjects[0]
-
-    def owners(face):  # face: a name like Face3; a shared face or one with a coincident copy has two
-        return objects.face_solids(top3.Shape, face)
-
-    single = next(f"Face{i}" for i in range(1, len(top3.Shape.Faces) + 1) if len(owners(f"Face{i}")) == 1)
-    shared = next(f"Face{i}" for i in range(1, len(top3.Shape.Faces) + 1) if len(owners(f"Face{i}")) == 2)
-    solid_asks, solid_answers = [], []
-    real_ask_solid = taskpanels.ask_solid
-    taskpanels.ask_solid = lambda face, names: (solid_asks.append((face, names)), solid_answers.pop(0))[1]
-    Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc3.Name, top3.Name, single)
-    move_answers.append(True)  # every solid already has a Material
-    Gui.runCommand("EMS_Material")
-    panel = material_panels.pop()
-    (want,) = owners(single)
-    assert panel.current == [(top3, want)] and not solid_asks, (panel.current, solid_asks)
-    assert any(w.text().startswith("Click a face of each solid") for w in panel.form.findChildren(QtWidgets.QLabel))
-    assert panel.refs.item(0).text().endswith(want), panel.refs.item(0).text()
-    assert "A solid can have only one Material" in moves[-1], moves[-1]
-    panel.name.setText("Smoke solid")
-    panel.name_typed("Smoke solid")
-    assert panel.accept()
-    (made3,) = [m for m in objects.piece_assignments(study3) if m.GroupName == "Smoke solid"]
-    assert objects.item_refs(made3) == [(top3, want)], objects.item_refs(made3)
-    Gui.Selection.clearSelection()  # a shared face without a picked point: asked, the answer is taken
-    Gui.Selection.addSelection(doc3.Name, top3.Name, shared)
-    solid_answers.append(owners(shared)[1])
-    move_answers.append(True)
-    Gui.runCommand("EMS_Material")
-    panel = material_panels.pop()
-    assert len(solid_asks) == 1 and solid_asks[0][1] == owners(shared), solid_asks
-    taken = owners(shared)[1]
-    assert panel.current == [(top3, taken)] and panel.reject(), panel.current
-    solid_answers.append(None)  # Cancel skips the pick: no panel, no warning
-    warned_before = len(warned)
-    Gui.runCommand("EMS_Material")
-    assert not material_panels and not Gui.Control.activeDialog(), "a panel opened after Cancel"
-    assert len(warned) == warned_before, warned[warned_before:]
-    taskpanels.ask_solid = real_ask_solid
-    App.closeDocument(doc3.Name)
     App.setActiveDocument(doc.Name)
-    log.append("symmetric mesh ok")
+    log.append("symmetric study ok")
     # Symmetric Group: the command on the stator cells, rules through the panel's buttons, a live drawing.
     import math
 
