@@ -169,9 +169,9 @@ def _picked_solids(names):
             picked = points[k] if len(points) == len(subs) else None
             solid = objects.piece_solid(shape, sub, picked, view)
             if solid is None:
-                names = objects.face_solids(shape, sub)
-                solid = ask_solid(f"{objects.display_name(body)}.{sub}", names) if names else None
-                cancelled = cancelled or bool(names) and solid is None
+                candidates = objects.face_solids(shape, sub)
+                solid = ask_solid(f"{objects.display_name(body)}.{sub}", candidates) if candidates else None
+                cancelled = cancelled or bool(candidates) and solid is None
             if solid is not None and (body, solid) not in out:
                 out.append((body, solid))
     return out, cancelled

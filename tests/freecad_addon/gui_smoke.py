@@ -1906,6 +1906,22 @@ def main():
     warned_before = len(warned)
     Gui.runCommand("EMS_Material")
     assert not material_panels and not Gui.Control.activeDialog() and len(warned) == warned_before
+    # Two drawings selected, the first click on a face of two solids: the question must not hide the second drawing.
+    rotor3 = objects.make_symmetric_group(
+        pick3_study,
+        pick3_info["rotor_cells"],
+        rules=[{"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}],
+        name="Rotor",
+    )
+    pick3_doc.recompute()
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(pick3_doc.Name, group3.Name, shared3)
+    Gui.Selection.addSelection(pick3_doc.Name, rotor3.Name, "Face1")
+    asked_before = len(solid_asks)
+    solid_answers.append(objects.face_solids(group3.Shape, shared3)[0])
+    picked3, cancelled3 = taskpanels.selected_group_pieces(pick3_study)
+    assert not cancelled3 and [b.Name for b, _ in picked3] == [group3.Name, rotor3.Name], picked3
+    assert len(solid_asks) == asked_before + 1, solid_asks
     taskpanels.ask_solid = real_ask_solid
     click(pick3_doc, group3, single3)
     Gui.runCommand("EMS_Excitation")
