@@ -654,7 +654,7 @@ def _refuse_coincident(name, V, parts, dim):
 
 
 def _copies_surface(side, dim):
-    """The whole surface of the copies of a side as triangles (edges in 2D), running outward, for meshfrozen.winding."""
+    """The whole surface of the copies of a side as triangles (edges in 2D), running outward, for meshfrozen.wraps."""
     return np.vstack([side.edge] if dim == 2 else [side.tri, side.quad[:, [0, 1, 2]], side.quad[:, [0, 2, 3]]])
 
 
@@ -665,7 +665,7 @@ def _refuse_inside_a_copy(name, V, side, points, dim):
     every = _copies_surface(side, dim)
     if len(every):
         for point in points:
-            if abs(meshfrozen.winding(V, every, point)) > 0.75:
+            if abs(meshfrozen.wraps(V, every, point)) > 0.75:
                 raise JobError(
                     f"free object {name}: it lies inside a copy near ({_text(point, dim)}); the geometry does not fit"
                 )
@@ -957,7 +957,7 @@ def _is_free(point, own, solid, V, tol):
     """True when point is not on one of the facets own, nor on or inside the copies (one half on a facet, one inside)."""
     if len(own) and meshfrozen.on_facets(V, own, point, tol):
         return False
-    return not len(solid) or abs(meshfrozen.winding(V, solid, point)) <= 0.1
+    return not len(solid) or abs(meshfrozen.wraps(V, solid, point)) <= 0.1
 
 
 def _free_beside(face, rows, own, solid, V, dim, tol):
@@ -1496,7 +1496,7 @@ def run(job_path, build, dim=2):
         gmsh.option.setNumber("Mesh.Binary", 0)
         gmsh.write(os.path.join(folder, "mesh.unv"))
         if slide:
-            outputs.append((os.path.join(folder, "rotor.msh"), job["rotor_file"]))
+            outputs.append((os.path.join(folder, "moving.msh"), job["rotor_file"]))
             for side, (path, _) in zip(("fixed", "moving"), outputs):
                 parts = [(dim, ents, id_, name) for id_, (name, ents) in sorted(model.split.get(side, {}).items())]
                 parts += [(dim - 1, e, id_, n) for id_, (n, e) in sorted(model.surfaces.get(side, {}).items())]

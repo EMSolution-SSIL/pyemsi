@@ -1,10 +1,125 @@
 """Reads a mesh the add-on wrote and describes it in text. Gmsh API only: never import FreeCAD here."""
 
+import collections
 import json
 import math
 import os
 
 import gmsh
+import numpy as np
+
+TYPE_NAMES = {2: "triangles", 3: "quadrangles", 4: "tetrahedra", 5: "hexahedra", 6: "prisms", 7: "pyramids"}
+FACETS = {  # element type -> its facets as corner indexes: edges in 2D, triangles and quadrangles in 3D
+    2: [(0, 1), (1, 2), (2, 0)],
+    3: [(0, 1), (1, 2), (2, 3), (3, 0)],
+    4: [(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)],
+    5: [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)],
+    6: [(0, 1, 2), (3, 4, 5), (0, 1, 4, 3), (1, 2, 5, 4), (0, 2, 5, 3)],
+    7: [(0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4), (0, 1, 2, 3)],
+}
+CORNER_TETS = {  # element type -> (corner, its three neighbours), each a tetrahedron of positive volume when valid
+    4: [(0, 1, 2, 3)],
+    5: [(0, 1, 3, 4), (1, 2, 0, 5), (2, 3, 1, 6), (3, 0, 2, 7), (4, 7, 5, 0), (5, 4, 6, 1), (6, 5, 7, 2), (7, 6, 4, 3)],
+    6: [(0, 1, 2, 3), (1, 2, 0, 4), (2, 0, 1, 5), (3, 5, 4, 0), (4, 3, 5, 1), (5, 4, 3, 2)],
+    7: [(0, 1, 3, 4), (1, 2, 0, 4), (2, 3, 1, 4), (3, 0, 2, 4)],
+}
+CORNER_TRIS = {2: [(0, 1, 2)], 3: [(0, 1, 3), (1, 2, 0), (2, 3, 1), (3, 0, 2)]}  # 2D: (corner, next, previous)
+
+
+def quality(msh_path, copied=()):
+    """What a mesh file holds and whether it is sound, from the physical groups of its highest dimension:
+    {"dim", "types": {type name: count}, "inverted", "faces_in_three", "kept", "boundary"}. Inverted: an element
+    with a corner whose tetrahedron (3D) or triangle (2D, against the normal of the drawing's plane, +Z for XY) is not
+    positive; a ZX drawing is held to the orientation most of its elements have. faces_in_three: facets (faces in 3D, edges in 2D)
+    shared by 3 or more elements. kept: the facets on the surface of the elements of the MAT_IDs copied that another
+    element shares. boundary: the facets used by one element, as (MAT_ID, centre, outward normal, size) arrays."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh_path)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        at = np.zeros((int(tags.max()) + 1, 3))
+        at[tags.astype(np.int64)] = np.reshape(coords, (-1, 3))
+        dim = max(d for d, _ in gmsh.model.getPhysicalGroups())
+        blocks = []  # (element type, connectivity, MAT_ID)
+        for d, tag in gmsh.model.getPhysicalGroups(dim):
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag):
+                for etype, etags, conn in zip(*gmsh.model.mesh.getElements(d, ent)):
+                    corners = gmsh.model.mesh.getElementProperties(etype)[5]
+                    per = len(conn) // len(etags)
+                    blocks.append((int(etype), np.reshape(conn, (-1, per))[:, :corners].astype(np.int64), tag))
+    finally:
+        gmsh.finalize()
+    types = collections.Counter()
+    for etype, conn, _ in blocks:
+        types[TYPE_NAMES.get(etype, f"type {etype}")] += len(conn)
+    inverted = _inverted(at, blocks, dim)
+    facets, owner_mat, owner_centre = {}, {}, {}
+    for etype, conn, mat_id in blocks:
+        centre = at[conn].mean(axis=1)
+        for f in FACETS[etype]:
+            facets.setdefault(len(f), []).append(conn[:, f])
+            owner_mat.setdefault(len(f), []).append(np.full(len(conn), mat_id))
+            owner_centre.setdefault(len(f), []).append(centre)
+    over, kept, mats, centres, normals, sizes = 0, 0, [], [], [], []
+    for n, parts in facets.items():
+        each = np.vstack(parts)
+        _, first, inverse, counts = np.unique(
+            np.sort(each, axis=1), axis=0, return_index=True, return_inverse=True, return_counts=True
+        )
+        over += int((counts > 2).sum())
+        of_copies = np.bincount(inverse.ravel(), np.isin(np.concatenate(owner_mat[n]), list(copied)), len(counts))
+        kept += int(((of_copies == 1) & (counts == 2)).sum())
+        once = first[counts == 1]
+        nodes = at[each[once]]
+        centre = nodes.mean(axis=1)
+        away = centre - np.vstack(owner_centre[n])[once]
+        if dim == 3:
+            normal = np.cross(nodes[:, 1] - nodes[:, 0], nodes[:, -1] - nodes[:, 0])
+        else:  # in the plane, across the edge
+            along = (nodes[:, 1] - nodes[:, 0]) / np.linalg.norm(nodes[:, 1] - nodes[:, 0], axis=1)[:, None]
+            normal = away - np.einsum("ij,ij->i", away, along)[:, None] * along
+        normal *= np.where(np.einsum("ij,ij->i", normal, away) < 0, -1.0, 1.0)[:, None]
+        normal /= np.linalg.norm(normal, axis=1)[:, None]
+        mats.append(np.concatenate(owner_mat[n])[once])
+        centres.append(centre)
+        normals.append(normal)
+        sizes.append(np.linalg.norm(nodes - centre[:, None, :], axis=2).max(axis=1))
+    boundary = tuple(np.concatenate(x) if x else np.zeros(0) for x in (mats, centres, normals, sizes))
+    return {
+        "dim": dim,
+        "types": dict(types),
+        "inverted": inverted,
+        "faces_in_three": over,
+        "kept": kept,
+        "boundary": boundary,
+    }
+
+
+def _inverted(at, blocks, dim):
+    if dim == 3:
+        bad = 0
+        for etype, conn, _ in blocks:
+            worst = np.full(len(conn), np.inf)
+            for a, b, c, d in CORNER_TETS[etype]:
+                p = at[conn[:, a]]
+                vol = np.einsum("ij,ij->i", np.cross(at[conn[:, b]] - p, at[conn[:, c]] - p), at[conn[:, d]] - p)
+                worst = np.minimum(worst, vol)
+            bad += int((worst <= 0).sum())
+        return bad
+    every = np.vstack([at[conn].reshape(-1, 3) for _, conn, _ in blocks])
+    axis = int(np.argmin(np.ptp(every, axis=0)))  # the normal of the drawing's plane
+    signs = []
+    for etype, conn, _ in blocks:
+        worst, best = np.full(len(conn), np.inf), np.full(len(conn), -np.inf)
+        for a, b, c in CORNER_TRIS[etype]:
+            p = at[conn[:, a]]
+            area = np.cross(at[conn[:, b]] - p, at[conn[:, c]] - p)[:, axis]
+            worst, best = np.minimum(worst, area), np.maximum(best, area)
+        signs.append(np.where(worst > 0, 1, np.where(best < 0, -1, 0)))
+    signs = np.concatenate(signs)
+    want = 1 if axis == 2 or (signs > 0).sum() >= (signs < 0).sum() else -1
+    return int((signs != want).sum())
 
 
 def groups(msh_path):

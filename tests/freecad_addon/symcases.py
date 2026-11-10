@@ -223,3 +223,182 @@ def motor_study_3d(doc, height=10):
     objects.make_excitation(study, "Coil01Ends", ends)
     doc.recompute()
     return study
+
+
+# ---- Studies built from code and meshed: the success list and test_rules_end_to_end
+
+
+def extruded(face, z0, z1):
+    """face (drawn at z = 0) as a solid from z0 to z1."""
+    return face.translated(V(0, 0, z0)).extrude(V(0, 0, z1 - z0))
+
+
+def libraries(study):
+    """Steel, Copper and Air in the Study's library: {name: library material}."""
+    import json
+
+    from emsolution import objects
+
+    from .materialdata import AIR, COPPER, STEEL, record
+
+    out = {}
+    for key, name, family, props in (
+        ("steel", "Steel", "electrical_steel", STEEL),
+        ("copper", "Copper", "conductor", COPPER),
+        ("air", "Air", "fluid_or_gas", AIR),
+    ):
+        out[name] = objects.make_library_material(study, json.dumps(record(f"user:{key}", name, family, props)))
+    return out
+
+
+def group(study, name, cells, rules, rows=None, side="Fixed", lib=None):
+    """A Symmetric Group of cells copied by rules. rows: {cell Name: row changes} (such as {"mode": "each"}, or a
+    function of the item and the row's index giving them); lib: {cell Name: library material}. The cells are hidden."""
+    from emsolution import objects
+
+    study.Document.recompute()
+    item = objects.make_symmetric_group(study, cells, rules=rules, name=name, side=side)
+    out = []
+    for r, row in enumerate(objects.rows_of(item)):
+        change = (rows or {}).get(row["cell"], {})
+        out.append({**row, **(change(item, r) if callable(change) else change)})
+    objects.set_rows(item, out)
+    for r, row in enumerate(out):
+        if lib and row["cell"] in lib:
+            objects.set_row_material(study, item, r, lib[row["cell"]])
+    for cell in cells:
+        cell.Visibility = False
+    study.Document.recompute()
+    return item
+
+
+def add_free(study, name, shape, lib=None, side="Main"):
+    """A body meshed normally, beside the copies: in the Main (or Moving) geometry, with a Material of lib."""
+    from emsolution import objects
+
+    body = feature(study.Document, name, shape)
+    setattr(study, side + "Mode", "Manual")
+    setattr(study, side + "Objects", [*getattr(study, side + "Objects"), body])
+    if lib is not None:
+        objects.assign(study, [body], lib, 0)
+    study.Document.recompute()
+    return body
+
+
+def transfinite_layer(study, body, arcs, ups, across=1):
+    """Make body (an annular sector solid about Z) structured and recombined: arcs elements along its arcs, across
+    elements from radius to radius, ups along Z."""
+    from emsolution import objects
+
+    by = {"arc": [], "across": [], "up": []}
+    for i, e in enumerate(body.Shape.Edges, 1):
+        d = e.Vertexes[-1].Point - e.Vertexes[0].Point
+        kind = "arc" if isinstance(e.Curve, Part.Circle) else "up" if abs(d.z) > 1e-9 else "across"
+        by[kind].append((body, f"Edge{i}"))
+    for kind, n in (("arc", arcs), ("across", across), ("up", ups)):
+        objects.make_transfinite_edges(study, n, by[kind]).Label = f"{body.Label} {kind} {n}"
+    objects.make_transfinite_body(study, [body])
+    objects.make_recombine(study, [body])
+
+
+def finish(study, path):
+    """Give every part its Material (sync_parts) and save the document at path."""
+    import os
+
+    from emsolution import objects
+
+    objects.sync_parts(study)
+    study.Document.recompute()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    study.Document.saveAs(path)
+
+
+def mesh_and_read(study, timeout=None):
+    """Write the job, run the mesher on it and read the mesh files back (read_mesh). Returns read_mesh's namespace
+    with ok, refused (the mesher's last error line when it stopped), poor [(part, poor, elements)] as the mesher
+    reports them, and seconds."""
+    import os
+    import subprocess
+    import sys
+    import time
+    import types
+
+    from emsolution import jobwriter
+
+    start = time.time()
+    path = jobwriter.write_job(study)
+    mesher = "mesher2d.py" if study.Dimension == "2D" else "mesher.py"
+    r = subprocess.run(
+        [sys.executable, os.path.join(os.path.dirname(jobwriter.__file__), mesher), path],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+    if r.returncode:
+        lines = [x for x in r.stderr.splitlines() if x.strip()]
+        refused = lines[-1] if lines else f"the mesher stopped with {r.returncode}"
+        return types.SimpleNamespace(ok=False, refused=refused, seconds=time.time() - start)
+    out = read_mesh(study)
+    out.ok, out.refused, out.poor = True, "", []
+    for line in r.stdout.splitlines():
+        if line.startswith("Poor elements"):
+            name, poor, _, total = line[len("Poor elements") :].split()
+            out.poor.append((name, int(poor), int(total)))
+    out.seconds = time.time() - start
+    return out
+
+
+def read_mesh(study):
+    """The mesh files of a meshed Study read back (meshreport.quality), as a namespace: types {type name: count},
+    inverted, faces_in_three, kept (facets of the copies' surface that the elements of free objects share), lost
+    (facets of the copies' surface that face the inside of a free object but no element of it: a frozen face not
+    kept) and frozen_kept (none lost)."""
+    import collections
+    import types
+
+    import numpy as np
+
+    from emsolution import geometry, jobwriter, objects, validation
+
+    from . import meshreport
+
+    out = types.SimpleNamespace(types={}, inverted=0, faces_in_three=0, kept=0, lost=0)
+    sliding = study.Movement == "Sliding motion"
+    files = {"fixed": jobwriter.mesh_file(study)}
+    if sliding:
+        files["moving"] = jobwriter.rotor_file(study)
+    main, moving, _ = geometry.setup(study)
+    on_moving = {b.Name for b in moving} if sliding else set()
+    free = validation.free_bodies(study, main, moving)
+    copied = collections.defaultdict(set)  # side -> MAT_IDs of the parts of the copies
+    for m in objects.part_assignments(study):
+        copied[m.PartKey.partition("|")[0]].add(int(study.MatIds[m.Name]))
+    found = collections.Counter()
+    for side, msh in files.items():
+        q = meshreport.quality(msh, copied[side])
+        found.update(q["types"])
+        out.inverted += q["inverted"]
+        out.faces_in_three += q["faces_in_three"]
+        out.kept += q["kept"]
+        shapes = [geometry.global_shape(b) for b in free if (b.Name in on_moving) == (side == "moving")]
+        mats, centres, normals, sizes = q["boundary"]
+        mine = np.isin(mats, sorted(copied[side])) if len(mats) else np.zeros(0, dtype=bool)
+        for c, n, h in zip(centres[mine], normals[mine], sizes[mine]):
+            probe = V(*(c + 1e-3 * h * n))
+            out.lost += any(_inside(s, probe) for s in shapes)
+    out.types = dict(found)
+    out.frozen_kept = out.lost == 0
+    return out
+
+
+def _inside(shape, p, tol=1e-9):
+    """True when p lies strictly inside the solids of shape (3D), or on its faces (2D)."""
+    box = shape.BoundBox
+    if not (box.XMin - tol <= p.x <= box.XMax + tol and box.YMin - tol <= p.y <= box.YMax + tol):
+        return False
+    if not box.ZMin - tol <= p.z <= box.ZMax + tol:
+        return False
+    if shape.Solids:
+        return any(s.isInside(p, tol, False) for s in shape.Solids)
+    return shape.distToShape(Part.Vertex(p))[0] < tol
