@@ -35,14 +35,17 @@ def rect(x1, y1, x2, y2):
     return polygon([V(x1, y1, 0), V(x2, y1, 0), V(x2, y2, 0), V(x1, y2, 0)])
 
 
-def half_disc(centre_deg, radius, r, side):
+def half_disc(centre_deg, radius, r, side, ccw=True):
     """Half the disc of radius r centred radius from the origin at centre_deg: the half on side +1 (towards larger
     angles) or -1 of the line through the origin at centre_deg, its diameter on that line. Drawn counterclockwise,
-    so that the face is turned to +Z."""
+    so that the face is turned to +Z: keep it so. A clockwise face (ccw False, the R-06-clockwise row) is turned to -Z
+    and hits tool defect D3 (Validate passes and the mesher writes inverted triangles); counterclockwise avoids it."""
     c = P(radius, centre_deg)
     u = V(math.cos(math.radians(centre_deg)), math.sin(math.radians(centre_deg)), 0)
     w = V(-u.y, u.x, 0) * side
     a, b = c + u * r * side, c - u * r * side
+    if not ccw:
+        a, b = b, a
     return Part.Face(Part.Wire([Part.Arc(a, c + w * r, b).toShape(), Part.LineSegment(b, a).toShape()]))
 
 
@@ -147,21 +150,27 @@ def r_05():
     return bundle("R_05", 0.5, 7.2, lambda doc, lib: ([], [], {}))
 
 
-def r_06():
+def r_06(name="R_06", ccw=True):
     """19 strands. Ring 2 has a strand at 0° (its halves across the mirror, as ring 1) and one at 30°, on the seam of
     the rotation: its drawn half (below the 30° line) and the mirrored half of the next rotation copy meet across the
     seam. The catalogue's "merge what touches" is Later (spec 2); a table does it: copy (mirror m, rotation k) of that
-    half is the strand at 30 + 60 k (m = 0) or -30 + 60 k (m = 1)."""
+    half is the strand at 30 + 60 k (m = 0) or -30 + 60 k (m = 1). ccw False draws that half clockwise."""
 
     def more(doc, lib):
         cells = [
             symcases.feature(doc, "Ring2Half0", half_disc(0, RING2, 2, 1)),
-            symcases.feature(doc, "Ring2Half30", half_disc(30, RING2, 2, -1)),
+            symcases.feature(doc, "Ring2Half30", half_disc(30, RING2, 2, -1, ccw)),
         ]
         seam = table(f"Ring2At{(30 + 60 * (c // 2) if c % 2 == 0 else -30 + 60 * (c // 2)) % 360}" for c in range(12))
         return cells, [lib["Copper"], lib["Copper"]], {3: {"mode": "across", "across": [0]}, 4: seam}
 
-    return bundle("R_06", 0.5, 11.2, more)
+    return bundle(name, 0.5, 11.2, more)
+
+
+def r_06_clockwise():
+    """R-06 with the ring-2 half at 30° drawn clockwise (its face turned to -Z). The design takes it (a face is a face),
+    so it should mesh; today it hits tool defect D3: Validate passes and the mesher writes inverted triangles."""
+    return r_06("R_06cw", ccw=False)
 
 
 # --- R-08: rod tilted 30° from Z --------------------------------------------------------------------------------------
@@ -242,6 +251,7 @@ CASES = [
     ("R-04", r_04, "meshes"),
     ("R-05", r_05, "meshes"),
     ("R-06", r_06, "meshes"),
+    ("R-06-clockwise", r_06_clockwise, "meshes"),
     ("R-07", sl.r_07, "meshes"),
     ("R-08", r_08, "meshes"),
     ("R-09", r_09, "meshes"),

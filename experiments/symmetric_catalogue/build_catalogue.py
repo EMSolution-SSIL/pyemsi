@@ -25,12 +25,24 @@ sl.OUT = OUT
 
 
 def cases():
-    """(id, builder, expected) of every section, then the success-list cases no section lists."""
-    out = [c for module in (m2, m3, rods, litz, devices, traps) for c in module.CASES]
+    """(id, builder, expected, check or None) of every section, then the success-list cases no section lists. A check
+    (study) gives (ok, text) on the built Study (traps.py)."""
+    out = [(*c, None)[:4] for module in (m2, m3, rods, litz, devices, traps) for c in module.CASES]
     have = {c[0] for c in out}
-    out.insert(0, ("motor_sliding", sl.motor_sliding, "meshes"))
-    out += [(n, b, "meshes") for n, b in sl.CASES if n not in have and n not in ("motor_sliding", "general")]
+    out.insert(0, ("motor_sliding", sl.motor_sliding, "meshes", None))
+    out += [(n, b, "meshes", None) for n, b in sl.CASES if n not in have and n not in ("motor_sliding", "general")]
     return out
+
+
+def checked(build, check, found):
+    """build, with check run on the Study it gives and its (ok, text) put in found."""
+
+    def wrapped():
+        study = build()
+        found.append(check(study))
+        return study
+
+    return wrapped
 
 
 def matches(expected, verdict, detail):
@@ -46,11 +58,18 @@ def want(expected):
 if __name__ == "__main__":
     wanted = sys.argv[1:]
     rows = []
-    for name, build, expected in cases():
+    for name, build, expected, check in cases():
         if wanted and name not in wanted:
             continue
+        found = []
+        if check is not None:
+            build = checked(build, check, found)
         _, verdict, detail = sl.run(name, build, os.path.join(OUT, name, name + ".FCStd"))
         ok = matches(expected, verdict, detail)
+        if check is not None:
+            passed, text = found[0] if found else (False, "not run, the Study was not built")
+            ok = ok and passed
+            detail += f" | check {'passed' if passed else 'FAILED'}: {text}"
         rows.append((name, verdict, want(expected), ok, detail))
         print(f"{name} | {verdict} | {'matches' if ok else 'DOES NOT MATCH'} | {detail}", flush=True)
     print("\nCatalogue")
