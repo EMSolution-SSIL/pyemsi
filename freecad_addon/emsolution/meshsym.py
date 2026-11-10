@@ -3,6 +3,7 @@ excitation patches that land on a face, the sliding circle or cylinder and its m
 ("cells": physical ids), their copies ("transforms") and, for the sliding checks, its "side" name. Runs in the mesher
 process; dim is 2 (faces) or 3 (solids). Never import FreeCAD here."""
 
+import itertools
 import math
 import os
 from collections import Counter
@@ -143,29 +144,51 @@ def _slide_faces_sym(slide, sides):
         _slide_faces(dict(slide, cross_divisions=cross), f"sliding interface {name}", [f], round(share), None, done)
 
 
+def _rim_points(t):
+    """Points of face t from its boundary curves, for a face that a grid over its parametric box misses (a thin ring):
+    the parametric middles between the middles of two of its curves that are inside it, else those middles (a point
+    on its edge counts as inside)."""
+    curves = sorted({abs(c) for _, c in gmsh.model.getBoundary([(2, t)], combined=False, oriented=False)})
+    middles = []
+    for c in curves:
+        lo, hi = gmsh.model.getParametrizationBounds(1, c)
+        middles.append(list(gmsh.model.getValue(1, c, [(lo[0] + hi[0]) / 2])))
+    uv = gmsh.model.getParametrization(2, t, [x for p in middles for x in p]) if middles else []
+    pairs = [
+        [(uv[2 * i + k] + uv[2 * j + k]) / 2 for k in (0, 1)] for i, j in itertools.combinations(range(len(middles)), 2)
+    ]
+    inner = [list(gmsh.model.getValue(2, t, w)) for w in pairs if gmsh.model.isInside(2, t, w, True)]
+    return inner or middles
+
+
 def _inside_points(dim, t):
     """Points of entity t on a grid over its parametric box that are inside its trimming (a face's box reaches past
-    it); its centre of mass when none is."""
+    it); for a face that the grid misses, _rim_points; its centre of mass when there is none of those either."""
     lo, hi = gmsh.model.getParametrizationBounds(dim, t)
     steps = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875)
     grid = [[a] for a in steps] if dim == 1 else [[a, b] for a in steps for b in steps]
     uvs = [[lo[i] + (hi[i] - lo[i]) * f[i] for i in range(dim)] for f in grid]
     out = [list(gmsh.model.getValue(dim, t, uv)) for uv in uvs if dim == 1 or gmsh.model.isInside(dim, t, uv, True)]
-    return out or [list(gmsh.model.occ.getCenterOfMass(dim, t))]
+    return out or (_rim_points(t) if dim == 2 else []) or [list(gmsh.model.occ.getCenterOfMass(dim, t))]
+
+
+def _same_size(c, d, tol, dim):
+    return abs(gmsh.model.occ.getMass(dim, c) - gmsh.model.occ.getMass(dim, d)) <= tol
+
+
+def _covers(c, d, m, tol, dim):
+    """True when points inside c moved by m lie inside d."""
+    moved = [_apply(m, p) for p in _inside_points(dim, c)]
+    return _on_face(dim, d, gmsh.model.getBoundingBox(dim, d), moved, tol)
 
 
 def _twin(c, d, m, tol, dim):
     """True when seam c (a curve when dim is 1, a face when 2) moved by the transform m covers seam d: the same length
     or area, and points inside c moved lie inside d. Their corners may still differ (see _same)."""
-    if abs(gmsh.model.occ.getMass(dim, c) - gmsh.model.occ.getMass(dim, d)) > tol:
-        return False
-    moved = [_apply(m, p) for p in _inside_points(dim, c)]
-    return _on_face(dim, d, gmsh.model.getBoundingBox(dim, d), moved, tol)
+    return _same_size(c, d, tol, dim) and _covers(c, d, m, tol, dim)
 
 
-def _missing_corners(c, d, m, tol, dim):
-    """(the corners of d that no corner of c moved by m reaches, the corners of c whose move reaches none of d)."""
-    corners_c, corners_d = _corners(dim, c), _corners(dim, d)
+def _missing(corners_c, corners_d, m, tol):
     moved = [_apply(m, p) for p in corners_c]
     return (
         [q for q in corners_d if min((math.dist(p, q) for p in moved), default=math.inf) > tol],
@@ -173,16 +196,35 @@ def _missing_corners(c, d, m, tol, dim):
     )
 
 
+def _missing_corners(c, d, m, tol, dim):
+    """(the corners of d that no corner of c moved by m reaches, the corners of c whose move reaches none of d)."""
+    return _missing(_corners(dim, c), _corners(dim, d), m, tol)
+
+
 def _corners_match(c, d, m, tol, dim):
     """True when the corners of c moved by m are those of d, one to one: gmsh copies a mesh only between such."""
-    return len(_corners(dim, c)) == len(_corners(dim, d)) and not any(_missing_corners(c, d, m, tol, dim))
+    corners_c, corners_d = _corners(dim, c), _corners(dim, d)
+    return len(corners_c) == len(corners_d) and not any(_missing(corners_c, corners_d, m, tol))
 
 
 def _same(c, d, m, tol, dim):
     """True when seam c moved by the transform m is seam d: _twin, with _corners_match. A face's parametric box reaches
     past its trimming, so _twin tests points inside it: two faces of one plane with the same area and some corners in
     common (the two pieces of a disc that a lens cut off) are not the same."""
-    return _corners_match(c, d, m, tol, dim) and _twin(c, d, m, tol, dim)
+    return _same_size(c, d, tol, dim) and _corners_match(c, d, m, tol, dim) and _covers(c, d, m, tol, dim)
+
+
+def set_periodic(name, dim, slave, master, m):
+    """gmsh setPeriodic of one entity, its error refused as a limit of the tool for the group name, gmsh's text kept."""
+    try:
+        gmsh.model.mesh.setPeriodic(dim, [slave], [master], m)
+    except Exception as err:
+        if type(err) is not Exception:  # gmsh raises Exception itself; anything else is a fault of this code
+            raise
+        raise JobError(
+            f"group {name}: the mesh of a face that the cell shares with a copy could not be copied ({err}); meshing"
+            " that is not handled yet, a limit of the tool, not of the drawing"
+        ) from err
 
 
 def _periodic(sides, dim):
@@ -203,7 +245,7 @@ def _periodic(sides, dim):
                     continue
                 m = next((m for m in side["transforms"] if _same(c, d, m, tol, dim - 1)), None)
                 if m is not None:
-                    gmsh.model.mesh.setPeriodic(dim - 1, [d], [c], m)
+                    set_periodic(side.get("name", "?"), dim - 1, d, c, m)
                     masters.add(c)
                     slaves.add(d)
                     break

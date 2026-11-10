@@ -965,7 +965,7 @@ class GroupJobTest(unittest.TestCase):
         self.assertIn("limit of the tool", r.stderr)
         self.assertEqual([n for n in os.listdir(self.dir) if n.startswith("images_")], [])
 
-    def test_gmsh_error_on_the_copied_faces_is_a_limit_of_the_tool(self):  # never gmsh's own words
+    def test_gmsh_error_on_the_copied_faces_is_a_limit_of_the_tool(self):  # with the group, and gmsh's text kept
         group = self.rod_group([ID, self.LENS["translation x + 2, z + 3"]])
         boom = "lambda *a: (_ for _ in ()).throw(Exception('Different number of points (5 vs 4)'))"
         r = self.run_job([group], dim=3, patch=f"meshgroups.gmsh.model.mesh.setPeriodic = {boom}")
@@ -973,7 +973,45 @@ class GroupJobTest(unittest.TestCase):
         (error,) = [x for x in r.stderr.splitlines() if x.startswith("ERROR:")]
         self.assertIn("group Boxes", error)
         self.assertIn("limit of the tool", error)
-        self.assertNotIn("Different number", error)
+        self.assertIn("(Different number of points (5 vs 4))", error)
+
+    def test_other_meshing_errors_are_not_blamed_on_the_copies(self):  # gmsh's, and a fault of the code
+        group = self.rod_group([ID, self.LENS["translation x + 2, z + 3"]])
+        for error, wanted in (
+            ("Exception('PLC Error: a segment and a facet intersect')", "group Boxes: PLC Error"),
+            ("TypeError('a bug')", "a bug"),
+        ):
+            with self.subTest(error):
+                boom = f"lambda *a: (_ for _ in ()).throw({error})"
+                r = self.run_job([group], dim=3, patch=f"meshgroups.generate = {boom}")
+                self.assertEqual(r.returncode, 1, r.stdout)
+                (line,) = [x for x in r.stderr.splitlines() if x.startswith("ERROR:")]
+                self.assertIn(wanted, line)
+                self.assertNotIn("limit of the tool", line)
+
+    def test_thin_tube_stacked_on_its_copy(self):  # D4: no grid point lies inside a ring of 5 % of its radius
+        write_ring(self.geo("tube.brep"), 9.5, 10, 0, 3)
+        group = self.box_group((0, 0, 0, 1, 1, 1), [ID, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 3, 0, 0, 0, 1]], size=0.37)
+        group["job"]["volumes"][0]["file"] = "geometry/tube.brep"
+        mesh = self.meshed([group], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(z_range(mesh), (0, 6))
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.model.occ.importShapes(self.geo("tube.brep"))
+            gmsh.model.occ.synchronize()
+            rings = sorted(
+                (gmsh.model.occ.getCenterOfMass(2, f)[2], f)
+                for _, f in gmsh.model.getEntities(2)
+                if gmsh.model.getType(2, f) == "Plane"
+            )
+            (_, bottom), (_, top) = rings
+            up = group["transforms"][1]
+            self.assertTrue(meshgroups.meshsym._same(bottom, top, up, 1e-6, 2))  # the seam the copies share
+            self.assertTrue(9.5 <= math.hypot(*meshgroups._point_on(2, top)[:2]) <= 10)  # not on its axis
+        finally:
+            gmsh.finalize()
 
     def test_one_image_per_source_and_transform(self):  # a copy of A lies on part of A and part of B
         write_boxes(self.geo("a.brep"), (0, 0, 0, 1, 1, 1))

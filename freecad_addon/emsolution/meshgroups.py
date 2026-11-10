@@ -125,7 +125,7 @@ def _boundary(dim, dimtags):
 
 def _point_on(dim, t):
     """A point of entity t: its parametric middle, or failing that one of a grid over its parametric box that is
-    inside its trimming."""
+    inside its trimming, or failing that (a thin ring) one from its rim (meshsym._rim_points)."""
     lo, hi = gmsh.model.getParametrizationBounds(dim, t)
     steps = (0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875)
     for a in steps:
@@ -133,7 +133,7 @@ def _point_on(dim, t):
             uv = [lo[0] + (hi[0] - lo[0]) * a] + ([lo[1] + (hi[1] - lo[1]) * b] if dim == 2 else [])
             if dim == 1 or gmsh.model.isInside(dim, t, uv, parametric=True):
                 return list(gmsh.model.getValue(dim, t, uv))
-    return list(gmsh.model.occ.getCenterOfMass(dim, t))
+    return meshsym._inside_points(dim, t)[0]
 
 
 def _whole(references, pieces, dim, tol):
@@ -375,7 +375,7 @@ def pair_images(group, images, dim):
         if partner is None or not (on_real or meshsym._corners_match(partner, f, image["transform"], tol, dim - 1)):
             continue
         if not _copied_from(dim - 1, partner, f):  # _periodic may have made it the other way round
-            gmsh.model.mesh.setPeriodic(dim - 1, [f], [partner], image["transform"])
+            meshsym.set_periodic(group["name"], dim - 1, f, partner, image["transform"])
 
 
 def _cell_of(face, cells, dim):
@@ -547,6 +547,22 @@ def _build_cell(group, contacts, folder, build, dim):
     )
 
 
+def _generate_cell(group, job, dim):
+    """generate, with gmsh's own error (it raises Exception itself) given the group's name; one about copying a mesh
+    between periodic faces is refused as a limit of the tool, with gmsh's text."""
+    try:
+        generate(dict(group["job"], options=job.get("options", {})), dim)
+    except Exception as err:
+        if type(err) is not Exception:
+            raise
+        if "periodic" in str(err).lower():
+            raise JobError(
+                f"group {group['name']}: the mesh of a face that the cell shares with a copy could not be copied"
+                f" ({err}); meshing that is not handled yet, a limit of the tool, not of the drawing"
+            ) from err
+        raise JobError(f"group {group['name']}: {err}") from err
+
+
 def mesh_cell(group, job, folder, build, dim, slide=None):
     """Mesh the cell of a group in a model of its own (removed at the end) and copy it by the group's transforms.
     Returns Copied: the joined nodes V, the elements of each (row, copy), the cell boundary patches that land on an
@@ -561,19 +577,9 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
         else:
             build(dict(group["job"]), folder)
         reached = _slide_cell(group, slide, dim) if slide else False
-        try:
-            meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
-            pair_images(group, group.get("images", []), dim)
-            generate(dict(group["job"], options=job.get("options", {})), dim)
-        except JobError:
-            raise
-        except Exception:  # gmsh's own error, which names no place the user can find
-            if contacts is None:
-                raise
-            raise JobError(
-                f"group {group['name']}: the faces where the cell touches its copies could not be given the same mesh;"
-                " meshing that is not handled yet, a limit of the tool, not of the drawing"
-            ) from None
+        meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
+        pair_images(group, group.get("images", []), dim)
+        _generate_cell(group, job, dim)
         expected = _expected_area(group, contacts, dim) if contacts else 0.0
         by_row = _by_row(group, folder, dim)
         cell_patches = meshsym._cell_patches(group, dim)

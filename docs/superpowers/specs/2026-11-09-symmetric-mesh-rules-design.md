@@ -287,7 +287,8 @@ gmsh copies a mesh only between faces with the same corners. The fragment puts a
 ends on a face's edge, or where two cuts of step 1 meet, and the face's twin (its seam partner, or the face of A that an
 image face is copied from) may have none there. Such a vertex is added to the cell object and the cell is built again,
 until every pair has the same corners; a few rounds at most, and a case that does not settle is refused as a limit of the
-tool. A gmsh error in the seams, the images or the meshing of the cell is refused the same way, never shown raw.
+tool. gmsh refusing to copy a face's mesh (`setPeriodic`, or a periodic error while meshing) is refused the same way,
+with gmsh's text in parentheses; any other meshing error of the cell names the group.
 
 ### 7.4 Free objects: frozen surfaces (3D)
 
