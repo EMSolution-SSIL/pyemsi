@@ -1,5 +1,5 @@
-"""Reading the copy transforms from the Mirror / Polar Array / Boolean Fragments chain of a drawing: the reading
-helper of a Symmetric Group."""
+"""Reading the rules from the Mirror / Polar Array / Boolean Fragments chain of a drawing: the reading helper of a
+Symmetric Group."""
 
 import pytest
 
@@ -45,8 +45,14 @@ def assert_lands(cells, transforms, top):
         assert sums[i] == pytest.approx(f.Area, rel=1e-6)
 
 
+def read(top):
+    """(cell bodies, transforms) of the one proposal rules_from_chain makes for top, in global positions."""
+    (p,) = symmetry.rules_from_chain(top)
+    return p.cells, symmetry.transforms(p.rules)
+
+
 def test_stator_chain_gives_24_copies_of_3_cells(motor):
-    cells, transforms = symmetry.read_chain(motor["stator_top"])
+    cells, transforms = read(motor["stator_top"])
     assert cells == motor["stator_cells"]
     assert len(transforms) == 24
     assert symmetry.apply(transforms[0], (1, 2, 3)) == pytest.approx([1, 2, 3])
@@ -54,7 +60,7 @@ def test_stator_chain_gives_24_copies_of_3_cells(motor):
 
 
 def test_rotor_chain_gives_16_copies(motor):
-    cells, transforms = symmetry.read_chain(motor["rotor_top"])
+    cells, transforms = read(motor["rotor_top"])
     assert cells == motor["rotor_cells"]
     assert len(transforms) == 16
     assert sum(symmetry.det(t) < 0 for t in transforms) == 8
@@ -62,16 +68,17 @@ def test_rotor_chain_gives_16_copies(motor):
 
 def test_copies_land_on_the_fragments(motor):
     for part in ("stator", "rotor"):
-        cells, transforms = symmetry.read_chain(motor[f"{part}_top"])
+        cells, transforms = read(motor[f"{part}_top"])
         assert_lands(cells, transforms, motor[f"{part}_top"])
 
 
-def test_moved_drawing_still_lands(motor):
+def test_moved_drawing_is_explained(motor):
+    """A Placement in the chain moves every copy off the drawn cell: no rule list gives that, and the message says so."""
     array = motor["doc"].getObjectsByLabel("StatorArray")[0]
     array.Placement = App.Placement(App.Vector(0, 0, 0), App.Rotation(App.Vector(0, 0, 1), 10))
     motor["doc"].recompute()
-    cells, transforms = symmetry.read_chain(motor["stator_top"])
-    assert_lands(cells, transforms, motor["stator_top"])
+    with pytest.raises(symmetry.SymmetryError, match="reset that Placement"):
+        symmetry.rules_from_chain(motor["stator_top"])
 
 
 def test_unknown_object_in_chain_is_refused(motor):
@@ -83,39 +90,7 @@ def test_unknown_object_in_chain_is_refused(motor):
     array.Base = cut
     doc.recompute()
     with pytest.raises(symmetry.SymmetryError, match=r"TheCut.*Part::Cut"):
-        symmetry.read_chain(motor["stator_top"])
-
-
-def test_leaves_with_different_copies_are_refused(motor):
-    doc = motor["doc"]
-    stray = symcases.feature(doc, "StrayBody", symcases.sector(60, 62, 0, 15))
-    pitch = doc.getObject("StatorPitch")
-    pitch.Links = list(pitch.Links) + [stray]
-    doc.recompute()
-    with pytest.raises(symmetry.SymmetryError, match="StrayBody"):
-        symmetry.read_chain(motor["stator_top"])
-
-
-def test_mirror_out_of_plane_reads(motor):
-    """A mirror plane that does not contain Z reads like any other: the mirror of z = 0 here."""
-    mirror = motor["doc"].getObject("StatorMirror")
-    mirror.Normal = App.Vector(0, 0, 1)
-    cells, transforms = symmetry.read_chain(motor["stator_top"])
-    assert len(transforms) == 24 and sum(symmetry.det(t) < 0 for t in transforms) == 12
-    assert symmetry.apply(transforms[1], (1, 2, 3)) == pytest.approx([1, 2, -3])
-    assert symmetry.steps(motor["stator_top"]) == ["mirror (0, 0, 0) normal (0, 0, 1)", "rotate (0, 0) 30° × 12"]
-
-
-def test_array_axis_other_than_z_reads(motor):
-    """An array about X turns the pitch about X: half a turn takes (0, 1, 0) to (0, -1, 0)."""
-    array = motor["doc"].getObjectsByLabel("StatorArray")[0]
-    array.Axis = App.Vector(1, 0, 0)
-    array.NumberPolar = 2
-    _, transforms = symmetry.read_chain(motor["stator_top"])
-    assert len(transforms) == 4
-    turned = [t for t in transforms if symmetry.det(t) > 0 and t != symmetry.ID]
-    assert [symmetry.apply(t, (0, 1, 0)) for t in turned] == [pytest.approx([0, -1, 0], abs=1e-9)]
-    assert symmetry.steps(motor["stator_top"])[1] == "rotate (0, 0, 0) axis (1, 0, 0) 180° × 2"
+        symmetry.rules_from_chain(motor["stator_top"])
 
 
 def test_cell_bodies_made_from_other_objects_are_leaves(motor):
@@ -128,7 +103,7 @@ def test_cell_bodies_made_from_other_objects_are_leaves(motor):
     pitch = doc.getObject("StatorCell")
     pitch.Links = list(pitch.Links) + [cut]
     doc.recompute()
-    cells, transforms = symmetry.read_chain(motor["stator_top"])
+    cells, transforms = read(motor["stator_top"])
     assert cut in cells
     assert len(transforms) == 24
 
@@ -136,50 +111,48 @@ def test_cell_bodies_made_from_other_objects_are_leaves(motor):
 def test_fragments_that_cut_a_cell_is_one_cell_body(motor):
     """A Boolean Fragments with no copy step below it only cuts: it is the cell body, not its face and divider."""
     frag = symcases.split_coil(motor["doc"])
-    cells, transforms = symmetry.read_chain(motor["stator_top"])
+    cells, transforms = read(motor["stator_top"])
     assert [c.Name for c in cells] == ["StatorIronCell", "CoilFragments", "StatorAirCell"]
     assert len(transforms) == 24 and len(frag.Shape.Faces) == 2
     assert len(motor["stator_top"].Shape.Faces) == 4 * 24  # the cut reaches the full drawing
     assert_lands(cells, transforms, motor["stator_top"])
 
 
-def test_identity_comes_first_whatever_the_link_order(motor):
+def test_link_order_does_not_change_the_rules(motor):
     pitch = motor["doc"].getObject("StatorPitch")
     pitch.Links = list(reversed(pitch.Links))
     motor["doc"].recompute()
-    _, transforms = symmetry.read_chain(motor["stator_top"])
-    assert len(transforms) == 24
-    assert transforms[0] == symmetry.ID
+    cells, transforms = read(motor["stator_top"])
+    assert len(transforms) == 24 and transforms[0] == symmetry.ID
+    assert sorted(c.Name for c in cells) == sorted(c.Name for c in motor["stator_cells"])
 
 
 def test_compound_without_links_is_refused(motor):
     pitch = motor["doc"].getObject("StatorPitch")
     pitch.Links = []
     with pytest.raises(symmetry.SymmetryError, match="StatorPitch"):
-        symmetry.read_chain(motor["stator_top"])
+        symmetry.rules_from_chain(motor["stator_top"])
 
 
 def test_mirror_without_source_is_refused(motor):
     mirror = motor["doc"].getObject("StatorMirror")
     mirror.Source = None
     with pytest.raises(symmetry.SymmetryError, match="StatorMirror"):
-        symmetry.read_chain(motor["stator_top"])
-    with pytest.raises(symmetry.SymmetryError, match="StatorMirror"):
-        symmetry.steps(motor["stator_top"])
+        symmetry.rules_from_chain(motor["stator_top"])
 
 
 def test_fragments_without_objects_are_refused(motor):
     frag = motor["stator_top"]
     frag.Objects = []
     with pytest.raises(symmetry.SymmetryError, match="StatorFragments"):
-        symmetry.read_chain(frag)
+        symmetry.rules_from_chain(frag)
 
 
 def test_array_of_one_copy_short_of_a_full_turn_is_refused(motor):
     array = motor["doc"].getObjectsByLabel("StatorArray")[0]
     array.NumberPolar, array.Angle = 1, 180
     with pytest.raises(symmetry.SymmetryError, match="StatorArray"):
-        symmetry.read_chain(motor["stator_top"])
+        symmetry.rules_from_chain(motor["stator_top"])
 
 
 def test_array_angle_minus_360_is_read_as_draft_does(motor):
@@ -195,6 +168,6 @@ def test_chain_in_a_rotated_part_lands(motor):
     part.addObjects([top, *top.OutListRecursive])
     part.Placement = App.Placement(App.Vector(5, -3, 0), App.Rotation(App.Vector(0, 0, 1), 10))
     doc.recompute()
-    cells, transforms = symmetry.read_chain(top)
+    cells, transforms = read(top)
     assert transforms[0] == symmetry.ID
     assert_lands(cells, transforms, top)

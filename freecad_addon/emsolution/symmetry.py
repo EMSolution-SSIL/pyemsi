@@ -1,8 +1,7 @@
 """Symmetric Groups: the copies that ordered mirror, rotation and translation rules make, and the parts they belong to.
 
-A drawing built with Part Mirror, Draft Polar Array and Part Compound / Boolean Fragments can fill a group: read_chain
-walks that chain from its top object down to the cell bodies and returns where every copy of the cell lies, and
-rules_from_chain reads the same chain as ordered rules. Mirror planes and array axes may lie any way.
+A drawing built with Part Mirror, Draft Polar Array and Part Compound / Boolean Fragments can fill a group:
+rules_from_chain walks that chain from its top object down to the cell bodies and reads it as ordered rules. Mirror planes and array axes may lie any way.
 Transforms are 4x4 affine, row major (16 floats), in global positions. No GUI code."""
 
 import collections
@@ -349,32 +348,6 @@ def _outer(top):
     return top.getGlobalPlacement().multiply(top.Placement.inverse())
 
 
-def read_chain(top):
-    """(cell bodies in first-seen order, transforms) of the chain whose top object is top.
-
-    The transforms are those of the first cell body, identity first; every cell body must have the same set."""
-    found = _walk(top)
-    if not found:
-        raise SymmetryError(f"{_name(top)} holds no cell body")
-    sets = {name: _unique(ts) for name, (body, ts) in found.items()}
-    first = next(iter(sets.values()))
-    for name, unique in sets.items():
-        if unique.keys() != first.keys():
-            raise SymmetryError(
-                f"{found[name][0].Label} is not copied the same way as the other cell bodies: "
-                "every body of the cell must go through the same Mirror and Polar Array"
-            )
-    ident = _key(ID)
-    transforms = [first[ident]] if ident in first else []
-    transforms += [t for k, t in first.items() if k != ident]
-    # the chain sits in its containers (App::Part): move the transforms into the global frame of global_shape
-    outer = _outer(top)
-    if not outer.isIdentity():
-        c, back = list(outer.toMatrix().A), list(outer.inverse().toMatrix().A)
-        transforms = [ID if _key(t) == ident else compose(c, t, back) for t in transforms]
-    return [b for b, _ in found.values()], transforms
-
-
 # ---- reading rules from a chain
 
 
@@ -503,52 +476,4 @@ def rules_from_chain(top):
                 " what the steps before it made cannot be read as a rule. Enter the rules by hand."
             )
         out.append(Proposal(cells, rules))
-    return out
-
-
-def _num(v):
-    return f"{round(v, 6) + 0.0:g}"
-
-
-def _chain_steps(obj):
-    """The Mirror and Array objects below obj, outermost first."""
-    if obj.TypeId == "Part::Mirroring":
-        return [obj] + _chain_steps(_below(obj, "Source"))
-    if _is_array(obj):
-        return [obj] + _chain_steps(_below(obj, "Base"))
-    kids = _below(obj, "Links") if obj.TypeId == "Part::Compound" else obj.Objects if _is_fragments(obj) else []
-    return [s for k in kids for s in _chain_steps(k)]
-
-
-def _point_text(v):
-    return "(" + ", ".join(_num(c) for c in _vec(v)) + ")"
-
-
-def steps(top):
-    """One line per Mirror and Polar Array below top, in the order they are applied (the cell first). A mirror plane
-    that contains Z and an array about Z read as in the XY plane, "mirror (0, 0) 15°" or "rotate (0, 0) 30° × 12";
-    the others name their plane or axis, "mirror (0, 0, 5) normal (0, 0, 1)" or "rotate (0, 0, 0) axis (1, 0, 0)
-    180° × 2". Raises SymmetryError like read_chain."""
-    out = []
-    for obj in reversed(list(dict.fromkeys(_chain_steps(top)))):
-        if obj.TypeId == "Part::Mirroring":
-            n, b = obj.Normal, obj.Base
-            if n.Length == 0:
-                raise SymmetryError(f"{_name(obj)}: the mirror normal is zero")
-            if abs(n.z) > TOL * n.Length:
-                out.append(f"mirror {_point_text(b)} normal {_point_text(n * (1 / n.Length))}")
-                continue
-            length = math.hypot(n.x, n.y)
-            nx, ny = n.x / length, n.y / length
-            d = nx * b.x + ny * b.y  # the foot of the perpendicular from the origin, on the mirror line
-            angle = math.degrees(math.atan2(-nx, ny)) % 180
-            out.append(f"mirror ({_num(d * nx)}, {_num(d * ny)}) {_num(angle)}°")
-        else:
-            n, step = _array_step(obj)
-            a = obj.Axis
-            if abs(a.x) > TOL * a.Length or abs(a.y) > TOL * a.Length or a.Length < TOL:
-                out.append(f"rotate {_point_text(obj.Center)} axis {_point_text(a)} {_num(step)}° × {n}")
-                continue
-            turn = step if a.z > 0 else -step  # read about +Z
-            out.append(f"rotate ({_num(obj.Center.x)}, {_num(obj.Center.y)}) {_num(turn)}° × {n}")
     return out
