@@ -1155,6 +1155,29 @@ def set_row_material(study, item, row, lib):
             m.Label = assignment_label(m)
 
 
+def part_of_pick(study, item, sub):
+    """(assignment, row) for a "SolidN" / "FaceN" of group item's drawing: the Material of the part that copy belongs
+    to (None when it has none yet) and the 0-based row of item it is a copy of. None when no copy has that element."""
+    owner = element_owner(item, sub)
+    if owner is None:
+        return None
+    row, copy = owner
+    key = part_key(study, item, row_parts(item, rows_of(item)[row])[copy])
+    return next((m for m in part_assignments(study) if m.PartKey == key), None), row
+
+
+def part_row(m):
+    """(group, row) that the first copy of part assignment m comes from; None when the part has no copy."""
+    copies = study_parts(owner_study(m)).get(m.PartKey)
+    return (copies[0][0], copies[0][1]) if copies else None
+
+
+def apply_part_material(m, name, lib, potential):
+    """Name, library material and POTENTIAL of a part assignment; its PartKey stays. No transaction."""
+    m.LibraryMaterial, m.Potential = lib, potential
+    set_material_name(m, name)
+
+
 def winding_table(item, row, rule, slots, pole_pairs, span=1, per_coil=False, layer="top"):
     """The part name of every copy of a row from a three-phase winding (see winding.py): the slot of a copy is the
     angle of its centre about the rotation rule's axis. layer: "top" or "bottom" of a two-layer winding, or "whole"

@@ -130,6 +130,9 @@ class AssignMaterial(_StudyCommand):
         if study is None:
             return
         bodies = taskpanels.selected_bodies()
+        groups = {g.Name: g for g in objects.symmetric_groups(study)}
+        if groups and self.open_part(study, groups, bodies):
+            return
         tops = {item.Top.Name for item in objects.symmetric_items(study) if item.Top is not None}
         solids = objects.is_symmetric(study) and objects.piece_kind(study) == "Solid"
         if solids:
@@ -161,6 +164,33 @@ class AssignMaterial(_StudyCommand):
             taskpanels.ask_bulk_assignment(study, bodies)
         else:
             taskpanels.open_material_panel(study, [(b, "") for b in bodies])
+
+    def open_part(self, study, groups, bodies):
+        """True when the selection was about a Symmetric Group's drawing, whether or not it opened a panel: a click
+        on a face of a copy opens the Material of that copy's part."""
+        pieces, cancelled = taskpanels.selected_group_pieces(study)
+        if not pieces:
+            if cancelled:
+                return True  # a Cancel in the question about a face of two solids
+            if any(b.Name in groups for b, _ in taskpanels.selected_subs(("Face",))):
+                warn("No part of the drawing has the selected face: click a face of a copy.")
+                return True
+            whole = [b for b in bodies if b.Name in groups]
+            if whole:
+                warn(f"Materials go on the parts of {objects.display_name(whole[0])}: click a face of a copy first.")
+                return True
+            return False
+        found = [objects.part_of_pick(study, g, sub) for g, sub in pieces]
+        if None in found:
+            warn("No part of the drawing has the selected face: click a face of a copy.")
+        elif any(m is None for m, _ in found):
+            warn("This part has no Material yet: accept the Symmetric Group's panel first.")
+        elif len({m.Name for m, _ in found}) > 1:
+            warn("The Material of one part is edited at a time: click faces of one part.")
+        else:
+            group, (m, row) = groups[pieces[0][0].Name], found[0]
+            Gui.Control.showDialog(taskpanels.MaterialPanel(m, row=(group, row)))
+        return True
 
 
 class AddExcitation(_StudyCommand):

@@ -377,6 +377,38 @@ def test_part_refs_and_item_refs(study, stator):
     assert objects.item_refs(m) == objects.part_refs(m)
 
 
+def test_part_of_pick_finds_the_part_and_row_of_a_clicked_copy(study, stator):
+    six_copies(stator, {"CoilCell": ["A+", "B+"] * 3})
+    objects.sync_parts(study)
+    m, row = objects.part_of_pick(study, stator, "Face11")  # copy 3 of row 1, a "B+"
+    assert m.PartKey == "fixed|B+" and row == 1
+    m, row = objects.part_of_pick(study, stator, "Face1")
+    assert m.PartKey == "fixed|StatorIronCell" and row == 0
+    assert objects.part_of_pick(study, stator, "Face99") is None
+
+
+def test_part_of_pick_without_an_assignment_gives_none_for_it(study, stator):
+    assert objects.part_of_pick(study, stator, "Face2") == (None, 1)
+
+
+def test_part_row_is_the_row_of_the_first_copy(study, stator):
+    six_copies(stator, {"CoilCell": ["A+", "B+"] * 3})
+    objects.sync_parts(study)
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|B+")
+    assert objects.part_row(m) == (stator, 1)
+    m.PartKey = "fixed|nothing"
+    assert objects.part_row(m) is None
+
+
+def test_apply_part_material_keeps_the_key(study, stator):
+    lib = library(study)
+    objects.sync_parts(study)
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|CoilCell")
+    objects.apply_part_material(m, "Winding", lib, 4)
+    assert (m.PartKey, m.GroupName, m.LibraryMaterial, m.Potential) == ("fixed|CoilCell", "Winding", lib, 4)
+    assert m.Label == "Winding: Steel"
+
+
 def test_one_mat_id_per_part(study, stator):
     study.Movement = "Sliding motion"
     iface = objects.make_sliding_interface(study)

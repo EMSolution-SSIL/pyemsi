@@ -1707,10 +1707,12 @@ def main():
         dialog.pole_pairs.setValue(2)
         return True
 
+    real_ask_winding = taskpanels.ask_winding
     taskpanels.TableDialog.exec = drive_table
     taskpanels.ask_winding = drive_winding
     panel.table_button.click()
     del taskpanels.TableDialog.exec
+    taskpanels.ask_winding = real_ask_winding
     assert windings[0].slots.value() == 12 and windings[0].span.value() == 3, windings[0].values()
     names = [tables[0].table.item(k, 1).text() for k in range(tables[0].table.rowCount())]
     assert len(names) == 24 and all(names) and objects.rows_of(group)[coil]["table"] == names, names
@@ -1764,6 +1766,155 @@ def main():
     App.closeDocument(group_doc.Name)
     App.setActiveDocument(doc.Name)
     log.append("symmetric group ok")
+    # Picking on a group's drawing: Materials, mesh settings and Excitations work on its copies.
+    from tests.freecad_addon.materialdata import COPPER, STEEL, record
+
+    rules = [
+        {"kind": "mirror", "point": [0, 0, 0], "normal": [-math.sin(math.radians(15)), math.cos(math.radians(15)), 0]},
+        {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 30, "count": 12},
+    ]
+
+    def click(document, item, sub):
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(document.Name, item.Name, sub)
+
+    pick_doc = App.newDocument("Picking")
+    pick_info = symcases.group_motor_doc(pick_doc)
+    free_air = symcases.feature(pick_doc, "FreeAir", symcases.sector(60, 70, 0, 15))
+    pick_doc.recompute()
+    pick_study = objects.make_study(pick_doc, "2D")
+    App.setActiveDocument(pick_doc.Name)
+    taskpanels.set_active_study(pick_study)
+    pick_study.MainMode, pick_study.MainObjects = "Manual", [free_air]
+    steel = objects.make_library_material(
+        pick_study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL))
+    )
+    copper = objects.make_library_material(pick_study, json.dumps(record("user:copper", "Copper", "conductor", COPPER)))
+    pick_group = objects.make_symmetric_group(pick_study, pick_info["stator_cells"], rules=rules, name="Stator")
+    objects.sync_parts(pick_study)
+    pick_doc.recompute()
+    pick_rows = objects.rows_of(pick_group)
+    pick_coil = [r["cell"] for r in pick_rows].index("CoilCell")
+
+    def face_of(row, copy):
+        return f"Face{copy * len(pick_rows) + row + 1}"
+
+    # A click on a coil copy opens the Material of that coil's part; its library material is changed there.
+    click(pick_doc, pick_group, face_of(pick_coil, 5))
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    (coil_part,) = [m for m in objects.part_assignments(pick_study) if m.PartKey == "fixed|CoilCell"]
+    assert panel.obj is coil_part and not panel.new and panel.part, panel.obj.Label
+    assert panel.current == objects.part_refs(coil_part) and panel.refs.count() == 24, panel.current
+    assert not panel.add_button.isEnabled() and not panel.remove_button.isEnabled()
+    panel.material.setCurrentIndex(panel.material.findData(copper.Name))
+    panel.potential.setValue(7)
+    panel.name.setText("Coil")
+    assert panel.accept() and not Gui.Control.activeDialog()
+    assert (
+        coil_part.LibraryMaterial == copper and coil_part.Potential == 7 and objects.display_name(coil_part) == "Coil"
+    )
+    assert coil_part.PartKey == "fixed|CoilCell" and len(objects.part_assignments(pick_study)) == 3
+    # Cancel leaves the part as it was.
+    click(pick_doc, pick_group, face_of(pick_coil, 0))
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert panel.obj is coil_part
+    panel.material.setCurrentIndex(panel.material.findData(steel.Name))
+    assert panel.reject() and coil_part.LibraryMaterial == copper
+    # Two parts picked: refused, no panel.
+    iron = [r["cell"] for r in pick_rows].index("StatorIronCell")
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(pick_doc.Name, pick_group.Name, face_of(pick_coil, 1))
+    Gui.Selection.addSelection(pick_doc.Name, pick_group.Name, face_of(iron, 1))
+    warned_before = len(warned)
+    Gui.runCommand("EMS_Material")
+    assert not material_panels and not Gui.Control.activeDialog() and len(warned) == warned_before + 1, warned
+    # "All parts of this object": every copy of the coil is a part of its own, and one click sets them all.
+    pick_rows[pick_coil]["mode"] = "each"
+    objects.set_rows(pick_group, pick_rows)
+    pick_doc.recompute()
+    objects.sync_parts(pick_study)
+    click(pick_doc, pick_group, face_of(pick_coil, 7))
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    each = objects.row_parts(pick_group, pick_rows[pick_coil])
+    assert panel.obj.PartKey == f"fixed|{each[7]}" and panel.refs.count() == 1, panel.obj.PartKey
+    panel.material.setCurrentIndex(panel.material.findData(steel.Name))
+    panel.all_parts.click()
+    coils = [m for m in objects.part_assignments(pick_study) if m.PartKey.partition("|")[2] in each]
+    irons = [m for m in objects.part_assignments(pick_study) if m.PartKey.partition("|")[2] not in each]
+    assert len(coils) == 24 and all(m.LibraryMaterial == steel for m in coils), [m.Label for m in coils]
+    assert all(m.LibraryMaterial != steel for m in irons), [m.Label for m in irons]
+    assert objects.rows_of(pick_group)[pick_coil]["material"] == steel.Name
+    assert panel.accept()
+    # A free body gets the ordinary Material panel.
+    click(pick_doc, free_air, "Face1")
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert panel.new and not panel.part and panel.current == [(free_air, "")], panel.current
+    assert panel.add_button.isEnabled()
+    assert panel.reject()
+    # Mesh settings picked on the drawing move to the cell, and their panels accept the group.
+    cell_coil = pick_info["stator_cells"][1]
+    click(pick_doc, pick_group, face_of(pick_coil, 9))
+    Gui.runCommand("EMS_MeshSize")
+    panel = opened.pop()
+    assert objects.item_refs(panel.obj) == [(cell_coil, "Face1")], objects.item_refs(panel.obj)
+    assert pick_group.Name in panel.gate.main
+    assert panel.reject()
+    gate_no_air = taskpanels.ItemGate(pick_study, ("Face",), False, air=False)
+    assert pick_group.Name in gate_no_air.main and cell_coil.Name in gate_no_air.main, gate_no_air.main
+    click(pick_doc, pick_group, face_of(pick_coil, 9))
+    assert taskpanels.picked_bodies(pick_study) == [(cell_coil, "")], taskpanels.picked_bodies(pick_study)
+    assert taskpanels.selected_face_picks(pick_study, False) == [(cell_coil, "")]
+    Gui.Selection.clearSelection()
+    App.closeDocument(pick_doc.Name)
+    # 3D: a face of the drawing finds its solid and its part; an Excitation stays on the drawing's face.
+    pick3_doc = App.newDocument("Picking3D")
+    pick3_info = symcases.group_motor_doc(pick3_doc, height=10)
+    pick3_study = objects.make_study(pick3_doc, "3D")
+    App.setActiveDocument(pick3_doc.Name)
+    taskpanels.set_active_study(pick3_study)
+    group3 = objects.make_symmetric_group(pick3_study, pick3_info["stator_cells"], rules=rules, name="Stator")
+    objects.sync_parts(pick3_study)
+    pick3_doc.recompute()
+    solid_asks, solid_answers = [], []
+    real_ask_solid = taskpanels.ask_solid
+    taskpanels.ask_solid = lambda face, names: (solid_asks.append((face, names)), solid_answers.pop(0))[1]
+    rows3 = objects.rows_of(group3)
+    faces3 = range(1, len(group3.Shape.Faces) + 1)
+    single3 = next(f"Face{i}" for i in faces3 if len(objects.face_solids(group3.Shape, f"Face{i}")) == 1)
+    shared3 = next(f"Face{i}" for i in faces3 if len(objects.face_solids(group3.Shape, f"Face{i}")) == 2)
+    click(pick3_doc, group3, single3)
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    (single_owner,) = objects.face_solids(group3.Shape, single3)
+    row, copy = objects.element_owner(group3, single_owner)
+    want = f"fixed|{objects.row_parts(group3, rows3[row])[copy]}"
+    assert panel.part and panel.obj.PartKey == want and not solid_asks, (panel.obj.PartKey, want, solid_asks)
+    assert panel.reject()
+    click(pick3_doc, group3, shared3)  # a face of two solids without a picked point: asked
+    solid_answers.append(objects.face_solids(group3.Shape, shared3)[1])
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    taken = objects.element_owner(group3, objects.face_solids(group3.Shape, shared3)[1])
+    assert len(solid_asks) == 1 and panel.part, solid_asks
+    assert panel.obj.PartKey == f"fixed|{objects.row_parts(group3, rows3[taken[0]])[taken[1]]}", panel.obj.PartKey
+    assert panel.reject()
+    solid_answers.append(None)  # Cancel: no panel, no warning
+    warned_before = len(warned)
+    Gui.runCommand("EMS_Material")
+    assert not material_panels and not Gui.Control.activeDialog() and len(warned) == warned_before
+    taskpanels.ask_solid = real_ask_solid
+    click(pick3_doc, group3, single3)
+    Gui.runCommand("EMS_Excitation")
+    (terminal,) = objects.excitations(pick3_study)
+    assert objects.item_refs(terminal) == [(group3, single3)], objects.item_refs(terminal)
+    Gui.Selection.clearSelection()
+    App.closeDocument(pick3_doc.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("picking on the drawing ok")
     App.closeDocument(doc.Name)
 
     label_doc = App.newDocument("Labels")
