@@ -1339,6 +1339,15 @@ def _groups(study, main, moving, r):
                 item,
                 [(b, "") for b in on],
             )
+    cells = {b.Name for b in objects.cell_bodies(study)}
+    for e in objects.excitations(study):
+        for b in [b for b, _ in objects.subs_by_body(e) if b.Name in cells]:
+            r.error(
+                f"Excitation {e.Label} refers to {objects.display_name(b)}: copies are not where it is drawn."
+                " Pick the faces on the drawing.",
+                e,
+                [(b, "")],
+            )
     _group_sliding(study, groups, ruled, free, plane, r)
     _free_transfinite(study, free, r)
     _part_materials(study, drawn, r)

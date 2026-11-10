@@ -16,7 +16,7 @@ from emsolution import airshapes, geometry, jobwriter, objects, symmetry, valida
 
 from . import meshreport, symcases
 from .test_meshsym import mesh_check
-from .test_meshsym3d import surface_group
+from .test_meshsym3d import mesh_check_3d, surface_group
 
 # the stator cell (0..15 degrees) mirrored about its edge at 15 degrees, then turned 12 times by 30 degrees
 STATOR_RULES = [
@@ -960,6 +960,8 @@ def test_group_motor_runs_end_to_end_3d(study_3d, tmp_path):
     assert r.returncode == 0, r.stderr
     assert set(meshreport.groups(jobwriter.mesh_file(study_3d))) == mat_ids(study_3d, "fixed")
     assert set(meshreport.groups(jobwriter.rotor_file(study_3d))) == mat_ids(study_3d, "moving")
+    assert mesh_check_3d(jobwriter.mesh_file(study_3d), (), ())[1] == 0
+    assert mesh_check_3d(jobwriter.rotor_file(study_3d), (), ())[1] == 0
 
 
 def test_excitation_on_the_drawing_is_copied(study_3d, tmp_path):
@@ -986,3 +988,12 @@ def test_excitation_on_the_drawing_is_copied(study_3d, tmp_path):
     assert r.returncode == 0, r.stderr
     name, count, _ = surface_group(jobwriter.mesh_file(study_3d), smat)
     assert name == entry["name"] and count > 0
+    assert mesh_check_3d(jobwriter.mesh_file(study_3d), (), ())[1] == 0
+
+
+def test_excitation_on_a_cell_object_is_refused(study_3d):
+    ready(study_3d)
+    coil = study_3d.Document.getObject("CoilCell")
+    objects.make_excitation(study_3d, "Coil", [(coil, "Face2")])
+    found = [t for t in texts(study_3d) if "Excitation Coil" in t and "Pick the faces on the drawing" in t]
+    assert found and "CoilCell" in found[0], texts(study_3d)
