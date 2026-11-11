@@ -50,7 +50,8 @@ def build_setup(name, build):
 
 def cases():
     """(id, builder, expected, check or None) of every section, then the success-list cases no section lists. A check
-    (study) gives (ok, text) on the built Study (traps.py)."""
+    (study) gives (ok, text) on the built Study (traps.py); a check with after(folder) also gives (ok, text) on the
+    mesh files of a case that meshed (common.Structured)."""
     out = [(*c, None)[:4] for module in (m2, m3, rods, litz, devices, traps) for c in module.CASES]
     have = {c[0] for c in out}
     out.insert(0, ("motor_sliding", sl.motor_sliding, "meshes", None))
@@ -113,6 +114,10 @@ if __name__ == "__main__":
             passed, text = found[0] if found else (False, "not run, the Study was not built")
             ok = ok and passed
             detail += f" | check {'passed' if passed else 'FAILED'}: {text}"
+        if getattr(check, "after", None) is not None and verdict == "OK":  # a check of the mesh files (Structured)
+            passed, text = check.after(os.path.join(OUT, name))
+            ok = ok and passed
+            detail += f" | mesh check {'passed' if passed else 'FAILED'}: {text}"
         rows.append((name, verdict, want(expected), ok, detail))
         print(f"{name} | {verdict} | {'matches' if ok else 'DOES NOT MATCH'} | {detail}", flush=True)
     print("\nCatalogue")

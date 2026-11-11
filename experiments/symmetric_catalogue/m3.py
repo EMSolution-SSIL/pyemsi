@@ -1,7 +1,8 @@
 """3D motors M3-01 to M3-12. The sliding motors slide at R 28.5 behind a Rotational Sliding Interface: the structured,
 recombined layers 28..28.5 (rotor) and 28.5..29 (stator) form the sliding cylinder, with unstructured air between them
 and the teeth (29..30) or the magnets (25..28), spec 7.5, as in success_list.m3_02. M3-02, M3-07, M3-10 and M3-12 are
-the success list's. CASES lists (id, builder, expected) in catalogue order."""
+the success list's. M3-01-structured is M3-01 with its coil sides structured too. CASES lists (id, builder,
+expected[, check]) in catalogue order."""
 
 from common import (
     App,
@@ -23,6 +24,7 @@ from common import (
     symcases,
     table,
     winding,
+    Structured,
 )
 from emsolution import symmetry
 
@@ -50,8 +52,8 @@ def motion(*matrices, count):
 # --- M3-01: the 48-slot, 8-pole motor over the whole stack -----------------------------------------------------------
 
 
-def m3_01():
-    doc, study = new_study("M3_01", "3D", "Sliding motion", 2.0)
+def m3_01(name="M3_01"):
+    doc, study = new_study(name, "3D", "Sliding motion", 2.0)
     lib = symcases.libraries(study)
     stator = stator48(doc, study, lib, L)
     magnet = sector(25, 27.5, 0, 17.5)
@@ -67,6 +69,17 @@ def m3_01():
     symcases.transfinite_layer(study, stator[4], 3, 8)  # 144 / 48
     symcases.transfinite_layer(study, cells[3], 9, 8)  # 144 * 22.5 / 360
     sizes(study, [(stator[5], 0.8), (cells[2], 1.2)])
+    return study
+
+
+def m3_01_structured():
+    """M3-01 with both coil sides structured and recombined as well as the sliding layers: 3 elements on each arc, 4
+    across a coil side, 8 along the stack (as the layers). The coils are hexahedra; the slot air round them stays
+    tetrahedra, with pyramids where it meets them."""
+    study = m3_01("M3_01_structured")
+    stator = objects.symmetric_groups(study)[0].Cells
+    for side in stator[2:4]:
+        symcases.transfinite_layer(study, side, 3, 8, 4)
     return study
 
 
@@ -351,6 +364,12 @@ def m3_09():
 
 CASES = [
     ("M3-01", m3_01, "meshes"),
+    (
+        "M3-01-structured",
+        m3_01_structured,
+        "meshes",
+        Structured(dict.fromkeys(("Top", "Bottom", "StatorLayer", "RotorLayer"), "hexahedra")),
+    ),
     ("M3-02", sl.m3_02, "meshes"),
     ("M3-03", m3_03, ("refused", "Rule 2 (motion) is not a rotation about Z")),
     ("M3-03-static", m3_03_static, "meshes"),

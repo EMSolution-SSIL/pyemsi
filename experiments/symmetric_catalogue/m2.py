@@ -1,6 +1,7 @@
 """2D motors M2-01 to M2-18. Each Study is an XY Study of Symmetric Groups; the rotor is moving behind a Rotational
 Sliding Interface at R 28.75 wherever the catalogue's rotor moves (the stator's gap band and the rotor's air band are
-the copied cells that cover it, spec 7.5). CASES lists (id, builder, expected) in catalogue order."""
+the copied cells that cover it, spec 7.5). M2-01-structured is M2-01 with structured blocks beside the others. CASES
+lists (id, builder, expected[, check]) in catalogue order."""
 
 import math
 
@@ -33,6 +34,9 @@ from common import (
     winding,
     SECTORS,
     coil_sector,
+    Part,
+    Structured,
+    structure,
 )
 
 
@@ -48,6 +52,25 @@ def motor(name, slots, pole_pairs, span, poles, size=1.0):
 
 def m2_01():
     return motor("M2_01", 48, 4, 5, 8)
+
+
+def arcs_and_lines(body):
+    """The kind of each edge of an annular sector face: "arc" or "line"."""
+    return ["arc" if isinstance(e.Curve, Part.Circle) else "line" for e in body.Shape.Edges]
+
+
+def m2_01_structured():
+    """M2-01 with the stator's gap band (R 28.75..30) and both coil sides as structured, recombined blocks: 3 elements
+    on each arc (the 144 divisions of the sliding interface over the 48 slot pitches), 2 across the band, 5 across a
+    coil side. The iron, the slot air and the rotor stay unstructured. The band's outer arc is split where the teeth
+    and the slot opening meet it; its 3 elements are shared out over the pieces."""
+    study = motor("M2_01_structured", 48, 4, 5, 8)
+    (iface,) = objects.sliding_interfaces(study)
+    gap, _, _, top, bottom = objects.symmetric_groups(study)[0].Cells
+    structure(study, gap, arcs_and_lines(gap), {"arc": iface.Divisions // 48, "line": 2})
+    for side in (top, bottom):
+        structure(study, side, arcs_and_lines(side), {"arc": 3, "line": 5})
+    return study
 
 
 # --- M2-02: single layer, the coil of a slot named by its phase belt ------------------------------------------------
@@ -411,6 +434,12 @@ def m2_18():
 
 CASES = [
     ("M2-01", m2_01, "meshes"),
+    (
+        "M2-01-structured",
+        m2_01_structured,
+        "meshes",
+        Structured(dict.fromkeys(("Gap", "Top", "Bottom"), "quadrangles")),
+    ),
     ("M2-02", m2_02, "meshes"),
     ("M2-03", m2_03, "meshes"),
     ("M2-04", m2_04, "meshes"),

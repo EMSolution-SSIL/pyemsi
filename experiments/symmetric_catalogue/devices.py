@@ -1,17 +1,19 @@
-"""Other electromagnetic devices D-01 to D-13. D-07 (three-core cable) and D-08 (Helmholtz pair) are the success
-list's. 3D devices are in drawn free air (spec 4.4) unless the catalogue draws the air in the cell. CASES lists (id,
-builder, expected) in catalogue order."""
+"""Other electromagnetic devices D-01 to D-13, and D-01-structured (the user's own D-01 with structured blocks). D-07
+(three-core cable) and D-08 (Helmholtz pair) are the success list's. 3D devices are in drawn free air (spec 4.4) unless
+the catalogue draws the air in the cell. CASES lists (id, builder, expected[, check]) in catalogue order."""
 
 from common import (
     MIRROR_X,
     MIRROR_Y,
     MIRROR_Z,
     Part,
+    Structured,
     V,
     cut,
     extruded,
     make_group,
     new_study,
+    objects,
     outline,
     polygon,
     rotate,
@@ -72,6 +74,53 @@ def d_01():
     ]
     mats = [lib["Air"], lib["Air"], lib["Steel"], lib["Copper"]]
     make_group(study, "Core and coil", cells, [MIRROR_Y, MIRROR_X], mats, {3: ACROSS_1})
+    return study
+
+
+def edges_on(body, segments):
+    """[(body, "EdgeN")] of the edges of body from one end to the other of a segment ((x1, y1), (x2, y2))."""
+    want = [{(float(x), float(y)) for x, y in s} for s in segments]
+    out = []
+    for i, e in enumerate(body.Shape.Edges, 1):
+        ends = {(round(v.X, 9) + 0.0, round(v.Y, 9) + 0.0) for v in e.Vertexes}
+        if ends in want:
+            out.append((body, f"Edge{i}"))
+    assert len(out) == len(segments), f"{body.Label}: {len(out)} of {len(segments)} edges found"
+    return out
+
+
+def d_01_structured():
+    """The user's own D-01 (their file delme\\new_symmetric tesrs\\D-01), drawn the way they drew it: a quarter, the
+    core (x 0..42, y 0..32, the window 13..32 x 0..22 cut out) cut into 3 faces of 4 corners by two lines from the
+    window's top corners to the outer corners (a Boolean Fragments: symcases.transformer_doc), the coil (15..30 x
+    0..20) and the window's air round it; no air outside the core. Mirror y = 0, then Mirror x = 0. Their mesh items:
+    Transfinite Body and Recombine on the core and the coil, Transfinite Edges of 10 (the coil's sides, the core's ends
+    across the limbs and yoke) and 15 (along the limbs and yoke, and the window's sides) on the core, the coil and the
+    air; the air is not structured (8 corners). The core is one row, so one part (their file, from before a cell
+    object had one row, had a part per face); the coil across rule 1, so the left and right sides; mesh size 5."""
+    doc, study = new_study("D_01_structured", "2D", "No movement", 5.0)
+    lib = symcases.libraries(study)
+    drawn = symcases.transformer_doc(doc)
+    core, coil, air = drawn["core"], drawn["coil"], drawn["air"]
+    make_group(
+        study,
+        "Symmetric Group",
+        [core, air, coil],
+        symcases.TRANSFORMER_RULES,
+        [lib[k] for k in ("Steel", "Air", "Copper")],
+        {2: ACROSS_1},
+    )
+    coil_sides = [((15, 0), (30, 0)), ((30, 0), (30, 20)), ((30, 20), (15, 20)), ((15, 20), (15, 0))]
+    window = [((13, 0), (13, 22)), ((13, 22), (32, 22)), ((32, 22), (32, 0))]
+    ends = [((0, 0), (13, 0)), ((0, 32), (13, 22)), ((32, 22), (42, 32)), ((32, 0), (42, 0))]
+    along = [((0, 0), (0, 32)), ((0, 32), (42, 32)), ((42, 32), (42, 0))] + window
+    objects.make_transfinite_edges(study, 10, edges_on(coil, coil_sides) + edges_on(air, coil_sides[1:]))
+    objects.make_transfinite_edges(study, 10, edges_on(core, ends))
+    objects.make_transfinite_edges(study, 15, edges_on(core, along) + edges_on(air, window))
+    objects.make_transfinite_body(study, [coil])
+    objects.make_recombine(study, [coil])
+    objects.make_transfinite_body(study, [core])
+    objects.make_recombine(study, [core])
     return study
 
 
@@ -306,6 +355,12 @@ def d_13():
 
 CASES = [
     ("D-01", d_01, "meshes"),
+    (
+        "D-01-structured",
+        d_01_structured,
+        "meshes",
+        Structured({"CoreCell": "quadrangles", "CoilCell": "quadrangles"}, ["CoreCell"]),
+    ),
     ("D-02", d_02, "meshes"),
     ("D-03", d_03, "meshes"),
     ("D-04", d_04, "meshes"),
