@@ -51,6 +51,7 @@ jupyter = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
+    "pytest-xdist>=3.8.0,<4",
     "Cython>=3.0.0",
     "ruff>=0.16.9,<0.17",
     "pre-commit>=4",
@@ -94,6 +95,7 @@ ruff = ">=0.16.9,<0.17"
 pre-commit = ">=4"
 qtpy = ">=2.4"
 pyyaml = ">=6.0.3,<7"
+pytest-xdist = ">=3.8.0,<4"
 
 [tool.pixi.pypi-dependencies]
 pyemsi = { path = ".", editable = true }
@@ -135,7 +137,7 @@ ems-material-manager = ">=0.1,<0.2"
 PYTHONPATH = "%CONDA_PREFIX%\\Library\\bin"
 
 [tool.pixi.feature.freecad.tasks]
-test-addon = "pytest tests/freecad_addon -q -p no:cacheprovider"
+test-addon = "pytest tests/freecad_addon -q -p no:cacheprovider -n auto"
 freecad = "freecad"
 # One-time per clone: link freecad_addon into FreeCAD's user Mod folder (re-run to repoint it at this clone)
 install-addon = '''powershell -NoProfile -Command '$mod = Join-Path $env:APPDATA FreeCAD\v1-1\Mod; $link = Join-Path $mod EMSolution; New-Item -ItemType Directory -Force $mod | Out-Null; $old = Get-Item -Force -ErrorAction SilentlyContinue $link; if ($old) { $old.Delete() }; New-Item -ItemType Junction -Path $link -Target (Join-Path $env:PIXI_PROJECT_ROOT freecad_addon) | Select-Object FullName, Target' '''
