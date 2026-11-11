@@ -1722,6 +1722,11 @@ class SymmetricGroupPanel:
         self.table_button = QtWidgets.QPushButton("Table…")
         self.table_button.setToolTip("Name the part of each copy of the selected row, or generate a winding")
         cells_layout.addLayout(self._buttons(self.use_selection, self.read_drawing, self.table_button))
+        self.split_button = QtWidgets.QPushButton("Split into blocks")
+        self.split_button.setToolTip("A row per solid (face in 2D) of the selected cell object, so each can have parts")
+        self.join_button = QtWidgets.QPushButton("Join blocks")
+        self.join_button.setToolTip("One row for the whole cell object, with the selected block's parts")
+        cells_layout.addLayout(self._buttons(self.split_button, self.join_button))
         layout.addWidget(cells)
 
         rules = QtWidgets.QGroupBox("Rules, in the order they apply")
@@ -1769,6 +1774,8 @@ class SymmetricGroupPanel:
         self.use_selection.clicked.connect(self.take_selection)
         self.read_drawing.clicked.connect(self.read_chain)
         self.table_button.clicked.connect(self.open_table)
+        self.split_button.clicked.connect(self.split_row)
+        self.join_button.clicked.connect(self.join_rows)
         self.add_mirror.clicked.connect(lambda: self.add_rule("mirror"))
         self.add_rotate.clicked.connect(lambda: self.add_rule("rotate"))
         self.add_translate.clicked.connect(lambda: self.add_rule("translate"))
@@ -1896,6 +1903,8 @@ class SymmetricGroupPanel:
             self.summary.setText("No drawing until the rules are fixed.")
         r, rows = self.rows.currentRow(), objects.rows_of(self.obj)
         self.table_button.setEnabled(0 <= r < len(rows) and rows[r].get("mode") == "table")
+        self.split_button.setEnabled(objects.can_split(self.obj, r))
+        self.join_button.setEnabled(objects.can_join(self.obj, r))
 
     # ---- writing
 
@@ -2022,6 +2031,21 @@ class SymmetricGroupPanel:
                 f"These bodies are copied differently and were left out: {', '.join(left)}. Read them into a group of"
                 " their own."
             )
+
+    def split_row(self):
+        r = self.rows.currentRow()
+        if not objects.split_row(self.obj, r):
+            return warn("Select the row of a cell object with several solids (faces in 2D).")
+        self.apply()
+        self.rows.setCurrentCell(r, 0)
+
+    def join_rows(self):
+        r = self.rows.currentRow()
+        cell = objects.rows_of(self.obj)[r]["cell"] if 0 <= r < self.rows.rowCount() else None
+        if not objects.join_rows(self.obj, r):
+            return warn("Select a block of a cell object that is split into blocks.")
+        self.apply()
+        self.rows.setCurrentCell([row["cell"] for row in objects.rows_of(self.obj)].index(cell), 0)
 
     def open_table(self):
         r, rows = self.rows.currentRow(), objects.rows_of(self.obj)

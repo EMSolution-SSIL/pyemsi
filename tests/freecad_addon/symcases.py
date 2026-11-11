@@ -124,6 +124,36 @@ def split_coil(doc, radius=43):
     return frag
 
 
+def _polygon(*points):
+    return Part.Face(Part.makePolygon([V(x, y, 0) for x, y in points + points[:1]]))
+
+
+TRANSFORMER_RULES = [
+    {"kind": "mirror", "point": [0, 0, 0], "normal": [0, 1, 0]},
+    {"kind": "mirror", "point": [0, 0, 0], "normal": [1, 0, 0]},
+]  # the quarter x, y >= 0 mirrored at y = 0, then at x = 0
+
+
+def transformer_doc(doc):
+    """A quarter of a transformer drawn as a user did (D-01): the core is a Boolean Fragments of its face (x 0..42,
+    y 0..32, the window x 13..32, y 0..22 cut out) and two lines from the window's top corners to the outer corners, so
+    one object of three faces, each with four corners; the coil x 15..30, y 0..20 and the air of the window around
+    it. Returns {"core", "coil", "air"}; copy them with TRANSFORMER_RULES."""
+    core = feature(doc, "CoreFace", _polygon((0, 0), (13, 0), (13, 22), (32, 22), (32, 0), (42, 0), (42, 32), (0, 32)))
+    lines = [Part.LineSegment(V(0, 32, 0), V(13, 22, 0)), Part.LineSegment(V(32, 22, 0), V(42, 32, 0))]
+    cuts = feature(doc, "CoreCuts", Part.makeCompound([line.toShape() for line in lines]))
+    frag = BOPTools.SplitFeatures.makeBooleanFragments(name="CoreCell")
+    frag.Objects = [core, cuts]
+    frag.Mode = "Standard"
+    coil = feature(doc, "CoilCell", _polygon((15, 0), (30, 0), (30, 20), (15, 20)))
+    window = _polygon((13, 0), (32, 0), (32, 22), (13, 22))
+    air = feature(doc, "AirCell", window.cut(coil.Shape).Faces[0])
+    for obj in (core, cuts):
+        obj.Visibility = False
+    doc.recompute()
+    return {"core": frag, "coil": coil, "air": air}
+
+
 def _piece_name(face, part):
     """The assignment a face of the full stator or rotor belongs to, from where its centre lies (radius, angle)."""
     c = face.CenterOfMass

@@ -1701,6 +1701,49 @@ def main():
     group.ViewObject.Proxy.doubleClicked(group.ViewObject)
     panel = group_panels.pop()
     assert panel.reject() and abs(group.Shape.BoundBox.ZMin - 5) < 1e-9, group.Shape.BoundBox
+    # A cell object cut into three faces by a Boolean Fragments (D-01) is one row; Split and Join through the panel.
+    blocks_doc = App.newDocument("Blocks")
+    blocks_cells = symcases.transformer_doc(blocks_doc)
+    blocks_study = objects.make_study(blocks_doc, "2D")
+    App.setActiveDocument(blocks_doc.Name)
+    taskpanels.set_active_study(blocks_study)
+    Gui.Selection.clearSelection()
+    for key in ("core", "coil", "air"):
+        Gui.Selection.addSelection(blocks_doc.Name, blocks_cells[key].Name)
+    Gui.runCommand("EMS_SymmetricGroup")
+    panel = group_panels.pop()
+    (blocks_group,) = objects.symmetric_groups(blocks_study)
+
+    def row_labels():
+        return [panel.rows.item(k, 0).text() for k in range(panel.rows.rowCount())]
+
+    assert row_labels() == ["CoreCell", "CoilCell", "AirCell"], row_labels()
+    assert panel.summary.text() == "1 copy, 3 parts" and len(blocks_group.Shape.Faces) == 5, panel.summary.text()
+    panel.rows.setCurrentCell(1, 0)  # the coil has one face: nothing to split or join
+    assert not panel.split_button.isEnabled() and not panel.join_button.isEnabled()
+    panel.rows.setCurrentCell(0, 0)
+    assert panel.split_button.isEnabled() and not panel.join_button.isEnabled()
+    panel.split_button.click()
+    assert row_labels() == ["CoreCell_1", "CoreCell_2", "CoreCell_3", "CoilCell", "AirCell"], row_labels()
+    assert panel.summary.text() == "1 copy, 5 parts" and len(blocks_group.Shape.Faces) == 5, panel.summary.text()
+    panel.rows.setCurrentCell(2, 0)
+    assert panel.join_button.isEnabled() and not panel.split_button.isEnabled()
+    panel.join_button.click()
+    assert row_labels() == ["CoreCell", "CoilCell", "AirCell"] and panel.rows.currentRow() == 0, row_labels()
+    panel.split_button.click()  # OK with the blocks split: a Material per block
+    assert panel.accept() and not Gui.Control.activeDialog()
+    names = sorted(m.GroupName for m in objects.part_assignments(blocks_study))
+    assert names == ["AirCell", "CoilCell", "CoreCell_1", "CoreCell_2", "CoreCell_3"], names
+    blocks_group.ViewObject.Proxy.doubleClicked(blocks_group.ViewObject)
+    panel = group_panels.pop()
+    panel.rows.setCurrentCell(0, 0)
+    panel.join_button.click()
+    assert panel.accept() and log[-1].startswith("refused: The parts of these Materials are gone"), log[-1]
+    names = sorted(m.GroupName for m in objects.part_assignments(blocks_study))
+    assert names == ["AirCell", "CoilCell", "CoreCell"], names
+    App.closeDocument(blocks_doc.Name)
+    App.setActiveDocument(group_doc.Name)
+    log.append("split and join ok")
     taskpanels.SymmetricGroupPanel = real_group_panel
     App.closeDocument(group_doc.Name)
     App.setActiveDocument(doc.Name)

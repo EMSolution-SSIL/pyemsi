@@ -335,8 +335,8 @@ def _steel(study):
 
 
 def test_cell_cut_by_a_fragments_meshes_per_block(tmp_path):
-    """A Boolean Fragments cell object (the coil cut by an arc) has two blocks, a row each. Face picks structure and
-    recombine one block only, and each block takes the Material of its part."""
+    """A Boolean Fragments cell object (the coil cut by an arc) has two blocks, a row each once split. Face picks
+    structure and recombine one block only, and each block takes the Material of its part."""
     doc = App.newDocument("SymSplit")
     try:
         info = symcases.group_motor_doc(doc)
@@ -344,6 +344,7 @@ def test_cell_cut_by_a_fragments_meshes_per_block(tmp_path):
         iron, _, air = info["stator_cells"]
         study = objects.make_study(doc, "2D")
         stator = objects.make_symmetric_group(study, [iron, frag, air], rules=symcases.STATOR_RULES, name="Stator")
+        assert objects.split_row(stator, 1)
         outer_area = symcases.sector(43, 50, 10, 15).Area
         block = next(f"Face{i}" for i, f in enumerate(frag.Shape.Faces, 1) if abs(f.Area - outer_area) < 1e-6)
         rows = []

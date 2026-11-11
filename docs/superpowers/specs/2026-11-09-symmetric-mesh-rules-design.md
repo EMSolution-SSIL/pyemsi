@@ -111,7 +111,7 @@ What this looks like for some of the examples (illustrations only, nothing below
 | Term | Meaning |
 |---|---|
 | **Group** | A set of cell objects meshed together once, with one ordered list of rules. One side (fixed or moving). |
-| **Cell object** | A body in a group. A body with several solids (faces in 2D), such as a Boolean Fragments that splits a cell, has one row per solid, so each block can have its own parts. |
+| **Cell object** | A body in a group, one row of the group. A body with several solids (faces in 2D), such as a Boolean Fragments that cuts a cell into blocks for a structured mesh, is still one row, all its solids together. Split into blocks on request, it has a row per solid, so each block can have its own parts. |
 | **Rule** | One mirror, rotation or translation. |
 | **Copy** | One position of a cell object, identified by one index per rule. |
 | **Part** | A named set of copies, possibly from several cell objects. A part is one MAT_ID, one volume or surface group, one Material. |
@@ -205,6 +205,12 @@ cannot be written as an ordered rule list gets an explanation instead of a guess
 - **Symmetric Group** replaces the Symmetric Mesh item (`objects.SymmetricMesh`, command `EMS_SymmetricMesh`). It holds
   the cell objects, each row's part mode and table, the rules and the side. It produces the drawing: a compound of all
   the copies, updated when anything changes, visible and pickable in the 3D view. No boolean is run on it.
+- **Rows:** one per cell object by default, covering all its solids (faces in 2D); its part names have no block
+  suffix (one part for "One part", one per copy for "Each copy", and so on, as for a one-solid object). "Split into
+  blocks" on a row gives a row per solid, each with the row's settings and its own parts (`<object>_<block>`), for
+  blocks that need different parts, such as two coil layers cut from one face; "Join blocks" on a block turns them back
+  into one row with that block's settings. In the drawing each copy holds the solids of every row in turn. Documents
+  saved with a row per solid are the split form and keep working; nothing joins them silently.
 - **Side:** fixed or moving, set in the panel and shown only for Sliding motion. Cell objects are not listed in the Main
   or Moving geometry; a body that is both is refused.
 - **Materials:** one assignment per part, created when the part appears and listed in the Study as today. It stores the

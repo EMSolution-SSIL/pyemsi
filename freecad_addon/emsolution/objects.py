@@ -257,7 +257,7 @@ class SymmetricGroup(_Proxy):
         add = obj.addProperty
         add("App::PropertyLinkListGlobal", "Cells", "EMSolution", "Cell objects: the only ones meshed")
         add("App::PropertyString", "Rules", "EMSolution", "Copy rules, JSON")
-        add("App::PropertyString", "Rows", "EMSolution", "One row per solid (face) of each cell object, JSON")
+        add("App::PropertyString", "Rows", "EMSolution", "One row per cell object, or per block of a split one, JSON")
         obj.Rules = obj.Rows = "[]"
         add("App::PropertyEnumeration", "Side", "EMSolution", "Fixed or moving side of a Sliding Interface")
         obj.Side = ["Fixed", "Moving"]
@@ -274,9 +274,9 @@ class SymmetricGroup(_Proxy):
         try:
             if symmetry.copy_count(rules) <= symmetry.MAX_DRAWN:
                 moves = symmetry.transforms(rules)
-                rows = [row_shape(obj, row) for row in rows_of(obj)]
+                rows = [row_pieces(obj, row) for row in rows_of(obj)]  # all the solids of a whole cell object
                 if all(s is not None for s in rows):  # a cell that is gone leaves the drawing empty
-                    shapes = [s.transformed(App.Matrix(*m)) for m in moves for s in rows]
+                    shapes = [s.transformed(App.Matrix(*m)) for m in moves for pieces in rows for s in pieces]
         except (KeyError, TypeError, ValueError, ZeroDivisionError):
             shapes = []  # rules that cannot be read: validation says so
         obj.Shape = Part.makeCompound(shapes)
@@ -907,8 +907,8 @@ def make_mesh_size(study, size, refs):
 
 
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group", side="Fixed"):
-    """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row per solid
-    (face in 2D) of every cell."""
+    """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
+    object, all its solids (faces in 2D); split_row splits a row into blocks."""
     obj = study.Document.addObject("Part::FeaturePython", "SymmetricGroup")
     SymmetricGroup(obj)
     obj.Label = name
@@ -959,18 +959,83 @@ def _pieces(shape):
     return shape.Solids if shape.Solids else shape.Faces
 
 
+WHOLE = None  # the "solid" of a row that stands for its whole cell object, all its solids (faces in 2D)
+
+
+def _new_row(cell, solid=WHOLE):
+    return {"cell": cell, "solid": solid, "mode": "one", "across": [], "table": [], "material": ""}
+
+
+def is_whole(row):
+    return row.get("solid") is WHOLE
+
+
 def sync_rows(item):
-    """Gives each solid (face in 2D) of each cell a row, in the order of the cells, keeping the rows that exist.
-    A row's solid is the 0-based index into the cell's Solids (Faces in 2D)."""
+    """Gives each cell its rows, in the order of the cells, keeping the rows that exist: one row for the whole cell
+    object, or, for a cell split into blocks (split_row; a document saved before that had a row per block), a row per
+    solid (face in 2D). A split row's solid is the 0-based index into the cell's Solids (Faces in 2D)."""
     from . import geometry
 
-    old = {(r["cell"], r["solid"]): r for r in rows_of(item)}
+    old = rows_of(item)
     rows = []
     for cell in item.Cells:
-        for i in range(len(_pieces(geometry.global_shape(cell)))):
-            default = {"cell": cell.Name, "solid": i, "mode": "one", "across": [], "table": [], "material": ""}
-            rows.append(old.get((cell.Name, i), default))
+        mine = [r for r in old if r["cell"] == cell.Name]
+        blocks = {r["solid"]: r for r in mine if not is_whole(r)}
+        if blocks:
+            count = len(_pieces(geometry.global_shape(cell)))
+            rows += [blocks.get(i) or _new_row(cell.Name, i) for i in range(count)]
+        else:
+            rows.append(mine[0] if mine else _new_row(cell.Name))
     set_rows(item, rows)
+
+
+def _cell_pieces(item, name):
+    """The solids (faces in 2D) of the cell named name, where the user sees it; None when it is gone."""
+    from . import geometry
+
+    cell = item.Document.getObject(name)
+    if cell is None or not hasattr(cell, "Shape") or cell.Shape.isNull():
+        return None
+    return _pieces(geometry.global_shape(cell))
+
+
+def can_split(item, r):
+    """True when row r is a whole cell object of several solids (faces in 2D)."""
+    rows = rows_of(item)
+    if not (0 <= r < len(rows) and is_whole(rows[r])):
+        return False
+    pieces = _cell_pieces(item, rows[r]["cell"])
+    return bool(pieces) and len(pieces) > 1
+
+
+def can_join(item, r):
+    """True when row r is a block of a cell object that has other rows."""
+    rows = rows_of(item)
+    return 0 <= r < len(rows) and not is_whole(rows[r]) and sum(row["cell"] == rows[r]["cell"] for row in rows) > 1
+
+
+def split_row(item, r):
+    """Split row r, a whole cell object of several solids (faces in 2D), into a row per block, each with r's settings.
+    False, and nothing changed, when r cannot be split (can_split)."""
+    if not can_split(item, r):
+        return False
+    rows = rows_of(item)
+    rows[r : r + 1] = [{**rows[r], "solid": i} for i in range(len(_cell_pieces(item, rows[r]["cell"])))]
+    set_rows(item, rows)
+    return True
+
+
+def join_rows(item, r):
+    """Join the block rows of row r's cell into one row for the whole cell object, with r's settings, where the first
+    block was. False, and nothing changed, when r cannot be joined (can_join)."""
+    if not can_join(item, r):
+        return False
+    rows = rows_of(item)
+    cell = rows[r]["cell"]
+    first = next(k for k, row in enumerate(rows) if row["cell"] == cell)
+    joined = {**rows[r], "solid": WHOLE}
+    set_rows(item, [joined if k == first else row for k, row in enumerate(rows) if k == first or row["cell"] != cell])
+    return True
 
 
 def group_transforms(item):
@@ -978,15 +1043,32 @@ def group_transforms(item):
     return symmetry.transforms(rules_of(item))
 
 
-def row_shape(item, row):
-    """The solid (face in 2D) a row stands for, where the user sees it; None when its cell or solid is gone."""
-    from . import geometry
+def row_pieces(item, row):
+    """The solids (faces in 2D) a row stands for, where the user sees them: all of its cell's for a whole row, the one
+    block of a split row. None when its cell or block is gone."""
+    pieces = _cell_pieces(item, row["cell"])
+    if pieces is None or is_whole(row):
+        return None if pieces is None else list(pieces)
+    return [pieces[row["solid"]]] if row["solid"] < len(pieces) else None
 
-    cell = item.Document.getObject(row["cell"])
-    if cell is None or not hasattr(cell, "Shape") or cell.Shape.isNull():
+
+def row_shape(item, row):
+    """The shape a row stands for, where the user sees it: its one solid (face in 2D), or a compound of the solids of
+    a whole cell object that has several; None when its cell or block is gone."""
+    import Part
+
+    pieces = row_pieces(item, row)
+    if not pieces:
         return None
-    pieces = _pieces(geometry.global_shape(cell))
-    return pieces[row["solid"]] if row["solid"] < len(pieces) else None
+    return pieces[0] if len(pieces) == 1 else Part.makeCompound(pieces)
+
+
+def _row_layout(item):
+    """([solids (faces in 2D) of each row in a copy of the drawing], [first index of each row in a copy], solids of
+    a copy). A row whose cell or block is gone counts 0."""
+    sizes = [len(row_pieces(item, row) or []) for row in rows_of(item)]
+    starts = [sum(sizes[:r]) for r in range(len(sizes))]
+    return sizes, starts, sum(sizes)
 
 
 def stale_drawing(item):
@@ -994,12 +1076,15 @@ def stale_drawing(item):
     Cells (links to the cells only) does not report. A drawing that is empty or a cell that is gone is not stale."""
     rows = rows_of(item)
     pieces = _pieces(item.Shape) if not item.Shape.isNull() else []
-    if not rows or len(pieces) < len(rows):
-        return False
-    for piece, row in zip(pieces, rows):
-        shape = row_shape(item, row)
-        if shape is None:
+    first = []
+    for row in rows:
+        mine = row_pieces(item, row)
+        if mine is None:
             return False
+        first += mine
+    if not first or len(pieces) < len(first):
+        return False
+    for piece, shape in zip(pieces, first):
         tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
         if any(abs(p - q) > tol for p, q in zip(_bounds(piece), _bounds(shape))):
             return True
@@ -1007,10 +1092,10 @@ def stale_drawing(item):
 
 
 def row_label(item, row):
-    """The name of a row: its cell's, with the solid's number when the cell has several rows."""
+    """The name of a row: its cell's, with the block's number for a block of a cell split into several rows."""
     cell = item.Document.getObject(row["cell"])
     label = clean(display_name(cell)) if cell is not None else row["cell"]
-    if sum(r["cell"] == row["cell"] for r in rows_of(item)) > 1:
+    if not is_whole(row) and sum(r["cell"] == row["cell"] for r in rows_of(item)) > 1:
         label += f"_{row['solid'] + 1}"
     return label
 
@@ -1021,15 +1106,20 @@ def row_parts(item, row):
 
 
 def element_owner(item, sub):
-    """(row, copy), both 0-based, that a "SolidN" or "FaceN" of the drawing belongs to; None when none does."""
-    shape, n = item.Shape, len(rows_of(item))
-    if not n or not shape.Faces:
+    """(row, copy), both 0-based, that a "SolidN" or "FaceN" of the drawing belongs to; None when none does. Each copy
+    in the drawing is the solids (faces in 2D) of every row in turn, all of its cell's for a whole row."""
+    shape = item.Shape
+    sizes, starts, per = _row_layout(item)
+    if not per or shape.isNull() or not shape.Faces:
         return None
     if sub.startswith("Face") and shape.Solids:
         owners = face_solids(shape, sub)
         sub = owners[0] if owners else ""
     index = int(re.sub(r"\D", "", sub) or 0) - 1
-    return (index % n, index // n) if 0 <= index < len(_pieces(shape)) else None
+    if not 0 <= index < len(_pieces(shape)):
+        return None
+    copy, k = divmod(index, per)
+    return next((r, copy) for r, (start, n) in enumerate(zip(starts, sizes)) if start <= k < start + n)
 
 
 def part_key(study, item, name):
@@ -1053,11 +1143,15 @@ def part_assignments(study):
 
 
 def part_refs(m):
-    """[(group, "SolidN")] (FaceN in 2D) of the copies of a part assignment."""
-    refs = []
+    """[(group, "SolidN")] (FaceN in 2D) of the copies of a part assignment: each solid of each copy of a whole cell
+    object."""
+    refs, layouts = [], {}
     for item, r, copy in study_parts(owner_study(m)).get(m.PartKey, []):
+        if item.Name not in layouts:
+            layouts[item.Name] = _row_layout(item)
+        sizes, starts, per = layouts[item.Name]
         kind = "Solid" if item.Shape.Solids else "Face"
-        refs.append((item, f"{kind}{copy * len(rows_of(item)) + r + 1}"))
+        refs += [(item, f"{kind}{copy * per + starts[r] + j + 1}") for j in range(sizes[r])]
     return refs
 
 
@@ -1133,12 +1227,14 @@ def apply_part_material(m, name, lib, potential):
 
 def winding_table(item, row, rule, slots, pole_pairs, span=1, per_coil=False, layer="top"):
     """The part name of every copy of a row from a three-phase winding (see winding.py): the slot of a copy is the
-    angle of its centre about the rotation rule's axis. layer: "top" or "bottom" of a two-layer winding, or "whole"
-    for an object that is a whole coil."""
+    angle of its centre (of all its solids, for a whole cell object) about the rotation rule's axis. layer: "top" or
+    "bottom" of a two-layer winding, or "whole" for an object that is a whole coil."""
     from . import winding
 
-    c = row_shape(item, rows_of(item)[row]).CenterOfMass
-    centres = [symmetry.apply(t, (c.x, c.y, c.z)) for t in group_transforms(item)]
+    pieces = row_pieces(item, rows_of(item)[row])
+    mass = sum(p.Mass for p in pieces)
+    c = [sum(getattr(p.CenterOfMass, a) * p.Mass for p in pieces) / mass for a in "xyz"]
+    centres = [symmetry.apply(t, c) for t in group_transforms(item)]
     if layer == "whole":
         by_slot = winding.whole_coils(slots, pole_pairs, per_coil)
     else:

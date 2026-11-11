@@ -821,6 +821,12 @@ def _group_rules(item, plane, r):
     return rules
 
 
+def _whole_and_blocks(rows):
+    """True when the rows of one cell object hold a row for the whole object and another row: they would draw and
+    mesh its solids twice."""
+    return len(rows) > 1 and any(objects.is_whole(row) for row in rows)
+
+
 def _group_rows(study, item, rules, r):
     """Every cell object of a group has a solid (face in 2D) and its rows, and no table is of the wrong length or has an
     empty name. True when the cell objects can be drawn."""
@@ -848,7 +854,17 @@ def _group_rows(study, item, rules, r):
         elif not any(row["cell"] == cell.Name for row in rows):
             r.error(prefix + f"cell object {label} has no part rows. Open the group.", item)
             ok = False
-        elif any(row["cell"] == cell.Name and row["solid"] >= len(objects._pieces(shape)) for row in rows):
+        elif _whole_and_blocks([row for row in rows if row["cell"] == cell.Name]):
+            r.error(
+                prefix + f"cell object {label} has a row for the whole object beside other rows for it. Open the"
+                " group and join its blocks.",
+                item,
+            )
+            ok = False
+        elif any(
+            row["cell"] == cell.Name and not objects.is_whole(row) and row["solid"] >= len(objects._pieces(shape))
+            for row in rows
+        ):
             r.error(prefix + f"cell object {label} has fewer {kind}s than the group has rows for.", item)
             ok = False
     if rules is not None:

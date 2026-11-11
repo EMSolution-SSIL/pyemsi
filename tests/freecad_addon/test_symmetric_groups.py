@@ -58,10 +58,10 @@ def test_drawing_has_a_solid_per_row_per_copy(study, stator):
     assert stator.Side == "Fixed"
 
 
-def test_rows_are_one_per_face_of_each_cell(stator):
+def test_rows_are_one_per_cell_object(stator):
     rows = objects.rows_of(stator)
     assert [r["cell"] for r in rows] == ["StatorIronCell", "CoilCell", "StatorAirCell"]
-    assert all(r["solid"] == 0 and r["mode"] == "one" and r["material"] == "" for r in rows)
+    assert all(r["solid"] is None and r["mode"] == "one" and r["material"] == "" for r in rows)
     assert all(r["across"] == [] and r["table"] == [] for r in rows)
 
 
@@ -153,7 +153,7 @@ def test_group_survives_save_and_reopen(study, stator, tmp_path):
     assert again.Side == "Fixed"
 
 
-def test_fragments_cell_has_one_row_per_face(study):
+def test_fragments_cell_has_one_row_until_split(study):
     doc = study.Document
     frag = symcases.coil_fragments(doc)
     (stator,) = objects.symmetric_groups(study)
@@ -161,11 +161,197 @@ def test_fragments_cell_has_one_row_per_face(study):
     stator.Cells = cells
     objects.sync_rows(stator)
     doc.recompute()
-    assert len([r for r in objects.rows_of(stator) if r["cell"] == "CoilFragments"]) == 2
+    assert [r["solid"] for r in objects.rows_of(stator) if r["cell"] == "CoilFragments"] == [None]
+    assert len(stator.Shape.Faces) == 4 * 24
+    # the winding of the whole coil goes by the centre of both its blocks, as for the coil drawn as one face
+    whole = objects.winding_table(stator, 1, STATOR_RULES[1], 12, 1, per_coil=True, layer="whole")
+    assert whole[:4] == ["Coil01", "Coil01", "Coil02", "Coil02"] and whole[-1] == "Coil12"
+    assert objects.split_row(stator, 1)
+    doc.recompute()
+    assert [r["solid"] for r in objects.rows_of(stator) if r["cell"] == "CoilFragments"] == [0, 1]
     assert len(stator.Shape.Faces) == 4 * 24
     assert objects.row_label(stator, objects.rows_of(stator)[1]) != objects.row_label(
         stator, objects.rows_of(stator)[2]
     )
+
+
+# ---- a cell object of several faces: one row, split into blocks on request (D-01)
+
+
+@pytest.fixture
+def transformer(tmp_path):
+    """(study, group) of the D-01 transformer quarter: the core a Fragments of three faces, the coil, the air."""
+    doc = App.newDocument("Transformer")
+    cells = symcases.transformer_doc(doc)
+    study = objects.make_study(doc, "2D")
+    item = objects.make_symmetric_group(
+        study, [cells["core"], cells["coil"], cells["air"]], rules=symcases.TRANSFORMER_RULES, name="Transformer"
+    )
+    doc.recompute()
+    doc.saveAs(str(tmp_path / "transformer.FCStd"))
+    yield study, item
+    for name in list(App.listDocuments()):
+        App.closeDocument(name)
+
+
+def _cells_and_solids(item):
+    return [(r["cell"], r["solid"]) for r in objects.rows_of(item)]
+
+
+def test_a_cell_object_of_three_faces_has_one_row(transformer):
+    study, item = transformer
+    assert _cells_and_solids(item) == [("CoreCell", None), ("CoilCell", None), ("AirCell", None)]
+    core = objects.rows_of(item)[0]
+    assert objects.row_label(item, core) == "CoreCell"
+    assert len(objects.row_pieces(item, core)) == 3
+    assert objects.row_shape(item, core).Area == pytest.approx(42 * 32 - 19 * 22)
+    assert len(item.Shape.Faces) == 5 * 4
+    assert not objects.stale_drawing(item)
+
+
+@pytest.mark.parametrize(
+    "mode, across, names",
+    [
+        ("one", [], ["CoreCell"] * 4),
+        ("each", [], ["CoreCell_1", "CoreCell_2", "CoreCell_3", "CoreCell_4"]),
+        ("across", [0], ["CoreCell_1", "CoreCell_1", "CoreCell_2", "CoreCell_2"]),
+    ],
+)
+def test_copies_of_a_whole_cell_object_give_a_part_per_the_rows_mode(transformer, mode, across, names):
+    study, item = transformer
+    rows = objects.rows_of(item)
+    rows[0].update(mode=mode, across=across)
+    objects.set_rows(item, rows)
+    assert objects.row_parts(item, rows[0]) == names
+    objects.sync_parts(study)
+    core = sorted(m.GroupName for m in objects.part_assignments(study) if m.GroupName.startswith("Core"))
+    assert core == sorted(set(names))
+
+
+def test_split_into_blocks_and_join_again(transformer):
+    study, item = transformer
+    lib = library(study)
+    rows = objects.rows_of(item)
+    rows[0]["mode"] = "each"
+    objects.set_rows(item, rows)
+    objects.set_row_material(study, item, 0, lib)
+    objects.sync_parts(study)
+    assert len(objects.part_assignments(study)) == 4 + 1 + 1
+    first = [f.CenterOfMass for f in item.Shape.Faces[:5]]
+    assert objects.split_row(item, 0)
+    study.Document.recompute()
+    assert _cells_and_solids(item)[:3] == [("CoreCell", 0), ("CoreCell", 1), ("CoreCell", 2)]
+    blocks = objects.rows_of(item)[:3]
+    assert all(r["mode"] == "each" and r["material"] == lib.Name for r in blocks)
+    assert [objects.row_label(item, r) for r in blocks] == ["CoreCell_1", "CoreCell_2", "CoreCell_3"]
+    assert [f.CenterOfMass for f in item.Shape.Faces[:5]] == first  # the drawing is the same, in the same order
+    removed = objects.sync_parts(study)
+    assert len(removed) == 4 and len(objects.part_assignments(study)) == 3 * 4 + 1 + 1
+    assert not objects.split_row(item, 3)  # the coil has one face: nothing to split
+    assert not objects.join_rows(item, 3)
+    blocks[1]["mode"] = "one"
+    objects.set_rows(item, blocks + objects.rows_of(item)[3:])
+    assert objects.join_rows(item, 1)  # the joined row takes the settings of the block it was asked on
+    study.Document.recompute()
+    assert _cells_and_solids(item) == [("CoreCell", None), ("CoilCell", None), ("AirCell", None)]
+    assert objects.rows_of(item)[0]["mode"] == "one"
+    objects.sync_parts(study)
+    assert sorted(m.GroupName for m in objects.part_assignments(study)) == ["AirCell", "CoilCell", "CoreCell"]
+
+
+def per_solid(item):
+    """The rows of item as a document saved before cell objects had one row: a row per face of the core."""
+    rows = objects.rows_of(item)
+    old = [{**rows[0], "solid": i} for i in range(3)] + rows[1:]
+    objects.set_rows(item, old)
+    return old
+
+
+def test_an_old_per_solid_document_keeps_its_rows_and_validates(transformer):
+    study, item = transformer
+    old = per_solid(item)
+    objects.sync_rows(item)
+    assert objects.rows_of(item) == old  # not joined silently
+    study.Document.recompute()
+    ready(study)
+    assert texts(study) == []
+    assert sorted(m.GroupName for m in objects.part_assignments(study))[:3] == ["AirCell", "CoilCell", "CoreCell_1"]
+    assert len(objects.part_assignments(study)) == 5
+
+
+def test_a_cell_with_a_whole_row_and_block_rows_is_refused(transformer):
+    study, item = transformer
+    ready(study)
+    objects.set_rows(item, [{**objects.rows_of(item)[0], "solid": 1}] + objects.rows_of(item))
+    study.Document.recompute()
+    assert any("CoreCell" in t and "whole" in t for t in texts(study)), texts(study)
+
+
+def test_element_owner_and_part_refs_of_a_whole_cell_object(transformer):
+    study, item = transformer
+    # each copy draws the core's three faces, then the coil, then the air
+    assert [objects.element_owner(item, f"Face{k}") for k in (1, 3, 4, 5, 6, 20)] == [
+        (0, 0),
+        (0, 0),
+        (1, 0),
+        (2, 0),
+        (0, 1),
+        (2, 3),
+    ]
+    assert objects.element_owner(item, "Face21") is None
+    objects.sync_parts(study)
+    (core,) = [m for m in objects.part_assignments(study) if m.GroupName == "CoreCell"]
+    refs = objects.part_refs(core)
+    assert [s for _, s in refs] == [f"Face{5 * c + k}" for c in range(4) for k in (1, 2, 3)]
+    assert sum(item.Shape.getElement(s).Area for _, s in refs) == pytest.approx(4 * (42 * 32 - 19 * 22))
+    assert objects.part_of_pick(study, item, "Face7") == (core, 0)
+    (coil,) = [m for m in objects.part_assignments(study) if m.GroupName == "CoilCell"]
+    assert [s for _, s in objects.part_refs(coil)] == ["Face4", "Face9", "Face14", "Face19"]
+
+
+def structured_core(study, item):
+    """Transfinite Body and Recombine on the core's faces, 4 elements on each of its edges, as the user set it."""
+    core = item.Cells[0]
+    faces = [(core, f"Face{i}") for i in range(1, len(core.Shape.Faces) + 1)]
+    objects.make_transfinite_body(study, []).References = faces
+    objects.make_transfinite_edges(study, 4, [(core, f"Edge{i}") for i in range(1, len(core.Shape.Edges) + 1)])
+    objects.make_recombine(study, []).References = faces
+    study.Document.recompute()
+
+
+def mesh_parts(study):
+    """{part name: element count} of the meshed Study, and the element type names."""
+    r = run_mesher(study, jobwriter.write_job(study))
+    assert r.returncode == 0, r.stderr
+    path = jobwriter.mesh_file(study)
+    kinds, inverted, _ = mesh_check(path, ())
+    assert inverted == 0
+    return {name: n for name, n in meshreport.groups(path).values()}, kinds
+
+
+def test_a_whole_cell_object_of_three_faces_meshes_as_one_part(transformer):
+    study, item = transformer
+    structured_core(study, item)
+    ready(study)
+    assert texts(study) == []
+    job = load_job(study)
+    (group,) = job["symmetric"]["groups"]
+    assert [(r["cell"], r["file"]) for r in group["rows"]] == [(1, None), (2, None), (3, None)]
+    whole, kinds = mesh_parts(study)
+    assert sorted(whole) == ["AirCell", "CoilCell", "CoreCell"]
+    assert any(k.startswith("Quadrilateral") for k in kinds), kinds
+    assert whole["CoreCell"] == 4 * 3 * 4 * 4  # four copies of three structured faces of 4 x 4 quads
+    # the same Study saved with a row per face of the core meshes the same, with a part per face
+    per_solid(item)
+    study.Document.recompute()
+    ready(study)
+    assert texts(study) == []
+    group = load_job(study)["symmetric"]["groups"][0]
+    assert [r["cell"] for r in group["rows"]] == [1, 1, 1, 2, 3] and all(r["file"] for r in group["rows"][:3])
+    split, _ = mesh_parts(study)
+    assert sorted(split) == ["AirCell", "CoilCell", "CoreCell_1", "CoreCell_2", "CoreCell_3"]
+    assert sum(split[f"CoreCell_{k}"] for k in (1, 2, 3)) == whole["CoreCell"]
+    assert (split["AirCell"], split["CoilCell"]) == (whole["AirCell"], whole["CoilCell"])
 
 
 def test_sync_keeps_existing_rows(study, stator):
@@ -1070,7 +1256,8 @@ def test_a_cell_with_several_rows_has_a_file_per_row(study):
         "TwoBlocks",
         Part.makeCompound([symcases.sector(70, 80, 0, 10), symcases.sector(70, 80, 10, 20)]),
     )
-    objects.make_symmetric_group(study, [cell], name="Blocks")
+    blocks = objects.make_symmetric_group(study, [cell], name="Blocks")
+    assert objects.split_row(blocks, 0)
     study.Document.recompute()
     ready(study)
     assert texts(study) == []

@@ -144,10 +144,13 @@ def new_study(doc, sliding=False, size=2.0):
 
 def group(study, name, cells, rules, name_of, side="Fixed"):
     """A Symmetric Group of cells, copied by rules. name_of(face) names the part of each copy of each row: a table
-    per row, as the group panel's table dialog fills it. The cells are hidden; the drawing shows them all."""
+    per row, as the group panel's table dialog fills it; a cell of several faces is split into blocks first, so each
+    face is named. The cells are hidden; the drawing shows them all."""
     doc = study.Document
     doc.recompute()
     item = objects.make_symmetric_group(study, cells, rules=rules, name=name, side=side)
+    for r in reversed(range(len(objects.rows_of(item)))):
+        objects.split_row(item, r)
     rows = []
     for row in objects.rows_of(item):
         shape = objects.row_shape(item, row)
