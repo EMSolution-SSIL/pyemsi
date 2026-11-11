@@ -161,8 +161,11 @@ def _picked_solids(names):
                 continue
             picked = points[k] if len(points) == len(subs) else None
             solid = objects.piece_solid(shape, sub, picked, view)
+            candidates = objects.face_solids(shape, sub) if solid is None else []
+            parts = [objects.part_name_of(body, c) for c in candidates]
+            if parts and None not in parts and len(set(parts)) == 1:
+                solid = candidates[0]  # the solids are in one part: either answer gives it
             if solid is None:
-                candidates = objects.face_solids(shape, sub)
                 solid = ask_solid(f"{objects.display_name(body)}.{sub}", candidates) if candidates else None
                 cancelled = cancelled or bool(candidates) and solid is None
             if solid is not None and (body, solid) not in out:
@@ -1501,16 +1504,24 @@ class MaterialPanel:
         elif not self.typed:
             self.name.setText(objects.suggest_name(self.study, self.current, self.lib(), self.obj, self.gone()))
 
+    def entries(self):
+        """The lines of the list, each [(body, sub)]: a line per copy of a part (several solids for a copy of a whole
+        cell object), else a line per reference."""
+        return objects.by_copy(self.current) if self.part else [[r] for r in self.current]
+
     def refresh(self):
         self.refs.clear()
-        self.refs.addItems([objects.ref_label(b, s) for b, s in self.current])
+        self.refs.addItems(
+            [objects.ref_label(*refs[0]) + "".join(f", {s}" for _, s in refs[1:]) for refs in self.entries()]
+        )
         gone = self.gone()
         self.note.setText("\n".join(f'"{objects.display_name(m)}" will be removed: it has nothing left.' for m in gone))
         self.note.setVisible(bool(gone))
         labels.set_refs(self.obj, self.current)
 
     def highlight_rows(self):
-        highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
+        entries = self.entries()
+        highlight.show([ref for r in sorted({i.row() for i in self.refs.selectedIndexes()}) for ref in entries[r]])
 
     def picks(self):
         """What the selection offers: whole bodies."""

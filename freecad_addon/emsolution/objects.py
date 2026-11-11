@@ -943,7 +943,17 @@ def rules_of(item):
 
 
 def rows_of(item):
-    return json.loads(item.Rows or "[]")
+    """The rows of a group. A cell's only row, saved as its block 0 (every one-solid cell of a document from before
+    cell objects had one row), reads as a row for the whole object: it is drawn, named and meshed the same, and stays
+    one row when the cell gains solids."""
+    rows = json.loads(item.Rows or "[]")
+    count = {}
+    for row in rows:
+        count[row["cell"]] = count.get(row["cell"], 0) + 1
+    for row in rows:
+        if count[row["cell"]] == 1 and row.get("solid") == 0:
+            row["solid"] = WHOLE
+    return rows
 
 
 def set_rules(item, rules):
@@ -973,19 +983,21 @@ def is_whole(row):
 def sync_rows(item):
     """Gives each cell its rows, in the order of the cells, keeping the rows that exist: one row for the whole cell
     object, or, for a cell split into blocks (split_row; a document saved before that had a row per block), a row per
-    solid (face in 2D). A split row's solid is the 0-based index into the cell's Solids (Faces in 2D)."""
+    solid (face in 2D). A split row's solid is the 0-based index into the cell's Solids (Faces in 2D). A cell with a
+    whole row and block rows besides (a hand edit; Validate refuses it) keeps its whole row only."""
     from . import geometry
 
     old = rows_of(item)
     rows = []
     for cell in item.Cells:
         mine = [r for r in old if r["cell"] == cell.Name]
+        whole = next((r for r in mine if is_whole(r)), None)
         blocks = {r["solid"]: r for r in mine if not is_whole(r)}
-        if blocks:
+        if blocks and whole is None:
             count = len(_pieces(geometry.global_shape(cell)))
             rows += [blocks.get(i) or _new_row(cell.Name, i) for i in range(count)]
         else:
-            rows.append(mine[0] if mine else _new_row(cell.Name))
+            rows.append(whole or _new_row(cell.Name))
     set_rows(item, rows)
 
 
@@ -1116,10 +1128,47 @@ def element_owner(item, sub):
         owners = face_solids(shape, sub)
         sub = owners[0] if owners else ""
     index = int(re.sub(r"\D", "", sub) or 0) - 1
-    if not 0 <= index < len(_pieces(shape)):
-        return None
+    return _copy_of((sizes, starts, per), index) if 0 <= index < len(_pieces(shape)) else None
+
+
+def _copy_of(layout, index):
+    """(row, copy) of the 0-based solid (face in 2D) index of a drawing laid out as _row_layout gives it."""
+    sizes, starts, per = layout
     copy, k = divmod(index, per)
     return next((r, copy) for r, (start, n) in enumerate(zip(starts, sizes)) if start <= k < start + n)
+
+
+def by_copy(refs):
+    """refs [(group, "SolidN")] (FaceN in 2D) of the copies of a part, grouped into one list per copy, in order: a copy
+    of a whole cell object of several solids is several refs. A ref that is not a solid of a group's drawing is a list
+    of its own."""
+    out, index, layouts = [], {}, {}
+    for body, sub in refs:
+        key = None
+        n = int(re.sub(r"\D", "", sub) or 0) - 1
+        group = isinstance(getattr(body, "Proxy", None), SymmetricGroup) and not body.Shape.isNull()
+        if group and n >= 0 and sub.startswith("Solid" if body.Shape.Solids else "Face"):
+            if body.Name not in layouts:
+                layouts[body.Name] = _row_layout(body)
+            if layouts[body.Name][2]:
+                key = (body.Name, *_copy_of(layouts[body.Name], n))
+        if key is None:
+            out.append([(body, sub)])
+            continue
+        if key not in index:
+            index[key] = len(out)
+            out.append([])
+        out[index[key]].append((body, sub))
+    return out
+
+
+def part_name_of(item, sub):
+    """The part name of the copy a "SolidN" or "FaceN" of group item's drawing belongs to; None when none does."""
+    owner = element_owner(item, sub)
+    if owner is None:
+        return None
+    row, copy = owner
+    return row_parts(item, rows_of(item)[row])[copy]
 
 
 def part_key(study, item, name):

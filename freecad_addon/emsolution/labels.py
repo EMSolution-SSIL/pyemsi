@@ -93,6 +93,21 @@ def shown(obj):
     return True
 
 
+def _one_per_copy(item, refs):
+    """The references to label: for a part's Material one per copy, its largest solid (face in 2D), since a copy of a
+    whole cell object of several solids is several references; else refs."""
+    if not getattr(item, "PartKey", ""):
+        return refs
+
+    def size(ref):
+        try:
+            return ref[0].Shape.getElement(ref[1]).Mass
+        except Exception:  # a sub-element the drawing no longer has: anchors skips it
+            return 0.0
+
+    return [max(copy, key=size) for copy in objects.by_copy(refs)]
+
+
 def build(focus, others, refs, values):
     """(tags, badges) of the items in focus, and of the other items of their group if others. refs: {item Name:
     [(body, sub)]} where an item is shown with other references than it has (a panel's unsaved list), values: {item Name:
@@ -114,7 +129,7 @@ def build(focus, others, refs, values):
         color = QtGui.QColor(KINDS[kind_of(item)][0])
         if item.Name not in names:
             color.setAlpha(FAINT)
-        for body, sub in refs.get(item.Name, objects.item_refs(item)):
+        for body, sub in _one_per_copy(item, refs.get(item.Name, objects.item_refs(item))):
             if not (shown(cells[body.Name]) if body.Name in cells else shown(body)):
                 continue
             try:

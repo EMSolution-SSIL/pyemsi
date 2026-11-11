@@ -279,6 +279,43 @@ def test_an_old_per_solid_document_keeps_its_rows_and_validates(transformer):
     assert len(objects.part_assignments(study)) == 5
 
 
+def test_a_lone_block_row_of_an_old_document_stays_one_row_when_its_cell_gains_faces(transformer):
+    """A document from before cell objects had one row saved every one-face cell as its block 0, as the user's D-01
+    file does for its coil and air. Such a row is the whole object: a face added later is in it, not a new part."""
+    study, item = transformer
+    old = per_solid(item)
+    old = old[:3] + [{**row, "solid": 0} for row in old[3:]]
+    objects.set_rows(item, old)
+    assert _cells_and_solids(item)[3:] == [("CoilCell", None), ("AirCell", None)]
+    coil = item.Cells[1]
+    left = symcases._polygon((15, 0), (22.5, 0), (22.5, 20), (15, 20))
+    coil.Shape = Part.makeCompound([left, symcases._polygon((22.5, 0), (30, 0), (30, 20), (22.5, 20))])
+    objects.sync_rows(item)
+    study.Document.recompute()
+    assert _cells_and_solids(item) == [
+        ("CoreCell", 0),
+        ("CoreCell", 1),
+        ("CoreCell", 2),
+        ("CoilCell", None),
+        ("AirCell", None),
+    ]
+    assert objects.row_parts(item, objects.rows_of(item)[3]) == ["CoilCell"] * 4
+    assert len(item.Shape.Faces) == (3 + 2 + 1) * 4
+    ready(study)
+    assert texts(study) == []
+    assert [r["file"] is None for r in load_job(study)["symmetric"]["groups"][0]["rows"]] == [False] * 3 + [True] * 2
+
+
+def test_sync_rows_keeps_the_whole_row_of_a_cell_with_block_rows_besides(transformer):
+    study, item = transformer
+    rows = objects.rows_of(item)
+    rows[0].update(mode="each")
+    objects.set_rows(item, [{**rows[0], "solid": 1, "mode": "one"}] + rows)
+    objects.sync_rows(item)
+    assert _cells_and_solids(item) == [("CoreCell", None), ("CoilCell", None), ("AirCell", None)]
+    assert objects.rows_of(item)[0]["mode"] == "each"
+
+
 def test_a_cell_with_a_whole_row_and_block_rows_is_refused(transformer):
     study, item = transformer
     ready(study)
@@ -304,9 +341,52 @@ def test_element_owner_and_part_refs_of_a_whole_cell_object(transformer):
     refs = objects.part_refs(core)
     assert [s for _, s in refs] == [f"Face{5 * c + k}" for c in range(4) for k in (1, 2, 3)]
     assert sum(item.Shape.getElement(s).Area for _, s in refs) == pytest.approx(4 * (42 * 32 - 19 * 22))
+    assert objects.by_copy(refs) == [refs[3 * c : 3 * c + 3] for c in range(4)]  # the Material panel's lines
     assert objects.part_of_pick(study, item, "Face7") == (core, 0)
     (coil,) = [m for m in objects.part_assignments(study) if m.GroupName == "CoilCell"]
     assert [s for _, s in objects.part_refs(coil)] == ["Face4", "Face9", "Face14", "Face19"]
+
+
+def test_element_owner_and_part_refs_of_a_whole_cell_object_in_3d():
+    """A box cut in two by a Boolean Fragments, mirrored: each copy of its one row is two solids."""
+    import BOPTools.SplitFeatures
+
+    doc = App.newDocument("Blocks3d")
+    try:
+        box = symcases.feature(doc, "Box", Part.makeBox(10, 10, 10))
+        wall = symcases.feature(
+            doc,
+            "Wall",
+            Part.Face(Part.makePolygon([App.Vector(6, y, z) for y, z in ((0, 0), (10, 0), (10, 10), (0, 10), (0, 0))])),
+        )
+        frag = BOPTools.SplitFeatures.makeBooleanFragments(name="TwoBlocks")
+        frag.Objects = [box, wall]
+        frag.Mode = "Standard"
+        doc.recompute()
+        assert len(frag.Shape.Solids) == 2
+        study = objects.make_study(doc, "3D")
+        item = objects.make_symmetric_group(study, [frag], rules=[MIRROR_X0], name="Blocks")
+        doc.recompute()
+        assert _cells_and_solids(item) == [("TwoBlocks", None)] and len(item.Shape.Solids) == 4
+        assert [objects.element_owner(item, f"Solid{k}") for k in range(1, 6)] == [(0, 0), (0, 0), (0, 1), (0, 1), None]
+        faces = [f"Face{i}" for i in range(1, len(item.Shape.Faces) + 1)]
+        inner = next(f for f in faces if objects.face_solids(item.Shape, f) == ["Solid1", "Solid2"])
+        assert objects.element_owner(item, inner) == (0, 0)
+        assert [objects.part_name_of(item, s) for s in ("Solid1", "Solid2")] == ["TwoBlocks", "TwoBlocks"]
+        objects.sync_parts(study)
+        (m,) = objects.part_assignments(study)
+        refs = objects.part_refs(m)
+        assert refs == [(item, f"Solid{k}") for k in range(1, 5)]
+        assert objects.by_copy(refs) == [refs[:2], refs[2:]]
+        rows = objects.rows_of(item)
+        rows[0]["mode"] = "each"
+        objects.set_rows(item, rows)
+        objects.sync_parts(study)
+        (second,) = [m for m in objects.part_assignments(study) if m.GroupName == "TwoBlocks_2"]
+        assert objects.part_refs(second) == [(item, "Solid3"), (item, "Solid4")]
+        assert objects.part_name_of(item, "Solid1") != objects.part_name_of(item, "Solid3")
+    finally:
+        App.closeDocument(doc.Name)
 
 
 def structured_core(study, item):

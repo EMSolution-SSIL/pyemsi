@@ -1741,6 +1741,16 @@ def main():
     assert panel.accept() and log[-1].startswith("refused: The parts of these Materials are gone"), log[-1]
     names = sorted(m.GroupName for m in objects.part_assignments(blocks_study))
     assert names == ["AirCell", "CoilCell", "CoreCell"], names
+    # The core part's Material lists its one copy as one line of three faces, and labels it once.
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(blocks_doc.Name, blocks_group.Name, "Face2")
+    Gui.runCommand("EMS_Material")
+    panel = material_panels.pop()
+    assert panel.part and panel.obj.GroupName == "CoreCell" and len(panel.current) == 3, panel.current
+    lines = [panel.refs.item(k).text() for k in range(panel.refs.count())]
+    assert len(lines) == 1 and lines[0].endswith(".Face1, Face2, Face3"), lines
+    assert len(labels._one_per_copy(panel.obj, panel.current)) == 1
+    assert panel.reject()
     App.closeDocument(blocks_doc.Name)
     App.setActiveDocument(group_doc.Name)
     log.append("split and join ok")
@@ -1867,7 +1877,20 @@ def main():
     rows3 = objects.rows_of(group3)
     faces3 = range(1, len(group3.Shape.Faces) + 1)
     single3 = next(f"Face{i}" for i in faces3 if len(objects.face_solids(group3.Shape, f"Face{i}")) == 1)
-    shared3 = next(f"Face{i}" for i in faces3 if len(objects.face_solids(group3.Shape, f"Face{i}")) == 2)
+
+    def parts_of(face):
+        return {objects.part_name_of(group3, s) for s in objects.face_solids(group3.Shape, face)}
+
+    shared3 = next(  # a face between two solids of two parts
+        f"Face{i}"
+        for i in faces3
+        if len(objects.face_solids(group3.Shape, f"Face{i}")) == 2 and len(parts_of(f"Face{i}")) == 2
+    )
+    same3 = next(  # a face between two solids of one part: the iron and its mirrored copy
+        f"Face{i}"
+        for i in faces3
+        if len(objects.face_solids(group3.Shape, f"Face{i}")) == 2 and len(parts_of(f"Face{i}")) == 1
+    )
     click(pick3_doc, group3, single3)
     Gui.runCommand("EMS_Material")
     panel = material_panels.pop()
@@ -1888,6 +1911,11 @@ def main():
     warned_before = len(warned)
     Gui.runCommand("EMS_Material")
     assert not material_panels and not Gui.Control.activeDialog() and len(warned) == warned_before
+    click(pick3_doc, group3, same3)  # both solids are in one part: no question, either answer gives that part
+    asked_before = len(solid_asks)
+    picked3, cancelled3 = taskpanels.selected_group_pieces(pick3_study)
+    assert len(solid_asks) == asked_before and not cancelled3 and len(picked3) == 1, (solid_asks, picked3)
+    assert objects.part_name_of(group3, picked3[0][1]) == next(iter(parts_of(same3))), picked3
     # Two drawings selected, the first click on a face of two solids: the question must not hide the second drawing.
     rotor3 = objects.make_symmetric_group(
         pick3_study,
