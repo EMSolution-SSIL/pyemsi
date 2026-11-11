@@ -4,3 +4,4 @@
 .pyemsi/
 structured_examples/**/*.FCStd
 symmetric_examples/**/*.FCStd
+symmetric_catalogue/**/*.FCStd

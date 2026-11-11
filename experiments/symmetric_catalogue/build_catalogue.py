@@ -1,8 +1,10 @@
 r"""The example catalogue as FreeCAD Studies of Symmetric Groups: each case is built, saved, validated and meshed, and
 its row is compared with what the catalogue expects ("meshes", or a refusal with a phrase of its message).
 
-Run: pixi run -e addon python experiments/symmetric_catalogue/build_catalogue.py [id ...]
-Output: C:\Users\hamed\Desktop\delme\catalogue_studies\<id>\<id>.FCStd (the mesh files beside it)
+Run: pixi run -e addon python experiments/symmetric_catalogue/build_catalogue.py [--setup-only] [id ...]
+Output: experiments/symmetric_catalogue/<id>/<id>.FCStd, the set-up Study of each case (git-ignored; rebuild it with
+this script), and C:\Users\hamed\Desktop\delme\catalogue_studies\<id>\<id>.FCStd with the mesh files beside it.
+--setup-only builds and saves the set-up Studies without validating or meshing them (a few minutes for all).
 Exit code 1 when a row does not match its expectation."""
 
 import os
@@ -22,6 +24,28 @@ from common import sl  # noqa: E402
 
 OUT = r"C:\Users\hamed\Desktop\delme\catalogue_studies"
 sl.OUT = OUT
+
+
+def setup_path(name):
+    """Where the set-up Study of a case is kept: its own folder in this one."""
+    return os.path.join(HERE, name, name + ".FCStd")
+
+
+def build_setup(name, build):
+    """Build one case and save its set-up Study only. Returns "" or the reason it could not be built."""
+    import FreeCAD as App
+    from tests.freecad_addon import symcases
+
+    study = None
+    try:
+        study = build()
+        symcases.finish(study, setup_path(name))
+        return ""
+    except Exception as err:  # a case that cannot be built is reported, the others still are
+        return f"{type(err).__name__}: {err}"
+    finally:
+        if study is not None:
+            App.closeDocument(study.Document.Name)
 
 
 def cases():
@@ -55,8 +79,27 @@ def want(expected):
     return "meshes" if expected == "meshes" else f"refused ({expected[1]})"
 
 
+def setups_only(wanted):
+    """--setup-only: build and save the set-up Study of each wanted case (all when none is named)."""
+    failed = []
+    for name, build, _, _ in cases():
+        if wanted and name not in wanted:
+            continue
+        problem = build_setup(name, build)
+        print(f"{name}: {problem or setup_path(name)}", flush=True)
+        if problem:
+            failed.append(name)
+    unknown = [n for n in wanted if n not in {c[0] for c in cases()}]
+    if unknown:
+        print(f"No such case: {', '.join(unknown)}")
+    print(f"\n{'Not built: ' + ', '.join(failed) if failed else 'All set-ups built.'}")
+    sys.exit(1 if failed or unknown else 0)
+
+
 if __name__ == "__main__":
     wanted = sys.argv[1:]
+    if "--setup-only" in wanted:
+        setups_only([n for n in wanted if n != "--setup-only"])
     rows = []
     for name, build, expected, check in cases():
         if wanted and name not in wanted:
@@ -64,7 +107,7 @@ if __name__ == "__main__":
         found = []
         if check is not None:
             build = checked(build, check, found)
-        _, verdict, detail = sl.run(name, build, os.path.join(OUT, name, name + ".FCStd"))
+        _, verdict, detail = sl.run(name, build, os.path.join(OUT, name, name + ".FCStd"), setup_path(name))
         ok = matches(expected, verdict, detail)
         if check is not None:
             passed, text = found[0] if found else (False, "not run, the Study was not built")

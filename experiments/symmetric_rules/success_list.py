@@ -481,13 +481,17 @@ def sliding_faces(study):
     return "sliding cylinder " + ", ".join(out)
 
 
-def run(name, build, path=None):
-    """One row: (name, verdict, details). path: where the document is saved (default: OUT/<name>/<name>.FCStd)."""
+def run(name, build, path=None, setup=None):
+    """One row: (name, verdict, details). path: where the document is saved and meshed (default:
+    OUT/<name>/<name>.FCStd). setup: where a copy of the set-up document is also saved, before meshing."""
     study = None
     start = time.time()
     try:
         study = build()
         symcases.finish(study, path or os.path.join(OUT, name, name.replace("-", "_") + ".FCStd"))
+        if setup:
+            os.makedirs(os.path.dirname(setup), exist_ok=True)
+            study.Document.saveCopy(setup)
         errors = validation.errors(validation.validate(study))
         if errors:
             return name, "refused", "validation: " + " | ".join(p.text for p in errors)
