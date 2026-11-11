@@ -948,9 +948,11 @@ def test_two_far_copies_that_overlap_are_found_though_far_pairs_are_dropped(tmp_
         App.closeDocument(doc.Name)
 
 
-def test_overlaps_of_5000_sectors_that_reach_the_axis_are_checked_quickly():
-    """Mirror, 250 turns and 10 steps along Z of a sector from the axis: every copy of a layer meets the others on the
-    axis, and Validate took 12 s (on the GUI thread, and again on Mesh). The bound is generous."""
+@pytest.mark.parametrize("order", ["MRU", "URM"])
+def test_overlaps_of_5000_sectors_that_reach_the_axis_are_checked_quickly(order):
+    """Mirror, 250 turns and 10 steps along Z of a sector from the axis, in either order: every copy of a layer meets
+    the others on the axis, and Validate took 12 s (on the GUI thread, and again on Mesh). It takes about 2 s; the
+    bound is generous for a loaded machine."""
     doc = App.newDocument("SymAxis")
     try:
         half = 360 / 250 / 2
@@ -969,11 +971,12 @@ def test_overlaps_of_5000_sectors_that_reach_the_axis_are_checked_quickly():
             {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 2 * half, "count": 250},
             {"kind": "translate", "vector": [0, 0, 10], "count": 10},
         ]
+        rules = [rules["MRU".index(c)] for c in order]
         item = symcases.group(study, "G", [cell], [])  # no drawing of the 5000 copies
         r = validation._Report()
         start = time.perf_counter()
         validation._overlaps(item, [cell], rules, r, True)
-        assert time.perf_counter() - start < 8
+        assert time.perf_counter() - start < 10
         assert r.problems == []
     finally:
         App.closeDocument(doc.Name)

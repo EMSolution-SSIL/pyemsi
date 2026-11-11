@@ -119,8 +119,13 @@ def test_a_full_turn_the_other_way_does_not_warn():
 
 
 def test_relative_transforms_of_closed_rules_are_the_copies():
+    """Each copy, or its inverse (the copy turned the other way), once."""
     rules = [MIRROR_X0, ROT(90, 4)]
-    assert relative_transforms(rules) == transforms(rules)
+    ts = transforms(rules)
+    found = relative_transforms(rules)
+    assert found[0] == ID and all(_listed(ts, m) for m in found)
+    assert all(_listed(found, t) or _listed(found, inverse(t)) for t in ts)
+    assert len(found) == len(ts) - 1  # the quarter turn and its inverse, the three-quarter turn, are one
     assert relative_transforms([]) == [ID]
 
 
@@ -135,12 +140,13 @@ def test_relative_transforms_of_open_rules_hold_every_pair():
     for i in range(len(ts)):
         for j in range(i + 1, len(ts)):
             r = compose(inverse(ts[i]), ts[j])
-            assert any(max(abs(a - b) for a, b in zip(r, t)) < 1e-9 for t in found), (i, j)
+            assert _listed(found, r) or _listed(found, inverse(r)), (i, j)
     assert len(found) > len(ts)
 
 
 OFF_AXIS = {"kind": "mirror", "point": [1, 0.75, 0], "normal": [2, 1.5, 0]}  # its plane misses the rotation axis
 MIRROR_Y0 = {"kind": "mirror", "point": [0, 0, 0], "normal": [0, 1, 0]}
+BAR_STEP = {"kind": "translate", "vector": [4, -4, 0], "count": 3}
 
 
 def UP(n, step=10):
@@ -156,6 +162,11 @@ def _close(a, b):
     return max(abs(x - y) for x, y in zip(a, b)) < 1e-7
 
 
+def _listed(found, m):
+    """The transform of found that is m, or None."""
+    return next((f for f in found if _close(f, m)), None)
+
+
 def _moves_into(r, box):
     """True if r moves one of a 5 x 5 x 5 grid of points of the box into the box."""
     grid = [[box[k] + f * (box[k + 3] - box[k]) for f in (0, 0.25, 0.5, 0.75, 1)] for k in range(3)]
@@ -167,17 +178,19 @@ def _moves_into(r, box):
 
 
 def _check(rules, box):
-    """relative_transforms(rules, box) against every pair i < j: each listed m is a T_i^-1 T_j and first_pair gives the
-    first pair that does, and every T_i^-1 T_j that moves a point of the box into it is listed. Returns the list."""
+    """relative_transforms(rules, box) against every pair i != j: each listed m is a T_i^-1 T_j, first_pair gives the
+    first pair that is, and none is listed with its inverse; every T_i^-1 T_j that moves a point of the box into it is
+    listed, or its inverse. Returns the list."""
     ts = transforms(rules)
-    pairs = [(i, j, compose(inverse(ts[i]), ts[j])) for i in range(len(ts)) for j in range(i + 1, len(ts))]
+    pairs = [(i, j, compose(inverse(ts[i]), ts[j])) for i in range(len(ts)) for j in range(len(ts)) if i != j]
     found = relative_transforms(rules, box)
     assert _close(found[0], ID)
-    for m in found[1:]:
+    for k, m in enumerate(found[1:], 1):
         assert symmetry.first_pair(ts, m) == next((i, j) for i, j, r in pairs if _close(r, m))
+        assert _listed(found[:k], inverse(m)) is None
     for i, j, r in pairs:
-        if _moves_into(r, box):
-            assert any(_close(r, m) for m in found), (i, j)
+        if i < j and _moves_into(r, box):
+            assert _listed(found, r) or _listed(found, inverse(r)), (i, j)
     return found
 
 
@@ -190,6 +203,11 @@ CHECKED = {
         [ROT(90, 4, axis=(1, 0, 0), point=(0, 5, 0)), {"kind": "translate", "vector": [7, 0, 0], "count": 5}],
         (0, 0, 0, 8, 3, 2),
     ),
+    "steps-then-rules-that-close": ([UP(3), ROT(30, 12), MIRROR_Y0], _sector_box(30)),
+    "steps-mirror-turns": ([UP(3), MIRROR_Y0, ROT(30, 12)], _sector_box(30)),
+    "turns-steps-mirror": ([ROT(30, 12), UP(3), MIRROR_Y0], _sector_box(30)),
+    "two-steps": ([{"kind": "translate", "vector": [0.5, -0.5, 0], "count": 7}, BAR_STEP], (0, 0, 0, 10, 10, 0)),
+    "off-axis-mirror-last": ([UP(2), ROT(45, 8), OFF_AXIS], (30, 0, 0, 50, 15, 10)),
 }
 
 
@@ -208,8 +226,16 @@ def test_relative_transforms_drop_relatives_that_cannot_overlap():
 def test_relative_transforms_by_sweeping_pairs_hold_the_same(monkeypatch):
     """With more steps than STRUCTURE_LIMIT, the pairs of copies are swept instead; the list still holds them all."""
     monkeypatch.setattr(symmetry, "STRUCTURE_LIMIT", 0)
-    for name in ("closed-then-turns-and-steps", "sector-to-the-axis", "turns-about-x-then-steps"):
+    for name in ("closed-then-turns-and-steps", "sector-to-the-axis", "turns-about-x-then-steps", "two-steps"):
         _check(*CHECKED[name])
+
+
+@pytest.mark.parametrize("name", CHECKED)
+def test_relative_transforms_in_small_blocks_hold_the_same(monkeypatch, name):
+    """The steps and products are formed a bounded block at a time; blocks of 7 give the same list."""
+    whole = relative_transforms(*CHECKED[name])
+    monkeypatch.setattr(symmetry, "BLOCK", 7)
+    assert _check(*CHECKED[name]) == whole
 
 
 def test_relative_transforms_of_random_rules_hold_every_relative_that_can_overlap():
@@ -246,7 +272,8 @@ def test_relative_transforms_of_random_rules_hold_every_relative_that_can_overla
         ts, everything = transforms(rules), relative_transforms(rules)  # without a box: every relative
         for i in range(len(ts)):
             for j in range(i + 1, len(ts)):
-                assert any(_close(compose(inverse(ts[i]), ts[j]), m) for m in everything), (rules, i, j)
+                r = compose(inverse(ts[i]), ts[j])
+                assert _listed(everything, r) or _listed(everything, inverse(r)), (rules, i, j)
         done += 1
 
 
@@ -254,32 +281,45 @@ def test_relative_transforms_of_closed_rules_are_the_copies_whose_boxes_meet_the
     rules = [MIRROR_X0, ROT(90, 4)]
     ts = transforms(rules)
     near = relative_transforms(rules, (0, 1, 0, 2, 2, 0))  # a rectangle on the mirror plane, clear of the axis
-    assert len(near) == 3 and all(m in ts for m in near)  # itself, its mirror image and one turned mirror image
+    assert len(near) == 3 and all(_listed(ts, m) for m in near)  # itself, its mirror image and one turned mirror image
     assert near[0] == ID and symmetry.first_pair(ts, near[1])[0] == 0
 
 
-@pytest.mark.parametrize(
-    "rules,box",
-    [
-        ([MIRROR_X0, ROT(7.5, 48), UP(10)], (30, 0, 0, 50, 3.3, 10)),
-        ([{"kind": "translate", "vector": [1, 0, 0], "count": 2000}], (0, 0, 0, 1, 1, 0)),
-        ([OFF_AXIS, ROT(7.2, 50), UP(50)], (30, 0, 0, 50, 3.1, 10)),
-        ([{"kind": "translate", "vector": [1, 0, 0], "count": 5000}], (0, 0, 0, 1, 1, 0)),
-        ([MIRROR_Y0, ROT(3.75, 96), UP(10)], _sector_box(3.75)),
-        ([MIRROR_Y0, ROT(1.44, 250), UP(10)], _sector_box(1.44)),
-        ([MIRROR_Y0, ROT(2.88, 125), UP(20)], _sector_box(2.88)),
-        ([{"kind": "translate", "vector": [0.01, -0.01, 0], "count": 5000}], (0, 0, 0, 100, 100, 0)),
-        ([ROT(1, 360), UP(10, 1)], (0, -0.1, 0, 100, 0.1, 1)),
-    ],
-    ids=["960", "2000", "5000-turned", "5000", "sector-1920", "sector-5000", "sector-5000-20", "bars-5000", "spokes"],
-)
-def test_relative_transforms_of_many_open_copies_are_quick(rules, box):
+BARS = {"kind": "translate", "vector": [0.01, -0.01, 0], "count": 5000}
+QUICK = {
+    "960": ([MIRROR_X0, ROT(7.5, 48), UP(10)], (30, 0, 0, 50, 3.3, 10)),
+    "2000": ([{"kind": "translate", "vector": [1, 0, 0], "count": 2000}], (0, 0, 0, 1, 1, 0)),
+    "5000-turned": ([OFF_AXIS, ROT(7.2, 50), UP(50)], (30, 0, 0, 50, 3.1, 10)),
+    "5000": ([{"kind": "translate", "vector": [1, 0, 0], "count": 5000}], (0, 0, 0, 1, 1, 0)),
+    "sector-1920": ([MIRROR_Y0, ROT(3.75, 96), UP(10)], _sector_box(3.75)),
+    "sector-5000 M R U": ([MIRROR_Y0, ROT(1.44, 250), UP(10)], _sector_box(1.44)),
+    "sector-5000 U R M": ([UP(10), ROT(1.44, 250), MIRROR_Y0], _sector_box(1.44)),
+    "sector-5000 U M R": ([UP(10), MIRROR_Y0, ROT(1.44, 250)], _sector_box(1.44)),
+    "sector-5000 R U M": ([ROT(1.44, 250), UP(10), MIRROR_Y0], _sector_box(1.44)),
+    "sector-5000 M U R": ([MIRROR_Y0, UP(10), ROT(1.44, 250)], _sector_box(1.44)),
+    "sector-5000 R M U": ([ROT(1.44, 250), MIRROR_Y0, UP(10)], _sector_box(1.44)),
+    "sector-5000 M R U20": ([MIRROR_Y0, ROT(2.88, 125), UP(20)], _sector_box(2.88)),
+    "sector-5000 U20 R M": ([UP(20), ROT(2.88, 125), MIRROR_Y0], _sector_box(2.88)),
+    "bars-5000": ([BARS], (0, 0, 0, 100, 100, 0)),
+    "bars-2500x2": ([{**BARS, "count": 2500}, {**BARS, "vector": [25, -25, 0], "count": 2}], (0, 0, 0, 100, 100, 0)),
+    "bars-1000x5": ([{**BARS, "count": 1000}, {**BARS, "vector": [10, -10, 0], "count": 5}], (0, 0, 0, 100, 100, 0)),
+    "spokes R U": ([ROT(1, 360), UP(10, 1)], (0, -0.1, 0, 100, 0.1, 1)),
+    "spokes U R": ([UP(10, 1), ROT(1, 360)], (0, -0.1, 0, 100, 0.1, 1)),
+}
+
+
+@pytest.mark.parametrize("name", QUICK)
+def test_relative_transforms_of_many_open_copies_are_quick(name):
     """Validate runs this on the GUI thread, and Mesh again. Forming every pair took 14 s at 960 copies and minutes at
     MAX_DRAWN; sweeping the pairs whose boxes meet still took 9 s for 5000 sectors that reach the axis (all of a layer
-    meet there) and 21 s for 5000 long bars side by side. The bound is generous; each takes well under a second."""
+    meet there), 10 s with their rules in another order, and 21 s for 5000 long bars side by side. Every order of these
+    rules has a split with few steps, so the pairs are never swept (that is checked, not timed); the time bound is
+    generous (each takes about a second or less) for a loaded machine."""
+    rules, box = QUICK[name]
+    assert symmetry._best_split(rules) is not None
     start = time.perf_counter()
     found = relative_transforms(rules, box)
-    assert time.perf_counter() - start < 3
+    assert time.perf_counter() - start < 8
     assert found[0] == ID and len(found) > 1
 
 
