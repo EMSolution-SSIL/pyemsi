@@ -49,6 +49,41 @@ def test_pyramid_points_away_from_its_hexahedron():
     assert (np.abs(V2[pyr[:, 4]] - 0.5) > 0.5).any(axis=1).all() and len(tris) == 24
 
 
+FLOOR = np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], float)  # a quad facing +z, 0.3 high pyramid alone
+
+
+def _height(around):
+    V2, pyr, _ = meshfrozen.quad_pyramids(FLOOR, np.arange(4)[None], around)
+    return V2[pyr[0, 4], 2]
+
+
+def test_pyramid_keeps_clear_of_a_facet_close_in_front():
+    ceiling = np.array([[(0, 0, 0.1), (0, 1, 0.1), (1, 1, 0.1)], [(0, 0, 0.1), (1, 1, 0.1), (1, 0, 0.1)]])
+    assert _height(None) == pytest.approx(0.3)
+    assert 0 < _height(ceiling) <= 0.04 + 1e-12  # a facing pyramid of the same height still leaves room between
+
+
+def test_pyramid_ignores_what_is_beside_far_or_behind_it():
+    wall = np.array([[(1, 0, 0), (1, 1, 0), (1, 1, 1)], [(1, 0, 0), (1, 1, 1), (1, 0, 1)]])  # on its edge, upright
+    far = FLOOR[[0, 1, 2]] + (0, 0, 5)
+    behind = FLOOR[[0, 1, 2]] - (0, 0, 0.05)
+    own = FLOOR[[[0, 1, 2], [0, 2, 3]]]  # its own triangles, as the caller passes them
+    assert _height(np.stack([*wall, far, behind, *own])) == pytest.approx(0.3)
+
+
+def test_warped_pyramid_ignores_its_own_triangles_and_stays_upright():
+    warped = FLOOR + [(0, 0, 0), (0, 0, 0), (0, 0, 0.05), (0, 0, 0)]
+    own = warped[[[0, 1, 2], [0, 2, 3]]]  # they rise over its mean plane
+    ceiling = warped[[[0, 1, 2], [0, 2, 3]]] + (0, 0, 0.03)  # too close for any pyramid: it keeps the least height
+    for around, low in ((own, 0.25), (ceiling, 0.0)):
+        V2, pyr, _ = meshfrozen.quad_pyramids(warped, np.arange(4)[None], around)
+        apex, base = V2[pyr[0, 4]], V2[pyr[0, :4]]
+        assert apex[2] - base[:, 2].mean() > low
+        for k in range(4):  # above the plane of every corner and its neighbours: not inverted
+            p, a, b = base[k], base[(k + 1) % 4], base[(k + 3) % 4]
+            assert np.dot(np.cross(a - p, b - p), apex - p) > 0
+
+
 def test_boundary_of_two_squares_in_2d():
     xy = np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], float)
     V, out = meshfrozen.copy_mesh(xy, {"a": {3: np.arange(4)[None]}}, [ID, SHIFT])

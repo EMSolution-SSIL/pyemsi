@@ -276,9 +276,8 @@ def o_strands(doc, study, name, lines, r, length, across=6, step=0.125, n=24):
     """Whole strands about the centre lines lines, z 0..length, each the 5 blocks of an O-grid (common.ogrid through
     n + 1 sections, 2 for a straight line) in one cell object, structured and recombined: across elements on the
     square's sides and the arcs, 1 on the radial lines, and along the strand as many as make elements step long.
-    The air puts a pyramid on each quadrangle of a strand, 0.3 x the root of its area high (meshfrozen.quad_pyramids):
-    in the gaps between neighbouring strands (0.1 in L-01 to L-03, 0.16 in L-06) those of facing strands must not
-    meet, so the elements are small; at 3 x 0.5 the air's mesh fails (the report has the numbers)."""
+    The air puts a pyramid on each quadrangle of a strand (meshfrozen.quad_pyramids), lower where a neighbouring
+    strand is close (gaps of 0.1 in L-01 to L-03, 0.16 in L-06); coarser counts (3 x 0.5) mesh too."""
     cells = []
     for k, line in enumerate(lines):
         shape, kinds = ogrid(line, r, 0, length, 1 if line is straight else n)

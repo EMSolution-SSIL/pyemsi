@@ -284,16 +284,108 @@ def on_facets(V, facets, point, tol):
     return bool(((v >= -1e-3) & (w >= -1e-3) & (v + w <= 1 + 1e-3) & (off <= np.maximum(tol, 0.2 * longest))).any())
 
 
-def quad_pyramids(V, quads):
+CLEAR = 0.4  # a pyramid rises at most this share of the room in front of it, so two facing ones never meet
+
+
+def _closest_on_triangles(p, tri):
+    """The point of each triangle tri[m, 3, 3] closest to p[m, 3]: the foot on its plane when that lies inside it,
+    else the closest point of its edges."""
+    a, b, c = tri[:, 0], tri[:, 1], tri[:, 2]
+    best = None
+    for s, e in ((a, b), (b, c), (c, a)):
+        d = e - s
+        t = np.clip(np.einsum("ij,ij->i", p - s, d) / np.maximum(np.einsum("ij,ij->i", d, d), 1e-300), 0, 1)
+        q = s + t[:, None] * d
+        best = q if best is None else np.where((_sq(p - q) < _sq(p - best))[:, None], q, best)
+    normal = np.cross(b - a, c - a)
+    twice = np.linalg.norm(normal, axis=1)
+    normal = normal / np.maximum(twice, 1e-300)[:, None]
+    foot = p - np.einsum("ij,ij->i", p - a, normal)[:, None] * normal
+    sides = [np.einsum("ij,ij->i", np.cross(e - s, foot - s), normal) for s, e in ((a, b), (b, c), (c, a))]
+    inside = (twice > 0) & (np.minimum.reduce(sides) >= 0)
+    return np.where(inside[:, None], foot, best)
+
+
+def _sq(v):
+    return np.einsum("ij,ij->i", v, v)
+
+
+def _room(corners, centre, normal, height, around):
+    """The highest each pyramid on the quads corners[n, 4, 3] may rise (at most height) so that it keeps clear of
+    the triangles around[m, 3, 3]: CLEAR times the height over the quad's plane of a triangle's point closest to its
+    centre, divided by how much of the pyramid stands at that point's distance from the axis (1 on the axis, 0 at the
+    quad's circumradius). Points beside, behind or beyond reach of a quad do not limit it, nor do triangles with a
+    corner of the quad (its own, its neighbours': a warped quad's own triangles rise a little over its plane).
+    Triangles are matched to the quads near them on a grid of cells as big as the farthest reach."""
+    radius = np.linalg.norm(corners - centre[:, None], axis=2).max(axis=1)
+    reach = np.sqrt((height / CLEAR) ** 2 + radius**2)
+    out = height.copy()
+    if not len(around) or not len(centre):
+        return out
+    cell = reach.max()
+    lo = np.minimum(around.min(axis=1).min(axis=0), (centre - reach[:, None]).min(axis=0)) - cell
+    first = np.floor((around.min(axis=1) - lo) / cell).astype(np.int64)
+    span = np.floor((around.max(axis=1) - lo) / cell).astype(np.int64) - first + 1
+    count = span.prod(axis=1)
+    which = np.repeat(np.arange(len(around)), count)  # each triangle once in every cell its box touches
+    local = np.arange(count.sum()) - np.repeat(np.cumsum(count) - count, count)
+    sx, sy = span[which, 0], span[which, 1]
+    cells = first[which] + np.column_stack([local % sx, local // sx % sy, local // (sx * sy)])
+    size = np.maximum(cells.max(axis=0), np.floor((centre - lo) / cell).max(axis=0).astype(np.int64)) + 2
+    key = (cells[:, 0] * size[1] + cells[:, 1]) * size[2] + cells[:, 2]
+    order = np.argsort(key, kind="stable")
+    key, which = key[order], which[order]
+    home = np.floor((centre - lo) / cell).astype(np.int64)
+    for offset in np.array(np.meshgrid(*[[-1, 0, 1]] * 3)).reshape(3, -1).T:
+        near = home + offset
+        k = (near[:, 0] * size[1] + near[:, 1]) * size[2] + near[:, 2]
+        start, stop = np.searchsorted(key, k, "left"), np.searchsorted(key, k, "right")
+        hits = stop - start
+        quad = np.repeat(np.arange(len(centre)), hits)
+        if not len(quad):
+            continue
+        tri = which[np.repeat(start, hits) + np.arange(hits.sum()) - np.repeat(np.cumsum(hits) - hits, hits)]
+        to = _closest_on_triangles(centre[quad], around[tri]) - centre[quad]
+        up = np.einsum("ij,ij->i", to, normal[quad])
+        aside = np.linalg.norm(to - up[:, None] * normal[quad], axis=1)
+        standing = 1 - aside / radius[quad]
+        apart = np.linalg.norm(around[tri][:, :, None] - corners[quad][:, None], axis=3).min(axis=(1, 2))
+        limits = (up > 1e-6 * radius[quad]) & (standing > 0) & (apart > 1e-6 * radius[quad])
+        np.minimum.at(out, quad[limits], CLEAR * up[limits] / standing[limits])
+    return out
+
+
+def _warp(corners, centre, normal):
+    """The least height over centre along normal at which an apex sees every corner of the quads corners[n, 4, 3]
+    from above the plane of that corner and its two neighbours (a warped quad needs some): below it the pyramid is
+    inverted at a corner."""
+    least = np.zeros(len(corners))
+    for k in range(4):
+        p = corners[:, k]
+        plane = np.cross(corners[:, (k + 1) % 4] - p, corners[:, (k + 3) % 4] - p)
+        along = np.einsum("ij,ij->i", plane, normal)
+        need = np.einsum("ij,ij->i", plane, p - centre) / np.where(along > 0, along, np.inf)
+        least = np.maximum(least, need)
+    return least
+
+
+def quad_pyramids(V, quads, around=None):
     """Close each outward-oriented quad with a pyramid on the outside. The apex is the centroid plus the outward
-    normal times 0.3 * sqrt(area). Returns (V2, pyramids[n, 5], tris[4n, 3]): V with the apexes appended, the
-    pyramids (base nodes then apex) and their four outward triangular sides each."""
+    normal times 0.3 * sqrt(area), lower where the triangles around[m, 3, 3] (coordinates: what else bounds the
+    region, the quads' own triangles may be among them) come close in front of it (_room). Returns
+    (V2, pyramids[n, 5], tris[4n, 3]): V with the apexes appended, the pyramids (base nodes then apex) and their four
+    outward triangular sides each."""
     V = np.asarray(V, dtype=float)
     quads = np.asarray(quads, dtype=np.int64).reshape(-1, 4)
     n = len(quads)
     cross = np.cross(V[quads[:, 2]] - V[quads[:, 0]], V[quads[:, 3]] - V[quads[:, 1]])
     length = np.linalg.norm(cross, axis=1)
-    apex = V[quads].mean(axis=1) + cross / length[:, None] * 0.3 * np.sqrt(0.5 * length)[:, None]
+    centre, normal = V[quads].mean(axis=1), cross / length[:, None]
+    height = 0.3 * np.sqrt(0.5 * length)
+    if around is not None:
+        room = _room(V[quads], centre, normal, height, np.asarray(around, dtype=float).reshape(-1, 3, 3))
+        height = np.minimum(height, np.maximum(room, 2 * _warp(V[quads], centre, normal)))
+    apex = centre + normal * height[:, None]
     V2 = np.vstack([V, apex])
     pyramids = np.column_stack([quads, len(V) + np.arange(n)])
     tris = np.stack([pyramids[:, f] for f in TRI_FACES[7]], axis=1).reshape(-1, 3)

@@ -1360,7 +1360,11 @@ def _mesh_free_entity(survey, side, V, dim):
         mask, quad_mask = survey.frozen["tri"], survey.frozen["quad"]
         tris, quads = side.tri[mask], side.quad[quad_mask]
         _refuse_coincident(name, V, (tris, quads), dim)
-        W, pyramids, sides = meshfrozen.quad_pyramids(V, quads)  # gmsh sees only their triangles
+        mine = [xyz[c] for per in own.values() for t, c in per.items() if t == 2] + [
+            xyz[c][:, half] for per in own.values() for t, c in per.items() if t == 3 for half in ([0, 1, 2], [0, 2, 3])
+        ]
+        around = np.concatenate([V[tris], V[quads][:, [0, 1, 2]], V[quads][:, [0, 2, 3]], *mine])  # what bounds it
+        W, pyramids, sides = meshfrozen.quad_pyramids(V, quads, around)  # gmsh sees only their triangles
         frozen, needed = np.vstack([tris, sides]), tris
         owners = np.vstack([side.tri_owner[mask], np.repeat(side.quad_owner[quad_mask], 4, axis=0)])
     else:
