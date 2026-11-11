@@ -951,6 +951,8 @@ def _touch_groups(a, b, three, r):
             if not box_a.intersect(box_b):
                 continue
             try:
+                if sa.distToShape(sb)[0] > tol:  # apart: neither overlap nor contact, the costly booleans need not run
+                    continue
                 common = sa.common(sb)
                 if measure(common) > 1e-6 * min(measure(sa), measure(sb)):
                     c = max(common.Solids if three else common.Faces, key=measure).CenterOfMass

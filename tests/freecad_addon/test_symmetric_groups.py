@@ -1110,6 +1110,22 @@ def test_a_contact_check_that_fails_is_reported(study, stator, monkeypatch):
     assert any("Could not check contact between" in t and "Stator" in t for t in texts(study, "warning"))
 
 
+def test_groups_apart_in_overlapping_boxes_skip_the_contact_search(monkeypatch):
+    import types
+
+    def searched(*args):
+        raise AssertionError("searched for contact between solids that are apart")
+
+    monkeypatch.setattr(validation, "_contact", searched)
+    ell = Part.makeBox(3, 1, 1).fuse(Part.makeBox(1, 3, 1)).removeSplitter()  # an L round the corner (1, 1)
+    near = Part.makeBox(1.9, 1.9, 1, App.Vector(1.1, 1.1, 0))  # in the L's box, 0.1 from it
+    a = types.SimpleNamespace(Shape=Part.makeCompound([ell]), Label="A")
+    b = types.SimpleNamespace(Shape=Part.makeCompound([near]), Label="B")
+    r = validation._Report()
+    validation._touch_groups(a, b, True, r)
+    assert r.problems == []
+
+
 def test_mesh_size_on_the_drawing_of_a_group_is_refused(study, stator):
     ready(study)
     objects.make_mesh_size(study, 1.5, [(stator, "")])
