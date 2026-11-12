@@ -98,7 +98,10 @@ def test_a_link_body_does_not_consume_its_target(doc):
     link.LinkPlacement.Base = App.Vector(50, 0, 0)
     doc.recompute()
     assert shown(doc) == ["Coil", "CoilCopy"]
-    assert abs(geometry.global_shape(link).BoundBox.XMin - 60) < 1e-6  # Coil starts at x = 10
+    assert abs(geometry.global_shape(link).BoundBox.XMin - 50) < 1e-6  # the link's placement replaces Coil's
+    link.LinkTransform = True
+    doc.recompute()
+    assert abs(geometry.global_shape(link).BoundBox.XMin - 60) < 1e-6  # Coil starts at x = 10: they compose
 
 
 def test_a_link_in_a_moved_part_is_where_it_is_seen(doc):

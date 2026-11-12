@@ -1,6 +1,7 @@
 """Geometry sources and setup validation. No GUI or mesh generation here."""
 
 import FreeCAD as App
+import Part
 
 from . import objects
 
@@ -20,15 +21,16 @@ def link_target(obj):
 
 def global_shape(obj):
     """Shape where the user sees it, including the placements of containing Parts. A link shows its target's
-    shape moved by the link's own placement and those of the Parts around it."""
+    shape as FreeCAD displays it (the link's own placement and those of the Parts around it)."""
     target = link_target(obj)
     if target is not None:
-        placement, parent = obj.Placement, obj.getParentGeoFeatureGroup()
+        path, parent = [obj.Name], obj.getParentGeoFeatureGroup()
         while parent is not None:
-            placement, parent = parent.Placement * placement, parent.getParentGeoFeatureGroup()
-        shape = target.Shape.transformed(App.Placement().Matrix)
-        shape.Placement = placement * target.Placement
-        return shape
+            path.insert(0, parent.Name)
+            parent = parent.getParentGeoFeatureGroup()
+        top = obj.Document.getObject(path[0])
+        # FreeCAD's own display: the link's placement replaces the target's, or composes with it (LinkTransform)
+        return Part.getShape(top, ".".join(path[1:]) + ".", transform=True) if len(path) > 1 else Part.getShape(obj)
     shape = obj.getPropertyOfGeometry().transformed(App.Placement().Matrix)
     shape.Placement = obj.getGlobalPlacement()
     return shape
