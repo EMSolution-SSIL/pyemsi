@@ -365,9 +365,9 @@ def _padding(air, bodies, plane, r):
     return True
 
 
-def _air(study, bodies, moving, r):
+def _air(study, bodies, moving, r, cells=()):
     """One Air Region, a shape the Study's plane allows, and every body inside it. moving: names of the moving
-    bodies."""
+    bodies. cells: names of cell objects, which a Custom shape may not be either."""
     airs = objects.air_regions(study)
     if not airs:
         return
@@ -389,11 +389,15 @@ def _air(study, bodies, moving, r):
         return
     if air.AirShape == "Custom":
         source = air.Source
-        if source.Name in {b.Name for b in bodies}:  # the mesher would find it overlapping the bodies inside it
-            where = "moving" if source.Name in moving else "main"
+        if source.Name in {b.Name for b in bodies} | set(cells):  # the mesher would find it overlapping the bodies
+            where = (
+                "the Symmetric Group"
+                if source.Name in cells
+                else f"the {'moving' if source.Name in moving else 'main'} geometry"
+            )
             r.error(
                 f"{source.Label} is the Custom shape of Air Region {objects.display_name(air)};"
-                f" take it out of the {where} geometry.",
+                f" take it out of {where}.",
                 air,
                 [(source, "")],
             )
@@ -1206,9 +1210,10 @@ def _groups(study, main, moving, r):
     groups = objects.symmetric_groups(study)
     three = study.Dimension == "3D"
     free = free_bodies(study, main, moving)
-    for air in objects.air_regions(study):
-        r.error(f"Air Region {objects.display_name(air)}: a Study with Symmetric Groups has no Air Region.", air)
-    plane = _group_plane(study, objects.cell_bodies(study), free, r)
+    cell_bodies = objects.cell_bodies(study)
+    moved = {b.Name for b in moving} | {g.Name for g in groups if g.Side == "Moving"}
+    _air(study, free + groups, moved, r, {b.Name for b in cell_bodies})
+    plane = _group_plane(study, cell_bodies, free, r)
     _free_cells(main, moving, groups, r)
     ruled, drawn = {}, []  # group Name -> its rules; the groups whose rules and rows can be read
     for item in groups:

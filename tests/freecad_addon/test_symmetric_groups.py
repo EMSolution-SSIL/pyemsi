@@ -834,10 +834,6 @@ def break_cell_also_in_main(study, stator):
     study.MainMode, study.MainObjects = "Manual", [study.Document.getObject("CoilCell")]
 
 
-def break_air_region(study, stator):
-    objects.make_air_region(study, "Box")
-
-
 def break_free_crosses_sliding(study, stator):
     sliding(study)
     free_body(study, "Gap", symcases.sector(30, 40, 0, 90))
@@ -876,7 +872,6 @@ def break_names_equal_in_mesh(study, stator):
         (break_empty_table_name, "table"),
         (break_body_in_two_groups, "two groups"),
         (break_cell_also_in_main, "Main"),
-        (break_air_region, "Air Region"),
         (break_free_crosses_sliding, "Sliding Interface"),
         (break_free_transfinite, "Transfinite"),
         (break_deleted_cell, "was deleted"),  # Review Focus 3
@@ -888,6 +883,35 @@ def test_refused(study, stator, case, phrase):
     case(study, stator)
     study.Document.recompute()
     assert any(phrase in t for t in texts(study)), texts(study)
+
+
+def test_air_region_round_the_copies_validates(study):
+    ready(study)
+    objects.make_air_region(study, "Sector", OuterRadius=90)
+    study.Document.recompute()
+    assert texts(study) == []
+
+
+def test_air_region_smaller_than_the_copies_names_the_group(study):
+    ready(study)
+    objects.make_air_region(study, "Sector", OuterRadius=50)
+    study.Document.recompute()
+    assert any("Stator" in t and "not fully inside Air Region" in t for t in texts(study))
+
+
+def test_custom_air_on_a_cell_object_is_refused(study):
+    ready(study)
+    objects.make_air_region(study, "Custom", Source=study.Document.getObject("CoilCell"))
+    study.Document.recompute()
+    assert any("CoilCell is the Custom shape of Air Region" in t for t in texts(study))
+
+
+def test_two_air_regions_are_refused_in_a_grouped_study(study):
+    ready(study)
+    for _ in range(2):
+        objects.make_air_region(study, "Sector", OuterRadius=90)
+    study.Document.recompute()
+    assert any(t.startswith("Only one Air Region per Study") for t in texts(study))
 
 
 def test_cell_without_solid_is_refused(study_3d):
