@@ -373,16 +373,20 @@ class Structured:
         self.kinds, self.whole, self.cell_of = dict(kinds), tuple(whole), {}
 
     def __call__(self, study):
-        self.cell_of, rows = {}, {}
+        self.cell_of, rows, cells = {}, {}, {}  # by Label: a Material may have a cell's Label (Air)
         for item in objects.symmetric_groups(study):
             for row in objects.rows_of(item):
                 cell = study.Document.getObject(row["cell"])
+                cells[cell.Label] = cell
                 rows.setdefault(cell.Label, []).append(row)
                 for part in objects.row_parts(item, row):  # named in the mesh as its Material is
                     self.cell_of.setdefault(objects.clean(part), set()).add(cell.Label)
         problems, said = [], []
         for label in self.whole:
-            (cell,) = study.Document.getObjectsByLabel(label)
+            if label not in cells:
+                problems.append(f"{label}: no row")
+                continue
+            cell = cells[label]
             blocks = len(cell.Shape.Solids if study.Dimension == "3D" else cell.Shape.Faces)
             mine = rows.get(label, [])
             if blocks < 2 or len(mine) != 1 or not objects.is_whole(mine[0]):
