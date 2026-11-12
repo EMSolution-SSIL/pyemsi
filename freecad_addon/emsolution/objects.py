@@ -605,6 +605,11 @@ class AirRegion(_Named):
 
 
 AXES = ["X", "Y", "Z"]
+MOVING_SIDES = {
+    "Rotational": ["Inside", "Outside"],
+    "Axial gap": ["Above", "Below"],
+    "Linear": ["Positive", "Negative"],
+}
 
 
 class SlidingInterface(_Named):
@@ -617,6 +622,7 @@ class SlidingInterface(_Named):
         add = obj.addProperty
         add("App::PropertyEnumeration", "Kind", "Sliding", "Rotational about the Z axis, Axial gap (3D) or Linear")
         obj.Kind = ["Rotational", "Axial gap", "Linear"]
+        self._add_moving_side(obj)
         add("App::PropertyLink", "AirRegion", "Sliding", "Air Region the surface spans")
         add("App::PropertyLength", "Radius", "Sliding", "Radius of a Rotational interface")
         obj.Radius = 50.0
@@ -631,6 +637,18 @@ class SlidingInterface(_Named):
         obj.Divisions = (90, 2, 100000, 2)
         add("App::PropertyIntegerConstraint", "CrossDivisions", "Sliding", "Divisions across the motion (3D)")
         obj.CrossDivisions = (10, 1, 100000, 1)
+
+    @staticmethod
+    def _add_moving_side(obj):
+        obj.addProperty("App::PropertyEnumeration", "MovingSide", "Sliding", "Which side of the surface moves")
+        obj.MovingSide = MOVING_SIDES[obj.Kind]
+
+    def onChanged(self, obj, prop):
+        super().onChanged(obj, prop)
+        if prop == "Kind" and not obj.Document.Restoring and hasattr(obj, "MovingSide"):
+            index = max(obj.getEnumerationsOfProperty("MovingSide").index(obj.MovingSide), 0)
+            obj.MovingSide = MOVING_SIDES[obj.Kind]
+            obj.MovingSide = MOVING_SIDES[obj.Kind][index]
 
     def execute(self, obj):
         from . import airshapes
@@ -664,6 +682,8 @@ class SlidingInterface(_Named):
 
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
+        if not hasattr(obj, "MovingSide"):  # saved before the moving side existed
+            self._add_moving_side(obj)
 
 
 def _make_folder(study, prop, cls):
