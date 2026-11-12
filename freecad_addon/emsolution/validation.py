@@ -114,6 +114,7 @@ def validate(study):
     _transfinite(study, meshed_bodies, r)
     _names(study, bodies, included, r)
     _materials(study, r)
+    _links_not_bodies(study, bodies + objects.cell_bodies(study), r)
     return r.problems
 
 
@@ -189,14 +190,11 @@ def _links(study, included, r):
         if refused:
             airs = [(b, "") for b, _ in by_body if objects.is_air(b)]
             r.error(f"{kind} {item.Label}: {refused} Remove it from the item.", item, airs)
-        outside = [(b, subs) for b, subs in by_body if b.Name not in included]
-        if outside:  # kept on purpose, e.g. to mesh only part of a model; they just do not reach this mesh
-            r.warning(
-                f"{kind} {item.Label} is not used for {', '.join(b.Label for b, _ in outside)}:"
-                " not meshed by the Study.",
-                item,
-                [(b, s) for b, subs in outside for s in subs],
-            )
+        for b, subs in by_body:  # kept on purpose, e.g. to mesh only part of a model; they just do not reach this mesh
+            why = geometry.not_meshed(study, b) if b.Name not in included else None
+            text = geometry.not_meshed_text(2, b, *why, k=kind, i=item.Label) if why is not None else None
+            if text:
+                r.warning(text, item, [(b, s) for s in subs])
         if study.Dimension == "3D" and isinstance(item.Proxy, (objects.TransfiniteBody, objects.Recombine)):
             faces = [(b, s) for b, subs in by_body for s in subs if s.startswith("Face")]
             if faces:
@@ -634,6 +632,21 @@ def _materials(study, r):
             None,
             [(b, "") for b in bodies],
         )
+    for m in objects.materials(study):  # an assignment left on a body the Study does not mesh
+        b = m.Body
+        why = geometry.not_meshed(study, b) if b is not None and not getattr(m, "PartKey", "") else None
+        text = geometry.not_meshed_text(1, b, *why, m=objects.display_name(m)) if why is not None else None
+        if text:
+            r.warning(text, m, [(b, "")])
+
+
+def _links_not_bodies(study, meshed, r):
+    """A Link the Study cannot mesh (an array, a link to a Part or Group, to a sketch) and no body is made from."""
+    used = {name for b in meshed for name in geometry.inputs(b)}
+    for link in study.Document.Objects:
+        if link.TypeId == "App::Link" and link.Name not in used and not geometry.is_excluded(study, link):
+            if geometry.link_target(link) is None:
+                r.warning(f"{link.Label} is not meshed: a Link is meshed only when it links one body.", None)
 
 
 def _listed(names, limit=8):

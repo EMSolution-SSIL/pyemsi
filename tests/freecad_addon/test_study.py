@@ -458,7 +458,7 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.assignment_problem(self.study, [a, a]), "")
         self.assertEqual(
             objects.assignment_problem(self.study, [a, b, b]),
-            "Not meshed by the Study: B. Tick them in the Study panel or select other bodies.",
+            "B is excluded from the Study: tick it in the Study panel.",
         )
 
     def test_library_material_survives_save_and_reload(self):
@@ -1753,8 +1753,187 @@ class StudyTest(unittest.TestCase):
         self.exclude(outside)
         objects.make_recombine(self.study, [a, outside])
         self.assertEqual(self.problems(validation.ERROR), [])
-        self.assertIn("Recombine Recombine is not used for Outside: not meshed by the Study.", self.problems("warning"))
+        self.assertIn(
+            "Recombine Recombine is not used for Outside, which is excluded from the Study.", self.problems("warning")
+        )
         jobwriter.check(self.study)
+
+    # --- Why a body is not meshed ---------------------------------------------
+
+    def warnings_with(self, text):
+        return [t for t in self.problems("warning") if text in t]
+
+    def mat(self):
+        return objects.display_name(objects.materials(self.study)[0])
+
+    def cut_tool_case(self):
+        coil = self.box("Coil", 10)
+        _, air = self.air_cut_by(coil)
+        return coil, air
+
+    def made_from_case(self):
+        box = self.box("Box", 0, 30)
+        tool = self.box("Tool", 10)
+        cut = self.doc.addObject("Part::Cut", "Cut")
+        cut.Base, cut.Tool = box, tool
+        self.doc.recompute()
+        self.exclude(tool)
+        return box, cut
+
+    def air_shape_case(self):
+        a = self.box("A")
+        shape = self.box("Shape", 20, 30)
+        air = objects.make_air_region(self.study, "Custom", Source=shape)
+        return a, shape, air
+
+    def drawing_case(self):
+        cell = self.box("Cell")
+        drawing = self.doc.addObject("Part::Mirroring", "Drawing")
+        drawing.Source, drawing.Normal = cell, App.Vector(1, 0, 0)
+        self.doc.recompute()
+        group = objects.make_symmetric_group(self.study, [cell], name="Rotor")
+        self.doc.recompute()
+        return drawing, group
+
+    def test_the_gate_says_a_body_is_excluded(self):
+        a = self.box("A")
+        self.exclude(a)
+        self.assertEqual(
+            objects.assignment_problem(self.study, [a]), "A is excluded from the Study: tick it in the Study panel."
+        )
+        self.assertEqual(geometry.not_meshed(self.study, a), ("excluded", None))
+
+    def test_the_gate_says_a_body_is_a_cut_tool(self):
+        coil, air = self.cut_tool_case()
+        self.assertEqual(
+            objects.assignment_problem(self.study, [coil]),
+            "Coil is the tool of Air and is not meshed. To mesh it, make a Link to it.",
+        )
+        self.assertEqual(geometry.not_meshed(self.study, coil), ("cut tool", air))
+
+    def test_the_gate_says_a_body_is_made_into_another(self):
+        box, cut = self.made_from_case()
+        self.assertEqual(
+            objects.assignment_problem(self.study, [box]), "Box is not meshed on its own: Cut is made from it."
+        )
+        self.assertEqual(geometry.not_meshed(self.study, box), ("made from", cut))
+
+    def test_the_gate_says_a_body_is_a_custom_air_shape(self):
+        _, shape, air = self.air_shape_case()
+        self.assertEqual(
+            objects.assignment_problem(self.study, [shape]), f"Shape is the Custom shape of Air Region {air.Label}."
+        )
+        self.assertEqual(geometry.not_meshed(self.study, shape), ("air shape", air))
+
+    def test_the_gate_says_a_body_is_the_drawing_of_a_group(self):
+        drawing, group = self.drawing_case()
+        self.assertEqual(
+            objects.assignment_problem(self.study, [drawing]),
+            f"Drawing is the drawing of Symmetric Group {group.Label}: pick its copies on the group.",
+        )
+        self.assertEqual(geometry.not_meshed(self.study, drawing), ("drawing", group))
+
+    def test_the_gate_joins_the_texts_and_lets_meshed_bodies_through(self):
+        a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
+        self.exclude(b, c)
+        why = "is excluded from the Study: tick it in the Study panel."
+        self.assertEqual(objects.assignment_problem(self.study, [a, b, c, b]), f"B {why} C {why}")
+        self.assertIsNone(geometry.not_meshed(self.study, a))
+
+    def test_a_material_on_an_excluded_body_is_warned_about(self):
+        a = self.box("A")
+        self.exclude(a)
+        self.assign([a])
+        self.assertIn(f"Material {self.mat()} is on A, which is excluded from the Study.", self.problems("warning"))
+
+    def test_a_material_on_a_cut_tool_is_warned_about(self):
+        coil, _ = self.cut_tool_case()
+        self.assign([coil])
+        self.assertIn(
+            f"Material {self.mat()} is on Coil, the tool of Air, which is not meshed. To mesh it, make a Link to it.",
+            self.problems("warning"),
+        )
+
+    def test_a_cut_tool_without_assignments_is_silent(self):
+        self.cut_tool_case()
+        self.assertFalse([p for p in validation.validate(self.study) if "Coil" in p.text])
+
+    def test_a_material_on_a_consumed_body_is_warned_about(self):
+        box, _ = self.made_from_case()
+        self.assign([box])
+        self.assertIn(
+            f"Material {self.mat()} is on Box, which Cut is now made from: assign it to Cut.", self.problems("warning")
+        )
+
+    def test_a_material_on_a_custom_air_shape_is_not_warned_about(self):
+        _, shape, _ = self.air_shape_case()
+        self.assign([shape])
+        self.assertFalse(self.warnings_with(f"Material {self.mat()} is on Shape"))
+
+    def test_a_material_on_a_group_drawing_is_warned_about(self):
+        drawing, group = self.drawing_case()
+        self.assign([drawing])
+        self.assertIn(
+            f"Material {self.mat()} is on Drawing, the drawing of Symmetric Group {group.Label}:"
+            " the group's parts take the Materials.",
+            self.problems("warning"),
+        )
+
+    def test_an_item_on_an_excluded_body_is_warned_about(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.exclude(b)
+        objects.make_recombine(self.study, [a, b])
+        self.assertIn(
+            "Recombine Recombine is not used for B, which is excluded from the Study.", self.problems("warning")
+        )
+
+    def test_an_item_on_a_cut_tool_is_warned_about(self):
+        coil, _ = self.cut_tool_case()
+        objects.make_recombine(self.study, [coil])
+        self.assertIn(
+            "Recombine Recombine is not used for Coil, the tool of Air, which is not meshed."
+            " To mesh it, make a Link to it.",
+            self.problems("warning"),
+        )
+
+    def test_an_item_on_a_consumed_body_is_warned_about(self):
+        box, _ = self.made_from_case()
+        objects.make_recombine(self.study, [box])
+        self.assertIn(
+            "Recombine Recombine is not used for Box, which Cut is now made from: put it on Cut.",
+            self.problems("warning"),
+        )
+
+    def test_an_item_on_a_custom_air_shape_is_warned_about(self):
+        _, shape, air = self.air_shape_case()
+        objects.make_recombine(self.study, [shape])
+        self.assertIn(
+            f"Recombine Recombine is not used for Shape, the Custom shape of Air Region {air.Label}:"
+            " put it on the Air Region.",
+            self.problems("warning"),
+        )
+
+    def test_an_item_on_a_group_drawing_is_warned_about(self):
+        drawing, group = self.drawing_case()
+        objects.make_recombine(self.study, [drawing])
+        self.assertIn(
+            f"Recombine Recombine is not used for Drawing, the drawing of Symmetric Group {group.Label}:"
+            " put it on the cell objects.",
+            self.problems("warning"),
+        )
+
+    def test_a_link_that_is_not_one_body_is_warned_about_once(self):
+        a = self.box("A")
+        array = self.doc.addObject("App::Link", "Array")
+        array.LinkedObject = a
+        array.ElementCount = 2
+        self.doc.recompute()
+        text = "Array is not meshed: a Link is meshed only when it links one body."
+        self.assertEqual(self.problems("warning").count(text), 1)
+
+    def test_a_link_to_one_body_is_not_warned_about(self):
+        self.coil_link()
+        self.assertFalse(self.warnings_with("is not meshed: a Link"))
 
     def test_validation_lists_every_error(self):
         a = self.box("A")

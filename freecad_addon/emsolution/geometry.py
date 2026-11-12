@@ -311,6 +311,67 @@ def air_sources(study):
     }
 
 
+WHY = {  # reason: (gate text, Material warning, item warning); {b} the body, {o} the other object
+    "excluded": (
+        "{b} is excluded from the Study: tick it in the Study panel.",
+        "Material {m} is on {b}, which is excluded from the Study.",
+        "{k} {i} is not used for {b}, which is excluded from the Study.",
+    ),
+    "cut tool": (
+        "{b} is the tool of {o} and is not meshed. To mesh it, make a Link to it.",
+        "Material {m} is on {b}, the tool of {o}, which is not meshed. To mesh it, make a Link to it.",
+        "{k} {i} is not used for {b}, the tool of {o}, which is not meshed. To mesh it, make a Link to it.",
+    ),
+    "made from": (
+        "{b} is not meshed on its own: {o} is made from it.",
+        "Material {m} is on {b}, which {o} is now made from: assign it to {o}.",
+        "{k} {i} is not used for {b}, which {o} is now made from: put it on {o}.",
+    ),
+    "air shape": (
+        "{b} is the Custom shape of Air Region {o}.",
+        None,  # the Air Region has its own Material
+        "{k} {i} is not used for {b}, the Custom shape of Air Region {o}: put it on the Air Region.",
+    ),
+    "drawing": (
+        "{b} is the drawing of Symmetric Group {o}: pick its copies on the group.",
+        "Material {m} is on {b}, the drawing of Symmetric Group {o}: the group's parts take the Materials.",
+        "{k} {i} is not used for {b}, the drawing of Symmetric Group {o}: put it on the cell objects.",
+    ),
+    "not a body": ("{b} is not a body of the Study.", None, None),
+}
+
+
+def not_meshed(study, obj):
+    """None when obj is a Study body, a cell object or a group (also an Air Region); else (reason, other): why the Study
+    does not mesh obj, and the object to name. Reasons: "excluded", "cut tool" (other: the Cut), "made from" (other:
+    the meshed body made from obj), "air shape" (other: the Air Region), "drawing" (other: the group), "not a body"."""
+    bodies = study_geometry(study)[0]
+    meshed = {o.Name for o in bodies + objects.cell_bodies(study) + objects.symmetric_groups(study)}
+    if obj.Name in meshed or obj.Name in {a.Name for a in objects.air_regions(study)}:
+        return None
+    if is_excluded(study, obj):
+        return "excluded", None
+    for reason, found in (
+        ("cut tool", cut_tools(study.Document)),
+        ("air shape", air_sources(study)),
+        ("drawing", group_drawings(study)),
+    ):
+        if obj.Name in found:
+            return reason, found[obj.Name]
+    other = next((b for b in bodies if obj.Name in inputs(b)), None)
+    if other is not None:
+        return "made from", other
+    return "not a body", None
+
+
+def not_meshed_text(column, obj, reason, other, **names):
+    """The text of WHY for column 0 (gate), 1 (Material warning) or 2 (item warning), or None."""
+    text = WHY[reason][column]
+    if text is None:
+        return None
+    return text.format(b=objects.display_name(obj), o=objects.display_name(other) if other is not None else "", **names)
+
+
 def _leaves(nodes):
     """The bodies of tree() nodes, in tree order."""
     out = []

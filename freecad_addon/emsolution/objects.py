@@ -1738,11 +1738,14 @@ def assignable(study):
 
 def assignment_problem(study, bodies):
     """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
-    meshed = {b.Name for b in assignable(study) + cell_bodies(study)}
-    outside = list(dict.fromkeys(display_name(b) for b in bodies if b.Name not in meshed))
-    if outside:
-        return f"Not meshed by the Study: {', '.join(outside)}. Tick them in the Study panel or select other bodies."
-    return ""
+    from . import geometry
+
+    texts = []
+    for b in bodies:
+        why = geometry.not_meshed(study, b)
+        if why is not None:
+            texts.append(geometry.not_meshed_text(0, b, *why))
+    return " ".join(dict.fromkeys(texts))
 
 
 def air_keys(study):
