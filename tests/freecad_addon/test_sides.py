@@ -90,3 +90,13 @@ def test_double_air_gap(study2d):
     b.MovingSide = "Outside"
     found, errors = sides.piece_sides(pieces, [a, b], surfaces, "XY")
     assert found[1] is None and len(errors) == 1 and "disagree" in errors[0][0]
+
+
+def test_axial_gap_far_from_the_shape(study3d):
+    i = objects.make_sliding_interface(study3d, "Axial gap", Position=-5000)
+    assert sides.side_of(Part.makeBox(10, 10, 10), i, "3D") == "moving"
+
+
+def test_rotational_far_along_z(study3d):
+    i = objects.make_sliding_interface(study3d, "Rotational", Radius=50)
+    assert sides.side_of(Part.makeCylinder(40, 10, V(0, 0, 5000)), i, "3D") == "moving"

@@ -11,14 +11,15 @@ _EPS = 1e-6
 def _half_space(shape, iface, plane):
     """The Inside / Above / Positive half-space of iface, as a shape that covers shape."""
     box = shape.BoundBox
-    far = 4 * max(box.DiagonalLength, abs(box.XMin), abs(box.XMax), abs(box.YMin), abs(box.YMax), 1.0) + 1000.0
     kind = iface.Kind
+    position = iface.Position.Value if kind != "Rotational" else 0.0
+    reach = max(abs(c) for c in (box.XMin, box.XMax, box.YMin, box.YMax, box.ZMin, box.ZMax))
+    far = 2 * max(reach, abs(position), box.DiagonalLength, 1.0) + 1000.0  # past the shape from the plane
     if kind == "Rotational":
         radius = iface.Radius.Value
         if plane == "3D":
             return Part.makeCylinder(radius, 2 * far, App.Vector(0, 0, -far))
         return Part.Face(Part.Wire(Part.makeCircle(radius)))
-    position = iface.Position.Value
     if kind == "Axial gap":
         return Part.makeBox(2 * far, 2 * far, far, App.Vector(-far, -far, position))
     axis = objects.AXES.index(iface.NormalAxis)

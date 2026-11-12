@@ -683,7 +683,10 @@ class SlidingInterface(_Named):
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
         if not hasattr(obj, "MovingSide"):  # saved before the moving side existed
+            touched = obj.isTouched()
             self._add_moving_side(obj)
+            if not touched:
+                obj.purgeTouched()
 
 
 def _make_folder(study, prop, cls):
