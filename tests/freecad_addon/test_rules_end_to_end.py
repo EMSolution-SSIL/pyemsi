@@ -1,4 +1,4 @@
-"""Symmetric Groups end to end on an arrangement from no catalogue: oblique rules, several groups and a free object,
+"""Symmetric Groups end to end on an arrangement from no catalogue: oblique rules, several groups and an Air Region,
 built, validated, meshed and read back. And the core code knows no device.
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_rules_end_to_end.py"""
 
@@ -28,15 +28,15 @@ def _unit(v):
 
 
 def arrangement(doc):
-    """The cells of the two groups and the free box: (box, wedge, sphere, free box shape).
+    """The cells of the two groups: (box, wedge, sphere).
 
     The box (4 x 3 x 2) and the wedge on its top face (y 3..5, narrowing to 2 x 1) are turned 37° about (2, -1, 1) and
     put 5 mm off the mirror plane, on the side its normal points to, at the point of the plane 40 mm along
     normal x axis from (1, 2, 3): about 40 mm from the rotation axis. Nothing of the cell reaches the plane (its
     corners lie within 3.4 mm of its centre), so the cell and its mirror image are apart, and the pair spans much less
     than 72° about the axis, so the five turns of the pair are apart too. The sphere (radius 4) starts 30 mm further
-    along the rotation axis than the cell, and each translation takes it 24 mm further along it. The free box is the
-    bounding box of all copies, 15 mm larger on every side."""
+    along the rotation axis than the cell, and each translation takes it 24 mm further along it. The Air Region (in
+    general_study) is the bounding box of all copies, 15 mm larger on every side."""
     n, a = _unit(V(*MIRROR["normal"])), _unit(V(*ROTATE["axis"]))
     foot = V(*MIRROR["point"]) + _unit(n.cross(a)) * 40
     centre = foot + n * 5
@@ -90,9 +90,9 @@ def study(tmp_path):
     App.closeDocument(doc.Name)
 
 
-def test_nothing_overlaps_and_everything_is_in_the_free_box(study):
+def test_nothing_overlaps_and_everything_is_in_the_air_region(study):
     """How the arrangement was checked: no two solids of the drawings share volume (the box and wedge of one copy
-    touch over a face, nothing else touches) and every copy lies inside the free box."""
+    touch over a face, nothing else touches) and every copy lies inside the Air Region."""
     solids = [s for item in objects.symmetric_groups(study) for s in item.Shape.Solids]
     assert len(solids) == 2 * 10 + 3
     for a, b in itertools.combinations(solids, 2):
@@ -105,15 +105,15 @@ def test_nothing_overlaps_and_everything_is_in_the_free_box(study):
     assert min(g for g in gaps if g > 1e-9) > 1
 
 
-def test_arbitrary_solids_oblique_rules_groups_and_free_body(study):
+def test_arbitrary_solids_oblique_rules_groups_and_air_region(study):
     """Group 1: a box and a touching wedge, Mirror about the plane through (1, 2, 3) with normal (1, 1, 2), then
     Rotate 72° × 5 about the axis (1, 2, 2) through (0, 3, 0). Group 2: a sphere, Translate (40, 7, 9) × 3.
-    Free: one big box. Mirrored and rotated cells are chosen so that nothing overlaps."""
+    Air: one Box Air Region. Mirrored and rotated cells are chosen so that nothing overlaps."""
     assert not validation.errors(validation.validate(study))
     report = symcases.mesh_and_read(study)
     assert report.ok, report.refused
     assert report.inverted == 0 and report.faces_in_three == 0 and report.frozen_kept
-    assert report.kept > 0  # the free air meets the copies: their facets are shared, not left open
+    assert report.kept > 0  # the Air Region meets the copies: their facets are shared, not left open
     parts = {int(study.MatIds[m.Name]) for m in objects.part_assignments(study)}
     assert len(parts) == 1 + 10 + 3  # the box one part, each wedge and each sphere its own
     air = int(study.MatIds[objects.air_regions(study)[0].Name])
@@ -122,8 +122,8 @@ def test_arbitrary_solids_oblique_rules_groups_and_free_body(study):
 
 
 def test_a_frozen_face_not_kept_is_seen(study):
-    """The frozen-face check can fail: with the free air's elements taken out of the mesh file, the copies' surface
-    faces the inside of the free box with no element there."""
+    """The frozen-face check can fail: with the Air Region's elements taken out of the mesh file, the copies' surface
+    faces the inside of the Air Region with no element there."""
     assert symcases.mesh_and_read(study).frozen_kept
     path = jobwriter.mesh_file(study)
     gmsh.initialize()

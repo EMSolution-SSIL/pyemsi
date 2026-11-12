@@ -1065,6 +1065,19 @@ def test_free_body_over_the_copies_is_refused(study):
     assert "FreeAir overlaps the copies of Symmetric Group Stator" in text and "Custom shape of the Air Region" in text
 
 
+def test_free_body_in_a_moved_part_is_checked_where_it_shows(study):
+    """The disc lies clear of the copies by its own Placement; the App::Part it sits in brings it over them."""
+    ready(study)
+    disc = free_body(study, "Disc", Part.Face(Part.Wire(Part.makeCircle(80, App.Vector(500, 0, 0)))))
+    assert not [t for t in texts(study) if t.startswith("Free object")]
+    part = study.Document.addObject("App::Part", "Holder")
+    part.addObject(disc)
+    part.Placement = App.Placement(App.Vector(-500, 0, 0), App.Rotation())
+    study.Document.recompute()
+    (text,) = [t for t in texts(study) if t.startswith("Free object")]
+    assert "Disc overlaps the copies of Symmetric Group Stator" in text
+
+
 def test_free_body_flush_against_the_copies_validates(study):
     ready(study)
     ring = Part.Face(Part.Wire(Part.makeCircle(90))).cut(Part.Face(Part.Wire(Part.makeCircle(60)))).Faces[0]

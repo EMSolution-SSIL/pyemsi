@@ -1009,18 +1009,18 @@ def _free_on_copies(groups, free, three, r):
     """A free object may touch the copies of any group, on either side, but not overlap them. A pair OCC cannot compute
     is reported as a warning, not taken as clear."""
     unit = "mm³" if three else "mm²"
+    drawn = [(g, _elements(g)[0]) for g in groups if not g.Shape.isNull()]
     for body in free:
-        shape = body.Shape
+        shape = geometry.global_shape(body)
         if shape.isNull():
             continue
         tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
         box = shape.BoundBox
         box.enlarge(tol)
-        for group in groups:
-            if group.Shape.isNull() or not box.intersect(group.Shape.BoundBox):
+        name = objects.display_name(body)
+        for group, copies in drawn:
+            if not box.intersect(group.Shape.BoundBox):
                 continue
-            copies, _ = _elements(group)
-            name = objects.display_name(body)
             failed = None  # where the first pair OCC failed on lies
             for piece, piece_box in copies:
                 if not box.intersect(piece_box):
