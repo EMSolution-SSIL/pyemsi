@@ -293,7 +293,11 @@ def refresh_padding(study):
     """Padding mode Air Regions follow the Study's bodies as they are now: a body added to a container source, edited
     since the last recompute or moved with a container counts. Recomputes the air and what it depends on, no more.
     Sliding Interfaces and the drawings of Symmetric Groups that no link keeps up to date are recomputed too.
-    Validate and Run Mesh call it."""
+    Validate and Run Mesh call it. The drawings go first: a Padding mode air fits round them."""
+    for item in objects.symmetric_groups(study):  # a moved container of a cell is not linked
+        if objects.stale_drawing(item):
+            item.touch()
+            study.Document.recompute([item])
     objects.refresh_sized_by(study)
     plane = None
     for air in objects.air_regions(study):
@@ -309,10 +313,6 @@ def refresh_padding(study):
         if objects.stale_sliding_cylinder(iface):
             iface.touch()
             study.Document.recompute([iface])
-    for item in objects.symmetric_groups(study):  # a moved container of a cell is not linked either
-        if objects.stale_drawing(item):
-            item.touch()
-            study.Document.recompute([item])
 
 
 def _off_size(air, plane):
@@ -1144,6 +1144,19 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                     iface,
                     [(body, "")],
                 )
+        for air in objects.air_regions(study):
+            try:
+                shape = airshapes.air_shape(air, "3D" if three else plane)
+            except ValueError:
+                continue  # _air reports it
+            if _on_interface(shape, radius, three):
+                r.error(
+                    f"Air Region {objects.display_name(air)} crosses or touches Sliding Interface {iface.Label}. With"
+                    " Symmetric Groups the air must keep clear of the sliding surface, a limit of the tool: use a"
+                    " Sector whose inner radius is past the copied air band, or a Custom shape.",
+                    iface,
+                    [(air, "")],
+                )
 
 
 def _part_materials(study, readable, r):
@@ -1190,8 +1203,9 @@ def _part_materials(study, readable, r):
 
 
 def _free_transfinite(study, free, r):
-    """A free object cannot be structured (spec 4.4): the mesher cannot yet put a structured mesh around copies."""
-    names = {b.Name for b in free}
+    """A free object cannot be structured (spec 4.4): the mesher cannot yet put a structured mesh around copies. The
+    Air Region counts as a free object."""
+    names = {b.Name for b in free + objects.air_regions(study)}
     for t in objects.transfinite_bodies(study):
         on = [b for b, _ in objects.subs_by_body(t) if b.Name in names]
         if on:

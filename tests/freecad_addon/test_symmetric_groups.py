@@ -914,6 +914,66 @@ def test_two_air_regions_are_refused_in_a_grouped_study(study):
     assert any(t.startswith("Only one Air Region per Study") for t in texts(study))
 
 
+def test_padding_air_sizes_round_the_drawing(study, stator):
+    ready(study)
+    air = objects.make_air_region(study, "Sector", SizeMode="Padding", PadOuterPercent=20)
+    study.Document.recompute()
+    assert [o.Name for o in air.SizedBy] == [stator.Name]  # the group, not its cell objects
+    assert air.OuterRadius.Value == pytest.approx(60 * 1.2)  # the drawing reaches r 60; one cell alone would too,
+    assert air.Shape.BoundBox.isInside(stator.Shape.BoundBox)  # but only the drawing covers the full circle
+
+
+def test_padding_air_follows_a_moved_drawing_on_validate(study, stator):  # Review Focus 1
+    doc = study.Document
+    ready(study)
+    part = doc.addObject("App::Part", "Holder")
+    for cell in stator.Cells:
+        part.addObject(cell)
+    air = objects.make_air_region(study, "Sector", SizeMode="Padding", PadOuterPercent=20)
+    doc.recompute()
+    assert air.OuterRadius.Value == pytest.approx(60 * 1.2)
+    part.Placement = App.Placement(App.Vector(5, 0, 0), App.Rotation())
+    doc.recompute()
+    validation.validate(study)
+    reach = airshapes.radial_extent([stator.Shape])[1]
+    assert reach > 60 + 1  # the drawing moved with the Part
+    assert air.OuterRadius.Value == pytest.approx(reach * 1.2)
+
+
+def test_air_has_one_mat_id_key_when_sliding(study):
+    sliding(study)
+    ready(study)
+    air = objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)
+    study.Document.recompute()
+    assert air.Name in objects.volume_keys(study) and f"{air.Name}#fixed" not in objects.volume_keys(study)
+
+
+def test_sliding_interface_keeps_its_radius_beside_an_air_region(study):  # Review Focus 3
+    sliding(study)
+    air = objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)
+    (iface,) = objects.sliding_interfaces(study)
+    assert iface.AirRegion is None
+    iface.AirRegion = air  # an older document
+    study.Document.recompute()
+    assert iface.Shape.Edges[0].Curve.Radius == pytest.approx(35)
+
+
+def test_air_region_across_the_sliding_surface_is_a_limit_of_the_tool(study):
+    sliding(study)
+    ready(study)
+    objects.make_air_region(study, "Sector", OuterRadius=90)
+    study.Document.recompute()
+    assert any("Air Region" in t and "Sliding Interface" in t and "a limit of the tool" in t for t in texts(study))
+
+
+def test_transfinite_air_region_is_refused_with_groups(study):
+    ready(study)
+    air = objects.make_air_region(study, "Sector", OuterRadius=90)
+    objects.make_transfinite_body(study, [air])
+    study.Document.recompute()
+    assert any("Transfinite" in t and "Air" in t for t in texts(study))
+
+
 def test_cell_without_solid_is_refused(study_3d):
     study_3d.Document.getObject("CoilCell").Shape = symcases.sector(37, 50, 10, 15)
     study_3d.Document.recompute()

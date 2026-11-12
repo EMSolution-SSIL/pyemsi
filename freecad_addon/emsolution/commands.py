@@ -233,7 +233,7 @@ class AddAirRegion(_StudyCommand):
             return warn("This Study already has an Air Region.")
         doc = study.Document
         try:
-            bodies = objects.study_bodies(study)  # main and moving geometry
+            bodies = objects.air_sizing_bodies(study)  # main and moving geometry, or free bodies and groups
         except Exception as exc:  # a body not recomputed yet has no shape: start with the manual defaults
             App.Console.PrintWarning(f"EMSolution: the Air Region starts Manual, the bodies are not ready ({exc}).\n")
             bodies = []
@@ -264,8 +264,7 @@ class AddSlidingInterface(_StudyCommand):
         study = assignment_study()
         if study is None:
             return
-        airs = objects.air_regions(study)
-        if not airs:
+        if not objects.air_regions(study) and not objects.is_grouped(study):  # with groups its radius places it
             return warn("Add an Air Region first.")
         doc = study.Document
         doc.openTransaction("Add Sliding Interface")  # stays open until OK or Cancel

@@ -465,7 +465,7 @@ def containers_of(bodies):
 
 
 def refresh_sized_by(study):
-    """SizedBy of each Air Region: the Study's bodies in Padding mode, none in Manual mode; SizedByContainers: the
+    """SizedBy of each Air Region: air_sizing_bodies in Padding mode, none in Manual mode; SizedByContainers: the
     containers that place them, so that moving one recomputes the air. A body that depends on the air would close a
     cycle (and links make study_bodies see the bodies as made from each other): then no body; a container that
     depends on the air is left out. Only a change is written."""
@@ -473,16 +473,16 @@ def refresh_sized_by(study):
     padding = [a for a in airs if a.SizeMode == "Padding"]
     loops = {a.Name: dependents_of(a) for a in padding}
     try:
-        bodies = study_bodies(study) if padding else []
+        bodies = air_sizing_bodies(study) if padding else []
     except IndexError:  # a cycle through the links: the bodies are the Study's own, look again without them
         for air in padding:
             air.SizedBy, air.SizedByContainers = [], []
-        bodies = study_bodies(study)
+        bodies = air_sizing_bodies(study)
     tangled = [a for a in padding if loops[a.Name] & {b.Name for b in bodies} and (a.SizedBy or a.SizedByContainers)]
     if tangled:  # study_bodies must not follow the links: look again without them
         for air in tangled:
             air.SizedBy, air.SizedByContainers = [], []
-        bodies = study_bodies(study)
+        bodies = air_sizing_bodies(study)
     names = {b.Name for b in bodies}
     for air in airs:
         want = bodies if air in padding and not names & loops[air.Name] else []
@@ -509,7 +509,7 @@ def safe_refresh_sized_by(study):
 def dependent_body(air, study):
     """The first of the Study's bodies that depends on the Air Region (so it cannot size it), or None."""
     loops = dependents_of(air)
-    return next((b for b in study_bodies(study) if b.Name in loops), None)
+    return next((b for b in air_sizing_bodies(study) if b.Name in loops), None)
 
 
 def drop_size_formulas(air):
@@ -635,9 +635,8 @@ class SlidingInterface(_Named):
     def execute(self, obj):
         from . import airshapes
 
-        air = air_of(obj)
         study = owner_study(obj)
-        if air is None and study is not None and is_grouped(study):
+        if study is not None and is_grouped(study):  # the radius alone places it, an Air Region or not
             if obj.Kind != "Rotational":
                 raise ValueError(
                     f"Sliding Interface {display_name(obj)}: a symmetric Study slides Rotational only. {obj.Kind}"
@@ -656,6 +655,7 @@ class SlidingInterface(_Named):
             else:
                 obj.Shape = Part.makeCompound([Part.makeCircle(obj.Radius.Value)])  # the full circle, no Air Region
             return
+        air = air_of(obj)
         if air is None:
             raise ValueError(f"Sliding Interface {display_name(obj)}: it needs an Air Region")
         plane = airshapes.study_plane(study) if study else "3D"
@@ -690,7 +690,7 @@ def _drawings_z(study):
 def stale_sliding_cylinder(iface):
     """True if iface, a 3D grouped Study's Rotational Sliding Interface, no longer spans the z range of the drawings."""
     study = owner_study(iface)
-    if study is None or study.Dimension != "3D" or not is_grouped(study) or air_of(iface) is not None:
+    if study is None or study.Dimension != "3D" or not is_grouped(study):
         return False
     z0, z1 = _drawings_z(study)
     if iface.Shape.isNull():  # not built, or the drawings were flat: stale once they have a height
@@ -770,7 +770,7 @@ def make_air_region(study, shape="Box", **props):
         setattr(obj, name, value)
     study.AirRegionsGroup.addObject(obj)
     for iface in sliding_interfaces(study):  # left without one when the old Air Region was deleted
-        if iface.AirRegion is None:
+        if iface.AirRegion is None and not is_grouped(study):  # with groups the radius alone places it
             iface.AirRegion = obj
     safe_refresh_sized_by(study)
     if getattr(obj, "ViewObject", None) is not None:  # GUI running
@@ -782,8 +782,9 @@ def make_air_region(study, shape="Box", **props):
 
 def make_sliding_interface(study, kind=None, **props):
     """Adds a Sliding Interface of kind on the Study's Air Region (see SlidingInterface). The default kind is
-    Linear for a Box Air Region (a Linear interface needs one), else Rotational."""
-    airs = air_regions(study)
+    Linear for a Box Air Region (a Linear interface needs one), else Rotational. In a Study with Symmetric Groups
+    the radius places the interface: it is Rotational and its AirRegion stays empty."""
+    airs = air_regions(study) if not is_grouped(study) else []
     if kind is None:
         kind = "Linear" if airs and airs[0].AirShape == "Box" else "Rotational"
     obj = study.Document.addObject("Part::FeaturePython", "SlidingInterface")
@@ -1724,6 +1725,15 @@ def study_bodies(study):
     return list({b.Name: b for b in bodies}.values())
 
 
+def air_sizing_bodies(study):
+    """What a Padding mode Air Region fits round: the Study's bodies; with Symmetric Groups the free bodies, then the
+    groups, whose drawings hold every copy (a cell object alone would leave the copies out)."""
+    if not is_grouped(study):
+        return study_bodies(study)
+    cells = {b.Name for b in cell_bodies(study)}
+    return [b for b in study_bodies(study) if b.Name not in cells] + symmetric_groups(study)
+
+
 def assignable(study):
     """What can get a Material: the main- and moving-geometry bodies, then the Air Regions and Symmetric Groups."""
     return study_bodies(study) + air_regions(study) + symmetric_groups(study)
@@ -1756,9 +1766,10 @@ def air_keys(study):
 
 def volume_keys(study):
     """MAT_ID keys: bodies, Air Regions (or their halves), then the Sliding Interfaces' SLIDE_MAT_IDs when sliding.
-    A Study with Symmetric Groups has the part assignments, then the free bodies, and no Air Region."""
+    A Study with Symmetric Groups has the part assignments, then the free bodies, then its Air Region, whole."""
     if is_grouped(study):
         keys = [m.Name for m in part_assignments(study)] + [b.Name for b in study_bodies(study)]
+        keys += [a.Name for a in air_regions(study)]
     else:
         keys = [b.Name for b in study_bodies(study)] + air_keys(study)
     if study.Movement == "Sliding motion":
