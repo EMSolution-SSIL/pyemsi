@@ -1482,9 +1482,15 @@ def test_air_region_goes_to_the_fixed_free_job(study):
     assert [s["size"] for s in free["job"]["sizes"]] == [2.0]
 
 
-def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study, monkeypatch):
-    # no Sector air both clears the sliding surface and holds every body, so only the job writer is under test here
-    monkeypatch.setattr(jobwriter.validation, "errors", lambda problems: [])
+def test_ring_air_round_a_sliding_motor_validates(study):
+    sliding(study)
+    ready(study)
+    objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)
+    study.Document.recompute()
+    assert texts(study) == []
+
+
+def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study):
     sliding(study)
     ready(study)
     objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)

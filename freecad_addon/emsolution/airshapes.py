@@ -241,6 +241,15 @@ def _padded_sector(air, shapes, box, plane):
     return size
 
 
+def filled(shape, plane):
+    """shape with its holes filled: each face by its outer wire (2D), each solid by its outer shell (3D)."""
+    if plane == "3D":
+        pieces = [Part.Solid(s.OuterShell) for s in shape.Solids]
+    else:
+        pieces = [Part.Face(f.OuterWire) for f in shape.Faces]
+    return pieces[0] if len(pieces) == 1 else Part.makeCompound(pieces)
+
+
 def outside(body_shape, air_shape, plane):
     """Volume ("3D") or area (2D) of the part of body_shape that lies outside air_shape."""
     rest = body_shape.cut(air_shape)

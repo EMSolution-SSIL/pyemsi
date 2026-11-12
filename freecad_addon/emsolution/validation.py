@@ -365,7 +365,7 @@ def _padding(air, bodies, plane, r):
     return True
 
 
-def _air(study, bodies, moving, r, cells=()):
+def _air(study, bodies, moving, r, cells=(), filled=False):
     """One Air Region, a shape the Study's plane allows, and every body inside it. moving: names of the moving
     bodies. cells: names of cell objects, which a Custom shape may not be either."""
     airs = objects.air_regions(study)
@@ -406,10 +406,11 @@ def _air(study, bodies, moving, r, cells=()):
             need = "a solid" if plane == "3D" else f"a face in the Study's {plane} plane"
             r.error(prefix + f"the Custom body {source.Label} must be {need}.", air, [(source, "")])
             return
+    holder = airshapes.filled(shape, plane) if filled else shape  # with groups: the outer boundary, holes filled
     for body in bodies:
         body_shape = geometry.global_shape(body)
         measure = body_shape.Volume if plane == "3D" else body_shape.Area
-        if airshapes.outside(body_shape, shape, plane) > 1e-6 * measure:
+        if airshapes.outside(body_shape, holder, plane) > 1e-6 * measure:
             r.error(f"{body.Label} is not fully inside Air Region {objects.display_name(air)}.", air, [(body, "")])
 
 
@@ -1225,7 +1226,7 @@ def _groups(study, main, moving, r):
     free = free_bodies(study, main, moving)
     cell_bodies = objects.cell_bodies(study)
     moved = {b.Name for b in moving} | {g.Name for g in groups if g.Side == "Moving"}
-    _air(study, free + groups, moved, r, {b.Name for b in cell_bodies})
+    _air(study, free + groups, moved, r, {b.Name for b in cell_bodies}, filled=True)
     plane = _group_plane(study, cell_bodies, free, r)
     _free_cells(main, moving, groups, r)
     ruled, drawn = {}, []  # group Name -> its rules; the groups whose rules and rows can be read

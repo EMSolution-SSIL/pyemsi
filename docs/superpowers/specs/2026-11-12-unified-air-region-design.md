@@ -59,7 +59,8 @@ In a Study with Symmetric Groups, `_groups` stops refusing the Air Region. These
   rectangle starting on the Z axis); Padding that can be built; a Custom source that is a solid (a face in the plane in
   2D) and is not in the Main or Moving geometry.
 - **Everything inside the air.** The free objects and each Symmetric Group's drawing (`SymmetricGroup.Shape`, all its
-  copies) must be inside the Air Region's shape. A copy sticking out is named with its group.
+  copies) must be inside the Air Region's outer boundary, its holes filled (a ring air outside the stator holds the motor). A
+  copy sticking out is named with its group.
 - **Free objects only touch the copies.** A free object (any body of the Main or Moving geometry that is not a cell
   object; never the Air Region) that overlaps a copy of a group on its side is refused. Method as `_touch_groups`: the
   copies' pieces with their bound boxes (`_elements`), a `distToShape` gate, then `common` only for pieces that meet. Touching
