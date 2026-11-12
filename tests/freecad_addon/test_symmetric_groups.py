@@ -804,13 +804,38 @@ def test_a_drawing_across_the_interface_has_no_side(study, stator):
 
 def test_part_materials_survive_a_new_radius(study):
     rotor, iface = sliding(study)
+    stator = objects.symmetric_groups(study)[0]
     objects.sync_parts(study)
     before = {m.Name: m.PartKey for m in objects.part_assignments(study)}
     iface.Radius = 36
     study.Document.recompute()
     objects.sync_parts(study)
     assert {m.Name: m.PartKey for m in objects.part_assignments(study)} == before
+    iface.Radius, iface.MovingSide = 35, "Outside"  # back between the groups (36 is in the stator's air), sides swap
+    study.Document.recompute()
+    assert (sides.group_side(study, rotor), sides.group_side(study, stator)) == ("fixed", "moving")
+    objects.sync_parts(study)
+    assert {m.Name: m.PartKey for m in objects.part_assignments(study)} == before
     assert all("|" not in key for key in before.values())
+
+
+def test_a_group_with_copies_on_both_sides_is_refused(study):
+    """Cells inside and outside the radius in one group, none touching it: no crossing, but no side either."""
+    far = free_body(study, "FarCell", Part.makePlane(5, 2, V(120, 0, 0)))
+    mixed = objects.make_symmetric_group(study, [study.Document.getObject("RotorIronCell"), far], rules=[ROTATE_Z])
+    mixed.Label = "Mixed"
+    study.Movement = "Sliding motion"
+    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    ready(study)
+    assert sides.group_side(study, mixed) is None
+    text = (
+        "Symmetric Group Mixed has copies on both sides of Sliding Interface Sliding Interface: a group is all on one"
+        " side. Move the interface or split the group."
+    )
+    assert text in texts(study)
+    assert not any("Mixed crosses it" in t for t in texts(study))
+    with pytest.raises(jobwriter.StudyError, match="Symmetric Group Mixed has copies on both sides"):
+        jobwriter.check(study)
 
 
 def test_same_name_on_the_two_sides_is_refused(study, stator):

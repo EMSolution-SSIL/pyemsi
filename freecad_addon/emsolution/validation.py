@@ -1099,6 +1099,7 @@ def _group_sliding(study, groups, ruled, free, plane, side, r):
     if plane == "ZX":
         r.error("Sliding motion is not supported in a ZX (axisymmetric) Study.")
         return
+    crossed = set()  # the groups refused below as crossing an interface
     for iface in objects.sliding_interfaces(study):
         if iface.Kind != "Rotational":
             continue  # _interfaces says so
@@ -1114,6 +1115,7 @@ def _group_sliding(study, groups, ruled, free, plane, side, r):
             if how == "crosses" and off_z and not any(_drawn_cross(c, radius, three) for c in item.Cells):
                 how = "touches"  # only copies made by a rule refused below cross it: splitting the cells would not help
             if how == "crosses":
+                crossed.add(item.Name)
                 r.error(
                     f"Sliding Interface {iface.Label}: Symmetric Group {item.Label} crosses it. A group may only end"
                     " on the sliding surface: split the cell objects at it.",
@@ -1167,6 +1169,15 @@ def _group_sliding(study, groups, ruled, free, plane, side, r):
                     iface,
                     [(air, "")],
                 )
+    interfaces = objects.sliding_interfaces(study)
+    for item in groups:  # the side group_side gives: none for copies on both sides, touching it or not
+        if interfaces and side[item.Name] is None and item.Name not in crossed and item.Shape.Faces:
+            r.error(
+                f"Symmetric Group {objects.display_name(item)} has copies on both sides of Sliding Interface"
+                f" {interfaces[0].Label}: a group is all on one side. Move the interface or split the group.",
+                item,
+                [(item, "")],
+            )
     _air_off_moving(groups, objects.air_regions(study), "3D" if three else plane, side, r)
 
 
