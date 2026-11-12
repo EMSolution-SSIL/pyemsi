@@ -97,7 +97,7 @@ def test_save_reload_keeps_parts_and_groups(motor, tmp_path):
     study = objects.find_study(doc)
     assert len(objects.part_assignments(study)) == 18
     coil = _part(study, "Coil01")
-    assert coil.PartKey == "fixed|Coil01" and coil.Body is None and len(objects.item_refs(coil)) == 2
+    assert coil.PartKey == "Coil01" and coil.Body is None and len(objects.item_refs(coil)) == 2
     assert [objects.rules_of(g) for g in objects.symmetric_groups(study)] == rules
     assert dict(study.MatIds) == ids
 

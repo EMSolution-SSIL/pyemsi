@@ -10,6 +10,7 @@ from PySide import QtCore, QtWidgets
 
 from . import airshapes, geometry, highlight, icon, jobwriter, labels, objects, validation
 from . import symmetry
+from . import sides
 
 
 def active_study():
@@ -1660,15 +1661,8 @@ class SymmetricGroupPanel:
         top.addRow(hint)
         self.name = QtWidgets.QLineEdit(objects.display_name(obj))
         top.addRow("Name", self.name)
-        self.side = QtWidgets.QComboBox()
-        self.side.addItems(obj.getEnumerationsOfProperty("Side"))
-        self.side.setCurrentText(obj.Side)
-        self.side_label = QtWidgets.QLabel("Side")
-        top.addRow(self.side_label, self.side)
-        sliding = study.Movement == "Sliding motion"
-        self.side.setVisible(sliding)
-        self.side_label.setVisible(sliding)
-        self.side.currentTextChanged.connect(self.write_side)
+        self.side = QtWidgets.QLabel()  # read-only: the Sliding Interface says which side moves (show_state)
+        top.addRow(self.side)
 
         cells = QtWidgets.QGroupBox("Cell objects and what their copies become")
         cells_layout = QtWidgets.QVBoxLayout(cells)
@@ -1859,6 +1853,11 @@ class SymmetricGroupPanel:
         texts = [p.text.removeprefix(prefix) for p in validation.group_problems(self.obj)]
         self.problem.setText("\n".join(texts))
         self.problem.setVisible(bool(texts))
+        sliding = self.study.Movement == "Sliding motion"
+        self.side.setVisible(sliding)
+        if sliding:
+            side = sides.group_side(self.study, self.obj)
+            self.side.setText(f"Side: {side}" if side else "Side: unknown, the drawing crosses the Sliding Interface")
         if self.rules_ok():
             n = symmetry.copy_count(objects.rules_of(self.obj))
             parts = len(objects.study_parts(self.study, [self.obj]))
@@ -1876,10 +1875,6 @@ class SymmetricGroupPanel:
         """Recompute the drawing and show it; rule: as for refresh."""
         self.doc.recompute()
         self.refresh(rule)
-
-    def write_side(self, side):
-        self.obj.Side = side
-        self.apply()
 
     def write_cells(self, cells):
         self.obj.Cells = list(cells)

@@ -232,7 +232,7 @@ class Material(_Proxy):
     @staticmethod
     def add_part(obj):
         if not hasattr(obj, "PartKey"):
-            obj.addProperty("App::PropertyString", "PartKey", "EMSolution", "Part of a Symmetric Group: side|name")
+            obj.addProperty("App::PropertyString", "PartKey", "EMSolution", "Part of a Symmetric Group: its name")
 
     def onDocumentRestored(self, obj):
         self.add_part(obj)
@@ -261,10 +261,12 @@ class SymmetricGroup(_Proxy):
         add("App::PropertyString", "Rules", "EMSolution", "Copy rules, JSON")
         add("App::PropertyString", "Rows", "EMSolution", "One row per cell object, or per block of a split one, JSON")
         obj.Rules = obj.Rows = "[]"
-        add("App::PropertyEnumeration", "Side", "EMSolution", "Fixed or moving side of a Sliding Interface")
-        obj.Side = ["Fixed", "Moving"]
         for prop in ("Rules", "Rows"):
             obj.setEditorMode(prop, 2)  # hidden: edit in the panel
+
+    def onDocumentRestored(self, obj):
+        if hasattr(obj, "Side"):
+            obj.removeProperty("Side")  # the side comes from the Sliding Interface now; no conversion
 
     def execute(self, obj):
         import FreeCAD as App
@@ -915,14 +917,13 @@ def make_mesh_size(study, size, refs):
     return obj
 
 
-def make_symmetric_group(study, cells, rules=(), name="Symmetric Group", side="Fixed"):
+def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
     object, all its solids (faces in 2D); split_row splits a row into blocks."""
     obj = study.Document.addObject("Part::FeaturePython", "SymmetricGroup")
     SymmetricGroup(obj)
     obj.Label = name
     obj.Cells = list(cells)
-    obj.Side = side
     set_rules(obj, rules)
     sync_rows(obj)
     study.MeshSizesGroup.addObject(obj)
@@ -1180,19 +1181,14 @@ def part_name_of(item, sub):
     return row_parts(item, rows_of(item)[row])[copy]
 
 
-def part_key(study, item, name):
-    """The key of a part: its side, "fixed" or "moving" (all fixed without Sliding motion), and its name."""
-    side = item.Side.lower() if study.Movement == "Sliding motion" else "fixed"
-    return f"{side}|{name}"
-
-
 def study_parts(study, items=None):
-    """{key: [(item, row index, copy), ...]} of every part of the Study's groups (or of items), in drawing order."""
+    """{name: [(item, row index, copy), ...]} of every part of the Study's groups (or of items), in drawing order. A
+    part's name is its key (a Material's PartKey)."""
     parts = {}
     for item in symmetric_groups(study) if items is None else items:
         for r, row in enumerate(rows_of(item)):
             for copy, name in enumerate(row_parts(item, row)):
-                parts.setdefault(part_key(study, item, name), []).append((item, r, copy))
+                parts.setdefault(name, []).append((item, r, copy))
     return parts
 
 
@@ -1231,7 +1227,7 @@ def sync_parts(study):
     for key, ((item, r, _), *_) in parts.items():
         if key in have:
             continue
-        base = name = key.partition("|")[2]
+        base = name = key
         n = 1
         while name_taken(study, name):
             n += 1
@@ -1254,7 +1250,7 @@ def set_row_material(study, item, row, lib):
     set_rows(item, rows)
     have = {m.PartKey: m for m in part_assignments(study)}
     for name in row_parts(item, rows[row]):
-        m = have.get(part_key(study, item, name))
+        m = have.get(name)
         if m is not None:
             m.LibraryMaterial = lib
             m.Label = assignment_label(m)
@@ -1267,7 +1263,7 @@ def part_of_pick(study, item, sub):
     if owner is None:
         return None
     row, copy = owner
-    key = part_key(study, item, row_parts(item, rows_of(item)[row])[copy])
+    key = row_parts(item, rows_of(item)[row])[copy]
     return next((m for m in part_assignments(study) if m.PartKey == key), None), row
 
 

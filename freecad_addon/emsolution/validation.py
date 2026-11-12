@@ -1087,9 +1087,10 @@ def _about_z(rule):
     return symmetry.z_motion(symmetry.rule_matrix(rule)) is not None
 
 
-def _group_sliding(study, groups, ruled, free, plane, r):
+def _group_sliding(study, groups, ruled, free, plane, side, r):
     """Sliding with groups (spec 7.5): a group that reaches the interface may only turn about Z through the origin or
-    mirror in a plane that contains Z or in z = const; its turns divide the Divisions; no free object touches it."""
+    mirror in a plane that contains Z or in z = const; its turns divide the Divisions; no free object touches it.
+    side: group Name -> sides.group_side."""
     three = study.Dimension == "3D"
     sliding = study.Movement == "Sliding motion"
     _interfaces(study, sliding, r)
@@ -1107,7 +1108,7 @@ def _group_sliding(study, groups, ruled, free, plane, r):
             how = _reach(item, radius, three)
             if how is None:
                 continue
-            reached.add(objects.part_key(study, item, "").partition("|")[0])
+            reached.add(side[item.Name])  # None for a group across it, reported below
             rules = ruled.get(item.Name)
             off_z = [(n, rule) for n, rule in enumerate(rules or [], 1) if not _about_z(rule)]
             if how == "crosses" and off_z and not any(_drawn_cross(c, radius, three) for c in item.Cells):
@@ -1136,10 +1137,10 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                     f" {turns} turns of {item.Label}'s cell objects.",
                     iface,
                 )
-        for side in ("fixed", "moving"):
-            if side not in reached:
+        for name in ("fixed", "moving") if None not in reached else ():  # a group across it has no side
+            if name not in reached:
                 r.error(
-                    f"Sliding Interface {iface.Label}: no Symmetric Group on the {side} side reaches it. Cell objects"
+                    f"Sliding Interface {iface.Label}: no Symmetric Group on the {name} side reaches it. Cell objects"
                     " of groups must cover the sliding surface on both sides (a limit of the tool: free objects may"
                     " not touch it).",
                     iface,
@@ -1166,13 +1167,13 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                     iface,
                     [(air, "")],
                 )
-    _air_off_moving(groups, objects.air_regions(study), "3D" if three else plane, r)
+    _air_off_moving(groups, objects.air_regions(study), "3D" if three else plane, side, r)
 
 
-def _air_off_moving(groups, airs, plane, r):
+def _air_off_moving(groups, airs, plane, side, r):
     """The Air Region is meshed with the fixed side (spec decision 3): it may neither touch nor overlap the copies of a
-    group on the moving side, the two meshes would share no nodes there."""
-    moving = [g for g in groups if g.Side == "Moving" and not g.Shape.isNull()]
+    group on the moving side, the two meshes would share no nodes there. side: group Name -> sides.group_side."""
+    moving = [g for g in groups if side[g.Name] == "moving" and not g.Shape.isNull()]
     for air in airs:
         try:
             shape = airshapes.air_shape(air, plane)
@@ -1194,19 +1195,20 @@ def _air_off_moving(groups, airs, plane, r):
                 )
 
 
-def _part_materials(study, readable, r):
+def _part_materials(study, readable, side, r):
     """Every part has a Material; a part name is on one side of a Sliding Interface only. readable: the groups whose
-    rules and rows could be read."""
+    rules and rows could be read; side: group Name -> sides.group_side (a group with none is skipped here,
+    _group_sliding reports it)."""
     parts = objects.study_parts(study, readable)
     have = {m.PartKey: m for m in objects.part_assignments(study)}
     sliding = study.Movement == "Sliding motion"
+    on = {key: {side[item.Name] for item, _, _ in copies} - {None} for key, copies in parts.items()}
 
     def named(key):
-        return key.partition("|")[2] + (" (moving)" if sliding and key.startswith("moving|") else "")
+        return key + (" (moving)" if sliding and "moving" in on.get(key, ()) else "")
 
     spelled = {}  # the name as the mesh has it -> {part name: the first group that has it}
-    for key, copies in parts.items():
-        name = key.partition("|")[2]
+    for name, copies in parts.items():
         spelled.setdefault(objects.clean(name), {}).setdefault(name, copies[0][0])
     for clashing in spelled.values():
         if len(clashing) > 1:
@@ -1226,8 +1228,7 @@ def _part_materials(study, readable, r):
             if key not in parts:
                 r.warning(f"Material {m.Label} is for part {named(key)}, which no group makes any more. Delete it.", m)
     if sliding:
-        fixed = {k.partition("|")[2] for k in parts if k.startswith("fixed|")}
-        both = sorted(fixed & {k.partition("|")[2] for k in parts if k.startswith("moving|")})
+        both = sorted(k for k in parts if on[k] == {"fixed", "moving"})
         if both:
             interfaces = objects.sliding_interfaces(study)
             r.error(
@@ -1269,9 +1270,10 @@ def _groups(study, free, r):
         if _group_rows(study, item, rules, r) and rules is not None:
             drawn.append(item)
             _overlaps(item, item.Cells, rules, r, three)
+    side = {g.Name: sides.group_side(study, g) for g in groups}
     for i, a in enumerate(drawn):
         for b in drawn[i + 1 :]:
-            if objects.part_key(study, a, "") == objects.part_key(study, b, ""):  # the same side
+            if side[a.Name] is not None and side[a.Name] == side[b.Name]:
                 _touch_groups(a, b, three, r)
     _free_on_copies(drawn, free, three, r)
     names = {g.Name for g in groups}
@@ -1309,6 +1311,6 @@ def _groups(study, free, r):
                 m,
                 [(m.Body, "")],
             )
-    _group_sliding(study, groups, ruled, free, plane, r)
+    _group_sliding(study, groups, ruled, free, plane, side, r)
     _free_transfinite(study, free, r)
-    _part_materials(study, drawn, r)
+    _part_materials(study, drawn, side, r)

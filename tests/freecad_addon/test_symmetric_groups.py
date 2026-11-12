@@ -13,7 +13,7 @@ import pytest
 import FreeCAD as App
 import Part
 
-from emsolution import airshapes, geometry, jobwriter, objects, symmetry, validation
+from emsolution import airshapes, geometry, jobwriter, objects, sides, symmetry, validation
 
 from . import meshreport, symcases
 from .test_meshsym import mesh_check
@@ -56,7 +56,7 @@ def test_drawing_has_a_solid_per_row_per_copy(study, stator):
     assert len(stator.Shape.Faces) == 3 * 24
     assert objects.is_grouped(study)
     assert stator.Label == "Stator"
-    assert stator.Side == "Fixed"
+    assert not hasattr(stator, "Side")  # its side comes from the Sliding Interface
 
 
 def test_rows_are_one_per_cell_object(stator):
@@ -142,6 +142,7 @@ def test_group_survives_save_and_reopen(study, stator, tmp_path):
     objects.set_rows(stator, [{**r, "mode": "table", "table": ["A"] * 24} for r in objects.rows_of(stator)])
     study.Document.recompute()
     rules, rows, faces = objects.rules_of(stator), objects.rows_of(stator), len(stator.Shape.Faces)
+    stator.addProperty("App::PropertyEnumeration", "Side", "EMSolution", "")  # as an older version saved it
     path = str(tmp_path / "again.FCStd")
     study.Document.saveAs(path)
     App.closeDocument(study.Document.Name)
@@ -151,7 +152,7 @@ def test_group_survives_save_and_reopen(study, stator, tmp_path):
     assert objects.rows_of(again) == rows
     assert objects.rows_of(again)[0]["table"] == ["A"] * 24
     assert len(again.Shape.Faces) == faces
-    assert again.Side == "Fixed"
+    assert not hasattr(again, "Side")  # the side comes from the Sliding Interface; no conversion
 
 
 def test_fragments_cell_has_one_row_until_split(study):
@@ -572,39 +573,27 @@ def test_each_part_has_one_assignment(study, stator):
     objects.set_rows(stator, [{**r, "mode": "each"} if r["cell"] == "CoilCell" else r for r in objects.rows_of(stator)])
     parts = objects.study_parts(study)
     assert len(parts) == 24 + 2
-    assert parts["fixed|CoilCell_3"] == [(stator, 1, 2)]
+    assert parts["CoilCell_3"] == [(stator, 1, 2)]
     assert objects.sync_parts(study) == []
     found = objects.part_assignments(study)
     assert sorted(m.PartKey for m in found) == sorted(parts)
-    assert {display for display in (objects.display_name(m) for m in found)} == {k.split("|")[1] for k in parts}
+    assert {display for display in (objects.display_name(m) for m in found)} == set(parts)
     assert objects.sync_parts(study) == []
     assert len(objects.part_assignments(study)) == 26
 
 
 def test_same_name_on_two_rows_is_one_part(study, stator):
     six_copies(stator, {"CoilCell": ["A+"] * 6, "StatorIronCell": ["A+"] * 6})
-    assert len(objects.study_parts(study)["fixed|A+"]) == 2 * 6
+    assert len(objects.study_parts(study)["A+"]) == 2 * 6
 
 
-def test_same_name_on_the_two_sides_is_two_parts(study, stator):
+def test_without_sliding_motion_or_an_interface_every_group_is_fixed(study, stator):
     study.Movement = "Sliding motion"
-    six_copies(stator, {"CoilCell": ["A+"] * 6})
-    rotor = objects.make_symmetric_group(
-        study, [study.Document.getObject("RotorIronCell")], name="Rotor", side="Moving"
-    )
-    objects.set_rows(rotor, [{**r, "mode": "table", "table": ["A+"] * 8} for r in objects.rows_of(rotor)])
-    objects.set_rules(rotor, [{"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}])
-    parts = objects.study_parts(study)
-    assert "fixed|A+" in parts and "moving|A+" in parts
-    objects.sync_parts(study)
-    names = [m.GroupName for m in objects.part_assignments(study) if m.PartKey.endswith("|A+")]
-    assert len(names) == 2 and len(set(names)) == 2
-
-
-def test_no_sliding_means_every_part_is_fixed(study, stator):
+    rotor = rotor_group(study)
+    assert sides.group_side(study, rotor) == "fixed"  # no Sliding Interface yet
+    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     study.Movement = "No movement"
-    stator.Side = "Moving"
-    assert all(k.startswith("fixed|") for k in objects.study_parts(study))
+    assert sides.group_side(study, rotor) == "fixed"
 
 
 def test_parts_gone_remove_their_assignment_and_are_reported(study, stator):
@@ -614,7 +603,7 @@ def test_parts_gone_remove_their_assignment_and_are_reported(study, stator):
     removed = objects.sync_parts(study)
     assert len(removed) == 24 and "CoilCell_2" in removed
     assert len(objects.part_assignments(study)) == 3
-    assert not [o for o in study.Document.Objects if getattr(o, "PartKey", "") == "fixed|CoilCell_2"]
+    assert not [o for o in study.Document.Objects if getattr(o, "PartKey", "") == "CoilCell_2"]
 
 
 def test_removed_name_is_reported(study, stator):
@@ -626,9 +615,9 @@ def test_removed_name_is_reported(study, stator):
 
 def test_rename_keeps_key_and_changes_mesh_name(study, stator):
     objects.sync_parts(study)
-    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|CoilCell")
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "CoilCell")
     objects.set_material_name(m, "Winding")
-    assert m.PartKey == "fixed|CoilCell"
+    assert m.PartKey == "CoilCell"
     assert objects.volume_name(m) == "Winding"
     assert objects.sync_parts(study) == []
     assert m.GroupName == "Winding"
@@ -637,7 +626,7 @@ def test_rename_keeps_key_and_changes_mesh_name(study, stator):
 def test_sync_keeps_library_material_and_potential(study, stator):
     lib = library(study)
     objects.sync_parts(study)
-    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|CoilCell")
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "CoilCell")
     m.LibraryMaterial, m.Potential = lib, 3
     objects.sync_parts(study)
     assert m.LibraryMaterial == lib and m.Potential == 3
@@ -648,10 +637,10 @@ def test_set_row_material_covers_all_its_parts(study, stator):
     objects.set_rows(stator, [{**r, "mode": "each"} if r["cell"] == "CoilCell" else r for r in objects.rows_of(stator)])
     objects.sync_parts(study)
     objects.set_row_material(study, stator, 1, lib)
-    coils = [m for m in objects.part_assignments(study) if m.PartKey.startswith("fixed|CoilCell_")]
+    coils = [m for m in objects.part_assignments(study) if m.PartKey.startswith("CoilCell_")]
     assert len(coils) == 24 and all(m.LibraryMaterial == lib for m in coils)
     assert objects.rows_of(stator)[1]["material"] == lib.Name
-    others = [m for m in objects.part_assignments(study) if not m.PartKey.startswith("fixed|CoilCell_")]
+    others = [m for m in objects.part_assignments(study) if not m.PartKey.startswith("CoilCell_")]
     assert all(m.LibraryMaterial is None for m in others)
 
 
@@ -659,14 +648,14 @@ def test_new_part_takes_the_library_material_of_its_row(study, stator):
     lib = library(study)
     objects.set_row_material(study, stator, 0, lib)
     objects.sync_parts(study)
-    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|StatorIronCell")
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "StatorIronCell")
     assert m.LibraryMaterial == lib
 
 
 def test_part_refs_and_item_refs(study, stator):
     six_copies(stator, {"CoilCell": ["A+", "B+"] * 3})
     objects.sync_parts(study)
-    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|B+")
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "B+")
     assert objects.part_refs(m) == [(stator, "Face5"), (stator, "Face11"), (stator, "Face17")]
     assert objects.item_refs(m) == objects.part_refs(m)
 
@@ -675,9 +664,9 @@ def test_part_of_pick_finds_the_part_and_row_of_a_clicked_copy(study, stator):
     six_copies(stator, {"CoilCell": ["A+", "B+"] * 3})
     objects.sync_parts(study)
     m, row = objects.part_of_pick(study, stator, "Face11")  # copy 3 of row 1, a "B+"
-    assert m.PartKey == "fixed|B+" and row == 1
+    assert m.PartKey == "B+" and row == 1
     m, row = objects.part_of_pick(study, stator, "Face1")
-    assert m.PartKey == "fixed|StatorIronCell" and row == 0
+    assert m.PartKey == "StatorIronCell" and row == 0
     assert objects.part_of_pick(study, stator, "Face99") is None
 
 
@@ -688,18 +677,18 @@ def test_part_of_pick_without_an_assignment_gives_none_for_it(study, stator):
 def test_part_row_is_the_row_of_the_first_copy(study, stator):
     six_copies(stator, {"CoilCell": ["A+", "B+"] * 3})
     objects.sync_parts(study)
-    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|B+")
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "B+")
     assert objects.part_row(m) == (stator, 1)
-    m.PartKey = "fixed|nothing"
+    m.PartKey = "nothing"
     assert objects.part_row(m) is None
 
 
 def test_apply_part_material_keeps_the_key(study, stator):
     lib = library(study)
     objects.sync_parts(study)
-    m = next(m for m in objects.part_assignments(study) if m.PartKey == "fixed|CoilCell")
+    m = next(m for m in objects.part_assignments(study) if m.PartKey == "CoilCell")
     objects.apply_part_material(m, "Winding", lib, 4)
-    assert (m.PartKey, m.GroupName, m.LibraryMaterial, m.Potential) == ("fixed|CoilCell", "Winding", lib, 4)
+    assert (m.PartKey, m.GroupName, m.LibraryMaterial, m.Potential) == ("CoilCell", "Winding", lib, 4)
     assert m.Label == "Winding: Steel"
 
 
@@ -721,7 +710,7 @@ def test_material_rows_list_free_bodies_and_parts(study, stator):
     tail = rows[len(rows) - len(parts) :]
     assert [r[0] for r in tail] == parts
     assert stator not in [r[0] for r in rows]
-    coil = next(r for r in tail if r[0].PartKey == "fixed|CoilCell")
+    coil = next(r for r in tail if r[0].PartKey == "CoilCell")
     assert coil[2] == ["CoilCell", lib.Label, study.MatIds[coil[0].Name], "0"]
     assert coil[1] == objects.part_refs(coil[0])
 
@@ -768,14 +757,14 @@ def ready(study):
     study.Document.recompute()
 
 
-def rotor_group(study, rules=(ROTATE_Z,), side="Fixed"):
+def rotor_group(study, rules=(ROTATE_Z,)):
     cells = [study.Document.getObject(n) for n in ("RotorIronCell", "MagnetCell", "RotorAirCell")]
-    return objects.make_symmetric_group(study, cells, rules=rules, name="Rotor", side=side)
+    return objects.make_symmetric_group(study, cells, rules=rules, name="Rotor")
 
 
 def sliding(study):
     study.Movement = "Sliding motion"
-    rotor = rotor_group(study, side="Moving")
+    rotor = rotor_group(study)
     iface = objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     return rotor, iface
 
@@ -796,6 +785,47 @@ def free_body(study, name, shape):
     body = symcases.feature(study.Document, name, shape)
     study.Document.recompute()
     return body
+
+
+def test_the_rotor_inside_the_interface_moves_with_no_setting(study):
+    rotor, iface = sliding(study)  # Radius 35, default Inside
+    assert sides.group_side(study, rotor) == "moving"
+    assert sides.group_side(study, objects.symmetric_groups(study)[0]) == "fixed"  # the stator
+    iface.MovingSide = "Outside"
+    assert sides.group_side(study, rotor) == "fixed"
+
+
+def test_a_drawing_across_the_interface_has_no_side(study, stator):
+    rotor, iface = sliding(study)
+    iface.Radius = 45  # through the stator's coils
+    assert sides.group_side(study, stator) is None
+    assert sides.group_side(study, rotor) == "moving"
+
+
+def test_part_materials_survive_a_new_radius(study):
+    rotor, iface = sliding(study)
+    objects.sync_parts(study)
+    before = {m.Name: m.PartKey for m in objects.part_assignments(study)}
+    iface.Radius = 36
+    study.Document.recompute()
+    objects.sync_parts(study)
+    assert {m.Name: m.PartKey for m in objects.part_assignments(study)} == before
+    assert all("|" not in key for key in before.values())
+
+
+def test_same_name_on_the_two_sides_is_refused(study, stator):
+    rotor, _ = sliding(study)
+    for item, cell, copies in ((stator, "StatorIronCell", 24), (rotor, "RotorIronCell", 16)):
+        rows = objects.rows_of(item)
+        objects.set_rows(
+            item, [{**r, "mode": "table", "table": ["Iron"] * copies} if r["cell"] == cell else r for r in rows]
+        )
+    ready(study)
+    assert len(objects.study_parts(study)["Iron"]) == 24 + 16
+    assert (
+        "Part names on both sides of the Sliding Interface: Iron. The moving side needs IDs of its own: give its parts"
+        " other names."
+    ) in texts(study)
 
 
 def test_the_ready_study_validates_clean(study):
@@ -1117,7 +1147,7 @@ def test_x_axis_rules_validate_without_sliding(study_3d):
 def test_z_mirror_with_sliding_validates(study_3d):
     (stator,) = objects.symmetric_groups(study_3d)
     objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
-    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
+    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z])
     study_3d.Movement = "Sliding motion"
     objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     ready(study_3d)
@@ -1429,7 +1459,8 @@ def outer_ring():
 
 
 def mat_ids(study, side):
-    return {int(study.MatIds[m.Name]) for m in objects.part_assignments(study) if m.PartKey.startswith(side + "|")}
+    parts = objects.part_assignments(study)
+    return {int(study.MatIds[m.Name]) for m in parts if sides.group_side(study, objects.part_row(m)[0]) == side}
 
 
 def test_job_holds_a_mini_job_per_group(study, stator):
@@ -1546,10 +1577,10 @@ def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study):
 def test_air_region_against_moving_copies_is_a_limit_of_the_tool(study):
     """An outer rotor: the stator group moves, so a ring air at its outer edge would mesh with no shared nodes."""
     study.Movement = "Sliding motion"
-    rotor_group(study, side="Fixed")
-    (stator,) = [g for g in objects.symmetric_groups(study) if g.Label == "Stator"]
-    stator.Side = "Moving"
-    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    rotor_group(study)
+    objects.make_sliding_interface(
+        study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2, MovingSide="Outside"
+    )
     ready(study)
     symcases.add_air_region(study, symcases.libraries(study)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90)
     study.Document.recompute()
@@ -1657,7 +1688,7 @@ def test_a_study_without_free_bodies_has_no_free(study, stator):
 def test_z_range_with_sliding(study_3d, tmp_path):
     (stator,) = objects.symmetric_groups(study_3d)
     objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
-    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
+    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z])
     study_3d.Movement = "Sliding motion"
     objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     ready(study_3d)
@@ -1769,7 +1800,7 @@ def test_group_motor_runs_end_to_end_3d(study_3d, tmp_path):
     (stator,) = objects.symmetric_groups(study_3d)
     study_3d.MeshSizesGroup.DefaultMeshSize = 1.5
     objects.set_rules(stator, [*STATOR_RULES, MIRROR_Z])
-    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z], side="Moving")
+    rotor_group(study_3d, rules=[ROTATE_Z, MIRROR_Z])
     study_3d.Movement = "Sliding motion"
     objects.make_sliding_interface(study_3d, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
     ready(study_3d)

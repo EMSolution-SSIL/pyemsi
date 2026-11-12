@@ -211,11 +211,8 @@ def _groups_study(doc, dimension, height=0):
     study = objects.make_study(doc, dimension)
     study.Movement = "Sliding motion"
     lib = objects.make_library_material(study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL)))
-    for part, cells, rules, side in (
-        ("Stator", stator_cells, STATOR_RULES, "Fixed"),
-        ("Rotor", rotor_cells, ROTOR_RULES, "Moving"),
-    ):
-        item = objects.make_symmetric_group(study, cells, rules=rules, name=part, side=side)
+    for part, cells, rules in (("Stator", stator_cells, STATOR_RULES), ("Rotor", rotor_cells, ROTOR_RULES)):
+        item = objects.make_symmetric_group(study, cells, rules=rules, name=part)
         name_parts(item, part)
         for r in range(len(cells)):
             objects.set_row_material(study, item, r, lib)
@@ -281,13 +278,13 @@ def libraries(study):
     return out
 
 
-def group(study, name, cells, rules, rows=None, side="Fixed", lib=None):
+def group(study, name, cells, rules, rows=None, lib=None):
     """A Symmetric Group of cells copied by rules. rows: {cell Name: row changes} (such as {"mode": "each"}, or a
     function of the item and the row's index giving them); lib: {cell Name: library material}. The cells are hidden."""
     from emsolution import objects
 
     study.Document.recompute()
-    item = objects.make_symmetric_group(study, cells, rules=rules, name=name, side=side)
+    item = objects.make_symmetric_group(study, cells, rules=rules, name=name)
     out = []
     for r, row in enumerate(objects.rows_of(item)):
         change = (rows or {}).get(row["cell"], {})
@@ -417,7 +414,7 @@ def read_mesh(study):
     free = geometry.study_geometry(study)[0]
     copied = collections.defaultdict(set)  # side -> MAT_IDs of the parts of the copies
     for m in objects.part_assignments(study):
-        copied[m.PartKey.partition("|")[0]].add(int(study.MatIds[m.Name]))
+        copied[sides.group_side(study, objects.part_row(m)[0])].add(int(study.MatIds[m.Name]))
     found = collections.Counter()
     for side, msh in files.items():
         q = meshreport.quality(msh, copied[side])

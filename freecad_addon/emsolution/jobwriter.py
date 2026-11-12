@@ -300,8 +300,7 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
     rows, parts, index, written = objects.rows_of(item), [], {}, []
     for k, row in enumerate(rows, 1):
         picks = []
-        for name in objects.row_parts(item, row):
-            key = objects.part_key(study, item, name)
+        for key in objects.row_parts(item, row):
             if key not in index:
                 index[key] = len(parts)
                 m = assignments[key]
@@ -314,7 +313,7 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
         written.append({"cell": ids[row["cell"]], "file": file, "parts": picks})
     entry = {
         "name": objects.volume_name(item),
-        "side": objects.part_key(study, item, "").partition("|")[0],
+        "side": sides.group_side(study, item),
         "job": cell_job,
         "cells": list(ids.values()),
         "transforms": objects.group_transforms(item),

@@ -34,7 +34,9 @@ def _half_space(shape, iface, plane):
 def side_of(shape, iface, plane):
     """ "moving", "fixed", or None when shape is on both sides of iface (all but 1e-6 of it must be on one side)."""
     whole = airshapes._measure(shape)
-    inside = airshapes._measure(shape.common(_half_space(shape, iface, plane)))
+    half = _half_space(shape, iface, plane)
+    # piece by piece: one common of a compound of touching pieces (a group's drawing) can lose some of them
+    inside = sum(airshapes._measure(p.common(half)) for p in (shape.Solids or shape.Faces))
     if inside >= (1 - _EPS) * whole:
         positive = True
     elif inside <= _EPS * whole:
@@ -89,6 +91,20 @@ def _pieces(study):
         return None
     pieces = airshapes.cells(air, surfaces)
     return pieces, piece_sides(pieces, interfaces, surfaces, plane)[0]
+
+
+def group_side(study, item):
+    """ "moving" or "fixed": the side of the Study's one Sliding Interface that Symmetric Group item's drawing is on;
+    "fixed" without Sliding motion or without an interface. None when the drawing is on both sides, or has none
+    (validation says why)."""
+    if study.Movement != "Sliding motion":
+        return "fixed"
+    interfaces = objects.sliding_interfaces(study)
+    if not interfaces:
+        return "fixed"
+    if item.Shape.isNull() or not item.Shape.Faces:  # rules that cannot be read, or too many copies to draw
+        return None
+    return side_of(item.Shape, interfaces[0], airshapes.study_plane(study))
 
 
 def moving(study):
