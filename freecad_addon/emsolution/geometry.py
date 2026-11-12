@@ -337,7 +337,11 @@ WHY = {  # reason: (gate text, Material warning, item warning); {b} the body, {o
         "Material {m} is on {b}, the drawing of Symmetric Group {o}: the group's parts take the Materials.",
         "{k} {i} is not used for {b}, the drawing of Symmetric Group {o}: put it on the cell objects.",
     ),
-    "not a body": ("{b} is not a body of the Study.", None, None),
+    "not a body": (
+        "{b} is not a body of the Study.",
+        "Material {m} is on {b}, which is not a body of the Study.",
+        "{k} {i} is not used for {b}, which is not a body of the Study.",
+    ),
 }
 
 

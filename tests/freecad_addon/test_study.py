@@ -1935,6 +1935,45 @@ class StudyTest(unittest.TestCase):
         self.coil_link()
         self.assertFalse(self.warnings_with("is not meshed: a Link"))
 
+    def link_array(self):
+        a = self.box("A")
+        array = self.doc.addObject("App::Link", "Array")
+        array.LinkedObject = a
+        array.ElementCount = 2
+        self.doc.recompute()
+        return array
+
+    def test_a_material_on_a_non_body_is_warned_about(self):
+        array = self.link_array()
+        self.assign([array])
+        self.assertIn(f"Material {self.mat()} is on Array, which is not a body of the Study.", self.problems("warning"))
+
+    def test_an_item_on_a_non_body_is_warned_about(self):
+        array = self.link_array()
+        objects.make_recombine(self.study, [array])
+        self.assertIn(
+            "Recombine Recombine is not used for Array, which is not a body of the Study.", self.problems("warning")
+        )
+
+    def test_an_excluded_cut_tool_gets_the_excluded_text(self):
+        coil, _ = self.cut_tool_case()
+        self.exclude(coil)
+        self.assertEqual(geometry.not_meshed(self.study, coil), ("excluded", None))
+        self.assertEqual(
+            objects.assignment_problem(self.study, [coil]),
+            "Coil is excluded from the Study: tick it in the Study panel.",
+        )
+
+    def test_a_link_a_meshed_body_is_made_from_gets_no_link_warning(self):
+        array = self.link_array()
+        cut = self.doc.addObject("Part::Cut", "Cut")
+        cut.Base, cut.Tool = array, self.box("Tool", 50)
+        self.doc.recompute()
+        self.assertIsNone(geometry.link_target(array))
+        self.assertIn(cut, objects.study_bodies(self.study))
+        self.assertIn(array.Name, geometry.inputs(cut))
+        self.assertFalse(self.warnings_with("Array is not meshed: a Link"))
+
     def test_validation_lists_every_error(self):
         a = self.box("A")
         self.study.MeshSizesGroup.DefaultMeshSize = 0
