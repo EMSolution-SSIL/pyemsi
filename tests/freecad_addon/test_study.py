@@ -1930,6 +1930,16 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         text = "Array is not meshed: a Link is meshed only when it links one body."
         self.assertEqual(self.problems("warning").count(text), 1)
+        (problem,) = [p for p in validation.validate(self.study) if p.text == text]
+        self.assertEqual((problem.item, problem.refs), (array, [(array, "")]))
+
+    def test_a_link_that_is_a_cut_tool_is_not_warned_about(self):
+        array = self.link_array()
+        cut = self.doc.addObject("Part::Cut", "Cut")
+        cut.Base, cut.Tool = self.box("Base", 0, 30), array
+        self.doc.recompute()
+        self.assertIn(cut, objects.study_bodies(self.study))
+        self.assertFalse(self.warnings_with("Array is not meshed: a Link"))
 
     def test_a_link_to_one_body_is_not_warned_about(self):
         self.coil_link()
@@ -1955,13 +1965,13 @@ class StudyTest(unittest.TestCase):
             "Recombine Recombine is not used for Array, which is not a body of the Study.", self.problems("warning")
         )
 
-    def test_an_excluded_cut_tool_gets_the_excluded_text(self):
-        coil, _ = self.cut_tool_case()
+    def test_an_excluded_cut_tool_gets_the_cut_tool_text(self):
+        coil, air = self.cut_tool_case()  # the tree hides a cut tool: ticking it in the Study panel cannot help
         self.exclude(coil)
-        self.assertEqual(geometry.not_meshed(self.study, coil), ("excluded", None))
+        self.assertEqual(geometry.not_meshed(self.study, coil), ("cut tool", air))
         self.assertEqual(
             objects.assignment_problem(self.study, [coil]),
-            "Coil is excluded from the Study: tick it in the Study panel.",
+            "Coil is the tool of Air and is not meshed. To mesh it, make a Link to it.",
         )
 
     def test_a_link_a_meshed_body_is_made_from_gets_no_link_warning(self):

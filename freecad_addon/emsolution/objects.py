@@ -670,7 +670,7 @@ class SlidingInterface(_Named):
     def onDocumentRestored(self, obj):
         obj.setEditorMode("Placement", 2)
         if not hasattr(obj, "MovingSide"):  # saved before the moving side existed
-            touched = obj.isTouched()
+            touched = "Touched" in obj.State  # a FeaturePython has no isTouched()
             self._add_moving_side(obj)
             if not touched:
                 obj.purgeTouched()
@@ -1740,9 +1740,9 @@ def assignment_problem(study, bodies):
     """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
     from . import geometry
 
-    texts = []
+    texts, known = [], {}  # what geometry.not_meshed needs, worked out once for all the bodies
     for b in bodies:
-        why = geometry.not_meshed(study, b)
+        why = geometry.not_meshed(study, b, known)
         if why is not None:
             texts.append(geometry.not_meshed_text(0, b, *why))
     return " ".join(dict.fromkeys(texts))

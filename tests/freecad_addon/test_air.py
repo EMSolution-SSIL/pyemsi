@@ -767,6 +767,31 @@ class AirTest(unittest.TestCase):
         iface.MovingSide = "Outside"
         self.assertEqual(sides.moving(self.study), {stator.Name})
 
+    def test_an_old_sliding_interface_gets_its_moving_side_on_restore(self):
+        self.motor()
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.MovingSide = "Outside"
+        iface.removeProperty("MovingSide")  # saved before the moving side existed
+        self.doc.recompute()
+        iface.purgeTouched()
+        iface.Proxy.onDocumentRestored(iface)
+        self.assertEqual(
+            (iface.MovingSide, iface.getEnumerationsOfProperty("MovingSide")), ("Inside", ["Inside", "Outside"])
+        )
+        self.assertNotIn("Touched", iface.State)
+
+    def test_an_old_sliding_study_reopens_and_validates(self):
+        self.motor()
+        objects.sliding_interfaces(self.study)[0].removeProperty("MovingSide")
+        path = os.path.join(self.tmp.name, "old_slide.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        self.study = objects.find_study(self.doc)
+        self.assertEqual(objects.sliding_interfaces(self.study)[0].MovingSide, "Inside")
+        self.assertEqual(self.air_errors(), [])
+        self.assertEqual(sides.moving(self.study), {"Rotor"})
+
     def test_bodies_on_one_side_only_need_that_side_to_move(self):
         text = "No body is on the moving side of the Sliding Interfaces."
         stator, rotor = self.motor()

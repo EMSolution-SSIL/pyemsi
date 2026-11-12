@@ -836,6 +836,35 @@ def test_a_group_with_copies_on_both_sides_is_refused(study):
     assert not any("Mixed crosses it" in t for t in texts(study))
     with pytest.raises(jobwriter.StudyError, match="Symmetric Group Mixed has copies on both sides"):
         jobwriter.check(study)
+    assert sides.side_label(study, mixed) == "Side: unknown, the drawing is on both sides of the Sliding Interface"
+    assert sides.side_label(study, objects.symmetric_groups(study)[0]) == "Side: fixed"  # the stator
+    objects.set_rules(mixed, [{"kind": "translate", "vector": [1, 0, 0], "count": 100000}])  # too many to draw
+    study.Document.recompute()
+    assert sides.side_label(study, mixed) == "Side: unknown, the group has no drawing"
+
+
+def test_a_free_object_on_both_sides_is_refused():
+    """A free compound with pieces inside and outside the radius, none touching it: it has no side, so it may not be
+    taken for fixed."""
+    doc = App.newDocument("FreeBothSides")
+    try:
+        study = symcases.motor_study(doc)
+        assert texts(study) == []
+        housing = Part.Face(Part.Wire(Part.makeCircle(70))).cut(Part.Face(Part.Wire(Part.makeCircle(62))))
+        shaft = Part.Face(Part.Wire(Part.makeCircle(5)))
+        symcases.add_free(study, "ShaftAndHousing", Part.makeCompound([shaft, housing]))
+        text = (
+            "Free object ShaftAndHousing has pieces on both sides of Sliding Interface Sliding Interface: a free object"
+            " is all on one side. Move the interface or split the object."
+        )
+        (problem,) = [p for p in problems(study) if p.text == text]
+        assert problem.item is doc.getObject("ShaftAndHousing")
+        assert problem.refs == [(doc.getObject("ShaftAndHousing"), "")]
+        assert not any("ShaftAndHousing crosses or touches" in t for t in texts(study))
+        with pytest.raises(jobwriter.StudyError, match="Free object ShaftAndHousing has pieces on both sides"):
+            jobwriter.check(study)
+    finally:
+        App.closeDocument(doc.Name)
 
 
 def test_same_name_on_the_two_sides_is_refused(study, stator):

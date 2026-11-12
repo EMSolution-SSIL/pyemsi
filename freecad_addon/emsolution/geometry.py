@@ -162,9 +162,14 @@ def cut_tools(doc):
     return found
 
 
+def link_tools(doc):
+    """Names of the links used as the Tool of a Cut or Join Cutout: not meshed, like any cut tool."""
+    return {tool.Name for _, tool in _cut_pairs(doc) if _is_link(tool)}
+
+
 def _left_out(doc):
     """Names no Study meshes: the tools of Cuts and Join Cutouts, and a link used as one."""
-    return set(cut_tools(doc)) | {tool.Name for _, tool in _cut_pairs(doc) if _is_link(tool)}
+    return set(cut_tools(doc)) | link_tools(doc)
 
 
 def collect(roots, dimension):
@@ -345,26 +350,43 @@ WHY = {  # reason: (gate text, Material warning, item warning); {b} the body, {o
 }
 
 
-def not_meshed(study, obj):
+def not_meshed(study, obj, known=None):
     """None when obj is a Study body, a cell object or a group (also an Air Region); else (reason, other): why the Study
-    does not mesh obj, and the object to name. Reasons: "excluded", "cut tool" (other: the Cut), "made from" (other:
-    the meshed body made from obj), "air shape" (other: the Air Region), "drawing" (other: the group), "not a body"."""
-    bodies = study_geometry(study)[0]
-    meshed = {o.Name for o in bodies + objects.cell_bodies(study) + objects.symmetric_groups(study)}
-    if obj.Name in meshed or obj.Name in {a.Name for a in objects.air_regions(study)}:
+    does not mesh obj, and the object to name. Reasons, the first that holds: the ones the Study tree hides, "cut tool"
+    (other: the Cut), "air shape" (other: the Air Region), "drawing" (other: the group) and "made from" (other: the
+    meshed body made from obj); then "excluded" and "not a body". known: a dict the caller passes to every call for
+    one state of the document, which keeps what the answers need (it may start as {"bodies": study_geometry's
+    bodies})."""
+    known = {} if known is None else known
+
+    def get(key, make):
+        if key not in known:
+            known[key] = make()
+        return known[key]
+
+    bodies = get("bodies", lambda: study_geometry(study)[0])
+    meshed = get(
+        "meshed",
+        lambda: (
+            {o.Name for o in bodies + objects.cell_bodies(study) + objects.symmetric_groups(study)}
+            | {a.Name for a in objects.air_regions(study)}
+        ),
+    )
+    if obj.Name in meshed:
         return None
-    if is_excluded(study, obj):
-        return "excluded", None
-    for reason, found in (
-        ("cut tool", cut_tools(study.Document)),
-        ("air shape", air_sources(study)),
-        ("drawing", group_drawings(study)),
+    for reason, make in (
+        ("cut tool", lambda: cut_tools(study.Document)),
+        ("air shape", lambda: air_sources(study)),
+        ("drawing", lambda: group_drawings(study)),
     ):
+        found = get(reason, make)
         if obj.Name in found:
             return reason, found[obj.Name]
     other = next((b for b in bodies if obj.Name in inputs(b)), None)
     if other is not None:
         return "made from", other
+    if is_excluded(study, obj):
+        return "excluded", None
     return "not a body", None
 
 

@@ -102,18 +102,19 @@ def validate(study):
         included |= {g.Name for g in objects.symmetric_groups(study)}
     _old_items(study, r)
     _body_overlaps(bodies, study.Dimension, r)
-    _links(study, with_air, r)
+    known = {"bodies": bodies}  # what geometry.not_meshed needs, worked out once
+    _links(study, with_air, r, known)
     _settings(study, with_air, r)
     if grouped:
         _groups(study, bodies, r)
     else:
         _air(study, bodies, r)
-        _slides(study, bodies, sides.moving(study), r)
+        _slides(study, bodies, r)
     meshed_bodies = bodies + objects.cell_bodies(study)  # with groups, the cells come besides the free objects
     _coarse(study, meshed_bodies, r)
     _transfinite(study, meshed_bodies, r)
     _names(study, bodies, included, r)
-    _materials(study, r)
+    _materials(study, r, known)
     _links_not_bodies(study, bodies + objects.cell_bodies(study), r)
     return r.problems
 
@@ -173,7 +174,7 @@ def _kind(item):
     }[type(item.Proxy)]
 
 
-def _links(study, included, r):
+def _links(study, included, r, known=None):
     """Items left empty by a deleted body, bodies the Study does not mesh, sub-elements a body no longer has."""
     items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: no excitations yet
     items += [
@@ -191,7 +192,7 @@ def _links(study, included, r):
             airs = [(b, "") for b, _ in by_body if objects.is_air(b)]
             r.error(f"{kind} {item.Label}: {refused} Remove it from the item.", item, airs)
         for b, subs in by_body:  # kept on purpose, e.g. to mesh only part of a model; they just do not reach this mesh
-            why = geometry.not_meshed(study, b) if b.Name not in included else None
+            why = geometry.not_meshed(study, b, known) if b.Name not in included else None
             text = geometry.not_meshed_text(2, b, *why, k=kind, i=item.Label) if why is not None else None
             if text:
                 r.warning(text, item, [(b, s) for s in subs])
@@ -398,9 +399,10 @@ def _custom_fits(shape, plane):
     return bool(shape.Faces) and not shape.Solids and all(geometry.plane_of(f) == plane for f in shape.Faces)
 
 
-def _slides(study, bodies, moving, r):
+def _slides(study, bodies, r):
     """Sliding: an Air Region and Sliding Interfaces that cut it, interfaces that agree on the side of each piece of
-    the air, no body across a sliding surface and a body on the moving side. moving: names of the moving bodies."""
+    the air, no body across a sliding surface and a body on the moving side (as sides.moving finds it, from the same
+    pieces of air)."""
     interfaces = objects.sliding_interfaces(study)
     if study.Movement != "Sliding motion":
         for i in interfaces:
@@ -422,10 +424,10 @@ def _slides(study, bodies, moving, r):
     if surfaces is None:
         return
     cells = airshapes.cells(air_shape, surfaces)  # once: the bodies are sorted into them below
-    _, disagreements = sides.piece_sides(cells, interfaces, surfaces, plane)
+    piece_side, disagreements = sides.piece_sides(cells, interfaces, surfaces, plane)
     for text, iface in disagreements:
         r.error(text, iface)
-    unplaced = False  # a body not in one cell
+    unplaced, moving = False, False  # a body not in one cell; a body in a moving cell
     hint = ""
     if any(i.Kind != "Linear" for i in interfaces):
         hint = " Rotation is about the global Z axis; put the machine axis on Z."
@@ -435,9 +437,12 @@ def _slides(study, bodies, moving, r):
         if airshapes.outside(shape, air_shape, plane) > 1e-6 * measure:
             unplaced = True
             continue  # _air reports a body outside the air
-        if airshapes.cell_of(shape, cells) is None:
+        k = airshapes.cell_of(shape, cells)
+        if k is None:
             unplaced = True
             r.error(f"{body.Label} crosses a Sliding Interface." + hint, body, [(body, "")])
+        elif piece_side[k] == "moving":
+            moving = True
     if unplaced or disagreements:
         return  # the sides cannot be judged until those are fixed
     if not moving:
@@ -622,7 +627,7 @@ def _names(study, bodies, included, r):
         )
 
 
-def _materials(study, r):
+def _materials(study, r, known=None):
     """The mesh does not need materials, but the input file needs one for every body."""
     bodies = objects.bodies_without_material(study)
     if bodies:
@@ -634,7 +639,7 @@ def _materials(study, r):
         )
     for m in objects.materials(study):  # an assignment left on a body the Study does not mesh
         b = m.Body
-        why = geometry.not_meshed(study, b) if b is not None and not getattr(m, "PartKey", "") else None
+        why = geometry.not_meshed(study, b, known) if b is not None and not getattr(m, "PartKey", "") else None
         text = geometry.not_meshed_text(1, b, *why, m=objects.display_name(m)) if why is not None else None
         if text:
             r.warning(text, m, [(b, "")])
@@ -642,11 +647,13 @@ def _materials(study, r):
 
 def _links_not_bodies(study, meshed, r):
     """A Link the Study cannot mesh (an array, a link to a Part or Group, to a sketch) and no body is made from."""
-    used = {name for b in meshed for name in geometry.inputs(b)}
+    used = {name for b in meshed for name in geometry.inputs(b)} | geometry.link_tools(study.Document)
     for link in study.Document.Objects:
         if link.TypeId == "App::Link" and link.Name not in used and not geometry.is_excluded(study, link):
             if geometry.link_target(link) is None:
-                r.warning(f"{link.Label} is not meshed: a Link is meshed only when it links one body.", None)
+                r.warning(
+                    f"{link.Label} is not meshed: a Link is meshed only when it links one body.", link, [(link, "")]
+                )
 
 
 def _listed(names, limit=8):
@@ -1113,6 +1120,7 @@ def _group_sliding(study, groups, ruled, free, plane, side, r):
         r.error("Sliding motion is not supported in a ZX (axisymmetric) Study.")
         return
     crossed = set()  # the groups refused below as crossing an interface
+    on_interface = set()  # the free objects refused below as crossing or touching an interface
     for iface in objects.sliding_interfaces(study):
         if iface.Kind != "Rotational":
             continue  # _interfaces says so
@@ -1162,6 +1170,7 @@ def _group_sliding(study, groups, ruled, free, plane, side, r):
                 )
         for body in free:
             if _on_interface(geometry.global_shape(body), radius, three):
+                on_interface.add(body.Name)
                 r.error(
                     f"Free object {objects.display_name(body)} crosses or touches Sliding Interface {iface.Label}."
                     " The sliding surface must be covered by cell objects of groups on both sides: draw the air next"
@@ -1190,6 +1199,16 @@ def _group_sliding(study, groups, ruled, free, plane, side, r):
                 f" {interfaces[0].Label}: a group is all on one side. Move the interface or split the group.",
                 item,
                 [(item, "")],
+            )
+    for body in free if interfaces else ():  # sides.moving would take one on both sides for fixed
+        if body.Name in on_interface:
+            continue
+        if sides.side_of(geometry.global_shape(body), interfaces[0], "3D" if three else plane) is None:
+            r.error(
+                f"Free object {objects.display_name(body)} has pieces on both sides of Sliding Interface"
+                f" {interfaces[0].Label}: a free object is all on one side. Move the interface or split the object.",
+                body,
+                [(body, "")],
             )
     _air_off_moving(groups, objects.air_regions(study), "3D" if three else plane, side, r)
 

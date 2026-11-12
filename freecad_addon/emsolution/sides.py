@@ -107,6 +107,16 @@ def group_side(study, item):
     return side_of(item.Shape, interfaces[0], airshapes.study_plane(study))
 
 
+def side_label(study, item):
+    """The Symmetric Group panel's text for the side of item in a sliding Study."""
+    side = group_side(study, item)
+    if side:
+        return f"Side: {side}"
+    if item.Shape.isNull() or not item.Shape.Faces:
+        return "Side: unknown, the group has no drawing"
+    return "Side: unknown, the drawing is on both sides of the Sliding Interface"
+
+
 def moving(study):
     """Names of the Study's free bodies on the moving side; empty without Sliding motion or when it cannot be worked
     out (validation says why). Without Symmetric Groups a body moves with the air piece it is in; with them, by its

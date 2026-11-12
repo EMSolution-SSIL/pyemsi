@@ -1910,8 +1910,7 @@ class SymmetricGroupPanel:
         sliding = self.study.Movement == "Sliding motion"
         self.side.setVisible(sliding)
         if sliding:
-            side = sides.group_side(self.study, self.obj)
-            self.side.setText(f"Side: {side}" if side else "Side: unknown, the drawing crosses the Sliding Interface")
+            self.side.setText(sides.side_label(self.study, self.obj))
         if self.rules_ok():
             n = symmetry.copy_count(objects.rules_of(self.obj))
             parts = len(objects.study_parts(self.study, [self.obj]))
