@@ -971,7 +971,8 @@ def test_transfinite_air_region_is_refused_with_groups(study):
     air = objects.make_air_region(study, "Sector", OuterRadius=90)
     objects.make_transfinite_body(study, [air])
     study.Document.recompute()
-    assert any("Transfinite" in t and "Air" in t for t in texts(study))
+    found = [t for t in texts(study) if "Transfinite" in t and "Air" in t]
+    assert len(found) == 1, found  # air_refusal says it, once
 
 
 def test_cell_without_solid_is_refused(study_3d):

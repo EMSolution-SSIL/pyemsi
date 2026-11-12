@@ -1203,9 +1203,8 @@ def _part_materials(study, readable, r):
 
 
 def _free_transfinite(study, free, r):
-    """A free object cannot be structured (spec 4.4): the mesher cannot yet put a structured mesh around copies. The
-    Air Region counts as a free object."""
-    names = {b.Name for b in free + objects.air_regions(study)}
+    """A free object cannot be structured (spec 4.4): the mesher cannot yet put a structured mesh around copies."""
+    names = {b.Name for b in free}
     for t in objects.transfinite_bodies(study):
         on = [b for b, _ in objects.subs_by_body(t) if b.Name in names]
         if on:
