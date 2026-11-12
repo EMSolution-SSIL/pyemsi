@@ -54,7 +54,7 @@ def arrangement(doc):
 
 def general_study(doc):
     """Group 1: the box and the wedge, Mirror then Rotate 72° x 5 about the oblique axis; group 2: the sphere,
-    Translate (40, 7, 9) x 3; one big box of free air around them all."""
+    Translate (40, 7, 9) x 3; a Box Air Region around them all."""
     box, roof, ball = arrangement(doc)
     study = objects.make_study(doc, "3D")
     study.MeshSizesGroup.DefaultMeshSize = 8
@@ -74,8 +74,10 @@ def general_study(doc):
     for item in objects.symmetric_groups(study):
         reach.add(item.Shape.BoundBox)
     reach.enlarge(15)
-    air = Part.makeBox(reach.XLength, reach.YLength, reach.ZLength, V(reach.XMin, reach.YMin, reach.ZMin))
-    symcases.add_free(study, "FreeAir", air, lib["Air"])
+    air = objects.make_air_region(
+        study, "Box", Center=reach.Center, Length=reach.XLength, Width=reach.YLength, Height=reach.ZLength
+    )
+    objects.assign(study, [air], lib["Air"], 0, name="Air")
     return study
 
 
@@ -95,7 +97,7 @@ def test_nothing_overlaps_and_everything_is_in_the_free_box(study):
     assert len(solids) == 2 * 10 + 3
     for a, b in itertools.combinations(solids, 2):
         assert a.common(b).Volume < 1e-9
-    air = study.Document.getObject("FreeAir").Shape
+    air = objects.air_regions(study)[0].Shape
     assert all(air.common(s).Volume == pytest.approx(s.Volume) for s in solids)
     pair = [s for s in objects.symmetric_groups(study)[0].Shape.Solids]
     gaps = [a.distToShape(b)[0] for a, b in itertools.combinations(pair, 2)]
@@ -114,7 +116,8 @@ def test_arbitrary_solids_oblique_rules_groups_and_free_body(study):
     assert report.kept > 0  # the free air meets the copies: their facets are shared, not left open
     parts = {int(study.MatIds[m.Name]) for m in objects.part_assignments(study)}
     assert len(parts) == 1 + 10 + 3  # the box one part, each wedge and each sphere its own
-    assert set(meshreport.groups(jobwriter.mesh_file(study))) == parts | {int(study.MatIds["FreeAir"])}
+    air = int(study.MatIds[objects.air_regions(study)[0].Name])
+    assert set(meshreport.groups(jobwriter.mesh_file(study))) == parts | {air}
     assert symmetry.copy_count([MIRROR, ROTATE]) == 10 and math.isclose(symmetry.det(symmetry.rule_matrix(MIRROR)), -1)
 
 
@@ -127,7 +130,7 @@ def test_a_frozen_face_not_kept_is_seen(study):
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.open(path)
-        gmsh.model.removePhysicalGroups([(3, int(study.MatIds["FreeAir"]))])
+        gmsh.model.removePhysicalGroups([(3, int(study.MatIds[objects.air_regions(study)[0].Name]))])
         gmsh.write(path)
     finally:
         gmsh.finalize()

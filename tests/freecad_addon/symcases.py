@@ -382,8 +382,8 @@ def mesh_and_read(study, timeout=None):
 def read_mesh(study):
     """The mesh files of a meshed Study read back (meshreport.quality), as a namespace: types {type name: count},
     inverted, faces_in_three, kept (facets of the copies' surface that the elements of free objects share), lost
-    (facets of the copies' surface that face the inside of a free object but no element of it: a frozen face not
-    kept) and frozen_kept (none lost)."""
+    (facets of the copies' surface that face the inside of a free object or the Air Region but no element of it: a
+    frozen face not kept) and frozen_kept (none lost)."""
     import collections
     import types
 
@@ -412,6 +412,8 @@ def read_mesh(study):
         out.faces_in_three += q["faces_in_three"]
         out.kept += q["kept"]
         shapes = [geometry.global_shape(b) for b in free if (b.Name in on_moving) == (side == "moving")]
+        if side == "fixed":  # the Air Region is meshed in the fixed side's free job
+            shapes += [geometry.global_shape(a) for a in objects.air_regions(study)]
         mats, centres, normals, sizes = q["boundary"]
         mine = np.isin(mats, sorted(copied[side])) if len(mats) else np.zeros(0, dtype=bool)
         for c, n, h in zip(centres[mine], normals[mine], sizes[mine]):

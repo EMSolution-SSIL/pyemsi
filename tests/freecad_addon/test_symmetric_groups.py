@@ -1058,11 +1058,18 @@ def test_translation_through_any_axis_validates(study_3d, vector):
     assert texts(study_3d) == []
 
 
-def test_free_air_and_copies_validate(study):
+def test_free_body_over_the_copies_is_refused(study):
     ready(study)
     free_body(study, "FreeAir", Part.Face(Part.Wire(Part.makeCircle(80))))
-    assert texts(study) == []  # the free air may be drawn right over the copies; a missing Material only warns
-    assert any("No material" in t and "FreeAir" in t for t in texts(study, "warning"))
+    (text,) = [t for t in texts(study) if t.startswith("Free object")]
+    assert "FreeAir overlaps the copies of Symmetric Group Stator" in text and "Custom shape of the Air Region" in text
+
+
+def test_free_body_flush_against_the_copies_validates(study):
+    ready(study)
+    ring = Part.Face(Part.Wire(Part.makeCircle(90))).cut(Part.Face(Part.Wire(Part.makeCircle(60)))).Faces[0]
+    free_body(study, "Ring", ring)
+    assert texts(study) == []
 
 
 def test_x_axis_rules_validate_without_sliding(study_3d):

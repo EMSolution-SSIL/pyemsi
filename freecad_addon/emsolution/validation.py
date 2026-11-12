@@ -944,9 +944,6 @@ def _touch_groups(a, b, three, r):
     if a.Shape.isNull() or b.Shape.isNull() or not a.Shape.BoundBox.intersect(b.Shape.BoundBox):
         return
 
-    def measure(shape):
-        return shape.Volume if three else shape.Area
-
     mine, tol = _elements(a)
     others, _ = _elements(b)
     unit = "mm³" if three else "mm²"
@@ -956,12 +953,12 @@ def _touch_groups(a, b, three, r):
             if not box_a.intersect(box_b):
                 continue
             try:
-                if sa.distToShape(sb)[0] > tol:  # apart: neither overlap nor contact, the costly booleans need not run
+                hit = _overlap(sa, sb, three, tol)
+                if hit is None:
                     continue
-                common = sa.common(sb)
-                if measure(common) > 1e-6 * min(measure(sa), measure(sb)):
-                    c = max(common.Solids if three else common.Faces, key=measure).CenterOfMass
-                    text = f"overlap by {measure(common):.3g} {unit} near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g})"
+                amount, c = hit
+                if amount:
+                    text = f"overlap by {amount:.3g} {unit} near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g})"
                 elif _contact(sa, sb, three, tol):
                     text = "touch"
                 else:
@@ -990,6 +987,69 @@ def _touch_groups(a, b, three, r):
             b,
             [(a, ""), (b, "")],
         )
+
+
+def _overlap(sa, sb, three, tol):
+    """None when two solids (faces, in 2D) are further apart than tol; else (the volume, area in 2D, they share, the
+    centre of mass of its largest piece), with (0, None) when they share no more than 1e-6 of the smaller one.
+    May raise Part.OCCError."""
+
+    def measure(shape):
+        return shape.Volume if three else shape.Area
+
+    if sa.distToShape(sb)[0] > tol:  # apart: neither overlap nor contact, the costly booleans need not run
+        return None
+    common = sa.common(sb)
+    if measure(common) <= 1e-6 * min(measure(sa), measure(sb)):
+        return 0, None
+    return measure(common), max(common.Solids if three else common.Faces, key=measure).CenterOfMass
+
+
+def _free_on_copies(groups, free, three, r):
+    """A free object may touch the copies of any group, on either side, but not overlap them. A pair OCC cannot compute
+    is reported as a warning, not taken as clear."""
+    unit = "mm³" if three else "mm²"
+    for body in free:
+        shape = body.Shape
+        if shape.isNull():
+            continue
+        tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+        box = shape.BoundBox
+        box.enlarge(tol)
+        for group in groups:
+            if group.Shape.isNull() or not box.intersect(group.Shape.BoundBox):
+                continue
+            copies, _ = _elements(group)
+            name = objects.display_name(body)
+            failed = None  # where the first pair OCC failed on lies
+            for piece, piece_box in copies:
+                if not box.intersect(piece_box):
+                    continue
+                try:
+                    hit = _overlap(shape, piece, three, tol)
+                except Part.OCCError:
+                    failed = failed or piece.CenterOfMass
+                    continue
+                if hit is None or not hit[0]:
+                    continue
+                amount, c = hit
+                r.error(
+                    f"Free object {name} overlaps the copies of Symmetric Group {group.Label} by {amount:.3g} {unit}"
+                    f" near ({c.x:.6g}, {c.y:.6g}, {c.z:.6g}). Free objects may only touch the copies: make it the"
+                    " Custom shape of the Air Region, or cut the copies out of it.",
+                    body,
+                    [(body, ""), (group, "")],
+                )
+                failed = None
+                break
+            if failed is not None:
+                r.warning(
+                    f"Could not check overlap between free object {name} and the copies of Symmetric Group"
+                    f" {group.Label} near ({failed.x:.6g}, {failed.y:.6g}, {failed.z:.6g}); check the drawing. Free"
+                    " objects may only touch the copies.",
+                    body,
+                    [(body, ""), (group, "")],
+                )
 
 
 def _contact(sa, sb, three, tol):
@@ -1241,6 +1301,7 @@ def _groups(study, main, moving, r):
         for b in drawn[i + 1 :]:
             if objects.part_key(study, a, "") == objects.part_key(study, b, ""):  # the same side
                 _touch_groups(a, b, three, r)
+    _free_on_copies(drawn, free, three, r)
     names = {g.Name for g in groups}
     settings = objects.mesh_sizes(study) + objects.transfinite_bodies(study) + objects.transfinite_edges(study)
     for item in settings + objects.recombine_items(study):
