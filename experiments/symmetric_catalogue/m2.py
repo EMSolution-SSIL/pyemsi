@@ -1,7 +1,8 @@
 """2D motors M2-01 to M2-18. Each Study is an XY Study of Symmetric Groups; the rotor is moving behind a Rotational
 Sliding Interface at R 28.75 wherever the catalogue's rotor moves (the stator's gap band and the rotor's air band are
-the copied cells that cover it, spec 7.5). M2-01-structured is M2-01 with structured blocks beside the others. CASES
-lists (id, builder, expected[, check]) in catalogue order."""
+the copied cells that cover it, spec 7.5). M2-01-structured is M2-01 with structured blocks beside the others;
+motor_sliding-air is the success list's motor_sliding in a ring Air Region. CASES lists (id, builder, expected[,
+check]) in catalogue order."""
 
 import math
 
@@ -325,6 +326,14 @@ def m2_12_sliding_air():
     return quarter("M2_12sa", True, air=True)
 
 
+def motor_sliding_air():
+    """The success list's motor_sliding (stator to R 60, rotor moving behind the interface at R 35) with a Sector Air
+    Region R 60..90 outside the stator: the air lies on the fixed side, clear of the sliding surface."""
+    study = sl.motor_sliding()
+    symcases.add_air_region(study, symcases.libraries(study)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90)
+    return study
+
+
 # --- M2-13: coaxial magnetic gear, three rings, two sliding surfaces --------------------------------------------------
 
 
@@ -469,6 +478,7 @@ CASES = [
     ("M2-12", m2_12, "meshes"),
     ("M2-12-sliding", m2_12_sliding, ("refused", "must cover the circle")),
     ("M2-12-sliding-air", m2_12_sliding_air, ("refused", "keep clear of the sliding surface")),
+    ("motor_sliding-air", motor_sliding_air, "meshes"),
     ("M2-13", m2_13, ("refused", "only one Sliding Interface: more than one is not handled yet, a limit of the tool")),
     (
         "M2-14",
