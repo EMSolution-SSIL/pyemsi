@@ -1389,6 +1389,18 @@ class StudyTest(unittest.TestCase):
         texts = [p.text for p in validation.errors(validation.validate(self.study))]
         self.assertIn(f"This document has two Studies, {self.study.Label} and Other: delete one.", texts)
 
+    def test_three_studies_are_refused(self):
+        objects.make_study(self.doc, "2D", "Other")
+        objects.make_study(self.doc, "3D", "Third")
+        texts = [p.text for p in validation.errors(validation.validate(self.study))]
+        self.assertIn(f"This document has 3 Studies, {self.study.Label}, Other and Third: delete all but one.", texts)
+
+    def test_generate_mesh_is_refused_with_two_studies(self):
+        self.box("A")
+        objects.make_study(self.doc, "2D", "Other")
+        with self.assertRaisesRegex(jobwriter.StudyError, "This document has two Studies"):
+            jobwriter.check(self.study)
+
     def test_a_container_with_study_objects_is_not_a_geometry_source(self):
         group = self.doc.addObject("App::DocumentObjectGroup", "Everything")
         group.addObject(self.study)
@@ -1737,14 +1749,13 @@ class StudyTest(unittest.TestCase):
         objects.make_mesh_size(self.study, 0.5, [(wire, "")])
         self.assertEqual([w for w in self.problems(validation.WARNING) if "thick" in w], [])
 
-    def test_body_a_sketch_only_references_is_not_reported_as_skipped(self):
+    def test_body_a_sketch_only_references_is_meshed_with_the_face_aligned_to_it(self):
         coil = self.doc.addObject("Part::Feature", "Coil")
         coil.Shape = Part.makePlane(10, 10)
         aligned = self.sketched_face_aligned_to(coil)
         study = self.replace_study()
         self.assertEqual(objects.study_bodies(study), [coil, aligned])
-        texts = [p.text for p in validation.validate(study) if "not meshed on its own" in p.text]
-        self.assertEqual(texts, [])
+        self.assertEqual(validation.errors(validation.validate(study)), [])
 
     def test_bodies_without_material_are_a_warning(self):
         self.box("A")

@@ -1710,7 +1710,7 @@ def mesh_size_rows(study):
 
 
 def bodies_without_material(study):
-    """Main-geometry bodies and Air Regions without an assignment; not the Symmetric Groups, whose Materials are on
+    """The Study's bodies and Air Regions without an assignment; not the Symmetric Groups, whose Materials are on
     their parts."""
     have = assignment_of(study)
     groups = {g.Name for g in symmetric_groups(study)}

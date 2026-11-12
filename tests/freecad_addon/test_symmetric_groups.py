@@ -478,6 +478,18 @@ def test_no_body_is_still_refused_without_groups():
         App.closeDocument(doc.Name)
 
 
+def test_a_free_body_cut_by_a_cell_object_is_a_body(study, stator):
+    doc = study.Document
+    ring = symcases.feature(
+        doc, "Ring", Part.Face(Part.Wire(Part.makeCircle(45))).cut(Part.Face(Part.Wire(Part.makeCircle(40))))
+    )
+    cut = doc.addObject("Part::Cut", "RingCut")
+    cut.Base, cut.Tool = ring, doc.getObject("CoilCell")  # shaped round a copy, not a drawing of the copies
+    doc.recompute()
+    assert cut.Name not in geometry.group_drawings(study)
+    assert cut in objects.study_bodies(study)
+
+
 def test_the_drawing_of_a_group_is_not_a_body():
     doc = App.newDocument("SymDrawing")
     try:

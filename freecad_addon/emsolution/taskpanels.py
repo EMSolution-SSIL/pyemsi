@@ -827,7 +827,14 @@ class StudyView:
         study = self.study
         if study.Document is None:
             return
-        excluded = self.unticked(self.tree.invisibleRootItem())
+        shown, stack = set(), [self.tree.invisibleRootItem()]
+        while stack:
+            item = stack.pop()
+            stack += [item.child(i) for i in range(item.childCount())]
+            shown.add(item.data(0, QtCore.Qt.UserRole))
+        # an entry no row shows (a body a boolean is made from now, a container left empty) stays excluded
+        kept = [o for o in study.Excluded if o.Name not in shown]
+        excluded = kept + self.unticked(self.tree.invisibleRootItem())
         if [o.Name for o in excluded] == [o.Name for o in study.Excluded]:
             return
         doc = study.Document

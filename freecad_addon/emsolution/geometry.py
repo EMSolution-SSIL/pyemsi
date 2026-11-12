@@ -67,6 +67,7 @@ def plane_of(face):
 # The input whose volume the result leaves out, by TypeId or, for a Python feature, by its Proxy class: a Cut's tool,
 # a mirror image's source and a Draft Clone's original (a copy placed elsewhere), a Part Join Cutout's tool.
 OUTSIDE = {"Part::Cut": "Tool", "Part::Mirroring": "Source", "Clone": "Objects", "FeatureCutout": "Tool"}
+COPIES = ("Part::Mirroring", "Clone")  # the kinds of OUTSIDE whose input is copied, not cut away
 
 
 def _kind(obj):
@@ -89,8 +90,10 @@ def _linked(item):
 def _made_from(obj, outside=False):
     """The objects whose volume obj holds: those it links as a whole. A link to an edge, face or vertex (a ruled
     surface's curves), an expression, a hidden back-link (a PartDesign feature's Body) and the input in OUTSIDE
-    only shape or place obj (outside=True follows that one too)."""
-    out, skip, found = obj.OutList, None if outside else OUTSIDE.get(_kind(obj)), []
+    only shape or place obj (outside=True follows that one too; a collection of kinds follows it for those kinds)."""
+    kind = _kind(obj)
+    follow = outside is True or (bool(outside) and kind in outside)
+    out, skip, found = obj.OutList, None if follow else OUTSIDE.get(kind), []
     for prop in obj.PropertiesList:
         kind = obj.getTypeIdOfProperty(prop)
         if prop == skip or not (kind.startswith("App::PropertyLink") or kind.startswith("App::PropertyXLink")):
@@ -107,7 +110,8 @@ def inputs(obj, outside=False):
     """Names of the objects obj is made from, in its document: the walk follows _made_from and does not go through a
     sketch, whose links (external geometry, attachment) only align it, nor through a Study object (the bodies an Air
     Region's SizedBy links only size it). The tool of a Cut, which the Cut leaves out, and a body a sketch or a ruled
-    surface only traces are not inputs, unless outside=True."""
+    surface only traces are not inputs, unless outside=True (or names the kind of the object that has them, as
+    COPIES does)."""
     found, stack = set(), [obj]
     while stack:
         for dep in _made_from(stack.pop(), outside):
@@ -311,8 +315,8 @@ def _leaves(nodes):
 
 def group_drawings(study, leaves=None):
     """{body Name: Symmetric Group} for each body of the Study's tree, not a cell object, made from a cell object of
-    a group (following also a Mirror's source, a Clone's original or a Cut's tool): the drawing of that group's
-    copies, which the copies replace in the mesh."""
+    a group (following also a Mirror's source and a Clone's original, not a Cut's tool: a body cut round the copies
+    is a real body): the drawing of that group's copies, which the copies replace in the mesh."""
     owner = {}
     for item in objects.symmetric_groups(study):
         for cell in item.Cells:
@@ -325,7 +329,7 @@ def group_drawings(study, leaves=None):
     for body in leaves:
         if body.Name in owner:
             continue
-        made_from = inputs(body, outside=True)
+        made_from = inputs(body, outside=COPIES)
         cell = next((name for name in owner if name in made_from), None)
         if cell is not None:
             found[body.Name] = owner[cell]

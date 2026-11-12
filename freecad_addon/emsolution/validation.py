@@ -81,8 +81,11 @@ def validate(study):
     found = objects.studies(study.Document)
     if len(found) > 1:  # one Study per document: the whole document is its geometry
         labels = [s.Label for s in found]
-        count = "two" if len(labels) == 2 else str(len(labels))
-        r.error(f"This document has {count} Studies, {', '.join(labels[:-1])} and {labels[-1]}: delete one.")
+        listed = f"{', '.join(labels[:-1])} and {labels[-1]}"
+        if len(labels) == 2:
+            r.error(f"This document has two Studies, {listed}: delete one.")
+        else:
+            r.error(f"This document has {len(labels)} Studies, {listed}: delete all but one.")
         return r.problems
     refresh_padding(study)
     bodies, geometry_errors = geometry.study_geometry(study)  # with groups, the free objects
@@ -272,8 +275,8 @@ def _coarse(study, bodies, r):
 
 
 def refresh_padding(study):
-    """Padding mode Air Regions follow the Study's bodies as they are now: a body added to a container source, edited
-    since the last recompute or moved with a container counts. Recomputes the air and what it depends on, no more.
+    """Padding mode Air Regions follow the Study's bodies as they are now: a body drawn later, edited since the last
+    recompute or moved with a container counts. Recomputes the air and what it depends on, no more.
     Sliding Interfaces and the drawings of Symmetric Groups that no link keeps up to date are recomputed too.
     Validate and Run Mesh call it. The drawings go first: a Padding mode air fits round them."""
     for item in objects.symmetric_groups(study):  # a moved container of a cell is not linked
@@ -1099,12 +1102,12 @@ def _group_sliding(study, groups, ruled, free, plane, r):
         if iface.Kind != "Rotational":
             continue  # _interfaces says so
         radius = iface.Radius.Value
-        sides = set()  # the sides a group reaches the interface on
+        reached = set()  # the sides a group reaches the interface on
         for item in groups:
             how = _reach(item, radius, three)
             if how is None:
                 continue
-            sides.add(objects.part_key(study, item, "").partition("|")[0])
+            reached.add(objects.part_key(study, item, "").partition("|")[0])
             rules = ruled.get(item.Name)
             off_z = [(n, rule) for n, rule in enumerate(rules or [], 1) if not _about_z(rule)]
             if how == "crosses" and off_z and not any(_drawn_cross(c, radius, three) for c in item.Cells):
@@ -1134,7 +1137,7 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                     iface,
                 )
         for side in ("fixed", "moving"):
-            if side not in sides:
+            if side not in reached:
                 r.error(
                     f"Sliding Interface {iface.Label}: no Symmetric Group on the {side} side reaches it. Cell objects"
                     " of groups must cover the sliding surface on both sides (a limit of the tool: free objects may"

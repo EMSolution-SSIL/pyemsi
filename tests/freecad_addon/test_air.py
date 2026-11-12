@@ -758,7 +758,7 @@ class AirTest(unittest.TestCase):
         errors = self.air_errors()
         self.assertIn(f"{rotor.Label} is not fully inside Air Region Air.", errors)
         self.assertFalse([t for t in errors if "crosses" in t])
-        self.assertFalse([t for t in errors if "holds no body" in t or "same side" in t])
+        self.assertNotIn("No body is on the moving side of the Sliding Interfaces.", errors)  # its side is unknown
 
     def test_the_rotor_inside_a_rotational_interface_moves_with_no_setting(self):
         stator, rotor = self.motor()
