@@ -5,6 +5,9 @@ Run: pixi run -e addon python experiments/symmetric_catalogue/build_catalogue.py
 Output: experiments/symmetric_catalogue/<id>/<id>.FCStd, the set-up Study of each case (git-ignored; rebuild it with
 this script), and C:\Users\hamed\Desktop\delme\catalogue_studies\<id>\<id>.FCStd with the mesh files beside it.
 --setup-only builds and saves the set-up Studies without validating or meshing them (a few minutes for all).
+--coarse (or --coarse=<factor>) multiplies the default mesh size and every Mesh Size by 2 (or factor) for a quick pass;
+Transfinite counts stay. Its meshes go to ...\catalogue_studies_coarse and the set-up Studies here are not rewritten,
+so element counts are only comparable with an earlier --coarse run of the same factor.
 Exit code 1 when a row does not match its expectation."""
 
 import os
@@ -70,6 +73,22 @@ def checked(build, check, found):
     return wrapped
 
 
+def coarsened(build, factor):
+    """build, with the default mesh size and every Mesh Size item of the Study it gives multiplied by factor.
+    Transfinite counts are left as they are."""
+    from emsolution import objects
+
+    def wrapped():
+        study = build()
+        study.MeshSizesGroup.DefaultMeshSize = study.MeshSizesGroup.DefaultMeshSize.Value * factor
+        for item in objects.mesh_sizes(study):
+            item.Size = item.Size.Value * factor
+        study.Document.recompute()
+        return study
+
+    return wrapped
+
+
 def matches(expected, verdict, detail):
     if expected == "meshes":
         return verdict == "OK"
@@ -97,25 +116,42 @@ def setups_only(wanted):
     sys.exit(1 if failed or unknown else 0)
 
 
+def coarse_option(args):
+    """(factor or None, the other arguments) for --coarse (factor 2) or --coarse=<factor> (a number above 0)."""
+    factor, rest = None, []
+    for a in args:
+        if a == "--coarse" or a.startswith("--coarse="):
+            factor = float(a.partition("=")[2] or 2)
+            if factor <= 0:
+                sys.exit(f"--coarse needs a factor above 0, not {factor:g}")
+        else:
+            rest.append(a)
+    return factor, rest
+
+
 if __name__ == "__main__":
-    wanted = sys.argv[1:]
+    factor, wanted = coarse_option(sys.argv[1:])
     if "--setup-only" in wanted:
         setups_only([n for n in wanted if n != "--setup-only"])
+    out = OUT if factor is None else f"{OUT}_coarse"  # a quick pass never overwrites the full run's meshes
     rows = []
     for name, build, expected, check in cases():
         if wanted and name not in wanted:
             continue
         found = []
+        if factor is not None:
+            build = coarsened(build, factor)
         if check is not None:
             build = checked(build, check, found)
-        _, verdict, detail = sl.run(name, build, os.path.join(OUT, name, name + ".FCStd"), setup_path(name))
+        setup = setup_path(name) if factor is None else None  # the kept set-up Studies stay at full size
+        _, verdict, detail = sl.run(name, build, os.path.join(out, name, name + ".FCStd"), setup)
         ok = matches(expected, verdict, detail)
         if check is not None:
             passed, text = found[0] if found else (False, "not run, the Study was not built")
             ok = ok and passed
             detail += f" | check {'passed' if passed else 'FAILED'}: {text}"
         if getattr(check, "after", None) is not None and verdict == "OK":  # a check of the mesh files (Structured)
-            passed, text = check.after(os.path.join(OUT, name))
+            passed, text = check.after(os.path.join(out, name))
             ok = ok and passed
             detail += f" | mesh check {'passed' if passed else 'FAILED'}: {text}"
         rows.append((name, verdict, want(expected), ok, detail))
