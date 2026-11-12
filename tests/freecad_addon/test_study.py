@@ -1271,7 +1271,7 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         body.Visibility = False  # hidden final geometry must still be included
         found, errors = geometry.collect([root, part, body], "3D")
-        self.assertEqual([obj.Name for obj in found], [body.Name, tool.Name, cut.Name], "a Cut's tool is its own body")
+        self.assertEqual([obj.Name for obj in found], [body.Name, cut.Name], "a Cut's tool is not meshed")
         self.assertEqual(errors, [])
 
     def test_planar_sources_are_checked_in_global_coordinates(self):
@@ -1322,12 +1322,12 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         return box, cut
 
-    def test_the_tool_of_a_cut_stays_a_body(self):
+    def test_the_tool_of_a_cut_is_not_meshed(self):
         coil = self.box("Coil", 10)
         box, air = self.air_cut_by(coil)
-        self.assertEqual(geometry.collect([air, coil], "3D"), ([air, coil], []))
+        self.assertEqual(geometry.collect([air, coil], "3D"), ([air], []))
         self.assertEqual(geometry.collect([air, box], "3D"), ([air], []), "the base is inside the result")
-        self.assertEqual(geometry.tree(self.doc, "3D"), [(coil, None), (air, None)])
+        self.assertEqual(geometry.tree(self.doc, "3D"), [(air, None)])
 
     def test_a_link_to_the_tool_of_a_cut_keeps_the_tool_a_body(self):
         coil = self.box("Coil", 10)
@@ -1390,7 +1390,7 @@ class StudyTest(unittest.TestCase):
         self.doc.addObject("App::DocumentObjectGroup", "Empty")
         flat = self.face("Flat")
         self.doc.recompute()
-        self.assertEqual(geometry.tree(self.doc, "3D"), [(part, [(a, None)]), (c, None), (cut, None)])
+        self.assertEqual(geometry.tree(self.doc, "3D"), [(part, [(a, None)]), (cut, None)])
         self.assertEqual(geometry.tree(self.doc, "2D"), [(flat, None)])
         self.assertTrue(geometry.whole(part, "3D"))
         self.assertFalse(geometry.whole(part, "2D"), "a container of solids is not 2D geometry")

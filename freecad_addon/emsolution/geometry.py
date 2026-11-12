@@ -5,8 +5,30 @@ import FreeCAD as App
 from . import objects
 
 
+def link_target(obj):
+    """The body an App::Link names, or None: not a link, a link array, or a link to anything but one body (a
+    Part::Feature or a PartDesign Body; not a link, a sketch, a Study object or a container)."""
+    if obj.TypeId != "App::Link" or obj.ElementCount:
+        return None
+    target = obj.getLinkedObject(True)
+    if target is None or target == obj or target.TypeId == "App::Link" or objects.is_study_object(target):
+        return None
+    if not target.isDerivedFrom("Part::Feature") or target.isDerivedFrom("Sketcher::SketchObject"):
+        return None
+    return target
+
+
 def global_shape(obj):
-    """Shape where the user sees it, including the placements of containing Parts."""
+    """Shape where the user sees it, including the placements of containing Parts. A link shows its target's
+    shape moved by the link's own placement and those of the Parts around it."""
+    target = link_target(obj)
+    if target is not None:
+        placement, parent = obj.Placement, obj.getParentGeoFeatureGroup()
+        while parent is not None:
+            placement, parent = parent.Placement * placement, parent.getParentGeoFeatureGroup()
+        shape = target.Shape.transformed(App.Placement().Matrix)
+        shape.Placement = placement * target.Placement
+        return shape
     shape = obj.getPropertyOfGeometry().transformed(App.Placement().Matrix)
     shape.Placement = obj.getGlobalPlacement()
     return shape
@@ -58,11 +80,11 @@ def _linked(item):
     return [obj.getSubObject(s, retType=1) for s in subs if s and not s.rsplit(".", 1)[-1]]
 
 
-def _made_from(obj):
+def _made_from(obj, outside=False):
     """The objects whose volume obj holds: those it links as a whole. A link to an edge, face or vertex (a ruled
     surface's curves), an expression, a hidden back-link (a PartDesign feature's Body) and the input in OUTSIDE
-    only shape or place obj."""
-    out, skip, found = obj.OutList, OUTSIDE.get(_kind(obj)), []
+    only shape or place obj (outside=True follows that one too)."""
+    out, skip, found = obj.OutList, None if outside else OUTSIDE.get(_kind(obj)), []
     for prop in obj.PropertiesList:
         kind = obj.getTypeIdOfProperty(prop)
         if prop == skip or not (kind.startswith("App::PropertyLink") or kind.startswith("App::PropertyXLink")):
@@ -75,13 +97,13 @@ def _made_from(obj):
     return found
 
 
-def inputs(obj):
+def inputs(obj, outside=False):
     """Names of the objects obj is made from, in its document: the walk follows _made_from and does not go through a
     sketch, whose links (external geometry, attachment) only align it. The tool of a Cut, which the Cut leaves out,
-    and a body a sketch or a ruled surface only traces are not inputs."""
+    and a body a sketch or a ruled surface only traces are not inputs, unless outside=True."""
     found, stack = set(), [obj]
     while stack:
-        for dep in _made_from(stack.pop()):
+        for dep in _made_from(stack.pop(), outside):
             if dep.Name in found or dep.Document != obj.Document:
                 continue
             found.add(dep.Name)
@@ -90,12 +112,57 @@ def inputs(obj):
     return found
 
 
+def _is_link(obj):
+    return obj.TypeId == "App::Link"
+
+
+def _cut_pairs(doc):
+    """[(cut, tool)] for every Part Cut and Join Cutout of doc that has a tool."""
+    return [
+        (o, o.Tool)
+        for o in doc.Objects
+        if (o.TypeId == "Part::Cut" or _kind(o) == "FeatureCutout") and getattr(o, "Tool", None) is not None
+    ]
+
+
+def cut_tools(doc):
+    """{body Name: the Cut or Join Cutout it is the Tool of}. A Part or Group tool gives every body in it, of either
+    dimension; a link tool gives none (the link is not a body, its target stays one)."""
+    found = {}
+    for cut, tool in _cut_pairs(doc):
+        if _is_link(tool):
+            continue
+        bodies, _ = _bodies([tool])
+        consumed = {name for obj in bodies if not _is_link(obj) for name in inputs(obj)}
+        for obj in bodies:
+            if obj.Name not in consumed:
+                found.setdefault(obj.Name, cut)
+    return found
+
+
+def _left_out(doc):
+    """Names no Study meshes: the tools of Cuts and Join Cutouts, and a link used as one."""
+    return set(cut_tools(doc)) | {tool.Name for _, tool in _cut_pairs(doc) if _is_link(tool)}
+
+
 def collect(roots, dimension):
     """Return final geometry objects and diagnostics, in source order.
 
     Bodies are atomic. A Part result consumes its inputs, so a Fuse and its operands do not become three
-    overlapping regions; the tool of a Cut stays a body of its own. Visibility is irrelevant.
+    overlapping regions; the tool of a Cut or Join Cutout is never a body (a Link to it is). A link to one body is a
+    body and does not consume its target. Visibility is irrelevant.
     """
+    candidates, errors = _bodies(roots)
+    if candidates:
+        left_out = _left_out(candidates[0].Document)
+        candidates = [obj for obj in candidates if obj.Name not in left_out]
+    consumed = {name for obj in candidates if not _is_link(obj) for name in inputs(obj)}
+    return _checked(candidates, consumed, errors, dimension)
+
+
+def _bodies(roots):
+    """(candidates, errors): the body objects under roots, containers resolved, before cut tools are dropped and
+    before any check of the shape. A link is a body when it links one."""
     candidates, errors, visited = [], [], set()
 
     def visit(obj):
@@ -114,12 +181,18 @@ def collect(roots, dimension):
             return  # sketches are construction inputs; this phase does not fill wires
         elif obj.isDerivedFrom("Part::Feature") and not obj.isDerivedFrom("App::Link"):
             candidates.append(obj)
+        elif link_target(obj) is not None:
+            candidates.append(obj)
         else:
             errors.append(f"{obj.Label}: unsupported geometry object ({obj.TypeId}).")
 
     for obj in roots:
         visit(obj)
-    consumed = {name for obj in candidates for name in inputs(obj)}
+    return candidates, errors
+
+
+def _checked(candidates, consumed, errors, dimension):
+    """(bodies, errors): candidates nothing consumes that are right for dimension."""
     result, plane = [], None
     for obj in candidates:
         if obj.Name in consumed:
@@ -188,20 +261,23 @@ def stored(study, name):
 def tree(doc, dimension):
     """[(obj, children)] for the Study geometry tree: Parts and Groups as in FreeCAD's tree (children a list) and
     the bodies collect() meshes in dimension (children None). Study objects, sketches, bodies another body is made
-    from, bodies of the other dimension and containers left empty are not shown."""
+    from, cut tools, bodies of the other dimension and containers left empty are not shown. A link to one body is
+    shown as a body."""
     shapes = {
         o.Name
         for o in doc.Objects
-        if o.isDerivedFrom("Part::Feature")
-        and not o.isDerivedFrom("App::Link")
-        and not o.isDerivedFrom("Sketcher::SketchObject")
+        if (
+            (o.isDerivedFrom("Part::Feature") and not o.isDerivedFrom("Sketcher::SketchObject"))
+            or link_target(o) is not None
+        )
         and not objects.is_study_object(o)
         and objects.owning_body(o) is o
-    }
-    consumed = {n for name in shapes for n in inputs(doc.getObject(name))}
+    } - _left_out(doc)
+    consumed = {n for name in shapes if not _is_link(doc.getObject(name)) for n in inputs(doc.getObject(name))}
 
     def fits(obj):
-        return bool(obj.Shape.Solids) if dimension == "3D" else not obj.Shape.Solids and bool(obj.Shape.Faces)
+        shape = link_target(obj).Shape if _is_link(obj) else obj.Shape
+        return bool(shape.Solids) if dimension == "3D" else not shape.Solids and bool(shape.Faces)
 
     def nodes(objs):
         out = []

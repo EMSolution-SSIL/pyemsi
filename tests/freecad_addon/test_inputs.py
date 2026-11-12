@@ -44,7 +44,7 @@ def test_a_link_with_a_subname_is_the_object_it_names(doc):
     link.setLink(stator, "AirBox.")
     air = doc.addObject("Part::Cut", "Air")
     air.Base, air.Tool = link, coil
-    assert shown(doc) == ["Magnet", "Coil", "Air"]
+    assert shown(doc) == ["Magnet", "Air"]  # Coil is a cut tool
 
 
 def test_a_link_to_an_edge_is_a_reference(doc):
@@ -72,11 +72,68 @@ def test_a_draft_array_holds_its_base(doc):
     assert shown(doc) == ["Rods"]
 
 
-def test_the_tool_of_a_join_cutout_stays_a_body(doc):
+def test_the_tool_of_a_join_cutout_is_not_meshed(doc):
     air_box, coil = box(doc, "AirBox", 0, 30), box(doc, "Coil", 10)
     cut = JoinFeatures.makeCutout(name="AirCut")
     cut.Base, cut.Tool = air_box, coil
-    assert shown(doc) == ["Coil", "AirCut"]
+    assert shown(doc) == ["AirCut"]
+    assert geometry.cut_tools(doc) == {"Coil": cut}
+
+
+def test_a_link_to_a_cut_tool_is_a_body(doc):
+    air_box, coil = box(doc, "AirBox", 0, 30), box(doc, "Coil", 10)
+    cut = doc.addObject("Part::Cut", "Air")
+    cut.Base, cut.Tool = air_box, coil
+    link = doc.addObject("App::Link", "CoilLink")
+    link.LinkedObject = coil
+    doc.recompute()
+    assert shown(doc) == ["Air", "CoilLink"]
+    assert geometry.link_target(link) is coil
+
+
+def test_a_link_body_does_not_consume_its_target(doc):
+    coil = box(doc, "Coil", 10)
+    link = doc.addObject("App::Link", "CoilCopy")
+    link.LinkedObject = coil
+    link.LinkPlacement.Base = App.Vector(50, 0, 0)
+    doc.recompute()
+    assert shown(doc) == ["Coil", "CoilCopy"]
+    assert abs(geometry.global_shape(link).BoundBox.XMin - 60) < 1e-6  # Coil starts at x = 10
+
+
+def test_a_link_in_a_moved_part_is_where_it_is_seen(doc):
+    coil = box(doc, "Coil", 10)
+    part = doc.addObject("App::Part", "Holder")
+    part.Placement.Base = App.Vector(0, 100, 0)
+    link = doc.addObject("App::Link", "CoilLink")
+    link.LinkedObject = coil
+    part.addObject(link)
+    doc.recompute()
+    assert abs(geometry.global_shape(link).BoundBox.YMin - 100) < 1e-6
+
+
+def test_a_link_array_and_a_link_to_a_part_are_not_bodies(doc):
+    coil = box(doc, "Coil", 10)
+    arr = doc.addObject("App::Link", "Arr")
+    arr.LinkedObject, arr.ElementCount = coil, 3
+    part = doc.addObject("App::Part", "P")
+    to_part = doc.addObject("App::Link", "ToPart")
+    to_part.LinkedObject = part
+    doc.recompute()
+    assert geometry.link_target(arr) is None and geometry.link_target(to_part) is None
+    assert "Arr" not in shown(doc) and "ToPart" not in shown(doc)
+
+
+def test_a_part_used_as_a_tool_makes_its_bodies_cut_tools(doc):
+    air_box = box(doc, "AirBox", 0, 30)
+    holder = doc.addObject("App::Part", "Coils")
+    a, b = box(doc, "CoilA", 5, 3), box(doc, "CoilB", 15, 3)
+    holder.addObject(a)
+    holder.addObject(b)
+    cut = doc.addObject("Part::Cut", "Air")
+    cut.Base, cut.Tool = air_box, holder
+    doc.recompute()
+    assert set(geometry.cut_tools(doc)) == {"CoilA", "CoilB"}
 
 
 def test_the_tool_of_a_join_embed_is_inside_it(doc):
