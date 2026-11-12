@@ -34,7 +34,6 @@ class StudyCase(unittest.TestCase):
         self.doc.UndoMode = 1
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
-        self.study.MainMode = "Manual"
         self.changes = []
         self.repo = studymaterials.StudyMaterialRepository(self.study, on_change=lambda: self.changes.append(1))
 
@@ -249,7 +248,6 @@ class BuilderTest(unittest.TestCase):
 class StudyRowsTest(StudyCase):
     def test_rows_follow_mat_ids_with_body_names_and_potential(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.study.MainObjects = [a, b]
         (lib,) = studymaterials.import_materials(self.study, [material("user:steel", "Steel", STEEL)])
         objects.assign(self.study, [a, b], lib, 1)
         rows = studymaterials.study_material_rows(self.study)
@@ -258,8 +256,7 @@ class StudyRowsTest(StudyCase):
         )
 
     def test_body_without_an_assignment_is_named(self):
-        a, b = self.box("A"), self.box("B", 10)
-        self.study.MainObjects = [a, b]
+        a, _ = self.box("A"), self.box("B", 10)
         (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
         objects.assign(self.study, [a], lib, 0)
         with self.assertRaisesRegex(StudyError, "no material from the Material Library: B$"):
@@ -267,7 +264,6 @@ class StudyRowsTest(StudyCase):
 
     def test_assignment_without_a_material_is_named(self):
         a = self.box("A")
-        self.study.MainObjects = [a]
         (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
         objects.assign(self.study, [a], lib, 0)[0].LibraryMaterial = None
         with self.assertRaisesRegex(StudyError, "no material from the Material Library: A$"):
@@ -275,7 +271,6 @@ class StudyRowsTest(StudyCase):
 
     def test_deleted_library_material_is_reported(self):
         a = self.box("A")
-        self.study.MainObjects = [a]
         (lib,) = studymaterials.import_materials(self.study, [material("user:air", "Air", AIR)])
         objects.assign(self.study, [a], lib, 0)
         self.doc.removeObject(lib.Name)

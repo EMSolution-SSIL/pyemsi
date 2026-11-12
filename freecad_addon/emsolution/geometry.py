@@ -105,15 +105,16 @@ def _made_from(obj, outside=False):
 
 def inputs(obj, outside=False):
     """Names of the objects obj is made from, in its document: the walk follows _made_from and does not go through a
-    sketch, whose links (external geometry, attachment) only align it. The tool of a Cut, which the Cut leaves out,
-    and a body a sketch or a ruled surface only traces are not inputs, unless outside=True."""
+    sketch, whose links (external geometry, attachment) only align it, nor through a Study object (the bodies an Air
+    Region's SizedBy links only size it). The tool of a Cut, which the Cut leaves out, and a body a sketch or a ruled
+    surface only traces are not inputs, unless outside=True."""
     found, stack = set(), [obj]
     while stack:
         for dep in _made_from(stack.pop(), outside):
             if dep.Name in found or dep.Document != obj.Document:
                 continue
             found.add(dep.Name)
-            if not dep.isDerivedFrom("Sketcher::SketchObject"):
+            if not dep.isDerivedFrom("Sketcher::SketchObject") and not objects.is_study_object(dep):
                 stack.append(dep)
     return found
 
@@ -240,35 +241,6 @@ def _checked(candidates, consumed, errors, dimension):
     return result, errors
 
 
-def region(study, name):
-    """Resolve a live source; a deleted container never falls back to the document."""
-    mode = getattr(study, name + "Mode")
-    if mode == "Container":
-        source = getattr(study, name + "Source")
-        if source is None:
-            return [], ["Selected container is missing. Choose a Part or Group."]
-        if source.Document != study.Document or not is_source(source):
-            return [], [f"{source.Label}: choose a Part or Group in this document without Study objects."]
-        roots = [source]
-    elif mode == "Manual":
-        roots = list(getattr(study, name + "Objects"))
-    else:
-        roots = []
-    resolved, errors = collect(roots, study.Dimension)
-    if not resolved and not errors and not objects.is_grouped(study):  # a group's cells are its geometry
-        errors.append("No geometry chosen. Select the Study and tick bodies, Parts or Groups in its geometry tree.")
-    return resolved, errors
-
-
-def stored(study, name):
-    """The objects a region is saved as: its container, its manual list, or nothing."""
-    mode = getattr(study, name + "Mode")
-    if mode == "Container":
-        source = getattr(study, name + "Source")
-        return [source] if source is not None else []
-    return list(getattr(study, name + "Objects")) if mode == "Manual" else []
-
-
 def tree(doc, dimension):
     """[(obj, children)] for the Study geometry tree: Parts and Groups as in FreeCAD's tree (children a list) and
     the bodies collect() meshes in dimension (children None). Study objects, sketches, bodies another body is made
@@ -305,29 +277,69 @@ def tree(doc, dimension):
     return nodes([o for o in doc.Objects if o.getParentGroup() is None and o.getParentGeoFeatureGroup() is None])
 
 
-def whole(obj, dimension):
-    """A container that can be saved as itself: no Study objects inside and nothing collect() refuses."""
-    return is_source(obj) and not collect([obj], dimension)[1]
+def is_excluded(study, obj):
+    """True if obj, or a Part or Group it is in, is in the Study's Excluded list."""
+    excluded = {o.Name for o in study.Excluded}
+    stack, seen = [obj], set()
+    while stack:
+        obj = stack.pop()
+        if obj is None or obj.Name in seen:
+            continue
+        if obj.Name in excluded:
+            return True
+        seen.add(obj.Name)
+        stack += [obj.getParentGroup(), obj.getParentGeoFeatureGroup()]
+    return False
 
 
-def setup(study):
-    """Resolve enabled regions and validate a common plane and disjoint assignments."""
-    main, errors = region(study, "Main")
-    errors = ["Main geometry: " + e for e in errors]
-    moving = []
-    if study.Movement == "Sliding motion":
-        moving, other_errors = region(study, "Moving")
-        errors += ["Moving geometry: " + e for e in other_errors]
-        duplicates = {o.Name for o in main} & {o.Name for o in moving}
-        if duplicates:
-            errors.append(
-                "Assigned to both fixed and moving geometry: "
-                + ", ".join(o.Label for o in main if o.Name in duplicates)
-            )
-        if study.Dimension == "2D":
-            _, plane_errors = collect(main + moving, "2D")
-            errors += plane_errors
-    return main, moving, list(dict.fromkeys(errors))
+def air_sources(study):
+    """{body Name: its Custom Air Region}: the bodies the Study meshes as air, not as bodies."""
+    return {
+        a.Source.Name: a
+        for a in objects.air_regions(study)
+        if a.AirShape == "Custom" and getattr(a, "Source", None) is not None
+    }
+
+
+def _leaves(nodes):
+    """The bodies of tree() nodes, in tree order."""
+    out = []
+    for obj, children in nodes:
+        out += [obj] if children is None else _leaves(children)
+    return out
+
+
+def group_drawings(study, leaves=None):
+    """{body Name: Symmetric Group} for each body of the Study's tree, not a cell object, made from a cell object of
+    a group (following also a Mirror's source, a Clone's original or a Cut's tool): the drawing of that group's
+    copies, which the copies replace in the mesh."""
+    owner = {}
+    for item in objects.symmetric_groups(study):
+        for cell in item.Cells:
+            owner.setdefault(cell.Name, item)
+    if not owner:
+        return {}
+    if leaves is None:
+        leaves = _leaves(tree(study.Document, study.Dimension))
+    found = {}
+    for body in leaves:
+        if body.Name in owner:
+            continue
+        made_from = inputs(body, outside=True)
+        cell = next((name for name in owner if name in made_from), None)
+        if cell is not None:
+            found[body.Name] = owner[cell]
+    return found
+
+
+def study_geometry(study):
+    """(bodies, errors): the Study's free bodies in tree order (every body of its dimension in the document, less the
+    excluded ones, the Custom air shapes, the cell objects of Symmetric Groups and their drawings) and the errors
+    collect() finds in them."""
+    leaves = _leaves(tree(study.Document, study.Dimension))
+    left_out = set(air_sources(study)) | {b.Name for b in objects.cell_bodies(study)}
+    left_out |= set(group_drawings(study, leaves))
+    return collect([b for b in leaves if b.Name not in left_out and not is_excluded(study, b)], study.Dimension)
 
 
 def export_unavailable(study):

@@ -3,7 +3,7 @@
 import json
 import os
 
-from . import airshapes, geometry, objects, validation
+from . import airshapes, geometry, objects, sides, validation
 from .geometry import global_shape
 
 
@@ -39,21 +39,18 @@ def rotor_file(study):
 
 def check(study):
     """Refuse the Study if validation finds an error. Returns (volumes, surfaces, elements):
-    volumes  = [(body, size_mm)] in main geometry order, then the moving geometry's
+    volumes  = [(body, size_mm)] in tree order (with Symmetric Groups the free bodies, then the cell objects)
     surfaces = [(excitation, body, [face names])] in tree order
     elements = [(mesh size, body, [face, edge and vertex names])] in tree order
     """
     found = validation.errors(validation.validate(study))
     if found:
         raise StudyError("\n".join(p.text for p in found))
-    main, moving, _ = geometry.setup(study)
+    bodies = geometry.study_geometry(study)[0]
     surface_on = None  # the names excitations sit on, when not the meshed bodies themselves
     if objects.is_grouped(study):  # the free objects, then the cell objects of the groups
-        free = validation.free_bodies(study, main, moving)
-        bodies = free + objects.cell_bodies(study)
-        surface_on = {b.Name for b in free} | {g.Name for g in objects.symmetric_groups(study)}
-    else:
-        bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
+        surface_on = {b.Name for b in bodies} | {g.Name for g in objects.symmetric_groups(study)}
+        bodies = bodies + objects.cell_bodies(study)
     included = surface_on if surface_on is not None else {b.Name for b in bodies}
     excitation_items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: none yet
     surfaces = [(e, b, faces) for e in excitation_items for b, faces in objects.subs_by_body(e) if b.Name in included]
@@ -146,10 +143,9 @@ def write_slides(study, folder, job):
     interfaces = objects.sliding_interfaces(study)
     surfaces = [airshapes.slide_surface(i, air, plane) for i in interfaces]
     cells = airshapes.cells(air, surfaces)
-    moving = {airshapes.cell_of(global_shape(b), cells) for b in geometry.setup(study)[1]}
     job["rotor_file"] = rotor_file(study)
     job["moving_cells"] = []
-    for k in sorted(moving):
+    for k in sides.moving_pieces(study):
         rel = f"geometry/cell_{k + 1}.brep"
         cells[k].exportBrep(os.path.join(folder, rel))
         job["moving_cells"].append(rel)
@@ -344,18 +340,16 @@ def write_groups(study, folder, checked=None):
         objects.update_ids(study)
         os.makedirs(os.path.join(folder, "geometry"), exist_ok=True)
     volumes, surfaces, elements = checked
-    sliding = study.Movement == "Sliding motion"
     groups = objects.symmetric_groups(study)
     block = {
         "groups": [_group_entry(study, folder, g, n, volumes, surfaces, elements) for n, g in enumerate(groups, 1)]
     }
-    main, moving, _ = geometry.setup(study)
-    on_moving = {b.Name for b in moving} if sliding else set()
-    free = {b.Name for b in validation.free_bodies(study, main, moving)}
+    on_moving = sides.moving(study)
+    cells = {b.Name for b in objects.cell_bodies(study)}  # volumes holds the free bodies, then the cell objects
     airs = objects.air_regions(study)  # validation allows one; with groups it is all on the fixed side
-    sides = []
+    free_jobs = []
     for side in ("fixed", "moving"):
-        mine = {b.Name for b, _ in volumes if b.Name in free and (b.Name in on_moving) == (side == "moving")}
+        mine = {b.Name for b, _ in volumes if b.Name not in cells and (b.Name in on_moving) == (side == "moving")}
         with_air = airs if side == "fixed" else []
         if mine or with_air:
             named = mine | {a.Name for a in with_air}
@@ -377,9 +371,9 @@ def write_groups(study, folder, checked=None):
                     "file": rel,
                     "size": air_size(study),
                 }
-            sides.append({"side": side, "job": job})
-    if sides:
-        block["free"] = sides
+            free_jobs.append({"side": side, "job": job})
+    if free_jobs:
+        block["free"] = free_jobs
     slide = _slide_block(study, groups)
     if slide:
         block["slide"] = slide
@@ -416,14 +410,14 @@ def write_job(study):
             rel = "geometry/air.brep"
             meshed_shape(air).exportBrep(os.path.join(folder, rel))
             if sliding:  # the two sides get their own IDs and names
-                sides = {
+                halves = {
                     half: {
                         "mat_id": int(study.MatIds[f"{air.Name}#{half}"]),
                         "name": objects.key_name(study, f"{air.Name}#{half}"),
                     }
                     for half in ("fixed", "moving")
                 }
-                job["air"] = {"sides": sides, "file": rel, "size": air_size(study)}
+                job["air"] = {"sides": halves, "file": rel, "size": air_size(study)}
             else:
                 job["air"] = {
                     "name": objects.key_name(study, air.Name),
@@ -432,7 +426,8 @@ def write_job(study):
                     "size": air_size(study),
                 }
         if sliding:
-            job["moving"] = [int(study.MatIds[b.Name]) for b in geometry.setup(study)[1]]
+            moving = sides.moving(study)
+            job["moving"] = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in moving]
             write_slides(study, folder, job)
     path = os.path.join(folder, "job.json")
     with open(path, "w", encoding="utf-8") as fh:

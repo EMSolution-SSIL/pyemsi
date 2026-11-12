@@ -37,6 +37,7 @@ def study(tmp_path):
     doc = App.newDocument("SymGroups")
     info = symcases.group_motor_doc(doc)
     study = objects.make_study(doc, "2D")
+    objects.set_excluded(study, info["rotor_cells"])  # not meshed until a test makes them the rotor's cells
     objects.make_symmetric_group(study, info["stator_cells"], rules=STATOR_RULES, name="Stator")
     doc.recompute()
     doc.saveAs(str(tmp_path / "t.FCStd"))
@@ -462,18 +463,33 @@ def test_element_owner(study, stator):
     assert objects.element_owner(stator, "Face73") is None
 
 
-def test_empty_main_is_fine_with_groups(study):
-    assert geometry.setup(study)[2] == []
+def test_no_free_body_is_fine_with_groups(study):
+    assert geometry.study_geometry(study) == ([], [])
     assert objects.assignment_problem(study, [study.Document.getObject("CoilCell")]) == ""
     assert objects.assignment_problem(study, [study.Document.getObject("Study")]) != ""
 
 
-def test_empty_main_is_still_refused_without_groups():
+def test_no_body_is_still_refused_without_groups():
     doc = App.newDocument("NoGroups")
     try:
         study = objects.make_study(doc, "2D")
-        assert geometry.setup(study)[2] != []
-        assert objects.assignment_problem(study, []) == objects.NO_MAIN_GEOMETRY
+        assert validation.NO_BODY in [p.text for p in validation.errors(validation.validate(study))]
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_the_drawing_of_a_group_is_not_a_body():
+    doc = App.newDocument("SymDrawing")
+    try:
+        info = symcases.motor_doc(doc)  # the cells and their Mirror / Polar Array / Fragments chains
+        study = objects.make_study(doc, "2D")
+        stator = objects.make_symmetric_group(study, info["stator_cells"], rules=STATOR_RULES, name="Stator")
+        doc.recompute()
+        top, rotor_top = info["stator_top"], info["rotor_top"]
+        assert geometry.group_drawings(study) == {top.Name: stator}
+        assert top not in objects.study_bodies(study)
+        assert rotor_top in objects.study_bodies(study)  # the rotor is no group's drawing: a free body
+        assert not [t for t in texts(study) if "overlap" in t], texts(study)
     finally:
         App.closeDocument(doc.Name)
 
@@ -757,16 +773,15 @@ def study_3d():
     doc = App.newDocument("SymGroups3dV")
     info = symcases.group_motor_doc(doc, height=10)
     study = objects.make_study(doc, "3D")
+    objects.set_excluded(study, info["rotor_cells"])  # not meshed until a test makes them the rotor's cells
     objects.make_symmetric_group(study, info["stator_cells"], rules=STATOR_RULES, name="Stator")
     doc.recompute()
     yield study
     App.closeDocument(doc.Name)
 
 
-def free_body(study, name, shape, side="Main"):
+def free_body(study, name, shape):
     body = symcases.feature(study.Document, name, shape)
-    setattr(study, side + "Mode", "Manual")
-    setattr(study, side + "Objects", [*getattr(study, side + "Objects"), body])
     study.Document.recompute()
     return body
 
@@ -830,10 +845,6 @@ def break_body_in_two_groups(study, stator):
     objects.make_symmetric_group(study, [study.Document.getObject("CoilCell")], rules=[], name="Second")
 
 
-def break_cell_also_in_main(study, stator):
-    study.MainMode, study.MainObjects = "Manual", [study.Document.getObject("CoilCell")]
-
-
 def break_free_crosses_sliding(study, stator):
     sliding(study)
     free_body(study, "Gap", symcases.sector(30, 40, 0, 90))
@@ -871,7 +882,6 @@ def break_names_equal_in_mesh(study, stator):
         (break_table_wrong_length, "table"),
         (break_empty_table_name, "table"),
         (break_body_in_two_groups, "two groups"),
-        (break_cell_also_in_main, "Main"),
         (break_free_crosses_sliding, "Sliding Interface"),
         (break_free_transfinite, "Transfinite"),
         (break_deleted_cell, "was deleted"),  # Review Focus 3
@@ -1121,6 +1131,7 @@ def test_old_item_is_refused(study, tmp_path):
     ready(study)
     doc = study.Document
     top = symcases.feature(doc, "OldTop", symcases.sector(36, 60, 0, 15))
+    objects.set_excluded(study, [*study.Excluded, top])  # the old drawing, over the copies
     old = doc.addObject("App::FeaturePython", "SymmetricMesh")  # as the older version saved it
     old.Proxy = objects.SymmetricMesh()
     old.addProperty("App::PropertyLinkGlobal", "Top", "EMSolution", "")
@@ -1475,7 +1486,7 @@ def test_free_bodies_go_to_free_with_final_mat_ids(study, stator):
     sliding(study)
     ready(study)
     free_body(study, "FreeAir", outer_ring())
-    free_body(study, "Bore", Part.Face(Part.Wire(Part.makeCircle(8))), side="Moving")
+    free_body(study, "Bore", Part.Face(Part.Wire(Part.makeCircle(8))))
     study.Document.recompute()
     job = load_job(study)
     free = {f["side"]: f["job"] for f in job["symmetric"]["free"]}
@@ -1514,7 +1525,7 @@ def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study):
     sliding(study)
     ready(study)
     objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)
-    free_body(study, "Bore", Part.Face(Part.Wire(Part.makeCircle(8))), side="Moving")
+    free_body(study, "Bore", Part.Face(Part.Wire(Part.makeCircle(8))))
     study.Document.recompute()
     free = {f["side"]: f["job"] for f in load_job(study)["symmetric"]["free"]}
     assert "air" in free["fixed"] and "air" not in free["moving"]

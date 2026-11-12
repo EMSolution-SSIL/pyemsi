@@ -22,16 +22,11 @@ def plane_of_bodies(bodies):
 
 
 def study_plane(study):
-    """ "3D" for a 3D Study; for 2D the plane of the first main-geometry face ("XY" or "ZX"), "XY" if there is none. A
+    """ "3D" for a 3D Study; for 2D the plane of the first face of its bodies ("XY" or "ZX"), "XY" if there is none. A
     Study of Symmetric Groups looks at the cell objects, then at the free objects: validation takes the same answer."""
     if study.Dimension == "3D":
         return "3D"
-    if not objects.is_grouped(study):
-        return plane_of_bodies(geometry.region(study, "Main")[0])
-    main, moving, _ = geometry.setup(study)
-    cells = objects.cell_bodies(study)
-    named = {b.Name for b in cells}
-    return plane_of_bodies(cells + [b for b in {b.Name: b for b in main + moving}.values() if b.Name not in named])
+    return plane_of_bodies(objects.cell_bodies(study) + geometry.study_geometry(study)[0])
 
 
 def air_shape(air, plane):
@@ -203,7 +198,7 @@ def padded_size(air, bodies, plane):
     if air.AirShape == "Custom":
         raise ValueError(f"Air Region {name}: Padding is not available for a Custom shape.")
     if not bodies:
-        raise ValueError(f"Air Region {name}: Padding needs bodies in the main or moving geometry.")
+        raise ValueError(f"Air Region {name}: Padding needs bodies in the Study.")
     shapes = [geometry.global_shape(b) for b in bodies]
     box = App.BoundBox()
     for shape in shapes:

@@ -122,15 +122,20 @@ FOLDERS = (
 )
 
 
-SIZING_PROPERTIES = (
-    "MainMode",
-    "MainSource",
-    "MainObjects",
-    "MovingMode",
-    "MovingSource",
-    "MovingObjects",
-    "Movement",
-)  # what decides study_bodies: a change refreshes the Air Regions' SizedBy
+SIZING_PROPERTIES = ("Excluded",)  # what decides study_bodies: a change refreshes the Air Regions' SizedBy
+OLD_GEOMETRY_PROPERTIES = ("MainMode", "MainSource", "MainObjects", "MovingMode", "MovingSource", "MovingObjects")
+
+
+def add_excluded(study):
+    """The bodies and containers the user leaves out of the Study; added on first use and to older Studies."""
+    if not hasattr(study, "Excluded"):
+        study.addProperty("App::PropertyLinkListGlobal", "Excluded", "Geometry", "Bodies and containers not meshed")
+        study.setEditorMode("Excluded", 2)  # edited in the Study panel
+
+
+def set_excluded(study, objs):
+    """Store objs as the Study's excluded bodies and containers, once each, in order."""
+    study.Excluded = list({o.Name: o for o in objs}.values())
 
 
 class Study(_Proxy):
@@ -154,14 +159,7 @@ class Study(_Proxy):
         obj.setEditorMode("Dimension", 1)  # choose at creation; assignments depend on it
         obj.addProperty("App::PropertyEnumeration", "Movement", "Setup")
         obj.Movement = ["No movement", "Sliding motion"]
-        for region in ("Main", "Moving"):
-            mode, source, refs = region + "Mode", region + "Source", region + "Objects"
-            obj.addProperty("App::PropertyEnumeration", mode, "Geometry")
-            setattr(obj, mode, ["Unassigned", "Container", "Manual"])
-            obj.addProperty("App::PropertyLinkGlobal", source, "Geometry")
-            obj.addProperty("App::PropertyLinkListGlobal", refs, "Geometry")
-            for prop in (mode, source, refs):
-                obj.setEditorMode(prop, 2)  # edit together in the Study panel
+        add_excluded(obj)
 
     def onChanged(self, obj, prop):
         if (
@@ -175,6 +173,10 @@ class Study(_Proxy):
         ensure_folders(obj)  # Studies saved before a folder existed
         if hasattr(obj, "MshVersion"):
             obj.removeProperty("MshVersion")  # EMSolution reads only Gmsh 4.1
+        for prop in OLD_GEOMETRY_PROPERTIES:  # the whole document is the geometry now; no conversion
+            if hasattr(obj, prop):
+                obj.removeProperty(prop)
+        add_excluded(obj)
 
 
 def add_folder_property(study, prop):
@@ -433,23 +435,6 @@ def dependents_of(air):
         air.SizedBy, air.SizedByContainers = [], []
         found = air.InListRecursive
     return {o.Name for o in found if not is_study_object(o)}
-
-
-def readers_in_sources(air, study):
-    """The objects inside the Study's container sources that read the Air Region (an expression, a Boolean): such a
-    container cannot be a source, and the air cannot follow its bodies. Only the objects that read it themselves, not
-    the groups that hold them."""
-    regions = ["Main", "Moving"] if study.Movement == "Sliding motion" else ["Main"]
-    sources = [getattr(study, n + "Source") for n in regions if getattr(study, n + "Mode") == "Container"]
-    loops = dependents_of(air)
-    found = {}
-    for source in sources:
-        if source is None or source.Document != study.Document:
-            continue
-        for o in source.OutListRecursive:
-            if o.Name in loops and not is_study_object(o) and not any(p.Name in loops for p in o.OutList):
-                found.setdefault(o.Name, o)
-    return list(found.values())
 
 
 def containers_of(bodies):
@@ -1646,7 +1631,7 @@ def item_refs(item):
 def material_rows(study):
     """Rows for the Materials panel: (body, refs, [body, material, MAT_ID, POTENTIAL]).
 
-    Every main- and moving-geometry body and Air Region, then bodies outside them that still have an assignment, then
+    Every body of the Study and Air Region, then bodies it does not mesh that still have an assignment, then
     the part assignments of the Symmetric Groups: (assignment, its copies, [name, ...]).
     """
     have = assignment_of(study)
@@ -1656,7 +1641,7 @@ def material_rows(study):
     for b in main + [m.Body for m in have.values() if m.Body.Name not in inside]:
         m = have.get(b.Name)
         lib = m.LibraryMaterial.Label if m and m.LibraryMaterial else NO_MATERIAL
-        name = display_name(b) if b.Name in inside else f"{display_name(b)} (not in main geometry)"
+        name = display_name(b) if b.Name in inside else f"{display_name(b)} (not meshed by the Study)"
         rows.append((b, [(b, "")], [name, lib, _id_text(study, b), str(m.Potential) if m else ""]))
     for m in part_assignments(study):  # the parts of the Symmetric Groups
         lib = m.LibraryMaterial.Label if m.LibraryMaterial else NO_MATERIAL
@@ -1732,51 +1717,31 @@ def bodies_without_material(study):
     return [b for b in assignable(study) if b.Name not in have and b.Name not in groups]
 
 
-def _main_bodies(study):
-    from . import geometry
-
-    return geometry.region(study, "Main")[0]
-
-
 def study_bodies(study):
-    """The Study's meshed bodies: the main geometry, then the moving geometry when the Study slides."""
+    """The Study's meshed free bodies, in tree order: every body of the document but the excluded ones, the Custom air
+    shapes and the cell objects of Symmetric Groups and their drawings (geometry.study_geometry)."""
     from . import geometry
 
-    bodies = _main_bodies(study)
-    if study.Movement == "Sliding motion":
-        bodies = bodies + geometry.region(study, "Moving")[0]
-    return list({b.Name: b for b in bodies}.values())
+    return geometry.study_geometry(study)[0]
 
 
 def air_sizing_bodies(study):
     """What a Padding mode Air Region fits round: the Study's bodies; with Symmetric Groups the free bodies, then the
     groups, whose drawings hold every copy (a cell object alone would leave the copies out)."""
-    if not is_grouped(study):
-        return study_bodies(study)
-    cells = {b.Name for b in cell_bodies(study)}
-    return [b for b in study_bodies(study) if b.Name not in cells] + symmetric_groups(study)
+    return study_bodies(study) + symmetric_groups(study)
 
 
 def assignable(study):
-    """What can get a Material: the main- and moving-geometry bodies, then the Air Regions and Symmetric Groups."""
+    """What can get a Material: the Study's bodies, then the Air Regions and Symmetric Groups."""
     return study_bodies(study) + air_regions(study) + symmetric_groups(study)
-
-
-NO_MAIN_GEOMETRY = "Choose the Study's main geometry first: tick it in the Study panel's geometry tree."
 
 
 def assignment_problem(study, bodies):
     """Why bodies cannot get Materials, Excitations or Mesh Sizes, or "" when they can."""
-    if not _main_bodies(study) and not is_grouped(study):
-        return NO_MAIN_GEOMETRY
-    main = {b.Name for b in assignable(study) + cell_bodies(study)}
-    outside = list(dict.fromkeys(display_name(b) for b in bodies if b.Name not in main))
+    meshed = {b.Name for b in assignable(study) + cell_bodies(study)}
+    outside = list(dict.fromkeys(display_name(b) for b in bodies if b.Name not in meshed))
     if outside:
-        return (
-            "Not in the Study's main geometry: "
-            + ", ".join(outside)
-            + ". Add them to it in the Study panel or select other bodies."
-        )
+        return f"Not meshed by the Study: {', '.join(outside)}. Tick them in the Study panel or select other bodies."
     return ""
 
 
@@ -1831,7 +1796,7 @@ def update_ids(study):
     """Give every body and (excitation, body) pair an ID; drop entries that are gone.
 
     Counters only grow, so a dropped ID is never handed out again. It comes back with its own object:
-    a body that returns to the main geometry, or is restored by undo, gets its old ID if it is still free.
+    a body that returns to the Study, or is restored by undo, gets its old ID if it is still free.
     """
     add_id_memory(study)
     vkeys, skeys = volume_keys(study), surface_keys(study)

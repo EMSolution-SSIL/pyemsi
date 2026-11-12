@@ -39,7 +39,6 @@ class StudyTest(unittest.TestCase):
         self.doc = App.newDocument("T")
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
-        self.study.MainMode = "Manual"  # bodies join the main geometry through self.include()
         self.doc.saveAs(os.path.join(self.tmp.name, "T.FCStd"))  # the temporary folder is the simulation folder
 
     def tearDown(self):
@@ -53,9 +52,16 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         return b
 
-    def include(self, *bodies):
-        """Add bodies to the Study's main geometry (Manual mode)."""
-        self.study.MainObjects = list(dict.fromkeys([*self.study.MainObjects, *bodies]))
+    def exclude(self, *bodies):
+        """Leave bodies (or containers) out of the Study."""
+        objects.set_excluded(self.study, [*self.study.Excluded, *bodies])
+
+    def replace_study(self, dimension="2D", label="Section"):
+        """A new Study in place of self.study: one Study per document."""
+        objects.delete_contents(self.study)
+        self.doc.removeObject(self.study.Name)
+        self.study = objects.make_study(self.doc, dimension, label)
+        return self.study
 
     def steel(self):
         """The Study's Steel library material, made on first use."""
@@ -63,8 +69,7 @@ class StudyTest(unittest.TestCase):
         return found[0] if found else self.lib()
 
     def assign(self, bodies, potential=0, lib=None):
-        """Assignments on bodies that are also in the main geometry; lib defaults to Steel."""
-        self.include(*bodies)
+        """Assignments on bodies; lib defaults to Steel."""
         return objects.assign(self.study, bodies, lib or self.steel(), potential)
 
     def ids(self):
@@ -81,44 +86,37 @@ class StudyTest(unittest.TestCase):
     # --- IDs ---------------------------------------------------------------
 
     def test_ids_follow_tree_order_and_stay_after_adding_a_body(self):
-        a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
-        self.include(b, a)
-        self.include(c)
+        for name, x in (("A", 0), ("B", 10), ("C", 20)):
+            self.box(name, x)
         objects.update_ids(self.study)
-        self.assertEqual(self.ids()[0], {"B": "1", "A": "2", "C": "3"})
-        d = self.box("D", 30)
-        self.include(d)
+        self.assertEqual(self.ids()[0], {"A": "1", "B": "2", "C": "3"})
+        self.box("D", 30)
         objects.update_ids(self.study)
-        self.assertEqual(self.ids()[0], {"B": "1", "A": "2", "C": "3", "D": "4"})
+        self.assertEqual(self.ids()[0], {"A": "1", "B": "2", "C": "3", "D": "4"})
 
     def test_surface_ids_one_per_excitation_and_body(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
         objects.make_excitation(self.study, "Terminal", [(a, "Face1"), (a, "Face2"), (b, "Face1")])
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[1], {"Excitation|A": "1001", "Excitation|B": "1002"})
 
     def test_rename_keeps_id_and_changes_name(self):
         a = self.box("A")
-        self.include(a)
         objects.update_ids(self.study)
         a.Label = "Coil"
         objects.update_ids(self.study)
         self.assertEqual(objects.id_rows(self.study), [("MatIds", "A", "Coil", 1)])
 
     def test_deleted_body_id_is_not_reused(self):
-        a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
+        self.box("A"), self.box("B", 10)
         objects.update_ids(self.study)
         self.doc.removeObject("B")
-        c = self.box("C", 20)
-        self.include(c)
+        self.box("C", 20)
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"A": "1", "C": "3"})
 
     def test_set_id_refuses_duplicates_and_raises_counter(self):
-        a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
+        a, _ = self.box("A"), self.box("B", 10)
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         with self.assertRaises(ValueError):
@@ -127,8 +125,7 @@ class StudyTest(unittest.TestCase):
             objects.set_id(self.study, "MatIds", "A", 1001)
         objects.set_id(self.study, "MatIds", "A", 50)
         self.assertEqual(self.study.NextMatId, 51)
-        c = self.box("C", 20)
-        self.include(c)
+        self.box("C", 20)
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds["C"], "51")
 
@@ -148,17 +145,16 @@ class StudyTest(unittest.TestCase):
 
     def test_new_volume_ids_skip_numbers_used_by_surfaces(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a)
+        self.exclude(b)
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         objects.set_id(self.study, "SmatIds", "Excitation|A", 2)
-        self.include(b)
+        objects.set_excluded(self.study, [])
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds["B"], "3")
 
     def test_volume_names_are_body_labels_and_survive_reload(self):
-        air, a, b = self.box("Air"), self.box("A", 10), self.box("B", 20)
-        self.include(air, a, b)
+        self.box("Air"), self.box("A", 10), self.box("B", 20)
         objects.update_ids(self.study)
         names = ["Air", "A", "B"]
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], names)
@@ -170,10 +166,6 @@ class StudyTest(unittest.TestCase):
         self.assertEqual([r[2] for r in objects.id_rows(study)], names)
 
     # --- tree objects ------------------------------------------------------
-
-    def test_main_geometry_has_no_materials_mode(self):
-        for prop in ("MainMode", "MovingMode"):
-            self.assertEqual(self.study.getEnumerationsOfProperty(prop), ["Unassigned", "Container", "Manual"])
 
     def test_pad_face_resolves_to_body(self):
         body = self.doc.addObject("PartDesign::Body", "Body")
@@ -214,6 +206,23 @@ class StudyTest(unittest.TestCase):
         self.assertIsInstance(objects.materials(study)[0].Proxy, objects.Material)
         self.assertEqual(objects.materials(study)[0].Body.Name, "A")
         self.assertEqual(study.MatIds, {"A": "1"})
+
+    def test_an_old_study_drops_its_geometry_lists_and_gets_excluded(self):
+        a, _ = self.box("A"), self.box("B", 20)
+        self.study.removeProperty("Excluded")
+        self.study.addProperty("App::PropertyEnumeration", "MainMode", "Geometry")
+        self.study.MainMode = ["Unassigned", "Container", "Manual"]
+        self.study.addProperty("App::PropertyLinkListGlobal", "MainObjects", "Geometry")
+        self.study.MainObjects = [a]  # saved before the whole document was the geometry: not converted
+        path = os.path.join(self.tmp.name, "old.FCStd")
+        self.doc.saveAs(path)
+        App.closeDocument(self.doc.Name)
+        self.doc = App.openDocument(path)
+        self.study = objects.find_study(self.doc)
+        self.assertNotIn("MainMode", self.study.PropertiesList)
+        self.assertNotIn("MainObjects", self.study.PropertiesList)
+        self.assertEqual((self.study.Excluded, self.study.getEditorMode("Excluded")), ([], ["Hidden"]))
+        self.assertEqual([o.Name for o in objects.study_bodies(self.study)], ["A", "B"])
 
     def test_folders_keep_their_names(self):
         folder = self.study.MaterialsGroup
@@ -301,7 +310,6 @@ class StudyTest(unittest.TestCase):
         b.Label = "Coil"
         lib = self.steel()
         self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil")
-        self.include(a)
         (m,) = objects.assign(self.study, [a], lib, 0, name="Coil")
         self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib), "Coil_2")
         self.assertEqual(objects.suggest_name(self.study, [(b, "")], lib, own=m), "Coil")
@@ -313,18 +321,16 @@ class StudyTest(unittest.TestCase):
 
     def test_mesh_name_is_the_material_name(self):
         a = self.box("A")
-        self.include(a)
         objects.assign(self.study, [a], self.steel(), 0, name="Core")
         self.assertEqual(self.job_volume_names(), ["Core"])
         self.assertEqual(objects.key_name(self.study, "A"), "Core")
 
     def test_mesh_name_without_material_is_the_body_label(self):
-        self.include(self.box("A"))
+        self.box("A")
         self.assertEqual(self.job_volume_names(), ["A"])
 
     def test_renaming_the_body_keeps_the_mesh_name(self):
         a = self.box("A")
-        self.include(a)
         (m,) = objects.assign(self.study, [a], self.steel(), 0, name="Core")
         a.Label = "Other"
         objects.sync_labels(self.study)
@@ -332,20 +338,18 @@ class StudyTest(unittest.TestCase):
 
     def test_material_names_equal_after_clean_are_refused(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
         objects.assign(self.study, [a], self.steel(), 0, name="Coil 1")
         objects.assign(self.study, [b], self.steel(), 0, name="Coil_1")
         self.assertTrue(any("group names are the same" in t for t in self.problems("error")))
 
     def test_air_keeps_its_own_mesh_name(self):
-        self.include(self.box("A"))
+        self.box("A")
         air = objects.make_air_region(self.study)
         objects.assign(self.study, [air], self.steel(), 0, name="X")
         self.assertEqual(objects.key_name(self.study, air.Name), "Air")
 
     def test_material_owners_and_emptied(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
         (copper,) = objects.assign(self.study, [a], self.steel(), 0, name="Copper")
         (steel,) = objects.assign(self.study, [b], self.steel(), 0, name="Steel")
         refs = [(a, ""), (b, "")]
@@ -355,7 +359,6 @@ class StudyTest(unittest.TestCase):
 
     def test_apply_material_moves_a_body(self):
         a = self.box("A")
-        self.include(a)
         lib = self.steel()
         (copper,) = objects.assign(self.study, [a], lib, 0, name="Copper")
         m = objects.make_material(self.study)
@@ -367,7 +370,6 @@ class StudyTest(unittest.TestCase):
 
     def test_bulk_assign_replaces_but_keeps_air_name(self):
         a = self.box("A")
-        self.include(a)
         air = objects.make_air_region(self.study)
         objects.assign(self.study, [a], self.steel(), 0, name="Core")
         objects.assign(self.study, [air], self.steel(), 0, name="Air")
@@ -380,7 +382,7 @@ class StudyTest(unittest.TestCase):
         self.assertIs(objects.air_material(self.study, air), have[air.Name])
 
     def test_renaming_air_renames_its_material(self):
-        self.include(self.box("A"))
+        self.box("A")
         air = objects.make_air_region(self.study)
         (m,) = objects.assign(self.study, [air], self.steel(), 0, name="Air")
         objects.rename_air_region(self.study, air, "Gap")
@@ -389,7 +391,6 @@ class StudyTest(unittest.TestCase):
 
     def test_suggest_name_ignores_a_material_about_to_be_removed(self):
         a = self.box("A")
-        self.include(a)
         lib = self.steel()
         (m,) = objects.assign(self.study, [a], lib, 0)  # named "A"
         self.assertEqual(objects.suggest_name(self.study, [(a, "")], lib, ignore=[m]), "A")
@@ -398,7 +399,6 @@ class StudyTest(unittest.TestCase):
     def test_names_equal_after_clean_are_taken(self):
         a, b = self.box("A"), self.box("B", 10)
         b.Label = "Coil 1"
-        self.include(a)
         lib = self.steel()
         objects.assign(self.study, [a], lib, 0, name="Coil_1")  # the same mesh group name as "Coil 1"
         self.assertTrue(objects.name_taken(self.study, "Coil 1"))
@@ -406,7 +406,6 @@ class StudyTest(unittest.TestCase):
 
     def test_apply_material_refuses_bodies_mixed_with_faces(self):
         a = self.box("A")
-        self.include(a)
         m = objects.make_material(self.study)
         with self.assertRaises(ValueError):
             objects.apply_material(self.study, m, "M", self.steel(), 0, [(a, ""), (a, "Face1")])
@@ -438,31 +437,28 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(objects.user_labels(lib), ["A", "B: Steel"])
         objects.sync_labels(self.study)  # must not fail on the orphan
 
-    def test_body_outside_the_main_geometry_keeps_its_row(self):
+    def test_body_outside_the_study_keeps_its_row(self):
         a, outside = self.box("A"), self.box("Outside", 20)
-        self.include(a)
+        self.exclude(outside)
         objects.assign(self.study, [outside], self.steel(), 1)
         objects.update_ids(self.study)
         self.assertEqual(
             objects.material_rows(self.study),
             [
                 (a, [(a, "")], ["A", "— none —", "1", ""]),
-                (outside, [(outside, "")], ["Outside (not in main geometry)", "Steel", "–", "1"]),
+                (outside, [(outside, "")], ["Outside (not meshed by the Study)", "Steel", "–", "1"]),
             ],
         )
         self.assertEqual(objects.bodies_without_material(self.study), [a])
 
-    def test_assignments_need_bodies_in_the_main_geometry(self):
+    def test_assignments_need_bodies_the_study_meshes(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.study.MainMode = "Unassigned"
-        self.assertEqual(objects.assignment_problem(self.study, [a]), objects.NO_MAIN_GEOMETRY)
-        self.study.MainMode = "Manual"  # with an empty manual list
-        self.assertEqual(objects.assignment_problem(self.study, [a]), objects.NO_MAIN_GEOMETRY)
-        self.include(a)
+        self.assertEqual(objects.assignment_problem(self.study, [a, b]), "")
+        self.exclude(b)
         self.assertEqual(objects.assignment_problem(self.study, [a, a]), "")
         self.assertEqual(
             objects.assignment_problem(self.study, [a, b, b]),
-            "Not in the Study's main geometry: B. Add them to it in the Study panel or select other bodies.",
+            "Not meshed by the Study: B. Tick them in the Study panel or select other bodies.",
         )
 
     def test_library_material_survives_save_and_reload(self):
@@ -486,7 +482,6 @@ class StudyTest(unittest.TestCase):
         ma, _mb = self.assign([a, b])
         exc = objects.make_excitation(self.study, "In", [(a, "Face1"), (a, "Face2")])
         size = objects.make_mesh_size(self.study, 1.5, [(a, ""), (c, "Edge1")])
-        self.include(c)
         objects.update_ids(self.study)
         self.assertEqual(
             objects.material_rows(self.study),
@@ -507,14 +502,15 @@ class StudyTest(unittest.TestCase):
         self.assertTrue(objects.is_item(size) and not objects.is_item(self.study.MeshSizesGroup))
         self.assertEqual([x.Name for x in objects.bodies_without_material(self.study)], ["C"])
         d = self.box("D", 30)
+        self.exclude(d)
         objects.assign(self.study, [d], ma.LibraryMaterial, 4)
         self.assertEqual(
-            objects.material_rows(self.study)[3], (d, [(d, "")], ["D (not in main geometry)", "Steel", "–", "4"])
+            objects.material_rows(self.study)[3],
+            (d, [(d, "")], ["D (not meshed by the Study)", "Steel", "–", "4"]),
         )
 
     def test_transfinite_items_are_listed_with_mesh_sizes(self):
         a = self.box("A")
-        self.include(a)
         size = objects.make_mesh_size(self.study, 1.5, [(a, "")])
         body = objects.make_transfinite_body(self.study, [a], [(a, "Vertex1")])
         edges = objects.make_transfinite_edges(self.study, 4, [(a, "Edge1"), (a, "Edge2")], "Bump", 0.2)
@@ -536,7 +532,6 @@ class StudyTest(unittest.TestCase):
 
     def test_recombine_item_is_listed_with_mesh_sizes(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
         item = objects.make_recombine(self.study, [a, b])
         self.assertEqual(objects.recombine_items(self.study), [item])
         self.assertEqual(objects.mesh_sizes(self.study), [])
@@ -557,7 +552,6 @@ class StudyTest(unittest.TestCase):
 
     def test_transfinite_items_survive_save_and_reload(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_body(self.study, [a])
         objects.make_transfinite_edges(self.study, 7, [(a, "Edge1")], "Bump", 0.3)
         objects.make_recombine(self.study, [a])
@@ -586,14 +580,14 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(hasattr(folder, "Recombine"))
         self.assertEqual(folder.RecombinationAlgorithm, "Blossom")
         self.study = objects.find_study(self.doc)
-        self.include(self.box("A"))
+        self.box("A")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             options = json.load(fh)["options"]
         self.assertNotIn("Mesh.RecombineAll", options)
         self.assertEqual(options["Mesh.RecombinationAlgorithm"], 1)
 
     def test_mesh_settings_go_to_the_job(self):
-        self.include(self.box("A"))
+        self.box("A")
         settings = self.study.MeshSizesGroup
         settings.SurfaceAlgorithm = "Delaunay"
         settings.VolumeAlgorithm = "HXT"
@@ -621,30 +615,27 @@ class StudyTest(unittest.TestCase):
     # --- checks ------------------------------------------------------------
 
     def test_check_min_size_above_max_size(self):
-        self.include(self.box("A"))
+        self.box("A")
         self.study.MeshSizesGroup.MinSize = 3.0
         self.study.MeshSizesGroup.MaxSize = 2.0
         self.assertStudyError("larger than the maximum")
 
     def test_check_no_solid(self):
-        self.include(self.face("Sheet"))
-        self.assertStudyError("at least one solid")
+        self.face("Sheet")  # a 3D Study ignores a face: nothing is left to mesh
+        self.assertStudyError("No body to mesh")
 
     def test_check_zero_size(self):
         a = self.box("A")
-        self.include(a)
         objects.make_mesh_size(self.study, 0.0, [(a, "")])
         self.assertStudyError("greater than 0")
 
     def test_check_missing_face(self):
         a = self.box("A")
-        self.include(a)
         objects.make_excitation(self.study, "T", [(a, "Face60")])  # a box has 6 faces
         self.assertStudyError("has no Face60")
 
     def test_smallest_mesh_size_wins(self):
         a = self.box("A")
-        self.include(a)
         objects.make_mesh_size(self.study, 3.0, [(a, "")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         volumes = jobwriter.check(self.study)[0]
@@ -655,7 +646,6 @@ class StudyTest(unittest.TestCase):
         b = self.box("B", 10)
         b.Label = "A!"  # cleans to "A_"
         a.Label = "A?"  # cleans to "A_" too
-        self.include(a, b)
         self.assertStudyError("A_")
 
     # --- simulation folder ----------------------------------------------------
@@ -690,16 +680,14 @@ class StudyTest(unittest.TestCase):
         doc = App.newDocument("Unsaved")
         self.addCleanup(App.closeDocument, doc.Name)
         study = objects.make_study(doc)
-        study.MainMode = "Manual"
-        box = doc.addObject("Part::Box", "A")
+        doc.addObject("Part::Box", "A")
         doc.recompute()
-        study.MainObjects = [box]
         with self.assertRaisesRegex(jobwriter.StudyError, "Save the document in the simulation folder first"):
             jobwriter.write_job(study)
         self.assertEqual(study.MatIds, {})
 
     def test_simulation_folder_with_spaces_and_persian_letters(self):
-        self.include(self.box("A"))
+        self.box("A")
         folder = os.path.join(self.tmp.name, "my model مدل")
         os.mkdir(folder)
         self.doc.saveAs(os.path.join(folder, "موتور.FCStd"))
@@ -709,24 +697,6 @@ class StudyTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(folder, "pre_geom.msh")))
         self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
 
-    def test_second_study_replaces_the_mesh_and_keeps_its_own_scratch_folder(self):
-        self.include(self.box("A"))
-        second = objects.make_study(self.doc)
-        b = self.box("B", 10)
-        second.MainMode, second.MainObjects = "Manual", [b]
-        for study in (self.study, second):
-            path = jobwriter.write_job(study)
-            r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
-            self.assertEqual(r.returncode, 0, r.stderr)
-        with open(os.path.join(self.tmp.name, "pre_geom.msh"), encoding="utf-8") as fh:
-            names = fh.read().split("$PhysicalNames\n", 1)[1].split("$EndPhysicalNames", 1)[0]
-        self.assertIn('"B"', names)
-        self.assertNotIn('"A"', names)
-        self.assertNotEqual(jobwriter.scratch_folder(self.study), jobwriter.scratch_folder(second))
-        self.assertTrue(os.path.isfile(self.scratch("mesh.unv")))
-
-    # --- geometry and job file ----------------------------------------------
-
     def test_body_in_app_part_is_exported_in_global_coordinates(self):
         part = self.doc.addObject("App::Part", "Part")
         part.Placement.Base = App.Vector(100, 0, 0)
@@ -734,7 +704,6 @@ class StudyTest(unittest.TestCase):
         a.Placement.Base = App.Vector(0, 50, 0)
         part.addObject(a)
         self.doc.recompute()
-        self.include(a)
         objects.make_excitation(self.study, "T", [(a, "Face6")])  # top face, z = 10
         jobwriter.write_job(self.study)
         vol = Part.Shape()
@@ -746,9 +715,7 @@ class StudyTest(unittest.TestCase):
         self.assertAlmostEqual(face.BoundBox.ZMin, 10)
 
     def test_job_json_contents(self):
-        a, b = self.box("A"), self.box("B", 10)
-        self.include(a)
-        self.include(b)
+        a, _ = self.box("A"), self.box("B", 10)
         objects.make_excitation(self.study, "Terminal In", [(a, "Face1"), (a, "Face2")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         self.study.Label = "My Study"
@@ -790,7 +757,6 @@ class StudyTest(unittest.TestCase):
 
     def test_face_edge_and_vertex_sizes_go_to_the_job(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
         objects.make_mesh_size(self.study, 1.0, [(a, "Face6"), (a, "Edge1"), (b, "Vertex1")])
         objects.make_mesh_size(self.study, 2.0, [(a, "")])
         path = jobwriter.write_job(self.study)
@@ -812,7 +778,6 @@ class StudyTest(unittest.TestCase):
 
     def test_check_missing_edge(self):
         a = self.box("A")
-        self.include(a)
         objects.make_mesh_size(self.study, 1.0, [(a, "Edge99")])  # a box has 12 edges
         self.assertStudyError("has no Edge99")
 
@@ -821,7 +786,6 @@ class StudyTest(unittest.TestCase):
 
     def test_transfinite_items_go_to_the_job(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_body(self.study, [a], [(a, "Vertex1")])
         objects.make_transfinite_edges(self.study, 3, self.all_edges(a), "Bump", 0.4)
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
@@ -839,27 +803,24 @@ class StudyTest(unittest.TestCase):
         self.assertNotIn("Mesh.RecombineAll", job["options"])
 
     def test_job_without_transfinite_items_has_no_transfinite_key(self):
-        self.include(self.box("A"))
+        self.box("A")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             self.assertNotIn("transfinite", json.load(fh))
 
     def test_structured_body_edge_without_item_is_refused(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_body(self.study, [a])
         objects.make_transfinite_edges(self.study, 3, self.all_edges(a)[:11])
         self.assertStudyError("edges without Transfinite Edges: Edge12")
 
     def test_edge_in_two_transfinite_edges_is_refused(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_edges(self.study, 3, [(a, "Edge1")])
         objects.make_transfinite_edges(self.study, 4, [(a, "Edge1")])
         self.assertStudyError("A.Edge1 is in Transfinite Edges")
 
     def test_body_in_two_transfinite_bodies_is_refused(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
         objects.make_transfinite_body(self.study, [a])
         objects.make_transfinite_body(self.study, [a])
@@ -867,7 +828,6 @@ class StudyTest(unittest.TestCase):
 
     def test_corner_on_another_body_is_refused(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
         objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
         objects.make_transfinite_body(self.study, [a], [(b, "Vertex1")])
         self.assertStudyError("is not on one of its bodies")
@@ -1025,7 +985,6 @@ class StudyTest(unittest.TestCase):
 
     def test_face_picks_in_a_3d_study_are_refused(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
         objects.make_transfinite_body(self.study, []).References = [(a, "Face1")]
         objects.make_recombine(self.study, []).References = [(a, "Face2")]
@@ -1034,7 +993,6 @@ class StudyTest(unittest.TestCase):
 
     def test_structured_box_job_meshes_to_hexahedra(self):
         a = self.box("A")
-        self.include(a)
         objects.make_transfinite_body(self.study, [a])
         objects.make_transfinite_edges(self.study, 3, self.all_edges(a))
         objects.make_recombine(self.study, [a])
@@ -1056,8 +1014,8 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(msh_element_types(os.path.join(self.tmp.name, "pre_geom2D.msh"), 2), {3}, "only quadrangles")
 
     def test_recombine_items_go_to_the_job(self):
-        a, b, c, d = self.box("A"), self.box("B", 10), self.box("C", 20), self.box("D", 40)
-        self.include(a, b, c)  # D is outside the main geometry: skipped
+        a, _, c, d = self.box("A"), self.box("B", 10), self.box("C", 20), self.box("D", 40)
+        self.exclude(d)  # D is not meshed: skipped
         objects.make_recombine(self.study, [c, a, d])
         objects.make_recombine(self.study, [a])  # twice: listed once
         self.study.MeshSizesGroup.VolumeAlgorithm = "HXT"  # no longer refused here
@@ -1069,7 +1027,7 @@ class StudyTest(unittest.TestCase):
         self.assertNotIn("Mesh.RecombineAll", job["options"])
 
     def test_job_without_recombine_items_has_no_recombine_key(self):
-        self.include(self.box("A"))
+        self.box("A")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             self.assertNotIn("recombine", json.load(fh))
 
@@ -1217,8 +1175,6 @@ class StudyTest(unittest.TestCase):
 
     def test_written_job_meshes(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.include(a)
-        self.include(b)
         objects.make_excitation(self.study, "T", [(a, "Face1")])  # x = 0 face
         objects.make_mesh_size(self.study, 1.0, [(a, "Face1"), (a, "Edge1"), (b, "Vertex8")])
         settings = self.study.MeshSizesGroup
@@ -1239,22 +1195,6 @@ class StudyTest(unittest.TestCase):
         obj.Shape = Part.makePlane(10, 10)
         obj.Placement.Base = App.Vector(0, 0, z)
         return obj
-
-    def test_multiple_studies_have_independent_ownership_and_ids(self):
-        second = objects.make_study(self.doc, "2D", "Cross-section")
-        a = self.box("A")
-        (material,) = self.assign([a])
-        copper = objects.make_library_material(second, json.dumps(record("user:copper", "Copper", "conductor")))
-        (other,) = objects.assign(second, [a], copper, 0)
-        objects.update_ids(self.study)
-        self.assertIsNone(objects.find_study(self.doc))
-        self.assertEqual(objects.owner_study(material), self.study)
-        self.assertEqual(objects.owner_study(other), second)
-        self.assertEqual(objects.owner_study(second.MeshSizesGroup), second)
-        self.assertIsNone(objects.owner_study(a))  # a reference does not imply ownership
-        self.assertEqual(second.MatIds, {})
-        self.assertEqual(objects.assignment_of(second), {"A": other})
-        self.assertEqual(len(objects.material_rows(second)), 1)
 
     def test_nested_sources_use_body_tip_and_final_boolean_result(self):
         root = self.doc.addObject("App::DocumentObjectGroup", "Geometry")
@@ -1365,21 +1305,19 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(found, [xy])
         self.assertIn("share one plane", errors[0])
 
-    def test_sources_update_after_rename_addition_and_deletion(self):
+    def test_an_excluded_group_follows_rename_addition_and_deletion(self):
         source = self.doc.addObject("App::DocumentObjectGroup", "Geometry")
         a = self.box("A")
         source.addObject(a)
-        self.study.MainMode, self.study.MainSource = "Container", source
+        self.exclude(source)
         source.Label = "Renamed"
         b = self.box("B", 10)
         source.addObject(b)
         self.doc.recompute()
-        self.assertEqual(geometry.region(self.study, "Main"), ([a, b], []))
-        self.doc.removeObject(source.Name)
-        found, errors = geometry.region(self.study, "Main")
-        self.assertEqual(found, [])
-        self.assertIn("missing", errors[0])
-        self.assertEqual(self.study.MainMode, "Container")
+        self.assertEqual(geometry.study_geometry(self.study), ([], []))
+        self.doc.removeObject(source.Name)  # its bodies stay, and are meshed again
+        self.assertEqual(geometry.study_geometry(self.study), ([a, b], []))
+        self.assertEqual(self.study.Excluded, [])
 
     def test_geometry_tree_shows_containers_and_meshable_bodies(self):
         part = self.doc.addObject("App::Part", "Stator")
@@ -1392,14 +1330,64 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         self.assertEqual(geometry.tree(self.doc, "3D"), [(part, [(a, None)]), (cut, None)])
         self.assertEqual(geometry.tree(self.doc, "2D"), [(flat, None)])
-        self.assertTrue(geometry.whole(part, "3D"))
-        self.assertFalse(geometry.whole(part, "2D"), "a container of solids is not 2D geometry")
-        self.study.MainObjects = [a, cut]
-        self.assertEqual(geometry.stored(self.study, "Main"), [a, cut])
-        self.study.MainMode, self.study.MainSource = "Container", part
-        self.assertEqual(geometry.stored(self.study, "Main"), [part])
-        self.study.MainMode = "Unassigned"
-        self.assertEqual(geometry.stored(self.study, "Main"), [])
+
+    # --- the whole document is the Study's geometry ---------------------------
+
+    def test_every_body_is_meshed_and_one_drawn_later_too(self):
+        a, b = self.box("A"), self.box("B", 20)
+        self.assertEqual(objects.study_bodies(self.study), [a, b])
+        c = self.box("C", 40)
+        self.assertEqual(objects.study_bodies(self.study), [a, b, c])
+
+    def test_a_hidden_body_is_meshed(self):
+        a = self.box("A")
+        a.Visibility = False
+        self.assertEqual(objects.study_bodies(self.study), [a])
+
+    def test_an_excluded_part_keeps_out_a_body_added_later(self):
+        part = self.doc.addObject("App::Part", "Helpers")
+        part.addObject(self.box("H1"))
+        keep = self.box("Keep", 40)
+        self.exclude(part)
+        part.addObject(self.box("H2", 20))
+        self.assertEqual(objects.study_bodies(self.study), [keep])
+
+    def test_an_excluded_body_stays_listed_once(self):
+        a, b = self.box("A"), self.box("B", 20)
+        self.exclude(b, b)
+        self.assertEqual((self.study.Excluded, objects.study_bodies(self.study)), ([b], [a]))
+        self.assertTrue(geometry.is_excluded(self.study, b) and not geometry.is_excluded(self.study, a))
+
+    def test_objects_that_are_not_bodies_are_ignored(self):
+        self.assign([self.box("A")])
+        self.doc.addObject("Spreadsheet::Sheet", "Sheet")
+        self.doc.addObject("Sketcher::SketchObject", "Sketch")
+        self.doc.addObject("Fem::FemMeshObject", "Mesh")
+        import Draft
+
+        Draft.make_linear_dimension(App.Vector(0, 0, 0), App.Vector(10, 0, 0), App.Vector(5, -5, 0))
+        self.doc.recompute()
+        self.assertEqual(validation.errors(validation.validate(self.study)), [])
+        self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A"])
+
+    def test_a_2d_study_ignores_solids(self):
+        doc = App.newDocument("Flat")
+        self.addCleanup(App.closeDocument, doc.Name)
+        flat = objects.make_study(doc, "2D")
+        doc.addObject("Part::Box", "Solid")
+        face = doc.addObject("Part::Feature", "Face")
+        face.Shape = Part.makePlane(10, 10)  # in z = 0
+        doc.recompute()
+        self.assertEqual(objects.study_bodies(flat), [face])
+        a = self.box("A")
+        self.face("Sheet", 20)
+        self.doc.recompute()
+        self.assertEqual(objects.study_bodies(self.study), [a], "a 3D Study ignores a face")
+
+    def test_a_second_study_is_refused(self):
+        objects.make_study(self.doc, "2D", "Other")
+        texts = [p.text for p in validation.errors(validation.validate(self.study))]
+        self.assertIn(f"This document has two Studies, {self.study.Label} and Other: delete one.", texts)
 
     def test_a_container_with_study_objects_is_not_a_geometry_source(self):
         group = self.doc.addObject("App::DocumentObjectGroup", "Everything")
@@ -1408,62 +1396,17 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(geometry.is_source(group))
         self.assertFalse(geometry.is_source(self.study.MaterialsGroup))
 
-    def test_sliding_setup_checks_assignments_and_ignores_disabled_region(self):
-        a = self.box("A")
-        self.study.MainMode = self.study.MovingMode = "Manual"
-        self.study.MainObjects = self.study.MovingObjects = [a]
-        self.assertEqual(geometry.setup(self.study), ([a], [], []))
-        self.study.Movement = "Sliding motion"
-        self.assertIn("both fixed and moving", geometry.setup(self.study)[2][0])
-        self.assertEqual(self.study.MovingObjects, [a])
-
-    def test_two_studies_restore_their_sources_settings_and_ids(self):
-        second = objects.make_study(self.doc, "2D", "Cross-section")
-        source = self.doc.addObject("App::DocumentObjectGroup", "Faces")
-        source.addObject(self.face("Section"))
-        second.MainMode, second.MainSource = "Container", source
-        second.MeshSizesGroup.DefaultMeshSize = 1.5
-        self.include(self.box("A"))
-        objects.update_ids(self.study)
-        path = os.path.join(self.tmp.name, "setup.FCStd")
-        self.doc.saveAs(path)
-        App.closeDocument(self.doc.Name)
-        self.doc = App.openDocument(path)
-        first, second = objects.studies(self.doc)
-        self.study = first
-        self.assertEqual(first.MatIds, {"A": "1"})
-        self.assertEqual(second.Dimension, "2D")
-        self.assertEqual(second.MainSource.Name, "Faces")
-        self.assertEqual(second.MeshSizesGroup.DefaultMeshSize.Value, 1.5)
-        self.assertEqual(geometry.region(second, "Main")[1], [])
-        code = """import sys
-import FreeCAD as App
-from emsolution import geometry, objects
-doc = App.openDocument(sys.argv[1])
-first, second = objects.studies(doc)
-assert first.MatIds == {'A': '1'}
-assert second.Dimension == '2D' and second.MainSource.Name == 'Faces'
-assert geometry.region(second, 'Main')[1] == []
-App.closeDocument(doc.Name)
-print('RESTORE PASS')
-"""
-        result = subprocess.run(
-            [sys.executable, "-c", code, path], capture_output=True, encoding="utf-8", errors="replace"
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("RESTORE PASS", result.stdout)
-
-    def test_sliding_without_moving_geometry_cannot_change_ids_or_write_files(self):
-        self.include(self.box("A"))
+    def test_sliding_without_interfaces_cannot_change_ids_or_write_files(self):
+        self.box("A")
         self.study.Movement = "Sliding motion"
         self.assertEqual(geometry.export_unavailable(self.study), "")
-        with self.assertRaisesRegex(jobwriter.StudyError, "Moving geometry: No geometry chosen"):
+        with self.assertRaisesRegex(jobwriter.StudyError, "Sliding motion needs an Air Region"):
             jobwriter.write_job(self.study)
         self.assertEqual(self.study.MatIds, {})
         self.assertFalse(os.path.exists(self.scratch("job.json")))
 
     def test_sliding_motion_is_no_longer_refused_as_a_later_phase(self):
-        study = objects.make_study(self.doc, "2D", "Section")
+        study = self.replace_study()
         self.assertEqual(geometry.export_unavailable(study), "")
         study.Movement = "Sliding motion"
         self.assertEqual(geometry.export_unavailable(study), "")
@@ -1471,23 +1414,20 @@ print('RESTORE PASS')
         self.assertNotIn("later phase", " ".join(texts))
         self.assertIn("Sliding motion needs an Air Region and at least one Sliding Interface.", texts)
 
-    def test_new_study_requires_geometry_even_when_materials_exist(self):
-        study = objects.make_study(self.doc)
-        self.assertEqual(study.MainMode, "Unassigned")
-        steel = objects.make_library_material(
-            study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL))
-        )
-        objects.assign(study, [self.box("A")], steel, 0)
-        with self.assertRaisesRegex(jobwriter.StudyError, "No geometry chosen. Select the Study"):
-            jobwriter.check(study)
+    def test_study_requires_a_body_even_when_materials_exist(self):
+        a = self.box("A")
+        objects.assign(self.study, [a], self.steel(), 0)
+        self.exclude(a)
+        with self.assertRaisesRegex(jobwriter.StudyError, "No body to mesh"):
+            jobwriter.check(self.study)
 
     def test_selected_geometry_controls_export_and_filters_other_assignments(self):
         a, b, outside = self.box("A"), self.box("B", 10), self.box("Outside", 20)
         source = self.doc.addObject("App::Part", "Stator")
         source.addObject(b)
         source.addObject(a)
-        self.study.MainMode, self.study.MainSource = "Container", source
-        # Invalid assignments outside the source must not affect its mesh.
+        self.exclude(outside)
+        # Invalid assignments on a body the Study does not mesh must not affect its mesh.
         objects.make_excitation(self.study, "Terminal", [(outside, "Face60"), (b, "Face1")])
         objects.make_mesh_size(self.study, 0.5, [(outside, "Face60"), (a, "Face1")])
         objects.make_mesh_size(self.study, 0.0, [(outside, "")])
@@ -1509,8 +1449,8 @@ print('RESTORE PASS')
         self.assertNotIn("Copper", physical_names)
 
     def make_2d_study(self, *faces):
-        study = objects.make_study(self.doc, "2D", "Section")
-        study.MainMode, study.MainObjects = "Manual", list(faces)
+        """A 2D Study in place of the 3D one; faces: the document's faces, all meshed."""
+        study = self.replace_study()
         study.MeshSizesGroup.DefaultMeshSize = 5
         return study
 
@@ -1539,7 +1479,7 @@ print('RESTORE PASS')
         self.assertIn('2 2 "B"', names)
 
     def test_3d_job_keeps_its_old_shape(self):
-        self.include(self.box("A"))
+        self.box("A")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             job = json.load(fh)
         self.assertNotIn("dimension", job)
@@ -1562,7 +1502,6 @@ print('RESTORE PASS')
 
     def test_bodies_without_materials_are_meshed_and_listed(self):
         a, b = self.box("A"), self.box("B", 10)
-        self.study.MainMode, self.study.MainObjects = "Manual", [a, b]
         self.assertEqual(geometry.export_unavailable(self.study), "")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             job = json.load(fh)
@@ -1571,26 +1510,18 @@ print('RESTORE PASS')
         self.assign([a])
         self.assertEqual(objects.bodies_without_material(self.study), [b])
 
-    def test_ids_follow_live_membership_of_the_selected_geometry(self):
-        a, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
-        source = self.doc.addObject("App::DocumentObjectGroup", "Stator")
-        source.addObject(a)
-        source.addObject(b)
-        self.study.MainMode, self.study.MainSource = "Container", source
+    def test_ids_follow_live_membership_of_the_study_geometry(self):
+        _, b, c = self.box("A"), self.box("B", 10), self.box("C", 20)
+        source = self.doc.addObject("App::DocumentObjectGroup", "Helpers")
+        source.addObject(c)
+        self.exclude(source)
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds, {"A": "1", "B": "2"})
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "B"])
-        source.removeObject(b)
-        source.addObject(c)
+        source.removeObject(c)
+        source.addObject(b)
         objects.update_ids(self.study)
         self.assertEqual(self.study.MatIds, {"A": "1", "C": "3"})
-
-    def test_selected_geometry_rejects_a_missing_container(self):
-        self.study.MainMode, self.study.MainObjects = "Manual", [self.box("A")]
-        self.study.MainMode = "Container"
-        self.assertStudyError("Selected container is missing")
-
-    # --- Bodies of several solids -------------------------------------------
 
     def sliced_coil(self, name="Coil", two_d=False):
         """An L of three 10 mm cubes (or squares at z = 0), one body: sliced like Part Slice, so the pieces
@@ -1626,7 +1557,7 @@ print('RESTORE PASS')
     def test_body_of_three_solids_is_one_mat_id(self):
         coil = self.sliced_coil()
         self.assertEqual(len(coil.Shape.Solids), 3)
-        self.include(coil, self.box("Iron", 40))
+        self.box("Iron", 40)
         job, r = self.run_mesher()
         self.assertEqual(self.study.MatIds, {"Coil": "1", "Iron": "2"})
         self.assertEqual([v["name"] for v in job["volumes"]], ["Coil", "Iron"])
@@ -1642,7 +1573,6 @@ print('RESTORE PASS')
 
     def test_transfinite_body_of_three_solids_meshes_to_hexahedra(self):
         coil = self.sliced_coil()
-        self.include(coil)
         objects.make_transfinite_body(self.study, [coil])
         objects.make_transfinite_edges(self.study, 3, self.all_edges(coil))
         objects.make_recombine(self.study, [coil])
@@ -1665,7 +1595,6 @@ print('RESTORE PASS')
         body = self.doc.addObject("Part::Feature", "Coil")
         body.Shape = ell.generalFuse([Part.makeBox(10, 10, 10, App.Vector(20, 0, 0))])[0]  # 8 faces + 6 faces
         self.doc.recompute()
-        self.include(body)
         objects.make_transfinite_body(self.study, [body])
         objects.make_transfinite_edges(self.study, 3, self.all_edges(body))
         path = jobwriter.write_job(self.study)
@@ -1676,7 +1605,6 @@ print('RESTORE PASS')
 
     def test_excitation_faces_on_two_pieces_are_one_smat_id(self):
         coil = self.sliced_coil()
-        self.include(coil)
         ends = [(coil, self.face_at(coil, 20, 5, 5)), (coil, self.face_at(coil, 5, 20, 5))]
         objects.make_excitation(self.study, "T", ends)
         job, r = self.run_mesher()
@@ -1688,7 +1616,6 @@ print('RESTORE PASS')
     def test_transfinite_compound_of_touching_solids_is_refused(self):
         coil = self.doc.addObject("Part::Feature", "Coil")
         coil.Shape = Part.makeCompound([Part.makeBox(10, 10, 10), Part.makeBox(10, 10, 10, App.Vector(10, 0, 0))])
-        self.include(coil)
         objects.make_transfinite_body(self.study, [coil])
         objects.make_transfinite_edges(self.study, 3, self.all_edges(coil))
         self.assertStudyError("touch without sharing faces. Make it with Part Slice or Boolean Fragments")
@@ -1765,36 +1692,25 @@ print('RESTORE PASS')
             jobwriter.check(self.study)
         self.assertEqual(str(ctx.exception).count("refers to nothing"), 5, "every problem, not only the first")
 
-    def test_items_on_bodies_outside_the_main_geometry_are_a_warning(self):
+    def test_items_on_bodies_the_study_does_not_mesh_are_a_warning(self):
         a, outside = self.box("A"), self.box("Outside", 20)
-        self.include(a)
+        self.exclude(outside)
         objects.make_recombine(self.study, [a, outside])
         self.assertEqual(self.problems(validation.ERROR), [])
-        self.assertIn(
-            "Recombine Recombine is not used for Outside: not in the main geometry.", self.problems("warning")
-        )
+        self.assertIn("Recombine Recombine is not used for Outside: not meshed by the Study.", self.problems("warning"))
         jobwriter.check(self.study)
 
     def test_validation_lists_every_error(self):
         a = self.box("A")
-        self.include(a)
         self.study.MeshSizesGroup.DefaultMeshSize = 0
         objects.make_mesh_size(self.study, 0.0, [(a, "Face1")])
         objects.make_excitation(self.study, "Gone", [])
         errors = self.problems(validation.ERROR)
         self.assertEqual(len(errors), 3, errors)
 
-    def test_body_picked_together_with_a_cut_made_from_it_is_a_warning(self):
-        coil = self.box("Coil", 10)
-        box, cut = self.air_cut_by(coil)
-        self.include(cut, coil, box)
-        (warning,) = [w for w in self.problems(validation.WARNING) if "not meshed on its own" in w]
-        self.assertEqual(warning, "AirBox is not meshed on its own: Air is made from it.")
-        self.assertEqual(self.problems(validation.ERROR), [])
-
     def test_overlapping_bodies_are_an_error(self):
-        a, b, c = self.box("A"), self.box("B", 5), self.box("C", 10)  # A and B overlap; A and C only touch
-        self.include(a, b, c)
+        for name, x in (("A", 0), ("B", 5), ("C", 10)):  # A and B overlap; A and C only touch
+            self.box(name, x)
         errors = [e for e in self.problems(validation.ERROR) if "overlap" in e]
         self.assertEqual(len(errors), 2, errors)
         self.assertTrue(errors[0].startswith("Bodies A and B overlap by 500 mm³ near (7.5, 5, 5)."), errors[0])
@@ -1802,10 +1718,9 @@ print('RESTORE PASS')
         self.assertStudyError("Bodies A and B overlap")
 
     def test_overlapping_faces_are_an_error_in_2d(self):
-        a, b, c = self.face("A"), self.face("B"), self.face("C")
+        _, b, c = self.face("A"), self.face("B"), self.face("C")
         b.Placement.Base, c.Placement.Base = App.Vector(5, 5, 0), App.Vector(-10, 0, 0)  # C touches A
-        study = objects.make_study(self.doc, "2D", "Section")
-        study.MainMode, study.MainObjects = "Manual", [a, b, c]
+        study = self.replace_study()
         errors = [p.text for p in validation.validate(study) if "overlap" in p.text]
         self.assertEqual(len(errors), 1, errors)
         self.assertTrue(errors[0].startswith("Bodies A and B overlap by 25 mm² near (7.5, 7.5, 0)."), errors[0])
@@ -1817,7 +1732,6 @@ print('RESTORE PASS')
         plate = self.box("Plate", 30)  # flat faces mesh at any size
         plate.Height = 0.5
         self.doc.recompute()
-        self.include(wire, plate)
         (warning,) = [w for w in self.problems(validation.WARNING) if "thick" in w]
         self.assertTrue(warning.startswith("Mesh size 5 mm is larger than Wire is thick (about 0.88 mm)"), warning)
         objects.make_mesh_size(self.study, 0.5, [(wire, "")])
@@ -1827,22 +1741,20 @@ print('RESTORE PASS')
         coil = self.doc.addObject("Part::Feature", "Coil")
         coil.Shape = Part.makePlane(10, 10)
         aligned = self.sketched_face_aligned_to(coil)
-        study = objects.make_study(self.doc, "2D", "Section")
-        study.MainMode, study.MainObjects = "Manual", [aligned, coil]
-        self.assertEqual(objects.study_bodies(study), [aligned, coil])
+        study = self.replace_study()
+        self.assertEqual(objects.study_bodies(study), [coil, aligned])
         texts = [p.text for p in validation.validate(study) if "not meshed on its own" in p.text]
         self.assertEqual(texts, [])
 
     def test_bodies_without_material_are_a_warning(self):
-        self.include(self.box("A"))
+        self.box("A")
         self.assertEqual(
             self.problems(validation.WARNING), ["No material (the input file needs one for every body): A"]
         )
 
     def test_ids_come_back_after_undo_but_not_to_a_new_object_with_the_same_name(self):
         self.doc.UndoMode = 1
-        a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
+        a, _ = self.box("A"), self.box("B", 10)
         objects.make_excitation(self.study, "T", [(a, "Face1")])
         objects.update_ids(self.study)
         before = self.ids()
@@ -1860,24 +1772,22 @@ print('RESTORE PASS')
         objects.update_ids(self.study)
         new = self.box("A", 20)  # FreeCAD gives the free name A again
         self.assertEqual(new.Name, "A")
-        self.include(new)
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"B": "2", "A": "3"})
 
-    def test_id_comes_back_when_a_body_returns_to_the_main_geometry(self):
-        a, b = self.box("A"), self.box("B", 10)
-        self.include(a, b)
+    def test_id_comes_back_when_a_body_returns_to_the_study(self):
+        a, _ = self.box("A"), self.box("B", 10)
         objects.update_ids(self.study)
-        self.study.MainObjects = [b]
+        self.exclude(a)
         objects.update_ids(self.study)
-        c = self.box("C", 20)
-        self.study.MainObjects = [b, c, a]
+        self.assertEqual(self.ids()[0], {"B": "2"})
+        self.box("C", 20)
+        objects.set_excluded(self.study, [])
         objects.update_ids(self.study)
         self.assertEqual(self.ids()[0], {"B": "2", "C": "3", "A": "1"})
 
     def test_mesher_check_only_writes_nothing(self):
-        coil = self.sliced_coil()
-        self.include(coil)
+        self.sliced_coil()
         path = jobwriter.write_job(self.study)
         r = subprocess.run(
             [sys.executable, MESHER, path, "--check"], capture_output=True, encoding="utf-8", errors="replace"
@@ -1897,8 +1807,6 @@ print('RESTORE PASS')
                 body.Shape = shape()
                 self.doc.recompute()
                 study = self.make_2d_study(body) if two_d else self.study
-                if not two_d:
-                    self.include(body)
                 objects.make_transfinite_body(study, [body])
                 objects.make_transfinite_edges(study, 3, self.all_edges(body))
                 path = jobwriter.write_job(study)

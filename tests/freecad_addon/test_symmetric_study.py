@@ -343,6 +343,7 @@ def test_cell_cut_by_a_fragments_meshes_per_block(tmp_path):
         frag = symcases.coil_fragments(doc)
         iron, _, air = info["stator_cells"]
         study = objects.make_study(doc, "2D")
+        objects.set_excluded(study, info["rotor_cells"])  # only the stator is meshed
         stator = objects.make_symmetric_group(study, [iron, frag, air], rules=symcases.STATOR_RULES, name="Stator")
         assert objects.split_row(stator, 1)
         outer_area = symcases.sector(43, 50, 10, 15).Area
@@ -468,6 +469,7 @@ def test_static_study_writes_one_file(tmp_path):
     try:
         info = symcases.group_motor_doc(doc)
         study = objects.make_study(doc, "2D")
+        objects.set_excluded(study, info["rotor_cells"])  # only the stator is meshed
         stator = objects.make_symmetric_group(study, info["stator_cells"], rules=symcases.STATOR_RULES, name="Stator")
         objects.set_rows(stator, [{**r, "mode": "table", "table": ["Stator"] * 24} for r in objects.rows_of(stator)])
         lib = _steel(study)

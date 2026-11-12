@@ -302,13 +302,12 @@ def group(study, name, cells, rules, rows=None, side="Fixed", lib=None):
     return item
 
 
-def add_free(study, name, shape, lib=None, side="Main"):
-    """A body meshed normally, beside the copies: in the Main (or Moving) geometry, with a Material of lib."""
+def add_free(study, name, shape, lib=None):
+    """A body meshed normally, beside the copies, with a Material of lib. It moves when it is on the moving side of
+    the Sliding Interface."""
     from emsolution import objects
 
     body = feature(study.Document, name, shape)
-    setattr(study, side + "Mode", "Manual")
-    setattr(study, side + "Objects", [*getattr(study, side + "Objects"), body])
     if lib is not None:
         objects.assign(study, [body], lib, 0)
     study.Document.recompute()
@@ -405,7 +404,7 @@ def read_mesh(study):
 
     import numpy as np
 
-    from emsolution import geometry, jobwriter, objects, validation
+    from emsolution import geometry, jobwriter, objects, sides
 
     from . import meshreport
 
@@ -414,9 +413,8 @@ def read_mesh(study):
     files = {"fixed": jobwriter.mesh_file(study)}
     if sliding:
         files["moving"] = jobwriter.rotor_file(study)
-    main, moving, _ = geometry.setup(study)
-    on_moving = {b.Name for b in moving} if sliding else set()
-    free = validation.free_bodies(study, main, moving)
+    on_moving = sides.moving(study)
+    free = geometry.study_geometry(study)[0]
     copied = collections.defaultdict(set)  # side -> MAT_IDs of the parts of the copies
     for m in objects.part_assignments(study):
         copied[m.PartKey.partition("|")[0]].add(int(study.MatIds[m.Name]))

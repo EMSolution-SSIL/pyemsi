@@ -11,40 +11,11 @@ from PySide import QtCore, QtWidgets
 from . import airshapes, geometry, highlight, icon, jobwriter, labels, objects, validation
 from . import symmetry
 
-_active = {}  # document name -> (document instance, Study Name); GUI state only
-
-
-def set_active_study(study):
-    _active[study.Document.Name] = (study.Document, study.Name)
-
 
 def active_study():
-    """Resolve selected ownership first, then a validated target for this document."""
-    docs = App.listDocuments()
-    for name, (doc, _) in list(_active.items()):
-        if docs.get(name) is not doc:
-            del _active[name]
+    """The active document's Study: one per document."""
     doc = App.ActiveDocument
-    if doc is None:
-        return None
-    owners = {
-        s.Name: s
-        for o in Gui.Selection.getSelection()
-        if o.Document == doc and (s := objects.owner_study(o)) is not None
-    }
-    if len(owners) > 1:
-        _active.pop(doc.Name, None)
-        return None
-    if owners:
-        study = next(iter(owners.values()))
-        set_active_study(study)
-        return study
-    remembered = _active.get(doc.Name)
-    study = doc.getObject(remembered[1]) if remembered else None
-    if study not in objects.studies(doc):
-        _active.pop(doc.Name, None)
-        study = objects.find_study(doc)
-    return study
+    return objects.find_study(doc) if doc is not None else None
 
 
 def selected_bodies():
@@ -545,11 +516,7 @@ class FolderView:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(QtWidgets.QLabel("Study: " + study.Label))
         if not isinstance(folder.Proxy, (objects.MaterialLibraryFolder, objects.AirRegionsFolder)):
-            if objects.assignment_problem(study, []) == objects.NO_MAIN_GEOMETRY:
-                notice = QtWidgets.QLabel(objects.NO_MAIN_GEOMETRY)
-                notice.setStyleSheet("color: #c00000")
-            else:
-                notice = QtWidgets.QLabel("Only assignments on the selected geometry are exported.")
+            notice = QtWidgets.QLabel("Only assignments on the bodies the Study meshes are exported.")
             notice.setWordWrap(True)
             layout.addWidget(notice)
         self.settings = None
@@ -703,7 +670,6 @@ class StudyView:
 
     def __init__(self, study):
         self.study = study
-        set_active_study(study)
         self.form = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(self.form)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -717,21 +683,19 @@ class StudyView:
         self.slide_hint = QtWidgets.QLabel("Add an Air Region and a Sliding Interface")
         self.slide_hint.setStyleSheet("color: #c00000")
         layout.addWidget(self.slide_hint)
-        self.regions, self.pending = {}, set()
-        for name in ("Main", "Moving"):
-            box = QtWidgets.QGroupBox()
-            rows = QtWidgets.QVBoxLayout(box)
-            tree = QtWidgets.QTreeWidget()
-            tree.setObjectName(name + "Geometry")
-            tree.setHeaderHidden(True)
-            rows.addWidget(tree)
-            count = QtWidgets.QLabel()
-            count.setWordWrap(True)
-            rows.addWidget(count)
-            layout.addWidget(box)
-            self.regions[name] = (box, tree, count)
-            tree.itemChanged.connect(lambda _item, _col, n=name: self.ticked(n))
-            tree.currentItemChanged.connect(lambda item, _prev: self.highlight_item(item))
+        self.pending = False
+        box = QtWidgets.QGroupBox("Geometry")
+        rows = QtWidgets.QVBoxLayout(box)
+        self.tree = QtWidgets.QTreeWidget()
+        self.tree.setObjectName("Geometry")
+        self.tree.setHeaderHidden(True)
+        rows.addWidget(self.tree)
+        self.count = QtWidgets.QLabel()
+        self.count.setWordWrap(True)
+        rows.addWidget(self.count)
+        layout.addWidget(box)
+        self.tree.itemChanged.connect(lambda _item, _col: self.ticked())
+        self.tree.currentItemChanged.connect(lambda item, _prev: self.highlight_item(item))
         refresh = QtWidgets.QPushButton("Refresh geometry")
         refresh.clicked.connect(self.refresh)
         layout.addWidget(refresh)
@@ -774,22 +738,18 @@ class StudyView:
         study = self.study
         sliding = study.Movement == "Sliding motion"
         self.slide_hint.setVisible(sliding and not (objects.air_regions(study) and objects.sliding_interfaces(study)))
-        nodes = geometry.tree(study.Document, study.Dimension)
-        for name, (box, tree, count) in self.regions.items():
-            box.setTitle("Moving geometry" if name == "Moving" else "Fixed geometry" if sliding else "Main geometry")
-            box.setVisible(name == "Main" or sliding)
-            self.fill(tree, nodes, geometry.stored(study, name))
-            resolved, _ = geometry.region(study, name)
-            if study.Dimension == "2D":
-                number = sum(len(obj.Shape.Faces) for obj in resolved)
-                text = f"Included: {number} face region{'s' if number != 1 else ''} "
-            else:
-                number = sum(len(obj.Shape.Solids) for obj in resolved)
-                text = f"Included: {number} solid{'s' if number != 1 else ''} "
-            text += f"({len(resolved)} object{'s' if len(resolved) != 1 else ''})"
-            count.setText(text)
+        self.fill(geometry.tree(study.Document, study.Dimension))
+        resolved, errors = geometry.study_geometry(study)
+        if study.Dimension == "2D":
+            number = sum(len(obj.Shape.Faces) for obj in resolved)
+            text = f"Included: {number} face region{'s' if number != 1 else ''} "
+        else:
+            number = sum(len(obj.Shape.Solids) for obj in resolved)
+            text = f"Included: {number} solid{'s' if number != 1 else ''} "
+        text += f"({len(resolved)} object{'s' if len(resolved) != 1 else ''})"
+        self.count.setText(text)
         if geometry.export_unavailable(study):
-            lines = geometry.setup(study)[2]
+            lines = errors
         else:  # every problem that stops the mesh; Validate Study also lists the warnings
             lines = [p.text for p in validation.errors(validation.validate(study))]
         self.diagnostics.setText("\n".join(lines))
@@ -810,24 +770,17 @@ class StudyView:
         if self.study.Document is not None:
             self.run_button.setEnabled(not geometry.export_unavailable(self.study) and not runner.busy())
 
-    def fill(self, tree, nodes, stored):
-        """Show nodes with the stored objects ticked; a stored object the tree leaves out is listed last, so a
-        tick elsewhere does not drop it."""
+    def fill(self, nodes):
+        """Show nodes with every body ticked unless the Study excludes it."""
+        tree = self.tree
         expanded, stack = set(), [tree.invisibleRootItem()]
         while stack:
             item = stack.pop()
             stack += [item.child(i) for i in range(item.childCount())]
             if item.isExpanded():
                 expanded.add(item.data(0, QtCore.Qt.UserRole))
-        listed, stack = set(), list(nodes)
-        while stack:
-            obj, children = stack.pop()
-            listed.add(obj.Name)
-            stack += children or []
-        nodes = nodes + [(o, None) for o in stored if o.Name not in listed]
-        names = {o.Name for o in stored}
 
-        def add(parent, nodes, ticked):
+        def add(parent, nodes):
             for obj, children in nodes:
                 item = QtWidgets.QTreeWidgetItem(parent, [obj.Label])
                 item.setIcon(0, obj.ViewObject.Icon)
@@ -835,54 +788,51 @@ class StudyView:
                 item.setData(0, QtCore.Qt.UserRole, obj.Name)
                 item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
                 if children is None:
-                    item.setCheckState(0, QtCore.Qt.Checked if ticked or obj.Name in names else QtCore.Qt.Unchecked)
+                    excluded = geometry.is_excluded(self.study, obj)
+                    item.setCheckState(0, QtCore.Qt.Unchecked if excluded else QtCore.Qt.Checked)
                 else:
                     item.setFlags(item.flags() | QtCore.Qt.ItemIsAutoTristate)
-                    add(item, children, ticked or obj.Name in names)
+                    add(item, children)
                     item.setExpanded(obj.Name in expanded)
 
         tree.blockSignals(True)
         tree.clear()
-        add(tree.invisibleRootItem(), nodes, False)
+        add(tree.invisibleRootItem(), nodes)
         tree.blockSignals(False)
 
-    def ticked(self, name):
+    def ticked(self):
         # A container's tick changes each child too: save once, after all of them.
-        if name not in self.pending:
-            self.pending.add(name)
-            QtCore.QTimer.singleShot(0, lambda: self.save_ticks(name))
+        if not self.pending:
+            self.pending = True
+            QtCore.QTimer.singleShot(0, self.save_ticks)
 
-    def picked(self, parent):
-        """The ticked objects under parent; a fully ticked container that can be saved whole is one object."""
+    def unticked(self, parent):
+        """The unticked objects under parent; a fully unticked container that can be saved as itself is one object,
+        so a body added to it later is left out too."""
         out, doc = [], self.study.Document
         for item in (parent.child(i) for i in range(parent.childCount())):
             obj, state = doc.getObject(item.data(0, QtCore.Qt.UserRole)), item.checkState(0)
-            if obj is None or state == QtCore.Qt.Unchecked:
+            if obj is None or state == QtCore.Qt.Checked:
                 continue
-            if not item.childCount() or (state == QtCore.Qt.Checked and geometry.whole(obj, self.study.Dimension)):
+            if not item.childCount():
+                out.append(obj)
+            elif state == QtCore.Qt.Unchecked and geometry.is_source(obj):
                 out.append(obj)
             else:
-                out += self.picked(item)
+                out += self.unticked(item)
         return out
 
-    def save_ticks(self, name):
-        self.pending.discard(name)
+    def save_ticks(self):
+        self.pending = False
         study = self.study
         if study.Document is None:
             return
-        picked = self.picked(self.regions[name][1].invisibleRootItem())
-        if picked == geometry.stored(study, name):
+        excluded = self.unticked(self.tree.invisibleRootItem())
+        if [o.Name for o in excluded] == [o.Name for o in study.Excluded]:
             return
         doc = study.Document
         doc.openTransaction("Choose Study geometry")
-        if not picked:
-            setattr(study, name + "Mode", "Unassigned")
-        elif len(picked) == 1 and geometry.is_container(picked[0]):
-            setattr(study, name + "Mode", "Container")
-            setattr(study, name + "Source", picked[0])
-        else:
-            setattr(study, name + "Mode", "Manual")
-            setattr(study, name + "Objects", picked)
+        objects.set_excluded(study, excluded)
         doc.commitTransaction()
         doc.recompute()
         self.refresh()
@@ -983,8 +933,6 @@ class SelectionObserver:
         self.pending = False
         sel = Gui.Selection.getSelection()
         editing = Gui.Control.activeDialog()
-        if not editing:
-            active_study()  # remember a Study when its tree item is selected
         if editing:
             pass  # an open item panel highlights its own selected rows
         elif len(sel) == 1 and objects.is_item(sel[0]):
@@ -1106,7 +1054,7 @@ def install_open_observer():
 
 
 class ItemGate:
-    """While an item panel is open, the 3D view and tree can only pick what it takes, on the main geometry."""
+    """While an item panel is open, the 3D view and tree can only pick what it takes, on the bodies the Study meshes."""
 
     def __init__(self, study, kinds, whole, air=True, regions=False):
         """regions: any click on a one-face body picks that region (2D face picks)."""
@@ -1227,9 +1175,8 @@ class ItemPanel:
         self.form.setWindowTitle(obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
         layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
-        region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"
         hint = QtWidgets.QLabel(
-            (hint2d if study.Dimension == "2D" else hint3d) + f" Only the Study's {region} can be picked."
+            (hint2d if study.Dimension == "2D" else hint3d) + " Only the bodies the Study meshes can be picked."
         )
         hint.setWordWrap(True)
         layout.addRow(hint)
@@ -1415,14 +1362,13 @@ class MaterialPanel:
         self.form.setWindowTitle("New Material" if new else obj.Label)
         layout = QtWidgets.QFormLayout(self.form)
         layout.addRow(QtWidgets.QLabel("Study: " + study.Label))
-        region = "main and moving geometry" if study.Movement == "Sliding motion" else "main geometry"
         if self.part:
             text = "This is the Material of a part of a Symmetric Group; its copies are listed below."
         elif study.Dimension == "2D":
             text = "Click a region in the 3D view, or select a body or the Air Region in the tree."
         else:
             text = "Click a solid in the 3D view, or select a body or the Air Region in the tree."
-        hint = QtWidgets.QLabel(text if self.part else f"{text} Only the Study's {region} can be picked.")
+        hint = QtWidgets.QLabel(text if self.part else f"{text} Only the bodies the Study meshes can be picked.")
         hint.setWordWrap(True)
         layout.addRow(hint)
         self.others = labels.others_checkbox()

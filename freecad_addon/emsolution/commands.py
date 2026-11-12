@@ -75,11 +75,8 @@ def _create_and_edit(study, title, make):
 
 def gate(study, bodies, item_cls=None):
     """Warn and return False unless bodies can get assignments (of an item of class item_cls, which may refuse the
-    air); with no main geometry, select the Study."""
+    air)."""
     problem = objects.assignment_problem(study, bodies) or objects.air_refusal(item_cls, bodies)
-    if problem == objects.NO_MAIN_GEOMETRY:
-        Gui.Selection.clearSelection()
-        Gui.Selection.addSelection(study)  # its panel shows the main geometry choice
     if problem:
         warn(problem)
     return not problem
@@ -98,8 +95,9 @@ class NewStudy:
             "ToolTip": "Create an EMSolution study in this document",
         }
 
-    def IsActive(self):
-        return App.ActiveDocument is not None and not Gui.Control.activeDialog()
+    def IsActive(self):  # one Study per document
+        doc = App.ActiveDocument
+        return doc is not None and not objects.studies(doc) and not Gui.Control.activeDialog()
 
     def Activated(self):
         doc = App.ActiveDocument
@@ -112,7 +110,6 @@ class NewStudy:
         taskpanels.attach_view_provider(study)
         doc.commitTransaction()
         doc.recompute()
-        taskpanels.set_active_study(study)
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(study)
 
@@ -133,7 +130,7 @@ class AssignMaterial(_StudyCommand):
         groups = {g.Name: g for g in objects.symmetric_groups(study)}
         if groups and self.open_part(study, groups, bodies):
             return
-        if not gate(study, bodies):  # with nothing selected, still refused without main geometry
+        if not gate(study, bodies):
             return
         air = objects.air_material(study, bodies[0]) if len(bodies) == 1 and taskpanels.is_air(bodies[0]) else None
         if air is not None:  # an Air Region keeps its Material: edit that one
@@ -233,7 +230,7 @@ class AddAirRegion(_StudyCommand):
             return warn("This Study already has an Air Region.")
         doc = study.Document
         try:
-            bodies = objects.air_sizing_bodies(study)  # main and moving geometry, or free bodies and groups
+            bodies = objects.air_sizing_bodies(study)  # the Study's bodies, then its groups
         except Exception as exc:  # a body not recomputed yet has no shape: start with the manual defaults
             App.Console.PrintWarning(f"EMSolution: the Air Region starts Manual, the bodies are not ready ({exc}).\n")
             bodies = []

@@ -13,7 +13,7 @@ import FreeCAD as App
 import Part
 import pytest
 
-from emsolution import airshapes, objects, validation, jobwriter, studymaterials
+from emsolution import airshapes, geometry, objects, sides, validation, jobwriter, studymaterials
 
 from .materialdata import AIR, STEEL, record
 from .test_mesher2d import clockwise
@@ -24,7 +24,6 @@ class AirTest(unittest.TestCase):
         self.doc = App.newDocument("T")
         self.tmp = tempfile.TemporaryDirectory()
         self.study = objects.make_study(self.doc)
-        self.study.MainMode = "Manual"
         self.doc.saveAs(os.path.join(self.tmp.name, "T.FCStd"))
 
     def tearDown(self):
@@ -32,23 +31,27 @@ class AirTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def study_2d(self, normal):
-        """A 2D Study with one square face body in z = 0 (normal along z) or y = 0 (normal along y)."""
+        """A 2D Study in place of the Study, with one square face body in z = 0 (normal along z) or y = 0 (normal
+        along y); the face an earlier call made is deleted."""
         self.doc.removeObject(self.study.Name)
+        if getattr(self, "face_2d", None) is not None:
+            self.doc.removeObject(self.face_2d.Name)
         self.study = objects.make_study(self.doc, "2D")
-        self.study.MainMode = "Manual"
-        body = self.doc.addObject("Part::Feature", "Face")
+        body = self.face_2d = self.doc.addObject("Part::Feature", "Face")
         body.Shape = Part.makePlane(10, 10, App.Vector(0, 0, 0), normal)
-        self.study.MainObjects = [body]
         self.doc.recompute()
         return body
+
+    def exclude(self, *bodies):
+        """Leave bodies (or containers) out of the Study."""
+        objects.set_excluded(self.study, [*self.study.Excluded, *bodies])
 
     def test_new_study_has_air_regions_folder(self):
         self.assertEqual(self.study.AirRegionsGroup.Label, "Air Regions")
         self.assertEqual(objects.air_regions(self.study), [])
 
     def test_restored_old_study_gets_air_folder_and_keeps_ids(self):
-        box = self.doc.addObject("Part::Box", "A")
-        self.study.MainObjects = [box]
+        self.doc.addObject("Part::Box", "A")
         self.doc.recompute()
         objects.update_ids(self.study)
         ids = dict(self.study.MatIds)
@@ -164,7 +167,6 @@ class AirTest(unittest.TestCase):
 
     def bodies(self, *names):
         boxes = [self.doc.addObject("Part::Box", n) for n in names]
-        self.study.MainObjects = boxes
         self.doc.recompute()
         return boxes
 
@@ -187,8 +189,7 @@ class AirTest(unittest.TestCase):
         self.assertEqual(self.study.MatIds[air.Name], "3")
         self.assertEqual(objects.id_rows(self.study)[-1][2], "Surroundings")
         self.doc.removeObject(air.Name)
-        c = self.doc.addObject("Part::Box", "C")
-        self.study.MainObjects = [*self.study.MainObjects, c]
+        self.doc.addObject("Part::Box", "C")
         self.doc.recompute()
         objects.update_ids(self.study)
         self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2", "C": "4"})
@@ -414,19 +415,18 @@ class AirTest(unittest.TestCase):
         boxes = [self.doc.addObject("Part::Box", n) for n in moving]
         for k, box in enumerate(boxes):
             box.Placement.Base = App.Vector(20 + 20 * k, 0, 0)
-        self.study.MovingMode, self.study.MovingObjects = "Manual", boxes
         self.study.Movement = "Sliding motion"
         self.doc.recompute()
         return boxes
 
-    def test_moving_bodies_get_ids_after_main_bodies(self):
+    def test_moving_bodies_get_ids_in_tree_order_and_keep_them_without_movement(self):
         self.sliding(["A", "B"], ["M"])
         objects.update_ids(self.study)
         self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2", "M": "3"})
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "B", "M"])
         self.study.Movement = "No movement"
         objects.update_ids(self.study)
-        self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2"})
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "B": "2", "M": "3"})
 
     def test_moving_body_can_get_a_material(self):
         (m,) = self.sliding(["A"], ["M"])
@@ -435,15 +435,7 @@ class AirTest(unittest.TestCase):
         objects.update_ids(self.study)
         rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
         self.assertEqual(rows["M"][1:3], ["Steel", self.study.MatIds[m.Name]])
-        self.assertEqual(objects.bodies_without_material(self.study), [self.study.MainObjects[0]])
-        self.study.Movement = "No movement"
-        self.assertIn("Not in the Study's main geometry: M", objects.assignment_problem(self.study, [m]))
-
-    def test_study_bodies_have_no_duplicates(self):
-        (m,) = self.sliding(["A"], ["M"])
-        self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A", "M"])
-        self.study.MainObjects = [*self.study.MainObjects, m]  # both: setup reports it, the list stays unique
-        self.assertEqual([b.Name for b in objects.study_bodies(self.study)], ["A", "M"])
+        self.assertEqual(objects.bodies_without_material(self.study), [self.doc.getObject("A")])
 
     def test_job_lists_moving_mat_ids(self):
         self.sliding(["A", "B"], ["M"])
@@ -470,7 +462,7 @@ class AirTest(unittest.TestCase):
         self.assertEqual([r[2] for r in objects.id_rows(self.study)], ["A", "M", "Air_fixed", "Air_moving"])
         self.study.Movement = "No movement"
         objects.update_ids(self.study)
-        self.assertEqual(dict(self.study.MatIds), {"A": "1", air.Name: "5"})
+        self.assertEqual(dict(self.study.MatIds), {"A": "1", "M": "2", air.Name: "5"})
         self.study.Movement = "Sliding motion"
         objects.update_ids(self.study)
         self.assertEqual(dict(self.study.MatIds), {"A": "1", "M": "2", fixed: "3", moving: "4"})
@@ -659,11 +651,9 @@ class AirTest(unittest.TestCase):
         with a Rotational interface at 42.5 and more at the radii in extra."""
         self.doc.removeObject(self.study.Name)
         self.study = objects.make_study(self.doc, "2D")
-        self.study.MainMode = self.study.MovingMode = "Manual"
         stator, rotor = self.doc.addObject("Part::Feature", "Stator"), self.doc.addObject("Part::Feature", "Rotor")
         stator.Shape = self.disc(80, 45)
         rotor.Shape = self.disc(rotor_radius)
-        self.study.MainObjects, self.study.MovingObjects = [stator], [rotor]
         self.study.Movement = "Sliding motion"
         objects.make_air_region(self.study, "Sector", OuterRadius=100)
         for radius in (42.5, *extra):
@@ -672,9 +662,9 @@ class AirTest(unittest.TestCase):
         return stator, rotor
 
     def box_slide(self, moving_x=20):
-        """A 3D sliding Study: box A fixed at x = 0..10, box M moving, a Linear interface at x = 15."""
-        self.sliding(["A"], ["M"])
-        self.study.MovingObjects[0].Placement.Base = App.Vector(moving_x, 0, 0)
+        """A 3D sliding Study: box A fixed at x = 0..10, box M moving, a Linear interface at x = 15 (x > 15 moves)."""
+        (moving,) = self.sliding(["A"], ["M"])
+        moving.Placement.Base = App.Vector(moving_x, 0, 0)
         objects.make_air_region(self.study, "Box", Center=App.Vector(20, 5, 5), Length=80, Width=30, Height=30)
         iface = objects.make_sliding_interface(self.study, "Linear", NormalAxis="X", Position=15, MotionAxis="Y")
         self.doc.recompute()
@@ -770,24 +760,55 @@ class AirTest(unittest.TestCase):
         self.assertFalse([t for t in errors if "crosses" in t])
         self.assertFalse([t for t in errors if "holds no body" in t or "same side" in t])
 
-    def test_moving_and_fixed_body_on_the_same_side_is_an_error(self):
+    def test_the_rotor_inside_a_rotational_interface_moves_with_no_setting(self):
         stator, rotor = self.motor()
-        stator.Shape = self.disc(30)
+        self.assertEqual(sides.moving(self.study), {rotor.Name})
+        (iface,) = objects.sliding_interfaces(self.study)
+        iface.MovingSide = "Outside"
+        self.assertEqual(sides.moving(self.study), {stator.Name})
+
+    def test_bodies_on_one_side_only_need_that_side_to_move(self):
+        text = "No body is on the moving side of the Sliding Interfaces."
+        stator, rotor = self.motor()
+        stator.Shape = self.disc(30, 20)
         rotor.Shape = self.disc(20)
-        names = f"Moving body {rotor.Label} and fixed body {stator.Label}"
-        self.assertIn(f"{names} are on the same side of the Sliding Interfaces.", self.air_errors())
+        self.doc.recompute()
+        self.assertEqual(sides.moving(self.study), {stator.Name, rotor.Name})
+        self.assertNotIn(text, self.air_errors())
+        objects.sliding_interfaces(self.study)[0].MovingSide = "Outside"  # no body is outside the radius
+        self.assertEqual(sides.moving(self.study), set())
+        self.assertIn(text, self.air_errors())
 
-    def test_air_cell_without_a_body_is_an_error(self):
-        stator, _ = self.motor(extra=(60,))  # three cells; the ring between 42.5 and 60 holds nothing
+    def test_interfaces_that_disagree_about_a_piece_of_air_are_an_error(self):
+        stator, _ = self.motor(extra=(60,))  # three pieces: the ring between 42.5 and 60 is inside one only
         stator.Shape = self.disc(90, 65)
+        self.doc.recompute()
         inner, outer = objects.sliding_interfaces(self.study)
-        text = f"Part of the air next to Sliding Interfaces {inner.Label}, {outer.Label} holds no body; its side is unknown."
-        self.assertIn(text + " Move an interface or add the body.", self.air_errors())
+        text = (
+            f"Sliding Interfaces {inner.Label} and {outer.Label} disagree about the side of the air between them:"
+            " change the moving side of one."
+        )
+        self.assertIn(text, self.air_errors())
+        outer.MovingSide = "Outside"  # the stator moves with the ring between them
+        self.assertNotIn(text, self.air_errors())
 
-    def test_no_body_in_the_moving_geometry_is_an_error(self):
-        self.motor()
-        self.study.MovingObjects = []
-        self.assertIn("No body is in the moving geometry.", self.air_errors())
+    def test_no_body_on_the_moving_side_is_an_error(self):
+        _, rotor = self.motor()
+        self.doc.removeObject(rotor.Name)
+        self.assertIn("No body is on the moving side of the Sliding Interfaces.", self.air_errors())
+
+    def test_linear_slide_moves_the_body_on_the_moving_side(self):
+        self.study_2d(App.Vector(0, 0, 1))  # the face spans y = 0..10
+        below = self.doc.addObject("Part::Feature", "Below")
+        below.Shape = Part.makePlane(10, 10, App.Vector(0, -20, 0))
+        self.study.Movement = "Sliding motion"
+        objects.make_air_region(self.study, "Box", Center=App.Vector(5, -5, 0), Length=40, Width=60)
+        iface = objects.make_sliding_interface(self.study, "Linear", NormalAxis="Y", Position=-5, MotionAxis="X")
+        self.doc.recompute()
+        self.assertEqual(sides.moving(self.study), {self.face_2d.Name})  # above y = -5: the Positive side
+        iface.MovingSide = "Negative"
+        self.assertEqual(sides.moving(self.study), {below.Name})
+        self.assertEqual(self.air_errors(), [])
 
     def does_not_span(self, iface):
         text = f"Sliding Interface {iface.Label} does not span the Air Region: its surface is cut into pieces by the air boundary."
@@ -818,19 +839,16 @@ class AirTest(unittest.TestCase):
         iface.Divisions = 91
         self.assertIn(text, self.air_errors())
         iface.Divisions = 90
-        self.assertEqual([t for t in self.air_errors() if "Sliding Interface" in t], [])
+        self.assertEqual([t for t in self.air_errors() if f"Sliding Interface {iface.Label}" in t], [])
 
     def test_slide_job_2d_sector(self):
         """The 45 degree machine: shaft and rotor move, the stator is fixed, one interface in the gap."""
         self.doc.removeObject(self.study.Name)
         self.study = objects.make_study(self.doc, "2D")
-        self.study.MainMode = self.study.MovingMode = "Manual"
         parts = {}
-        for name, inner, outer in (("Shaft", 0, 30), ("Rotor", 30, 78), ("Stator", 82, 149)):
+        for name, inner, outer in (("Stator", 82, 149), ("Shaft", 0, 30), ("Rotor", 30, 78)):
             parts[name] = self.doc.addObject("Part::Feature", name)
             parts[name].Shape = airshapes._bottom_face(airshapes._ring_sector(inner, outer, 0, 45, 0, 1), 0)
-        self.study.MainObjects = [parts["Stator"]]
-        self.study.MovingObjects = [parts["Shaft"], parts["Rotor"]]
         self.study.Movement = "Sliding motion"
         objects.make_air_region(self.study, "Sector", OuterRadius=200, EndAngle=45)
         objects.make_sliding_interface(self.study, "Rotational", Radius=80.575, Divisions=90)
@@ -936,23 +954,20 @@ class AirTest(unittest.TestCase):
         refused = f"Air Region {air.Label} cannot be an Excitation."
         self.assertIn(f"Excitation {coil.Label}: {refused} Remove it from the item.", self.air_errors())
         self.assertEqual(objects.air_refusal(objects.MeshSize, [air]), "")
-        self.assertEqual(objects.air_refusal(objects.Recombine, self.study.MainObjects), "")
+        self.assertEqual(objects.air_refusal(objects.Recombine, objects.study_bodies(self.study)), "")
 
-    def test_custom_source_in_the_study_geometry_is_an_error(self):
+    def test_the_custom_air_source_is_not_a_body(self):
         (a,) = self.bodies("A")
-        outer = self.doc.addObject("Part::Box", "OuterBox")
-        outer.Length = outer.Width = outer.Height = 40
-        outer.Placement.Base = App.Vector(-15, -15, -15)
-        self.study.MainObjects = [a, outer]
-        air = objects.make_air_region(self.study, "Custom", Source=outer)
+        source = self.doc.addObject("Part::Box", "S")
+        source.Length = source.Width = source.Height = 40
+        source.Placement.Base = App.Vector(-15, -15, -15)
         self.doc.recompute()
-        text = f"OuterBox is the Custom shape of Air Region {air.Label}; take it out of the main geometry."
-        self.assertIn(text, self.air_errors())
-        self.study.MainObjects = [a]
+        self.assertEqual(objects.study_bodies(self.study), [a, source])
+        air = objects.make_air_region(self.study, "Custom", Source=source)
+        self.doc.recompute()
+        self.assertEqual(objects.study_bodies(self.study), [a])
+        self.assertEqual(geometry.air_sources(self.study), {source.Name: air})
         self.assertEqual(self.air_problems(), [])
-        self.study.Movement, self.study.MovingMode, self.study.MovingObjects = "Sliding motion", "Manual", [outer]
-        text = f"OuterBox is the Custom shape of Air Region {air.Label}; take it out of the moving geometry."
-        self.assertIn(text, self.air_errors())
 
     def test_custom_source_of_the_wrong_kind_is_an_error(self):
         self.bodies("A")
@@ -1013,8 +1028,7 @@ class AirTest(unittest.TestCase):
             self.assertEqual(objects.make_sliding_interface(self.study).Kind, kind)
 
     def padded(self, bodies, shape="Box", **props):
-        """An Air Region in Padding mode sized by bodies (the Study's main geometry)."""
-        self.study.MainObjects = list(bodies)
+        """An Air Region in Padding mode sized by bodies (the Study's bodies)."""
         air = objects.make_air_region(self.study, shape, **props)
         air.SizeMode = "Padding"
         air.SizedBy = list(bodies)
@@ -1161,36 +1175,46 @@ class AirTest(unittest.TestCase):
         self.doc.recompute()
         self.assertSize(air, Length=32)
 
-    def test_air_grows_when_a_body_joins_main_geometry(self):
+    def test_air_grows_when_a_body_is_ticked_again(self):
         (body,) = self.bodies("B")
-        air = self.padding_air()
-        self.assertSize(air, Length=10)
         other = self.doc.addObject("Part::Box", "C")
         other.Placement.Base = App.Vector(20, 0, 0)
-        self.doc.recompute()  # a body without a shape cannot be listed yet
-        self.study.MainObjects = [body, other]
+        self.exclude(other)
+        self.doc.recompute()
+        air = self.padding_air()
+        self.assertSize(air, Length=10)
+        objects.set_excluded(self.study, [])
         self.doc.recompute()
         self.assertEqual([o.Name for o in air.SizedBy], ["B", "C"])
         self.assertSize(air, Length=30)
-        self.study.MainObjects = [body]
+        self.exclude(other)
         self.doc.recompute()
         self.assertSize(air, Length=10)
 
-    def test_air_follows_moving_geometry_when_sliding(self):
+    def test_padding_air_grows_to_a_body_drawn_later(self):
+        self.bodies("A")
+        air = self.padding_air()
+        self.assertSize(air, Length=10)
+        b = self.doc.addObject("Part::Box", "B")
+        b.Placement.Base = App.Vector(40, 0, 0)  # outside the air
+        self.doc.recompute()
+        validation.validate(self.study)
+        self.assertTrue(air.Shape.BoundBox.isInside(b.Shape.BoundBox), "the air holds B")
+
+    def test_air_fits_the_moving_bodies_with_or_without_movement(self):
         self.sliding(["A"], ["M"])
         air = self.padding_air()
         self.assertEqual([o.Name for o in air.SizedBy], ["A", "M"])
         self.assertSize(air, Length=30)
         self.study.Movement = "No movement"
         self.doc.recompute()
-        self.assertEqual([o.Name for o in air.SizedBy], ["A"])
-        self.assertSize(air, Length=10)
+        self.assertEqual([o.Name for o in air.SizedBy], ["A", "M"])
+        self.assertSize(air, Length=30)
 
-    def test_body_added_to_container_source_is_picked_up_at_validate(self):
+    def test_body_added_to_a_part_is_picked_up_at_validate(self):
         part = self.doc.addObject("App::Part", "Part")
         first = self.doc.addObject("Part::Box", "First")
         part.addObject(first)
-        self.study.MainMode, self.study.MainSource = "Container", part
         self.doc.recompute()
         air = self.padding_air()
         self.assertEqual([o.Name for o in air.SizedBy], ["First"])
@@ -1214,7 +1238,7 @@ class AirTest(unittest.TestCase):
     def test_padding_without_bodies_is_an_error(self):
         air = self.padding_air()
         self.assertEqual(air.SizedBy, [])
-        self.assertIn("Air Region Air: Padding needs bodies in the main or moving geometry.", self.air_errors())
+        self.assertIn("Air Region Air: Padding needs bodies in the Study.", self.air_errors())
 
     def test_negative_padding_is_an_error(self):
         self.bodies("B")
@@ -1257,8 +1281,8 @@ class AirTest(unittest.TestCase):
         self.assertEqual(air.SizedBy, [body])
         air.SizeMode = "Manual"
         self.assertEqual(air.SizedBy, [])
-        self.study.MainObjects = []
-        self.study.MainObjects = [body]
+        self.exclude(body)
+        objects.set_excluded(self.study, [])
         self.assertEqual(air.SizedBy, [])
         objects.refresh_sized_by(self.study)
         self.assertEqual(air.SizedBy, [])
@@ -1266,13 +1290,10 @@ class AirTest(unittest.TestCase):
     def test_sliding_sector_padding_keeps_period(self):
         self.doc.removeObject(self.study.Name)
         self.study = objects.make_study(self.doc, "2D")
-        self.study.MainMode = self.study.MovingMode = "Manual"
         parts = {}
-        for name, inner, outer in (("Shaft", 0, 30), ("Rotor", 30, 78), ("Stator", 82, 149)):
+        for name, inner, outer in (("Stator", 82, 149), ("Shaft", 0, 30), ("Rotor", 30, 78)):
             parts[name] = self.doc.addObject("Part::Feature", name)
             parts[name].Shape = airshapes._bottom_face(airshapes._ring_sector(inner, outer, 0, 45, 0, 1), 0)
-        self.study.MainObjects = [parts["Stator"]]
-        self.study.MovingObjects = [parts["Shaft"], parts["Rotor"]]
         self.study.Movement = "Sliding motion"
         air = objects.make_air_region(self.study, "Sector", OuterRadius=200, EndAngle=45)
         objects.make_sliding_interface(self.study, "Rotational", Radius=80.575, Divisions=90)
@@ -1348,9 +1369,19 @@ class AirTest(unittest.TestCase):
                 self.assertTrue(hasattr(air, f"Pad{key}Percent") and hasattr(air, f"Pad{key}"), key)
 
     def test_padding_air_made_before_a_body_is_recomputed(self):
-        fresh = self.doc.addObject("Part::Box", "Fresh")  # not recomputed: no shape yet
-        self.study.MainObjects = [fresh]
+        self.doc.addObject("Part::Box", "Fresh")  # not recomputed: no shape yet, so not listed yet
         with mock.patch.object(App.Console, "PrintWarning") as warning:
+            air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+            self.assertFalse(warning.called)
+            self.assertEqual((air.SizeMode, air.SizedBy), ("Padding", []))
+        self.doc.recompute()
+        self.assertEqual(self.air_problems(), [])  # Validate refreshes again
+        self.assertEqual([o.Name for o in air.SizedBy], ["Fresh"])
+
+    def test_a_failing_refresh_leaves_the_air_whole(self):
+        self.bodies("B")
+        failing = mock.patch.object(objects, "air_sizing_bodies", side_effect=RuntimeError("no shape yet"))
+        with failing, mock.patch.object(App.Console, "PrintWarning") as warning:
             air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
             self.assertTrue(warning.called, "the failure was swallowed silently")
             self.assertIn(air, objects.air_regions(self.study))  # the Air Region is not left half made
@@ -1362,15 +1393,14 @@ class AirTest(unittest.TestCase):
             self.assertTrue(warning.called)
         self.doc.recompute()
         self.assertEqual(self.air_problems(), [])  # Validate refreshes again
-        self.assertEqual([o.Name for o in air.SizedBy], ["Fresh"])
+        self.assertEqual([o.Name for o in air.SizedBy], ["B"])
 
     def nested_parts(self):
-        """B in an inner App::Part in an outer one, the outer the Study's main container; a Padding air."""
+        """B in an inner App::Part in an outer one; a Padding air."""
         outer, inner = self.doc.addObject("App::Part", "Outer"), self.doc.addObject("App::Part", "Inner")
         body = self.doc.addObject("Part::Box", "B")
         outer.addObject(inner)
         inner.addObject(body)
-        self.study.MainMode, self.study.MainSource = "Container", outer
         self.doc.recompute()
         air = self.padding_air()
         self.assertSize(air, Center=(5, 5, 5))
@@ -1407,7 +1437,7 @@ class AirTest(unittest.TestCase):
         body, reader = self.doc.addObject("Part::Box", "B"), self.doc.addObject("Part::Box", "Reader")
         part.addObject(body)
         part.addObject(reader)
-        self.study.MainObjects = [body]
+        self.exclude(reader)
         self.doc.recompute()
         air = objects.make_air_region(self.study, "Box")
         reader.setExpression("Height", "Air.Height / 10")  # the Part now depends on the air through Reader
@@ -1420,24 +1450,25 @@ class AirTest(unittest.TestCase):
         self.assertEqual(self.air_problems(), [])
 
     def linked_part(self):
-        """B in an App::Part, the Study's main container; a Padding air linked to B and to the Part."""
+        """B in an App::Part; a Padding air linked to B and to the Part."""
         part, body = self.doc.addObject("App::Part", "Part"), self.doc.addObject("Part::Box", "B")
         part.addObject(body)
-        self.study.MainMode, self.study.MainSource = "Container", part
         self.doc.recompute()
         air = self.padding_air()
         self.assertEqual([o.Name for o in air.SizedByContainers], ["Part"])
         return part, air
 
     def check_reader_moved_into_linked_part(self, reader, air, part):
-        """Part -> reader -> Air -> SizedByContainers -> Part: Validate names the reader, unlinks, and heals."""
+        """Part -> reader -> Air -> SizedByContainers -> Part: Validate names the reader, unlinks, and heals once
+        the reader is out of the Part and of the Study."""
         part.addObject(reader)
-        text = "Air Region Air: Reader depends on the Air Region; it cannot size it."
+        text = "Air Region Air: body Reader depends on the Air Region; it cannot size it."
         for _ in range(2):  # stable: validating again changes nothing
             self.assertEqual(self.air_problems(), [text])
             self.assertEqual((air.SizedBy, air.SizedByContainers), ([], []))
         self.assertTrue(objects.safe_refresh_sized_by(self.study))
         part.removeObject(reader)
+        self.exclude(reader)
         self.doc.recompute()
         self.assertEqual(self.air_problems(), [])
         self.assertEqual([o.Name for o in air.SizedBy], ["B"])
@@ -1533,6 +1564,7 @@ class AirTest(unittest.TestCase):
         (body,) = self.bodies("B")
         air = self.padding_air()
         other = self.doc.addObject("Part::Box", "Unrelated")
+        self.exclude(other)
         self.doc.recompute()
         body.Length, other.Length = 30, 40
         self.assertEqual(self.air_problems(), [])

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import FreeCAD as App
 import Part
 
-from . import airshapes, geometry, objects, symmetry
+from . import airshapes, geometry, objects, sides, symmetry
 
 ERROR, WARNING = "error", "warning"
 
@@ -68,6 +68,9 @@ class _Report:
         self.problems.append(Problem(WARNING, text, item, list(refs)))
 
 
+NO_BODY = "No body to mesh: the document has none of the Study's dimension, or the Study panel excludes them all."
+
+
 def validate(study):
     """Every problem of the Study, errors and warnings, in a stable order."""
     r = _Report()
@@ -75,30 +78,34 @@ def validate(study):
     if unavailable:
         r.error(unavailable)
         return r.problems
+    found = objects.studies(study.Document)
+    if len(found) > 1:  # one Study per document: the whole document is its geometry
+        labels = [s.Label for s in found]
+        count = "two" if len(labels) == 2 else str(len(labels))
+        r.error(f"This document has {count} Studies, {', '.join(labels[:-1])} and {labels[-1]}: delete one.")
+        return r.problems
     refresh_padding(study)
-    main, moving, setup_errors = geometry.setup(study)
-    for text in setup_errors:
+    bodies, geometry_errors = geometry.study_geometry(study)  # with groups, the free objects
+    for text in geometry_errors:
         r.error(text)
     grouped = objects.is_grouped(study)
-    bodies = list({b.Name: b for b in main + moving}.values())  # main geometry order, then moving
-    if grouped:  # the cell objects of a group are not ordinary bodies; what is left is the free objects
-        bodies = free_bodies(study, main, moving)
+    if not bodies and not grouped and not geometry_errors:
+        r.error(NO_BODY)
     included = {b.Name for b in bodies}
     with_air = meshed(study, bodies)
-    if grouped:  # mesh settings may sit on the cell objects, outside the main geometry; excitations on a drawing
+    if grouped:  # mesh settings may sit on the cell objects, which are not free bodies; excitations on a drawing
         with_air |= {b.Name for b in objects.cell_bodies(study)}
         with_air |= {g.Name for g in objects.symmetric_groups(study)}
         included |= {g.Name for g in objects.symmetric_groups(study)}
     _old_items(study, r)
-    _skipped_picks(study, r)
     _body_overlaps(bodies, study.Dimension, r)
     _links(study, with_air, r)
     _settings(study, with_air, r)
     if grouped:
-        _groups(study, main, moving, r)
+        _groups(study, bodies, r)
     else:
-        _air(study, bodies, {b.Name for b in moving}, r)
-        _slides(study, main, moving, r)
+        _air(study, bodies, r)
+        _slides(study, bodies, sides.moving(study), r)
     meshed_bodies = bodies + objects.cell_bodies(study)  # with groups, the cells come besides the free objects
     _coarse(study, meshed_bodies, r)
     _transfinite(study, meshed_bodies, r)
@@ -121,33 +128,8 @@ def _old_items(study, r):
         r.error(old_item_text(item), item)
 
 
-def free_bodies(study, main, moving):
-    """The bodies of the main and moving geometry that are not cell objects of a group, once each: the ones meshed as
-    ordinary bodies."""
-    cells = {b.Name for b in objects.cell_bodies(study)}
-    return [b for b in {b.Name: b for b in main + moving}.values() if b.Name not in cells]
-
-
-def _skipped_picks(study, r):
-    """A body picked by hand that another picked body is made from is not meshed on its own (geometry.collect)."""
-    for name in ("Main", "Moving"):
-        if getattr(study, name + "Mode") != "Manual" or (name == "Moving" and study.Movement == "No movement"):
-            continue
-        picked = list(getattr(study, name + "Objects"))
-        resolved, _ = geometry.region(study, name)
-        kept = {o.Name for o in resolved}
-        for obj in picked:
-            if obj.Name in kept or not obj.isDerivedFrom("Part::Feature"):
-                continue
-            users = [o.Label for o in resolved if obj.Name in geometry.inputs(o)]
-            if users:
-                r.warning(
-                    f"{obj.Label} is not meshed on its own: {', '.join(users)} is made from it.", obj, [(obj, "")]
-                )
-
-
 def _body_overlaps(bodies, dimension, r):
-    """Bodies may only touch: where two overlap the mesher cannot give the region to either. Main and moving bodies
+    """Bodies may only touch: where two overlap the mesher cannot give the region to either. Fixed and moving bodies
     alike; the Air Region is not a body, the bodies win where they overlap it."""
     unit = "mm³" if dimension == "3D" else "mm²"
 
@@ -188,7 +170,7 @@ def _kind(item):
 
 
 def _links(study, included, r):
-    """Items left empty by a deleted body, bodies outside the main geometry, sub-elements a body no longer has."""
+    """Items left empty by a deleted body, bodies the Study does not mesh, sub-elements a body no longer has."""
     items = objects.excitations(study) if study.Dimension == "3D" else []  # 2D: no excitations yet
     items += [
         i
@@ -208,7 +190,7 @@ def _links(study, included, r):
         if outside:  # kept on purpose, e.g. to mesh only part of a model; they just do not reach this mesh
             r.warning(
                 f"{kind} {item.Label} is not used for {', '.join(b.Label for b, _ in outside)}:"
-                " not in the main geometry.",
+                " not meshed by the Study.",
                 item,
                 [(b, s) for b, subs in outside for s in subs],
             )
@@ -350,12 +332,6 @@ def _padding(air, bodies, plane, r):
         r.error(prefix + f"body {objects.display_name(body)} depends on the Air Region; it cannot size it.", air)
     if dependent:
         return False
-    study = objects.owner_study(air)
-    readers = objects.readers_in_sources(air, study) if not bodies and study is not None else []
-    for reader in readers:  # the container source is no source: it holds an object made from the air
-        r.error(prefix + f"{objects.display_name(reader)} depends on the Air Region; it cannot size it.", air)
-    if readers:
-        return False
     try:
         airshapes.padded_size(air, bodies, plane)
     except ValueError as e:
@@ -365,9 +341,9 @@ def _padding(air, bodies, plane, r):
     return True
 
 
-def _air(study, bodies, moving, r, cells=(), filled=False):
-    """One Air Region, a shape the Study's plane allows, and every body inside it. moving: names of the moving
-    bodies. cells: names of cell objects, which a Custom shape may not be either."""
+def _air(study, bodies, r, cells=(), filled=False):
+    """One Air Region, a shape the Study's plane allows, and every body inside it. cells: names of cell objects,
+    which a Custom shape may not be (a Custom shape is never one of the bodies: geometry.air_sources)."""
     airs = objects.air_regions(study)
     if not airs:
         return
@@ -389,15 +365,10 @@ def _air(study, bodies, moving, r, cells=(), filled=False):
         return
     if air.AirShape == "Custom":
         source = air.Source
-        if source.Name in {b.Name for b in bodies} | set(cells):  # the mesher would find it overlapping the bodies
-            where = (
-                "the Symmetric Group"
-                if source.Name in cells
-                else f"the {'moving' if source.Name in moving else 'main'} geometry"
-            )
+        if source.Name in set(cells):  # the mesher would find it overlapping the copies
             r.error(
                 f"{source.Label} is the Custom shape of Air Region {objects.display_name(air)};"
-                f" take it out of {where}.",
+                " take it out of the Symmetric Group.",
                 air,
                 [(source, "")],
             )
@@ -426,8 +397,9 @@ def _custom_fits(shape, plane):
     return bool(shape.Faces) and not shape.Solids and all(geometry.plane_of(f) == plane for f in shape.Faces)
 
 
-def _slides(study, main, moving, r):
-    """Sliding: an Air Region and Sliding Interfaces that cut it, every body on one side, both sides in use."""
+def _slides(study, bodies, moving, r):
+    """Sliding: an Air Region and Sliding Interfaces that cut it, interfaces that agree on the side of each piece of
+    the air, no body across a sliding surface and a body on the moving side. moving: names of the moving bodies."""
     interfaces = objects.sliding_interfaces(study)
     if study.Movement != "Sliding motion":
         for i in interfaces:
@@ -448,51 +420,27 @@ def _slides(study, main, moving, r):
     surfaces = _surfaces(interfaces, airs[0], air_shape, plane, r)
     if surfaces is None:
         return
-    if not moving:
-        r.error("No body is in the moving geometry.")
-        return
     cells = airshapes.cells(air_shape, surfaces)  # once: the bodies are sorted into them below
-    moving_names = {b.Name for b in moving}
-    fixed = [b for b in main if b.Name not in moving_names]
-    held, unplaced = {}, False  # cell index -> ([moving bodies], [fixed bodies]); a body not in one cell
+    _, disagreements = sides.piece_sides(cells, interfaces, surfaces, plane)
+    for text, iface in disagreements:
+        r.error(text, iface)
+    unplaced = False  # a body not in one cell
     hint = ""
     if any(i.Kind != "Linear" for i in interfaces):
         hint = " Rotation is about the global Z axis; put the machine axis on Z."
-    for side, group in enumerate((moving, fixed)):
-        for body in group:
-            shape = geometry.global_shape(body)
-            measure = shape.Volume if plane == "3D" else shape.Area
-            if airshapes.outside(shape, air_shape, plane) > 1e-6 * measure:
-                unplaced = True
-                continue  # _air reports a body outside the air
-            k = airshapes.cell_of(shape, cells)
-            if k is None:
-                unplaced = True
-                r.error(f"{body.Label} crosses a Sliding Interface." + hint, body, [(body, "")])
-            else:
-                held.setdefault(k, ([], []))[side].append(body)
-    if unplaced:
-        return  # the sides cannot be judged until those bodies are fixed
-    for k in range(len(cells)):
-        moving_here, fixed_here = held.get(k, ([], []))
-        if moving_here and fixed_here:
-            m, f = moving_here[0], fixed_here[0]
-            refs = [(m, ""), (f, "")]
-            r.error(
-                f"Moving body {m.Label} and fixed body {f.Label} are on the same side of the Sliding Interfaces.",
-                m,
-                refs,
-            )
-    empty = {}  # error text -> the first interface it names
-    for k, cell in enumerate(cells):
-        if any(held.get(k, ([], []))):
-            continue
-        near = [i for i, s in zip(interfaces, surfaces) if cell.distToShape(s)[0] < airshapes.TOL]
-        names = ("Sliding Interfaces " if len(near) > 1 else "Sliding Interface ") + ", ".join(i.Label for i in near)
-        text = f"Part of the air next to {names} holds no body; its side is unknown. Move an interface or add the body."
-        empty.setdefault(text, near[0] if near else None)
-    for text, iface in empty.items():
-        r.error(text, iface)
+    for body in bodies:
+        shape = geometry.global_shape(body)
+        measure = shape.Volume if plane == "3D" else shape.Area
+        if airshapes.outside(shape, air_shape, plane) > 1e-6 * measure:
+            unplaced = True
+            continue  # _air reports a body outside the air
+        if airshapes.cell_of(shape, cells) is None:
+            unplaced = True
+            r.error(f"{body.Label} crosses a Sliding Interface." + hint, body, [(body, "")])
+    if unplaced or disagreements:
+        return  # the sides cannot be judged until those are fixed
+    if not moving:
+        r.error("No body is on the moving side of the Sliding Interfaces.")
 
 
 def _surfaces(interfaces, air, air_shape, plane, r):
@@ -905,8 +853,8 @@ def group_problems(item):
     return sorted(r.problems, key=lambda p: p.severity != ERROR)
 
 
-def _free_cells(main, moving, groups, r):
-    """A cell object is in one group only and not in the main or moving geometry."""
+def _free_cells(groups, r):
+    """A cell object is in one group only."""
     owners = {}
     for item in groups:
         for cell in item.Cells:
@@ -919,16 +867,6 @@ def _free_cells(main, moving, groups, r):
                 items[1],
                 [(cell, "")],
             )
-    for where, bodies in (("Main", main), ("Moving", moving)):
-        for body in bodies:
-            if body.Name in owners:
-                item = owners[body.Name][1][0]
-                r.error(
-                    f"{objects.display_name(body)} is a cell object of Symmetric Group {item.Label} and is also in the"
-                    f" {where} geometry. Take it out of the {where} geometry: a group meshes its cell objects itself.",
-                    item,
-                    [(body, "")],
-                )
 
 
 def _elements(group):
@@ -1311,17 +1249,15 @@ def _free_transfinite(study, free, r):
             )
 
 
-def _groups(study, main, moving, r):
-    """A Study with Symmetric Groups (spec section 6). The free objects, the bodies of the main and moving geometry that
-    are in no group, are checked as ordinary bodies by validate."""
+def _groups(study, free, r):
+    """A Study with Symmetric Groups (spec section 6). free: the Study's bodies, which are in no group, checked as
+    ordinary bodies by validate."""
     groups = objects.symmetric_groups(study)
     three = study.Dimension == "3D"
-    free = free_bodies(study, main, moving)
     cell_bodies = objects.cell_bodies(study)
-    moved = {b.Name for b in moving} | {g.Name for g in groups if g.Side == "Moving"}
-    _air(study, free + groups, moved, r, {b.Name for b in cell_bodies}, filled=True)
+    _air(study, free + groups, r, {b.Name for b in cell_bodies}, filled=True)
     plane = _group_plane(study, cell_bodies, free, r)
-    _free_cells(main, moving, groups, r)
+    _free_cells(groups, r)
     ruled, drawn = {}, []  # group Name -> its rules; the groups whose rules and rows can be read
     for item in groups:
         rules = _group_rules(item, plane, r)

@@ -74,15 +74,13 @@ def ring_face(inner, outer, start, end):
 
 
 def new_study(doc, dimension, shapes):
-    """A Manual Study of dimension with one body per (name, shape). Returns (study, bodies)."""
+    """A Study of dimension with one body per (name, shape). Returns (study, bodies)."""
     study = objects.make_study(doc, dimension, doc.Name)
-    study.MainMode = "Manual"
     bodies = []
     for name, shape in shapes:
         body = doc.addObject("Part::Feature", name)
         body.Shape = shape
         bodies.append(body)
-    study.MainObjects = bodies
     doc.recompute()
     return study, bodies
 
@@ -214,13 +212,11 @@ def hollow_sector_3d(doc):
 
 def slide_study(doc, fixed, moving, shape, air_props, interfaces, dimension="2D", size=None):
     """A sliding-motion Study: fixed and moving (name, face or solid) bodies, an Air Region of shape with air_props
-    and the Sliding Interfaces [(kind, properties)]. size: the default mesh size, if not the Study's."""
+    and the Sliding Interfaces [(kind, properties)], whose MovingSide puts the moving bodies on the side that moves.
+    size: the default mesh size, if not the Study's."""
     study, bodies = new_study(doc, dimension, fixed + moving)
     if size:
         study.MeshSizesGroup.DefaultMeshSize = size
-    study.MainObjects = bodies[: len(fixed)]
-    study.MovingMode = "Manual"
-    study.MovingObjects = bodies[len(fixed) :]
     study.Movement = "Sliding motion"
     air = objects.make_air_region(study, shape, **air_props)
     for kind, props in interfaces:
@@ -242,8 +238,8 @@ def sector_motor_2d(doc):
     return slide_study(doc, fixed, moving, "Sector", air, [("Rotational", {"Radius": 80.575, "Divisions": 90})])
 
 
-def linear_props(y, name="Sliding Interface"):
-    return {"NormalAxis": "Y", "Position": y, "MotionAxis": "X", "Divisions": 32, "GroupName": name}
+def linear_props(y, name="Sliding Interface", side="Positive"):
+    return {"NormalAxis": "Y", "Position": y, "MotionAxis": "X", "Divisions": 32, "GroupName": name, "MovingSide": side}
 
 
 def linear_2d(doc):
@@ -256,7 +252,7 @@ def linear_two_2d(doc):
     fixed = [("Bottom", face(rect(0, 0, 80, 20))), ("Top", face(rect(0, 40, 80, 60)))]
     moving = [("Mover", face(rect(0, 24, 80, 36)))]
     air = {"Center": App.Vector(40, 30, 0), "Length": 80, "Width": 60}
-    gaps = [("Linear", linear_props(22, "Lower gap")), ("Linear", linear_props(38, "Upper gap"))]
+    gaps = [("Linear", linear_props(22, "Lower gap")), ("Linear", linear_props(38, "Upper gap", "Negative"))]
     return slide_study(doc, fixed, moving, "Box", air, gaps)
 
 
@@ -283,7 +279,7 @@ def sector_motor_3d(doc):
 def axial_gap_3d(doc):
     """Rotor disc z 0..10 moving, stator disc z 12..22 fixed, slide disc z 11 over the whole air."""
     fixed, moving = [("Stator", ring_sector(0, 50, 0, 360, 12, 10))], [("Rotor", ring_sector(0, 50, 0, 360, 0, 10))]
-    interface = ("Axial gap", {"Position": 11, "Divisions": 36, "CrossDivisions": 8})
+    interface = ("Axial gap", {"Position": 11, "Divisions": 36, "CrossDivisions": 8, "MovingSide": "Below"})
     air = {"OuterRadius": 80, "ZMin": -10, "Height": 42}
     return slide_study(doc, fixed, moving, "Sector", air, [interface], "3D", 10)
 
@@ -331,8 +327,8 @@ def axis_not_z(doc):
 
 
 def moving_on_fixed_side(doc):
-    fixed = [("Shaft", ring_face(0, 40, 0, 360)), ("Stator", ring_face(45, 60, 0, 360))]
-    moving = [("Rotor", ring_face(65, 80, 0, 360))]  # outside the slide circle, next to the stator
+    fixed = [("Stator", ring_face(45, 60, 0, 360))]
+    moving = [("Rotor", ring_face(65, 80, 0, 360))]  # outside the slide circle, next to the stator: nothing inside
     interface = ("Rotational", {"Radius": 42.5, "Divisions": 72})
     return slide_study(doc, fixed, moving, "Sector", {"OuterRadius": 100}, [interface])
 
@@ -459,8 +455,8 @@ CASES = [
     Case(
         "E5_moving_on_fixed_side",
         moving_on_fixed_side,
-        ["Validate refuses: the moving rotor is on the stator's side of the slide circle"],
-        "on the same side of the Sliding Interfaces",
+        ["Validate refuses: the rotor is on the stator's side of the slide circle, nothing is inside it"],
+        "No body is on the moving side of the Sliding Interfaces",
     ),
     Case("E6_bodies_overlap", bodies_overlap, ["Run Mesh refuses: the two bodies overlap"], "overlap"),
 ]

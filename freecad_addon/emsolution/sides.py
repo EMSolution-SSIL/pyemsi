@@ -3,7 +3,7 @@
 import FreeCAD as App
 import Part
 
-from . import airshapes, objects
+from . import airshapes, geometry, objects
 
 _EPS = 1e-6
 
@@ -71,3 +71,52 @@ def piece_sides(pieces, interfaces, surfaces, plane):
                 )
             )
     return found, errors
+
+
+def _pieces(study):
+    """(air pieces, their sides) of a sliding Study without Symmetric Groups, or None when they cannot be worked out:
+    no Air Region or interface, or one that does not cut the air (validation says why)."""
+    airs, interfaces = objects.air_regions(study), objects.sliding_interfaces(study)
+    if not airs or not interfaces:
+        return None
+    plane = airshapes.study_plane(study)
+    try:
+        air = airshapes.air_shape(airs[0], plane)
+        surfaces = [airshapes.slide_surface(i, air, plane) for i in interfaces]
+    except (ValueError, Part.OCCError):
+        return None
+    if not all(s.Edges for s in surfaces):  # an interface that misses the air
+        return None
+    pieces = airshapes.cells(air, surfaces)
+    return pieces, piece_sides(pieces, interfaces, surfaces, plane)[0]
+
+
+def moving(study):
+    """Names of the Study's free bodies on the moving side; empty without Sliding motion or when it cannot be worked
+    out (validation says why). Without Symmetric Groups a body moves with the air piece it is in; with them, by its
+    side of the one Sliding Interface."""
+    if study.Movement != "Sliding motion":
+        return set()
+    bodies = geometry.study_geometry(study)[0]
+    if objects.is_grouped(study):
+        interfaces = objects.sliding_interfaces(study)
+        if not interfaces:
+            return set()
+        plane = "3D" if study.Dimension == "3D" else airshapes.study_plane(study)
+        return {b.Name for b in bodies if side_of(geometry.global_shape(b), interfaces[0], plane) == "moving"}
+    found = _pieces(study)
+    if found is None:
+        return set()
+    pieces, piece_side = found
+    out = set()
+    for body in bodies:
+        k = airshapes.cell_of(geometry.global_shape(body), pieces)
+        if k is not None and piece_side[k] == "moving":
+            out.add(body.Name)
+    return out
+
+
+def moving_pieces(study):
+    """Indices of the moving pieces of airshapes.cells(...) in a sliding Study without Symmetric Groups."""
+    found = _pieces(study)
+    return [] if found is None else [k for k, side in enumerate(found[1]) if side == "moving"]
