@@ -151,5 +151,6 @@ mode round the drawing, and Validate passes.
 | 6 | "An Air Region in a symmetric Study" refused. | Section 4 here. |
 | 7.5 | Free objects may not touch the sliding surface. | Free objects and the Air Region may not touch it (first version). |
 | 8, item 2 | "M3-10 with drawn air", "L-06 and L-07 with drawn air". | "… with an Air Region". |
+| 11 | "The automatic Air Region is for non-symmetric meshes only. With symmetry the user draws the air." | Kept, with "Superseded on 2026-11-12: the Air Region comes into symmetric Studies and drawn air is its Custom shape (2026-11-12-unified-air-region-design.md)." after it. |
 
 The plan updates the rules spec in the same commit as the code that changes it.

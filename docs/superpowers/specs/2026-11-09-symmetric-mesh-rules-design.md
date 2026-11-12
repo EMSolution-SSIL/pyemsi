@@ -411,6 +411,8 @@ arms in two radial layers with the layer change at a rounded nose. `Part.makeLof
   matter, especially with fractional slots. Curved end windings for both.
 - Coils and strands stay whole objects (M3-10 yes, M3-11 no).
 - The automatic Air Region is for non-symmetric meshes only. With symmetry the user draws the air.
+  Superseded on 2026-11-12: the Air Region comes into symmetric Studies and drawn air is its Custom shape
+  (2026-11-12-unified-air-region-design.md).
 - Litz wires are varied, mainly 3D, no slices, double skew included. R-10 dropped.
 - Some cells structured and others unstructured must work together, in 2D and 3D.
 - The examples are only examples: the logic must be general, not specific to them.
