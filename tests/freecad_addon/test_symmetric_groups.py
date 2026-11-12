@@ -1520,6 +1520,69 @@ def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study):
     assert "air" in free["fixed"] and "air" not in free["moving"]
 
 
+def test_air_region_against_moving_copies_is_a_limit_of_the_tool(study):
+    """An outer rotor: the stator group moves, so a ring air at its outer edge would mesh with no shared nodes."""
+    study.Movement = "Sliding motion"
+    rotor_group(study, side="Fixed")
+    (stator,) = [g for g in objects.symmetric_groups(study) if g.Label == "Stator"]
+    stator.Side = "Moving"
+    objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144, CrossDivisions=2)
+    ready(study)
+    symcases.add_air_region(study, symcases.libraries(study)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90)
+    study.Document.recompute()
+    assert (
+        "Air Region Air touches the copies of Symmetric Group Stator, which is on the moving side. With Symmetric"
+        " Groups the Air Region is all on the fixed side, a limit of the tool: draw the air next to the moving copies"
+        " as a cell object of a moving group."
+    ) in texts(study)
+
+
+def test_ring_air_round_a_3d_sliding_motor_validates(study_3d):
+    sliding(study_3d)
+    ready(study_3d)
+    objects.make_air_region(study_3d, "Sector", InnerRadius=60, OuterRadius=90, ZMin=-5, Height=20)
+    study_3d.Document.recompute()
+    assert texts(study_3d) == []
+
+
+def test_body_past_the_ring_is_still_refused(study):
+    sliding(study)
+    ready(study)
+    objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)
+    free_body(study, "Shield", Part.Face(Part.Wire(Part.makeCircle(95))).cut(Part.Face(Part.Wire(Part.makeCircle(85)))))
+    study.Document.recompute()
+    assert any("Shield is not fully inside Air Region" in t for t in texts(study)), texts(study)
+
+
+def test_custom_air_too_small_says_it_must_enclose_the_copies(study):
+    ready(study)
+    symcases.add_air_region(study, shape=Part.Face(Part.Wire(Part.makeCircle(50))))
+    study.Document.recompute()
+    assert (
+        "Stator is not fully inside Air Region Air. A Custom air must enclose the copies; a hole through it is"
+        " not filled."
+    ) in texts(study), texts(study)
+
+
+@pytest.mark.parametrize("plane", ["XY", "3D"])
+def test_the_holder_of_a_ring_sector_is_the_full_sector(study, plane):
+    air = objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90, StartAngle=0, EndAngle=90)
+    air.ZMin, air.Height = -5, 20
+    holder = airshapes.filled_air(air, plane)
+    full = math.pi * 90**2 / 4
+    assert (holder.Volume if plane == "3D" else holder.Area) == pytest.approx(full * (20 if plane == "3D" else 1))
+
+
+def test_ring_air_round_a_sliding_motor_meshes(study):
+    sliding(study)
+    ready(study)
+    symcases.add_air_region(study, symcases.libraries(study)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90)
+    study.Document.recompute()
+    assert texts(study) == []
+    parts, _ = mesh_parts(study)  # asserts 0 inverted
+    assert parts.get("Air", 0) > 0
+
+
 def group_areas(msh_path):
     """{physical group name: area} of the 2D elements of the mesh file (corners only)."""
     import gmsh

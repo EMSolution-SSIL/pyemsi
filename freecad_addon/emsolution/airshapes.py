@@ -87,12 +87,15 @@ def _bottom_face(solid, z):
     return next(f for f in solid.Faces if abs(f.BoundBox.ZMin - z) < TOL and abs(f.BoundBox.ZMax - z) < TOL)
 
 
-def _sector(air, plane):
+def _sector(air, plane, filled=False):
+    """The Sector's shape; filled: from radius 0 (the radii are still checked)."""
     inner, outer = air.InnerRadius.Value, air.OuterRadius.Value
     if outer <= inner:
         raise ValueError(
             f"Air Region {objects.display_name(air)}: the outer radius must be larger than the inner radius."
         )
+    if filled:
+        inner = 0.0
     if plane == "ZX":  # half ring in the XY plane, x >= 0, stood up into y = 0
         face = _bottom_face(_ring_sector(inner, outer, -90, 180, 0, 1), 0)
         face.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 90)
@@ -248,6 +251,16 @@ def filled(shape, plane):
     else:
         pieces = [Part.Face(f.OuterWire) for f in shape.Faces]
     return pieces[0] if len(pieces) == 1 else Part.makeCompound(pieces)
+
+
+def filled_air(air, plane):
+    """The Air Region with its holes filled, which must hold every body of a Study with Symmetric Groups: a Sector's
+    same sector from radius 0 (same angles and z span), a Box itself, a Custom shape by filled (2D: each face by its
+    outer wire; 3D: closed cavities only, a hole through a solid is part of its one shell). May raise ValueError."""
+    if air.AirShape == "Sector":
+        return _baked(_sector(air, plane, filled=True))
+    shape = air_shape(air, plane)
+    return shape if air.AirShape == "Box" else filled(shape, plane)
 
 
 def outside(body_shape, air_shape, plane):

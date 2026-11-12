@@ -406,12 +406,17 @@ def _air(study, bodies, moving, r, cells=(), filled=False):
             need = "a solid" if plane == "3D" else f"a face in the Study's {plane} plane"
             r.error(prefix + f"the Custom body {source.Label} must be {need}.", air, [(source, "")])
             return
-    holder = airshapes.filled(shape, plane) if filled else shape  # with groups: the outer boundary, holes filled
+    holder = airshapes.filled_air(air, plane) if filled else shape  # with groups: the outer boundary, holes filled
+    hint = ""
+    if filled and air.AirShape == "Custom":
+        hint = " A Custom air must enclose the copies; a hole through it is not filled."
     for body in bodies:
         body_shape = geometry.global_shape(body)
         measure = body_shape.Volume if plane == "3D" else body_shape.Area
         if airshapes.outside(body_shape, holder, plane) > 1e-6 * measure:
-            r.error(f"{body.Label} is not fully inside Air Region {objects.display_name(air)}.", air, [(body, "")])
+            r.error(
+                f"{body.Label} is not fully inside Air Region {objects.display_name(air)}.{hint}", air, [(body, "")]
+            )
 
 
 def _custom_fits(shape, plane):
@@ -1217,6 +1222,32 @@ def _group_sliding(study, groups, ruled, free, plane, r):
                     " Sector whose inner radius is past the copied air band, or a Custom shape.",
                     iface,
                     [(air, "")],
+                )
+    _air_off_moving(groups, objects.air_regions(study), "3D" if three else plane, r)
+
+
+def _air_off_moving(groups, airs, plane, r):
+    """The Air Region is meshed with the fixed side (spec decision 3): it may neither touch nor overlap the copies of a
+    group on the moving side, the two meshes would share no nodes there."""
+    moving = [g for g in groups if g.Side == "Moving" and not g.Shape.isNull()]
+    for air in airs:
+        try:
+            shape = airshapes.air_shape(air, plane)
+        except ValueError:
+            continue  # _air reports it
+        for group in moving:
+            copies, tol = _elements(group)
+            near = shape.BoundBox  # a new box on each read
+            near.enlarge(tol)
+            if not near.intersect(group.Shape.BoundBox):
+                continue
+            if any(near.intersect(b) and shape.distToShape(piece)[0] <= tol for piece, b in copies):
+                r.error(
+                    f"Air Region {objects.display_name(air)} touches the copies of Symmetric Group {group.Label},"
+                    " which is on the moving side. With Symmetric Groups the Air Region is all on the fixed side, a"
+                    " limit of the tool: draw the air next to the moving copies as a cell object of a moving group.",
+                    air,
+                    [(air, ""), (group, "")],
                 )
 
 
