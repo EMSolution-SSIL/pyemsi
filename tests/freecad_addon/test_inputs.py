@@ -144,3 +144,41 @@ def test_the_tool_of_a_join_embed_is_inside_it(doc):
     embed = JoinFeatures.makeEmbed(name="Embedded")
     embed.Base, embed.Tool = air_box, coil
     assert shown(doc) == ["Embedded"]
+
+
+def test_what_a_cut_tool_is_made_of_is_not_meshed(doc):
+    air_box, a, b = box(doc, "AirBox", 0, 30), box(doc, "A", 5, 3), box(doc, "B", 15, 3)
+    tool = doc.addObject("Part::Fuse", "Tool")
+    tool.Base, tool.Tool = a, b
+    cut = doc.addObject("Part::Cut", "Air")
+    cut.Base, cut.Tool = air_box, tool
+    assert shown(doc) == ["Air"]
+    assert geometry.collect([air_box, a, b, tool, cut], "3D") == ([cut], [])
+
+
+def test_a_top_level_link_with_a_subname_names_that_body(doc):
+    stator = doc.addObject("App::Part", "Stator")
+    magnet = box(doc, "Magnet", 40)
+    stator.addObject(magnet)
+    link = doc.addObject("App::Link", "MagnetLink")
+    link.setLink(stator, "Magnet.")
+    edge = doc.addObject("App::Link", "MagnetEdge")
+    edge.setLink(stator, "Magnet.Edge3")
+    whole = doc.addObject("App::Link", "StatorLink")
+    whole.setLink(stator)
+    doc.recompute()
+    assert geometry.link_target(link) is magnet
+    assert geometry.link_target(edge) is None and geometry.link_target(whole) is None
+    assert shown(doc) == ["Magnet", "MagnetLink"]  # not MagnetEdge (an element) or StatorLink (a Part)
+    assert abs(geometry.global_shape(link).BoundBox.XMin - 40) < 1e-6
+
+
+def test_a_link_used_as_a_cut_tool_is_left_out(doc):
+    air_box, coil = box(doc, "AirBox", 0, 30), box(doc, "Coil", 10)
+    link = doc.addObject("App::Link", "CoilLink")
+    link.LinkedObject = coil
+    cut = doc.addObject("Part::Cut", "Air")
+    cut.Base, cut.Tool = air_box, link
+    doc.recompute()
+    assert shown(doc) == ["Coil", "Air"]
+    assert [o.Name for o in geometry.collect([air_box, coil, link, cut], "3D")[0]] == ["Coil", "Air"]

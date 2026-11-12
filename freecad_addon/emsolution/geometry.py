@@ -11,6 +11,10 @@ def link_target(obj):
     Part::Feature or a PartDesign Body; not a link, a sketch, a Study object or a container)."""
     if obj.TypeId != "App::Link" or obj.ElementCount:
         return None
+    named = obj.LinkedObject
+    subs = named[1] if isinstance(named, tuple) and len(named) > 1 else ""
+    if any(sub.rsplit(".", 1)[-1] for sub in ([subs] if isinstance(subs, str) else subs)):
+        return None  # names an edge, face or vertex
     target = obj.getLinkedObject(True)
     if target is None or target == obj or target.TypeId == "App::Link" or objects.is_study_object(target):
         return None
@@ -118,6 +122,11 @@ def _is_link(obj):
     return obj.TypeId == "App::Link"
 
 
+def _consumed(bodies):
+    """Names of the objects the bodies are made from; a link body does not consume its target."""
+    return {name for obj in bodies if not _is_link(obj) for name in inputs(obj)}
+
+
 def _cut_pairs(doc):
     """[(cut, tool)] for every Part Cut and Join Cutout of doc that has a tool."""
     return [
@@ -135,7 +144,7 @@ def cut_tools(doc):
         if _is_link(tool):
             continue
         bodies, _ = _bodies([tool])
-        consumed = {name for obj in bodies if not _is_link(obj) for name in inputs(obj)}
+        consumed = _consumed(bodies)
         for obj in bodies:
             if obj.Name not in consumed:
                 found.setdefault(obj.Name, cut)
@@ -155,10 +164,10 @@ def collect(roots, dimension):
     body and does not consume its target. Visibility is irrelevant.
     """
     candidates, errors = _bodies(roots)
+    consumed = _consumed(candidates)  # a cut tool still consumes what it is made of
     if candidates:
         left_out = _left_out(candidates[0].Document)
         candidates = [obj for obj in candidates if obj.Name not in left_out]
-    consumed = {name for obj in candidates if not _is_link(obj) for name in inputs(obj)}
     return _checked(candidates, consumed, errors, dimension)
 
 
@@ -274,8 +283,9 @@ def tree(doc, dimension):
         )
         and not objects.is_study_object(o)
         and objects.owning_body(o) is o
-    } - _left_out(doc)
-    consumed = {n for name in shapes if not _is_link(doc.getObject(name)) for n in inputs(doc.getObject(name))}
+    }
+    consumed = _consumed(doc.getObject(name) for name in shapes)  # a cut tool still consumes what it is made of
+    shapes -= _left_out(doc)
 
     def fits(obj):
         shape = link_target(obj).Shape if _is_link(obj) else obj.Shape
