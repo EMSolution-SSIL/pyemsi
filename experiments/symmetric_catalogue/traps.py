@@ -1,7 +1,7 @@
-"""Traps T-01 to T-07: drawings the tool has to catch. T-01 and T-02 mesh, with different drawings; T-03 meshes with a
-warning; the others are refused, by Validate (T-04, T-05, T-07) or by the mesher (T-06). CASES lists (id, builder,
-expected, check) in catalogue order; a check(study) gives (ok, text) on the built Study, and the row matches only
-when it is ok."""
+"""Traps T-01 to T-09: drawings the tool has to catch. T-01 and T-02 mesh, with different drawings; T-03 meshes with a
+warning; the others are refused, by Validate (T-04, T-05, T-07, T-08, T-09) or by the mesher (T-06). CASES lists
+(id, builder, expected[, check]) in catalogue order; a check(study) gives (ok, text) on the built Study, and the row
+matches only when it is ok."""
 
 import math
 
@@ -36,15 +36,18 @@ MOVE = {"kind": "translate", "vector": [24, 0, 0], "count": 2}
 
 
 def order(name, rules):
-    """A block (x 2..9, y -2..3), each copy its own part, in a drawn air rectangle that covers either order."""
+    """A block (x 2..9, y -2..3), each copy its own part, in an Air Region on a drawn rectangle that covers either
+    order."""
     doc, study = new_study(name, "2D", "No movement", 0.8)
     lib = symcases.libraries(study)
-    block = symcases.feature(doc, "Block", polygon([V(x, y, 0) for x, y in ((2, -2), (9, -2), (9, 3), (2, 3))]))
+    block = symcases.feature(doc, "Block", rect(2, -2, 9, 3))
     make_group(study, "Part", [block], rules, [lib["Copper"]], {0: {"mode": "each"}})
-    symcases.add_free(
-        study, "Air", polygon([V(x, y, 0) for x, y in ((-40, -10), (40, -10), (40, 10), (-40, 10))]), lib["Air"]
-    )
+    symcases.add_air_region(study, lib["Air"], shape=rect(-40, -10, 40, 10))
     return study
+
+
+def rect(x1, y1, x2, y2):
+    return polygon([V(x1, y1, 0), V(x2, y1, 0), V(x2, y2, 0), V(x1, y2, 0)])
 
 
 def t_01():
@@ -55,6 +58,31 @@ def t_01():
 def t_02():
     """Translate (24, 0) x 2, then Mirror x = 0: blocks at x -33..-26, -9..-2, 2..9, 26..33."""
     return order("T_02", [MOVE, MIRROR_X])
+
+
+# --- T-08 and T-09: air over the copies --------------------------------------------------------------------------------
+
+
+def t_08():
+    """T-01's blocks with the air drawn as it was before the Air Region: a free body (the rectangle x -40..40,
+    y -10..10) over the copies. Free objects may only touch the copies, so Validate refuses it."""
+    doc, study = new_study("T_08", "2D", "No movement", 0.8)
+    lib = symcases.libraries(study)
+    block = symcases.feature(doc, "Block", rect(2, -2, 9, 3))
+    make_group(study, "Part", [block], [MIRROR_X, MOVE], [lib["Copper"]], {0: {"mode": "each"}})
+    symcases.add_free(study, "DrawnAir", rect(-40, -10, 40, 10), lib["Air"])
+    return study
+
+
+def t_09():
+    """T-01's blocks (x -9..33) in an Air Region on a rectangle x -20..20, y -10..10: the copies beyond x 20 are not
+    inside the air, so Validate refuses it."""
+    doc, study = new_study("T_09", "2D", "No movement", 0.8)
+    lib = symcases.libraries(study)
+    block = symcases.feature(doc, "Block", rect(2, -2, 9, 3))
+    make_group(study, "Part", [block], [MIRROR_X, MOVE], [lib["Copper"]], {0: {"mode": "each"}})
+    symcases.add_air_region(study, lib["Air"], shape=rect(-20, -10, 20, 10))
+    return study
 
 
 def drawing(study):
@@ -224,4 +252,6 @@ CASES = [
     ("T-05", t_05, ("refused", "overlaps a copy turned by")),
     ("T-06", t_06, ("refused", "do not match")),
     ("T-07", t_07, ("refused", "Rule 1 (rotate) is not a rotation about Z"), not_said("crosses it")),
+    ("T-08", t_08, ("refused", "may only touch the copies")),
+    ("T-09", t_09, ("refused", "not fully inside Air Region")),
 ]

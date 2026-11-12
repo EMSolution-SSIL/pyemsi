@@ -247,7 +247,7 @@ def m3_10():
     """24 slots, 4 poles, coil span 5: the half coil of data/distributed_half.brep (z >= 0) and a 15° iron wedge
     over the half stack (z 0..14), mirrored at z = 0, then rotated 15° x 24. Each slot is two pockets that fit the coil
     sides exactly (a top side of one coil and the bottom side of the coil five slots back), so the iron touches coil
-    copies other than its own. The air is one drawn cylinder over everything."""
+    copies other than its own. The air is an Air Region on one drawn cylinder over everything."""
     doc, study = new_study("M3_10", "3D", "No movement", 5.0)
     lib = symcases.libraries(study)
     turn = rotate(15, 24)
@@ -266,7 +266,7 @@ def m3_10():
         study, "Stator", [iron, coil], [MIRROR_Z, turn], rows, lib={"Iron": lib["Steel"], "HalfCoil": lib["Copper"]}
     )
     sizes(study, [(iron, 2.5), (coil, 1.5)])
-    symcases.add_free(study, "FreeAir", Part.makeCylinder(58, 92, V(0, 0, -46)), lib["Air"])
+    symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(58, 92, V(0, 0, -46)))
     return study
 
 
@@ -276,7 +276,7 @@ def m3_10():
 def m3_12():
     """12 stator poles: an iron cell 0..15° over z 0..14 and a quarter coil (y >= 0, z >= 0) around the pole, mirrored
     at y = 0 and z = 0, then rotated 30° x 12; the coil's four quarters are one part. An 8-pole rotor of its own rules.
-    Static: one drawn air cylinder holds both groups."""
+    Static: an Air Region on one drawn cylinder holds both groups."""
     doc, study = new_study("M3_12", "3D", "No movement", 5.0)
     lib = symcases.libraries(study)
     b = 3.7  # half the pole width
@@ -333,7 +333,7 @@ def m3_12():
     rotor = symcases.feature(doc, "RotorIron", extruded(Part.Face(rotor), 0, 14))
     symcases.group(study, "Rotor", [rotor], [MIRROR_Y, MIRROR_Z, rotate(45, 8)], lib={"RotorIron": lib["Steel"]})
     sizes(study, [(iron, 2.5), (coil, 1.5), (rotor, 2.5)])
-    symcases.add_free(study, "FreeAir", Part.makeCylinder(58, 60, V(0, 0, -30)), lib["Air"])
+    symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(58, 60, V(0, 0, -30)))
     return study
 
 
@@ -361,7 +361,7 @@ def r_07():
 def litz(name, tables):
     """data/double_skew_opposite.brep: the straight strand on the axis is a group of its own with no rules; the 8
     strands whose centres lie between 15° and 75° are the cells of Rotate Z 60° x 6. tables: one part per bundle
-    (L-07), else each strand separate (L-06). Air: one drawn cylinder."""
+    (L-07), else each strand separate (L-06). Air: an Air Region on one drawn cylinder."""
     doc, study = new_study(name, "3D", "No movement", 1.0)
     lib = symcases.libraries(study)
     solids = Part.read(os.path.join(DATA, "double_skew_opposite.brep")).Solids
@@ -384,7 +384,7 @@ def litz(name, tables):
     symcases.group(study, "Centre", [straight], [], one, lib=copper)
     symcases.group(study, "Strands", cells, [rotate(60, 6)], rows, lib=copper)
     sizes(study, [(c, 0.35) for c in [straight, *cells]])
-    symcases.add_free(study, "FreeAir", Part.makeCylinder(7.5, 36, V(0, 0, -3)), lib["Air"])
+    symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(7.5, 36, V(0, 0, -3)))
     return study
 
 
@@ -401,7 +401,7 @@ def l_07():
 
 def d_07():
     """Three cores in their filler (Rotate Z 120° x 3) and 40 armour wires (Rotate Z 9° x 40) have no common repeat:
-    the bedding, a drawn disc over both, joins them."""
+    the bedding, an Air Region on a drawn disc over both, joins them."""
     doc, study = new_study("D_07", "2D", "No movement", 0.8)
     lib = symcases.libraries(study)
     core = disc(P(8.5, 60), 5)
@@ -410,7 +410,7 @@ def d_07():
     symcases.group(study, "Cores", cores, [rotate(120, 3)], rows, lib={"Filler": lib["Air"], "Core": lib["Copper"]})
     wire = symcases.feature(doc, "Wire", disc(P(21.6, 4.5), 1.5))
     symcases.group(study, "Armour", [wire], [rotate(9, 40)], {"Wire": {"mode": "each"}}, lib={"Wire": lib["Steel"]})
-    symcases.add_free(study, "Bedding", disc(V(0, 0, 0), 25), lib["Air"])
+    symcases.add_air_region(study, lib["Air"], shape=disc(V(0, 0, 0), 25))
     return study
 
 

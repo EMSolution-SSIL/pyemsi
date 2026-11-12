@@ -196,18 +196,17 @@ def l_09():
 
 
 def l_10():
-    """L-02's wire between two terminal plates (R 2.2, 3 thick) at its ends: the strands end on the plates. Plates and
-    air are free objects; the air (R 5, z -6..36) is drawn with the plates cut out of it, since free objects may only
-    touch. The plates are Copper where the catalogue colours them iron: they are the terminals that join the strands
-    and carry the current (the excitation goes on them), a conductor, not a core."""
+    """L-02's wire between two terminal plates (R 2.2, 3 thick) at its ends: the strands end on the plates. The plates
+    are free objects inside the Air Region, a cylinder R 5, z -6..36 that gives way to them and to the strands. The
+    plates are Copper where the catalogue colours them iron: they are the terminals that join the strands and carry the
+    current (the excitation goes on them), a conductor, not a core."""
     doc, study, lib = wire_study("L_10")
     centre(doc, study, lib)
     layer(study, lib, "Wire", strands(doc, "RingStrand", [twisted(0, 1.1, 0, 180, 0, LENGTH, SR)]), [rotate(60, 6)])
     plates = [Part.makeCylinder(2.2, 3, V(0, 0, -3)), Part.makeCylinder(2.2, 3, V(0, 0, LENGTH))]
     for k, plate in enumerate(plates):
         symcases.add_free(study, f"Plate{k + 1}", plate, lib["Copper"])
-    air = Part.makeCylinder(5, LENGTH + 12, V(0, 0, -6)).cut(Part.makeCompound(plates))
-    sizes(study, [(symcases.add_free(study, "FreeAir", air.Solids[0], lib["Air"]), 1.0)])
+    wire_air(study, lib, 5, LENGTH + 12, 1.0, z0=-6)
     return study
 
 

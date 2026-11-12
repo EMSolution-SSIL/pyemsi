@@ -428,13 +428,14 @@ def read_mesh(study):
         out.faces_in_three += q["faces_in_three"]
         out.kept += q["kept"]
         shapes = [geometry.global_shape(b) for b in free if (b.Name in on_moving) == (side == "moving")]
-        if side == "fixed":  # the Air Region is meshed in the fixed side's free job
-            shapes += [geometry.global_shape(a) for a in objects.air_regions(study)]
+        # the Air Region is meshed in the fixed side's free job. Its shape holds the copies, so its probe goes half a
+        # facet out: a facet of a copy on the air's curved outer boundary (a chord) lies inside it by the sagitta
+        airs = [geometry.global_shape(a) for a in objects.air_regions(study)] if side == "fixed" else []
         mats, centres, normals, sizes = q["boundary"]
         mine = np.isin(mats, sorted(copied[side])) if len(mats) else np.zeros(0, dtype=bool)
         for c, n, h in zip(centres[mine], normals[mine], sizes[mine]):
-            probe = V(*(c + 1e-3 * h * n))
-            out.lost += any(_inside(s, probe) for s in shapes)
+            probe, far = V(*(c + 1e-3 * h * n)), V(*(c + 0.5 * h * n))
+            out.lost += any(_inside(s, probe) for s in shapes) or any(_inside(s, far) for s in airs)
     out.types = dict(found)
     out.frozen_kept = out.lost == 0
     return out

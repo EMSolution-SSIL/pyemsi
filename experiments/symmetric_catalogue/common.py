@@ -417,9 +417,9 @@ class Structured:
 
 
 def wire_air(study, lib, radius, length, size=None, z0=0.0):
-    """The drawn air of a wire: a cylinder of radius about Z from z0 over length, in the Main geometry (free air, spec
-    4.4). Strands that run the whole length end on its end planes."""
-    air = symcases.add_free(study, "FreeAir", Part.makeCylinder(radius, length, V(0, 0, z0)), lib["Air"])
+    """The drawn air of a wire: a cylinder of radius about Z from z0 over length, the Custom shape of the Study's Air
+    Region (it gives way to the strands). Strands that run the whole length end on its end planes."""
+    air = symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(radius, length, V(0, 0, z0)))
     if size:
         sizes(study, [(air, size)])
     return air

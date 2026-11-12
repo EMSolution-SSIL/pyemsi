@@ -146,7 +146,7 @@ def m3_03_static():
     screw = motion(symmetry.translation([0, 0, SLICE]), symmetry.rotation_about([0, 0, 0], [0, 0, 1], SKEW), count=3)
     rows = {1: {"mode": "across", "across": [1]}}
     make_group(study, "Rotor", cells, [rotate(45, 8), screw], [lib["Steel"], lib["Steel"]], rows)
-    air = symcases.add_free(study, "FreeAir", Part.makeCylinder(34, L + 8, V(0, 0, -4)), lib["Air"])
+    air = symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(34, L + 8, V(0, 0, -4)))
     sizes(study, [(air, 3.0)])
     return study
 
@@ -238,7 +238,7 @@ def axial(name, moving):
             symcases.add_free(study, "RotorAir", Part.makeCylinder(40, 7, V(0, 0, z)), lib["Air"], side="Moving")
         objects.make_sliding_interface(study, "Axial gap", Position=4.5, Divisions=144, CrossDivisions=8)
     else:
-        air = symcases.add_free(study, "FreeAir", Part.makeCylinder(40, 24, V(0, 0, -12)), lib["Air"])
+        air = symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(40, 24, V(0, 0, -12)))
         sizes(study, [(air, 3.0)])
     return study
 
@@ -272,7 +272,7 @@ def m3_05():
     flip = symmetry.rule_matrix(mirror((0, 0, 1), (0, 0, 9.5)))
     step = motion(symmetry.rotation_about([0, 0, 0], [0, 0, 1], 30), flip, count=2)
     make_group(study, "Rotor", [cell], [rotate(60, 6), step], [lib["Steel"]], {0: table(["N"] * 6 + ["S"] * 6)})
-    air = symcases.add_free(study, "FreeAir", Part.makeCylinder(24, 26, V(0, 0, -3.5)), lib["Air"])
+    air = symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(24, 26, V(0, 0, -3.5)))
     sizes(study, [(air, 2.5)])
     return study
 
@@ -343,7 +343,7 @@ def m3_08():
         symcases.feature(doc, "Foot", extruded(foot, -3, L + 3)),
     ]
     make_group(study, "Frame", cells, [rotate(90, 4)], [lib["Steel"], lib["Steel"]])
-    air = symcases.add_free(study, "FreeAir", Part.makeCylinder(66, L + 12, V(0, 0, -6)), lib["Air"])
+    air = symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(66, L + 12, V(0, 0, -6)))
     sizes(study, [(air, 8.0)])
     return study
 
@@ -353,11 +353,11 @@ def m3_08():
 
 def m3_09():
     """The M3-01 stator (Rotate Z 7.5° x 48) in a drawn box of air, -62..62 x -62..62 x -14..28, meshed normally around
-    the copies (free air, spec 4.4). Static."""
+    the copies (the Air Region, Custom on the box). Static."""
     doc, study = new_study("M3_09", "3D", "No movement", 2.0)
     lib = symcases.libraries(study)
     stator48(doc, study, lib, L, layer=False)
-    air = symcases.add_free(study, "AirBox", Part.makeBox(124, 124, 42, V(-62, -62, -14)), lib["Air"])
+    air = symcases.add_air_region(study, lib["Air"], shape=Part.makeBox(124, 124, 42, V(-62, -62, -14)))
     sizes(study, [(air, 8.0)])
     return study
 

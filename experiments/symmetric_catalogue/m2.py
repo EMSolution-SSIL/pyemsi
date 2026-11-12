@@ -264,8 +264,8 @@ ECC = V(2.2, 1.0, 0)
 
 
 def m2_11():
-    """The rotor turns about (2.2, 1.0), the uneven gap is a drawn disc (R 30, the bore of the stator) in the Main
-    geometry: free air around the copies of both groups. Static, as the two groups meet no sliding surface."""
+    """The rotor turns about (2.2, 1.0), the uneven gap is the Air Region, Custom on a disc R 50 (the
+    stator outside) that gives way to the copies of both groups. Static, as the two groups meet no sliding surface."""
     doc, study = new_study("M2_11", "2D", "No movement", 1.5)
     lib = symcases.libraries(study)
     distributed(doc, study, lib, 48, 4, 5, gap=False)
@@ -277,16 +277,17 @@ def m2_11():
     about = {"point": list(ECC), "axis": [0, 0, 1]}
     rules = [mirror((0, 1, 0), (2.2, 1.0, 0)), {"kind": "rotate", "step": 45, "count": 8, **about}]
     make_group(study, "Rotor", cells, rules, [lib["Steel"], lib["Steel"]], {1: {"mode": "across", "across": [0]}})
-    symcases.add_free(study, "UnevenGap", disc(V(0, 0, 0), RI), lib["Air"])
+    symcases.add_air_region(study, lib["Air"], shape=disc(V(0, 0, 0), RO))
     return study
 
 
 # --- M2-12: a quarter of the machine, 12 of 48 slots and 2 of 8 poles -------------------------------------------------
 
 
-def quarter(name, moving):
+def quarter(name, moving, air=False):
     """The stator turns 7.5 deg x 12 and the rotor, a half pole mirrored at the line of 22.5 deg, 45 deg x 2: 90 deg.
-    moving: the sliding gap (stator band and rotor air band, a sliding interface); else a drawn sector of air."""
+    moving: the sliding gap (stator band and rotor air band, a sliding interface); else an Air Region on a
+    sector R 8..50, 0..90 deg that gives way to the copies: the gap. air (moving): an Air Region on a disc R 55 too."""
     doc, study = new_study(name, "2D", "Sliding motion" if moving else "No movement", 1.0)
     lib = symcases.libraries(study)
     distributed(doc, study, lib, 48, 4, 5, gap=moving, count=12)
@@ -303,8 +304,10 @@ def quarter(name, moving):
     )
     if moving:
         sliding(study, [48, 16])
+        if air:
+            symcases.add_air_region(study, lib["Air"], shape=disc(V(0, 0, 0), RO + 5))
     else:
-        symcases.add_free(study, "AirGap", sector(RR, RI, 0, 90), lib["Air"])
+        symcases.add_air_region(study, lib["Air"], shape=sector(8, RO, 0, 90))
     return study
 
 
@@ -314,6 +317,12 @@ def m2_12():
 
 def m2_12_sliding():
     return quarter("M2_12s", True)
+
+
+def m2_12_sliding_air():
+    """M2-12-sliding's Study with an Air Region on a disc R 55 over everything: it crosses the sliding circle, and
+    with Symmetric Groups the air must keep clear of it."""
+    return quarter("M2_12sa", True, air=True)
 
 
 # --- M2-13: coaxial magnetic gear, three rings, two sliding surfaces --------------------------------------------------
@@ -459,6 +468,7 @@ CASES = [
     ("M2-11", m2_11, "meshes"),
     ("M2-12", m2_12, "meshes"),
     ("M2-12-sliding", m2_12_sliding, ("refused", "must cover the circle")),
+    ("M2-12-sliding-air", m2_12_sliding_air, ("refused", "keep clear of the sliding surface")),
     ("M2-13", m2_13, ("refused", "only one Sliding Interface: more than one is not handled yet, a limit of the tool")),
     (
         "M2-14",

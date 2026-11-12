@@ -187,7 +187,7 @@ def r_08():
     axis = (math.sin(math.radians(30)), 0, math.cos(math.radians(30)))
     rules = [MIRROR_Y, rotate(90, 4, axis), mirror(axis)]
     make_group(study, "Rod", [rod], rules, [lib["Copper"]])
-    air = symcases.add_free(study, "FreeAir", Part.makeBox(30, 20, 40, V(-15, -10, -20)), lib["Air"])
+    air = symcases.add_air_region(study, lib["Air"], shape=Part.makeBox(30, 20, 40, V(-15, -10, -20)))
     sizes(study, [(air, 3.0)])
     return study
 

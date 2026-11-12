@@ -1,6 +1,6 @@
 """Other electromagnetic devices D-01 to D-13, and D-01-structured (the user's own D-01 with structured blocks). D-07
-(three-core cable) and D-08 (Helmholtz pair) are the success list's. 3D devices are in drawn free air (spec 4.4) unless
-the catalogue draws the air in the cell. CASES lists (id, builder, expected[, check]) in catalogue order."""
+(three-core cable) and D-08 (Helmholtz pair) are the success list's. 3D devices are in an Air Region on a drawn shape
+unless the catalogue draws the air in the cell. CASES lists (id, builder, expected[, check]) in catalogue order."""
 
 from common import (
     MIRROR_X,
@@ -51,7 +51,8 @@ def revolved(section, a1, a2):
 
 
 def free_air(study, lib, shape, size):
-    sizes(study, [(symcases.add_free(study, "FreeAir", shape, lib["Air"]), size)])
+    """The drawn air shape as the Custom shape of the Study's Air Region, with a Mesh Size of size."""
+    sizes(study, [(symcases.add_air_region(study, lib["Air"], shape=shape), size)])
 
 
 # --- D-01 and D-02: transformers, a quarter drawn, Mirror y = 0 then Mirror x = 0 -------------------------------------
