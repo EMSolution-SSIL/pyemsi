@@ -69,13 +69,13 @@ def selected_face_picks(study, vertices):
             continue
         if body.Name in tops:
             faces = [(body, s) for s in sel.SubElementNames if s.startswith("Face")]
-            out += [(b, "" if len(b.Shape.Faces) == 1 else s) for b, s in objects.to_cells(study, faces)]
+            out += [(b, "" if len(geometry.body_shape(b).Faces) == 1 else s) for b, s in objects.to_cells(study, faces)]
             if vertices:
                 top_corners += objects.to_cells(
                     study, [(body, s) for s in sel.SubElementNames if s.startswith("Vertex")]
                 )
             continue
-        one_face = len(body.Shape.Faces) == 1
+        one_face = len(geometry.body_shape(body).Faces) == 1
         for sub in sel.SubElementNames:
             if vertices and sub.startswith("Vertex"):
                 out.append((body, sub))
@@ -742,10 +742,10 @@ class StudyView:
         self.fill(geometry.tree(study.Document, study.Dimension))
         resolved, errors = geometry.study_geometry(study)
         if study.Dimension == "2D":
-            number = sum(len(obj.Shape.Faces) for obj in resolved)
+            number = sum(len(geometry.body_shape(obj).Faces) for obj in resolved)
             text = f"Included: {number} face region{'s' if number != 1 else ''} "
         else:
-            number = sum(len(obj.Shape.Solids) for obj in resolved)
+            number = sum(len(geometry.body_shape(obj).Solids) for obj in resolved)
             text = f"Included: {number} solid{'s' if number != 1 else ''} "
         text += f"({len(resolved)} object{'s' if len(resolved) != 1 else ''})"
         self.count.setText(text)
@@ -1078,7 +1078,7 @@ class ItemGate:
             return False
         if not sub:
             return self.whole
-        if self.regions and len(body.Shape.Faces) == 1:
+        if self.regions and len(geometry.body_shape(body).Faces) == 1:
             return sub.startswith(ANY_SUB)
         return sub.startswith(self.kinds)
 

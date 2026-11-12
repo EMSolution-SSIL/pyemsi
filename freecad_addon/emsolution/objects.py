@@ -1564,8 +1564,10 @@ def owning_body(obj):
 
 def pick_body(obj):
     """The solid body behind a picked object; None for tree folders, study items and containers."""
+    from . import geometry
+
     body = owning_body(obj)
-    return body if body.isDerivedFrom("Part::Feature") else None
+    return body if body.isDerivedFrom("Part::Feature") or geometry.link_target(body) is not None else None
 
 
 def subs_by_body(item):
@@ -1592,7 +1594,9 @@ def face_picks(item):
 
 def structured_faces(body, faces):
     """The faces of a face pick: the picked ones, or every face of the body for a whole-body pick."""
-    return list(faces) or [f"Face{i}" for i in range(1, len(body.Shape.Faces) + 1)]
+    from . import geometry
+
+    return list(faces) or [f"Face{i}" for i in range(1, len(geometry.body_shape(body).Faces) + 1)]
 
 
 def is_item(obj):

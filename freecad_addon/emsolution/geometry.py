@@ -23,6 +23,12 @@ def link_target(obj):
     return target
 
 
+def body_shape(obj):
+    """What obj.Shape is for a Part::Feature; for a link body the linked shape in the link's own coordinates
+    (its placement applied, those of the Parts around it not)."""
+    return Part.getShape(obj) if link_target(obj) is not None else obj.Shape
+
+
 def global_shape(obj):
     """Shape where the user sees it, including the placements of containing Parts. A link shows its target's
     shape as FreeCAD displays it (the link's own placement and those of the Parts around it)."""
@@ -264,7 +270,7 @@ def tree(doc, dimension):
     shapes -= _left_out(doc)
 
     def fits(obj):
-        shape = link_target(obj).Shape if _is_link(obj) else obj.Shape
+        shape = body_shape(obj)
         return bool(shape.Solids) if dimension == "3D" else not shape.Solids and bool(shape.Faces)
 
     def nodes(objs):

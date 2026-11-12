@@ -33,7 +33,7 @@ def loose_pieces(shape):
 
 def _has(body, sub):
     try:
-        body.Shape.getElement(sub)
+        geometry.body_shape(body).getElement(sub)
         return True
     except Exception:
         return False
@@ -545,7 +545,7 @@ def _transfinite(study, bodies, r):
         mine = [e for e in entries if e[1].Name == b.Name]
         if not mine:
             continue
-        if loose_pieces(b.Shape):
+        if loose_pieces(geometry.body_shape(b)):
             t = mine[0][0]
             r.error(
                 f"Transfinite Body {t.Label}: the {pieces} of {b.Label} touch without sharing {shared}."
@@ -583,17 +583,17 @@ def _transfinite(study, bodies, r):
 def _edge_numbers(body, face=None):
     """Numbers N of the EdgeN of body that bound the given face (all of body without one). A zero-length edge, the
     pole of a sphere, is left out: it cannot be picked, and the mesher does not need it."""
-    edges = None if face is None else body.Shape.getElement(face).Edges
+    edges = None if face is None else geometry.body_shape(body).getElement(face).Edges
     return [
         i
-        for i, e in enumerate(body.Shape.Edges, 1)
+        for i, e in enumerate(geometry.body_shape(body).Edges, 1)
         if e.Length > 1e-9 and (edges is None or any(e.isSame(f) for f in edges))
     ]
 
 
 def _on_face(body, face, vertex):
-    v = body.Shape.getElement(vertex)
-    return any(v.isSame(f) for f in body.Shape.getElement(face).Vertexes)
+    v = geometry.body_shape(body).getElement(vertex)
+    return any(v.isSame(f) for f in geometry.body_shape(body).getElement(face).Vertexes)
 
 
 def _names(study, bodies, included, r):

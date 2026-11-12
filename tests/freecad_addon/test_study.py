@@ -1276,6 +1276,50 @@ class StudyTest(unittest.TestCase):
         _, air = self.air_cut_by(link)
         self.assertEqual(geometry.collect([air, coil], "3D"), ([air, coil], []))
 
+    def coil_link(self):
+        coil = self.box("Coil", 10)
+        self.air_cut_by(coil)
+        link = self.doc.addObject("App::Link", "CoilLink")
+        link.LinkedObject = coil
+        link.LinkTransform = True  # the link composes with Coil's own placement, so it stays where Coil is
+        self.doc.recompute()
+        return link
+
+    def test_a_link_takes_a_material_and_a_face_size(self):
+        link = self.coil_link()
+        self.assign([link])
+        objects.make_mesh_size(self.study, 1.0, [(link, "Face1")])
+        volumes, _, elements = jobwriter.check(self.study)
+        self.assertIn(link, [b for b, _ in volumes])
+        self.assertEqual([(b, subs) for _, b, subs in elements], [(link, ["Face1"])])
+        self.assertIs(objects.pick_body(link), link)
+
+    def test_a_missing_face_on_a_link_is_reported(self):
+        link = self.coil_link()
+        self.assign([link])
+        objects.make_mesh_size(self.study, 1.0, [(link, "Face99")])
+        self.assertStudyError("body CoilLink has no Face99. Reselect it.")
+
+    def test_a_link_is_written_where_it_is_displayed(self):
+        link = self.coil_link()
+        self.assign([link])
+        jobwriter.write_job(self.study)
+        found = []
+        for name in os.listdir(self.scratch("geometry")):
+            shape = Part.Shape()
+            shape.read(self.scratch("geometry", name))
+            found.append(shape.BoundBox.XMin)
+        self.assertIn(10, [round(x, 6) for x in found])
+        self.assertAlmostEqual(geometry.global_shape(link).BoundBox.XMin, geometry.body_shape(link).BoundBox.XMin)
+
+    def test_the_global_shape_of_a_link_in_a_part_is_its_body_shape_moved_by_the_part(self):
+        link = self.coil_link()
+        part = self.doc.addObject("App::Part", "Part")
+        part.Placement.Base = App.Vector(100, 0, 0)
+        part.addObject(link)
+        self.doc.recompute()
+        self.assertAlmostEqual(geometry.global_shape(link).BoundBox.XMin, geometry.body_shape(link).BoundBox.XMin + 100)
+
     def test_a_body_only_an_edge_or_an_expression_refers_to_stays_a_body(self):
         coil = self.box("Coil", 10)
         ruled = self.doc.addObject("Part::RuledSurface", "Ruled")
