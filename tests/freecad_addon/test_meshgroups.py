@@ -1060,6 +1060,46 @@ class GroupJobTest(unittest.TestCase):
         self.assertAlmostEqual(volume(mesh) / (60 * 60 * 15), 1, delta=1e-6)
         self.assertIn("MAT_ID      20  Air", self.result.stdout)
 
+    def air_entry(self, *boxes, size=6.0):
+        """An "air" entry: the boxes (x, y, z, dx, dy, dz) as geometry/air_region.brep, MAT_ID 30, named Air."""
+        write_boxes(self.geo("air_region.brep"), *boxes)
+        return {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": size}
+
+    PLATE = (-4, -4, 1, 8, 8, 3)  # in the bore of the ring (radius 10), clear of every copy
+
+    def test_air_region_gives_way_to_the_copies_and_a_free_body(self):
+        write_boxes(self.geo("plate.brep"), self.PLATE)
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": 4.0}
+        free = {
+            "side": "fixed",
+            "job": {"volumes": [plate], "surfaces": [], "sizes": [], "air": self.air_entry(self.BOX)},
+        }
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[free], dim=3)
+        self.assertEqual(groups(mesh)[30][0], "Air")
+        self.assertAlmostEqual(volume(mesh) / (60 * 60 * 15), 1, delta=1e-6)  # air + plate + copies fill the box
+        self.assertAlmostEqual(shared_area(mesh, 20, 30), 2 * (8 * 8 + 8 * 3 + 3 * 8), delta=1e-6)  # the air wraps it
+        self.assertEqual(faces_in_three(mesh), 0)
+        self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+
+    def test_air_region_alone_in_the_free_job_2d(self):  # a free job of no body, only the air
+        write_rects(self.geo("air_region.brep"), (-25, -25, 50, 50))
+        air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 4.0}
+        free = {"side": "fixed", "job": {"bodies": [], "sizes": [], "air": air}}
+        mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, size=1.0)], free=[free])
+        self.assertEqual(groups(mesh)[30][0], "Air")
+        self.assertAlmostEqual(area(mesh) / (50 * 50), 1, delta=1e-6)  # air + copies fill the square
+        self.assertEqual(edges_in_three(mesh), 0)
+
+    def test_air_region_wholly_under_a_free_body_2d(self):  # the free body wins: the air has nothing left
+        write_rects(self.geo("air_region.brep"), (-25, -25, 50, 50))
+        write_rects(self.geo("plate.brep"), (-25, -25, 50, 50))
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": 4.0}
+        air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 4.0}
+        free = {"side": "fixed", "job": {"bodies": [plate], "sizes": [], "air": air}}
+        r = self.run_job([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, size=1.0)], free=[free])
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("fully covered by bodies", r.stderr)
+
     def test_mirrored_copies_in_free_air(self):  # mirrored copies have their elements reversed
         transforms = [compose(rotation(30 * k), m) for k in range(12) for m in (ID, MIRROR_Z)]
         mesh = self.meshed([self.ring_3d(transforms, ())], free=[self.air_3d((-30, -30, -10, 60, 60, 20))], dim=3)

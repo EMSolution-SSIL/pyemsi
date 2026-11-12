@@ -17,6 +17,7 @@ import numpy as np
 from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, FIELD_LISTS, MSH_VERSION
 from meshcommon import _note
 from meshcommon import face_normal, plane_normal
+from meshcommon import air_items
 import meshfrozen
 import meshsym
 
@@ -731,7 +732,7 @@ def _text(p, dim):
 
 def _structured_names(free_job, dim):
     """The names of the free bodies the free job asks for a structured or recombined mesh."""
-    by_id = {b["mat_id"]: b["name"] for b in free_job["bodies" if dim == 2 else "volumes"]}
+    by_id = {b["mat_id"]: b["name"] for b in free_job["bodies" if dim == 2 else "volumes"] + air_items(free_job)}
     names = [b["name"] for b in (free_job.get("transfinite") or {}).get("bodies", [])]
     names += [by_id[m] for m in free_job.get("recombine", [])]
     return names + [f["name"] for f in free_job.get("recombine_faces", [])]
@@ -1428,9 +1429,10 @@ def _mesh_free_entity(survey, side, V, dim):
 
 
 def mesh_free(free, side_boundary, V, job, folder, build, dim):
-    """Mesh the free bodies of one side around the frozen facets of its copies. free: an entry of symmetric["free"];
-    side_boundary: the Boundary of the side's copies, node numbers into V. Returns {mat_id: FreeBody}: FreeBody.added
-    are the new nodes, numbered after those of V, and the frozen nodes keep their numbers."""
+    """Mesh the free bodies of one side, and its air, around the frozen facets of its copies. free: an entry of
+    symmetric["free"]; side_boundary: the Boundary of the side's copies, node numbers into V. Returns {mat_id:
+    FreeBody}: FreeBody.added are the new nodes, numbered after those of V, and the frozen nodes keep their numbers.
+    An air the free bodies cover wholly has no entry."""
     free_job = free["job"]
     names = _structured_names(free_job, dim)
     if names:
@@ -1441,8 +1443,11 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
     out = {}
     start = len(V)
     with _scratch(f"free_{free['side']}"):
-        build(dict(free_job), folder)
-        bodies = free_job["bodies" if dim == 2 else "volumes"]
+        built = dict(free_job)
+        build(built, folder)
+        airs = [dict(a, size=free_job["air"]["size"]) for a in air_items(free_job)]
+        bodies = free_job["bodies" if dim == 2 else "volumes"] + airs  # the air: what no body owns
+        bodies = [b for b in bodies if b["mat_id"] not in built.get("unwritten", [])]
         surveys = [
             _survey(b, int(e), side_boundary, V, dim)
             for b in bodies
