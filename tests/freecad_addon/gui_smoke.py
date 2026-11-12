@@ -73,8 +73,19 @@ def main():
 
     commands.ask_study = lambda: ("Study", "3D", "No movement")
 
+    def rows_of(tree):
+        """{object Name: row} of a Study geometry tree."""
+        rows = tree.findItems("*", QtCore.Qt.MatchWildcard | QtCore.Qt.MatchRecursive)
+        return {i.data(0, QtCore.Qt.UserRole): i for i in rows}
+
+    def tick(tree, obj, on=True):
+        """Tick obj's row in a Study geometry tree as a click does; the panel saves on the next event loop turn."""
+        rows_of(tree)[obj.Name].setCheckState(0, QtCore.Qt.Checked if on else QtCore.Qt.Unchecked)
+        QtWidgets.QApplication.processEvents()
+        return rows_of(tree)[obj.Name]  # the save rebuilt the tree
+
     doc = App.newDocument("Smoke")
-    for name, x in (("A", 0), ("B", 10), ("Outside", 40)):  # Outside never joins the main geometry
+    for name, x in (("A", 0), ("B", 10), ("Outside", 40)):  # Outside is excluded from the Study in its tree
         box = doc.addObject("Part::Box", name)
         box.Placement.Base = App.Vector(x, 0, 0)
     doc.recompute()
@@ -82,32 +93,25 @@ def main():
     Gui.runCommand("EMS_NewStudy")
     study = objects.find_study(doc)
     assert study is not None, "no study"
-    assert study.MainMode == "Unassigned"
-    for folder in (study.MaterialsGroup, study.ExcitationsGroup, study.MeshSizesGroup):
-        view = taskpanels.FolderView(folder)  # keep it: its widgets go with it
-        texts = [w.text() for w in view.form.findChildren(QtWidgets.QLabel)]
-        assert objects.NO_MAIN_GEOMETRY in texts and not any(t.startswith("Only assignments") for t in texts), texts
-    for name, sub in (("EMS_Material", ""), ("EMS_Excitation", "Face1"), ("EMS_MeshSize", "Face1")):
-        Gui.Selection.clearSelection()
-        Gui.Selection.addSelection(doc.Name, "A", sub)
-        Gui.runCommand(name)
-        assert warned[-1:] == [objects.NO_MAIN_GEOMETRY], (name, warned)
-        assert [o.Name for o in Gui.Selection.getSelection()] == [study.Name], (name, "the Study was not selected")
-    assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), "assigned without geometry"
-    assert not material_panels, "a Material panel opened without main geometry"
-    study.MainMode, study.MainObjects = "Manual", [doc.A, doc.B]
-    outside_message = (
-        "Not in the Study's main geometry: Outside. Add them to it in the Study panel or select other bodies."
-    )
+    assert study.Excluded == [] and [b.Name for b in objects.study_bodies(study)] == ["A", "B", "Outside"]
+    study_view = taskpanels.StudyView(study)
+    assert study_view.tree.objectName() == "Geometry" and study_view.tree.columnCount() == 2
+    assert all(r.checkState(0) == QtCore.Qt.Checked and r.text(1) == "" for r in rows_of(study_view.tree).values())
+    assert tick(study_view.tree, doc.Outside, False).checkState(0) == QtCore.Qt.Unchecked
+    assert study.Excluded == [doc.Outside], study.Excluded
+    assert "(2 objects)" in study_view.count.text(), study_view.count.text()
+    outside_message = "Outside is excluded from the Study: tick it in the Study panel."
     for name, sub in (("EMS_Material", ""), ("EMS_Excitation", "Face1"), ("EMS_MeshSize", "")):
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(doc.Name, "A", sub)
         Gui.Selection.addSelection(doc.Name, "Outside", sub)
         Gui.runCommand(name)
         assert warned[-1:] == [outside_message], (name, warned)
-    assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), "assigned outside geometry"
-    assert not material_panels, "a Material panel opened for a body outside the main geometry"
-    log.append("main geometry gate ok")
+    assert not asked and not objects.excitations(study) and not objects.mesh_sizes(study), (
+        "assigned on an excluded body"
+    )
+    assert not material_panels, "a Material panel opened for an excluded body"
+    log.append("excluded body gate ok")
     doc.saveAs(os.path.join(tempfile.mkdtemp(), "Smoke.FCStd"))  # the simulation folder
     log.append("study ok")
 
@@ -135,7 +139,7 @@ def main():
     assert log[-1].startswith("refused: Nothing is selected"), log[-1]
     hint = "Click faces, edges or vertices in the 3D view, or a solid in the tree."
     assert any(w.text().startswith(hint) for w in panel.form.findChildren(QtWidgets.QLabel)), "no 3D hint"
-    for name in (study.Name, "Outside"):  # the gate: not geometry, not main geometry
+    for name in (study.Name, "Outside"):  # the gate: not geometry, excluded
         Gui.Selection.addSelection(doc.Name, name)
     assert Gui.Selection.getSelection() == [], "the gate let a pick through"
     Gui.Selection.addSelection(doc.Name, "A", "Face1")
@@ -196,18 +200,6 @@ def main():
             Gui.Selection.addSelection(doc.Name, name)
         for _ in range(5):  # the watcher panel and the workbench switch follow the selection
             Gui.updateGui()
-
-    def tick(tree, obj, on=True):
-        """Tick obj's row in a Study geometry tree as a click does; the panel saves on the next event loop turn."""
-
-        def row():
-            rows = tree.findItems("*", QtCore.Qt.MatchWildcard | QtCore.Qt.MatchRecursive)
-            (item,) = [i for i in rows if i.data(0, QtCore.Qt.UserRole) == obj.Name]
-            return item
-
-        row().setCheckState(0, QtCore.Qt.Checked if on else QtCore.Qt.Unchecked)
-        QtWidgets.QApplication.processEvents()
-        return row()  # the save rebuilt the tree
 
     first_column = {
         "Name": "Material Library",
@@ -434,11 +426,14 @@ def main():
     assert asked[-1] == ["A", "B"], asked
     extra = doc.addObject("Part::Box", "Extra")
     doc.recompute()
+    assert extra in objects.study_bodies(study), "a body drawn later is not in the Study"
+    objects.set_excluded(study, [doc.Outside, extra])
     dialog = taskpanels.BulkAssignDialog(study, [extra])
     dialog.accept()
-    assert objects.assignment_of(study).get("Extra") is None, "assigned a body outside the main geometry"
-    assert log[-1].startswith("refused: Not in the Study's main geometry: Extra"), log[-1]
+    assert objects.assignment_of(study).get("Extra") is None, "assigned an excluded body"
+    assert log[-1] == "refused: Extra is excluded from the Study: tick it in the Study panel.", log[-1]
     dialog.reject()
+    objects.set_excluded(study, [doc.Outside])
     doc.removeObject("Extra")
     select(study.MaterialLibraryGroup.Name)
     used_by = shown_folders()["Material Library"].item(0, 3).text()
@@ -729,8 +724,8 @@ def main():
     App.closeDocument(fresh_doc.Name)
     App.setActiveDocument(doc.Name)
     select(study.Name)
-    saved_bodies = study.MainObjects  # a Study with no bodies: the new Air Region stays Manual with the old defaults
-    study.MainObjects = []
+    saved_excluded = list(study.Excluded)  # every body excluded: the new Air Region stays Manual with the old defaults
+    objects.set_excluded(study, [doc.A, doc.B, doc.Outside])
     Gui.runCommand("EMS_AddAirRegion")
     panel = air_panels.pop()
     (empty,) = objects.air_regions(study)
@@ -738,7 +733,7 @@ def main():
     assert (empty.Length.Value, empty.Width.Value, empty.Height.Value) == (100, 100, 100), "no bodies: not the defaults"
     assert all(getattr(empty, f"Pad{s}Percent") == 0 for s in sides), "no bodies: padding was set"
     assert panel.reject() and objects.air_regions(study) == []
-    study.MainObjects = saved_bodies
+    objects.set_excluded(study, saved_excluded)
     Gui.runCommand("EMS_AddAirRegion")
     panel = air_panels.pop()
     (air,) = objects.air_regions(study)
@@ -832,13 +827,10 @@ def main():
     Gui.Selection.addSelection(doc.Name, air.Name, "Face1")
     assert Gui.Selection.getSelection() == [], "the Excitation gate let the Air Region through"
     panel.reject()
-    moving = doc.addObject("Part::Box", "MovingBox")  # sliding: the Excitation gate takes the moving geometry too
+    moving = doc.addObject("Part::Box", "NewBox")  # the Excitation gate takes a body drawn later, not an excluded one
     doc.recompute()
-    study.MovingMode, study.MovingObjects, study.Movement = "Manual", [moving], "Sliding motion"
-    assert moving.Name in taskpanels.ItemGate(study, taskpanels.ANY_SUB, True, False).main, "gate: moving body"
-    study.Movement = "No movement"
-    assert moving.Name not in taskpanels.ItemGate(study, taskpanels.ANY_SUB, True, False).main, "gate: static"
-    study.MovingMode, study.MovingObjects = "Unassigned", []
+    assert moving.Name in taskpanels.ItemGate(study, taskpanels.ANY_SUB, True, False).main, "gate: new body"
+    assert "Outside" not in taskpanels.ItemGate(study, taskpanels.ANY_SUB, True, False).main, "gate: excluded body"
     doc.removeObject(moving.Name)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, air.Name)
@@ -879,6 +871,37 @@ def main():
     doc.removeObject(air.Name)
     log.append("air region ok")
 
+    # The Study tree: a Custom Air Region's shape is unticked and disabled, with the reason beside it.
+    src_doc = App.newDocument("AirSource")
+    core = src_doc.addObject("Part::Box", "Core")
+    side = src_doc.addObject("Part::Box", "Side")
+    side.Placement.Base = App.Vector(12, 0, 0)
+    shell = src_doc.addObject("Part::Box", "Shell")
+    shell.Length = shell.Width = shell.Height = 60
+    shell.Placement.Base = App.Vector(-20, -20, -20)
+    holder = src_doc.addObject("App::DocumentObjectGroup", "Holder")
+    holder.addObject(side)
+    holder.addObject(shell)
+    src_study = objects.make_study(src_doc)
+    src_air = objects.make_air_region(src_study, "Custom", Source=shell)
+    src_doc.recompute()
+    src_view = taskpanels.StudyView(src_study)
+    src_rows = rows_of(src_view.tree)
+    shell_row = src_rows[shell.Name]
+    assert shell_row.text(1) == f"air shape of {objects.display_name(src_air)}", shell_row.text(1)
+    assert shell_row.checkState(0) == QtCore.Qt.Unchecked and shell_row.isDisabled(), "the air source is choosable"
+    assert src_rows[core.Name].text(1) == "" and src_rows[core.Name].checkState(0) == QtCore.Qt.Checked
+    assert [b.Name for b in objects.study_bodies(src_study)] == ["Core", "Side"], objects.study_bodies(src_study)
+    tick(src_view.tree, holder, False)  # the group with the air source in it, unticked and ticked again
+    assert src_study.Excluded == [holder], src_study.Excluded
+    holder_row = tick(src_view.tree, holder)
+    assert src_study.Excluded == [] and rows_of(src_view.tree)[shell.Name].checkState(0) == QtCore.Qt.Unchecked
+    assert holder_row.checkState(0) == QtCore.Qt.PartiallyChecked, "the group shows its air source ticked"
+    assert src_air.Source == shell and objects.air_regions(src_study) == [src_air]
+    App.closeDocument(src_doc.Name)
+    App.setActiveDocument(doc.Name)
+    log.append("study tree air source ok")
+
     # A Study saved before the Air Regions folder existed gets it back when the document opens in the GUI.
     old = App.newDocument("OldAir")
     old_study = objects.make_study(old)
@@ -910,7 +933,6 @@ def main():
     # 2D panels: a rectangle or a sector in XY; only a rectangle or a half disc in ZX.
     import Part
 
-    flat = App.newDocument("Air2D")
     for normal, shapes, rows, half_rows in (
         (
             App.Vector(0, 0, 1),
@@ -920,11 +942,10 @@ def main():
         ),
         (App.Vector(0, 1, 0), ["Rectangle", "Half disc"], ["XPlus", "ZPlus", "ZMinus"], ["Outer"]),
     ):
+        flat = App.newDocument("Air2D")  # one Study per document
         flat_study = objects.make_study(flat, "2D")
-        flat_study.MainMode = "Manual"
         face = flat.addObject("Part::Feature", "Face")
         face.Shape = Part.makePlane(10, 10, App.Vector(0, 0, 0), normal)
-        flat_study.MainObjects = [face]
         flat.recompute()
         flat_air = objects.make_air_region(flat_study, "Sector", OuterRadius=50)
         flat.recompute()
@@ -951,8 +972,7 @@ def main():
         assert flat_panel.accept() and not flat_air.Shape.isNull() and flat_air.AirShape == "Box"
         assert flat_air.SizeMode == "Manual", "Convert to Manual in a 2D Study"
         assert (plus.replace("Plus", "Minus"), "10 * 2") in flat_air.ExpressionEngine, "OK did not mirror"
-        flat.removeObject(flat_study.Name)
-    App.closeDocument(flat.Name)
+        App.closeDocument(flat.Name)
     App.setActiveDocument(doc.Name)
     log.append("2D air panels ok")
 
@@ -966,8 +986,6 @@ def main():
     disc = lambda r: Part.Face(Part.Wire(Part.makeCircle(r)))  # noqa: E731 - a face in z = 0
     stator, rotor = (slide_doc.addObject("Part::Feature", n) for n in ("Stator", "Rotor"))
     stator.Shape, rotor.Shape = disc(80).cut(disc(45)), disc(40)
-    slide_study.MainMode = slide_study.MovingMode = "Manual"
-    slide_study.MainObjects, slide_study.MovingObjects = [stator], [rotor]
     slide_doc.recompute()
     slide_doc.saveAs(os.path.join(tempfile.mkdtemp(), "Slide2D.FCStd"))
     App.setActiveDocument(slide_doc.Name)
@@ -1003,6 +1021,18 @@ def main():
     taskpanels.set_field_value(panel.divisions, 72)
     assert iface.Divisions == 72, "the Divisions field did not write the property while editing"
     assert "5" in panel.step_label.text() and "deg" in panel.step_label.text(), panel.step_label.text()
+
+    def moving_sides():
+        return [panel.moving_side.itemText(i) for i in range(panel.moving_side.count())]
+
+    assert moving_sides() == ["Inside", "Outside"] and panel.moving_side.currentText() == iface.MovingSide == "Inside"
+    panel.moving_side.setCurrentText("Outside")
+    assert iface.MovingSide == "Outside", "the Moving side combo did not write MovingSide"
+    panel.kind.setCurrentIndex(panel.kind.findData("Linear"))  # the choices follow the Kind
+    assert moving_sides() == ["Positive", "Negative"], moving_sides()
+    assert iface.MovingSide == "Negative" and panel.moving_side.currentText() == "Negative", iface.MovingSide
+    panel.kind.setCurrentIndex(panel.kind.findData("Rotational"))
+    assert iface.MovingSide == "Outside" and panel.moving_side.currentText() == "Outside", iface.MovingSide
     assert panel.reject() and objects.sliding_interfaces(slide_study) == [], "Cancel kept the new Sliding Interface"
     assert not Gui.Control.activeDialog()
     Gui.runCommand("EMS_AddSlidingInterface")
@@ -1022,13 +1052,24 @@ def main():
     assert len(iface.Shape.Edges) == 2, "a full turn is two half circles"
     study_view.refresh()
     assert not study_view.slide_hint.isVisibleTo(study_view.form), "the hint stayed with an Air Region and an interface"
+
+    def notes():
+        """{body: second column} of the Study tree."""
+        study_view.refresh()
+        return {name: r.text(1) for name, r in rows_of(study_view.tree).items()}
+
+    assert notes() == {"Stator": "", "Rotor": "moving"}, notes()  # Inside the radius moves
     assert iface.ViewObject.Proxy.doubleClicked(iface.ViewObject)
     panel = slide_panels.pop()
     assert not panel.new and taskpanels.field_value(panel.divisions) == 72
+    assert panel.moving_side.currentText() == "Inside", panel.moving_side.currentText()
+    panel.moving_side.setCurrentText("Outside")
+    assert iface.MovingSide == "Outside" and notes() == {"Stator": "moving", "Rotor": ""}, notes()
     taskpanels.set_field_value(panel.radius, 10)
     assert iface.Radius.Value == 10, "the edit was not live"
     assert panel.reject() and objects.sliding_interfaces(slide_study) == [iface], "Cancel of an edit removed it"
     assert iface.Radius.Value == 42.5 and ("Divisions", "36 * 2") in iface.ExpressionEngine, "Cancel kept the edit"
+    assert iface.MovingSide == "Inside" and notes() == {"Stator": "", "Rotor": "moving"}, "Cancel kept the moving side"
     slide_errors = [p.text for p in validation.errors(validation.validate(slide_study))]
     assert not slide_errors, slide_errors
     slide_run = runner.start(slide_study)
@@ -1045,34 +1086,36 @@ def main():
     App.setActiveDocument(doc.Name)
     log.append("sliding interface ok")
 
-    # Several Studies: ownership, setup controls, bulk selection and undo.
+    # A 2D Study in a document of its own (one Study per document): setup controls, ticks and undo.
     import Part
     from emsolution import geometry
 
+    assert not commands.COMMANDS["EMS_NewStudy"].IsActive(), "New Study is active in a document with a Study"
+    sec = App.newDocument("Section")
+    sec.saveAs(os.path.join(tempfile.mkdtemp(), "Section.FCStd"))  # the simulation folder
+    App.setActiveDocument(sec.Name)
     commands.ask_study = lambda: ("Cross-section", "2D", "No movement")
     Gui.runCommand("EMS_NewStudy")
     for _ in range(5):
         Gui.updateGui()
-    first, second = objects.studies(doc)
-    assert first == study and second.Dimension == "2D"
+    second = objects.find_study(sec)
+    assert second is not None and second.Dimension == "2D"
     assert commands.active_study() == second
     assert commands.COMMANDS["EMS_Material"].IsActive() and commands.COMMANDS["EMS_MeshSize"].IsActive()
     assert not commands.COMMANDS["EMS_Excitation"].IsActive(), "excitations are 3D-only for now"
     assert commands.COMMANDS["EMS_RunMesh"].IsActive()
     assert taskpanels.FolderView(second.MaterialsGroup).rows == []
-    source = doc.addObject("App::DocumentObjectGroup", "FaceGroup")
-    section = doc.addObject("Part::Feature", "Section")
+    source = sec.addObject("App::DocumentObjectGroup", "FaceGroup")
+    section = sec.addObject("Part::Feature", "Section")
     section.Shape = Part.makePlane(10, 10)
     source.addObject(section)
-    part = doc.addObject("App::Part", "SolidPart")
-    part.addObject(doc.A)
-    doc.recompute()
+    part = sec.addObject("App::Part", "SolidPart")
+    part.addObject(sec.addObject("Part::Box", "Solid"))
+    sec.recompute()
     view = taskpanels.StudyView(second)
-    tree = view.regions["Main"][1]
+    tree = view.tree
     shown = [tree.topLevelItem(i).data(0, QtCore.Qt.UserRole) for i in range(tree.topLevelItemCount())]
     assert source.Name in shown and part.Name not in shown, f"a 2D tree lists faces, not solids: {shown}"
-    second.MainMode, second.MainSource = "Container", source
-    view.refresh()
     assert view.diagnostics.text() == "", view.diagnostics.text()
     assert view.run_button.isEnabled()
     assert view.export_notice.toolTip() == f"Writes {jobwriter.mesh_file(second)}", view.export_notice.toolTip()
@@ -1086,16 +1129,16 @@ def main():
     assert second.MeshResult.FemMesh.NodeCount > 0
     log.append("2D mesh ok")
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, section.Name)
+    Gui.Selection.addSelection(sec.Name, section.Name)
     Gui.runCommand("EMS_TransfiniteBody")
     texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
     assert any(t.startswith("Click a face to structure") for t in texts), texts
     ok()
     Gui.Selection.clearSelection()
     for k in range(1, 5):
-        Gui.Selection.addSelection(doc.Name, section.Name, f"Edge{k}")
+        Gui.Selection.addSelection(sec.Name, section.Name, f"Edge{k}")
     Gui.runCommand("EMS_TransfiniteEdges")
-    Gui.Selection.addSelection(doc.Name, section.Name, "Face1")
+    Gui.Selection.addSelection(sec.Name, section.Name, "Face1")
     assert "Face1" not in Gui.Selection.getSelectionEx()[0].SubElementNames, "the edge gate let a face through"
     ok(elements=4)
     (tb,) = objects.transfinite_bodies(second)
@@ -1103,7 +1146,7 @@ def main():
     assert tb.References == [(section, ("",))], tb.References
     assert te.Elements == 4 and len(te.References[0][1]) == 4, te.References
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, section.Name)
+    Gui.Selection.addSelection(sec.Name, section.Name)
     Gui.runCommand("EMS_Recombine")
     ok()
     (rc,) = objects.recombine_items(second)
@@ -1115,96 +1158,91 @@ def main():
     assert run_tf.error == "" and not runner.busy(), run_tf.error
     log.append("2D transfinite mesh ok")
     for item in (tb, te, rc):  # leave the Study as the rest of the smoke test expects it
-        doc.removeObject(item.Name)
+        sec.removeObject(item.Name)
     second.MeshSizesGroup.RecombinationAlgorithm = "Blossom"
     # Face picks in 2D: a clicked face of a two-face body stays a face; a tree pick and a one-face body are whole.
-    blocks = doc.addObject("Part::Feature", "Blocks")
+    blocks = sec.addObject("Part::Feature", "Blocks")
     blocks.Shape = Part.makePlane(10, 10).generalFuse([Part.makePlane(10, 10, App.Vector(10, 0, 0))])[0]
     source.addObject(blocks)
-    doc.recompute()
+    sec.recompute()
     right = next(f"Face{i}" for i, f in enumerate(blocks.Shape.Faces, 1) if abs(f.CenterOfMass.x - 15) < 1e-6)
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, blocks.Name, right)
+    Gui.Selection.addSelection(sec.Name, blocks.Name, right)
     Gui.runCommand("EMS_TransfiniteBody")
     texts = [w.text() for w in opened[-1].form.findChildren(QtWidgets.QLabel)]
     assert any(t.startswith("Click a face to structure that block") for t in texts), texts
     gate = opened[-1].gate  # what the 3D view may pick while the panel is open
-    assert gate.allow(doc, blocks, right) and gate.allow(doc, blocks, "Vertex1"), "faces and corners"
-    assert gate.allow(doc, section, "Edge1"), "an edge click on a one-face body is that region"
-    assert not gate.allow(doc, blocks, "Edge1"), "an edge of a two-face body is no region"
+    assert gate.allow(sec, blocks, right) and gate.allow(sec, blocks, "Vertex1"), "faces and corners"
+    assert gate.allow(sec, section, "Edge1"), "an edge click on a one-face body is that region"
+    assert not gate.allow(sec, blocks, "Edge1"), "an edge of a two-face body is no region"
     ok()
     (tb,) = objects.transfinite_bodies(second)
     assert tb.References == [(blocks, (right,))], tb.References
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, blocks.Name)  # tree pick
+    Gui.Selection.addSelection(sec.Name, blocks.Name)  # tree pick
     Gui.runCommand("EMS_Recombine")
     gate = opened[-1].gate
-    assert gate.allow(doc, blocks, right) and gate.allow(doc, section, "Vertex1"), "faces, one-face regions"
-    assert not gate.allow(doc, blocks, "Vertex1"), "Recombine takes no corners"
+    assert gate.allow(sec, blocks, right) and gate.allow(sec, section, "Vertex1"), "faces, one-face regions"
+    assert not gate.allow(sec, blocks, "Vertex1"), "Recombine takes no corners"
     ok()
     (rc,) = objects.recombine_items(second)
     assert rc.References == [(blocks, ("",))], rc.References
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, section.Name, "Face1")  # one-face body: stored whole
+    Gui.Selection.addSelection(sec.Name, section.Name, "Face1")  # one-face body: stored whole
     Gui.runCommand("EMS_Recombine")
     ok()
     assert objects.recombine_items(second)[-1].References == [(section, ("",))]
     Gui.Selection.clearSelection()
-    Gui.Selection.addSelection(doc.Name, section.Name, "Edge1")  # an edge click on a one-face body adds the region
+    Gui.Selection.addSelection(sec.Name, section.Name, "Edge1")  # an edge click on a one-face body adds the region
     Gui.runCommand("EMS_Recombine")
     ok()
     assert objects.recombine_items(second)[-1].References == [(section, ("",))]
     for item in [tb] + objects.recombine_items(second):  # leave the Study as the rest of the smoke test expects it
-        doc.removeObject(item.Name)
+        sec.removeObject(item.Name)
     source.removeObject(blocks)
-    doc.removeObject(blocks.Name)
-    doc.recompute()
+    sec.removeObject(blocks.Name)
+    sec.recompute()
     log.append("2D face picks ok")
     view.refresh()
-    undo_before = list(doc.UndoNames)
+    undo_before = list(sec.UndoNames)
     view.refresh()
-    assert list(doc.UndoNames) == undo_before, "populating widgets changed the model"
+    assert list(sec.UndoNames) == undo_before, "populating widgets changed the model"
     tick(tree, source, False)
-    assert second.MainMode == "Unassigned"
+    assert second.Excluded == [source], ("a fully unticked group is excluded as itself", second.Excluded)
+    assert "0 face regions" in view.count.text(), view.count.text()
     tick(tree, source)
-    assert second.MainSource == source and second.MainMode == "Container"
-    assert "1 face region" in view.regions["Main"][2].text()
-    assert view.run_button.isEnabled(), "a 2D Study with a main geometry can mesh"
+    assert second.Excluded == [] and "1 face region" in view.count.text(), view.count.text()
+    assert view.run_button.isEnabled(), "a 2D Study with a body can mesh"
     view.movement.setCurrentText("Sliding motion")
     assert second.Movement == "Sliding motion" and study.Movement == "No movement"
-    assert view.regions["Moving"][0].isHidden() is False
-    select(study.MaterialsGroup.Name)
-    assert commands.active_study() == study
-    select("B")
-    assert commands.active_study() == study, "geometry selection lost the target Study"
-    select(study.Name, second.Name)
-    assert commands.active_study() is None, "ambiguous Study selection picked a target"
-    select("B")
-    assert commands.active_study() is None, "ambiguous target was silently remembered"
-    select(second.Name)
-    extra = doc.addObject("Part::Feature", "Extra")
+    assert view.slide_hint.isVisibleTo(view.form), "no hint for a sliding Study without an interface"
+    App.setActiveDocument(doc.Name)
+    assert commands.active_study() == study, "the active document's Study is the target"
+    App.setActiveDocument(sec.Name)
+    assert commands.active_study() == second
+    extra = sec.addObject("Part::Feature", "Extra")
     extra.Shape = Part.makePlane(5, 5, App.Vector(20, 0, 0))
     source.addObject(extra)
-    doc.recompute()
+    sec.recompute()
     view.refresh()
     assert tick(tree, extra, False).parent().checkState(0) == QtCore.Qt.PartiallyChecked
-    assert second.MainMode == "Manual" and second.MainObjects == [section], "a partly ticked group keeps its ticks"
-    doc.undo()
-    assert second.MainMode == "Container" and second.MainObjects == []
-    doc.redo()
-    assert second.MainMode == "Manual" and second.MainObjects == [section]
+    assert second.Excluded == [extra], ("a partly ticked group keeps its ticks", second.Excluded)
+    sec.undo()
+    assert second.Excluded == [], second.Excluded
+    sec.redo()
+    assert second.Excluded == [extra], second.Excluded
     source.removeObject(extra)
-    doc.removeObject(extra.Name)
-    doc.recompute()
+    sec.removeObject(extra.Name)
+    sec.recompute()
     view.refresh()
     tree.setCurrentItem(tick(tree, section))
     assert highlight.shown() is not None, "a clicked row highlights its bodies"
     highlight.clear()
-    assert study.MainMode == "Manual"
-    select(second.Name)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sec.Name, second.Name)
     assert second.ViewObject.Proxy.doubleClicked(second.ViewObject)
     assert not Gui.Control.activeDialog(), "double-click Study opened the ID dialog"
-    log.append("multiple Study setup and undo ok")
+    log.append("2D Study setup and undo ok")
 
     # The selected folder's settings stay isolated and targeting cannot cross documents.
     view = taskpanels.FolderView(study.MeshSizesGroup)
@@ -1214,15 +1252,19 @@ def main():
     second_settings = taskpanels.FolderView(second.MeshSizesGroup)
     assert second_settings.settings.box.isEnabled()
     assert "RecombinationAlgorithm" in second_settings.settings.algorithms
-    select(second.Name)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sec.Name, second.Name)
+    for _ in range(5):
+        Gui.updateGui()
     (actual_tree,) = [
         t
         for t in Gui.getMainWindow().findChildren(QtWidgets.QTreeWidget)
-        if t.isVisible() and t.objectName() == "MainGeometry"
+        if t.isVisible() and t.objectName() == "Geometry"
     ]
     tick(actual_tree, source, False)
+    assert second.Excluded == [source], second.Excluded
     tick(actual_tree, source)
-    assert second.MainMode == "Container" and second.MainSource == source
+    assert second.Excluded == [], second.Excluded
     Gui.activeDocument().activeView().viewTop()
     Gui.activeDocument().activeView().fitAll()
     Gui.updateGui()
@@ -1231,17 +1273,20 @@ def main():
     other_study = objects.make_study(another_doc)
     assert commands.active_study() == other_study
     App.closeDocument(another_doc.Name)
+    App.setActiveDocument(sec.Name)
+    objects.make_study(sec)  # two Studies in one document: no target, and Validate says why
+    assert commands.active_study() is None and not commands.COMMANDS["EMS_Material"].IsActive()
+    two = [p.text for p in validation.errors(validation.validate(second))]
+    assert any(t.startswith("This document has two Studies") for t in two), two
+    App.closeDocument(sec.Name)
     App.setActiveDocument(doc.Name)
-    select(second.Name)
-    name = second.Name
-    doc.removeObject(name)
     select("B")
-    assert commands.active_study() == study, "deleted Study remained the target"
+    assert commands.active_study() == study, "a closed document's Study remained the target"
     Gui.activateWorkbench("PartWorkbench")
     Gui.activateWorkbench("EMSolutionWorkbench")
     select(study.Name)
     assert not geometry.export_unavailable(study)
-    study.MainMode, study.MainSource = "Container", part
+    objects.set_excluded(study, [doc.Outside, doc.B])
     view = taskpanels.StudyView(study)
     assert commands.COMMANDS["EMS_RunMesh"].IsActive()
     assert view.run_button.isEnabled()
@@ -1306,7 +1351,6 @@ def main():
     body = headless.addObject("Part::Box", "Body")
     headless.recompute()
     headless_study = objects.make_study(headless, "3D", "Headless")
-    headless_study.MainMode, headless_study.MainObjects = "Manual", [body]
     objects.make_air_region(headless_study, "Box")
     objects.make_sliding_interface(headless_study)
     material = objects.make_library_material(headless_study, json.dumps(json.loads(lib.Record)))
@@ -1394,7 +1438,6 @@ def main():
     sym_doc = App.newDocument("Symmetric")
     sym_study = symcases.motor_study(sym_doc)
     App.setActiveDocument(sym_doc.Name)
-    taskpanels.set_active_study(sym_study)
     stator_top = objects.symmetric_groups(sym_study)[0]  # its drawing is the full stator
     # An Air Region in a grouped Study: Padding round the two groups, then a ring outside the stator (r 60).
     Gui.Selection.clearSelection()
@@ -1569,7 +1612,6 @@ def main():
     group_info = symcases.motor_doc(group_doc)  # the cells and, for Read from drawing, their chains
     group_study = objects.make_study(group_doc, "2D")
     App.setActiveDocument(group_doc.Name)
-    taskpanels.set_active_study(group_study)
     group_panels, tables, windings = [], [], []
     real_group_panel = taskpanels.SymmetricGroupPanel
 
@@ -1659,6 +1701,11 @@ def main():
     assert group.Label == "Stator group" and group_doc.UndoNames[0] == "Add Symmetric Group", group_doc.UndoNames
     assert len(objects.part_assignments(group_study)) == 3, [m.Label for m in objects.part_assignments(group_study)]
     assert not any(c.Visibility for c in stator_cells) and group.Visibility, "the cells are not hidden"
+    group_view = taskpanels.StudyView(group_study)  # the chain the rules were read from is the group's drawing
+    drawing_row = rows_of(group_view.tree)[group_info["stator_top"].Name]
+    assert drawing_row.text(1) == f"drawing of Symmetric Group {objects.display_name(group)}", drawing_row.text(1)
+    assert drawing_row.isDisabled() and drawing_row.checkState(0) == QtCore.Qt.Unchecked
+    del group_view
     # Double-click reopens it; a part that goes takes its Material along, and the panel says so.
     group.ViewObject.Proxy.doubleClicked(group.ViewObject)
     panel = group_panels.pop()
@@ -1740,7 +1787,6 @@ def main():
     blocks_cells = symcases.transformer_doc(blocks_doc)
     blocks_study = objects.make_study(blocks_doc, "2D")
     App.setActiveDocument(blocks_doc.Name)
-    taskpanels.set_active_study(blocks_study)
     Gui.Selection.clearSelection()
     for key in ("core", "coil", "air"):
         Gui.Selection.addSelection(blocks_doc.Name, blocks_cells[key].Name)
@@ -1810,8 +1856,7 @@ def main():
     pick_doc.recompute()
     pick_study = objects.make_study(pick_doc, "2D")
     App.setActiveDocument(pick_doc.Name)
-    taskpanels.set_active_study(pick_study)
-    pick_study.MainMode, pick_study.MainObjects = "Manual", [free_air]
+    objects.set_excluded(pick_study, pick_info["rotor_cells"])  # the stator group and the free air
     steel = objects.make_library_material(
         pick_study, json.dumps(record("user:steel", "Steel", "electrical_steel", STEEL))
     )
@@ -1819,6 +1864,20 @@ def main():
     pick_group = objects.make_symmetric_group(pick_study, pick_info["stator_cells"], rules=rules, name="Stator")
     objects.sync_parts(pick_study)
     pick_doc.recompute()
+    # The Study tree: the group is a ticked row after the document's, its cell objects under it and nowhere else.
+    pick_view = taskpanels.StudyView(pick_study)
+    tops = [pick_view.tree.topLevelItem(i) for i in range(pick_view.tree.topLevelItemCount())]
+    group_row = tops[-1]
+    assert group_row.data(0, QtCore.Qt.UserRole) == pick_group.Name and group_row.isDisabled()
+    assert group_row.checkState(0) == QtCore.Qt.Checked and group_row.text(1) == "", group_row.text(1)
+    cell_rows = [group_row.child(i) for i in range(group_row.childCount())]
+    assert [r.data(0, QtCore.Qt.UserRole) for r in cell_rows] == [c.Name for c in pick_info["stator_cells"]]
+    note = f"meshed by Symmetric Group {objects.display_name(pick_group)}"
+    assert all(r.text(1) == note and r.isDisabled() and r.checkState(0) == QtCore.Qt.Checked for r in cell_rows)
+    names = [t.data(0, QtCore.Qt.UserRole) for t in tops[:-1]]
+    assert free_air.Name in names and not set(names) & {c.Name for c in pick_info["stator_cells"]}, names
+    assert all(rows_of(pick_view.tree)[c.Name].checkState(0) == QtCore.Qt.Unchecked for c in pick_info["rotor_cells"])
+    del pick_view, tops, group_row, cell_rows
     pick_rows = objects.rows_of(pick_group)
     pick_coil = [r["cell"] for r in pick_rows].index("CoilCell")
 
@@ -1829,7 +1888,7 @@ def main():
     click(pick_doc, pick_group, face_of(pick_coil, 5))
     Gui.runCommand("EMS_Material")
     panel = material_panels.pop()
-    (coil_part,) = [m for m in objects.part_assignments(pick_study) if m.PartKey == "fixed|CoilCell"]
+    (coil_part,) = [m for m in objects.part_assignments(pick_study) if m.PartKey == "CoilCell"]
     assert panel.obj is coil_part and not panel.new and panel.part, panel.obj.Label
     assert panel.current == objects.part_refs(coil_part) and panel.refs.count() == 24, panel.current
     assert not panel.add_button.isEnabled() and not panel.remove_button.isEnabled()
@@ -1840,7 +1899,7 @@ def main():
     assert (
         coil_part.LibraryMaterial == copper and coil_part.Potential == 7 and objects.display_name(coil_part) == "Coil"
     )
-    assert coil_part.PartKey == "fixed|CoilCell" and len(objects.part_assignments(pick_study)) == 3
+    assert coil_part.PartKey == "CoilCell" and len(objects.part_assignments(pick_study)) == 3
     # Cancel leaves the part as it was.
     click(pick_doc, pick_group, face_of(pick_coil, 0))
     Gui.runCommand("EMS_Material")
@@ -1865,11 +1924,11 @@ def main():
     Gui.runCommand("EMS_Material")
     panel = material_panels.pop()
     each = objects.row_parts(pick_group, pick_rows[pick_coil])
-    assert panel.obj.PartKey == f"fixed|{each[7]}" and panel.refs.count() == 1, panel.obj.PartKey
+    assert panel.obj.PartKey == each[7] and panel.refs.count() == 1, panel.obj.PartKey
     panel.material.setCurrentIndex(panel.material.findData(steel.Name))
     panel.all_parts.click()
-    coils = [m for m in objects.part_assignments(pick_study) if m.PartKey.partition("|")[2] in each]
-    irons = [m for m in objects.part_assignments(pick_study) if m.PartKey.partition("|")[2] not in each]
+    coils = [m for m in objects.part_assignments(pick_study) if m.PartKey in each]
+    irons = [m for m in objects.part_assignments(pick_study) if m.PartKey not in each]
     assert len(coils) == 24 and all(m.LibraryMaterial == steel for m in coils), [m.Label for m in coils]
     assert all(m.LibraryMaterial != steel for m in irons), [m.Label for m in irons]
     assert objects.rows_of(pick_group)[pick_coil]["material"] == steel.Name
@@ -1901,7 +1960,6 @@ def main():
     pick3_info = symcases.group_motor_doc(pick3_doc, height=10)
     pick3_study = objects.make_study(pick3_doc, "3D")
     App.setActiveDocument(pick3_doc.Name)
-    taskpanels.set_active_study(pick3_study)
     group3 = objects.make_symmetric_group(pick3_study, pick3_info["stator_cells"], rules=rules, name="Stator")
     objects.sync_parts(pick3_study)
     pick3_doc.recompute()
@@ -1930,7 +1988,7 @@ def main():
     panel = material_panels.pop()
     (single_owner,) = objects.face_solids(group3.Shape, single3)
     row, copy = objects.element_owner(group3, single_owner)
-    want = f"fixed|{objects.row_parts(group3, rows3[row])[copy]}"
+    want = objects.row_parts(group3, rows3[row])[copy]
     assert panel.part and panel.obj.PartKey == want and not solid_asks, (panel.obj.PartKey, want, solid_asks)
     assert panel.reject()
     click(pick3_doc, group3, shared3)  # a face of two solids without a picked point: asked
@@ -1939,7 +1997,7 @@ def main():
     panel = material_panels.pop()
     taken = objects.element_owner(group3, objects.face_solids(group3.Shape, shared3)[1])
     assert len(solid_asks) == 1 and panel.part, solid_asks
-    assert panel.obj.PartKey == f"fixed|{objects.row_parts(group3, rows3[taken[0]])[taken[1]]}", panel.obj.PartKey
+    assert panel.obj.PartKey == objects.row_parts(group3, rows3[taken[0]])[taken[1]], panel.obj.PartKey
     assert panel.reject()
     solid_answers.append(None)  # Cancel: no panel, no warning
     warned_before = len(warned)
@@ -1976,6 +2034,40 @@ def main():
     App.setActiveDocument(doc.Name)
     log.append("picking on the drawing ok")
     App.closeDocument(doc.Name)
+
+    # A face clicked on a link body arrives as a pick the Mesh Size panel takes, also for a link inside a Part.
+    link_doc = App.newDocument("LinkPick")
+    coil = link_doc.addObject("Part::Box", "Coil")
+    coil_link = link_doc.addObject("App::Link", "CoilLink")
+    coil_link.LinkedObject = coil
+    coil_link.Placement.Base = App.Vector(50, 0, 0)
+    link_holder = link_doc.addObject("App::Part", "LinkHolder")
+    inner_link = link_doc.addObject("App::Link", "InnerLink")
+    inner_link.LinkedObject = coil
+    inner_link.Placement.Base = App.Vector(0, 50, 0)
+    link_holder.addObject(inner_link)
+    link_study = objects.make_study(link_doc, "3D")
+    link_doc.recompute()
+    App.setActiveDocument(link_doc.Name)
+    assert [b.Name for b in objects.study_bodies(link_study)] == ["Coil", "CoilLink", "InnerLink"]
+    Gui.Selection.clearSelection()
+    Gui.runCommand("EMS_MeshSize")
+    panel = opened.pop()
+    forms = []
+    for top, sub in (("CoilLink", "Face1"), ("LinkHolder", "InnerLink.Face1")):
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(link_doc.Name, top, sub)  # what a click in the 3D view selects, through the gate
+        forms.append([(s.Object.Name, s.SubElementNames) for s in Gui.Selection.getSelectionEx()])
+        panel.add_selection()
+    log.append(f"link face picks arrive as {forms}")
+    assert forms == [[("CoilLink", ("Face1",))], [("InnerLink", ("Face1",))]], forms
+    assert [(b.Name, s) for b, s in panel.current] == [("CoilLink", "Face1"), ("InnerLink", "Face1")], panel.current
+    panel.size.setValue(2.0)
+    assert panel.accept()
+    (link_size,) = objects.mesh_sizes(link_study)
+    assert objects.item_refs(link_size) == [(coil_link, "Face1"), (inner_link, "Face1")], objects.item_refs(link_size)
+    App.closeDocument(link_doc.Name)
+    log.append("link face picks ok")
 
     label_doc = App.newDocument("Labels")
     label_box = label_doc.addObject("Part::Box", "Box")

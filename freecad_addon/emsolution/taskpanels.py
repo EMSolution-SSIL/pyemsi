@@ -666,6 +666,9 @@ class FolderView:
             Gui.Control.showDialog(ItemPanel(item))
 
 
+UNTICKED_ROLE = QtCore.Qt.UserRole + 1  # a Study tree row the Study keeps unticked: an air source or a drawing
+
+
 class StudyView:
     """Overall setup, saved on the selected Study; geometry work stays in geometry.py."""
 
@@ -690,12 +693,13 @@ class StudyView:
         self.tree = QtWidgets.QTreeWidget()
         self.tree.setObjectName("Geometry")
         self.tree.setHeaderHidden(True)
+        self.tree.setColumnCount(2)  # the body, and why the Study decides about it or that it moves
         rows.addWidget(self.tree)
         self.count = QtWidgets.QLabel()
         self.count.setWordWrap(True)
         rows.addWidget(self.count)
         layout.addWidget(box)
-        self.tree.itemChanged.connect(lambda _item, _col: self.ticked())
+        self.tree.itemChanged.connect(lambda item, _col: self.ticked(item))
         self.tree.currentItemChanged.connect(lambda item, _prev: self.highlight_item(item))
         refresh = QtWidgets.QPushButton("Refresh geometry")
         refresh.clicked.connect(self.refresh)
@@ -772,40 +776,86 @@ class StudyView:
             self.run_button.setEnabled(not geometry.export_unavailable(self.study) and not runner.busy())
 
     def fill(self, nodes):
-        """Show nodes with every body ticked unless the Study excludes it."""
-        tree = self.tree
+        """Show nodes with every body ticked unless the Study excludes it. The rows the Study decides are disabled,
+        with the reason in the second column: an air source and a group's drawing unticked, and each Symmetric Group
+        (after the document's nodes) ticked, its cell objects under it and nowhere else. When sliding, the rows on
+        the moving side say "moving"."""
+        study, tree = self.study, self.tree
         expanded, stack = set(), [tree.invisibleRootItem()]
         while stack:
             item = stack.pop()
             stack += [item.child(i) for i in range(item.childCount())]
             if item.isExpanded():
                 expanded.add(item.data(0, QtCore.Qt.UserRole))
+        cells = {c.Name for c in objects.cell_bodies(study)}
+        decided = {name: f"air shape of {objects.display_name(a)}" for name, a in geometry.air_sources(study).items()}
+        for name, group in geometry.group_drawings(study).items():
+            decided.setdefault(name, f"drawing of Symmetric Group {objects.display_name(group)}")
+        sliding = study.Movement == "Sliding motion"
+        moving = sides.moving(study) if sliding else set()
+
+        def row(parent, obj, state, note="", enabled=True):
+            item = QtWidgets.QTreeWidgetItem(parent, [obj.Label, note])
+            item.setIcon(0, obj.ViewObject.Icon)
+            item.setToolTip(0, obj.Name)
+            item.setData(0, QtCore.Qt.UserRole, obj.Name)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            if not enabled:
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
+            if state is not None:
+                item.setCheckState(0, state)
+            return item
 
         def add(parent, nodes):
             for obj, children in nodes:
-                item = QtWidgets.QTreeWidgetItem(parent, [obj.Label])
-                item.setIcon(0, obj.ViewObject.Icon)
-                item.setToolTip(0, obj.Name)
-                item.setData(0, QtCore.Qt.UserRole, obj.Name)
-                item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
                 if children is None:
-                    excluded = geometry.is_excluded(self.study, obj)
-                    item.setCheckState(0, QtCore.Qt.Unchecked if excluded else QtCore.Qt.Checked)
-                else:
-                    item.setFlags(item.flags() | QtCore.Qt.ItemIsAutoTristate)
-                    add(item, children)
-                    item.setExpanded(obj.Name in expanded)
+                    if obj.Name in decided:
+                        item = row(parent, obj, QtCore.Qt.Unchecked, decided[obj.Name], enabled=False)
+                        item.setData(0, UNTICKED_ROLE, True)
+                    elif obj.Name not in cells:  # a cell object is listed under its group
+                        excluded = geometry.is_excluded(study, obj)
+                        state = QtCore.Qt.Unchecked if excluded else QtCore.Qt.Checked
+                        row(parent, obj, state, "moving" if obj.Name in moving else "")
+                    continue
+                item = row(parent, obj, None)
+                item.setFlags(item.flags() | QtCore.Qt.ItemIsAutoTristate)
+                add(item, children)
+                if not item.childCount():  # it held cell objects only
+                    parent.removeChild(item)
+                    continue
+                item.setExpanded(obj.Name in expanded)
 
         tree.blockSignals(True)
         tree.clear()
-        add(tree.invisibleRootItem(), nodes)
+        root = tree.invisibleRootItem()
+        add(root, nodes)
+        for group in objects.symmetric_groups(study):
+            side = "moving" if sliding and sides.group_side(study, group) == "moving" else ""
+            item = row(root, group, QtCore.Qt.Checked, side, enabled=False)
+            note = f"meshed by Symmetric Group {objects.display_name(group)}"
+            for cell in {c.Name: c for c in group.Cells}.values():
+                row(item, cell, QtCore.Qt.Checked, note, enabled=False)
+            item.setExpanded(group.Name in expanded)
+        tree.resizeColumnToContents(0)
         tree.blockSignals(False)
 
-    def ticked(self):
+    def ticked(self, item):
+        if item.data(0, UNTICKED_ROLE) and item.checkState(0) != QtCore.Qt.Unchecked:
+            # a ticked container ticks each child, also the air source or drawing the Study keeps unticked
+            self.tree.blockSignals(True)
+            item.setCheckState(0, QtCore.Qt.Unchecked)
+            self.tree.blockSignals(False)
         # A container's tick changes each child too: save once, after all of them.
         if not self.pending:
             self.pending = True
             QtCore.QTimer.singleShot(0, self.save_ticks)
+
+    @staticmethod
+    def choosable(item):
+        """The row of a body the user ticks, or of a container holding one."""
+        if item.isDisabled():  # the Study decides it
+            return False
+        return not item.childCount() or any(StudyView.choosable(item.child(i)) for i in range(item.childCount()))
 
     def unticked(self, parent):
         """The unticked objects under parent; a fully unticked container that can be saved as itself is one object,
@@ -813,7 +863,7 @@ class StudyView:
         out, doc = [], self.study.Document
         for item in (parent.child(i) for i in range(parent.childCount())):
             obj, state = doc.getObject(item.data(0, QtCore.Qt.UserRole)), item.checkState(0)
-            if obj is None or state == QtCore.Qt.Checked:
+            if obj is None or state == QtCore.Qt.Checked or not self.choosable(item):
                 continue
             if not item.childCount():
                 out.append(obj)
@@ -832,8 +882,10 @@ class StudyView:
         while stack:
             item = stack.pop()
             stack += [item.child(i) for i in range(item.childCount())]
-            shown.add(item.data(0, QtCore.Qt.UserRole))
-        # an entry no row shows (a body a boolean is made from now, a container left empty) stays excluded
+            if item is not self.tree.invisibleRootItem() and self.choosable(item):
+                shown.add(item.data(0, QtCore.Qt.UserRole))
+        # an entry no row offers (a body a boolean is made from now, a container left empty, a body that is an air
+        # source or a cell object now) stays excluded
         kept = [o for o in study.Excluded if o.Name not in shown]
         excluded = kept + self.unticked(self.tree.invisibleRootItem())
         if [o.Name for o in excluded] == [o.Name for o in study.Excluded]:
@@ -847,6 +899,8 @@ class StudyView:
 
     def highlight_item(self, item):
         obj = item and self.study.Document.getObject(item.data(0, QtCore.Qt.UserRole))
+        if obj is not None and isinstance(getattr(obj, "Proxy", None), objects.SymmetricGroup):
+            return highlight.show([(obj, "")])  # its drawing
         bodies = geometry.collect([obj], self.study.Dimension)[0] if obj is not None else []
         highlight.show([(b, "") for b in bodies])
 
@@ -2546,9 +2600,9 @@ class AirRegionPanel:
 
 
 class SlidingInterfacePanel:
-    """Edit a Sliding Interface: its kind, where its surface lies and how many divisions the motion has.
-    Changes apply as they are made, inside one transaction: OK commits it, Cancel undoes it. new: obj was just made
-    inside an open transaction, so Cancel removes it."""
+    """Edit a Sliding Interface: its kind, which side moves, where its surface lies and how many divisions the motion
+    has. Changes apply as they are made, inside one transaction: OK commits it, Cancel undoes it. new: obj was just
+    made inside an open transaction, so Cancel removes it."""
 
     def __init__(self, obj, new=False):
         self.obj, self.new = obj, new
@@ -2572,6 +2626,9 @@ class SlidingInterfacePanel:
                 self.kind.addItem(kind, kind)
         self.kind.setCurrentIndex(max(self.kind.findData(obj.Kind), 0))
         self.fields.addRow("Kind", self.kind)
+        self.moving_side = QtWidgets.QComboBox()
+        self.fields.addRow("Moving side", self.moving_side)
+        self.fill_moving_side()
         axes = objects.AXES if self.three_d else objects.AXES[:2]  # a 2D motion lies in the XY plane
         self.radius = formula_box(obj, "Radius", 0.001, 1e6)
         self.add_field("Radius", self.radius, "Rotational")
@@ -2594,6 +2651,7 @@ class SlidingInterfacePanel:
         self.step_label = QtWidgets.QLabel()
         self.fields.addRow("Step", self.step_label)
         self.kind.currentIndexChanged.connect(self.write_kind)
+        self.moving_side.currentIndexChanged.connect(self.write_moving_side)
         self.normal.currentIndexChanged.connect(self.write_axes)
         self.motion.currentIndexChanged.connect(self.write_axes)
         self.kind.currentIndexChanged.connect(self.show_kind)
@@ -2602,7 +2660,20 @@ class SlidingInterfacePanel:
         self.show_kind()
 
     def write_kind(self):
-        self.obj.Kind = self.kind.currentData()
+        self.obj.Kind = self.kind.currentData()  # the moving side's choices follow the Kind
+        self.fill_moving_side()
+        self.obj.Document.recompute()
+
+    def fill_moving_side(self):
+        """The choices of MovingSide for the interface's Kind, its value selected; filling writes nothing."""
+        self.moving_side.blockSignals(True)
+        self.moving_side.clear()
+        self.moving_side.addItems(self.obj.getEnumerationsOfProperty("MovingSide"))
+        self.moving_side.setCurrentText(self.obj.MovingSide)
+        self.moving_side.blockSignals(False)
+
+    def write_moving_side(self):
+        self.obj.MovingSide = self.moving_side.currentText()
         self.obj.Document.recompute()
 
     def write_axes(self):
