@@ -1520,6 +1520,49 @@ def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study):
     assert "air" in free["fixed"] and "air" not in free["moving"]
 
 
+def group_areas(msh_path):
+    """{physical group name: area} of the 2D elements of the mesh file (corners only)."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh_path)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        xy = {int(t): coords[3 * k : 3 * k + 2] for k, t in enumerate(tags)}
+        out = {}
+        for dim, tag in gmsh.model.getPhysicalGroups(2):
+            area = 0.0
+            for entity in gmsh.model.getEntitiesForPhysicalGroup(dim, tag):
+                for typ, _, enodes in zip(*gmsh.model.mesh.getElements(dim, entity)):
+                    corners = gmsh.model.mesh.getElementProperties(typ)[5]
+                    per = gmsh.model.mesh.getElementProperties(typ)[3]
+                    for k in range(0, len(enodes), per):
+                        pts = [xy[int(n)] for n in enodes[k : k + corners]]
+                        area += sum(p[0] * q[1] - q[0] * p[1] for p, q in zip(pts, pts[1:] + pts[:1])) / 2
+            name = gmsh.model.getPhysicalName(dim, tag)
+            out[name] = out.get(name, 0.0) + area
+        return out
+    finally:
+        gmsh.finalize()
+
+
+def test_air_region_meshes_round_the_copies(study):
+    """A Sector Air Region (r 90) round the stator copies: the mesh has the Air part, nothing inverted, and the air
+    and the copies fill the disc of r 90. The mesh draws the circles as polygons: they lose 0.05 % of the area, the
+    test allows 0.2 %."""
+    ready(study)
+    symcases.add_air_region(study, symcases.libraries(study)["Air"], AirShape="Sector", OuterRadius=90)
+    study.Document.recompute()
+    assert texts(study) == []
+    parts, _ = mesh_parts(study)
+    assert parts.get("Air", 0) > 0
+    areas = group_areas(jobwriter.mesh_file(study))
+    assert sum(areas.values()) == pytest.approx(math.pi * 90**2, rel=2e-3)
+    copies = sum(a for name, a in areas.items() if name != "Air")
+    assert copies == pytest.approx(objects.symmetric_groups(study)[0].Shape.Area, rel=2e-3)
+
+
 def test_a_study_without_free_bodies_has_no_free(study, stator):
     ready(study)
     assert "free" not in load_job(study)["symmetric"]

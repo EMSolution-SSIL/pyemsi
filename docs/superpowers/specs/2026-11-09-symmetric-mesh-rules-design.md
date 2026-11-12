@@ -46,7 +46,7 @@ implement. So:
   two-layer windings.
 - Whole objects that reach past their sector: distributed coils with curved end turns (M3-10), twisted and double-skew
   Litz strands (L-01 to L-13).
-- Objects **meshed normally beside the copies**, in particular air drawn by the user.
+- Objects **meshed normally beside the copies**, in particular air drawn by the user, and the Air Region.
 - Mixed structured and unstructured cells: quads and triangles in 2D, hexahedra, prisms, tetrahedra and pyramids in 3D.
 - Sliding motion as today: Rotational about Z, one interface, with a Z mirror now allowed.
 - An optional helper that reads an existing Mirror / Polar Array drawing and fills in the rules.
@@ -69,7 +69,6 @@ implement. So:
 
 - Coils and strands are never cut at a sector boundary to make them fit a cell (the user rejected M3-11).
 - Twisted wires are never built from slices (the user rejected R-10). Skew is part of the drawn strand.
-- The automatic Air Region does not come into symmetric Studies. It stays for non-symmetric Studies only.
 - The user never has to Explode compounds, and never has to draw Mirror or Polar Array objects to get a symmetric mesh.
 - A wrong mesh is never produced silently: anything that does not fit is refused, naming the object and the place.
 
@@ -77,8 +76,8 @@ implement. So:
 
 1. Draw the cell objects as ordinary solids (3D) or faces (2D). Objects that repeat as a wedge stay inside the wedge. A
    coil or strand that should stay whole is drawn whole, even when it reaches past the wedge.
-2. If there is air that does not repeat, draw it as an ordinary body, usually a plain block or cylinder over everything.
-   The copies are cut out of it when meshing. Put it in the Main or Moving geometry.
+2. If there is air that does not repeat, add an Air Region: Padding round the groups and free bodies, or Custom with a
+   drawn body. It gives way to the copies and the free objects when meshing.
 3. Add a **Symmetric Group** for each set of objects with the same rules. In its panel: pick the cell objects, add the
    rules, and for each object choose what its copies become. The drawing of the full model appears in the 3D view as
    the rules are edited (order matters, T-01 and T-02, so the result has to be visible). The panel states the number of
@@ -182,8 +181,8 @@ reluctance.
 Everything in the Main or Moving geometry that is not in a group is a free object. It gets a Material as an ordinary
 body. It is meshed normally, around the frozen surfaces of the copies on its side.
 
-- The user may draw the air solid, right over the copies, or with holes. The tool cuts at mesh level (section 7.4), with
-  no boolean against the copies.
+- The Air Region gives way to the copies and the free objects. A free object only touches the copies. The mesher cuts at
+  mesh level (section 7.4), with no boolean against the copies, as before.
 - The general rule: a free object's mesh is bounded by whatever of its own surface the copies leave uncovered, and by
   the copies' surfaces inside it. Copies may sit inside it, lie flush against whole faces of it, or meet a planar face of
   it in any pattern. A copy crossing a curved face of it is not handled yet, because holes were only tested in planar
@@ -191,7 +190,7 @@ body. It is meshed normally, around the frozen surfaces of the copies on its sid
 - Two groups with different repeats that would meet (a locked rotor in its stator) are joined by a free object drawn
   between them, flush against both: the air gap as a ring.
 - Mesh Size works on free objects. A free object with frozen holes cannot be Transfinite; that is refused.
-- The automatic Air Region is refused in a symmetric Study, as today (`validation.py`, `_symmetric`).
+- The Air Region is checked as in section 4 of `2026-11-12-unified-air-region-design.md`.
 
 ### 4.5 Reading rules from a drawing
 
@@ -239,7 +238,7 @@ Refused, naming the object and rule or place:
 - A free object in a relation not allowed by section 4.4, or crossing a Sliding Interface (section 7.5).
 - A part with no Material; a part name on both sides; a table of the wrong length or with an empty name.
 - A cell object with no solid (face in 2D); a body in two groups, or both a cell object and in the Main or Moving geometry.
-- An Air Region in a symmetric Study.
+- An Air Region against section 4 of `2026-11-12-unified-air-region-design.md`.
 - Sliding: section 7.5.
 
 Warned:
@@ -326,8 +325,9 @@ shells it contains.
 - Rotational about Z, one interface, as today. Rule axes elsewhere are accepted by the rules and refused only by the
   Sliding Interface, which names the rule (T-07). For a group that reaches the cylinder, only these are allowed: rotations
   about Z through the origin, mirrors containing Z, and mirrors of z = const.
-- The surface must be covered by copied cell objects on both sides. **A free object may not touch it.** So air near the
-  gap is a copied cell object (a band, reaching the full height of the drawing), and free air lies outside that band.
+- The surface must be covered by copied cell objects on both sides. **Free objects and the Air Region may not touch it
+  (first version).** So air near the gap is a copied cell object (a band, reaching the full height of the drawing), and
+  free air lies outside that band.
 - Node grid, marker line and the "only the nodes have to match" rule are as in the 3D spec.
 - **Quads on the sliding surface are the normal case in 3D (the user's rule).** Users give the air that forms the sliding
   surface a Transfinite Body and a Recombine, on the cell as for any object, so both sides of the surface are quads and the
@@ -351,7 +351,7 @@ groups of the free object's surface mesh. Files as today: `.msh`, `mesh.unv`, an
    against the tables in M2-15 to M2-18.
 2. These validate and mesh inside the add-on, each with 0 inverted elements, no facet in 3 or more elements, every frozen face
    kept: the existing sliding motor example redone with rules; M2-15; M3-02 (Z mirror) with sliding; M3-07; M3-10 with
-   drawn air; M3-12; R-07; L-06 and L-07 with drawn air; D-07; D-08.
+   an Air Region; M3-12; R-07; L-06 and L-07 with an Air Region; D-07; D-08.
 3. An arrangement from no catalogue passes the same way: arbitrary solids, oblique mirror planes and rotation axes,
    several groups, free objects. The examples of item 2 pass with no code that knows about them.
 4. `gui_smoke.py` covers creating a group, adding rules, seeing the drawing and picking a part.

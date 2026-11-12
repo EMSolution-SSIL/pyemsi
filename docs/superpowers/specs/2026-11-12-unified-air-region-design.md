@@ -1,7 +1,7 @@
 # One Air Region for Every Study: Requirements and Design
 
 Date: 2026-11-12
-Status: written after the discussion of D-04, waiting for the user's review
+Status: implemented on feature/symmetric-rules
 Branch: written on `feature/symmetric-rules`
 Changes: `2026-11-09-symmetric-mesh-rules-design.md` (sections 2, 3, 4.4, 6, 8; listed in section 9 here) and
 `2026-10-20-air-region-and-sliding-design.md` (the Air Region is no longer for non-symmetric Studies only).

@@ -1396,6 +1396,40 @@ def main():
     App.setActiveDocument(sym_doc.Name)
     taskpanels.set_active_study(sym_study)
     stator_top = objects.symmetric_groups(sym_study)[0]  # its drawing is the full stator
+    # An Air Region in a grouped Study: Padding round the two groups, then a ring outside the stator (r 60).
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sym_doc.Name, sym_study.Name)
+    for _ in range(5):
+        Gui.updateGui()
+    assert commands.COMMANDS["EMS_AddAirRegion"].IsActive(), "Air Region is not active in a grouped Study"
+    air_panels.clear()
+    Gui.runCommand("EMS_AddAirRegion")
+    panel = air_panels.pop()
+    assert panel.new and Gui.Control.activeDialog(), "the Air Region panel did not open in a grouped Study"
+    (sym_air,) = objects.air_regions(sym_study)
+    assert sym_air.SizeMode == "Padding", sym_air.SizeMode
+    groups = objects.symmetric_groups(sym_study)
+    assert sorted(o.Name for o in sym_air.SizedBy) == sorted(g.Name for g in groups), sym_air.SizedBy
+    for item in groups:
+        assert sym_air.Shape.BoundBox.isInside(item.Shape.BoundBox), "the Air Region does not enclose " + item.Label
+    assert panel.accept()
+    sym_errors = [p.text for p in validation.errors(validation.validate(sym_study))]
+    assert any("crosses or touches Sliding Interface" in t for t in sym_errors), sym_errors
+    sym_air.SizeMode = "Manual"
+    sym_air.AirShape = "Sector"
+    sym_air.InnerRadius = 60
+    sym_air.OuterRadius = 90
+    sym_doc.recompute()
+    sym_errors = [p.text for p in validation.errors(validation.validate(sym_study))]
+    assert not [t for t in sym_errors if "Sliding Interface" in t], sym_errors
+    (sym_air_mat,) = [m for m in objects.materials(sym_study) if m.Body == sym_air]
+    sym_air_lib = sym_air_mat.LibraryMaterial
+    sym_doc.removeObject(sym_air_mat.Name)
+    sym_doc.removeObject(sym_air.Name)
+    sym_doc.removeObject(sym_air_lib.Name)  # the command made it: the motor's library had no Air
+    sym_doc.recompute()
+    Gui.Selection.clearSelection()
+    log.append("air region in a grouped study ok")
     # Materials panel of a grouped Study: no drawing listed without material; a row opens its part's Material.
     mat_view = taskpanels.FolderView(sym_study.MaterialsGroup)
     asked_before = len(asked)

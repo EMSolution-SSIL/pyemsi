@@ -315,6 +315,22 @@ def add_free(study, name, shape, lib=None, side="Main"):
     return body
 
 
+def add_air_region(study, lib=None, shape=None, **props):
+    """The Study's Air Region. With shape: a feature AirShape (in no geometry) and a Custom Air Region on it; else an
+    AirShape (props, default Box) Air Region sized by props. With lib, a Material of lib named Air."""
+    from emsolution import objects
+
+    if shape is not None:
+        source = feature(study.Document, "AirShape", shape)
+        air = objects.make_air_region(study, "Custom", Source=source, **props)
+    else:
+        air = objects.make_air_region(study, props.pop("AirShape", "Box"), **props)
+    if lib is not None:
+        objects.assign(study, [air], lib, 0, name="Air")
+    study.Document.recompute()
+    return air
+
+
 def transfinite_layer(study, body, arcs, ups, across=1):
     """Make body (an annular sector solid about Z) structured and recombined: arcs elements along its arcs, across
     elements from radius to radius, ups along Z."""
