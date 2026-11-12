@@ -352,19 +352,31 @@ def write_groups(study, folder, checked=None):
     main, moving, _ = geometry.setup(study)
     on_moving = {b.Name for b in moving} if sliding else set()
     free = {b.Name for b in validation.free_bodies(study, main, moving)}
+    airs = objects.air_regions(study)  # validation allows one; with groups it is all on the fixed side
     sides = []
     for side in ("fixed", "moving"):
         mine = {b.Name for b, _ in volumes if b.Name in free and (b.Name in on_moving) == (side == "moving")}
-        if mine:
+        with_air = airs if side == "fixed" else []
+        if mine or with_air:
+            named = mine | {a.Name for a in with_air}
             job = _body_job(
                 study,
                 folder,
                 [(b, size) for b, size in volumes if b.Name in mine],
                 [s for s in surfaces if s[1].Name in mine],
-                [e for e in elements if e[1].Name in mine],
+                [e for e in elements if e[1].Name in named],
                 {name: int(study.MatIds[name]) for name in mine},
                 f"free_{side}_",
             )
+            for air in with_air:
+                rel = "geometry/air.brep"
+                meshed_shape(air).exportBrep(os.path.join(folder, rel))
+                job["air"] = {
+                    "name": objects.key_name(study, air.Name),
+                    "mat_id": int(study.MatIds[air.Name]),
+                    "file": rel,
+                    "size": air_size(study),
+                }
             sides.append({"side": side, "job": job})
     if sides:
         block["free"] = sides

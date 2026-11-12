@@ -1468,6 +1468,32 @@ def test_free_bodies_go_to_free_with_final_mat_ids(study, stator):
     assert air["file"] != bore["file"] and free["fixed"]["sizes"] == []
 
 
+def test_air_region_goes_to_the_fixed_free_job(study):
+    ready(study)
+    air = objects.make_air_region(study, "Sector", OuterRadius=90)
+    objects.make_mesh_size(study, 4.0, [(air, "")])
+    objects.make_mesh_size(study, 2.0, [(air, "Edge1")])
+    study.Document.recompute()
+    (free,) = load_job(study)["symmetric"]["free"]
+    assert free["side"] == "fixed" and free["job"]["bodies"] == []
+    entry = free["job"]["air"]
+    assert entry["mat_id"] == int(study.MatIds[air.Name]) and entry["name"] == "Air" and entry["size"] == 4.0
+    assert os.path.exists(os.path.join(jobwriter.scratch_folder(study), entry["file"]))
+    assert [s["size"] for s in free["job"]["sizes"]] == [2.0]
+
+
+def test_air_gets_a_fixed_job_when_free_bodies_are_only_moving(study, monkeypatch):
+    # no Sector air both clears the sliding surface and holds every body, so only the job writer is under test here
+    monkeypatch.setattr(jobwriter.validation, "errors", lambda problems: [])
+    sliding(study)
+    ready(study)
+    objects.make_air_region(study, "Sector", InnerRadius=60, OuterRadius=90)
+    free_body(study, "Bore", Part.Face(Part.Wire(Part.makeCircle(8))), side="Moving")
+    study.Document.recompute()
+    free = {f["side"]: f["job"] for f in load_job(study)["symmetric"]["free"]}
+    assert "air" in free["fixed"] and "air" not in free["moving"]
+
+
 def test_a_study_without_free_bodies_has_no_free(study, stator):
     ready(study)
     assert "free" not in load_job(study)["symmetric"]
