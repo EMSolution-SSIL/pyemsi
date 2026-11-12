@@ -26,7 +26,6 @@ def box(doc, name, x=0.0, size=10.0):
 def new_doc(name):
     doc = App.newDocument(name)
     study = objects.make_study(doc, "3D", "Study")
-    study.MainMode = "Manual"
     return doc, study
 
 
@@ -37,19 +36,10 @@ def labels(nodes):
     return out
 
 
-def bodies(nodes):
-    out = []
-    for obj, children in nodes:
-        out += bodies(children) if children else [obj]
-    return out
-
-
 def finish(doc, study, name):
-    """Tick every body the geometry tree offers, as a user would, then save and report."""
+    """Save and report the bodies the geometry tree offers (the Study meshes them all)."""
     doc.recompute()
     tree = geometry.tree(doc, "3D")
-    study.MainObjects = bodies(tree)
-    doc.recompute()
     folder = os.path.join(HERE, name)
     os.makedirs(folder, exist_ok=True)
     doc.saveAs(os.path.join(folder, name + ".FCStd"))

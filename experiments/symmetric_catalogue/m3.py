@@ -64,7 +64,7 @@ def m3_01(name="M3_01"):
         symcases.feature(doc, "RotorLayer", extruded(sector(28, 28.5, 0, 22.5), 0, L)),
     ]
     mats = [lib["Steel"], lib["Steel"], lib["Air"], lib["Air"]]
-    make_group(study, "Rotor", cells, [MIRROR_Y, rotate(45, 8)], mats, {1: {"mode": "across", "across": [0]}}, "Moving")
+    make_group(study, "Rotor", cells, [MIRROR_Y, rotate(45, 8)], mats, {1: {"mode": "across", "across": [0]}})
     objects.make_sliding_interface(study, "Rotational", Radius=28.5, Divisions=144, CrossDivisions=8)
     symcases.transfinite_layer(study, stator[4], 3, 8)  # 144 / 48
     symcases.transfinite_layer(study, cells[3], 9, 8)  # 144 * 22.5 / 360
@@ -108,7 +108,7 @@ def skewed(name, cells_for):
     cells, rules, rows = cells_for(doc)
     by = {"RotorIron": "Steel", "Magnet": "Steel", "RotorAir": "Air", "GapAir": "Air", "RotorLayer": "Air"}
     mats = [lib[by[c.Label.rstrip("0123456789")]] for c in cells]
-    make_group(study, "Rotor", cells, rules, mats, rows, "Moving")
+    make_group(study, "Rotor", cells, rules, mats, rows)
     objects.make_sliding_interface(study, "Rotational", Radius=28.5, Divisions=240, CrossDivisions=6)
     symcases.transfinite_layer(study, stator[4], 5, 6)  # 240 / 48
     for c in cells:
@@ -230,12 +230,11 @@ def axial(name, moving):
         cells.append(symcases.feature(doc, "RotorGapAir", extruded(sl.pie(40, 0, 22.5), 4.5, 5)))
         mats.append(lib["Air"])
     rows = {0: {"mode": "across", "across": [0, 1]}, 1: {"mode": "across", "across": [0]}}
-    side = "Moving" if moving else "Fixed"
-    make_group(study, "Rotors", cells, [MIRROR_Y, rotate(45, 8), MIRROR_Z], mats, rows, side)
+    make_group(study, "Rotors", cells, [MIRROR_Y, rotate(45, 8), MIRROR_Z], mats, rows)
     if moving:
         symcases.add_free(study, "StatorAir", Part.makeCylinder(40, 8, V(0, 0, -4)), lib["Air"])
         for z in (5, -12):
-            symcases.add_free(study, "RotorAir", Part.makeCylinder(40, 7, V(0, 0, z)), lib["Air"], side="Moving")
+            symcases.add_free(study, "RotorAir", Part.makeCylinder(40, 7, V(0, 0, z)), lib["Air"])
         objects.make_sliding_interface(study, "Axial gap", Position=4.5, Divisions=144, CrossDivisions=8)
     else:
         air = symcases.add_air_region(study, lib["Air"], shape=Part.makeCylinder(40, 24, V(0, 0, -12)))
@@ -310,7 +309,7 @@ def m3_06():
     ]
     mats = [lib[k] for k in ("Steel", "Copper", "Copper", "Air", "Air", "Air")]
     cage = table(["Cage"] * 36)
-    make_group(study, "Rotor", rotor, [rotate(20, 18), MIRROR_Z], mats, {1: cage, 2: cage}, "Moving")
+    make_group(study, "Rotor", rotor, [rotate(20, 18), MIRROR_Z], mats, {1: cage, 2: cage})
     objects.make_sliding_interface(study, "Rotational", Radius=28.5, Divisions=144, CrossDivisions=10)
     symcases.transfinite_layer(study, stator[4], 6, 5)  # 144 / 24, 10 / 2 halves
     symcases.transfinite_layer(study, rotor[5], 8, 5)  # 144 / 18

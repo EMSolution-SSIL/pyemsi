@@ -5,7 +5,7 @@ The challenges then break or extend it. Every expected result below was checked 
 `pixi run -e addon python experiments/structured_examples/build_examples.py --challenges`, which also rebuilds the files.
 
 The files were made without the GUI, so the inputs of each Fragments object are hidden and there are no Materials yet.
-In all four, Main geometry is the `Geometry` group (Container mode).
+The Study meshes every body of the document; the bodies are in the `Geometry` group.
 
 ## 1. Ring sectors: curved blocks
 

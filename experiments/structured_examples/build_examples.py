@@ -47,7 +47,6 @@ def new_doc(name, dimension="2D"):
     doc = App.newDocument(name)
     group = doc.addObject("App::DocumentObjectGroup", "Geometry")
     study = objects.make_study(doc, dimension, "Study")
-    study.MainMode, study.MainSource = "Container", group
     study.MeshSizesGroup.DefaultMeshSize = 2 if dimension == "2D" else 3
     return doc, group, study, os.path.join(folder, name + ".FCStd")
 

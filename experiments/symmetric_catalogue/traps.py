@@ -239,7 +239,7 @@ def t_07():
     ]
     make_group(study, "Stator", stator, [rotate(30, 12, (1, 0, 0))], [lib["Air"], lib["Steel"], lib["Air"]])
     rotor = [body("RotorIron", sector(8, RR, 0, 45)), body("RotorAir", sector(RR, RS, 0, 45))]
-    make_group(study, "Rotor", rotor, [rotate(45, 8, (1, 0, 0))], [lib["Steel"], lib["Air"]], side="Moving")
+    make_group(study, "Rotor", rotor, [rotate(45, 8, (1, 0, 0))], [lib["Steel"], lib["Air"]])
     objects.make_sliding_interface(study, "Rotational", Radius=RS, Divisions=120, CrossDivisions=6)
     return study
 

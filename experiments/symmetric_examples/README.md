@@ -26,8 +26,10 @@ signed area, 0 gaps between copies). That command also rebuilds the files.
 5. A drawing made with Mirror, Polar Array and Boolean Fragments can still fill a group: select its top object and
    click **Read from drawing** in the panel.
 
-The cell objects are not in the Study's Main or Moving geometry. The Main geometry holds only free objects, bodies
-meshed as usual around the copies. With sliding motion, the group's Side says whether it is fixed or moving.
+The Study meshes every body of the document. The cell objects and a drawing made from them (through Mirror, Polar
+Array or Fragments) are left to their group; the other bodies are free objects, meshed as usual around the copies.
+With sliding motion, the Sliding Interface's Moving Side says which side moves, and a group moves with the side its
+copies are on.
 
 The drawing in examples 1 to 3 is the spike motor. Stator cell, 0 to 15°: `StatorIronCell`, `CoilCell` (37 to 50 mm,
 10 to 15°) and `StatorAirCell` (35 to 36 mm). Rotor cell, 0 to 22.5°: `RotorIronCell`, `MagnetCell`, `RotorAirCell`.
@@ -35,7 +37,7 @@ The stator's rules are a mirror at 15° and a rotation of 30° × 12; the rotor'
 
 ## 1. Motor with sliding motion (`1_motor_sliding`)
 
-12 slots and 8 poles. Two groups, `Stator` (Fixed) and `Rotor` (Moving), a Rotational Sliding Interface at R 35 with
+12 slots and 8 poles. Two groups, `Stator` (fixed) and `Rotor` (moving), a Rotational Sliding Interface at R 35 with
 144 divisions and no Air Region. Every row is named by a table: `StatorIron`, `StatorAir`, `Coil01` to `Coil12` (the
 two halves of a slot are one coil), `RotorIron`, `MagnetN`, `MagnetS` and `RotorAir`.
 
@@ -104,7 +106,8 @@ drawing fills it from stator_fragments.* The script does what you would do, on a
 
 - Read from drawing on `stator_fragments` proposes the cells `coil_face_cell`, `stator_air_cell` (2 faces) and
   `core_cell` (3 faces), with a mirror at 15° and a rotation of 30° × 6.
-- The older item and its Materials are deleted, and `stator_fragments` leaves the Main geometry: the group draws it.
+- The older item and its Materials are deleted. `stator_fragments`, made from the cells, is the group's drawing: the
+  Study does not mesh it on its own.
 - Parts: each coil copy separate (`coil_face_cell_1` to `_12`), and one part each for `stator_air` and `core`, named
   by tables across their faces.
 - **As is:** it validates clean and meshes, 828 triangles, 14 MAT_IDs.

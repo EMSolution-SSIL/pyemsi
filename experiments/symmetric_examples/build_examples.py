@@ -136,19 +136,19 @@ def new_doc(name):
 
 
 def new_study(doc, sliding=False, size=2.0):
-    """A 2D Study with no main geometry: the groups bring their own cells."""
+    """A 2D Study: the groups mesh their own cells, which the Study leaves to them."""
     study = objects.make_study(doc, "2D", "Study", "Sliding motion" if sliding else "No movement")
     study.MeshSizesGroup.DefaultMeshSize = size
     return study
 
 
-def group(study, name, cells, rules, name_of, side="Fixed"):
+def group(study, name, cells, rules, name_of):
     """A Symmetric Group of cells, copied by rules. name_of(face) names the part of each copy of each row: a table
     per row, as the group panel's table dialog fills it; a cell of several faces is split into blocks first, so each
     face is named. The cells are hidden; the drawing shows them all."""
     doc = study.Document
     doc.recompute()
-    item = objects.make_symmetric_group(study, cells, rules=rules, name=name, side=side)
+    item = objects.make_symmetric_group(study, cells, rules=rules, name=name)
     for r in reversed(range(len(objects.rows_of(item)))):
         objects.split_row(item, r)
     rows = []
@@ -235,7 +235,7 @@ def motor():
     doc, path = new_doc("1_motor_sliding")
     study = new_study(doc, sliding=True)
     group(study, "Stator", stator_cells(doc), [mirror(15), rotate(12)], stator_piece)
-    group(study, "Rotor", rotor_cells(doc), [mirror(22.5), rotate(8)], rotor_piece, side="Moving")
+    group(study, "Rotor", rotor_cells(doc), [mirror(22.5), rotate(8)], rotor_piece)
     objects.make_sliding_interface(study, "Rotational", Radius=35, Divisions=144)
     give_materials(study, library(study))
     return doc, study, path
@@ -284,8 +284,8 @@ def split_coil():
 
 def your_test_file():
     """experiments/symmetric_spike/test.FCStd (the PRD's reproduction), copied and moved to a Symmetric Group the way a
-    user does: Read from drawing on its Fragments, then delete the older item and its Materials, take the Fragments out
-    of the main geometry and give the parts their Materials."""
+    user does: Read from drawing on its Fragments, then delete the older item and its Materials and give the parts their
+    Materials (the Fragments, a cell object, is the group's to mesh)."""
     src = os.path.join(ADDON, "..", "experiments", "symmetric_spike", "test.FCStd")
     folder = os.path.join(HERE, "4_prd_test_file")
     os.makedirs(folder, exist_ok=True)
@@ -299,7 +299,6 @@ def your_test_file():
     for m in objects.materials(study):
         doc.removeObject(m.Name)
     doc.removeObject(old.Name)
-    study.MainMode, study.MainObjects = "Manual", []
     names = {"coil_face_cell": "coil", "stator_air_cell": "stator_air", "core_cell": "core"}
     item = objects.make_symmetric_group(study, proposal.cells, rules=proposal.rules, name="Stator")
     rows = []

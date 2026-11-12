@@ -152,7 +152,7 @@ def m2_15():
     ]
     mats = {"RotorAir": lib["Air"], "RotorIron": lib["Steel"], "Magnet": lib["Steel"]}
     rows = {"Magnet": {"mode": "across", "across": [0]}}
-    symcases.group(study, "Rotor", rotor, [MIRROR_Y, rotate(90, 4)], rows, side="Moving", lib=mats)
+    symcases.group(study, "Rotor", rotor, [MIRROR_Y, rotate(90, 4)], rows, lib=mats)
     objects.make_sliding_interface(study, "Rotational", Radius=28.75, Divisions=144)
     return study
 
@@ -197,7 +197,7 @@ def m3_02():
     ]
     mats = dict(zip([c.Name for c in rotor], (lib[k] for k in ("Steel", "Steel", "Air", "Air"))))
     rows = {"Magnet": {"mode": "across", "across": [0, 1]}}
-    symcases.group(study, "Rotor", rotor, [MIRROR_Y, MIRROR_Z, rotate(45, 8)], rows, side="Moving", lib=mats)
+    symcases.group(study, "Rotor", rotor, [MIRROR_Y, MIRROR_Z, rotate(45, 8)], rows, lib=mats)
     objects.make_sliding_interface(study, "Rotational", Radius=28.5, Divisions=144, CrossDivisions=8)
     symcases.transfinite_layer(study, doc.getObject(names[4]), 3, 4)  # 144 / 48 turns, 8 / 2 halves
     symcases.transfinite_layer(study, doc.getObject("RotorLayer"), 9, 4)  # 144 * 22.5 / 360

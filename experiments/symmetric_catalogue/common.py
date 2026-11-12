@@ -39,12 +39,12 @@ RS, RI, RY, RO, RR = 28.75, 30.0, 42.0, 50.0, 25.0  # sliding radius, stator bor
 SECTORS = ["A+", "C-", "B+", "A-", "C+", "B-"]
 
 
-def make_group(study, name, cells, rules, mats, rows=None, side="Fixed"):
+def make_group(study, name, cells, rules, mats, rows=None):
     """symcases.group with the rows and materials given by the position of the cell in cells: rows {index: change},
     mats [library material or None]."""
     by_row = {cells[i].Name: change for i, change in (rows or {}).items()}
     lib = {c.Name: m for c, m in zip(cells, mats) if m is not None}
-    return symcases.group(study, name, cells, rules, by_row, side=side, lib=lib)
+    return symcases.group(study, name, cells, rules, by_row, lib=lib)
 
 
 def table(names):
@@ -111,7 +111,7 @@ def distributed(doc, study, lib, slots, pole_pairs, span, name="Stator", gap=Tru
     return make_group(study, name, cells, [turn], mats, rows)
 
 
-def surface_rotor(doc, study, lib, poles, name="Rotor", side="Moving", band=True, magnet_row=None):
+def surface_rotor(doc, study, lib, poles, name="Rotor", band=True, magnet_row=None):
     """A half pole 0..180/poles of iron, a magnet on it (78 % of the half) and an air band to the sliding radius,
     mirrored at y = 0 and rotated; the two halves of a magnet are one part (or magnet_row)."""
     b = 180 / poles
@@ -122,7 +122,7 @@ def surface_rotor(doc, study, lib, poles, name="Rotor", side="Moving", band=True
         cells.append(symcases.feature(doc, "RotorAir", cut(sector(RR, RS, 0, b), magnet)))
         mats.append(lib["Air"])
     row = magnet_row or {"mode": "across", "across": [0]}
-    return make_group(study, name, cells, [MIRROR_Y, rotate(2 * b, poles)], mats, {1: row}, side)
+    return make_group(study, name, cells, [MIRROR_Y, rotate(2 * b, poles)], mats, {1: row})
 
 
 def v_rotor(doc, study, lib, name="Rotor"):
@@ -136,9 +136,7 @@ def v_rotor(doc, study, lib, name="Rotor"):
         symcases.feature(doc, "Magnet", leg),
     ]
     mats = [lib["Air"], lib["Steel"], lib["Steel"]]
-    return make_group(
-        study, name, cells, [MIRROR_Y, rotate(90, 4)], mats, {2: {"mode": "across", "across": [0]}}, "Moving"
-    )
+    return make_group(study, name, cells, [MIRROR_Y, rotate(90, 4)], mats, {2: {"mode": "across", "across": [0]}})
 
 
 def coil_sector(k, slots, pole_pairs):

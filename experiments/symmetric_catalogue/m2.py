@@ -113,7 +113,7 @@ def m2_03():
     ]
     mats = [lib["Air"], lib["Steel"], lib["Steel"]]
     polarity = table("MagN" if (c // 2) % 2 == 0 else "MagS" for c in range(20))  # copy = mirror + 2 * rotation
-    make_group(study, "Rotor", cells, [MIRROR_Y, rotate(36, 10)], mats, {2: polarity}, "Moving")
+    make_group(study, "Rotor", cells, [MIRROR_Y, rotate(36, 10)], mats, {2: polarity})
     sliding(study)
     return study
 
@@ -135,7 +135,7 @@ def m2_04():
         symcases.feature(doc, "Magnet", magnet),
     ]
     mats = [lib["Air"], lib["Steel"], lib["Steel"]]
-    make_group(study, "Rotor", cells, [rotate(45, 8)], mats, {2: {"mode": "each"}}, "Moving")
+    make_group(study, "Rotor", cells, [rotate(45, 8)], mats, {2: {"mode": "each"}})
     sliding(study)
     return study
 
@@ -154,7 +154,7 @@ def m2_05():
         symcases.feature(doc, "Bar", bar),
     ]
     mats = [lib["Air"], lib["Steel"], lib["Copper"]]
-    make_group(study, "Rotor", cells, [rotate(20, 18)], mats, {2: {"mode": "each"}}, "Moving")
+    make_group(study, "Rotor", cells, [rotate(20, 18)], mats, {2: {"mode": "each"}})
     sliding(study)
     return study
 
@@ -181,7 +181,7 @@ def m2_06():
         symcases.feature(doc, "RotorAir", cut(sector(19, RS, 0, 22.5), rotor)),
         symcases.feature(doc, "RotorIron", rotor),
     ]
-    make_group(study, "Rotor", cells, [MIRROR_Y, rotate(45, 8)], [lib["Air"], lib["Steel"]], side="Moving")
+    make_group(study, "Rotor", cells, [MIRROR_Y, rotate(45, 8)], [lib["Air"], lib["Steel"]])
     sliding(study)
     return study
 
@@ -207,7 +207,7 @@ def m2_07():
         symcases.feature(doc, "RotorAir", cut(sector(22, RS, 0, 15), magnet)),
     ]
     mats = [lib["Steel"], lib["Steel"], lib["Air"]]
-    make_group(study, "Rotor", cells, [rotate(15, 24)], mats, {1: {"mode": "each"}}, "Moving")
+    make_group(study, "Rotor", cells, [rotate(15, 24)], mats, {1: {"mode": "each"}})
     sliding(study)
     return study
 
@@ -300,9 +300,7 @@ def quarter(name, moving, air=False):
         cells.append(symcases.feature(doc, "RotorAir", cut(sector(RR, RS, 0, 22.5), magnet)))
         mats.append(lib["Air"])
     rules = [mirror((-math.sin(a), math.cos(a), 0)), rotate(45, 2)]
-    make_group(
-        study, "Rotor", cells, rules, mats, {1: {"mode": "across", "across": [0]}}, "Moving" if moving else "Fixed"
-    )
+    make_group(study, "Rotor", cells, rules, mats, {1: {"mode": "across", "across": [0]}})
     if moving:
         sliding(study, [48, 16])
         if air:
@@ -348,7 +346,7 @@ def m2_13():
     ]
     mats = [lib["Steel"], lib["Steel"], lib["Air"]]
     polarity = table("MagN" if k % 2 == 0 else "MagS" for k in range(8))
-    make_group(study, "Inner rotor", cells, [rotate(45, 8)], mats, {1: polarity}, "Moving")
+    make_group(study, "Inner rotor", cells, [rotate(45, 8)], mats, {1: polarity})
     pitch = 360 / 21
     piece = sector(24, 30, 0.5, 9)
     cells = [
@@ -365,9 +363,10 @@ def m2_13():
     ]
     mats = [lib["Air"], lib["Steel"], lib["Steel"]]
     polarity = table("MagN" if k % 2 == 0 else "MagS" for k in range(34))
-    make_group(study, "Outer rotor", cells, [rotate(pitch, 34)], mats, {1: polarity}, "Moving")
+    make_group(study, "Outer rotor", cells, [rotate(pitch, 34)], mats, {1: polarity})
     objects.make_sliding_interface(study, "Rotational", Radius=22.5, Divisions=168, Label="Inner sliding")
-    objects.make_sliding_interface(study, "Rotational", Radius=33, Divisions=714, Label="Outer sliding")
+    outer = objects.make_sliding_interface(study, "Rotational", Radius=33, Divisions=714, Label="Outer sliding")
+    outer.MovingSide = "Outside"  # the outer rotor
     return study
 
 
@@ -406,9 +405,10 @@ def m2_14():
     ]
     polarity = table("MagN" if k % 2 == 0 else "MagS" for k in range(7))
     move = {"kind": "translate", "vector": [10, 0, 0], "count": 7}
-    make_group(study, "Secondary", cells, [move], [lib["Steel"], lib["Air"], lib["Air"]], {0: polarity}, "Moving")
-    symcases.add_free(study, "BackIron", rect(-14, -10, 62, -6.5), lib["Steel"], side="Moving")
-    objects.make_sliding_interface(study, "Linear", Position=-1.5, NormalAxis="Y", MotionAxis="X", Divisions=60)
+    make_group(study, "Secondary", cells, [move], [lib["Steel"], lib["Air"], lib["Air"]], {0: polarity})
+    symcases.add_free(study, "BackIron", rect(-14, -10, 62, -6.5), lib["Steel"])
+    iface = objects.make_sliding_interface(study, "Linear", Position=-1.5, NormalAxis="Y", MotionAxis="X", Divisions=60)
+    iface.MovingSide = "Negative"  # the secondary and the back iron, below y = -1.5
     return study
 
 
