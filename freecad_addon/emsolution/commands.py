@@ -268,7 +268,7 @@ class AddSlidingInterface(_StudyCommand):
             return warn("Add an Air Region first.")
         doc = study.Document
         doc.openTransaction("Add Sliding Interface")  # stays open until OK or Cancel
-        iface = objects.make_sliding_interface(study)  # Linear in a Box Air Region, else Rotational
+        iface = objects.make_sliding_interface(study)  # Rotational with groups; else Linear in a Box Air Region
         doc.recompute()
         Gui.Control.showDialog(taskpanels.SlidingInterfacePanel(iface, new=True))
 

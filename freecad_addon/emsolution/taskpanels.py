@@ -2686,8 +2686,8 @@ class SlidingInterfacePanel:
                 return self.step_label.setText("")
             length = (air.Length, air.Width, air.Height)[objects.AXES.index(self.motion.currentText())].Value
             return self.step_label.setText(f"{length / n:g} mm per division")
-        span = 360.0
-        if air is not None and air.AirShape == "Sector":
+        span = 360.0  # with Symmetric Groups the interface is a full turn, whatever the Sector air spans
+        if air is not None and air.AirShape == "Sector" and not objects.is_grouped(self.study):
             span = min(air.EndAngle.Value - air.StartAngle.Value, 360.0)
         self.step_label.setText(f"{span / n:g} deg per division")
 

@@ -1013,6 +1013,8 @@ def _overlap(sa, sb, three, tol):
 def _free_on_copies(groups, free, three, r):
     """A free object may touch the copies of any group, on either side, but not overlap them. A pair OCC cannot compute
     is reported as a warning, not taken as clear."""
+    if not free:
+        return
     unit = "mm³" if three else "mm²"
     drawn = [(g, _elements(g)[0]) for g in groups if not g.Shape.isNull()]
     for body in free:

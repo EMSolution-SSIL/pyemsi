@@ -49,7 +49,7 @@ def build(job, folder):
     """Import, fragment, check, tag and size the model. Gmsh must be initialized.
     Sliding motion: returns the split of the model into the fixed and the moving side (see meshcommon.run)."""
     bodies = job["bodies"]
-    if not bodies and not job.get("air"):  # a free job of Symmetric Groups may hold only the air
+    if not bodies and not job.get("air"):  # any job: one may hold only the air (a free job of Symmetric Groups)
         raise JobError("job has no bodies")
     inputs, body_spans = [], []  # body i owns inputs[start:end]
     for b in bodies:

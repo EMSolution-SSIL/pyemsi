@@ -1432,7 +1432,7 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
     """Mesh the free bodies of one side, and its air, around the frozen facets of its copies. free: an entry of
     symmetric["free"]; side_boundary: the Boundary of the side's copies, node numbers into V. Returns {mat_id:
     FreeBody}: FreeBody.added are the new nodes, numbered after those of V, and the frozen nodes keep their numbers.
-    An air the free bodies cover wholly has no entry."""
+    An air the free bodies cover wholly is refused by claim_air ("the air region is fully covered by bodies")."""
     free_job = free["job"]
     names = _structured_names(free_job, dim)
     if names:

@@ -45,7 +45,7 @@ def build(job, folder):
     """Import, fragment, check, tag and size the model. Gmsh must be initialized.
     Sliding motion: returns the split of the model into the fixed and the moving side (see meshcommon.run)."""
     vols, surfs = job["volumes"], job["surfaces"]
-    if not vols and not job.get("air"):  # a free job of Symmetric Groups may hold only the air
+    if not vols and not job.get("air"):  # any job: one may hold only the air (a free job of Symmetric Groups)
         raise JobError("job has no volumes")
     pieces = [import_brep(os.path.join(folder, v["file"]), 3) for v in vols]  # a body may be several solids
     inputs = [t for p in pieces for t in p]
