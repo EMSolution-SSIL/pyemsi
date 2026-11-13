@@ -11,13 +11,19 @@ Human-oriented setup details are in [BUILDING.md](BUILDING.md).
   - Dependencies: `pixi add <pkg>` (conda-forge) or `pixi add --pypi <pkg>`; commit `pyproject.toml` and `pixi.lock` together.
 - `pyemsi/core/femap_parser` is a Cython extension. Edit the `.pyx`; the generated C in `build/` is not tracked.
   Rebuild with `pixi run python setup.py build_ext --inplace`.
+- `pyemsi/widgets/input_control_editor/editor/` is a built bundle of the input control file editor, whose source
+  lives in the EMSolutionDocs repo. Don't edit it by hand; refresh it with `tools/sync_input_control_editor.py`.
 
 ## FreeCAD add-on (`freecad_addon/`)
 
 - Workbench `EMSolution`, package `freecad_addon/emsolution/`. FreeCAD 1.1.0 is pinned in pixi; run it with `pixi run -e addon freecad` (the `addon` environment; the default one has no FreeCAD).
-- `mesher.py`, `mesher2d.py` and `meshcommon.py` run in a separate Python process started by `runner.py`.
-  Never import FreeCAD there. `objects.py`, `geometry.py` and `studymaterials.py` have no GUI code;
-  GUI lives in `commands.py` and `taskpanels.py`.
+- The mesher modules (`mesher.py`, `mesher2d.py`, `meshcommon.py`, `meshgroups.py`, `meshsym.py`, `meshfrozen.py`)
+  run in a separate Python process (gmsh) started by `runner.py`. Never import FreeCAD there; they import each other
+  by plain module name, not relative imports.
+- GUI code (FreeCADGui, Qt, coin) lives only in `commands.py`, `taskpanels.py`, `runner.py`, `labels.py`,
+  `highlight.py` and `materialstandins.py`. Keep the other modules (`objects.py`, `geometry.py`, `jobwriter.py`,
+  `studymaterials.py`, `sides.py`, `validation.py`, `airshapes.py`, `symmetry.py`, `winding.py`) GUI-free, so the
+  unit tests can import them.
 - Unit tests: `pixi run -e addon test-addon`.
 - GUI changes also need the smoke test, which drives the real FreeCAD GUI (steps in the docstring of
   `tests/freecad_addon/gui_smoke.py`). Use `pixi run -e addon freecad tests\freecad_addon\gui_smoke.py`, then read the last
@@ -55,6 +61,20 @@ The goal is zero formatting churn: every line in a diff should be there because 
 - Use `# noqa: <code> - <reason>` only for deliberate cases, e.g. imports that must come after setup code (`E402`).
 
 ## Git
+
+### Branches
+
+- `main` is the one development branch for both pyemsi and the FreeCAD add-on. There is no separate long-lived
+  FreeCAD branch.
+- Do work on a short-lived branch off `main`, merge it back when done, then delete it (locally and on GitHub):
+  - `freecad/<feature>` for the add-on (`freecad_addon/`, `installer/freecad/`)
+  - `pyemsi/<feature>` for the pyemsi app and library
+  - Use lowercase words joined by hyphens, e.g. `freecad/air-region`, `pyemsi/vtk-export`.
+- Releases are tags on `main` (e.g. `0.6.0`). A patch for a shipped version goes on `release/x.y`, created from the
+  tag only when needed. Don't bump the version or create tags unless asked.
+- `gh-pages` holds the published docs site; leave it alone unless asked.
+
+### Hooks and formatting
 
 - Install hooks once per clone: `pixi run install-hooks`. The pre-commit hook runs `ruff format` and `ruff check`
   on staged Python files.
