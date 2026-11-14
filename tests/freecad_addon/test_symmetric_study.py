@@ -267,6 +267,55 @@ def test_refine_near_limit_to_partly_across_parts_warns(motor):
     assert cells[0][0]["limit_to"] == [list(objects.symmetric_groups(motor)[0].Cells).index(cell) + 1]
 
 
+def _sector_air(study):
+    return symcases.add_air_region(
+        study, symcases.libraries(study)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90
+    )
+
+
+def _air_edge(air, radius):
+    """The name of the Air Region's arc at radius (its shape as the mesh gets it)."""
+    shape = jobwriter.meshed_shape(air)
+    return next(
+        f"Edge{i}"
+        for i, e in enumerate(shape.Edges, 1)
+        if hasattr(e.Curve, "Radius") and e.Curve.Radius == pytest.approx(radius)
+    )
+
+
+def test_refine_near_whole_free_body_warns_about_the_copies(motor):
+    air = _sector_air(motor)
+    item = objects.make_refine_near(motor, [(air, "")])
+    assert (
+        f"Refine Near {item.Label}: in a Study with Symmetric Groups, {objects.display_name(air)} is refined only where"
+        " it meets other free objects, not where it meets the copies of a Symmetric Group."
+    ) in _texts(motor, "warning")
+
+
+def test_refine_near_on_the_copies_warns(motor):
+    air = _sector_air(motor)
+    inner, outer = _air_edge(air, 60), _air_edge(air, 90)
+    item = objects.make_refine_near(motor, [(air, inner)])
+    text = (
+        f"Refine Near {item.Label}: {inner} of {objects.display_name(air)} lies on the copies of a Symmetric Group,"
+        " which are meshed apart; it is not refined there."
+    )
+    assert text in _texts(motor, "warning")
+    item.References = [(air, outer)]  # the outer arc meets no copy
+    assert not [t for t in _texts(motor, "warning") if t.startswith(f"Refine Near {item.Label}")]
+
+
+def test_refine_near_pick_apart_from_every_limit_to_warns(motor):
+    body, cell = _free_ring(motor), _cell(motor)
+    item = objects.make_refine_near(motor, [(cell, "Edge1"), (body, "Edge1")], limit_to=[cell])
+    assert (
+        f"Refine Near {item.Label}: {objects.display_name(body)} is meshed apart from every body in Limit to; it has"
+        " no effect there."
+    ) in _texts(motor, "warning")
+    _, free = _refine_keys(_job_of(motor))
+    assert not any(free)  # the free job leaves the entry out
+
+
 def _texts(study, severity="error"):
     return [p.text for p in _problems(study, severity)]
 

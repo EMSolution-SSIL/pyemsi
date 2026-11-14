@@ -269,20 +269,94 @@ def _settings(study, included, r):
         for b in meshed_limit + picked:
             parts.setdefault(b.Name, _mesh_part(study, b))
         pick_parts = set().union(*(parts[b.Name] for b in picked))
-        if not (meshed_limit and pick_parts):
-            continue
-        apart = [b for b in meshed_limit if not parts[b.Name] & pick_parts]
-        if len(apart) == len(meshed_limit):  # jobwriter.refine_entries leaves the item out of every job
+        lost = set()  # the picked bodies whose job leaves the item out: apart from every body in Limit to
+        if meshed_limit and pick_parts:
+            apart = [b for b in meshed_limit if not parts[b.Name] & pick_parts]
+            if len(apart) == len(meshed_limit):  # jobwriter.refine_entries leaves the item out of every job
+                r.warning(
+                    f"Refine Near {n.Label}: no body in Limit to is meshed with its picks; the refinement is skipped.",
+                    n,
+                )
+                continue
+            for b in apart:
+                r.warning(
+                    f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is meshed apart from its picks (a"
+                    " Symmetric Group's cell objects are meshed on their own); it has no effect there.",
+                    n,
+                )
+            limit_parts = set().union(*(parts[b.Name] for b in meshed_limit))
+            for b in dict.fromkeys(picked):
+                if parts[b.Name] and not parts[b.Name] & limit_parts:
+                    lost.add(b.Name)
+                    r.warning(
+                        f"Refine Near {n.Label}: {objects.display_name(b)} is meshed apart from every body in Limit"
+                        " to; it has no effect there.",
+                        n,
+                    )
+        free = [
+            (b, subs)
+            for b, subs in objects.subs_by_body(n)
+            if b.Name in included and b.Name not in lost and any(p.startswith("free") for p in parts[b.Name])
+        ]
+        _free_picks_on_copies(study, n, free, r)
+
+
+def _free_picks_on_copies(study, n, free, r):
+    """Refine Near n in a Study with Symmetric Groups: the free model meshes without the copies, so the picks of free
+    bodies and of the Air Region (free: [(body, subs)]) do not refine where they meet the copies. A whole body is
+    refined only where it meets other free objects; a picked face or edge that lies on the copies is dropped from the
+    free model there."""
+    copies = None
+    for body, subs in free:
+        name = objects.display_name(body)
+        if "" in subs:
             r.warning(
-                f"Refine Near {n.Label}: no body in Limit to is meshed with its picks; the refinement is skipped.", n
-            )
-            continue
-        for b in apart:
-            r.warning(
-                f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is meshed apart from its picks (a"
-                " Symmetric Group's cell objects are meshed on their own); it has no effect there.",
+                f"Refine Near {n.Label}: in a Study with Symmetric Groups, {name} is refined only where it meets other"
+                " free objects, not where it meets the copies of a Symmetric Group.",
                 n,
             )
+            continue
+        shape = None
+        for sub in subs:
+            if not sub.startswith(("Face", "Edge")):
+                continue
+            if copies is None:  # worked out once, and only when a face or an edge is picked
+                copies = [p for g in objects.symmetric_groups(study) if not g.Shape.isNull() for p in _elements(g)[0]]
+            if shape is None:
+                plane = airshapes.study_plane(study)
+                shape = airshapes.air_shape(body, plane) if objects.is_air(body) else geometry.global_shape(body)
+            try:
+                element = shape.getElement(sub)
+            except Exception:  # a stale name: _links reports it
+                continue
+            if _lies_on(element, copies):
+                r.warning(
+                    f"Refine Near {n.Label}: {sub} of {name} lies on the copies of a Symmetric Group, which are meshed"
+                    " apart; it is not refined there.",
+                    n,
+                    [(body, sub)],
+                )
+
+
+def _lies_on(element, copies):
+    """True if a face or an edge shares an area (a length, for an edge) with the solids or faces copies, as
+    _elements gives them. A pair OCC cannot compute counts as not lying on."""
+    box = element.BoundBox
+    tol = 1e-6 * max(1.0, box.DiagonalLength)
+    box.enlarge(tol)
+    for piece, piece_box in copies:
+        if not box.intersect(piece_box):
+            continue
+        try:
+            if element.distToShape(piece)[0] > tol:
+                continue
+            common = element.common(piece)
+        except Part.OCCError:
+            continue
+        size = sum(f.Area for f in common.Faces) if element.ShapeType == "Face" else sum(e.Length for e in common.Edges)
+        if size > tol:
+            return True
+    return False
 
 
 def _mesh_part(study, body):
