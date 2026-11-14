@@ -30,6 +30,7 @@ from meshcommon import (
     slide_report,
     import_brep,
     slide_split,
+    apply_refinements,
 )
 import meshgroups
 
@@ -59,6 +60,8 @@ def build(job, folder):
     inputs += [_import_one(path, 0, 1, 2) for _, path in size_files]
     tf_files = transfinite_files(job, folder)
     inputs += [_import_one(path, FILE_DIMS[kind]) for kind, _, path in tf_files]
+    refine_files = [(k, os.path.join(folder, f)) for k, e in enumerate(job.get("refine", [])) for f in e["files"]]
+    inputs += [_import_one(path, 0, 1, 2) for _, path in refine_files]
 
     def add(file, *dims):  # sliding: last, so the spans above keep their places
         start = len(inputs)
@@ -100,7 +103,7 @@ def build(job, folder):
             parts = [air_tags]
         body_vols.update((a["mat_id"], tags) for a, tags in zip(airs, parts))
     job["unwritten"] = [a["mat_id"] for a in airs if not body_vols[a["mat_id"]]]  # run_job lists only the others
-    rest = out_map[start:]  # surface, size and transfinite files, one entity each; then the slide files
+    rest = out_map[start:]  # surface, size, transfinite and refine files, one entity each; then the slide files
 
     surf_tags = {s["smat_id"]: [] for s in surfs}
     for (s, _), dimtags in zip(surf_files, rest):
@@ -133,6 +136,15 @@ def build(job, folder):
             by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
     apply_size_fields(by_size)
     tf_maps = rest[first + len(size_files) : first + len(size_files) + len(tf_files)]
+    picks = [(e, {}) for e in job.get("refine", [])]  # (entry, {dim: [final tags]})
+    refine_start = first + len(size_files) + len(tf_files)
+    for (k, path), dimtags in zip(refine_files, rest[refine_start:]):
+        e, picked = picks[k]
+        for d, t in dimtags:
+            if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
+                raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
+            picked.setdefault(d, []).append(t)
+    apply_refinements(picks, body_vols, 3)
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
     tf = apply_transfinite(job, mapped, body_vols, 3)
     apply_recombine(job, body_vols, 3, tf, mapped)

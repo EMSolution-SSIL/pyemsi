@@ -37,6 +37,20 @@ def write_rect(path, x, y, z, dx, dy):
         gmsh.finalize()
 
 
+def write_rect_x(path, x, y, z, dy, dz):
+    """Rectangle in the plane x = const."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        face = gmsh.model.occ.addRectangle(0, 0, 0, dz, dy)  # (a, b, 0) turns to (0, b, a)
+        gmsh.model.occ.rotate([(2, face)], 0, 0, 0, 0, 1, 0, -math.pi / 2)
+        gmsh.model.occ.translate([(2, face)], x, y, z)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
 def write_line(path, p, q):
     gmsh.initialize()
     try:
@@ -316,6 +330,89 @@ class MesherTest(unittest.TestCase):
         last = r.stderr.strip().splitlines()[-1]
         self.assertIn("ERROR:", last)
         self.assertIn("Fine", last)
+
+    def refine(self, files=(), whole=(), fine=0.05, coarse=0.5, growth=0.3, fine_distance=0.0, limit_to=()):
+        return {
+            "name": "Near",
+            "files": ["geometry/" + f for f in files],
+            "whole": list(whole),
+            "fine": fine,
+            "fine_distance": fine_distance,
+            "coarse": coarse,
+            "growth": growth,
+            "limit_to": list(limit_to),
+        }
+
+    def two_boxes_refined(self, entry, face=False):
+        """Boxes 1 (x 0..1) and 2 (x 1..2) meshed at size 0.5 with one refine entry (face: the shared face x = 1 is
+        its refine_1_1_1.brep). Returns the node coordinates."""
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_box(self.geo("vol_2.brep"), 1, 0, 0, 1, 1, 1)
+        if face:
+            write_rect_x(self.geo("refine_1_1_1.brep"), 1, 0, 0, 1, 1)
+        vols = [self.vol(1, "Box1", "vol_1.brep"), self.vol(2, "Box2", "vol_2.brep")]
+        r = self.run_job(vols, extra={"refine": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return read_nodes(os.path.join(self.dir, "pre_geom.msh"))
+
+    def test_refine_near_an_edge_grades_away_from_it(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (1, 0, 0))
+        r = self.run_job([self.vol(1, "Box", "vol_1.brep")], extra={"refine": [self.refine(["refine_1_1_1.brep"])]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        nodes = read_nodes(os.path.join(self.dir, "pre_geom.msh"))
+        near = sum(math.hypot(y, z) < 0.1 for x, y, z in nodes)
+        far = sum(math.hypot(y - 1, z - 1) < 0.1 for x, y, z in nodes)
+        self.assertGreater(near, 10 * max(far, 1))
+
+    def test_refine_near_does_not_cap_sizes_beyond_its_reach(self):
+        def near_far_face(extra):  # size 0.2: at 0.5 only about 12 nodes are there, too few to compare
+            r = self.run_job([self.vol(1, "Box", "vol_1.brep", size=0.2)], extra=extra)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return sum(x > 0.75 for x, y, z in read_nodes(os.path.join(self.dir, "pre_geom.msh")))
+
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (0, 1, 0))  # on x = 0, reach 0.3
+        plain = near_far_face(None)
+        refined = near_far_face({"refine": [self.refine(["refine_1_1_1.brep"], coarse=0.1)]})
+        self.assertLess(abs(refined - plain), 0.2 * plain, (plain, refined))
+
+    def limited_to_box_1(self):
+        # a fine layer of 0.1: with none, box 1 has only about 67 nodes in 0.9 < x < 1 against 15 (box 2's side faces
+        # by the fine edges), the size grows that fast
+        return self.refine(["refine_1_1_1.brep"], fine_distance=0.1, limit_to=[1])
+
+    def test_limit_to_keeps_the_refinement_in_that_body(self):
+        nodes = self.two_boxes_refined(self.limited_to_box_1(), face=True)
+        inside = sum(0.9 < x < 1 for x, y, z in nodes)
+        outside = sum(1 < x < 1.1 for x, y, z in nodes)
+        self.assertGreater(inside, 5 * outside, (inside, outside))
+
+    def test_limit_to_keeps_the_body_boundary_sized(self):
+        nodes = self.two_boxes_refined(self.limited_to_box_1(), face=True)
+        on_edge = sum(x == 0 and z == 0 for x, y, z in nodes)  # the edge (0,0,0)-(0,1,0) of box 1
+        self.assertGreaterEqual(on_edge, 1 / 0.5 + 1)
+
+    def test_whole_body_pick_refines_only_shared_faces(self):
+        nodes = self.two_boxes_refined(self.refine(whole=[1]))
+        shared = sum(abs(x - 1) < 0.1 for x, y, z in nodes)
+        outer = sum(x < 0.1 for x, y, z in nodes)
+        self.assertGreater(shared, 5 * outer, (shared, outer))
+
+    def test_whole_body_pick_with_no_shared_face_notes_and_meshes(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        r = self.run_job([self.vol(1, "Box", "vol_1.brep")], extra={"refine": [self.refine(whole=[1])]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("has no face shared with another region", r.stderr)
+
+    def test_refine_file_off_the_bodies_fails(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 1.5), (1, 0, 1.5))  # floats above the box
+        r = self.run_job([self.vol(1, "Box", "vol_1.brep")], extra={"refine": [self.refine(["refine_1_1_1.brep"])]})
+        self.assertEqual(r.returncode, 1)
+        last = r.stderr.strip().splitlines()[-1]
+        self.assertIn("ERROR:", last)
+        self.assertIn("refine near Near", last)
 
     def box_tets(self, options=None):
         """Mesh a unit box at size 0.5. Returns {element type: count} of the 3D elements."""

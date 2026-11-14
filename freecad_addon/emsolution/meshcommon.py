@@ -32,6 +32,71 @@ def apply_size_fields(by_size):
         gmsh.option.setNumber(opt, 0)
 
 
+def add_to_background(fields):
+    """Join fields to the background Min field that apply_size_fields made."""
+    field = gmsh.model.mesh.field
+    fmin = next(f for f in field.list() if field.getType(f) == "Min")
+    field.setNumbers(fmin, "FieldsList", [int(f) for f in field.getNumbers(fmin, "FieldsList")] + list(fields))
+
+
+def real_boundary(dim, tags):
+    """The (dim-1) boundary entities of tags that touch a dim-entity outside them: faces shared with the air or other
+    bodies. Faces on the domain boundary and between pieces of the same body are left out."""
+    inside = set(tags)
+    faces = dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary([(dim, t) for t in tags], oriented=False))
+    return [b for b in faces if any(t not in inside for t in gmsh.model.getAdjacencies(dim - 1, b)[0])]
+
+
+def _sampling(picked, fine):
+    """Points along each picked curve (per side of a surface grid): about two per fine size over the picks' extent."""
+    boxes = [gmsh.model.getBoundingBox(d, t) for d, tags in picked.items() for t in tags]
+    lo = [min(b[i] for b in boxes) for i in range(3)]
+    hi = [max(b[i + 3] for b in boxes) for i in range(3)]
+    n = math.ceil(math.dist(lo, hi) / (fine / 2))
+    low, high = (10, 100) if picked.get(2) else (20, 500)
+    return min(max(n, low), high)
+
+
+def apply_refinements(items, body_tags, dim):
+    """items: one (refine entry, {entity dim: [final tags]}) per job["refine"] entry. Each adds a size that grows from
+    fine at its picks to coarse at fine_distance + growth, and stops there; limit_to keeps it inside those bodies."""
+    fields = []
+    for entry, picked in items:
+        picked = {d: list(tags) for d, tags in picked.items()}
+        for m in entry["whole"]:
+            faces = real_boundary(dim, body_tags.get(m, []))
+            if not faces:
+                _note(
+                    f"Refine Near {entry['name']}: MAT_ID {m} has no face shared with another region; "
+                    "it refines nothing there"
+                )
+            picked.setdefault(dim - 1, []).extend(faces)
+        picked = {d: list(dict.fromkeys(tags)) for d, tags in picked.items() if tags}
+        if not picked:
+            continue
+        field = gmsh.model.mesh.field
+        dist = field.add("Distance")
+        for d, tags in picked.items():
+            field.setNumbers(dist, FIELD_LISTS[d], tags)
+        field.setNumber(dist, "Sampling", _sampling(picked, entry["fine"]))
+        f = field.add("Threshold")
+        field.setNumber(f, "InField", dist)
+        field.setNumber(f, "SizeMin", entry["fine"])
+        field.setNumber(f, "SizeMax", entry["coarse"])
+        field.setNumber(f, "DistMin", entry["fine_distance"])
+        field.setNumber(f, "DistMax", entry["fine_distance"] + entry["growth"])
+        field.setNumber(f, "StopAtDistMax", 1)  # beyond its reach it sizes nothing, else coarse would cap the model
+        if entry["limit_to"]:
+            restrict = field.add("Restrict")
+            field.setNumber(restrict, "InField", f)
+            field.setNumbers(restrict, FIELD_LISTS[dim], [t for m in entry["limit_to"] for t in body_tags.get(m, [])])
+            field.setNumber(restrict, "IncludeBoundary", 1)  # their faces and curves too: they are meshed first
+            f = restrict
+        fields.append(f)
+    if fields:
+        add_to_background(fields)
+
+
 def claim_air(air_tags, owner):
     """The air's final top-dimension tags that no body owns, sorted. air_tags: all the air's final tags.
     owner: {final tag: body name}. A body wins where it overlaps the air."""
