@@ -216,7 +216,7 @@ def main():
     fine.References = [(doc.A, "Edge1"), (doc.B, "Vertex8"), (doc.B, "Face2")]
     log.append("mesh size panel ok")
 
-    from emsolution import validation
+    from emsolution import validation, labels
 
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A", "Edge1")
@@ -231,6 +231,9 @@ def main():
     panel = opened.pop()
     assert panel.new and Gui.Control.activeDialog(), (panel.new, Gui.Control.activeDialog(), warned[-1:])
     panel.fine.setValue(0.5)
+    overlay = next(iter(labels._overlays.values()))
+    overlay.tick()
+    assert overlay.tags[0]["text"] == "0.5 → 5 mm", overlay.tags  # the panel's unsaved fine size, first: in focus
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "B")
     panel.add_limit()

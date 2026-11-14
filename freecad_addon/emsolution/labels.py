@@ -20,6 +20,7 @@ from .geometry import global_shape
 KINDS = {
     "Material": ("#3366cc", "M", "Material"),
     "MeshSize": ("#2e9e44", "S", "Mesh size"),
+    "RefineNear": ("#c92a2a", "R", "Refine near"),
     "TransfiniteEdges": ("#e8590c", "E", "Transfinite edges"),
     "TransfiniteBody": ("#7b3fb3", "T", "Transfinite body"),
     "Recombine": ("#0b9eb3", "Q", "Recombine"),
@@ -62,6 +63,10 @@ def tag_text(item, values):
         return f"{elements} bump" if distribution == "Bump" else str(elements)
     if kind == "MeshSize":
         return f"{values.get('Size', item.Size.Value):g} mm"
+    if kind == "RefineNear":
+        return (
+            f"{values.get('FineSize', item.FineSize.Value):g} → {values.get('CoarseSize', item.CoarseSize.Value):g} mm"
+        )
     if kind == "Material":
         return values.get("Material", item.LibraryMaterial.Label if item.LibraryMaterial else objects.NO_MATERIAL)
     if kind == "TransfiniteBody":
@@ -77,7 +82,7 @@ def description(item, values):
         return f"{name}: {values.get('Name', objects.display_name(item))}"
     if kind == "Material":
         return f"{name}: {item.Label}"
-    if kind == "MeshSize":
+    if kind in ("MeshSize", "RefineNear"):
         return f"{name}: {tag_text(item, values)}"
     if kind == "TransfiniteEdges":
         return f"{name}: {values.get('Elements', item.Elements)} el, {values.get('Distribution', item.Distribution)}"
@@ -279,6 +284,11 @@ class _Watcher:
             "Corners",
             "Elements",
             "Size",
+            "FineSize",
+            "FineDistance",
+            "CoarseSize",
+            "GrowthDistance",
+            "LimitTo",
             "Distribution",
             "Label",
             "Body",
