@@ -1365,13 +1365,37 @@ def _meets(faces, where, dim):
     return "a copy crosses a curved face of it"
 
 
-def _mesh_free_entity(survey, side, V, dim):
+def _free_rules(built, dim):
+    """[(entry, points)], one per refinement field of the free model (built["refine_fields"]): points, the unique
+    coordinates of the mesh nodes of the entities its Distance field lists now (after _carry_size_picks). Called after
+    the free surface mesh, so they are the refined nodes of the picks."""
+    field = gmsh.model.mesh.field
+    present = {d: {t for _, t in gmsh.model.getEntities(d)} for d in range(dim)}
+    rules = []
+    for entry, distance in built.get("refine_fields", []):
+        points = [np.zeros((0, 3))]
+        for d in range(dim):  # a list never set reads as empty; a carry may have emptied one
+            for tag in (int(t) for t in field.getNumbers(distance, FIELD_LISTS[d])):
+                if tag in present[d]:
+                    points.append(np.reshape(gmsh.model.mesh.getNodes(d, tag, includeBoundary=True)[1], (-1, 3)))
+        rules.append((entry, np.unique(np.vstack(points), axis=0)))
+    return rules
+
+
+def _mesh_free_entity(survey, side, V, dim, rules=()):
     """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
     and the frozen facets that bound it (survey.frozen) bound one region or several (nest), each meshed by
-    mesh_region. Returns (W, elements, own): W is V with the apexes of the pyramids and the new nodes appended,
-    elements numbered into it, own {face: {etype: connectivity}} the mesh of each of its own faces, for excitations."""
+    mesh_region, graded by the rules (from _free_rules) whose Limit to is empty or holds the body. Returns (W,
+    elements, own): W is V with the apexes of the pyramids and the new nodes appended, elements numbered into it, own
+    {face: {etype: connectivity}} the mesh of each of its own faces, for excitations."""
     body, entity, faces = survey.body, survey.entity, survey.faces
     name = body["name"]
+    keys = ("fine", "fine_distance", "coarse", "growth")
+    sizes = [
+        dict({k: e[k] for k in keys}, points=p)
+        for e, p in rules
+        if not e["limit_to"] or body["mat_id"] in e["limit_to"]
+    ]
     xyz, own = meshfrozen.read_model(dim - 1, {f: [f] for f in faces})
     facet_type = 2 if dim == 3 else 1
     pyramids = np.zeros((0, 5), dtype=np.int64)
@@ -1429,7 +1453,8 @@ def _mesh_free_entity(survey, side, V, dim):
         elements[7] = pyramids
     for outer, holes in regions:
         try:
-            W, region = meshfrozen.mesh_region(W, facets, found[outer], [found[h] for h in holes], body["size"], dim)
+            inners = [found[h] for h in holes]
+            W, region = meshfrozen.mesh_region(W, facets, found[outer], inners, body["size"], dim, sizes)
         except Exception as err:  # gmsh could not mesh around them, or moved a frozen node
             where = W[facets[found[outer][0]]].mean(axis=0)
             raise _limit(name, f"the mesh around the copies failed ({err})", _text(where, dim)) from None
@@ -1481,13 +1506,14 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             generate(settings, 1)
             _place_rim_nodes(rims)
         generate(settings, dim - 1)
+        rules = _free_rules(built, dim)  # the picks' refined surface nodes grade the volumes too
         surfaces = free_job.get("surfaces", [])
         for body in bodies:
             added, elements, excited, count = [], {}, {}, 0
             for survey in surveys:
                 if survey.body is not body:
                     continue
-                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim)
+                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim, rules)
                 shifted = {t: np.where(c >= start, c + count, c) for t, c in per_type.items()}
                 for etype, conn in shifted.items():
                     elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn

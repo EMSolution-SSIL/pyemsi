@@ -1130,6 +1130,81 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(faces_in_three(mesh), 0)
         self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
 
+    NO_RULES = "meshgroups._free_rules = lambda built, dim: []"  # the free volumes graded from their surfaces only
+    SMALL_PLATE = (-2, -2, 1, 4, 4, 2)
+
+    @staticmethod
+    def free_refine(name, files=(), whole=(), limit_to=(), **sizes):
+        entry = {"name": name, "files": list(files), "whole": list(whole), "limit_to": list(limit_to)}
+        return dict(entry, fine=0.25, fine_distance=0.5, coarse=6.0, growth=20.0) | sizes
+
+    def plate_in_air(self, *refine):
+        """The ring of copies, the free plate SMALL_PLATE (MAT_ID 20, size 4) and the air BOX (MAT_ID 30, size 6)."""
+        write_boxes(self.geo("plate.brep"), self.SMALL_PLATE)
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": 4.0}
+        job = {"volumes": [plate], "surfaces": [], "sizes": [], "air": self.air_entry(self.BOX), "refine": list(refine)}
+        return [self.ring_3d(self.TWELVE, ())], [{"side": "fixed", "job": job}]
+
+    @staticmethod
+    def mean_edge(path, id_, distance, lo, hi):
+        """The mean element edge of physical group id_ over its elements whose centroid lies lo..hi from something:
+        distance(centroids) gives the distances."""
+        xyz, elements, dim = _physical_mesh(path, (id_,))
+        conn = elements[id_][4 if dim == 3 else 2]
+        centroid = xyz[conn].mean(axis=1)
+        d = distance(centroid)
+        chosen = conn[(d >= lo) & (d <= hi)]
+        pairs = [(a, b) for a in range(conn.shape[1]) for b in range(a + 1, conn.shape[1])]
+        return float(np.mean([np.linalg.norm(xyz[chosen[:, a]] - xyz[chosen[:, b]], axis=1) for a, b in pairs]))
+
+    def from_box(self, box):
+        low, high = np.array(box[:3], dtype=float), np.array(box[:3], dtype=float) + box[3:]
+        return lambda p: np.linalg.norm(np.maximum(np.maximum(low - p, p - high), 0), axis=1)
+
+    def test_free_refinement_grades_the_air_3d(self):  # the air grows from the plate at the growth asked, not faster
+        groups_, free = self.plate_in_air(self.free_refine("plate", whole=[20]))
+        graded = self.mean_edge(self.meshed(groups_, free=free, dim=3), 30, self.from_box(self.SMALL_PLATE), 2, 4)
+        self.assertEqual(faces_in_three(self.mesh_file()), 0)
+        ungraded = self.mean_edge(
+            self.meshed(groups_, free=free, dim=3, patch=self.NO_RULES), 30, self.from_box(self.SMALL_PLATE), 2, 4
+        )
+        self.assertLess(graded, 1.35)  # asked 0.97 at 3 mm; measured 1.15, and 1.60 without the rules
+        self.assertGreater(ungraded, 1.35)
+
+    def test_free_refinement_grades_the_air_2d(self):  # a pick on the air's own outer line, far from the copies
+        write_rects(self.geo("air.brep"), (-30, -30, 60, 60))
+        write_line(self.geo("bottom.brep"), (-30, -30, 0), (30, -30, 0))
+        refine = self.free_refine("bottom", files=["geometry/bottom.brep"], fine=0.5, coarse=4.0, growth=20.0)
+        free = self.air_2d(size=6.0)
+        free["job"]["refine"] = [refine]
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, size=6.0)
+        below = lambda p: np.where(np.abs(p[:, 0]) < 5, p[:, 1] + 30, np.inf)  # noqa: E731
+        graded = self.mean_edge(self.meshed([group], free=[free]), 20, below, 2, 4)
+        self.assertEqual(edges_in_three(self.mesh_file()), 0)
+        ungraded = self.mean_edge(self.meshed([group], free=[free], patch=self.NO_RULES), 20, below, 2, 4)
+        self.assertLess(graded, 1.2)  # asked 0.94 at 3 mm; measured 0.90, and 1.68 without the rules
+        self.assertGreater(ungraded, 1.2)
+
+    def test_free_refinement_limited_to_the_plate_leaves_the_air(self):
+        # The plate's faces are refined either way (the Restrict holds them), and the air grows from them; only the
+        # rule inside the air's own region is left out. Measured: 13458 elements both ways, 39684 with no Limit to.
+        def air_elements(limit_to, patch=""):
+            groups_, free = self.plate_in_air(self.free_refine("plate", whole=[20], limit_to=limit_to))
+            return groups(self.meshed(groups_, free=free, dim=3, patch=patch))[30][1]
+
+        limited = air_elements([20])
+        self.assertAlmostEqual(limited / air_elements([20], self.NO_RULES), 1, delta=0.05)
+        self.assertGreater(air_elements([]), 1.5 * limited)  # the rule reaches the air when nothing limits it
+
+    def test_free_pick_under_copies_meshes(self):  # the air's bottom face lies wholly on the copy: the carry empties it
+        write_face(self.geo("bottom.brep"), corners=[(-5, -5, 0), (25, -5, 0), (25, 5, 0), (-5, 5, 0)])
+        group = self.box_group((-5, -5, -5, 30, 10, 5), [ID], size=2.0)
+        free = self.air_3d(self.STRAND_BOX, size=3.0)
+        free["job"]["refine"] = [self.free_refine("bottom", files=["geometry/bottom.brep"], coarse=3.0)]
+        r = self.run_job([group], free=[free], dim=3)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(faces_in_three(self.mesh_file()), 0)
+
     def test_air_region_alone_in_the_free_job_2d(self):  # a free job of no body, only the air
         write_rects(self.geo("air_region.brep"), (-25, -25, 50, 50))
         air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 4.0}
