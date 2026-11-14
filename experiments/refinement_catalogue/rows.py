@@ -435,7 +435,9 @@ def rns5():
 
 def rns6():
     """The 2D sliding motor with its stator air band (r 35..36, the gap's stator half) structured and recombined: 6
-    elements on each arc (144 divisions over 24 cells), 2 across; the stator's tooth tips (the iron cell's arc r 36)."""
+    elements on each arc (144 divisions over 24 cells), 2 across. Refined: the iron cell's corners on the bore (r 36)
+    and the tooth's sides, the slot wall at 10 deg and the slot's arc r 37, next to the band but not its arcs, which
+    are transfinite curves whose divisions win."""
     study = motor("RN-S6")
     band = cell(study, "StatorAirCell")
     by = {}
@@ -446,22 +448,63 @@ def rns6():
     objects.make_transfinite_body(study, [band])
     objects.make_recombine(study, [band])
     iron = cell(study, "StatorIronCell")
-    tips = subs(iron, "Edge", lambda e: on_arc(e, TIP_R))
-    objects.make_refine_near(study, [(iron, n) for n in tips], fine=0.3, coarse=2, growth=3)
+    bore = subs(iron, "Vertex", lambda v: near(polar(v.Point)[0], TIP_R))
+    sides = subs(iron, "Edge", lambda e: on_arc(e, TIP_R + 1) or (not isinstance(e.Curve, Part.Circle) and side(e)))
+    refs = [(iron, n) for n in bore + sides]
+    objects.make_refine_near(study, refs, fine=0.3, coarse=2, growth=RNS6_GROWTH)
     return study
 
 
+RNS6_GROWTH = 3
+IRON_FACTOR = 3  # the stator iron of new has at least this many times today's elements
+
+
+def side(e):
+    """True for the slot's wall at 10 deg, r 37..50: the side of the tooth."""
+    return all(near(polar(v.Point)[1], 10, 1e-6) for v in e.Vertexes)
+
+
+def part_elements(msh, name):
+    """The elements of the 2D physical group name in a mesh file."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        return sum(
+            len(t)
+            for d, tag in gmsh.model.getPhysicalGroups(2)
+            if gmsh.model.getPhysicalName(d, tag) == name
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag)
+            for t in gmsh.model.mesh.getElements(d, ent)[1]
+        )
+    finally:
+        gmsh.finalize()
+
+
 def rns6_after(folder):
-    """(passed, text): the nodes on the sliding circle r 35 are the same in new and today, in both mesh files."""
+    """(passed, text): the nodes on the sliding circle r 35 are the same in new and today, in both mesh files, the
+    structured band keeps its elements, and the stator iron has IRON_FACTOR times today's elements or more."""
     files = ("pre_geom2D.msh", "rotor_mesh2D.msh")
     counts = {}
     for which in ("new", "today"):
         for f in files:
             path = os.path.join(folder, which, f)
             counts[which, f] = slide_nodes(path, MOTOR_R) if os.path.exists(path) else -1
+        fixed = os.path.join(folder, which, files[0])
+        counts[which, "iron"] = part_elements(fixed, "StatorIron")
+        counts[which, "band"] = part_elements(fixed, "StatorAir")
     same = all(counts["new", f] == counts["today", f] > 0 for f in files)
+    band = counts["new", "band"] == counts["today", "band"] > 0
+    iron = counts["new", "iron"] >= IRON_FACTOR * counts["today", "iron"] > 0
     text = ", ".join(f"{f}: new {counts['new', f]}, today {counts['today', f]}" for f in files)
-    return same, f"nodes on the sliding circle r {MOTOR_R:g} " + text
+    text = f"nodes on the sliding circle r {MOTOR_R:g} {text}; structured band (StatorAir) elements: new"
+    text += (
+        f" {counts['new', 'band']}, today {counts['today', 'band']}; StatorIron elements: new {counts['new', 'iron']},"
+    )
+    text += f" today {counts['today', 'iron']} (needs x {IRON_FACTOR:g})"
+    return same and band and iron, text
 
 
 MAGNET = {"zoom": (-30, -15, 30, 15)}
@@ -566,8 +609,8 @@ CASES += [
     ),
     (
         "RN-S6",
-        "2D sliding motor with a structured stator air band: the tooth tips (0.3 to 2 over 3), the slide keeps 144"
-        " (the tip arcs are the band's, so they keep its 6 divisions: only the iron behind them grades)",
+        "2D sliding motor with a structured stator air band: the teeth's bore corners and slot sides beside it (0.3"
+        " to 2 over 3) grade the iron; the band and the sliding circle (144) keep their divisions",
         rns6,
         "meshes",
         STATOR_TIP,
