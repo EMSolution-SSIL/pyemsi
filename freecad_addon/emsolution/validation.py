@@ -168,6 +168,7 @@ def _kind(item):
     return {
         objects.Excitation: "Excitation",
         objects.MeshSize: "Mesh Size",
+        objects.RefineNear: "Refine Near",
         objects.TransfiniteBody: "Transfinite Body",
         objects.TransfiniteEdges: "Transfinite Edges",
         objects.Recombine: "Recombine",
@@ -240,6 +241,30 @@ def _settings(study, included, r):
     for e in objects.transfinite_edges(study):
         if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
+    grouped = objects.is_grouped(study)
+    for n in objects.refine_items(study):
+        if grouped:
+            r.error(
+                f"Refine Near {n.Label}: refinements in a Study with Symmetric Groups are not handled yet, a limit of"
+                " the tool.",
+                n,
+            )
+        if any(b.Name in included for b, _ in n.References):
+            if n.FineSize.Value <= 0:
+                r.error(f"Refine Near {n.Label}: the fine size must be greater than 0.", n)
+            elif n.CoarseSize.Value < n.FineSize.Value:
+                r.error(f"Refine Near {n.Label}: the coarse size must not be smaller than the fine size.", n)
+            if n.GrowthDistance.Value <= 0:
+                r.error(f"Refine Near {n.Label}: the growth distance must be greater than 0.", n)
+            if n.FineDistance.Value < 0:
+                r.error(f"Refine Near {n.Label}: the fine distance must not be negative.", n)
+        for b in n.LimitTo:
+            if b.Name not in included:
+                r.warning(
+                    f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is not meshed by the Study; it has"
+                    " no effect there.",
+                    n,
+                )
 
 
 def thickness(shape):

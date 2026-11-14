@@ -1744,8 +1744,40 @@ class StudyTest(unittest.TestCase):
 
     # --- Validation -----------------------------------------------------------
 
-    def problems(self, severity):
-        return [p.text for p in validation.validate(self.study) if p.severity == severity]
+    def problems(self, severity=None):
+        return [p.text for p in validation.validate(self.study) if severity is None or p.severity == severity]
+
+    def test_refine_near_settings_are_checked(self):
+        a = self.box("A")
+        item = objects.make_refine_near(self.study, [(a, "Edge1")], 0.0, 1.0, 0.0)
+        texts = self.problems()
+        # no test for a negative fine distance: App::PropertyLength turns a negative value into 0
+        for end in ("the fine size must be greater than 0.", "the growth distance must be greater than 0."):
+            self.assertIn(f"Refine Near {item.Label}: {end}", texts)
+        item.FineSize, item.CoarseSize, item.GrowthDistance, item.FineDistance = 2.0, 1.0, 5.0, 0.0
+        self.assertIn(
+            f"Refine Near {item.Label}: the coarse size must not be smaller than the fine size.", self.problems()
+        )
+
+    def test_refine_near_on_a_deleted_body_refers_to_nothing(self):
+        self.box("A")
+        b = self.box("B", 20)
+        item = objects.make_refine_near(self.study, [(b, "Edge1")])
+        self.doc.removeObject("B")
+        self.doc.recompute()
+        self.assertIn(
+            f"Refine Near {item.Label} refers to nothing (were its bodies deleted?). Pick again or delete it.",
+            self.problems(),
+        )
+
+    def test_refine_near_limit_to_an_unmeshed_body_warns(self):
+        a, b = self.box("A"), self.box("B", 20)
+        self.exclude(b)
+        item = objects.make_refine_near(self.study, [(a, "Edge1")], limit_to=[b])
+        self.assertIn(
+            f"Refine Near {item.Label}: B in Limit to is not meshed by the Study; it has no effect there.",
+            self.problems(validation.WARNING),
+        )
 
     def test_deleting_a_body_leaves_empty_items_that_refuse_the_mesh(self):
         a, b = self.box("A"), self.box("B", 10)

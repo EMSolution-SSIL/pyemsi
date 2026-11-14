@@ -189,6 +189,16 @@ def _problems(study, severity=None):
     return [p for p in validation.validate(study) if severity in (None, p.severity)]
 
 
+def test_refine_near_is_refused_with_symmetric_groups(motor):
+    cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
+    item = objects.make_refine_near(motor, [(cell, "Edge1")])
+    texts = [p.text for p in _problems(motor, "error")]
+    assert (
+        f"Refine Near {item.Label}: refinements in a Study with Symmetric Groups are not handled yet, a limit of the"
+        " tool."
+    ) in texts
+
+
 def _texts(study, severity="error"):
     return [p.text for p in _problems(study, severity)]
 
