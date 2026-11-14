@@ -544,7 +544,8 @@ def _options(values):
 
 def _size_field(rules, points):
     """Grade the size of the current gmsh model from the size rules (see mesh_region), as its background field.
-    points: the tags of the model points added at each rule's points, in order; rules without points are left out."""
+    points: the tags of the model points added at each rule's points, in order. Every rule has points: mesh_region
+    leaves out those without."""
     import gmsh
 
     field = gmsh.model.mesh.field
@@ -627,14 +628,19 @@ def mesh_region(V, facets, outer, inners, size, dim, rules=()):
     len(V) - 1 unchanged, connectivity into V2. A frozen node moved by gmsh raises FrozenError. The current gmsh model
     stays as it was.
     rules: size rules, each {"points": (n, 3), "fine", "fine_distance", "coarse", "growth"}: the size is fine within
-    fine_distance of the points and grows to coarse over growth beyond it. Rules without points are left out."""
+    fine_distance of the points and grows to coarse over growth beyond it. Points farther than fine_distance + growth
+    from the region's bounding box are left out, and so are the rules left without points."""
     import gmsh
 
     V = np.asarray(V, dtype=float).reshape(-1, 3)
     facets = np.asarray(facets, dtype=np.int64)
     rings = [np.asarray(outer, dtype=np.int64)] + [np.asarray(s, dtype=np.int64) for s in inners]
     used = np.unique(facets[np.concatenate(rings)])
+    lo, hi = V[used].min(axis=0), V[used].max(axis=0)
     rules = [dict(r, points=np.asarray(r["points"], dtype=float).reshape(-1, 3)) for r in rules]
+    for r in rules:  # a point farther than its rule's reach from the region's box sizes nothing in it
+        reach = r["fine_distance"] + r["growth"]
+        r["points"] = r["points"][((r["points"] >= lo - reach) & (r["points"] <= hi + reach)).all(axis=1)]
     rules = [r for r in rules if len(r["points"])]
     options = {"Mesh.Renumber": 0, "Mesh.MeshSizeMax": size, "Mesh.MeshSizeExtendFromBoundary": 1, "Mesh.Optimize": 1}
     if dim == 3:

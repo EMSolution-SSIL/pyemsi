@@ -57,11 +57,12 @@ def _sampling(picked, fine):
     return min(max(n, low), high)
 
 
-def apply_refinements(items, body_tags, dim, same_body=()):
+def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
     """items: one (refine entry, {entity dim: [final tags]}) per job["refine"] entry. Each adds a size that grows from
     fine at its picks to coarse at fine_distance + growth, and stops there; limit_to keeps it inside those bodies.
     same_body: collections of MAT_IDs that a whole-body pick treats as one body (the two sides of a sliding air), so
-    the surface between them is not a pick. Returns [(entry, its Distance field)], one per field made."""
+    the surface between them is not a pick. copies_apart: the model is a free job of a symmetric Study, whose copies
+    are meshed apart (only the notes say so). Returns [(entry, its Distance field)], one per field made."""
     joined = {m: list(group) for group in same_body for m in group}
     fields = []
     made = []
@@ -70,9 +71,10 @@ def apply_refinements(items, body_tags, dim, same_body=()):
         for body in dict.fromkeys(tuple(joined.get(m, [m])) for m in entry["whole"]):
             faces = real_boundary(dim, [t for m in body for t in body_tags.get(m, [])])
             if not faces:
+                other = "free object; the copies are meshed apart" if copies_apart else "region"
                 _note(
                     f"Refine Near {entry['name']}: MAT_ID {'/'.join(map(str, body))} has no face shared with another"
-                    " region; it refines nothing there"
+                    f" {other}; it refines nothing there"
                 )
             picked.setdefault(dim - 1, []).extend(faces)
         picked = {d: list(dict.fromkeys(tags)) for d, tags in picked.items() if tags}
@@ -98,8 +100,10 @@ def apply_refinements(items, body_tags, dim, same_body=()):
             restrict = field.add("Restrict")
             field.setNumber(restrict, "InField", f)
             field.setNumbers(restrict, FIELD_LISTS[dim], limit)
-            # the faces by name as well: the free model drops its volumes before it meshes their surfaces
-            edge = dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary([(dim, t) for t in limit], oriented=False))
+            # the faces by name as well: the free model drops its volumes before it meshes their surfaces. Not combined:
+            # a face between two limit bodies (or two pieces of one) is theirs too
+            whole = gmsh.model.getBoundary([(dim, t) for t in limit], combined=False, oriented=False)
+            edge = dict.fromkeys(abs(t) for _, t in whole)
             field.setNumbers(restrict, FIELD_LISTS[dim - 1], list(edge))
             field.setNumber(restrict, "IncludeBoundary", 1)  # their faces and curves too: they are meshed first
             f = restrict

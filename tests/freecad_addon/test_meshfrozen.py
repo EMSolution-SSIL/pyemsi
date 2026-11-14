@@ -313,6 +313,27 @@ def test_rule_without_points_is_ignored(model):
     assert np.array_equal(V1, V0)
 
 
+def test_rule_out_of_reach_is_left_out(model, monkeypatch):
+    # points farther than fine_distance + growth from the region's box size nothing in it: the mesh of no rules, and
+    # gmsh never sees them
+    V, tris = cube_shell()
+    outer = np.arange(len(tris))
+    V0, before = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3)
+    seen = []
+    size_field = meshfrozen._size_field
+    monkeypatch.setattr(
+        meshfrozen, "_size_field", lambda rules, points: seen.append(rules) or size_field(rules, points)
+    )
+    far = dict(corner_rule(V), points=np.array([[4.0 + 2.1, 2.0, 2.0], [-3.0, -3.0, -3.0]]))
+    V1, after = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=[far])
+    assert {t: len(c) for t, c in after.items()} == {t: len(c) for t, c in before.items()}
+    assert np.array_equal(V1, V0)
+    assert seen == [[]]
+    near = dict(far, points=np.array([[4.0 + 1.9, 2.0, 2.0], [-3.0, -3.0, -3.0]]))  # one point within reach
+    meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=[near])
+    assert [len(r["points"]) for r in seen[-1]] == [1]
+
+
 def test_rule_grades_from_its_points_2d(model):
     s, o, f = np.arange(8) * 0.5, np.zeros(8), np.full(8, 4.0)  # a square of side 4, its sides split at 0.5
     V = np.vstack([np.column_stack(c + (o,)) for c in ((s, o), (f, s), (f - s, f), (o, f - s))])

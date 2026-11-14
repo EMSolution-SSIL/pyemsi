@@ -565,10 +565,10 @@ def _generate_cell(group, job, dim):
 
 
 def _refine_partners(dim):
-    """After meshsym._periodic: every Distance field (each is a refinement's) also measures from the periodic partners
-    of its picks, the master a picked entity is copied from and the entities copied from a picked one. gmsh copies a
-    seam's mesh from its master, so a pick on the copy alone would not refine the seam, and a pick on the master would
-    grade only its own side of the cell."""
+    """After meshsym._periodic and pair_images: every Distance field (each is a refinement's) also measures from the
+    periodic partners of its picks, the master a picked entity is copied from and the entities copied from a picked
+    one. gmsh copies a seam's mesh from its master, so a pick on the copy alone would not refine the seam, and a pick
+    on the master would grade only its own side of the cell."""
     field = gmsh.model.mesh.field
     for f in field.list():
         if field.getType(f) != "Distance":
@@ -597,8 +597,8 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
             build(dict(group["job"]), folder)
         reached = _slide_cell(group, slide, dim) if slide else False
         meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
-        _refine_partners(dim)
         pair_images(group, group.get("images", []), dim)
+        _refine_partners(dim)  # after pair_images: the seams it makes periodic too
         _generate_cell(group, job, dim)
         expected = _expected_area(group, contacts, dim) if contacts else 0.0
         by_row = _by_row(group, folder, dim)
@@ -1378,7 +1378,13 @@ def _free_rules(built, dim):
             for tag in (int(t) for t in field.getNumbers(distance, FIELD_LISTS[d])):
                 if tag in present[d]:
                     points.append(np.reshape(gmsh.model.mesh.getNodes(d, tag, includeBoundary=True)[1], (-1, 3)))
-        rules.append((entry, np.unique(np.vstack(points), axis=0)))
+        points = np.unique(np.vstack(points), axis=0)
+        if not len(points):  # the carry emptied it: every pick was under frozen facets
+            _note(
+                f"Refine Near {entry['name']}: its picks lie under the copies of a Symmetric Group; it refines nothing"
+                " there"
+            )
+        rules.append((entry, points))
     return rules
 
 
@@ -1488,7 +1494,7 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
     out = {}
     start = len(V)
     with _scratch(f"free_{free['side']}"):
-        built = dict(free_job)
+        built = dict(free_job, copies_apart=True)  # the mesher's notes then speak of free objects
         build(built, folder)
         airs = [dict(a, size=free_job["air"]["size"]) for a in air_items(free_job)]
         bodies = free_job["bodies" if dim == 2 else "volumes"] + airs  # the air: what no body owns

@@ -1205,6 +1205,32 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(faces_in_three(self.mesh_file()), 0)
 
+    def test_free_pick_on_the_copies_refines_nothing_and_says_so(self):
+        # The air (a disc in the bore) meets the copies at r 10 only. The copies are meshed apart, so neither a whole
+        # pick on the air nor a pick on its line under the copies refines anything; the mesher says so.
+        write_disc(self.geo("air.brep"), 10)
+        write_arc(self.geo("inner.brep"), 10, 0, 30)
+
+        def air_elements(*refine):
+            free = self.air_2d(size=2.0)
+            free["job"]["refine"] = list(refine)
+            group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
+            return groups(self.meshed([group], free=[free]))[20][1]
+
+        without = air_elements()
+        sizes = {"fine": 0.5, "coarse": 5.0, "growth": 10.0}
+        self.assertEqual(air_elements(self.free_refine("whole", whole=[20], **sizes)), without)
+        self.assertIn(
+            "NOTE: Refine Near whole: MAT_ID 20 has no face shared with another free object; the copies are meshed"
+            " apart",
+            self.result.stderr,
+        )
+        self.assertEqual(air_elements(self.free_refine("inner", files=["geometry/inner.brep"], **sizes)), without)
+        self.assertIn(
+            "NOTE: Refine Near inner: its picks lie under the copies of a Symmetric Group; it refines nothing there",
+            self.result.stderr,
+        )
+
     def test_air_region_alone_in_the_free_job_2d(self):  # a free job of no body, only the air
         write_rects(self.geo("air_region.brep"), (-25, -25, 50, 50))
         air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 4.0}
@@ -1913,6 +1939,20 @@ class RefinementFieldsTest(unittest.TestCase):
         meshgroups._carry_size_picks({1: []}, 3)
         self.assertEqual(list(field.getNumbers(restrict, "VolumesList")), [])
         self.assertEqual(sorted(int(t) for t in field.getNumbers(restrict, "SurfacesList")), faces)
+
+    def test_restrict_keeps_the_face_between_two_limit_bodies(self):
+        occ = gmsh.model.occ
+        occ.addBox(10, 0, 0, 10, 10, 10)
+        occ.fragment([(3, 1)], [(3, 2)])
+        occ.synchronize()
+        (shared,) = set(gmsh.model.getAdjacencies(3, 1)[1]) & set(gmsh.model.getAdjacencies(3, 2)[1])
+        meshcommon.apply_refinements([(self.entry(limit_to=[5, 6]), {0: [1]})], {5: [1], 6: [2]}, 3)
+        field = gmsh.model.mesh.field
+        restrict = next(f for f in field.list() if field.getType(f) == "Restrict")
+        faces = [int(t) for t in field.getNumbers(restrict, "SurfacesList")]
+        self.assertIn(int(shared), faces)
+        self.assertEqual(len(faces), len(set(faces)))
+        self.assertEqual(len(faces), 11)
 
     def test_apply_refinements_returns_its_distance_fields(self):
         items = [(self.entry(name="A"), {2: [1]}), (self.entry(name="B"), {2: [2]})]
