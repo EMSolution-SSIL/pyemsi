@@ -144,7 +144,8 @@ def build(job, folder):
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
                 raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
             picked.setdefault(d, []).append(t)
-    apply_refinements(picks, body_vols, 3)
+    sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
+    apply_refinements(picks, body_vols, 3, sliding_air)
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
     tf = apply_transfinite(job, mapped, body_vols, 3)
     apply_recombine(job, body_vols, 3, tf, mapped)

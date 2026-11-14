@@ -393,6 +393,16 @@ class MesherTest(unittest.TestCase):
         on_edge = sum(x == 0 and z == 0 for x, y, z in nodes)  # the edge (0,0,0)-(0,1,0) of box 1
         self.assertGreaterEqual(on_edge, 1 / 0.5 + 1)
 
+    def test_limit_to_a_body_not_in_the_mesh_notes_and_refines_nothing(self):
+        write_box(self.geo("vol_1.brep"), 0, 0, 0, 1, 1, 1)
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (1, 0, 0))
+        entry = self.refine(["refine_1_1_1.brep"], limit_to=[7])  # MAT_ID 7 has no volumes
+        r = self.run_job([self.vol(1, "Box", "vol_1.brep")], extra={"refine": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Refine Near Near: its Limit to bodies are not in this mesh; it refines nothing", r.stderr)
+        nodes = read_nodes(os.path.join(self.dir, "pre_geom.msh"))
+        self.assertLess(sum(math.hypot(y, z) < 0.1 for x, y, z in nodes), 10, "no refinement anywhere")
+
     def test_whole_body_pick_refines_only_shared_faces(self):
         nodes = self.two_boxes_refined(self.refine(whole=[1]))
         shared = sum(abs(x - 1) < 0.1 for x, y, z in nodes)

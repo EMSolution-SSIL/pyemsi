@@ -1770,9 +1770,17 @@ class StudyTest(unittest.TestCase):
         )
 
     def test_refine_near_limit_to_an_unmeshed_body_warns(self):
-        a, b = self.box("A"), self.box("B", 20)
+        a, b, c = self.box("A"), self.box("B", 20), self.box("C", 40)
+        self.assign([a])
         self.exclude(b)
-        item = objects.make_refine_near(self.study, [(a, "Edge1")], limit_to=[b])
+        self.exclude(c)
+        item = objects.make_refine_near(self.study, [(a, "Edge1")], limit_to=[b, c])
+        warnings = self.problems(validation.WARNING)
+        skipped = f"Refine Near {item.Label}: no body in Limit to is meshed by the Study; the refinement is skipped."
+        self.assertEqual([w for w in warnings if w.startswith(f"Refine Near {item.Label}")], [skipped])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("refine", json.load(fh), "a Limit to with no meshed body would refine everywhere")
+        item.LimitTo = [a, b]
         self.assertIn(
             f"Refine Near {item.Label}: B in Limit to is not meshed by the Study; it has no effect there.",
             self.problems(validation.WARNING),

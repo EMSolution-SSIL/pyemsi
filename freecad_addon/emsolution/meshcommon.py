@@ -57,22 +57,29 @@ def _sampling(picked, fine):
     return min(max(n, low), high)
 
 
-def apply_refinements(items, body_tags, dim):
+def apply_refinements(items, body_tags, dim, same_body=()):
     """items: one (refine entry, {entity dim: [final tags]}) per job["refine"] entry. Each adds a size that grows from
-    fine at its picks to coarse at fine_distance + growth, and stops there; limit_to keeps it inside those bodies."""
+    fine at its picks to coarse at fine_distance + growth, and stops there; limit_to keeps it inside those bodies.
+    same_body: collections of MAT_IDs that a whole-body pick treats as one body (the two sides of a sliding air), so
+    the surface between them is not a pick."""
+    joined = {m: list(group) for group in same_body for m in group}
     fields = []
     for entry, picked in items:
         picked = {d: list(tags) for d, tags in picked.items()}
-        for m in entry["whole"]:
-            faces = real_boundary(dim, body_tags.get(m, []))
+        for body in dict.fromkeys(tuple(joined.get(m, [m])) for m in entry["whole"]):
+            faces = real_boundary(dim, [t for m in body for t in body_tags.get(m, [])])
             if not faces:
                 _note(
-                    f"Refine Near {entry['name']}: MAT_ID {m} has no face shared with another region; "
-                    "it refines nothing there"
+                    f"Refine Near {entry['name']}: MAT_ID {'/'.join(map(str, body))} has no face shared with another"
+                    " region; it refines nothing there"
                 )
             picked.setdefault(dim - 1, []).extend(faces)
         picked = {d: list(dict.fromkeys(tags)) for d, tags in picked.items() if tags}
         if not picked:
+            continue
+        limit = [t for m in entry["limit_to"] for t in body_tags.get(m, [])]
+        if entry["limit_to"] and not limit:
+            _note(f"Refine Near {entry['name']}: its Limit to bodies are not in this mesh; it refines nothing")
             continue
         field = gmsh.model.mesh.field
         dist = field.add("Distance")
@@ -86,10 +93,10 @@ def apply_refinements(items, body_tags, dim):
         field.setNumber(f, "DistMin", entry["fine_distance"])
         field.setNumber(f, "DistMax", entry["fine_distance"] + entry["growth"])
         field.setNumber(f, "StopAtDistMax", 1)  # beyond its reach it sizes nothing, else coarse would cap the model
-        if entry["limit_to"]:
+        if limit:
             restrict = field.add("Restrict")
             field.setNumber(restrict, "InField", f)
-            field.setNumbers(restrict, FIELD_LISTS[dim], [t for m in entry["limit_to"] for t in body_tags.get(m, [])])
+            field.setNumbers(restrict, FIELD_LISTS[dim], limit)
             field.setNumber(restrict, "IncludeBoundary", 1)  # their faces and curves too: they are meshed first
             f = restrict
         fields.append(f)

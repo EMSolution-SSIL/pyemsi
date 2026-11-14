@@ -256,13 +256,18 @@ def _settings(study, included, r):
                 r.error(f"Refine Near {n.Label}: the coarse size must not be smaller than the fine size.", n)
             if n.GrowthDistance.Value <= 0:
                 r.error(f"Refine Near {n.Label}: the growth distance must be greater than 0.", n)
-        for b in n.LimitTo:
-            if b.Name not in included:
-                r.warning(
-                    f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is not meshed by the Study; it has"
-                    " no effect there.",
-                    n,
-                )
+        unmeshed = [b for b in n.LimitTo if b.Name not in included]
+        if unmeshed and len(unmeshed) == len(n.LimitTo):  # jobwriter.refine_entries leaves the item out
+            r.warning(
+                f"Refine Near {n.Label}: no body in Limit to is meshed by the Study; the refinement is skipped.", n
+            )
+            continue
+        for b in unmeshed:
+            r.warning(
+                f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is not meshed by the Study; it has"
+                " no effect there.",
+                n,
+            )
 
 
 def thickness(shape):

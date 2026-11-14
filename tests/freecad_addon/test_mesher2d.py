@@ -375,6 +375,34 @@ class Mesher2DTest(unittest.TestCase):
         outer = sum(x < 0.1 for x, y, z in nodes)
         self.assertGreater(shared, 3 * outer, (shared, outer))
 
+    def test_whole_sliding_air_pick_leaves_out_the_surface_between_its_sides(self):
+        def nodes_by(entries, same_body):
+            """Squares x 0..1 and 1..2 (the two air sides, MAT_IDs 1 and 2) and a body x 2..3 (MAT_ID 3), size 0.5.
+            Returns the node counts within 0.1 of x = 1 (between the sides) and of x = 2 (the air's outer face)."""
+            gmsh.initialize()
+            try:
+                gmsh.option.setNumber("General.Terminal", 0)
+                occ = gmsh.model.occ
+                squares = [(2, occ.addRectangle(x, 0, 0, 1, 1)) for x in range(3)]
+                _, out_map = occ.fragment(squares[:1], squares[1:])
+                occ.synchronize()
+                tags = {k: [t for _, t in dimtags] for k, dimtags in enumerate(out_map, 1)}
+                meshcommon.apply_size_fields({0.5: {2: [t for v in tags.values() for t in v]}})
+                meshcommon.apply_refinements([(e, {}) for e in entries], tags, 2, same_body)
+                gmsh.model.mesh.generate(2)
+                c = gmsh.model.mesh.getNodes()[1]
+            finally:
+                gmsh.finalize()
+            xs = c[0::3]
+            return sum(abs(x - 1) < 0.1 for x in xs), sum(abs(x - 2) < 0.1 for x in xs)
+
+        plain = nodes_by([], [])
+        joined = nodes_by([self.refine(whole=[1, 2])], [[1, 2]])
+        apart = nodes_by([self.refine(whole=[1, 2])], [])
+        self.assertLess(joined[0], 1.5 * plain[0] + 2, (plain, joined))
+        self.assertGreater(joined[1], 5 * plain[1], (plain, joined))
+        self.assertGreater(apart[0], 5 * plain[0], "without same_body the surface between the sides is a pick")
+
     def test_face_size_refines_that_face(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
         write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)])

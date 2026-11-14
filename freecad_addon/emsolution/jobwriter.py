@@ -153,6 +153,8 @@ def refine_entries(study, folder, ids):
         if not (files or whole):
             continue
         limit_to = [mat_id for body in item.LimitTo if body.Name in ids for mat_id in ids[body.Name]]
+        if item.LimitTo and not limit_to:  # no Limit to body is meshed: the refinement has nowhere to apply
+            continue
         entries.append(
             {
                 "name": item.Label,
