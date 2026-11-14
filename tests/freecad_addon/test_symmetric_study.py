@@ -305,6 +305,14 @@ def test_refine_near_on_the_copies_warns(motor):
     assert not [t for t in _texts(motor, "warning") if t.startswith(f"Refine Near {item.Label}")]
 
 
+def test_refine_near_on_a_broken_air_region_leaves_it_to_its_error(motor):
+    air = _sector_air(motor)
+    objects.make_refine_near(motor, [(air, _air_edge(air, 60))])
+    air.AirShape = "Custom"  # and no Source: air_shape raises
+    motor.Document.recompute()
+    assert _has(motor, "choose a body for the Custom shape")
+
+
 def test_refine_near_pick_apart_from_every_limit_to_warns(motor):
     body, cell = _free_ring(motor), _cell(motor)
     item = objects.make_refine_near(motor, [(cell, "Edge1"), (body, "Edge1")], limit_to=[cell])

@@ -324,7 +324,10 @@ def _free_picks_on_copies(study, n, free, r):
                 copies = [p for g in objects.symmetric_groups(study) if not g.Shape.isNull() for p in _elements(g)[0]]
             if shape is None:
                 plane = airshapes.study_plane(study)
-                shape = airshapes.air_shape(body, plane) if objects.is_air(body) else geometry.global_shape(body)
+                try:
+                    shape = airshapes.air_shape(body, plane) if objects.is_air(body) else geometry.global_shape(body)
+                except ValueError:
+                    continue  # _air reports it
             try:
                 element = shape.getElement(sub)
             except Exception:  # a stale name: _links reports it
