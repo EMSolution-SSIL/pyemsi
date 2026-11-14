@@ -31,6 +31,7 @@ from meshcommon import (
     import_brep,
     slide_split,
     orient_faces,
+    apply_refinements,
 )
 import meshgroups
 
@@ -82,6 +83,12 @@ def build(job, folder):
         start = len(inputs)
         inputs += import_brep(path, FILE_DIMS[kind])
         tf_spans.append((start, len(inputs)))
+    refine_files = [(k, os.path.join(folder, f)) for k, e in enumerate(job.get("refine", [])) for f in e["files"]]
+    refine_spans = []
+    for _, path in refine_files:
+        start = len(inputs)
+        inputs += import_brep(path, 0, 1, 2)
+        refine_spans.append((start, len(inputs)))
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
         out_map = [inputs]
@@ -137,6 +144,15 @@ def build(job, folder):
         (kind, item, os.path.basename(path), [dt for dimtags in out_map[start:end] for dt in dimtags])
         for (kind, item, path), (start, end) in zip(tf_files, tf_spans)
     ]
+    picks = [(e, {}) for e in job.get("refine", [])]  # (entry, {dim: [final tags]})
+    for (k, path), (start, end) in zip(refine_files, refine_spans):
+        e, picked = picks[k]
+        for dimtags in out_map[start:end]:
+            for d, t in dimtags:
+                if not _on_bodies(d, t, placed):
+                    raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
+                picked.setdefault(d, []).append(t)
+    apply_refinements(picks, body_faces, 2)
     tf = apply_transfinite(job, mapped, body_faces, 2)
     apply_recombine(job, body_faces, 2, tf, mapped)
     if job.get("periodic"):

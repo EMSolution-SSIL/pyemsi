@@ -326,6 +326,55 @@ class Mesher2DTest(unittest.TestCase):
             gmsh.finalize()
         return [tuple(c[i : i + 3]) for i in range(0, len(c), 3)]
 
+    def refine(self, files=(), whole=(), fine=0.05, coarse=0.5, growth=0.3, fine_distance=0.0, limit_to=()):
+        return {
+            "name": "Near",
+            "files": ["geometry/" + f for f in files],
+            "whole": list(whole),
+            "fine": fine,
+            "fine_distance": fine_distance,
+            "coarse": coarse,
+            "growth": growth,
+            "limit_to": list(limit_to),
+        }
+
+    def refined_nodes(self, entry, rects=((0, 0, 1, 1),), transfinite=None):
+        """Mesh the rectangles (one body each, size 0.5) with one refine entry; returns the node coordinates."""
+        bodies = []
+        for k, rect in enumerate(rects, 1):
+            write_rects(self.geo(f"vol_{k}.brep"), [rect])
+            bodies.append(self.body(k, f"Sq{k}", f"vol_{k}.brep"))
+        r = self.run_job(bodies, transfinite=transfinite, extra={"refine": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return list(read_nodes(os.path.join(self.dir, "pre_geom2D.msh")).values())
+
+    def test_refine_near_a_curve_grades_away_from_it_2d(self):
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (1, 0, 0))
+        nodes = self.refined_nodes(self.refine(["refine_1_1_1.brep"]))
+        near = sum(y < 0.1 for x, y, z in nodes)
+        far = sum(y > 0.9 for x, y, z in nodes)
+        self.assertGreater(near, 5 * max(far, 1), (near, far))
+
+    def test_refine_near_a_vertex_2d(self):
+        write_point(self.geo("refine_1_1_1.brep"), (0, 0, 0))
+        # a fine layer of 0.1: with none, only about 8 nodes fit within 0.1 of the corner however fine it is (growth 0.3)
+        nodes = self.refined_nodes(self.refine(["refine_1_1_1.brep"], fine=0.02, fine_distance=0.1))
+        self.assertGreaterEqual(sum(math.hypot(x, y) < 0.1 for x, y, z in nodes), 10)
+
+    def test_transfinite_edge_keeps_its_count_next_to_a_refinement(self):
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (0, 1, 0))  # the left edge
+        top = self.edge_item("tedge_1", [square_lines()[2]], 4)
+        nodes = self.refined_nodes(
+            self.refine(["refine_1_1_1.brep"], growth=2.0), transfinite={"bodies": [], "edges": [top]}
+        )
+        self.assertEqual(sum(abs(y - 1) < 1e-9 for x, y, z in nodes), 5)
+
+    def test_whole_body_pick_refines_only_shared_curves_2d(self):
+        nodes = self.refined_nodes(self.refine(whole=[1]), rects=((0, 0, 1, 1), (1, 0, 1, 1)))
+        shared = sum(abs(x - 1) < 0.1 for x, y, z in nodes)
+        outer = sum(x < 0.1 for x, y, z in nodes)
+        self.assertGreater(shared, 3 * outer, (shared, outer))
+
     def test_face_size_refines_that_face(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
         write_rects(self.geo("vol_2.brep"), [(1, 0, 1, 1)])
