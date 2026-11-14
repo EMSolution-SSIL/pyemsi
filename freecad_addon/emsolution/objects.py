@@ -1558,7 +1558,8 @@ def is_air(obj):
 
 def air_refusal(item_cls, bodies):
     """Why an item of class item_cls cannot take bodies, because some are Air Regions; "" when it can. The air
-    takes Materials and Mesh Sizes: it is not recombined or structured, and an excitation goes on a body."""
+    takes Materials, Mesh Sizes and Refine Nears: it is not recombined or structured, and an excitation goes on a
+    body."""
     airs = list(dict.fromkeys(display_name(b) for b in bodies if is_air(b)))
     if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine):
         return ""
@@ -1646,7 +1647,8 @@ def is_item(obj):
 
 
 def item_refs(item):
-    """[(body, sub)] of a Material, Excitation, Mesh Size, Recombine or transfinite item; sub "" = the whole body."""
+    """[(body, sub)] of a Material, Excitation, Mesh Size, Refine Near, Recombine or transfinite item; sub "" = the
+    whole body. A Refine Near's Limit to is not among them."""
     if isinstance(item.Proxy, Material):
         if getattr(item, "PartKey", ""):
             return part_refs(item)

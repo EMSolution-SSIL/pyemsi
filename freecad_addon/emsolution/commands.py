@@ -496,8 +496,8 @@ MENU = [
 
 def context_names(study, kinds):
     """Commands for a right click, given the Study and the kinds of picks: "Body", "Face", "Edge", "Vertex", plus
-    "Air" when an Air Region is picked (it takes only a Material and a Mesh Size) and "Cell" when a model body is
-    picked as a whole (a Symmetric Group's cell object)."""
+    "Air" when an Air Region is picked (it takes only a Material, a Mesh Size and a Refine Near) and "Cell" when a
+    model body is picked as a whole (a Symmetric Group's cell object)."""
     if study is None or not kinds:
         return []
     if "Air" in kinds:
