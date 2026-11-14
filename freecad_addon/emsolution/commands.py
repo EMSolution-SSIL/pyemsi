@@ -425,6 +425,82 @@ COMMANDS = {
     "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),
 }
+STRUCTURED = ("EMS_TransfiniteBody", "EMS_TransfiniteEdges", "EMS_Recombine")
+
+
+class StructuredMesh:
+    """Toolbar dropdown of the structured mesh controls; the button keeps the last one used."""
+
+    def GetCommands(self):
+        return STRUCTURED
+
+    def GetDefaultCommand(self):
+        return 0
+
+    def GetResources(self):
+        return {"MenuText": "Structured Mesh", "ToolTip": "Transfinite Body, Transfinite Edges or Recombine"}
+
+    def IsActive(self):
+        return active_study() is not None and not Gui.Control.activeDialog()
+
+
+COMMANDS["EMS_StructuredMesh"] = StructuredMesh()
 for _name, _cmd in COMMANDS.items():
     Gui.addCommand(_name, _cmd)
 NAMES = list(COMMANDS)
+
+TOOLBARS = (
+    ("EMSolution Study", ["EMS_NewStudy", "EMS_Material", "EMS_Excitation"]),
+    ("EMSolution Air", ["EMS_AddAirRegion", "EMS_AddSlidingInterface"]),
+    ("EMSolution Mesh", ["EMS_MeshSize", "EMS_StructuredMesh", "EMS_SymmetricGroup"]),
+    ("EMSolution Run", ["EMS_Validate", "EMS_RunMesh"]),
+)
+# The toolbars' order, with the dropdown's commands listed one by one
+MENU = [
+    *["EMS_NewStudy", "EMS_Material", "EMS_Excitation", "Separator"],
+    *["EMS_AddAirRegion", "EMS_AddSlidingInterface", "Separator"],
+    *["EMS_MeshSize", *STRUCTURED, "EMS_SymmetricGroup", "Separator"],
+    *["EMS_Validate", "EMS_RunMesh"],
+]
+
+
+def context_names(study, kinds):
+    """Commands for a right click, given the Study and the kinds of picks: "Body", "Face", "Edge", "Vertex", plus
+    "Air" when an Air Region is picked (it takes only a Material and a Mesh Size) and "Cell" when a model body is
+    picked as a whole (a Symmetric Group's cell object)."""
+    if study is None or not kinds:
+        return []
+    if "Air" in kinds:
+        return ["EMS_Material", "EMS_MeshSize"]
+    two_d = study.Dimension == "2D"
+    out = []
+    if kinds & {"Body", "Face"}:
+        out.append("EMS_Material")
+    if "Face" in kinds and not two_d:
+        out.append("EMS_Excitation")
+    out += ["Separator", "EMS_MeshSize"] if out else ["EMS_MeshSize"]
+    if "Body" in kinds or (two_d and "Face" in kinds):
+        out += ["EMS_TransfiniteBody", "EMS_Recombine"]
+    if "Edge" in kinds:
+        out.append("EMS_TransfiniteEdges")
+    if "Cell" in kinds:
+        out.append("EMS_SymmetricGroup")
+    return out
+
+
+def context_menu():
+    """The right-click commands for the current selection; [] outside a Study, or while a panel is open."""
+    if Gui.Control.activeDialog():
+        return []
+    kinds = set()
+    for sel in Gui.Selection.getSelectionEx():
+        body = objects.pick_body(sel.Object)
+        if body is None:
+            continue
+        subs = sel.SubElementNames
+        kinds |= {k for k in ("Face", "Edge", "Vertex") if any(s.startswith(k) for s in subs)} if subs else {"Body"}
+        if objects.is_air(body):
+            kinds.add("Air")
+        elif not subs and not objects.is_study_object(body):
+            kinds.add("Cell")
+    return context_names(active_study(), kinds)

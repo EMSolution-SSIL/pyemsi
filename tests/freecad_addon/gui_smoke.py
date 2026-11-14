@@ -115,6 +115,26 @@ def main():
     doc.saveAs(os.path.join(tempfile.mkdtemp(), "Smoke.FCStd"))  # the simulation folder
     log.append("study ok")
 
+    bars = {b.objectName(): b for b in mw.findChildren(QtWidgets.QToolBar)}
+    for title, names in commands.TOOLBARS:
+        assert title in bars and bars[title].isVisible(), (title, sorted(bars))
+    assert set(commands.MENU) - {"Separator"} == set(commands.NAMES) - {"EMS_StructuredMesh"}, commands.MENU
+    assert Gui.Command.get("EMS_StructuredMesh") is not None and commands.COMMANDS["EMS_StructuredMesh"].IsActive()
+    menus = []
+    for sub in ("", "Face1", "Edge1"):
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(doc.Name, "A", sub)
+        menus.append(commands.context_menu())
+    Gui.Selection.clearSelection()
+    menus.append(commands.context_menu())
+    assert menus == [
+        ["EMS_Material", "Separator", "EMS_MeshSize", "EMS_TransfiniteBody", "EMS_Recombine", "EMS_SymmetricGroup"],
+        ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize"],
+        ["EMS_MeshSize", "EMS_TransfiniteEdges"],
+        [],
+    ], menus
+    log.append("toolbars and context menu ok")
+
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(doc.Name, "A")
     Gui.Selection.addSelection(doc.Name, "B")
