@@ -1036,10 +1036,11 @@ def _new_size_field(by_size, dim):
 
 
 def _carry_size_picks(replaced, dim):
-    """A Mesh Size picked on a face (line in 2D) that was replaced goes on to what replaced it."""
+    """A Mesh Size or Refine Near picked on a face (line in 2D) that was replaced goes on to what replaced it."""
     field = gmsh.model.mesh.field
     for f in field.list():
-        if field.getType(f) != "Constant":
+        kind = field.getType(f)
+        if kind not in ("Constant", "Distance", "Restrict") or (kind == "Distance" and dim == 3):  # no VolumesList
             continue
         old = [int(t) for t in field.getNumbers(f, FIELD_LISTS[dim])]
         if any(t in replaced for t in old):

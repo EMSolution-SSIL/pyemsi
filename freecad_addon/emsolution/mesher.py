@@ -145,7 +145,7 @@ def build(job, folder):
                 raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
             picked.setdefault(d, []).append(t)
     sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
-    apply_refinements(picks, body_vols, 3, sliding_air)
+    job["refine_fields"] = apply_refinements(picks, body_vols, 3, sliding_air)  # (entry, Distance field) pairs
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
     tf = apply_transfinite(job, mapped, body_vols, 3)
     apply_recombine(job, body_vols, 3, tf, mapped)

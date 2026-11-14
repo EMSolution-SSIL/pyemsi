@@ -21,6 +21,7 @@ from .test_meshsym3d import mesh_check_3d, slide_nodes, surface_group, write_fac
 from .meshreport import groups
 
 sys.path.insert(0, os.path.dirname(MESHER))  # meshgroups imports its neighbours by bare name, as in the mesher process
+import meshcommon  # noqa: E402 - needs the path above
 import meshgroups  # noqa: E402 - needs the path above
 
 ID = rotation(0)
@@ -1744,6 +1745,57 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(sorted(slide_nodes(fixed, 20)), sorted(slide_nodes(rotor, 20)))
         self.assertIn("Air", {v[0] for v in groups(fixed).values()})
         self.assertEqual(faces_in_three(fixed), 0)
+
+
+class RefinementFieldsTest(unittest.TestCase):
+    """The refinement fields survive the free model's face replacement (in-process gmsh)."""
+
+    def setUp(self):
+        gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.occ.addBox(0, 0, 0, 10, 10, 10)
+        gmsh.model.occ.synchronize()
+        meshcommon.apply_size_fields({})  # the background Min field the refinements join
+
+    def tearDown(self):
+        gmsh.finalize()
+
+    @staticmethod
+    def entry(**more):
+        return dict(
+            {"name": "R", "whole": [], "limit_to": [], "fine": 1.0, "coarse": 5.0, "fine_distance": 1.0, "growth": 2.0},
+            **more,
+        )
+
+    def test_carry_retargets_refinement_fields(self):
+        field = gmsh.model.mesh.field
+        dist = field.add("Distance")
+        field.setNumbers(dist, "SurfacesList", [1])
+        restrict = field.add("Restrict")
+        field.setNumbers(restrict, "VolumesList", [1])
+        field.setNumbers(restrict, "SurfacesList", [1])
+        meshgroups._carry_size_picks({1: [7, 8]}, 2)
+        self.assertEqual([int(t) for t in field.getNumbers(dist, "SurfacesList")], [7, 8])
+        faces = [int(t) for t in field.getNumbers(restrict, "SurfacesList")]
+        self.assertIn(7, faces)
+        self.assertIn(8, faces)
+        self.assertNotIn(1, faces)
+
+    def test_restrict_keeps_faces_when_volumes_go(self):
+        field = gmsh.model.mesh.field
+        meshcommon.apply_refinements([(self.entry(limit_to=[5]), {0: [1]})], {5: [1]}, 3)
+        restrict = next(f for f in field.list() if field.getType(f) == "Restrict")
+        faces = sorted(int(t) for t in field.getNumbers(restrict, "SurfacesList"))
+        self.assertEqual(faces, [1, 2, 3, 4, 5, 6])
+        meshgroups._carry_size_picks({1: []}, 3)
+        self.assertEqual(list(field.getNumbers(restrict, "VolumesList")), [])
+        self.assertEqual(sorted(int(t) for t in field.getNumbers(restrict, "SurfacesList")), faces)
+
+    def test_apply_refinements_returns_its_distance_fields(self):
+        items = [(self.entry(name="A"), {2: [1]}), (self.entry(name="B"), {2: [2]})]
+        made = meshcommon.apply_refinements(items, {}, 3)
+        self.assertEqual([e["name"] for e, _ in made], ["A", "B"])
+        self.assertTrue(all(gmsh.model.mesh.field.getType(f) == "Distance" for _, f in made))
 
 
 if __name__ == "__main__":
