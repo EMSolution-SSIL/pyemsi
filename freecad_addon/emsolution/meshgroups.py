@@ -564,6 +564,24 @@ def _generate_cell(group, job, dim):
         raise JobError(f"group {group['name']}: {err}") from err
 
 
+def _refine_partners(dim):
+    """After meshsym._periodic: every Distance field (each is a refinement's) also measures from the periodic partners
+    of its picks, the master a picked entity is copied from and the entities copied from a picked one. gmsh copies a
+    seam's mesh from its master, so a pick on the copy alone would not refine the seam, and a pick on the master would
+    grade only its own side of the cell."""
+    field = gmsh.model.mesh.field
+    for f in field.list():
+        if field.getType(f) != "Distance":
+            continue
+        for d in range(dim):
+            listed = [int(t) for t in field.getNumbers(f, FIELD_LISTS[d])]
+            if not listed:
+                continue
+            master = {e: int(gmsh.model.mesh.getPeriodic(d, [e])[0]) for _, e in gmsh.model.getEntities(d)}
+            wanted = set(listed) | {master[e] for e in listed} | {e for e, m in master.items() if m in listed}
+            field.setNumbers(f, FIELD_LISTS[d], listed + sorted(wanted - set(listed)))
+
+
 def mesh_cell(group, job, folder, build, dim, slide=None):
     """Mesh the cell of a group in a model of its own (removed at the end) and copy it by the group's transforms.
     Returns Copied: the joined nodes V, the elements of each (row, copy), the cell boundary patches that land on an
@@ -579,6 +597,7 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
             build(dict(group["job"]), folder)
         reached = _slide_cell(group, slide, dim) if slide else False
         meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
+        _refine_partners(dim)
         pair_images(group, group.get("images", []), dim)
         _generate_cell(group, job, dim)
         expected = _expected_area(group, contacts, dim) if contacts else 0.0

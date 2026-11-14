@@ -13,7 +13,7 @@ import gmsh
 import numpy as np
 
 from emsolution import meshfrozen
-from .test_mesher import MESHER, write_line
+from .test_mesher import MESHER, write_line, write_point
 from .test_mesher2d import MESHER2D, clockwise, turn_over, write_arc, write_sectors
 from .test_mesher2d import write_rects as write_plane_rects
 from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
@@ -1036,6 +1036,54 @@ class GroupJobTest(unittest.TestCase):
         write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)
         mesh = self.meshed([group])
         self.assertEqual(mesh_check(mesh, ())[1], 0)
+
+    def refine_line(self, name, p, q, fine_distance=0.5):
+        """A cell job "refine" entry picking the line p..q (written as geometry/<name>.brep): fine 0.25, coarse 2."""
+        write_line(self.geo(f"{name}.brep"), (*p, 0), (*q, 0))
+        entry = {"name": name, "files": [f"geometry/{name}.brep"], "whole": [], "limit_to": []}
+        return dict(entry, fine=0.25, fine_distance=fine_distance, coarse=2.0, growth=3.0)
+
+    def refine_ends(self, name, p, q, fine_distance=5.0):
+        """refine_line's entry picking only the points p and q, reaching over the whole line between them."""
+        entry = self.refine_line(name, p, q, fine_distance)
+        entry["files"] = [f"geometry/{name}_{k}.brep" for k in range(2)]
+        for file, point in zip(entry["files"], (p, q)):
+            write_point(os.path.join(self.dir, file), (*point, 0))
+        return entry
+
+    @staticmethod
+    def nodes_on_ray(path, degrees, r0, r1):
+        """The nodes of the mesh on the ray at degrees from the origin with r0 <= r <= r1: in a ring of copies, the
+        seam that the cell (copy 0) shares with its neighbour there."""
+        xyz = read_mesh(path)[0]
+        u = np.array([math.cos(math.radians(degrees)), math.sin(math.radians(degrees))])
+        along = xyz[:, :2] @ u
+        off = np.abs(xyz[:, :2] @ np.array([-u[1], u[0]]))
+        return int(np.count_nonzero((off < 1e-6) & (along >= r0 - 1e-6) & (along <= r1 + 1e-6)))
+
+    def test_refine_on_either_seam_refines_both(self):  # gmsh copies one seam's mesh from the other
+        least = 10 / 0.25 * 0.8
+        # A picked line ends up the lower curve tag after the build's fragment, so _periodic makes it the master
+        # whichever seam it is on; the points at a seam's ends leave the curve tags alone and reach the copy too.
+        for how, refine in (("line", self.refine_line), ("ends", self.refine_ends)):
+            for degrees in (0, 30):
+                with self.subTest(pick=how, seam=degrees):
+                    entry = refine(f"{how}_{degrees}", _polar(10, degrees), _polar(20, degrees))
+                    group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, extra={"refine": [entry]})
+                    mesh = self.meshed([group])
+                    self.assertGreaterEqual(self.nodes_on_ray(mesh, 0, 10, 20), least)
+                    self.assertGreaterEqual(self.nodes_on_ray(mesh, 30, 10, 20), least)
+                    self.assertEqual(mesh_check(mesh, [10, 20])[1:], (0, 0))
+
+    def test_refine_in_a_cell_stays_in_the_cell(self):  # cell items never reach the free air around the copies
+        def air_elements(extra):  # a disc of air in the bore, 2 mm clear of the copies: within the pick's reach
+            write_disc(self.geo("air.brep"), 8)
+            group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, extra=extra)
+            return groups(self.meshed([group], free=[self.air_2d(size=2.0)]))[20][1]
+
+        without = air_elements(None)
+        seam = self.refine_line("seam", _polar(10, 0), _polar(20, 0))
+        self.assertEqual(air_elements({"refine": [seam]}), without)
 
     AIR = {"mat_id": 20, "name": "Air", "file": "geometry/air.brep", "size": 6.0}
 
