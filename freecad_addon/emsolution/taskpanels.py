@@ -1230,9 +1230,8 @@ class ItemPanel:
         if regions:
             self.pick, label, kinds, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
-        air = isinstance(
-            obj.Proxy, (objects.MeshSize, objects.RefineNear)
-        )  # the air is not recombined, structured or excited
+        # the air is not recombined, structured or excited
+        air = isinstance(obj.Proxy, (objects.MeshSize, objects.RefineNear))
         self.gate = ItemGate(study, kinds, whole, air, regions)
         Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.current = objects.item_refs(obj)
@@ -1355,8 +1354,12 @@ class ItemPanel:
         allowed = {b.Name for b in objects.assignable(study) + objects.cell_bodies(study)}
         have = {b.Name for b in self.limit_to}
         added = [b for b in bodies if b.Name in allowed and b.Name not in have]
+        skipped = [b for b in bodies if b.Name not in allowed or b.Name in have]
         if not added:
             warn("Nothing new to add: pick bodies the Study meshes that are not in the list yet.")
+        elif skipped:
+            names = ", ".join(objects.display_name(b) for b in skipped)
+            warn(f"Not added: {names}. They are not meshed by the Study, or already in the list.")
         self.limit_to += added
         self.refresh_limit()
 
