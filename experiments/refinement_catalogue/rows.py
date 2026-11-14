@@ -219,6 +219,58 @@ def rn05():
     return study
 
 
+PLATE_FINE = 2.0
+
+
+def rn10():
+    """A 200 x 200 x 10 plate in a Manual Box Air Region 220 x 220 x 30 (10 mm of air round it), default size 10; its
+    top face z = 5. A large face: the Distance must sample it densely enough that the face gets the fine size."""
+    doc, study, (plate,) = study_of("RN-10", "3D", [("Plate", block(-100, -100, -5, 100, 100, 5))], size=10)
+    air = objects.make_air_region(study, "Box", SizeMode="Manual", Center=V(0, 0, 0), Length=220, Width=220, Height=30)
+    done(study, [plate], air)
+    top = subs(plate, "Face", lambda f: near(f.BoundBox.ZMin, 5) and near(f.BoundBox.ZMax, 5))
+    objects.make_refine_near(study, [(plate, top[0])], fine=PLATE_FINE, coarse=10, growth=10)
+    return study
+
+
+def face_edges(msh, z=5.0, half=100.0):
+    """(longest, mean) length of the mesh edges in the plane z inside |x|, |y| <= half: the edges of RN-10's top face
+    triangles. Read from the tetrahedra, as the file holds only the volumes' elements."""
+    import gmsh
+    import numpy as np
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        types, _, nodes = gmsh.model.mesh.getElements(3)
+    finally:
+        gmsh.finalize()
+    where = np.zeros(int(tags.max()) + 1, dtype=int)
+    where[tags.astype(int)] = np.arange(len(tags))
+    xyz = np.reshape(coords, (-1, 3))
+    tets = np.reshape(nodes[list(types).index(4)], (-1, 4)).astype(int)
+    pairs = np.concatenate([tets[:, [a, b]] for a in range(4) for b in range(a + 1, 4)])
+    pairs = np.unique(np.sort(pairs, axis=1), axis=0)
+    p, q = xyz[where[pairs[:, 0]]], xyz[where[pairs[:, 1]]]
+    on = (np.abs(p[:, 2] - z) < 1e-6) & (np.abs(q[:, 2] - z) < 1e-6)
+    on &= np.all(np.abs(p[:, :2]) <= half + 1e-6, axis=1) & np.all(np.abs(q[:, :2]) <= half + 1e-6, axis=1)
+    lengths = np.linalg.norm(p[on] - q[on], axis=1)
+    return (float(lengths.max()), float(lengths.mean())) if len(lengths) else (0.0, 0.0)
+
+
+def rn10_after(folder):
+    """(passed, text): the plate's top face is refined (its longest edge in new under half of today's); the text says
+    whether the longest is within 1.5 x the fine size, which the Distance's Sampling (at most 100 per side of a
+    surface) does not reach on a face this large."""
+    worst, mean = face_edges(os.path.join(folder, "new", "pre_geom.msh"))
+    today = face_edges(os.path.join(folder, "today", "pre_geom.msh"))
+    within = "within" if worst <= 1.5 * PLATE_FINE else "NOT within"
+    text = f"top face edges: new longest {worst:.2f} mean {mean:.2f}, today longest {today[0]:.2f} mean {today[1]:.2f}"
+    return 0 < worst < today[0] / 2, text + f" mm; new longest {within} 1.5 x fine {PLATE_FINE:g}"
+
+
 MAGNET = {"zoom": (-30, -15, 30, 15)}
 CASES = [
     ("RN-01", "2D magnet 40 x 10, its 4 corners (0.3 to 4 over 8)", rn01, "meshes", MAGNET),
@@ -274,5 +326,12 @@ CASES = [
         "refers to nothing (were its bodies deleted?)",
         {},
     ),
+    (
+        "RN-10",
+        "3D plate 200 x 200 x 10, its top face (2 to 10 over 10, default 10): the whole face gets 2, cut at y = 0",
+        rn10,
+        "meshes",
+        {"clip": "y", "at": 0.0, "zoom": (-110, -15, -60, 15)},
+    ),
 ]
-AFTER = {"RN-08": rn08_after}
+AFTER = {"RN-08": rn08_after, "RN-10": rn10_after}
