@@ -1196,6 +1196,7 @@ ITEM_PICKS = {
         "Click regions, edges or vertices in the 3D view.",
     ),
 }
+ITEM_PICKS[objects.RefineNear] = ITEM_PICKS[objects.MeshSize]
 # in a 2D Study: (pick, list label, gate kinds, hint) replacing those of ITEM_PICKS
 ITEM_PICKS_2D = {
     objects.TransfiniteBody: (
@@ -1229,7 +1230,9 @@ class ItemPanel:
         if regions:
             self.pick, label, kinds, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
-        air = isinstance(obj.Proxy, objects.MeshSize)  # the air is not recombined, structured or excited
+        air = isinstance(
+            obj.Proxy, (objects.MeshSize, objects.RefineNear)
+        )  # the air is not recombined, structured or excited
         self.gate = ItemGate(study, kinds, whole, air, regions)
         Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.current = objects.item_refs(obj)
@@ -1250,6 +1253,30 @@ class ItemPanel:
         if isinstance(obj.Proxy, objects.MeshSize):
             self.size = _length_box(obj.Size.Value)
             layout.addRow("Size", self.size)
+        self.fine = self.fine_distance = self.coarse = self.growth = self.limit = None
+        self.limit_to = []
+        if isinstance(obj.Proxy, objects.RefineNear):
+            self.fine = _length_box(obj.FineSize.Value)
+            layout.addRow("Fine size", self.fine)
+            self.fine_distance = _length_box(obj.FineDistance.Value, minimum=0.0)
+            layout.addRow("Fine distance", self.fine_distance)
+            self.coarse = _length_box(obj.CoarseSize.Value)
+            layout.addRow("Coarse size", self.coarse)
+            self.growth = _length_box(obj.GrowthDistance.Value)
+            layout.addRow("Growth distance", self.growth)
+            self.limit_to = list(obj.LimitTo)
+            self.limit = QtWidgets.QListWidget()
+            self.limit.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+            layout.addRow("Limit to", self.limit)
+            add_limit = QtWidgets.QPushButton("Add selection")
+            remove_limit = QtWidgets.QPushButton("Remove")
+            add_limit.clicked.connect(self.add_limit)
+            remove_limit.clicked.connect(self.remove_limit)
+            limit_buttons = QtWidgets.QHBoxLayout()
+            limit_buttons.addWidget(add_limit)
+            limit_buttons.addWidget(remove_limit)
+            layout.addRow(limit_buttons)
+            self.refresh_limit()
         self.elements = self.distribution = self.bump = None
         if isinstance(obj.Proxy, objects.TransfiniteEdges):
             self.elements = QtWidgets.QSpinBox()
@@ -1284,6 +1311,10 @@ class ItemPanel:
         for signal in (
             self.name.textChanged,
             self.size and self.size.valueChanged,
+            self.fine and self.fine.valueChanged,
+            self.fine_distance and self.fine_distance.valueChanged,
+            self.coarse and self.coarse.valueChanged,
+            self.growth and self.growth.valueChanged,
             self.elements and self.elements.valueChanged,
             self.distribution and self.distribution.currentTextChanged,
         ):
@@ -1295,6 +1326,13 @@ class ItemPanel:
         values = {"Name": self.name.text().strip() or objects.display_name(self.obj)}
         if self.size is not None:
             values["Size"] = self.size.value()
+        if self.fine is not None:
+            values.update(
+                FineSize=self.fine.value(),
+                FineDistance=self.fine_distance.value(),
+                CoarseSize=self.coarse.value(),
+                GrowthDistance=self.growth.value(),
+            )
         if self.elements is not None:
             values.update(Elements=self.elements.value(), Distribution=self.distribution.currentText())
         return values
@@ -1303,6 +1341,29 @@ class ItemPanel:
         self.refs.clear()
         self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
         labels.set_refs(self.obj, self.current)
+
+    def refresh_limit(self):
+        self.limit.clear()
+        self.limit.addItems([objects.display_name(b) for b in self.limit_to])
+
+    def add_limit(self):
+        """Limit to the bodies picked, whole: any click on a body counts, an Air Region too."""
+        study = objects.owner_study(self.obj)
+        bodies = list(
+            dict.fromkeys(b for b in (objects.pick_body(s.Object) for s in Gui.Selection.getSelectionEx()) if b)
+        )
+        allowed = {b.Name for b in objects.assignable(study) + objects.cell_bodies(study)}
+        have = {b.Name for b in self.limit_to}
+        added = [b for b in bodies if b.Name in allowed and b.Name not in have]
+        if not added:
+            warn("Nothing new to add: pick bodies the Study meshes that are not in the list yet.")
+        self.limit_to += added
+        self.refresh_limit()
+
+    def remove_limit(self):
+        rows = {i.row() for i in self.limit.selectedIndexes()}
+        self.limit_to = [b for i, b in enumerate(self.limit_to) if i not in rows]
+        self.refresh_limit()
 
     def highlight_rows(self):
         highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
@@ -1362,6 +1423,12 @@ class ItemPanel:
                 self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
+        if self.fine is not None:
+            self.obj.FineSize = self.fine.value()
+            self.obj.FineDistance = self.fine_distance.value()
+            self.obj.CoarseSize = self.coarse.value()
+            self.obj.GrowthDistance = self.growth.value()
+            self.obj.LimitTo = list(self.limit_to)
         if self.elements is not None:
             self.obj.Elements = self.elements.value()
             self.obj.Distribution = self.distribution.currentText()

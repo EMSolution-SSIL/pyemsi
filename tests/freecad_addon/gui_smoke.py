@@ -118,7 +118,10 @@ def main():
     bars = {b.objectName(): b for b in mw.findChildren(QtWidgets.QToolBar)}
     for title, names in commands.TOOLBARS:
         assert title in bars and bars[title].isVisible(), (title, sorted(bars))
-    assert set(commands.MENU) - {"Separator"} == set(commands.NAMES) - {"EMS_StructuredMesh"}, commands.MENU
+    assert set(commands.MENU) - {"Separator"} == set(commands.NAMES) - {
+        "EMS_StructuredMesh",
+        "EMS_Refinement",
+    }, commands.MENU
     assert Gui.Command.get("EMS_StructuredMesh") is not None and commands.COMMANDS["EMS_StructuredMesh"].IsActive()
     menus = []
     for sub in ("", "Face1", "Edge1"):
@@ -128,9 +131,12 @@ def main():
     Gui.Selection.clearSelection()
     menus.append(commands.context_menu())
     assert menus == [
-        ["EMS_Material", "Separator", "EMS_MeshSize", "EMS_TransfiniteBody", "EMS_Recombine", "EMS_SymmetricGroup"],
-        ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize"],
-        ["EMS_MeshSize", "EMS_TransfiniteEdges"],
+        [
+            *["EMS_Material", "Separator", "EMS_MeshSize", "EMS_RefineNear"],
+            *["EMS_TransfiniteBody", "EMS_Recombine", "EMS_SymmetricGroup"],
+        ],
+        ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize", "EMS_RefineNear"],
+        ["EMS_MeshSize", "EMS_RefineNear", "EMS_TransfiniteEdges"],
         [],
     ], menus
     log.append("toolbars and context menu ok")
@@ -210,6 +216,34 @@ def main():
     fine.References = [(doc.A, "Edge1"), (doc.B, "Vertex8"), (doc.B, "Face2")]
     log.append("mesh size panel ok")
 
+    from emsolution import validation
+
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "A", "Edge1")
+    opened.clear()  # the Mesh Size panel above was opened by hand
+    Gui.runCommand("EMS_RefineNear")
+    assert len(opened) == 1, (
+        warned[-1:],
+        commands.COMMANDS["EMS_RefineNear"].IsActive(),
+        Gui.Control.activeDialog(),
+        commands.active_study(),
+    )
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog(), (panel.new, Gui.Control.activeDialog(), warned[-1:])
+    panel.fine.setValue(0.5)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "B")
+    panel.add_limit()
+    assert panel.limit.count() == 1, panel.limit.count()
+    assert panel.accept()
+    (near,) = objects.refine_items(study)
+    assert near.FineSize.Value == 0.5 and near.LimitTo == [doc.B], (near.FineSize.Value, near.LimitTo)
+    assert near.References == [(doc.A, ("Edge1",))], near.References
+    refine_errors = [p.text for p in validation.errors(validation.validate(study)) if "Refine" in p.text]
+    assert not refine_errors, refine_errors
+    Gui.Selection.clearSelection()
+    log.append("refine near ok")
+
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
         return sorted(b.text().replace("&", "") for box in boxes if box.isVisible() for b in box.buttons())
@@ -238,7 +272,7 @@ def main():
             if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column
         }
 
-    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 2, "Air Regions": 0}
+    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 3, "Air Regions": 0}
     for folder in (
         study.MaterialLibraryGroup,
         study.MaterialsGroup,

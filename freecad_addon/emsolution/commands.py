@@ -214,6 +214,23 @@ class AddMeshSize(_StudyCommand):
             _create_and_edit(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
 
 
+class AddRefineNear(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("refinenear"),
+            "MenuText": "Refine Near",
+            "ToolTip": "Fine elements at the selected faces, edges, vertices or bodies, growing to a coarse size",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
+        if gate(study, [b for b, _ in refs]):
+            _create_and_edit(study, "Add Refine Near", lambda: objects.make_refine_near(study, refs))
+
+
 class AddAirRegion(_StudyCommand):
     def GetResources(self):
         return {
@@ -416,6 +433,7 @@ COMMANDS = {
     "EMS_Material": AssignMaterial(),
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
+    "EMS_RefineNear": AddRefineNear(),
     "EMS_AddAirRegion": AddAirRegion(),
     "EMS_AddSlidingInterface": AddSlidingInterface(),
     "EMS_TransfiniteBody": AddTransfiniteBody(),
@@ -426,6 +444,7 @@ COMMANDS = {
     "EMS_RunMesh": RunMesh(),
 }
 STRUCTURED = ("EMS_TransfiniteBody", "EMS_TransfiniteEdges", "EMS_Recombine")
+REFINEMENTS = ("EMS_RefineNear",)
 
 
 class StructuredMesh:
@@ -444,7 +463,18 @@ class StructuredMesh:
         return active_study() is not None and not Gui.Control.activeDialog()
 
 
+class Refinement(StructuredMesh):
+    """Toolbar dropdown of the mesh refinements."""
+
+    def GetCommands(self):
+        return REFINEMENTS
+
+    def GetResources(self):
+        return {"Pixmap": icon("refinement"), "MenuText": "Refinement", "ToolTip": "Refine Near"}
+
+
 COMMANDS["EMS_StructuredMesh"] = StructuredMesh()
+COMMANDS["EMS_Refinement"] = Refinement()
 for _name, _cmd in COMMANDS.items():
     Gui.addCommand(_name, _cmd)
 NAMES = list(COMMANDS)
@@ -452,14 +482,14 @@ NAMES = list(COMMANDS)
 TOOLBARS = (
     ("EMSolution Study", ["EMS_NewStudy", "EMS_Material", "EMS_Excitation"]),
     ("EMSolution Air", ["EMS_AddAirRegion", "EMS_AddSlidingInterface"]),
-    ("EMSolution Mesh", ["EMS_MeshSize", "EMS_StructuredMesh", "EMS_SymmetricGroup"]),
+    ("EMSolution Mesh", ["EMS_MeshSize", "EMS_Refinement", "EMS_StructuredMesh", "EMS_SymmetricGroup"]),
     ("EMSolution Run", ["EMS_Validate", "EMS_RunMesh"]),
 )
 # The toolbars' order, with the dropdown's commands listed one by one
 MENU = [
     *["EMS_NewStudy", "EMS_Material", "EMS_Excitation", "Separator"],
     *["EMS_AddAirRegion", "EMS_AddSlidingInterface", "Separator"],
-    *["EMS_MeshSize", *STRUCTURED, "EMS_SymmetricGroup", "Separator"],
+    *["EMS_MeshSize", *REFINEMENTS, *STRUCTURED, "EMS_SymmetricGroup", "Separator"],
     *["EMS_Validate", "EMS_RunMesh"],
 ]
 
@@ -471,14 +501,14 @@ def context_names(study, kinds):
     if study is None or not kinds:
         return []
     if "Air" in kinds:
-        return ["EMS_Material", "EMS_MeshSize"]
+        return ["EMS_Material", "EMS_MeshSize", "EMS_RefineNear"]
     two_d = study.Dimension == "2D"
     out = []
     if kinds & {"Body", "Face"}:
         out.append("EMS_Material")
     if "Face" in kinds and not two_d:
         out.append("EMS_Excitation")
-    out += ["Separator", "EMS_MeshSize"] if out else ["EMS_MeshSize"]
+    out += ["Separator", "EMS_MeshSize", "EMS_RefineNear"] if out else ["EMS_MeshSize", "EMS_RefineNear"]
     if "Body" in kinds or (two_d and "Face" in kinds):
         out += ["EMS_TransfiniteBody", "EMS_Recombine"]
     if "Edge" in kinds:
