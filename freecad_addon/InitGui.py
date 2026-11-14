@@ -13,8 +13,17 @@ class EMSolutionWorkbench(Gui.Workbench):
     def Initialize(self):
         from emsolution import commands
 
-        self.appendToolbar("EMSolution", commands.NAMES)
-        self.appendMenu("EMSolution", commands.NAMES)
+        for title, names in commands.TOOLBARS:
+            self.appendToolbar(title, names)
+        self.appendMenu("EMSolution", commands.MENU)
+
+    def ContextMenu(self, recipient):
+        from emsolution import commands
+
+        names = commands.context_menu()
+        if names:
+            self.appendContextMenu("", "Separator")
+            self.appendContextMenu("EMSolution", names)
 
     def Activated(self):
         import FreeCADGui
