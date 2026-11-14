@@ -256,8 +256,6 @@ def _settings(study, included, r):
                 r.error(f"Refine Near {n.Label}: the coarse size must not be smaller than the fine size.", n)
             if n.GrowthDistance.Value <= 0:
                 r.error(f"Refine Near {n.Label}: the growth distance must be greater than 0.", n)
-            if n.FineDistance.Value < 0:
-                r.error(f"Refine Near {n.Label}: the fine distance must not be negative.", n)
         for b in n.LimitTo:
             if b.Name not in included:
                 r.warning(

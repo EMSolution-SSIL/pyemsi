@@ -1751,7 +1751,6 @@ class StudyTest(unittest.TestCase):
         a = self.box("A")
         item = objects.make_refine_near(self.study, [(a, "Edge1")], 0.0, 1.0, 0.0)
         texts = self.problems()
-        # no test for a negative fine distance: App::PropertyLength turns a negative value into 0
         for end in ("the fine size must be greater than 0.", "the growth distance must be greater than 0."):
             self.assertIn(f"Refine Near {item.Label}: {end}", texts)
         item.FineSize, item.CoarseSize, item.GrowthDistance, item.FineDistance = 2.0, 1.0, 5.0, 0.0
