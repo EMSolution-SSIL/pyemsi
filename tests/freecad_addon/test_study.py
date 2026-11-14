@@ -85,6 +85,25 @@ class StudyTest(unittest.TestCase):
 
     # --- IDs ---------------------------------------------------------------
 
+    def test_refine_near_defaults_and_row(self):
+        a = self.box("A")
+        self.study.MeshSizesGroup.DefaultMeshSize = 4.0
+        item = objects.make_refine_near(self.study, [(a, "Edge1")])
+        self.assertEqual((item.FineSize.Value, item.CoarseSize.Value, item.GrowthDistance.Value), (2.0, 4.0, 10.0))
+        self.assertEqual(item.FineDistance.Value, 0.0)
+        self.assertEqual(objects.refine_items(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.item_refs(item), [(a, "Edge1")])
+        self.assertEqual(
+            objects.mesh_size_rows(self.study),
+            [(item, [(a, "Edge1")], ["RefineNear", "2 → 4 mm over 10 mm", "A.Edge1"])],
+        )
+
+    def test_refine_near_row_names_its_limit(self):
+        a = self.box("A")
+        objects.make_refine_near(self.study, [(a, "Face2")], 0.4, 4, 10, limit_to=[a])
+        self.assertEqual(objects.mesh_size_rows(self.study)[0][2][1], "0.4 → 4 mm over 10 mm in A")
+
     def test_ids_follow_tree_order_and_stay_after_adding_a_body(self):
         for name, x in (("A", 0), ("B", 10), ("C", 20)):
             self.box(name, x)

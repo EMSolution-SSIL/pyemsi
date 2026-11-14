@@ -329,6 +329,19 @@ class MeshSize(_Proxy):
         )
 
 
+class RefineNear(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "Faces, edges and vertices to refine around"
+        )
+        obj.addProperty("App::PropertyLength", "FineSize", "EMSolution", "Element size next to the references")
+        obj.addProperty("App::PropertyLength", "FineDistance", "EMSolution", "Distance over which the fine size holds")
+        obj.addProperty("App::PropertyLength", "CoarseSize", "EMSolution", "Element size far from the references")
+        obj.addProperty("App::PropertyLength", "GrowthDistance", "EMSolution", "Distance over which the size grows")
+        obj.addProperty("App::PropertyLinkListGlobal", "LimitTo", "EMSolution", "Bodies the refinement is limited to")
+
+
 class TransfiniteBody(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
@@ -917,6 +930,21 @@ def make_mesh_size(study, size, refs):
     return obj
 
 
+def make_refine_near(study, refs, fine=None, coarse=None, growth=None, fine_distance=0.0, limit_to=()):
+    """refs: list of (body, sub), sub = "FaceN", "EdgeN" or "VertexN". None takes the default: half and the whole of the
+    Study's DefaultMeshSize for the fine and coarse sizes, five fine sizes for the growth distance; 0.0 is a value."""
+    default = study.MeshSizesGroup.DefaultMeshSize.Value
+    fine = default / 2 if fine is None else fine
+    obj = _add(study, "MeshSizesGroup", RefineNear, "RefineNear")
+    obj.FineSize = fine
+    obj.CoarseSize = default if coarse is None else coarse
+    obj.GrowthDistance = 5 * fine if growth is None else growth
+    obj.FineDistance = fine_distance
+    obj.References = refs
+    obj.LimitTo = list(limit_to)
+    return obj
+
+
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
     object, all its solids (faces in 2D); split_row splits a row into blocks."""
@@ -933,6 +961,10 @@ def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
 
         taskpanels.attach_view_provider(obj)
     return obj
+
+
+def refine_items(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), RefineNear)]
 
 
 def symmetric_groups(study):
@@ -1604,6 +1636,7 @@ def is_item(obj):
         Material,
         Excitation,
         MeshSize,
+        RefineNear,
         TransfiniteBody,
         TransfiniteEdges,
         Recombine,
@@ -1689,6 +1722,11 @@ def air_region_rows(study):
 def _size_text(item):
     if isinstance(item.Proxy, MeshSize):
         return f"{item.Size.Value:g} mm"
+    if isinstance(item.Proxy, RefineNear):
+        text = f"{item.FineSize.Value:g} → {item.CoarseSize.Value:g} mm over {item.GrowthDistance.Value:g} mm"
+        if item.LimitTo:
+            text += f" in {', '.join(display_name(b) for b in item.LimitTo)}"
+        return text
     if isinstance(item.Proxy, TransfiniteBody):
         return "structured"
     if isinstance(item.Proxy, Recombine):
