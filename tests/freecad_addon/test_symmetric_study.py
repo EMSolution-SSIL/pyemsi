@@ -189,14 +189,82 @@ def _problems(study, severity=None):
     return [p for p in validation.validate(study) if severity in (None, p.severity)]
 
 
-def test_refine_near_is_refused_with_symmetric_groups(motor):
-    cell = next(b for b in objects.cell_bodies(motor) if b.Name == "CoilCell")
-    item = objects.make_refine_near(motor, [(cell, "Edge1")])
-    texts = [p.text for p in _problems(motor, "error")]
+def _cell(study, name="CoilCell"):
+    return next(b for b in objects.cell_bodies(study) if b.Name == name)
+
+
+def _free_ring(study):
+    """A free body on the fixed side, outside the stator."""
+    ring = Part.Face(Part.Wire(Part.makeCircle(110))).cut(Part.Face(Part.Wire(Part.makeCircle(100))))
+    return symcases.add_free(study, "FreeRing", ring, symcases.libraries(study)["Steel"])
+
+
+def _job_of(study):
+    with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _refine_keys(job):
+    sym = job["symmetric"]
+    return [g["job"].get("refine") for g in sym["groups"]], [f["job"].get("refine") for f in sym.get("free", [])]
+
+
+def test_refine_near_on_a_cell_goes_to_the_cell_job(motor):
+    cell = _cell(motor)
+    objects.make_refine_near(motor, [(cell, "")])
+    assert not _texts(motor)
+    job = _job_of(motor)
+    cells, free = _refine_keys(job)
+    group = objects.symmetric_groups(motor)[0]
+    assert cells[0][0]["whole"] == [list(group.Cells).index(cell) + 1]
+    assert cells[1] is None and not any(free)
+
+
+def test_refine_near_on_a_free_body_goes_to_the_free_job(motor):
+    body = _free_ring(motor)
+    objects.make_refine_near(motor, [(body, "Edge1")])
+    assert not _texts(motor)
+    cells, free = _refine_keys(_job_of(motor))
+    assert not any(cells)
+    (entry,) = free[0]
+    assert len(entry["files"]) == 1 and entry["files"][0].startswith("geometry/free_fixed_refine_")
+
+
+def test_refine_near_on_a_cell_and_a_free_body_goes_to_both_jobs(motor):
+    body = _free_ring(motor)
+    objects.make_refine_near(motor, [(_cell(motor), "Edge1"), (body, "Edge1")])
+    cells, free = _refine_keys(_job_of(motor))
+    assert len(cells[0]) == 1 and cells[1] is None and len(free[0]) == 1
+    files = cells[0][0]["files"] + free[0][0]["files"]
+    assert files and len(set(files)) == len(files)
+
+
+def test_refine_near_limit_to_across_parts_warns(motor):
+    air = symcases.add_air_region(
+        motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90
+    )
+    item = objects.make_refine_near(motor, [(_cell(motor), "Edge1")], limit_to=[air])
+    assert not _texts(motor)
     assert (
-        f"Refine Near {item.Label}: refinements in a Study with Symmetric Groups are not handled yet, a limit of the"
-        " tool."
-    ) in texts
+        f"Refine Near {item.Label}: no body in Limit to is meshed with its picks; the refinement is skipped."
+        in _texts(motor, "warning")
+    )
+    cells, free = _refine_keys(_job_of(motor))
+    assert not any(cells) and not any(free)
+
+
+def test_refine_near_limit_to_partly_across_parts_warns(motor):
+    cell = _cell(motor)
+    air = symcases.add_air_region(
+        motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90
+    )
+    item = objects.make_refine_near(motor, [(cell, "Edge1")], limit_to=[cell, air])
+    assert (
+        f"Refine Near {item.Label}: {objects.display_name(air)} in Limit to is meshed apart from its picks (a Symmetric"
+        " Group's cell objects are meshed on their own); it has no effect there."
+    ) in _texts(motor, "warning")
+    cells, _ = _refine_keys(_job_of(motor))
+    assert cells[0][0]["limit_to"] == [list(objects.symmetric_groups(motor)[0].Cells).index(cell) + 1]
 
 
 def _texts(study, severity="error"):

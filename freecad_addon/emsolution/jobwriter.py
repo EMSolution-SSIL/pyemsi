@@ -136,10 +136,10 @@ def export_subs(folder, body, subs, prefix):
     return files
 
 
-def refine_entries(study, folder, ids):
+def refine_entries(study, folder, ids, prefix=""):
     """The job's "refine" list: one entry per Refine Near item that refers to the mesh. ids is {body or air Name:
     [MAT_ID, ...]}; a whole-body reference goes to "whole" (it wins over sub-elements of that body), the sub-elements
-    are written to geometry/refine_<item>_<body>_<n>.brep."""
+    are written to geometry/<prefix>refine_<item>_<body>_<n>.brep."""
     entries = []
     for k, item in enumerate(objects.refine_items(study), 1):
         files, whole = [], []
@@ -149,7 +149,7 @@ def refine_entries(study, folder, ids):
             if "" in subs:
                 whole.extend(ids[body.Name])
             else:
-                files.extend(export_subs(folder, body, subs, f"refine_{k}_{j}"))
+                files.extend(export_subs(folder, body, subs, f"{prefix}refine_{k}_{j}"))
         if not (files or whole):
             continue
         limit_to = [mat_id for body in item.LimitTo if body.Name in ids for mat_id in ids[body.Name]]
@@ -330,6 +330,9 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
         ids,
         prefix,
     )
+    refine = refine_entries(study, folder, {name: [n] for name, n in ids.items()}, prefix)
+    if refine:
+        cell_job["refine"] = refine
     assignments = {m.PartKey: m for m in objects.part_assignments(study)}
     rows, parts, index, written = objects.rows_of(item), [], {}, []
     for k, row in enumerate(rows, 1):
@@ -395,6 +398,7 @@ def write_groups(study, folder, checked=None):
                 {name: int(study.MatIds[name]) for name in mine},
                 f"free_{side}_",
             )
+            refine_ids = {name: [int(study.MatIds[name])] for name in mine}
             for air in with_air:
                 rel = "geometry/air.brep"
                 meshed_shape(air).exportBrep(os.path.join(folder, rel))
@@ -404,6 +408,10 @@ def write_groups(study, folder, checked=None):
                     "file": rel,
                     "size": air_size(study),
                 }
+                refine_ids[air.Name] = [job["air"]["mat_id"]]
+            refine = refine_entries(study, folder, refine_ids, f"free_{side}_")
+            if refine:
+                job["refine"] = refine
             free_jobs.append({"side": side, "job": job})
     if free_jobs:
         block["free"] = free_jobs

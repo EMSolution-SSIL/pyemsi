@@ -241,14 +241,8 @@ def _settings(study, included, r):
     for e in objects.transfinite_edges(study):
         if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
-    grouped = objects.is_grouped(study)
+    parts = {}  # body Name -> _mesh_part, worked out once and only with Symmetric Groups
     for n in objects.refine_items(study):
-        if grouped:
-            r.error(
-                f"Refine Near {n.Label}: refinements in a Study with Symmetric Groups are not handled yet, a limit of"
-                " the tool.",
-                n,
-            )
         if any(b.Name in included for b, _ in n.References):
             if n.FineSize.Value <= 0:
                 r.error(f"Refine Near {n.Label}: the fine size must be greater than 0.", n)
@@ -268,6 +262,41 @@ def _settings(study, included, r):
                 " no effect there.",
                 n,
             )
+        if not objects.is_grouped(study):
+            continue
+        meshed_limit = [b for b in n.LimitTo if b.Name in included]
+        picked = [b for b, _ in n.References if b.Name in included]
+        for b in meshed_limit + picked:
+            parts.setdefault(b.Name, _mesh_part(study, b))
+        pick_parts = set().union(*(parts[b.Name] for b in picked))
+        if not (meshed_limit and pick_parts):
+            continue
+        apart = [b for b in meshed_limit if not parts[b.Name] & pick_parts]
+        if len(apart) == len(meshed_limit):  # jobwriter.refine_entries leaves the item out of every job
+            r.warning(
+                f"Refine Near {n.Label}: no body in Limit to is meshed with its picks; the refinement is skipped.", n
+            )
+            continue
+        for b in apart:
+            r.warning(
+                f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is meshed apart from its picks (a"
+                " Symmetric Group's cell objects are meshed on their own); it has no effect there.",
+                n,
+            )
+
+
+def _mesh_part(study, body):
+    """The meshes body is in with Symmetric Groups, as a set: its group for a cell object (one per group that holds
+    it), "free fixed" or "free moving" for a free body by its side (the Air Region is on the fixed side), nothing for
+    a group's drawing, which no job meshes."""
+    if objects.is_air(body):
+        return {"free fixed"}
+    found = {f"group {g.Name}" for g in objects.symmetric_groups(study) if body in g.Cells}
+    if found:
+        return found
+    if body in objects.symmetric_groups(study):
+        return set()
+    return {"free moving" if body.Name in sides.moving(study) else "free fixed"}
 
 
 def thickness(shape):
