@@ -1,4 +1,4 @@
-r"""The Stage 1 refinement catalogue (spec 9): each row of rows.CASES is built as a Study, its set-up saved, meshed with
+r"""The refinement catalogue (spec 9): each row of rows.CASES is built as a Study, its set-up saved, meshed with
 its Refine Near items ("new") and again with them deleted ("today"), and its pictures drawn.
 
 Run: pixi run -e addon python experiments/refinement_catalogue/build_catalogue.py [--only ID ...]

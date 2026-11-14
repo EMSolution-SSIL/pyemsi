@@ -1,9 +1,11 @@
-"""The Stage 1 rows of the refinement catalogue (spec 9): Refine Near in ordinary Studies. Each row is
+"""The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
+(RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups. Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
 (see AFTER), a check of its meshes. Sizes in mm, default mesh size 4."""
 
+import json
 import math
 import os
 import sys
@@ -16,8 +18,9 @@ sys.path.insert(0, ROOT)
 import FreeCAD as App  # noqa: E402 - after the add-on path
 import Part  # noqa: E402
 
-from emsolution import objects  # noqa: E402
+from emsolution import geometry, objects  # noqa: E402
 from tests.freecad_addon import cases  # noqa: E402
+from tests.freecad_addon import symcases  # noqa: E402
 
 V = App.Vector
 SIZE = 4.0
@@ -155,8 +158,8 @@ def rn08():
     return study
 
 
-def slide_nodes(msh):
-    """The nodes of a mesh file on RN-08's sliding circle."""
+def slide_nodes(msh, radius=SLIDE_R):
+    """The nodes of a mesh file on a sliding circle of radius (RN-08's by default)."""
     import gmsh
     import numpy as np
 
@@ -167,7 +170,7 @@ def slide_nodes(msh):
         xyz = np.reshape(gmsh.model.mesh.getNodes()[1], (-1, 3))
     finally:
         gmsh.finalize()
-    return int(np.sum(np.abs(np.hypot(xyz[:, 0], xyz[:, 1]) - SLIDE_R) < 1e-6))
+    return int(np.sum(np.abs(np.hypot(xyz[:, 0], xyz[:, 1]) - radius) < 1e-6))
 
 
 def rn08_after(folder):
@@ -271,6 +274,196 @@ def rn10_after(folder):
     return 0 < worst < today[0] / 2, text + f" mm; new longest {within} 1.5 x fine {PLATE_FINE:g}"
 
 
+# --- Stage 2: Refine Near in Studies with Symmetric Groups (symcases' spike motor) ------------------------------------
+# The stator cells span 0..15 deg (iron r 36..60 with a closed slot r 37..50 at 10..15, the coil, an air band r 35..36),
+# mirrored at 15 deg and turned 12 times; the rotor cells 0..22.5 deg (iron r 10..30, the magnet r 30..34 at 4.5..22.5,
+# the air r 30..35), mirrored at 22.5 deg and turned 8 times; a Rotational Sliding Interface at r 35, 144 divisions.
+
+MOTOR_R = 35.0  # the motor's sliding circle
+TIP_R = 36.0  # the stator's bore: the tooth tips
+
+
+def polar(p):
+    """(radius, angle in degrees 0..360) of a point."""
+    return math.hypot(p.x, p.y), math.degrees(math.atan2(p.y, p.x)) % 360
+
+
+def motor(name):
+    """symcases.motor_study (default size 5) in a new document."""
+    return symcases.motor_study(App.newDocument(name.replace("-", "_")))
+
+
+def cell(study, name):
+    return next(b for b in objects.cell_bodies(study) if b.Name == name)
+
+
+def on_arc(e, r):
+    """True when e is an arc of radius r about Z."""
+    return isinstance(e.Curve, Part.Circle) and near(e.Curve.Radius, r) and near(e.Curve.Center.Length, 0)
+
+
+def rns1():
+    study = motor("RN-S1")
+    corners(study, cell(study, "MagnetCell"), fine=0.3, coarse=2, growth=4)
+    return study
+
+
+RNS2_COPY = (90, 105)  # the copy of the stator cell the tooth tip is picked on (degrees)
+
+
+def rns2():
+    """The tooth tip of the copy at 90..105 deg, picked on the stator's drawing and mapped to the cells by to_cells
+    as the command does: the arc r 36, 0..15 deg, that the iron cell and the air band share."""
+    study = motor("RN-S2")
+    stator = objects.symmetric_groups(study)[0]
+    drawing = geometry.global_shape(stator)
+
+    def tip(e):
+        return on_arc(e, TIP_R) and RNS2_COPY[0] < polar(centre(e))[1] < RNS2_COPY[1]
+
+    picks = [f"Edge{i}" for i, e in enumerate(drawing.Edges, 1) if tip(e)]
+    assert picks, "no tooth tip on the copy"
+    refs = objects.to_cells(study, [(stator, picks[0])])
+    assert all(b.Name in {c.Name for c in stator.Cells} for b, _ in refs), refs
+    objects.make_refine_near(study, refs, fine=0.3, coarse=2, growth=4)
+    return study
+
+
+def job_of(folder):
+    """(job, its folder) of the Study saved in folder: the one job.json under its .pyemsi."""
+    found = [os.path.join(d, "job.json") for d, _, f in os.walk(os.path.join(folder, ".pyemsi")) if "job.json" in f]
+    assert len(found) == 1, found
+    with open(found[0], encoding="utf-8") as fh:
+        return json.load(fh), os.path.dirname(found[0])
+
+
+def rns2_after(folder):
+    """(passed, text): the job has one refine entry, in the stator's cell job, and its edges lie on the cell's tooth
+    tip (r 36, 0..15 deg), not on the copy picked; the rotor's and the free jobs have none."""
+    job, where = job_of(os.path.join(folder, "new"))
+    sym = job["symmetric"]
+    stator, rotor = (g["job"].get("refine") or [] for g in sym["groups"])
+    free = [e for f in sym.get("free", []) for e in f["job"].get("refine") or []]
+    places = []
+    for entry in stator:
+        for f in entry["files"]:
+            for e in Part.read(os.path.join(where, f)).Edges:
+                places.append((on_arc(e, TIP_R), round(polar(centre(e))[1], 2)))
+    passed = len(stator) == 1 and not rotor and not free and places and all(ok and 0 < a < 15 for ok, a in places)
+    angles = ", ".join(f"{a:g}" for _, a in places)
+    text = (
+        f"refine entries: stator cells {len(stator)}, rotor cells {len(rotor)}, free {len(free)}; the stator's entry"
+        f" has {len(places)} edge(s), on r {TIP_R:g}: {all(ok for ok, _ in places)}, centred at {angles} deg (picked"
+        f" on the copy at {RNS2_COPY[0]}..{RNS2_COPY[1]} deg)"
+    )
+    return bool(passed), text
+
+
+SEAM = (10.0, 40.0, 30.0)  # RN-S3's cell: r 10..40, 0..30 deg, turned 12 times
+
+
+def rns3():
+    """A sector cell r 10..40, 0..30 deg, turned 12 times (its 0 and 30 deg sides are periodic seams), default size 4;
+    the seam at 0 deg."""
+    r1, r2, pitch = SEAM
+    doc = App.newDocument("RN_S3")
+    study = objects.make_study(doc, "2D")
+    study.MeshSizesGroup.DefaultMeshSize = SIZE
+    lib = symcases.libraries(study)
+    body = symcases.feature(doc, "SectorCell", symcases.sector(r1, r2, 0, pitch))
+    symcases.group(study, "Ring", [body], [symcases.rotate_rule(pitch, 12)], lib={body.Name: lib["Steel"]})
+    seam = subs(body, "Edge", lambda e: not isinstance(e.Curve, Part.Circle) and near(centre(e).y, 0))
+    objects.make_refine_near(study, [(body, seam[0])], fine=0.3, coarse=2, growth=3)
+    return study
+
+
+def mesh_nodes(msh):
+    """The (n, 3) node coordinates of a mesh file."""
+    import gmsh
+    import numpy as np
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        return np.reshape(gmsh.model.mesh.getNodes()[1], (-1, 3))
+    finally:
+        gmsh.finalize()
+
+
+def seam_nodes(xyz, deg):
+    """The nodes of RN-S3's cell on its side at deg degrees (r 10..40)."""
+    import numpy as np
+
+    r1, r2, _ = SEAM
+    u = np.array([math.cos(math.radians(deg)), math.sin(math.radians(deg))])
+    along, off = xyz[:, :2] @ u, np.abs(xyz[:, :2] @ np.array([-u[1], u[0]]))
+    return int(np.sum((off < 1e-6) & (along > r1 - 1e-6) & (along < r2 + 1e-6)))
+
+
+def rns3_after(folder):
+    """(passed, text): both seams of the cell (0 and 30 deg) have the same nodes, more than today."""
+    counts = {}
+    for which in ("new", "today"):
+        xyz = mesh_nodes(os.path.join(folder, which, "pre_geom2D.msh"))
+        counts[which] = (seam_nodes(xyz, 0), seam_nodes(xyz, SEAM[2]))
+    new, today = counts["new"], counts["today"]
+    passed = new[0] == new[1] > today[0] == today[1]
+    return passed, f"nodes on the seams at 0 / {SEAM[2]:g} deg: new {new[0]} / {new[1]}, today {today[0]} / {today[1]}"
+
+
+def rns4():
+    """The 3D motor (10 mm high, default size 1.5); the magnet's outer face r 34 on the rotor cell."""
+    study = symcases.motor_study_3d(App.newDocument("RN_S4"))
+    magnet = cell(study, "MagnetCell")
+    face = subs(magnet, "Face", lambda f: isinstance(f.Surface, Part.Cylinder) and near(f.Surface.Radius, 34))
+    objects.make_refine_near(study, [(magnet, face[0])], fine=0.5, coarse=3, growth=5)
+    return study
+
+
+def rns5():
+    """The 2D motor in a Sector Air Region r 60..90 (default size 5) with a free sensor block 6 x 6 in the air at
+    x 72..78; the sensor whole, coarse the air's size."""
+    study = motor("RN-S5")
+    lib = symcases.libraries(study)
+    symcases.add_air_region(study, lib["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90)
+    sensor = symcases.add_free(study, "Sensor", cases.face(cases.rect(72, -3, 78, 3)), lib["Steel"])
+    size = study.MeshSizesGroup.DefaultMeshSize.Value
+    objects.make_refine_near(study, [(sensor, "")], fine=0.3, coarse=size, growth=10)
+    return study
+
+
+def rns6():
+    """The 2D sliding motor with its stator air band (r 35..36, the gap's stator half) structured and recombined: 6
+    elements on each arc (144 divisions over 24 cells), 2 across; the stator's tooth tips (the iron cell's arc r 36)."""
+    study = motor("RN-S6")
+    band = cell(study, "StatorAirCell")
+    by = {}
+    for i, e in enumerate(band.Shape.Edges, 1):
+        by.setdefault(6 if isinstance(e.Curve, Part.Circle) else 2, []).append((band, f"Edge{i}"))
+    for n, edges in sorted(by.items()):
+        objects.make_transfinite_edges(study, n, edges).Label = f"{band.Label} {n}"
+    objects.make_transfinite_body(study, [band])
+    objects.make_recombine(study, [band])
+    iron = cell(study, "StatorIronCell")
+    tips = subs(iron, "Edge", lambda e: on_arc(e, TIP_R))
+    objects.make_refine_near(study, [(iron, n) for n in tips], fine=0.3, coarse=2, growth=3)
+    return study
+
+
+def rns6_after(folder):
+    """(passed, text): the nodes on the sliding circle r 35 are the same in new and today, in both mesh files."""
+    files = ("pre_geom2D.msh", "rotor_mesh2D.msh")
+    counts = {}
+    for which in ("new", "today"):
+        for f in files:
+            path = os.path.join(folder, which, f)
+            counts[which, f] = slide_nodes(path, MOTOR_R) if os.path.exists(path) else -1
+    same = all(counts["new", f] == counts["today", f] > 0 for f in files)
+    text = ", ".join(f"{f}: new {counts['new', f]}, today {counts['today', f]}" for f in files)
+    return same, f"nodes on the sliding circle r {MOTOR_R:g} " + text
+
+
 MAGNET = {"zoom": (-30, -15, 30, 15)}
 CASES = [
     ("RN-01", "2D magnet 40 x 10, its 4 corners (0.3 to 4 over 8)", rn01, "meshes", MAGNET),
@@ -334,4 +527,50 @@ CASES = [
         {"clip": "y", "at": 0.0, "zoom": (-110, -15, -60, 15)},
     ),
 ]
-AFTER = {"RN-08": rn08_after, "RN-10": rn10_after}
+STATOR_TIP = {"zoom": (26, -4, 46, 16)}
+CASES += [
+    (
+        "RN-S1",
+        "2D motor: the rotor cell magnet's 4 corners (0.3 to 2 over 4)",
+        rns1,
+        "meshes",
+        {"zoom": (12, -4, 44, 36)},
+    ),
+    (
+        "RN-S2",
+        "2D motor: a tooth tip picked on the stator copy at 90..105 deg, moved to the cell (0.3 to 2 over 4)",
+        rns2,
+        "meshes",
+        STATOR_TIP,
+    ),
+    (
+        "RN-S3",
+        "2D sector cell r 10..40 turned 12 times: its seam at 0 deg (0.3 to 2 over 3) refines the partner seam too",
+        rns3,
+        "meshes",
+        {"zoom": (0, -12, 44, 30)},
+    ),
+    (
+        "RN-S4",
+        "3D motor: the magnet's outer face on the rotor cell (0.5 to 3 over 5), cut at z = 5",
+        rns4,
+        "meshes",
+        {"clip": "z", "at": 5.0, "zoom": (29, 1, 37, 11)},
+    ),
+    (
+        "RN-S5",
+        "2D motor in a Sector Air Region r 60..90: a free sensor block whole (0.3 to the air's 5 over 10)",
+        rns5,
+        "meshes",
+        {"zoom": (56, -16, 94, 16)},
+    ),
+    (
+        "RN-S6",
+        "2D sliding motor with a structured stator air band: the tooth tips (0.3 to 2 over 3), the slide keeps 144"
+        " (the tip arcs are the band's, so they keep its 6 divisions: only the iron behind them grades)",
+        rns6,
+        "meshes",
+        STATOR_TIP,
+    ),
+]
+AFTER = {"RN-08": rn08_after, "RN-10": rn10_after, "RN-S2": rns2_after, "RN-S3": rns3_after, "RN-S6": rns6_after}

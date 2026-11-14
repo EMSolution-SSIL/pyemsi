@@ -92,7 +92,7 @@ def write(results=RESULTS):
     page = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Refinement catalogue</title>'
-        f"<style>{STYLE}</style></head><body><main><h1>Refinement catalogue, Stage 1: Refine Near</h1>"
+        f"<style>{STYLE}</style></head><body><main><h1>Refinement catalogue, Stages 1 and 2: Refine Near</h1>"
         f'<p class="lead">{matched} of {len(rows)} rows match. Each row is meshed today (its Refine Near items deleted)'
         " and new (with them); 3D pictures show the elements that cross a cut plane.</p>"
         f"{body}</main></body></html>"
