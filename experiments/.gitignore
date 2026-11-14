@@ -5,3 +5,4 @@
 structured_examples/**/*.FCStd
 symmetric_examples/**/*.FCStd
 symmetric_catalogue/**/*.FCStd
+refinement_catalogue/**/*.FCStd
