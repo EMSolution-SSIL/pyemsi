@@ -481,6 +481,31 @@ class AirTest(unittest.TestCase):
         rows = {r[2][0]: r[2] for r in objects.material_rows(self.study)}
         self.assertEqual(rows["Air"][2], self.study.MatIds[air.Name])
 
+    def test_refine_near_on_an_air_face_goes_to_the_job(self):
+        self.bodies("A")
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        objects.make_refine_near(self.study, [(air, "Face1")])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            (entry,) = json.load(fh)["refine"]
+        (rel,) = entry["files"]
+        path = os.path.join(jobwriter.scratch_folder(self.study), rel)
+        self.assertTrue(os.path.exists(path))
+        face = Part.read(path)
+        expected = air.Shape.getElement("Face1").BoundBox
+        got = face.BoundBox
+        for attr in ("XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax"):
+            self.assertAlmostEqual(getattr(got, attr), getattr(expected, attr))
+
+    def test_refine_near_limited_to_a_sliding_air_lists_both_sides(self):
+        self.box_slide()
+        air = objects.air_regions(self.study)[0]
+        objects.make_refine_near(self.study, [(self.doc.getObject("A"), "Edge1")], limit_to=[air])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            (entry,) = json.load(fh)["refine"]
+        ids = self.study.MatIds
+        self.assertEqual(entry["limit_to"], [int(ids[f"{air.Name}#fixed"]), int(ids[f"{air.Name}#moving"])])
+
     def test_sliding_with_air_writes_the_slide_job(self):
         self.box_slide()
         iface = objects.sliding_interfaces(self.study)[0]

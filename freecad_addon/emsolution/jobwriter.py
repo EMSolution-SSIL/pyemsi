@@ -136,6 +136,38 @@ def export_subs(folder, body, subs, prefix):
     return files
 
 
+def refine_entries(study, folder, ids):
+    """The job's "refine" list: one entry per Refine Near item that refers to the mesh. ids is {body or air Name:
+    [MAT_ID, ...]}; a whole-body reference goes to "whole" (it wins over sub-elements of that body), the sub-elements
+    are written to geometry/refine_<item>_<body>_<n>.brep."""
+    entries = []
+    for k, item in enumerate(objects.refine_items(study), 1):
+        files, whole = [], []
+        for j, (body, subs) in enumerate(objects.subs_by_body(item), 1):
+            if body.Name not in ids:
+                continue
+            if "" in subs:
+                whole.extend(ids[body.Name])
+            else:
+                files.extend(export_subs(folder, body, subs, f"refine_{k}_{j}"))
+        if not (files or whole):
+            continue
+        limit_to = [mat_id for body in item.LimitTo if body.Name in ids for mat_id in ids[body.Name]]
+        entries.append(
+            {
+                "name": item.Label,
+                "files": files,
+                "whole": whole,
+                "fine": item.FineSize.Value,
+                "fine_distance": item.FineDistance.Value,
+                "coarse": item.CoarseSize.Value,
+                "growth": item.GrowthDistance.Value,
+                "limit_to": limit_to,
+            }
+        )
+    return entries
+
+
 def write_slides(study, folder, job):
     """Add the slide keys to job and write their BREPs: the moving cells, each interface's surface and slide marker."""
     plane = airshapes.study_plane(study)
@@ -405,6 +437,7 @@ def write_job(study):
     else:
         ids = {body.Name: int(study.MatIds[body.Name]) for body, _ in volumes}
         job.update(_body_job(study, folder, volumes, surfaces, elements, ids))
+        refine_ids = {name: [mat_id] for name, mat_id in ids.items()}
         for air in objects.air_regions(study):  # validation allows one
             rel = "geometry/air.brep"
             meshed_shape(air).exportBrep(os.path.join(folder, rel))
@@ -417,6 +450,7 @@ def write_job(study):
                     for half in ("fixed", "moving")
                 }
                 job["air"] = {"sides": halves, "file": rel, "size": air_size(study)}
+                refine_ids[air.Name] = [half["mat_id"] for half in halves.values()]
             else:
                 job["air"] = {
                     "name": objects.key_name(study, air.Name),
@@ -424,6 +458,10 @@ def write_job(study):
                     "file": rel,
                     "size": air_size(study),
                 }
+                refine_ids[air.Name] = [job["air"]["mat_id"]]
+        refine = refine_entries(study, folder, refine_ids)
+        if refine:
+            job["refine"] = refine
         if sliding:
             moving = sides.moving(study)
             job["moving"] = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in moving]

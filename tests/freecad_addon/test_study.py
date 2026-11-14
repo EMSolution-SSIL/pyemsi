@@ -1778,6 +1778,38 @@ class StudyTest(unittest.TestCase):
             self.problems(validation.WARNING),
         )
 
+    def test_job_without_refine_near_has_no_refine_key(self):
+        a = self.box("A")
+        self.assign([a])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("refine", json.load(fh))
+
+    def test_refine_near_goes_to_the_job(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.assign([a, b])
+        objects.make_refine_near(self.study, [(a, "Edge1"), (a, "Vertex1"), (b, "")], 0.4, 4, 10, 0.5, limit_to=[a])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        ids = self.study.MatIds
+        (entry,) = job["refine"]
+        self.assertEqual(entry["name"], "RefineNear")
+        self.assertEqual(len(entry["files"]), 2)
+        self.assertTrue(all(os.path.exists(self.scratch(f)) for f in entry["files"]))
+        self.assertEqual(entry["whole"], [int(ids[b.Name])])
+        self.assertEqual(entry["limit_to"], [int(ids[a.Name])])
+        self.assertEqual(
+            (entry["fine"], entry["fine_distance"], entry["coarse"], entry["growth"]), (0.4, 0.5, 4.0, 10.0)
+        )
+
+    def test_refine_near_leaves_out_limit_bodies_the_study_does_not_mesh(self):
+        a, b = self.box("A"), self.box("B", 20)
+        self.assign([a])
+        self.exclude(b)
+        objects.make_refine_near(self.study, [(a, "Edge1")], limit_to=[a, b])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            (entry,) = json.load(fh)["refine"]
+        self.assertEqual(entry["limit_to"], [int(self.study.MatIds[a.Name])])
+
     def test_deleting_a_body_leaves_empty_items_that_refuse_the_mesh(self):
         a, b = self.box("A"), self.box("B", 10)
         self.assign([a, b])
