@@ -1231,6 +1231,105 @@ class GroupJobTest(unittest.TestCase):
             self.result.stderr,
         )
 
+    @staticmethod
+    def air_grading(mat_id, far=12.0, growth=10.0):
+        return {"name": "AirGrading", "mat_ids": [mat_id], "growth": growth, "far": far}
+
+    AIR_BANDS = ((0, 2), (5, 10))  # mm from the copies: beside them, and past the air's size
+
+    def ring_in_air_region(self, *grading, box=BOX, size=6.0):
+        """The ring of copies (size 3) in the air BOX (MAT_ID 30, size size), no free body; grading: its Air Grading."""
+        job = {"volumes": [], "surfaces": [], "sizes": [], "air": self.air_entry(box, size=size)}
+        if grading:
+            job["air_grading"] = list(grading)
+        return [self.ring_3d(self.TWELVE, ())], [{"side": "fixed", "job": job}]
+
+    @staticmethod
+    def from_ring_3d(p):  # the distance from the solid ring of copies, r 10..20, z 0..5
+        r = np.hypot(p[:, 0], p[:, 1])
+        return np.hypot(np.maximum(np.maximum(10 - r, r - 20), 0), np.maximum(np.maximum(-p[:, 2], p[:, 2] - 5), 0))
+
+    @staticmethod
+    def from_ring_2d(p):  # the distance from the ring of copies, r 10..20
+        r = np.hypot(p[:, 0], p[:, 1])
+        return np.maximum(np.maximum(10 - r, r - 20), 0)
+
+    def test_air_grading_grades_the_air_around_copies_3d(self):  # the air grows from the copies' faces to the far size
+        def air(*grading):
+            groups_, free = self.ring_in_air_region(*grading)
+            mesh = self.meshed(groups_, free=free, dim=3)
+            return groups(mesh)[30][1], [
+                self.mean_edge(mesh, 30, self.from_ring_3d, lo, hi) for lo, hi in self.AIR_BANDS
+            ]
+
+        today, _ = air()
+        graded, (near, out) = air(self.air_grading(30))
+        self.assertEqual(faces_in_three(self.mesh_file()), 0)
+        # measured 2374 against 3743; 3044 when only the box's faces get the far size (mesh_region not graded)
+        self.assertLess(graded, 0.72 * today)
+        self.assertLess(near, 0.6 * 12)  # within 2 mm: measured 4.22, today 3.71
+        self.assertGreater(out, 7.5)  # 5 to 10 mm, past the air's size: measured 8.43, today 6.54 (capped at 6)
+
+    def test_air_grading_grades_the_air_around_copies_2d(self):
+        def air(*grading):
+            write_rects(self.geo("air.brep"), (-30, -30, 60, 60))
+            free = self.air_2d(size=6.0)
+            free["job"]["air_grading"] = list(grading)
+            mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)], free=[free])
+            return groups(mesh)[20][1], [
+                self.mean_edge(mesh, 20, self.from_ring_2d, lo, hi) for lo, hi in self.AIR_BANDS
+            ]
+
+        today, _ = air()
+        graded, (near, out) = air(self.air_grading(20))
+        self.assertEqual(edges_in_three(self.mesh_file()), 0)
+        self.assertLess(graded, today)  # measured 412 against 794
+        self.assertLess(near, 0.6 * 12)  # within 2 mm: measured 2.21, today 1.74
+        self.assertGreater(out, 4.5)  # 5 to 10 mm: measured 5.49, today 3.39
+
+    FROZEN_LINES_OFF = "meshgroups._grow_from_frozen = meshgroups._grow_from_ends = lambda gradings, lines: None"
+
+    def test_air_face_beside_a_copy_grades_3d(self):  # the copies stand on the air's bottom face, z = 0
+        # Triangles within 2 mm of the copies' edges (3 mm) are small either way: 2.91 graded, 3.59 without the frozen
+        # lines in the Extend. The face grows from them only with the lines: 5 to 10 mm away it is the band to watch.
+        def bottom_edge(patch=""):
+            grading = self.air_grading(30, far=12.0, growth=20.0)
+            groups_, free = self.ring_in_air_region(grading, box=(-30, -30, 0, 60, 60, 10), size=12.0)
+            xyz, elements, _ = _physical_mesh(self.meshed(groups_, free=free, dim=3, patch=patch), (30,))
+            tri = meshfrozen.boundary(xyz, [elements[30]], 3).tri
+            tri = tri[np.abs(xyz[tri][:, :, 2]).max(axis=1) < 1e-6]  # the air's own triangles on z = 0
+            r = np.hypot(*xyz[tri].mean(axis=1)[:, :2].T)
+            d = np.minimum(np.abs(r - 10), np.abs(r - 20))  # from the copies' frozen edges, r 10 and 20
+            near = tri[(d >= 5) & (d <= 10)]
+            pairs = [(0, 1), (1, 2), (0, 2)]
+            return float(np.mean([np.linalg.norm(xyz[near[:, a]] - xyz[near[:, b]], axis=1) for a, b in pairs]))
+
+        self.assertLess(bottom_edge(), 0.6 * 12)  # asked 6.4 at 7.5 mm; measured 5.82
+        self.assertGreater(bottom_edge(self.FROZEN_LINES_OFF), 0.6 * 12)  # measured 10.36
+
+    def test_air_line_beside_a_copy_grades_2d(self):  # the copies stand on the air's bottom line, y = 0, from below
+        def first_edges(patch=""):  # the air's edges on y = 0 that start at a copy's corner
+            group = self.rect_group((5, -6, 4, 6), [translation(20 * k) for k in range(3)])
+            write_rects(self.geo("air.brep"), (0, 0, 60, 20))
+            free = self.air_2d(size=12.0)
+            free["job"]["air_grading"] = [self.air_grading(20)]
+            xyz, elements, _ = _physical_mesh(self.meshed([group], free=[free], patch=patch), (20,))
+            edge = meshfrozen.boundary(xyz, [elements[20]], 2).edge
+            x = xyz[edge[np.abs(xyz[edge][:, :, 1]).max(axis=1) < 1e-6]][:, :, 0]
+            beside = np.all(np.abs(x.mean(axis=1)[:, None] - np.array([7, 27, 47])) > 2, axis=1)  # not on x 5..9 ...
+            corners = np.any(np.abs(x[:, :, None] - np.array([5, 9, 25, 29, 45, 49])) < 1e-6, axis=(1, 2))
+            return float(np.abs(x[beside & corners, 1] - x[beside & corners, 0]).mean())
+
+        self.assertLess(first_edges(), 0.6 * 12)  # measured 1.13 (the copies' edges are 1 mm)
+        self.assertGreater(first_edges(self.FROZEN_LINES_OFF), 0.6 * 12)  # measured 8.0
+
+    def test_no_air_grading_free_job_unchanged(self):  # the element counts of before the Air Grading
+        write_rects(self.geo("air.brep"), (-30, -30, 60, 60))
+        mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)], free=[self.air_2d()])
+        self.assertEqual(groups(mesh)[20][1], 794)
+        groups_, free = self.plate_in_air()
+        self.assertEqual(groups(self.meshed(groups_, free=free, dim=3))[30][1], 3745)
+
     def test_air_region_alone_in_the_free_job_2d(self):  # a free job of no body, only the air
         write_rects(self.geo("air_region.brep"), (-25, -25, 50, 50))
         air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 4.0}

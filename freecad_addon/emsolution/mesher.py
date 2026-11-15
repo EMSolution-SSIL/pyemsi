@@ -153,7 +153,7 @@ def build(job, folder):
             picked.setdefault(d, []).append(t)
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_vols, 3, sliding_air, apart)  # (entry, Distance field) pairs
-    job["air_grading_fields"] = apply_air_grading(job.get("air_grading", []), graded, sizes, 3)  # (entry, Extend)
+    job["air_grading_fields"] = apply_air_grading(job.get("air_grading", []), graded, sizes, 3, apart)  # entry, Extend
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
     tf = apply_transfinite(job, mapped, body_vols, 3)
     apply_recombine(job, body_vols, 3, tf, mapped)

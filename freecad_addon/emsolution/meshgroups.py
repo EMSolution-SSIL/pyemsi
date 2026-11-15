@@ -16,6 +16,7 @@ import numpy as np
 
 from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, FIELD_LISTS, MSH_VERSION
 from meshcommon import _note
+from meshcommon import _field, add_to_background
 from meshcommon import face_normal, plane_normal
 from meshcommon import air_items
 import meshfrozen
@@ -1055,12 +1056,13 @@ def _new_size_field(by_size, dim):
 
 
 def _carry_size_picks(replaced, dim):
-    """A Mesh Size or Refine Near picked on a face (line in 2D) that was replaced goes on to what replaced it."""
+    """A Mesh Size, Refine Near or Air Grading picked on a face (line in 2D) that was replaced goes on to what replaced
+    it."""
     field = gmsh.model.mesh.field
     for f in field.list():
         kind = field.getType(f)
-        if kind not in ("Constant", "Distance", "Restrict") or (kind == "Distance" and dim == 3):  # no VolumesList
-            continue
+        if kind not in ("Constant", "Distance", "Restrict", "Extend") or (kind in ("Distance", "Extend") and dim == 3):
+            continue  # no VolumesList
         old = [int(t) for t in field.getNumbers(f, FIELD_LISTS[dim])]
         if any(t in replaced for t in old):
             field.setNumbers(f, FIELD_LISTS[dim], [n for t in old for n in replaced.get(t, [t])])
@@ -1169,11 +1171,12 @@ def _triangles(rows):
     return np.array(tris, dtype=np.int64).reshape(-1, 3)
 
 
-def _open_lines(surveys, covered, names, V, side):
+def _open_lines(surveys, covered, names, V, side, gradings=()):
     """2D: a line of the free object that frozen edges lie on leaves room for them: dropped when no part of it is free
     (_taken), split at their end nodes otherwise, the pieces meshed as new lines. A curved line partly covered is a
     limit of the tool. A line with no frozen edge on it that ends on one and lies inside the copies is dropped too.
-    Returns {line: [its new lines]}."""
+    gradings: the Air Gradings of the free job (built["air_grading_fields"]): a new line of a graded air grows from its
+    ends on frozen nodes (_grow_from_ends). Returns {line: [its new lines]}."""
     occ = gmsh.model.occ
     tol = _tol()
     nodes = np.unique(np.vstack([np.asarray(rows) for rows in covered.values()]))
@@ -1182,7 +1185,12 @@ def _open_lines(surveys, covered, names, V, side):
     sizes = {f: s.body["size"] for s in surveys for f in s.faces}
     solid = _copies_surface(side, 2)
     frozen_labels = set(vertices.of_node.values())
-    replaced, by_size = {}, {}
+    node_of = {label: node for node, label in vertices.of_node.items()}
+    edge_size = np.full(len(V), np.inf)  # of each frozen node: the shortest frozen edge it ends
+    lengths = np.linalg.norm(V[side.edge[:, 0]] - V[side.edge[:, 1]], axis=1)
+    for k in (0, 1):
+        np.minimum.at(edge_size, side.edge[:, k], lengths)
+    replaced, by_size, on_frozen = {}, {}, []  # see _grow_from_ends
     for line in every:
         if line in covered:
             continue
@@ -1199,22 +1207,54 @@ def _open_lines(surveys, covered, names, V, side):
         replaced[line] = [occ.addLine(vertices.tag(a), vertices.tag(b)) for a, b, _ in pieces]
         if replaced[line]:
             by_size.setdefault(sizes[line], []).extend(replaced[line])
+        mat_id = next(s.body["mat_id"] for s in surveys if line in s.faces)
+        for (a, b, _), new in zip(pieces, replaced[line]):
+            at = {vertices.tag(v): float(edge_size[node_of[v]]) for v in (a, b) if v in frozen_labels}
+            if at:
+                on_frozen.append((mat_id, sizes[line], new, at))
     occ.synchronize()
     if by_size:
         _new_size_field(by_size, 1)
     _carry_size_picks(replaced, 1)
+    if gradings and on_frozen:
+        _grow_from_ends(gradings, on_frozen)
     return replaced
 
 
-def _open_faces(surveys, covered, names, V, side):
+def _grow_from_ends(gradings, ends):
+    """2D Air Grading on the lines _open_lines made: along them the size grows from the copies' edge size at their ends
+    on frozen nodes to the far size over the growth distance, as meshcommon.apply_air_grading does from the points
+    where the outer lines meet the bodies (a line is meshed before any mesh exists to extend from). ends: [(MAT_ID of
+    the line's body, its size, new line, {point tag of a frozen end: the shortest copies' edge there})]."""
+    fields = []
+    for entry, _ in gradings:
+        mine = [e for e in ends if e[0] in entry["mat_ids"]]
+        starts = {}  # start size -> points
+        for _, size, _, at in mine:
+            for point, edge in at.items():
+                starts.setdefault(min(size, edge), set()).add(point)
+        lines = [new for _, _, new, _ in mine]
+        far, growth = float(entry["far"]), float(entry["growth"])
+        for size, points in starts.items():
+            dist = _field("Distance", PointsList=sorted(points))
+            grow = _field(
+                "Threshold", InField=dist, SizeMin=size, SizeMax=far, DistMin=0, DistMax=growth, StopAtDistMax=1
+            )
+            fields.append(_field("Restrict", InField=grow, CurvesList=lines))
+    if fields:
+        add_to_background(fields)
+
+
+def _open_faces(surveys, covered, names, V, side, gradings=()):
     """3D: the faces that frozen facets lie on leave room for them, and so do the faces that share a curve with those. A
     face with no free part (_taken: under frozen facets or inside the copies) is dropped; a planar one with a free part
     is rebuilt with one hole per loop of the region's outer
     edges, through the exact nodes of the copies (each polygon line one element), and a stretch of a bounding curve that
     only reaches a frozen node is kept. A curved face the copies reach only along its rim keeps its surface and its
     curves, whose mesh goes through the frozen nodes (_chords, _place_rim_nodes). A curved face partly covered is a limit
-    of the tool. Returns ({face: [the faces in its place]}, the rims for _place_rim_nodes); the new tags come after an
-    occ.remove of the volumes: their face lists come from the surveys, read first."""
+    of the tool. gradings: as in _open_lines (see _rebuild). Returns ({face: [the faces in its place]}, the rims for
+    _place_rim_nodes); the new tags come after an occ.remove of the volumes: their face lists come from the surveys,
+    read first."""
     tol = _tol()
     faces = {f for s in surveys for f in s.faces}
     outer = {f: _outer_edges(rows, names[f], V) for f, rows in covered.items()}
@@ -1274,13 +1314,14 @@ def _open_faces(surveys, covered, names, V, side):
         if gmsh.model.getType(2, f) != "Plane":
             raise _limit(names[f], PART_OF_CURVED, _text(V[covered[f][0]].mean(axis=0), 3))
         plans[f] = edges
-    return _rebuild(plans, dropped, surveys, vertices, names, rims), rims
+    return _rebuild(plans, dropped, surveys, vertices, names, rims, gradings), rims
 
 
-def _rebuild(plans, dropped, surveys, vertices, names, rims):
+def _rebuild(plans, dropped, surveys, vertices, names, rims, gradings=()):
     """Apply _open_faces: every free volume that has a face to change is taken out of the OCC model (not its faces),
     each of those faces is removed and the planned ones are made again as plane surfaces, keeping physical groups and
-    sizes. Returns {face: [new faces]}."""
+    sizes. The Air Gradings (gradings, see _open_lines) grow from the copies' frozen lines too (_grow_from_frozen).
+    Returns {face: [new faces]}."""
     occ = gmsh.model.occ
     replaced = {f: [] for f in dropped}
     loops_of = {}
@@ -1319,6 +1360,8 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims):
     occ.synchronize()
     for tag in polygon:
         gmsh.model.mesh.setTransfiniteCurve(tag, 2)
+    if gradings and polygon:
+        _grow_from_frozen(gradings, sorted(polygon))
     for curve, targets, closed in rims:
         gmsh.model.mesh.setTransfiniteCurve(curve, len(targets) + (1 if closed else 0))
     _carry_physical_groups(saved, replaced, 2)
@@ -1335,9 +1378,18 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims):
     return replaced
 
 
-def _leave_room(surveys, V, dim, side):
-    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines). Returns (the surveys with the
-    faces they have now, for the model has changed; the rims for _place_rim_nodes)."""
+def _grow_from_frozen(gradings, lines):
+    """3D Air Grading: each Extend grows from the copies' frozen lines too, so the air's faces beside the copies grow
+    from the copies' edges (gmsh meshes the surfaces before any surface mesh exists to extend from)."""
+    field = gmsh.model.mesh.field
+    for _, extend in gradings:
+        field.setNumbers(extend, "CurvesList", [int(t) for t in field.getNumbers(extend, "CurvesList")] + lines)
+
+
+def _leave_room(surveys, V, dim, side, gradings=()):
+    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines; gradings: the Air Gradings of
+    the free job, built["air_grading_fields"]). Returns (the surveys with the faces they have now, for the model has
+    changed; the rims for _place_rim_nodes)."""
     covered = {}
     for s in surveys:
         covered.update(s.covered)  # a face between two bodies has the same facets on it for both
@@ -1345,9 +1397,9 @@ def _leave_room(surveys, V, dim, side):
         return surveys, []
     names = {f: s.body["name"] for s in surveys for f in s.faces}
     replaced, rims = (
-        _open_faces(surveys, covered, names, V, side)
+        _open_faces(surveys, covered, names, V, side, gradings)
         if dim == 3
-        else (_open_lines(surveys, covered, names, V, side), [])
+        else (_open_lines(surveys, covered, names, V, side, gradings), [])
     )
     return [s._replace(faces=[n for f in s.faces for n in replaced.get(f, [f])]) for s in surveys], rims
 
@@ -1388,12 +1440,13 @@ def _free_rules(built, dim):
     return rules
 
 
-def _mesh_free_entity(survey, side, V, dim, rules=()):
+def _mesh_free_entity(survey, side, V, dim, rules=(), grading=None):
     """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
     and the frozen facets that bound it (survey.frozen) bound one region or several (nest), each meshed by
-    mesh_region, graded by the rules (from _free_rules) whose Limit to is empty or holds the body. Returns (W,
-    elements, own): W is V with the apexes of the pyramids and the new nodes appended, elements numbered into it, own
-    {face: {etype: connectivity}} the mesh of each of its own faces, for excitations."""
+    mesh_region, graded by the rules (from _free_rules) whose Limit to is empty or holds the body, and by grading (None,
+    or {"growth", "far"} of the body's Air Grading). Returns (W, elements, own): W is V with the apexes of the pyramids
+    and the new nodes appended, elements numbered into it, own {face: {etype: connectivity}} the mesh of each of its own
+    faces, for excitations."""
     body, entity, faces = survey.body, survey.entity, survey.faces
     name = body["name"]
     keys = ("fine", "fine_distance", "coarse", "growth")
@@ -1460,7 +1513,7 @@ def _mesh_free_entity(survey, side, V, dim, rules=()):
     for outer, holes in regions:
         try:
             inners = [found[h] for h in holes]
-            W, region = meshfrozen.mesh_region(W, facets, found[outer], inners, body["size"], dim, sizes)
+            W, region = meshfrozen.mesh_region(W, facets, found[outer], inners, body["size"], dim, sizes, grading)
         except Exception as err:  # gmsh could not mesh around them, or moved a frozen node
             where = W[facets[found[outer][0]]].mean(axis=0)
             raise _limit(name, f"the mesh around the copies failed ({err})", _text(where, dim)) from None
@@ -1504,8 +1557,9 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             for b in bodies
             for e in gmsh.model.getEntitiesForPhysicalGroup(dim, b["mat_id"])
         ]
+        gradings = built.get("air_grading_fields", [])
         surveys, rims = _leave_room(
-            surveys, V, dim, side_boundary
+            surveys, V, dim, side_boundary, gradings
         )  # only now: the volumes of the changed faces leave the model
         settings = dict(free_job, options=job.get("options", {}))
         if rims:  # gmsh keeps a mesh of the curves when asked for the surfaces next
@@ -1516,10 +1570,12 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
         surfaces = free_job.get("surfaces", [])
         for body in bodies:
             added, elements, excited, count = [], {}, {}, 0
+            entry = next((e for e in free_job.get("air_grading", []) if body["mat_id"] in e["mat_ids"]), None)
+            grading = {"growth": entry["growth"], "far": entry["far"]} if entry else None
             for survey in surveys:
                 if survey.body is not body:
                     continue
-                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim, rules)
+                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim, rules, grading)
                 shifted = {t: np.where(c >= start, c + count, c) for t, c in per_type.items()}
                 for etype, conn in shifted.items():
                     elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn

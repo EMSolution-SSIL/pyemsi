@@ -178,12 +178,13 @@ def _field(kind, **values):
     return f
 
 
-def apply_air_grading(entries, graded, sizes, dim):
+def apply_air_grading(entries, graded, sizes, dim, copies_apart=False):
     """The Air Grading fields, after apply_refinements. graded: what graded_air returned; sizes: the map it took.
     Per entry: the far size on the air and on its outer boundary; an Extend that grows from the inner boundary's sizes
     to the far size over the growth distance, inside the air and on its outer boundary; and along the outer curves a
     Threshold from each point where they meet the inner boundary (a curve is meshed before any mesh exists to extend
-    from). Returns [(entry, its Extend field)]."""
+    from). copies_apart: a free job of a symmetric Study, whose copies bound the air too: an air that touches no body
+    still gets its Extend, for meshgroups adds the copies' frozen lines to it. Returns [(entry, its Extend field)]."""
     fields, made = [], []
     for entry in entries:
         tags, inner, outer = graded[entry["name"]]
@@ -193,7 +194,7 @@ def apply_air_grading(entries, graded, sizes, dim):
         fields.append(_field("Constant", VIn=far, IncludeBoundary=0, **{FIELD_LISTS[dim]: tags}))
         if outer:
             fields.append(_field("Constant", VIn=far, IncludeBoundary=1, **{FIELD_LISTS[dim - 1]: outer}))
-        if not inner:
+        if not inner and not copies_apart:
             _note(f"Air Grading {entry['name']}: the air touches no body; it is meshed at the far size")
             continue
         inner_curves = _curves(dim, inner)
