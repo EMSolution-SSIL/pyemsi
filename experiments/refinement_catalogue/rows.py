@@ -1,6 +1,6 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
 (RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
-(SL-01..SL-08), Skin Layer. Each row is
+(SL-01..SL-09), Skin Layer. Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -915,6 +915,35 @@ def sl06():
     return study
 
 
+OUTER_BAR = (55.0, 60.0, 2.0, 13.0)  # SL-09's bar in the stator iron cell: r 55..60, 2..13 deg, its arc r 60 outside
+OUTER_DEPTH = 0.5
+
+
+def sl09():
+    """SL-06's set-up on the stator: the 2D motor of RN-S1 (default size 5) with a copper bar r 55..60 over 2..13 deg
+    at the outer surface of its stator iron cell, a cell of its own in the stator's Symmetric Group (24 copies), in a
+    Sector Air Region r 60..90 round the copies; a Skin Layer δ 0.5 on the bar cell. The bar's arc r 60 faces the air,
+    which the cell job does not hold."""
+    study = motor("SL-09")
+    doc = study.Document
+    bar_face = symcases.sector(*OUTER_BAR)
+    iron = cell(study, "StatorIronCell")
+    iron.Shape = iron.Shape.cut(bar_face).Faces[0]
+    bar = symcases.feature(doc, "Bar", bar_face)
+    bar.Visibility = False
+    stator = objects.symmetric_groups(study)[0]
+    stator.Cells = list(stator.Cells) + [bar]
+    objects.sync_rows(stator)
+    lib = symcases.libraries(study)
+    row = [x["cell"] for x in objects.rows_of(stator)].index(bar.Name)
+    objects.set_row_material(study, stator, row, lib["Copper"])
+    doc.recompute()
+    objects.sync_parts(study)
+    symcases.add_air_region(study, lib["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90)
+    skin(study, bar, depth=OUTER_DEPTH)
+    return study
+
+
 SENSOR_DEPTH = 0.6
 
 
@@ -1010,6 +1039,29 @@ def in_copy(k):
     return lambda x, y: 22.5 * k < math.degrees(math.atan2(y, x)) % 360 < 22.5 * (k + 1)
 
 
+def stator_copy(k, band):
+    """True for a point (x, y) in the stator's k-th 15 deg sector within band of the bar's arc r 60."""
+    return lambda x, y: 15 * k < math.degrees(math.atan2(y, x)) % 360 < 15 * (k + 1) and math.hypot(x, y) > 60 - band
+
+
+def sl09_after(folder):
+    """(passed, text): in each of the 24 copies of the bar (one per 15 deg of the stator) the elements within δ of
+    its arc r 60 are as many and as fine (mean edge below δ); today that band is as coarse as the bar."""
+    out = {}
+    for w in ("new", "today"):
+        msh = os.path.join(folder, w, "pre_geom2D.msh")
+        out[w] = [air_band(msh, stator_copy(k, OUTER_DEPTH), "Bar") for k in range(24)]
+    new, today = out["new"], out["today"]
+    counts = {n for n, _ in new}
+    passed = len(counts) == 1 and min(counts) > 0 and max(e for _, e in new) < OUTER_DEPTH
+    edges = sorted({round(e, 3) for _, e in new})
+    text = (
+        f"Bar elements within δ of r 60 per copy: new {sorted(counts)} (mean edge {edges}), today"
+        f" {sorted({n for n, _ in today})} (mean edge {sorted({round(e, 3) for _, e in today})}), 24 copies"
+    )
+    return passed, text
+
+
 def sl06_after(folder):
     """(passed, text): each of the 16 copies of the bar (one per 22.5 deg of the rotor) has the same elements, more
     than today."""
@@ -1066,5 +1118,14 @@ CASES += [
         "meshes",
         {"clip": "z", "at": 5.0, "zoom": (69, -4.5, 81, 4.5)},
     ),
+    (
+        "SL-09",
+        "2D motor of RN-S1 with a copper bar r 55..60 at the outer surface of the stator iron cell, in a Sector Air"
+        " Region r 60..90: Skin Layer δ 0.5 on the bar cell, graded along its arc toward the air in every copy",
+        sl09,
+        "meshes",
+        {"zoom": (50, -1, 64, 16)},
+    ),
 ]
 AFTER.update({"SL-01": sl01_after, "SL-04": sl04_after, "SL-05": sl05_after, "SL-06": sl06_after, "SL-07": sl07_after})
+AFTER["SL-09"] = sl09_after
