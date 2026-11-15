@@ -1,5 +1,5 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
-(RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups. Each row is
+(RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, and Stage 3 (AG-01..AG-S2), Air Grading. Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -145,15 +145,20 @@ def rn03():
     return study
 
 
-def rn08():
+def sliding_motor(name, outer=60):
     """Rotor disc r 25 with 4 surface magnets r 25..27 (60 degrees each), stator ring r 30..50, a Sector Air Region
-    r 60 and a Rotational Sliding Interface at r 28.5 with 120 divisions."""
+    r outer and a Rotational Sliding Interface at r 28.5 with 120 divisions. Returns (study, bodies, air)."""
     magnets = [(f"Magnet{k + 1}", cases.ring_face(25, 27, 90 * k - 30, 90 * k + 30)) for k in range(4)]
     shapes = [("Stator", cases.ring_face(30, 50, 0, 360)), ("Rotor", cases.ring_face(0, 25, 0, 360)), *magnets]
-    doc, study, bodies = study_of("RN-08", "2D", shapes, movement="Sliding motion")
-    air = objects.make_air_region(study, "Sector", OuterRadius=60)
+    doc, study, bodies = study_of(name, "2D", shapes, movement="Sliding motion")
+    air = objects.make_air_region(study, "Sector", OuterRadius=outer)
     objects.make_sliding_interface(study, "Rotational", Radius=SLIDE_R, Divisions=120)
-    done(study, bodies, air)
+    return done(study, bodies, air), bodies, air
+
+
+def rn08():
+    """sliding_motor with its 4 magnets refined."""
+    study, bodies, _ = sliding_motor("RN-08")
     objects.make_refine_near(study, [(b, "") for b in bodies[2:]], fine=0.4, coarse=2, growth=3)
     return study
 
@@ -617,3 +622,199 @@ CASES += [
     ),
 ]
 AFTER = {"RN-08": rn08_after, "RN-10": rn10_after, "RN-S2": rns2_after, "RN-S3": rns3_after, "RN-S6": rns6_after}
+
+
+# --- Stage 3: Air Grading --------------------------------------------------------------------------------------------
+# Each row has a large air and a small body size; the air's size is a whole-body Mesh Size on the Air Region.
+
+
+def ag_magnet(name, far=0.0):
+    """The 40 x 10 magnet of RN-01 at size 2 (the default) in a Padding Box Air Region of 200 x 200 (80 / 95 mm on
+    the sides) with a Mesh Size 20 on it; an Air Grading over 60 to far. Returns (study, magnet, air)."""
+    doc, study, (magnet,) = study_of(name, "2D", [("Magnet", cases.face(cases.rect(-20, -5, 20, 5)))], size=2)
+    pads = {"PadXPlus": 80, "PadXMinus": 80, "PadYPlus": 95, "PadYMinus": 95}
+    air = objects.make_air_region(study, "Box", SizeMode="Padding", **pads)
+    done(study, [magnet], air)
+    box = air.Shape.BoundBox
+    assert near(box.XLength, 200) and near(box.YLength, 200), box
+    objects.make_mesh_size(study, 20, [(air, "")])
+    objects.make_air_grading(study, growth=60, far=far)
+    return study, magnet, air
+
+
+def ag01():
+    return ag_magnet("AG-01")[0]
+
+
+def ag02():
+    """The 40 x 20 x 10 magnet of RN-02 at size 3 (the default) in a Manual Box Air Region 300 x 300 x 300 with a Mesh
+    Size 30 on it; an Air Grading over 80 to the air's size."""
+    doc, study, (magnet,) = study_of("AG-02", "3D", [("Magnet", block(-20, -10, -5, 20, 10, 5))], size=3)
+    air = objects.make_air_region(study, "Box", SizeMode="Manual", Center=V(0, 0, 0), Length=300, Width=300, Height=300)
+    done(study, [magnet], air)
+    objects.make_mesh_size(study, 30, [(air, "")])
+    objects.make_air_grading(study, growth=80, far=0)
+    return study
+
+
+def ag03():
+    return ag_magnet("AG-03", far=60)[0]
+
+
+def ag04():
+    """sliding_motor (default size 4) in a Sector Air Region r 150 with a Mesh Size 10 on it; an Air Grading over 30."""
+    study, _, air = sliding_motor("AG-04", outer=150)
+    objects.make_mesh_size(study, 10, [(air, "")])
+    objects.make_air_grading(study, growth=30, far=0)
+    return study
+
+
+def ag05a():
+    study, _, _ = ag_magnet("AG-05a")
+    objects.make_air_grading(study, growth=30)
+    return study
+
+
+def ag05b():
+    study, magnet, _ = ag_magnet("AG-05b")
+    for item in objects.air_gradings(study):
+        study.Document.removeObject(item.Name)
+    objects.make_air_grading(study, [(magnet, "")], growth=60)
+    return study
+
+
+def ags1():
+    """The 2D motor (default size 5) in a Sector Air Region r 60..150 round the copies with a Mesh Size 10 on it; an
+    Air Grading over 30 to the air's size."""
+    study = motor("AG-S1")
+    lib = symcases.libraries(study)
+    air = symcases.add_air_region(study, lib["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=150)
+    objects.make_mesh_size(study, 10, [(air, "")])
+    objects.make_air_grading(study, growth=30, far=0)
+    return study
+
+
+def ags2():
+    """The 3D motor of RN-S4 (10 mm high, default size 1.5) in a Sector Air Region r 60..120, z 0..10 round the
+    copies (a Box would cross the sliding surface and the moving copies, which Validate refuses) with a Mesh Size 8 on
+    it; an Air Grading over 25 to the air's size."""
+    study = symcases.motor_study_3d(App.newDocument("AG_S2"))
+    ring = {"InnerRadius": 60, "OuterRadius": 120, "ZMin": 0, "Height": 10}
+    air = symcases.add_air_region(study, symcases.libraries(study)["Air"], AirShape="Sector", **ring)
+    objects.make_mesh_size(study, 8, [(air, "")])
+    objects.make_air_grading(study, growth=25, far=0)
+    return study
+
+
+def air_band(msh, keep, name="Air"):
+    """(elements, mean edge length) of the 2D physical group name's elements whose centroid (x, y) passes keep."""
+    import gmsh
+    import numpy as np
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        where = np.zeros(int(tags.max()) + 1, dtype=int)
+        where[tags.astype(int)] = np.arange(len(tags))
+        xyz = np.reshape(coords, (-1, 3))[:, :2]
+        lengths, count = [], 0
+        for d, tag in gmsh.model.getPhysicalGroups(2):
+            if gmsh.model.getPhysicalName(d, tag) != name:
+                continue
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag):
+                for etype, _, nodes in zip(*gmsh.model.mesh.getElements(2, ent)):
+                    corners = gmsh.model.mesh.getElementProperties(etype)[5]
+                    each = gmsh.model.mesh.getElementProperties(etype)[3]
+                    pts = xyz[where[np.reshape(nodes, (-1, each))[:, :corners].astype(int)]]
+                    mid = pts.mean(axis=1)
+                    pts = pts[[keep(x, y) for x, y in mid]]
+                    count += len(pts)
+                    lengths += [np.linalg.norm(pts - np.roll(pts, 1, axis=1), axis=2).ravel()]
+    finally:
+        gmsh.finalize()
+    lengths = np.concatenate(lengths) if lengths else np.zeros(0)
+    return count, float(lengths.mean()) if len(lengths) else 0.0
+
+
+def air_counts(folder, msh="pre_geom2D.msh"):
+    """{"new": elements, "today": elements} of the Air in the mesh file msh of new and today."""
+    return {w: part_elements(os.path.join(folder, w, msh), "Air") for w in ("new", "today")}
+
+
+def ag01_after(folder):
+    """(passed, text): the Air's elements in new and today, printed."""
+    n = air_counts(folder)
+    return n["new"] > 0 and n["today"] > 0, f"Air elements: new {n['new']}, today {n['today']}"
+
+
+def ag03_after(folder):
+    """(passed, text): the far size 60 gives the Air fewer elements than today."""
+    n = air_counts(folder)
+    return 0 < n["new"] < n["today"], f"Air elements: new {n['new']}, today {n['today']} (needs new < today)"
+
+
+AGS1_BAND = (60, 90)  # the air within the growth distance of the stator (r 60)
+
+
+def ags1_after(folder):
+    """(passed, text): the Air's elements and the mean edge of the air in the band r 60..90 beside the copies, in new
+    and today, printed."""
+    lo, hi = AGS1_BAND
+    out = {}
+    for w in ("new", "today"):
+        msh = os.path.join(folder, w, "pre_geom2D.msh")
+        out[w] = (part_elements(msh, "Air"), air_band(msh, lambda x, y: lo <= math.hypot(x, y) <= hi))
+    text = "; ".join(
+        f"{w}: Air elements {n}, band r {lo}..{hi} {b} elements, mean edge {e:.2f}" for w, (n, (b, e)) in out.items()
+    )
+    return all(n > 0 and b > 0 for n, (b, _) in out.values()), text
+
+
+ONE_PER_AIR = "already has Air Grading AirGrading; one per air."
+NOT_AN_AIR = "is not an air. Pick the Air Region"
+AIR_BOX = {"zoom": (-100, -100, 100, 100)}
+CASES += [
+    (
+        "AG-01",
+        "2D magnet (size 2) in a 200 x 200 air (size 20): Air Grading over 60 to the air's size",
+        ag01,
+        "meshes",
+        AIR_BOX,
+    ),
+    (
+        "AG-02",
+        "3D magnet 40 x 20 x 10 (size 3) in a 300 mm air box (size 30): Air Grading over 80 to the air's size, cut at"
+        " z = 0",
+        ag02,
+        "meshes",
+        {"clip": "z", "at": 0.0, "zoom": (-100, -100, 100, 100)},
+    ),
+    ("AG-03", "AG-01 with far size 60: fewer air elements than today", ag03, "meshes", AIR_BOX),
+    (
+        "AG-04",
+        "2D sliding motor (size 4) in an air r 150 (size 10): Air Grading over 30; the sliding circle keeps 120"
+        " divisions",
+        ag04,
+        "meshes",
+        {"zoom": (0, -75, 150, 75)},
+    ),
+    ("AG-05a", "AG-01 with a second Air Grading on the air: refused", ag05a, ONE_PER_AIR, {}),
+    ("AG-05b", "AG-01 with the Air Grading on the magnet: refused", ag05b, NOT_AN_AIR, {}),
+    (
+        "AG-S1",
+        "2D motor (size 5) in an air r 60..150 round the copies (size 10): Air Grading over 30 to the air's size",
+        ags1,
+        "meshes",
+        {"zoom": (0, -80, 155, 80)},
+    ),
+    (
+        "AG-S2",
+        "3D motor (size 1.5) in an air r 60..120, z 0..10 round the copies (size 8): Air Grading over 25, cut at z = 5",
+        ags2,
+        "meshes",
+        {"clip": "z", "at": 5.0, "zoom": (40, -50, 120, 50)},
+    ),
+]
+AFTER.update({"AG-01": ag01_after, "AG-03": ag03_after, "AG-04": rn08_after, "AG-S1": ags1_after})
