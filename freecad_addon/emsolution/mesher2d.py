@@ -36,6 +36,7 @@ from meshcommon import (
     graded_air,
     apply_air_grading,
     graded_ids,
+    apply_quad_layers,
 )
 import meshgroups
 
@@ -164,6 +165,9 @@ def build(job, folder):
     picks += [(e, {}) for e in skin_refinements(job.get("skin", []), sizes)]  # graded skins of conductors
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_faces, 2, sliding_air, apart)  # (entry, Distance field) pairs
+    tf_bodies = [b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])]
+    recombined = set(job.get("recombine", [])) | {r["mat_id"] for r in job.get("recombine_faces", [])} | set(tf_bodies)
+    apply_quad_layers(job.get("skin", []), body_faces, recombined)  # quads in the smooth skins, on the graded fields
     job["air_grading_fields"] = apply_air_grading(
         job.get("air_grading", []), graded, sizes, 2, apart
     )  # (entry, Extend field) pairs

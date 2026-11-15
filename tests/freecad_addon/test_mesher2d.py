@@ -105,6 +105,19 @@ def write_sectors(path, *sectors):
         gmsh.finalize()
 
 
+def write_disks(path, *disks):
+    """One BREP holding the discs (x, y, r)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for x, y, r in disks:
+            gmsh.model.occ.addDisk(x, y, 0, r, r)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
 def write_arc(path, r, a0, a1):
     """A circle arc about the origin in z = 0 from angle a0 to a1 (degrees)."""
     gmsh.initialize()
@@ -212,6 +225,7 @@ class Mesher2DTest(unittest.TestCase):
         recombine=None,
         air=None,
         extra=None,
+        patch=None,
     ):
         job = {
             "dimension": "2D",
@@ -232,7 +246,15 @@ class Mesher2DTest(unittest.TestCase):
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
-        return subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        cmd = [sys.executable, MESHER2D, path]
+        if patch:  # code run in the mesher process before it meshes, e.g. to replace a check
+            folder = os.path.dirname(os.path.abspath(MESHER2D))
+            code = (
+                f"import runpy, sys; sys.path.insert(0, {folder!r}); import meshcommon; {patch}; "
+                f"sys.argv = {cmd[1:]!r}; runpy.run_path({MESHER2D!r}, run_name='__main__')"
+            )
+            cmd = [sys.executable, "-c", code]
+        return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
     def open_msh(self):
         gmsh.initialize()
@@ -1111,6 +1133,107 @@ class Mesher2DTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         note = "Skin Layer Skin: MAT_ID 1 has no face shared with another region; it refines nothing"
         self.assertIn(note, r.stderr)
+
+    # ---- quad layers: the Skin Layer with QuadLayers, a BoundaryLayer on smooth conductors (2D)
+
+    def quads_of(self, group):
+        """[(corner points)] of the quads of a physical group of the open mesh."""
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        at = {int(t): tuple(coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
+        out = []
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, group):
+            for typ, _, nodes in zip(*gmsh.model.mesh.getElements(2, e)):
+                if gmsh.model.mesh.getElementProperties(typ)[0].startswith("Quadrilateral"):
+                    out += [tuple(at[int(n)] for n in nodes[k : k + 4]) for k in range(0, len(nodes), 4)]
+        return out
+
+    def quad_job(self, bodies, mat_ids=(1,), recombine=None, patch=None):
+        """Mesh the bodies [(mat_id, name, write(path))] in the air square of 120 at size 6, at body size 3, with a
+        Skin Layer with quad layers on mat_ids. Returns the run."""
+        made = []
+        for id_, name, write in bodies:
+            write(self.geo(f"vol_{id_}.brep"))
+            made.append(self.body(id_, name, f"vol_{id_}.brep", size=3.0))
+        write_rects(self.geo("air.brep"), [(-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        entry = dict(skin(mat_ids=mat_ids), quads=True)
+        return self.run_job(made, air=air, recombine=recombine, extra={"skin": [entry]}, patch=patch)
+
+    WIRE = (1, "Wire", lambda path: write_sectors(path, (0, 5)))
+    BAR = (1, "Bar", lambda path: write_rects(path, [(-10, -5, 20, 10)]))
+
+    @staticmethod
+    def bar_depth(c):  # below the surface of BAR
+        return min(5 - abs(c[1]), 10 - abs(c[0]))
+
+    def test_quad_layers_on_a_wire(self):
+        r = self.quad_job([self.WIRE])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        counts = self.element_counts(1)
+        self.assertGreater(counts.get("Quadrilateral 4", 0), 100, counts)  # spike: 252 quads, 95 triangles
+        self.assertNotIn("Quadrilateral 4", self.element_counts(2))
+        deepest = max(self.wire_depth(p) for q in self.quads_of(1) for p in q)
+        self.assertLess(deepest, 3 + 0.5)
+
+    def test_quad_layers_on_a_half_wire(self):
+        write_sectors(self.geo("vol_1.brep"), (0, 5, 0, 180))
+        write_rects(self.geo("air.brep"), [(-60, 0, 120, 60)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        entry = dict(skin(), quads=True)
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], air=air, extra={"skin": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertGreater(self.element_counts(1).get("Quadrilateral 4", 0), 50)  # spike: 128 quads
+
+    def test_quad_layers_fall_back_on_a_bar(self):
+        r = self.quad_job([self.BAR])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        note = "Skin Layer Skin: MAT_ID 1 has a sharp corner on its surface; graded triangles instead of quad layers"
+        self.assertIn(note, r.stderr)
+        bar = simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2, group=1)
+        self.assertLess(depth_edge(bar, self.bar_depth, 0, 1), 0.6)  # the graded band, as without quad layers
+        self.open_msh()
+        self.assertNotIn("Quadrilateral 4", self.element_counts(1))
+
+    def test_quad_layers_on_two_wires(self):
+        left = (1, "Left", lambda path: write_disks(path, (-15, 0, 5)))
+        right = (3, "Right", lambda path: write_disks(path, (15, 0, 5)))
+        r = self.quad_job([left, right], mat_ids=(1, 3))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        for group in (1, 3):
+            self.assertGreater(self.element_counts(group).get("Quadrilateral 4", 0), 100, group)
+
+    # the mesher's first gmsh.model.mesh.generate raises, as gmsh does when it cannot build a layer at a corner. A bar
+    # with its corners let through the smooth check does that only sometimes: as often it hangs in gmsh
+    FAIL_ONCE = "exec(%r)" % (
+        "import gmsh\n"
+        "real = gmsh.model.mesh.generate\n"
+        "def generate(dim):\n"
+        "    gmsh.model.mesh.generate = real\n"
+        "    raise Exception('Edge not recovered: 1 109 444444')\n"
+        "gmsh.model.mesh.generate = generate\n"
+    )
+
+    def test_quad_layers_retry(self):
+        r = self.quad_job([self.WIRE], patch=self.FAIL_ONCE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: Skin Layer: gmsh could not make the quad layers; graded triangles instead", r.stderr)
+        wire = simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2, group=1)
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 1), 0.6)  # the graded fields are still the background
+        self.open_msh()
+        self.assertNotIn("Quadrilateral 4", self.element_counts(1))
+
+    def test_a_gmsh_error_without_quad_layers_stays(self):
+        write_sectors(self.geo("vol_1.brep"), (0, 5))
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], extra={"skin": [skin()]}, patch=self.FAIL_ONCE)
+        self.assertEqual(self.last_error(r), "ERROR: Edge not recovered: 1 109 444444")
+
+    def test_quad_layers_skip_a_recombined_wire(self):
+        r = self.quad_job([self.WIRE], recombine=[1])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Skin Layer Skin: MAT_ID 1 is structured or recombined; no quad layers", r.stderr)
 
     # ---- sliding motion: the fixed side goes to pre_geom2D.msh, the moving side to rotor_mesh2D.msh
 

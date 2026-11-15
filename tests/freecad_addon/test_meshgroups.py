@@ -14,7 +14,7 @@ import numpy as np
 
 from emsolution import meshfrozen
 from .test_mesher import MESHER, write_line, write_point
-from .test_mesher2d import MESHER2D, clockwise, turn_over, write_arc, write_sectors
+from .test_mesher2d import MESHER2D, clockwise, turn_over, write_arc, write_sectors, add_sector
 from .test_mesher2d import write_rects as write_plane_rects
 from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
 from .test_meshsym3d import mesh_check_3d, slide_nodes, surface_group, write_face, write_sector_solids
@@ -1288,6 +1288,51 @@ class GroupJobTest(unittest.TestCase):
         self.assertGreater(len(seam), 0)
         seam_edge = float(np.linalg.norm(xyz[seam[:, 0]] - xyz[seam[:, 1]], axis=1).mean())
         self.assertGreater(seam_edge, 0.8 * size)  # measured 0.88
+
+    def test_quad_layers_on_a_cell_wire_copy(self):
+        # The cell: iron r 10..30 over 30 degrees (size 2) holding a round wire r 3 at radius 20 (size 1.5), its skin
+        # 0.5 deep with quad layers
+        centre = (20 * math.cos(math.radians(15)), 20 * math.sin(math.radians(15)))
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            for name, cut in (("wire", False), ("iron", True)):
+                occ = gmsh.model.occ
+                disk = [(2, occ.addDisk(*centre, 0, 3, 3))]
+                if cut:
+                    sector = add_sector(10, 30, 0, 30)
+                    occ.cut(sector, disk)
+                occ.synchronize()
+                gmsh.write(self.geo(f"{name}.brep"))
+                gmsh.clear()
+        finally:
+            gmsh.finalize()
+        skin = dict(self.skin(1, 0.5), quads=True)
+        job = {
+            "bodies": [
+                {"mat_id": 1, "name": "Wire", "file": "geometry/wire.brep", "size": 1.5},
+                {"mat_id": 2, "name": "Iron", "file": "geometry/iron.brep", "size": 2.0},
+            ],
+            "sizes": [],
+            "skin": [skin],
+        }
+        group = {
+            "name": "Stator",
+            "side": "fixed",
+            "job": job,
+            "cells": [1, 2],
+            "transforms": self.TWELVE,
+            "parts": [{"mat_id": 4, "name": "Copper"}, {"mat_id": 7, "name": "Iron"}],
+            "rows": [{"cell": k, "file": None, "parts": [k - 1] * 12} for k in (1, 2)],
+        }
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, [10, 30])[1:], (0, 0))
+        xyz, found = read_mesh(mesh)
+        centroids = xyz[found[3]].mean(axis=1)  # gmsh type 3: the 4-node quads
+        copy = (np.degrees(np.arctan2(centroids[:, 1], centroids[:, 0])) % 360 // 30).astype(int)
+        per_copy = np.bincount(copy, minlength=12)
+        self.assertGreater(per_copy[0], 50)
+        self.assertEqual(list(per_copy), [per_copy[0]] * 12)
 
     SKIN_PLATE = (-6, -6, -4, 12, 12, 8)  # in the bore of the ring (radius 10), inside the air BOX
 

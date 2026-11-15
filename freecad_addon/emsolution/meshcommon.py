@@ -140,6 +140,73 @@ def skin_refinements(entries, sizes):
     return out
 
 
+def _smooth(curves, radius):
+    """True when the layer curves turn by at most 15 degrees where two of them meet (never where three do) and none
+    has a radius of curvature below radius: at a corner a gmsh BoundaryLayer fails ("Edge not recovered") or hangs."""
+    ends = []  # (where, unit tangent leading away from there along the curve) at both ends of every curve
+    for c in curves:
+        lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, c))
+        for u, sign in ((lo, 1), (hi, -1)):
+            d = gmsh.model.getDerivative(1, c, [u])
+            size = math.hypot(*d)
+            ends.append((gmsh.model.getValue(1, c, [u]), [sign * x / size for x in d]))
+        samples = [lo + (hi - lo) * k / 19 for k in range(20)]
+        if max(gmsh.model.getCurvature(1, c, samples)) * radius > 1 + 1e-9:
+            return False
+    tol = 1e-6 * max(1.0, *(abs(x) for where, _ in ends for x in where))
+    for where, _ in ends:
+        meeting = [a for w, a in ends if math.dist(w, where) < tol]
+        if len(meeting) > 2:
+            return False
+        if len(meeting) == 2:  # coming in along one, going on along the other: -away of one against away of the other
+            turn = -sum(a * b for a, b in zip(*meeting))
+            if turn < math.cos(math.radians(15)) - 1e-9:
+                return False
+    return True
+
+
+def apply_quad_layers(entries, body_tags, recombined=()):
+    """2D: quad layers in the skins with "quads" (job["skin"] entries), after apply_refinements made their graded
+    fields: one BoundaryLayer field per smooth body, growing from its real surface into the body only. A body with a
+    sharp corner on that surface, or structured or recombined (recombined: those MAT_IDs), keeps the graded triangles.
+    Returns the BoundaryLayer fields."""
+    field = gmsh.model.mesh.field
+    surfaces = [t for _, t in gmsh.model.getEntities(2)]
+    made = []
+    for e in entries:
+        if not e["quads"]:
+            continue
+        depth, layer = e["depth"], e["layer"]
+        for m in e["mat_ids"]:
+            tags = body_tags.get(m, [])
+            curves = real_boundary(2, tags)
+            if not curves:  # apply_refinements said so
+                continue
+            if m in recombined:
+                _note(f"Skin Layer {e['name']}: MAT_ID {m} is structured or recombined; no quad layers")
+                continue
+            if not _smooth(curves, layer * depth):
+                _note(
+                    f"Skin Layer {e['name']}: MAT_ID {m} has a sharp corner on its surface; graded triangles instead"
+                    " of quad layers"
+                )
+                continue
+            inside = set(tags)
+            others = [s for s in surfaces if s not in inside]
+            f = _field(
+                "BoundaryLayer",
+                CurvesList=curves,
+                ExcludedSurfacesList=others,
+                Size=depth / e["per_depth"],
+                Ratio=1.2,
+                Thickness=layer * depth,
+                Quads=1,
+            )
+            field.setAsBoundaryLayer(f)
+            made.append(f)
+    return made
+
+
 def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):
     """Air Grading, before apply_size_fields. entries: job["air_grading"]. The caller leaves each graded air's own size
     out of by_size (see graded_ids): apply_air_grading sizes the air, and a Mesh Size item on it stays. The air's inner
@@ -971,7 +1038,18 @@ def generate(job, dim):
     gmsh.option.setNumber("Mesh.Optimize", 1)
     gmsh.logger.start()  # Gmsh only warns when a transfinite face or volume falls back to unstructured
     try:
-        gmsh.model.mesh.generate(dim)
+        try:
+            gmsh.model.mesh.generate(dim)
+        except Exception:
+            field = gmsh.model.mesh.field
+            layers = [f for f in field.list() if field.getType(f) == "BoundaryLayer"]  # apply_quad_layers'
+            if not layers:
+                raise
+            for f in layers:
+                field.remove(f)
+            gmsh.model.mesh.clear()
+            _note("Skin Layer: gmsh could not make the quad layers; graded triangles instead")
+            gmsh.model.mesh.generate(dim)
         failed = [m for m in gmsh.logger.get() if "cannot be meshed using the transfinite" in m]
     finally:
         gmsh.logger.stop()
