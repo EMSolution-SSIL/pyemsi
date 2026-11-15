@@ -888,6 +888,29 @@ def sl07():
     return sl_wire("SL-07", 3, SIZE, depth=2)
 
 
+def rounded_rect(w, h, r):
+    """A face w x h centred at the origin with its corners rounded to radius r."""
+    a, b = w / 2 - r, h / 2 - r
+    edges = [
+        Part.LineSegment(V(-a, -h / 2, 0), V(a, -h / 2, 0)).toShape(),
+        Part.LineSegment(V(w / 2, -b, 0), V(w / 2, b, 0)).toShape(),
+        Part.LineSegment(V(a, h / 2, 0), V(-a, h / 2, 0)).toShape(),
+        Part.LineSegment(V(-w / 2, b, 0), V(-w / 2, -b, 0)).toShape(),
+    ]
+    for (x, y), start in (((a, -b), 270), ((a, b), 0), ((-a, b), 90), ((-a, -b), 180)):
+        edges.append(Part.makeCircle(r, V(x, y, 0), V(0, 0, 1), start, start + 90))
+    return Part.Face(Part.Wire(Part.__sortEdges__(edges)))
+
+
+def sl10():
+    """A 2D bar 30 x 14 with corners rounded to r 6 (twice the layer depth) at size 3 in a Padding Box Air Region
+    (50 %), δ 1 with quad layers: smooth, so it gets them."""
+    doc, study, (bar,) = study_of("SL-10", "2D", [("Bar", rounded_rect(30, 14, 6))], size=3)
+    done(study, [bar], cases.fit_air(study, [bar], 50))
+    skin(study, bar, depth=1, quads=True)
+    return study
+
+
 BAR = (22.0, 11.25, 3.0)  # SL-06's round bar in the rotor iron cell: centred at r 22, 11.25 deg, radius 3
 BAR_DEPTH = 0.5
 
@@ -1028,6 +1051,15 @@ def sl05_after(folder):
     return quads == 0 and bool(notes) and bool(warnings), text
 
 
+def sl10_after(folder):
+    """(passed, text): quadrangles in the bar, and no sharp-corner note or Validate warning."""
+    quads = part_types(os.path.join(folder, "new", "pre_geom2D.msh"), "Bar").get(3, 0)
+    notes = [x for x in mesher_notes(folder) if SHARP_NOTE in x]
+    warnings = [x for x in new_warnings(folder, "SL-10") if SHARP_WARNING in x]
+    text = f"quads in the Bar: {quads}; sharp-corner note: {len(notes)}; Validate warning: {len(warnings)}"
+    return quads > 0 and not notes and not warnings, text
+
+
 def sl07_after(folder):
     """(passed, text): the "layer is deeper than half" warning printed."""
     warnings = [x for x in new_warnings(folder, "SL-07") if DEEPER in x]
@@ -1126,6 +1158,15 @@ CASES += [
         "meshes",
         {"zoom": (50, -1, 64, 16)},
     ),
+    (
+        "SL-10",
+        "2D bar 30 x 14 with corners rounded to r 6 (size 3), δ 1 with quad layers: smooth, so the layers follow the"
+        " corners",
+        sl10,
+        "meshes",
+        {"zoom": (-18, -10, 18, 10)},
+    ),
 ]
 AFTER.update({"SL-01": sl01_after, "SL-04": sl04_after, "SL-05": sl05_after, "SL-06": sl06_after, "SL-07": sl07_after})
 AFTER["SL-09"] = sl09_after
+AFTER["SL-10"] = sl10_after
