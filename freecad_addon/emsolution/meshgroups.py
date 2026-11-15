@@ -1445,9 +1445,9 @@ def _mesh_free_entity(survey, side, V, dim, rules=(), grading=None):
     """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
     and the frozen facets that bound it (survey.frozen) bound one region or several (nest), each meshed by
     mesh_region, graded by the rules (from _free_rules) whose Limit to is empty or holds the body, and by grading (None,
-    or {"growth", "far"} of the body's Air Grading). Returns (W, elements, own): W is V with the apexes of the pyramids
-    and the new nodes appended, elements numbered into it, own {face: {etype: connectivity}} the mesh of each of its own
-    faces, for excitations."""
+    or {"growth", "far"} of the body's Air Grading or Skin Layer). Returns (W, elements, own): W is V with the apexes
+    of the pyramids and the new nodes appended, elements numbered into it, own {face: {etype: connectivity}} the mesh of
+    each of its own faces, for excitations."""
     body, entity, faces = survey.body, survey.entity, survey.faces
     name = body["name"]
     keys = ("fine", "fine_distance", "coarse", "growth")
@@ -1573,6 +1573,11 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             added, elements, excited, count = [], {}, {}, 0
             entry = next((e for e in free_job.get("air_grading", []) if body["mat_id"] in e["mat_ids"]), None)
             grading = {"growth": entry["growth"], "far": entry["far"]} if entry else None
+            skin = next(
+                (e for e, _ in rules if e.get("label") == "Skin Layer" and body["mat_id"] in e["limit_to"]), None
+            )
+            if skin and not grading:  # grown from its fine skin to its own size, not extended inward from the skin
+                grading = {"growth": skin["fine_distance"] + skin["growth"], "far": body["size"]}
             for survey in surveys:
                 if survey.body is not body:
                     continue

@@ -1232,6 +1232,94 @@ class GroupJobTest(unittest.TestCase):
         )
 
     @staticmethod
+    def skin(mat_id, depth=1.0):
+        """A job "skin" entry on MAT_ID mat_id: depth mm, 2 elements per depth, graded over 3 depths, no quads."""
+        return {"name": "Skin", "mat_ids": [mat_id], "depth": depth, "per_depth": 2, "layer": 3, "quads": False}
+
+    @staticmethod
+    def inside_box(box):  # the depth of points inside the box (x, y, dx, dy) or (x, y, z, dx, dy, dz) below its surface
+        n = len(box) // 2
+        low = np.array(box[:n], dtype=float)
+        high = low + box[n:]
+        return lambda p: np.min(np.minimum(p[:, :n] - low, high - p[:, :n]), axis=1)
+
+    def test_skin_on_a_cell_conductor_copies_2d(self):
+        # The cell: a conductor r 10..16 (skin on its real surface, the arc r 16) inside iron r 16..20, both size 1.
+        depth, size = 0.5, 1.0
+        write_sectors(self.geo("conductor.brep"), (10, 16, 0, 30))
+        write_sectors(self.geo("iron.brep"), (16, 20, 0, 30))
+        job = {
+            "bodies": [
+                {"mat_id": 1, "name": "Conductor", "file": "geometry/conductor.brep", "size": size},
+                {"mat_id": 2, "name": "Iron", "file": "geometry/iron.brep", "size": size},
+            ],
+            "sizes": [],
+            "skin": [self.skin(1, depth)],
+        }
+        group = {
+            "name": "Stator",
+            "side": "fixed",
+            "job": job,
+            "cells": [1, 2],
+            "transforms": self.TWELVE,
+            "parts": [{"mat_id": 4, "name": "Copper"}, {"mat_id": 7, "name": "Iron"}],
+            "rows": [{"cell": k, "file": None, "parts": [k - 1] * 12} for k in (1, 2)],
+        }
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, [10, 20])[1:], (0, 0))
+
+        def in_copy(k):  # the depth below the arc r 16 of the conductor of copy k, inf outside that copy
+            def distance(p):
+                angle = np.degrees(np.arctan2(p[:, 1], p[:, 0])) % 360
+                return np.where((angle > 30 * k) & (angle < 30 * (k + 1)), 16 - np.hypot(p[:, 0], p[:, 1]), np.inf)
+
+            return distance
+
+        bands = [self.mean_edge(mesh, 4, in_copy(k), 0, depth) for k in range(12)]
+        self.assertLess(bands[0], 0.6 * size)  # measured 0.24
+        for k, band in enumerate(bands):
+            self.assertAlmostEqual(band, bands[0], places=6, msg=f"copy {k}")
+        # the seam at 0 degrees: the conductor's edges on it, farther than 3 depths from the arc r 16
+        xyz, elements, _ = _physical_mesh(mesh, (4,))
+        tri = elements[4][2]
+        on_seam = (np.abs(xyz[:, 1]) < 1e-6) & (xyz[:, 0] > 0) & (xyz[:, 0] <= 16 - 3 * depth + 1e-6)
+        edges = [tri[:, [a, b]] for a, b in ((0, 1), (1, 2), (0, 2))]
+        seam = np.concatenate([e[on_seam[e].all(axis=1)] for e in edges])
+        self.assertGreater(len(seam), 0)
+        seam_edge = float(np.linalg.norm(xyz[seam[:, 0]] - xyz[seam[:, 1]], axis=1).mean())
+        self.assertGreater(seam_edge, 0.8 * size)  # measured 0.88
+
+    SKIN_PLATE = (-6, -6, -4, 12, 12, 8)  # in the bore of the ring (radius 10), inside the air BOX
+
+    def test_skin_on_a_free_conductor_grades_its_volume_3d(self):
+        depth, size = 1.0, 2.0
+        write_boxes(self.geo("plate.brep"), self.SKIN_PLATE)
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": size}
+        job = {"volumes": [plate], "surfaces": [], "sizes": [], "air": self.air_entry(self.BOX)}
+        job["skin"] = [self.skin(20, depth)]
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[{"side": "fixed", "job": job}], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+        inside = self.inside_box(self.SKIN_PLATE)
+        self.assertLess(self.mean_edge(mesh, 20, inside, 0, depth), 0.75 * depth)  # measured 0.65
+        # measured 2.03; 0.67 when the free region took its size from its fine skin (Mesh.MeshSizeExtendFromBoundary)
+        self.assertGreater(self.mean_edge(mesh, 20, inside, 3 * depth, np.inf), 0.8 * size)
+
+    def test_skin_on_a_free_conductor_2d(self):
+        depth, size = 1.0, 2.0
+        plate_rect = (-6, -6, 12, 12)
+        write_rects(self.geo("plate.brep"), plate_rect)
+        write_rects(self.geo("air_region.brep"), (-30, -30, 60, 60))
+        plate = {"mat_id": 21, "name": "Plate", "file": "geometry/plate.brep", "size": size}
+        air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 6.0}
+        free = {"side": "fixed", "job": {"bodies": [plate], "sizes": [], "air": air, "skin": [self.skin(21, depth)]}}
+        mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)], free=[free])
+        self.assertEqual(edges_in_three(mesh), 0)
+        inside = self.inside_box(plate_rect)
+        self.assertLess(self.mean_edge(mesh, 21, inside, 0, depth), 0.75 * depth)  # measured 0.50
+        # measured 1.94; 0.50 when the free region took its size from its fine skin
+        self.assertGreater(self.mean_edge(mesh, 21, inside, 3 * depth, np.inf), 0.8 * size)
+
+    @staticmethod
     def air_grading(mat_id, far=12.0, growth=10.0):
         return {"name": "AirGrading", "mat_ids": [mat_id], "growth": growth, "far": far}
 
