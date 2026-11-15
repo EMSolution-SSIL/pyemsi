@@ -1865,6 +1865,26 @@ class StudyTest(unittest.TestCase):
             (entry["fine"], entry["fine_distance"], entry["coarse"], entry["growth"]), (0.4, 0.5, 4.0, 10.0)
         )
 
+    def test_job_without_air_grading_has_no_air_grading_key(self):
+        a = self.box("A")
+        self.assign([a])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("air_grading", json.load(fh))
+
+    def test_air_grading_goes_to_the_job(self):
+        a = self.box("A")
+        self.assign([a])
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        objects.make_mesh_size(self.study, 12.0, [(air, "")])
+        objects.make_air_grading(self.study, growth=50.0)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual(
+            job["air_grading"],
+            [{"name": "AirGrading", "mat_ids": [int(self.study.MatIds[air.Name])], "growth": 50.0, "far": 12.0}],
+        )
+
     def test_refine_near_leaves_out_limit_bodies_the_study_does_not_mesh(self):
         a, b = self.box("A"), self.box("B", 20)
         self.assign([a])

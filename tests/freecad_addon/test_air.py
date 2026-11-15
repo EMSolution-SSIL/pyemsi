@@ -506,6 +506,16 @@ class AirTest(unittest.TestCase):
         ids = self.study.MatIds
         self.assertEqual(entry["limit_to"], [int(ids[f"{air.Name}#fixed"]), int(ids[f"{air.Name}#moving"])])
 
+    def test_air_grading_on_a_sliding_air_lists_both_sides(self):
+        self.box_slide()
+        air = objects.air_regions(self.study)[0]
+        objects.make_air_grading(self.study, [(air, "")], 20.0, 6.0)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            (entry,) = json.load(fh)["air_grading"]
+        ids = self.study.MatIds
+        self.assertEqual(entry["mat_ids"], [int(ids[f"{air.Name}#fixed"]), int(ids[f"{air.Name}#moving"])])
+        self.assertEqual((entry["growth"], entry["far"]), (20.0, 6.0))
+
     def test_sliding_with_air_writes_the_slide_job(self):
         self.box_slide()
         iface = objects.sliding_interfaces(self.study)[0]

@@ -221,6 +221,24 @@ def test_air_grading_on_a_free_object_is_allowed_and_on_a_cell_refused(motor):
     )
 
 
+def test_air_grading_goes_to_the_free_job_of_its_air(motor):
+    air = symcases.add_air_region(
+        motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=130
+    )
+    body = _free_ring(motor)
+    objects.make_air_grading(motor, [(air, "")], 7.0, 3.0)
+    objects.make_air_grading(motor, [(body, "")], 9.0, 4.0)
+    assert not [t for t in _texts(motor) if t.startswith("Air Grading")]
+    job = _job_of(motor)
+    assert not any(g["job"].get("air_grading") for g in job["symmetric"]["groups"])
+    (free,) = [f["job"] for f in job["symmetric"]["free"] if f["side"] == "fixed"]
+    ids = motor.MatIds
+    assert free["air_grading"] == [
+        {"name": "AirGrading", "mat_ids": [int(ids[air.Name])], "growth": 7.0, "far": 3.0},
+        {"name": "AirGrading001", "mat_ids": [int(ids[body.Name])], "growth": 9.0, "far": 4.0},
+    ]
+
+
 def test_refine_near_on_a_cell_goes_to_the_cell_job(motor):
     cell = _cell(motor)
     objects.make_refine_near(motor, [(cell, "")])

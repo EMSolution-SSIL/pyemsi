@@ -170,6 +170,24 @@ def refine_entries(study, folder, ids, prefix=""):
     return entries
 
 
+def air_grading_entries(study, ids):
+    """The job's "air_grading" list: one entry per Air Grading whose air is meshed here. ids is {body or air Name:
+    [MAT_ID, ...]}, the map refine_entries takes."""
+    entries = []
+    for item in objects.air_gradings(study):
+        mat_ids = [mat_id for body, _ in objects.item_refs(item) if body.Name in ids for mat_id in ids[body.Name]]
+        if mat_ids:
+            entries.append(
+                {
+                    "name": item.Label,
+                    "mat_ids": mat_ids,
+                    "growth": item.GrowthDistance.Value,
+                    "far": objects.far_size(item),
+                }
+            )
+    return entries
+
+
 def write_slides(study, folder, job):
     """Add the slide keys to job and write their BREPs: the moving cells, each interface's surface and slide marker."""
     plane = airshapes.study_plane(study)
@@ -412,6 +430,9 @@ def write_groups(study, folder, checked=None):
             refine = refine_entries(study, folder, refine_ids, f"free_{side}_")
             if refine:
                 job["refine"] = refine
+            grading = air_grading_entries(study, refine_ids)
+            if grading:
+                job["air_grading"] = grading
             free_jobs.append({"side": side, "job": job})
     if free_jobs:
         block["free"] = free_jobs
@@ -472,6 +493,9 @@ def write_job(study):
         refine = refine_entries(study, folder, refine_ids)
         if refine:
             job["refine"] = refine
+        grading = air_grading_entries(study, refine_ids)
+        if grading:
+            job["air_grading"] = grading
         if sliding:
             moving = sides.moving(study)
             job["moving"] = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in moving]
