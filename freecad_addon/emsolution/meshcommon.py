@@ -71,7 +71,7 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
         picked = {d: list(tags) for d, tags in picked.items()}
         for body in dict.fromkeys(tuple(joined.get(m, [m])) for m in entry["whole"]):
             faces = real_boundary(dim, [t for m in body for t in body_tags.get(m, [])])
-            if not faces:
+            if not faces and not (entry.get("skin") and picked):  # a skin's picks are its faces toward the free side
                 other = "free object; the copies are meshed apart" if copies_apart else "region"
                 _note(
                     f"{item}: MAT_ID {'/'.join(map(str, body))} has no face shared with another {other}; it refines"
@@ -115,15 +115,18 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
     return made
 
 
-def skin_refinements(entries, sizes):
-    """Refine Near entries for apply_refinements, one per Skin Layer entry (job["skin"]) and MAT_ID: the size is
-    depth / per_depth within min(1, layer) skin depths of the body's real surface and grows to the body's own size
-    (sizes: {mat_id: size}) at layer skin depths, inside the body only."""
-    out = []
-    for e in entries:
+def skin_refinements(entries, sizes, faces=None):
+    """(Refine Near entry, picks) pairs for apply_refinements, one per Skin Layer entry (job["skin"]) and MAT_ID: the
+    size is depth / per_depth within min(1, layer) skin depths of the body's real surface and grows to the body's own
+    size (sizes: {mat_id: size}) at layer skin depths, inside the body only. faces: {(index of the skin entry, MAT_ID):
+    {dim: [final tags]}}, the body's faces toward the free side in a cell job (the entry's "faces"): its picks, so the
+    surface is the real one and those."""
+    out, keys = [], []
+    for k, e in enumerate(entries):
         depth = e["depth"]
         fine_distance = min(1, e["layer"]) * depth
         for m in e["mat_ids"]:
+            keys.append((k, m))
             out.append(
                 {
                     "name": e["name"],
@@ -138,7 +141,8 @@ def skin_refinements(entries, sizes):
                     "limit_to": [m],
                 }
             )
-    return out
+    picks = [(faces or {}).get(key, {}) for key in keys]
+    return [(e, {d: list(tags) for d, tags in p.items()}) for e, p in zip(out, picks)]
 
 
 def _smooth(curves, radius):
@@ -168,23 +172,25 @@ def _smooth(curves, radius):
     return True
 
 
-def apply_quad_layers(entries, body_tags, recombined=()):
+def apply_quad_layers(entries, body_tags, recombined=(), faces=None):
     """2D: quad layers in the skins with "quads" (job["skin"] entries), after apply_refinements made their graded
     fields: one BoundaryLayer field per smooth body, growing from its real surface into the body only. A body with a
     sharp corner on that surface, or structured or recombined (recombined: those MAT_IDs), keeps the graded triangles.
     One BoundaryLayer per MAT_ID, the first skin's in job order: two on the same curves leave the body's core unmeshed.
-    Returns the BoundaryLayer fields."""
+    faces: the faces toward the free side that skin_refinements takes; their curves are part of the surface. Returns
+    the BoundaryLayer fields."""
     field = gmsh.model.mesh.field
     surfaces = [t for _, t in gmsh.model.getEntities(2)]
     made = []
     layered = {}  # {MAT_ID: the name of the skin that made its quad layers}
-    for e in entries:
+    for k, e in enumerate(entries):
         if not e["quads"]:
             continue
         depth, layer = e["depth"], e["layer"]
         for m in e["mat_ids"]:
             tags = body_tags.get(m, [])
-            curves = real_boundary(2, tags)
+            free = (faces or {}).get((k, m), {}).get(1, [])
+            curves = list(dict.fromkeys(real_boundary(2, tags) + free))
             if not curves:  # apply_refinements said so
                 continue
             if m in layered:

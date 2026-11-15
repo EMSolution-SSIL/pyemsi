@@ -256,6 +256,117 @@ def test_skin_layer_quads_on_a_cell_cut_by_a_seam_not(tmp_path):
         App.closeDocument(doc.Name)
 
 
+@pytest.fixture
+def bar_study(tmp_path):
+    """A 2D group (mirror at 0 degrees, six turns of 60) whose cell is iron r 10..30 over 0..30 degrees holding a bar
+    r 25..30 over 0..10 degrees (its arc r 30 faces the Air Region, its line at 0 degrees is a seam with its mirror
+    image, its other edges lie against the iron) and a round wire r 2 inside the iron, in a 100 mm Air Region box.
+    Yields (study, bar, wire)."""
+    doc = App.newDocument("BarSkin")
+    try:
+        study = objects.make_study(doc, "2D")
+        libs = symcases.libraries(study)
+        bar_face = symcases.sector(25, 30, 0, 10)
+        centre = App.Vector(18 * math.cos(math.radians(15)), 18 * math.sin(math.radians(15)), 0)
+        wire_face = Part.Face(Part.Wire(Part.makeCircle(2, centre)))
+        bar = symcases.feature(doc, "BarCell", bar_face)
+        wire = symcases.feature(doc, "WireCell", wire_face)
+        iron = symcases.feature(doc, "IronCell", symcases.sector(10, 30, 0, 30).cut(bar_face).cut(wire_face).Faces[0])
+        lib = {iron.Name: libs["Steel"], bar.Name: libs["Copper"], wire.Name: libs["Copper"]}
+        rows = {c.Name: {"mode": "table", "table": [c.Name[:-4]] * 12} for c in (iron, bar, wire)}
+        rules = [symcases.mirror_rule(0), symcases.rotate_rule(60, 6)]
+        symcases.group(study, "G", [iron, bar, wire], rules, rows=rows, lib=lib)
+        symcases.add_air_region(study, libs["Air"], Center=App.Vector(), Length=100, Width=100)
+        symcases.finish(study, str(tmp_path / "bar.FCStd"))
+        yield study, bar, wire
+    finally:
+        for name in list(App.listDocuments()):
+            App.closeDocument(name)
+
+
+def _arc_radius(shape):
+    (edge,) = shape.Edges
+    return getattr(edge.Curve, "Radius", None)
+
+
+def test_free_faces_of_a_cell_conductor(bar_study):
+    from emsolution import geometry, validation
+
+    study, bar, wire = bar_study
+    (group,) = objects.symmetric_groups(study)
+    edges = geometry.global_shape(bar).Edges
+    (outer,) = [f"Edge{i}" for i, e in enumerate(edges, 1) if getattr(e.Curve, "Radius", 0) == pytest.approx(30)]
+    assert validation.free_faces(study, group, bar) == [outer]
+    assert validation.free_faces(study, group, wire) == []
+    (air,) = objects.air_regions(study)
+    air.AirShape, air.InnerRadius, air.OuterRadius = "Sector", 30, 60  # round the copies: its inner arc meets the bar
+    study.Document.recompute()
+    assert validation.free_faces(study, group, bar) == [outer]
+    # a half model: three turns of the cell and its mirror image at 30 degrees, in a box above y = 0. The bar's line at
+    # 0 degrees lies on the box's side, a cut of the domain
+    objects.set_rules(group, [symcases.mirror_rule(30), symcases.rotate_rule(60, 3)])
+    air.AirShape, air.Center, air.Length, air.Width = "Box", App.Vector(0, 50, 0), 200, 100
+    study.Document.recompute()
+    assert validation.free_faces(study, group, bar) == [outer]
+    air.Center = App.Vector(0, 49, 0)  # the box reaches 1 mm below y = 0: that line now faces its air
+    study.Document.recompute()
+    line = next(f"Edge{i}" for i, e in enumerate(edges, 1) if abs(e.CenterOfMass.y) < 1e-9)
+    assert validation.free_faces(study, group, bar) == sorted([outer, line], key=lambda n: int(n[4:]))
+
+
+def test_skin_on_a_cell_conductor_lists_its_free_faces(bar_study):
+    study, bar, wire = bar_study
+    objects.make_skin_layer(study, [(bar, "")], 1.0)
+    objects.make_skin_layer(study, [(wire, "")], 1.0)
+    assert not _texts(study)
+    path = jobwriter.write_job(study)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    (group,) = objects.symmetric_groups(study)
+    on_bar, on_wire = job["symmetric"]["groups"][0]["job"]["skin"]
+    n = list(group.Cells).index(bar) + 1
+    (face,) = on_bar["faces"]
+    assert face["mat_id"] == n and on_bar["mat_ids"] == [n]
+    assert _arc_radius(Part.read(os.path.join(os.path.dirname(path), face["file"]))) == pytest.approx(30)
+    assert "faces" not in on_wire
+
+
+def test_refine_near_whole_cell_body_gets_its_free_faces(bar_study):
+    study, bar, _ = bar_study
+    objects.make_refine_near(study, [(bar, "")])
+    path = jobwriter.write_job(study)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    (group,) = objects.symmetric_groups(study)
+    (entry,) = job["symmetric"]["groups"][0]["job"]["refine"]
+    assert entry["whole"] == [list(group.Cells).index(bar) + 1]
+    (file,) = entry["files"]
+    assert _arc_radius(Part.read(os.path.join(os.path.dirname(path), file))) == pytest.approx(30)
+
+
+def test_skin_layer_quads_on_a_cell_conductor_facing_the_air(tmp_path):
+    """A lens-shaped bar at the iron's outer arc: its arc against the iron is smooth on its own, but where its free arc
+    r 30 meets it the surface turns sharply, so Validate warns as the mesher would find it."""
+    doc = App.newDocument("LensSkin")
+    try:
+        study = objects.make_study(doc, "2D")
+        centre = App.Vector(30 * math.cos(math.radians(15)), 30 * math.sin(math.radians(15)), 0)
+        sector = symcases.sector(10, 30, 0, 30)
+        disk = Part.Face(Part.Wire(Part.makeCircle(4, centre)))
+        lens = symcases.feature(doc, "LensCell", sector.common(disk).Faces[0])
+        iron = symcases.feature(doc, "IronCell", sector.cut(disk).Faces[0])
+        symcases.group(study, "G", [iron, lens], [symcases.mirror_rule(0), symcases.rotate_rule(60, 6)])
+        symcases.add_air_region(study, Center=App.Vector(), Length=100, Width=100)
+        item = objects.make_skin_layer(study, [(lens, "")], 0.5)
+        item.QuadLayers = True
+        assert [t for t in _texts(study, "warning") if t.startswith(f"Skin Layer {item.Label}")] == [
+            f"Skin Layer {item.Label}: {objects.display_name(lens)} has sharp corners on its surface; quad layers need"
+            " a smooth surface, so it gets graded triangles."
+        ]
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def test_air_grading_goes_to_the_free_job_of_its_air(motor):
     air = symcases.add_air_region(
         motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=130

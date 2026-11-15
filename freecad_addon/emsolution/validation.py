@@ -392,12 +392,15 @@ def _skin_layers(study, included, bodies, r):
 def _sharp(study, body, shape, bodies, layer):
     """True when a 2D body's layer edges are not smooth: two meet with the direction turning by more than 15°, or one
     is curved tighter than the layer's depth. A layer edge is an edge of the body's boundary shared with another meshed
-    body, or inside the Air Region's face (not on its outline). For a cell object only the edges it shares with the
-    other cell objects of its groups: its cell job holds nothing else, so an edge on a seam or against a copy is a cut."""
+    body, or inside the Air Region's face (not on its outline). For a cell object the edges it shares with the other
+    cell objects of its groups and its edges toward the free side (free_faces), as its cell job sees them: an edge on
+    a seam or against a copy is a cut."""
     tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
     outline = None
     airs = objects.air_regions(study)
-    cells = {c.Name for g in objects.symmetric_groups(study) if body in g.Cells for c in g.Cells}
+    mine = [g for g in objects.symmetric_groups(study) if body in g.Cells]
+    cells = {c.Name for g in mine for c in g.Cells}
+    free = [shape.getElement(n) for g in mine for n in free_faces(study, g, body)]
     if cells:
         bodies = [o for o in bodies if o.Name in cells]
     elif airs:
@@ -414,7 +417,7 @@ def _sharp(study, body, shape, bodies, layer):
     ends = []  # (point, direction leaving the point along the edge)
     for e in edges:
         samples = [e.valueAt(e.FirstParameter + k * (e.LastParameter - e.FirstParameter) / 4) for k in (1, 2, 3)]
-        shared = any(_on(samples, o, tol) for o in others)
+        shared = any(_on(samples, o, tol) for o in others) or any(e.isSame(f) for f in free)
         if not shared and (outline is None or _on(samples, outline, tol)):
             continue
         u0, u1 = e.FirstParameter, e.LastParameter
@@ -433,6 +436,95 @@ def _sharp(study, body, shape, bodies, layer):
 def _on(points, shape, tol):
     """True if every point lies on shape."""
     return all(shape.distToShape(Part.Vertex(p))[0] < tol for p in points)
+
+
+def _beyond(element, body, step, tol):
+    """A few points just outside body (a face in 2D, a solid in 3D) beyond an edge (a face in 3D) of its boundary, step
+    from it along its normal, away from its ends and sides; [] where that cannot be told."""
+    if element.ShapeType == "Edge":
+        plane = body.Faces[0].normalAt(0, 0)
+        u0, u1 = element.FirstParameter, element.LastParameter
+        at = [
+            (element.valueAt(u), element.tangentAt(u).cross(plane)) for u in (u0 + k * (u1 - u0) / 4 for k in (1, 2, 3))
+        ]
+    else:
+        u0, u1, v0, v1 = element.ParameterRange
+        grid = [(u0 + i * (u1 - u0) / 4, v0 + j * (v1 - v0) / 4) for i in (1, 2, 3) for j in (1, 2, 3)]
+        at = [(element.valueAt(u, v), element.normalAt(u, v)) for u, v in grid if element.isPartOfDomain(u, v)]
+    out = []
+    for p, n in at:
+        if n.Length < 1e-12:
+            return []
+        n.normalize()
+        sides = [q for q in (p + n * step, p - n * step) if not _inside(q, [body], tol)]
+        if len(sides) != 1:
+            return []
+        out += sides
+    return out
+
+
+def _inside(q, shapes, tol):
+    """True if the point q lies in one of shapes: on a face in 2D, inside a solid in 3D."""
+    for s in shapes:
+        if s.Solids:
+            if any(solid.isInside(q, tol, True) for solid in s.Solids):
+                return True
+        elif s.distToShape(Part.Vertex(q))[0] < tol:
+            return True
+    return False
+
+
+def free_faces(study, group, body):
+    """The faces (edges in 2D) of the boundary of a cell object of group that face the free side: the Air Region
+    around the copies, free objects and the copies of other groups. Names of geometry.global_shape(body), in order.
+    The cell job holds nothing beyond them, so the real surface of the body there is these faces. A face counts when
+    the points just beyond it lie inside the Air Region, a free object or a copy of another group, and not in another
+    cell object of group or a copy of one of its cell objects (the body's own place excluded): those are seams and
+    contacts, which the cell job meshes. Beyond a cut of the domain (a side of the Air Region, a symmetry line of a
+    half model) lies nothing."""
+    shape = geometry.global_shape(body)
+    size = max(1.0, shape.BoundBox.DiagonalLength)
+    tol, step = 1e-6 * size, 1e-4 * size
+    box = shape.BoundBox
+    box.enlarge(2 * step)
+
+    def near(shapes):
+        return [s for s in shapes if box.intersect(s.BoundBox)]
+
+    mine = (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+    own = []  # the cells of group in every copy, the body where it is drawn left out
+    for cell in group.Cells:
+        cell_shape = geometry.global_shape(cell)
+        if cell_shape.isNull():  # _groups reports it
+            continue
+        cell_box = _box(cell_shape)
+        for t in objects.group_transforms(group):
+            here = max(abs(a - c) for a, c in zip(t, symmetry.ID)) < symmetry.TOL
+            if not (here and cell.Name == body.Name) and symmetry.boxes_meet(symmetry.moved_box(t, cell_box), mine):
+                own.append(cell_shape if here else cell_shape.transformed(App.Matrix(*t)))
+    cells = {c.Name for c in objects.cell_bodies(study)}
+    free = [b for b in geometry.study_geometry(study)[0] if b.Name not in cells and not objects.is_air(b)]
+    beside = near(geometry.global_shape(b) for b in free)
+    others = [g for g in objects.symmetric_groups(study) if g.Name != group.Name and not g.Shape.isNull()]
+    beside += near(p for g in others for p, _ in _elements(g)[0])
+    for air in objects.air_regions(study)[:1]:  # validation allows one
+        try:
+            beside += near([airshapes.air_shape(air, airshapes.study_plane(study))])
+        except ValueError:  # _air reports it
+            pass
+    three = study.Dimension == "3D"
+    if three:
+        walls, elements = [f for s in shape.Solids for f in s.Faces], shape.Faces
+    else:
+        walls, elements = [e for f in shape.Faces for e in f.Edges], shape.Edges
+    found = []
+    for n, element in enumerate(elements, 1):
+        if sum(element.isSame(w) for w in walls) != 1:  # inside the body, between two of its pieces
+            continue
+        points = _beyond(element, shape, step, tol)
+        if points and all(not _inside(q, own, tol) and _inside(q, beside, tol) for q in points):
+            found.append(f"{'Face' if three else 'Edge'}{n}")
+    return found
 
 
 def _air_gradings(study, included, r):

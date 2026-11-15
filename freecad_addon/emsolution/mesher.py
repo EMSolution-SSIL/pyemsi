@@ -66,6 +66,12 @@ def build(job, folder):
     inputs += [_import_one(path, FILE_DIMS[kind]) for kind, _, path in tf_files]
     refine_files = [(k, os.path.join(folder, f)) for k, e in enumerate(job.get("refine", [])) for f in e["files"]]
     inputs += [_import_one(path, 0, 1, 2) for _, path in refine_files]
+    skin_files = [  # a cell's faces toward the free side
+        (k, f["mat_id"], os.path.join(folder, f["file"]))
+        for k, e in enumerate(job.get("skin", []))
+        for f in e.get("faces", [])
+    ]
+    inputs += [_import_one(path, 2) for _, _, path in skin_files]
 
     def add(file, *dims):  # sliding: last, so the spans above keep their places
         start = len(inputs)
@@ -107,7 +113,7 @@ def build(job, folder):
             parts = [air_tags]
         body_vols.update((a["mat_id"], tags) for a, tags in zip(airs, parts))
     job["unwritten"] = [a["mat_id"] for a in airs if not body_vols[a["mat_id"]]]  # run_job lists only the others
-    rest = out_map[start:]  # surface, size, transfinite and refine files, one entity each; then the slide files
+    rest = out_map[start:]  # surface, size, transfinite, refine and skin files, one entity each; then the slides
 
     surf_tags = {s["smat_id"]: [] for s in surfs}
     for (s, _), dimtags in zip(surf_files, rest):
@@ -153,7 +159,14 @@ def build(job, folder):
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
                 raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
             picked.setdefault(d, []).append(t)
-    picks += [(e, {}) for e in skin_refinements(job.get("skin", []), sizes)]  # graded skins of conductors
+    skin_faces = {}  # (skin entry index, MAT_ID) -> {dim: [final tags]}
+    for (k, m, path), dimtags in zip(skin_files, rest[refine_start + len(refine_files) :]):
+        for d, t in dimtags:
+            if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
+                name = job["skin"][k]["name"]
+                raise JobError(f"skin layer {name}: {os.path.basename(path)} did not merge with the bodies")
+            skin_faces.setdefault((k, m), {}).setdefault(d, []).append(t)
+    picks += skin_refinements(job.get("skin", []), sizes, skin_faces)  # graded skins of conductors
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_vols, 3, sliding_air, apart)  # (entry, Distance field) pairs
     job["air_grading_fields"] = apply_air_grading(

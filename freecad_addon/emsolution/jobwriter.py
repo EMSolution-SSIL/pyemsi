@@ -136,10 +136,12 @@ def export_subs(folder, body, subs, prefix):
     return files
 
 
-def refine_entries(study, folder, ids, prefix=""):
+def refine_entries(study, folder, ids, prefix="", group=None):
     """The job's "refine" list: one entry per Refine Near item that refers to the mesh. ids is {body or air Name:
     [MAT_ID, ...]}; a whole-body reference goes to "whole" (it wins over sub-elements of that body), the sub-elements
-    are written to geometry/<prefix>refine_<item>_<body>_<n>.brep."""
+    are written to geometry/<prefix>refine_<item>_<body>_<n>.brep. group: the Symmetric Group whose cell job this is;
+    a whole cell object then also picks its faces toward the free side (validation.free_faces), which the cell job
+    holds nothing beyond."""
     entries = []
     for k, item in enumerate(objects.refine_items(study), 1):
         files, whole = [], []
@@ -148,6 +150,9 @@ def refine_entries(study, folder, ids, prefix=""):
                 continue
             if "" in subs:
                 whole.extend(ids[body.Name])
+                if group is not None:
+                    free = validation.free_faces(study, group, body)
+                    files.extend(export_subs(folder, body, free, f"{prefix}refine_{k}_{j}"))
             else:
                 files.extend(export_subs(folder, body, subs, f"{prefix}refine_{k}_{j}"))
         if not (files or whole):
@@ -188,11 +193,14 @@ def air_grading_entries(study, ids):
     return entries
 
 
-def skin_entries(study, ids, quads=True):
+def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
     """The job's "skin" list: one entry per Skin Layer with a whole-body reference in ids ({body or air Name:
-    [MAT_ID, ...]}, the map refine_entries takes), in tree order. Quad layers only in a 2D Study and when quads."""
+    [MAT_ID, ...]}, the map refine_entries takes), in tree order. Quad layers only in a 2D Study and when quads.
+    group: the Symmetric Group whose cell job this is; the faces of its cell objects toward the free side
+    (validation.free_faces) are written to geometry/<prefix>skin_<item>_<body>_<n>.brep and listed in "faces" with
+    the MAT_ID of their body."""
     entries = []
-    for item in objects.skin_layers(study):
+    for k, item in enumerate(objects.skin_layers(study), 1):
         mat_ids = [
             mat_id
             for body, sub in objects.item_refs(item)
@@ -211,6 +219,15 @@ def skin_entries(study, ids, quads=True):
                     "quads": bool(item.QuadLayers and study.Dimension == "2D" and quads),
                 }
             )
+            if group is not None:
+                bodies = {body.Name: body for body, sub in objects.item_refs(item) if sub == "" and body.Name in ids}
+                faces = []
+                for j, body in enumerate(bodies.values(), 1):
+                    free = validation.free_faces(study, group, body)
+                    files = export_subs(folder, body, free, f"{prefix}skin_{k}_{j}")
+                    faces += [{"mat_id": ids[body.Name][0], "file": f} for f in files]
+                if faces:
+                    entries[-1]["faces"] = faces
     return entries
 
 
@@ -374,10 +391,10 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
         ids,
         prefix,
     )
-    refine = refine_entries(study, folder, {name: [n] for name, n in ids.items()}, prefix)
+    refine = refine_entries(study, folder, {name: [n] for name, n in ids.items()}, prefix, item)
     if refine:
         cell_job["refine"] = refine
-    skin = skin_entries(study, {name: [n] for name, n in ids.items()})
+    skin = skin_entries(study, {name: [n] for name, n in ids.items()}, folder=folder, prefix=prefix, group=item)
     if skin:
         cell_job["skin"] = skin
     assignments = {m.PartKey: m for m in objects.part_assignments(study)}

@@ -94,6 +94,16 @@ def build(job, folder):
         start = len(inputs)
         inputs += import_brep(path, 0, 1, 2)
         refine_spans.append((start, len(inputs)))
+    skin_files = [  # a cell's edges toward the free side
+        (k, f["mat_id"], os.path.join(folder, f["file"]))
+        for k, e in enumerate(job.get("skin", []))
+        for f in e.get("faces", [])
+    ]
+    skin_spans = []
+    for _, _, path in skin_files:
+        start = len(inputs)
+        inputs += import_brep(path, 1)
+        skin_spans.append((start, len(inputs)))
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
         out_map = [inputs]
@@ -162,12 +172,20 @@ def build(job, folder):
                 if not _on_bodies(d, t, placed):
                     raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
                 picked.setdefault(d, []).append(t)
-    picks += [(e, {}) for e in skin_refinements(job.get("skin", []), sizes)]  # graded skins of conductors
+    skin_faces = {}  # (skin entry index, MAT_ID) -> {dim: [final tags]}
+    for (k, m, path), (start, end) in zip(skin_files, skin_spans):
+        for dimtags in out_map[start:end]:
+            for d, t in dimtags:
+                if not _on_bodies(d, t, placed):
+                    name = job["skin"][k]["name"]
+                    raise JobError(f"skin layer {name}: {os.path.basename(path)} did not merge with the bodies")
+                skin_faces.setdefault((k, m), {}).setdefault(d, []).append(t)
+    picks += skin_refinements(job.get("skin", []), sizes, skin_faces)  # graded skins of conductors
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_faces, 2, sliding_air, apart)  # (entry, Distance field) pairs
     tf_bodies = [b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])]
     recombined = set(job.get("recombine", [])) | {r["mat_id"] for r in job.get("recombine_faces", [])} | set(tf_bodies)
-    apply_quad_layers(job.get("skin", []), body_faces, recombined)  # quads in the smooth skins, on the graded fields
+    apply_quad_layers(job.get("skin", []), body_faces, recombined, skin_faces)  # quads in the smooth skins
     job["air_grading_fields"] = apply_air_grading(
         job.get("air_grading", []), graded, sizes, 2, apart
     )  # (entry, Extend field) pairs

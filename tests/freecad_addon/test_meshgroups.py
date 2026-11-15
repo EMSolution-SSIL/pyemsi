@@ -1334,6 +1334,108 @@ class GroupJobTest(unittest.TestCase):
         self.assertGreater(per_copy[0], 50)
         self.assertEqual(list(per_copy), [per_copy[0]] * 12)
 
+    def two_cell_group(self, conductor, iron, transforms, skin, dim=2, size=1.0, iron_size=1.0):
+        """A group of two cells, the conductor (MAT_ID 1, part Copper 4) and the iron (MAT_ID 2, part Iron 7), from
+        the BREPs geometry/<conductor> and geometry/<iron>; skin: the job's "skin" list."""
+        key = "bodies" if dim == 2 else "volumes"
+        job = {
+            key: [
+                {"mat_id": 1, "name": "Conductor", "file": f"geometry/{conductor}", "size": size},
+                {"mat_id": 2, "name": "Iron", "file": f"geometry/{iron}", "size": iron_size},
+            ],
+            "sizes": [],
+            "skin": skin,
+        }
+        if dim == 3:
+            job["surfaces"] = []
+        return {
+            "name": "Stator",
+            "side": "fixed",
+            "job": job,
+            "cells": [1, 2],
+            "transforms": transforms,
+            "parts": [{"mat_id": 4, "name": "Copper"}, {"mat_id": 7, "name": "Iron"}],
+            "rows": [{"cell": k, "file": None, "parts": [k - 1] * len(transforms)} for k in (1, 2)],
+        }
+
+    def test_skin_on_a_cell_conductor_facing_the_air_2d(self):
+        # The cell: iron r 10..16 under a conductor r 16..20 (both size 1). The conductor's arc r 16 is its real
+        # surface in the cell job; its arc r 20 faces the free side (the air around the copies), listed in "faces".
+        depth, size = 0.5, 1.0
+        write_sectors(self.geo("conductor.brep"), (16, 20, 0, 30))
+        write_sectors(self.geo("iron.brep"), (10, 16, 0, 30))
+        write_arc(self.geo("free.brep"), 20, 0, 30)
+        skin = dict(self.skin(1, depth), faces=[{"mat_id": 1, "file": "geometry/free.brep"}])
+        mesh = self.meshed([self.two_cell_group("conductor.brep", "iron.brep", self.TWELVE, [skin])])
+        self.assertEqual(mesh_check(mesh, [10, 20])[1:], (0, 0))
+
+        def in_copy(k):  # the depth below the arc r 20 of the conductor of copy k, inf outside that copy
+            def distance(p):
+                angle = np.degrees(np.arctan2(p[:, 1], p[:, 0])) % 360
+                return np.where((angle > 30 * k) & (angle < 30 * (k + 1)), 20 - np.hypot(p[:, 0], p[:, 1]), np.inf)
+
+            return distance
+
+        bands = [self.mean_edge(mesh, 4, in_copy(k), 0, depth) for k in range(12)]
+        self.assertLess(bands[0], 0.6 * size)  # measured 0.25; 0.90 before the free faces were picked
+        for k, band in enumerate(bands):
+            self.assertAlmostEqual(band, bands[0], places=6, msg=f"copy {k}")
+
+    def test_quad_layers_on_a_cell_conductor_facing_the_air_2d(self):
+        # The cell: iron r 10..20 over 30 degrees (size 2) and a round wire r 3 centred on its arc r 20 (size 1.5):
+        # half of the wire's circle lies against the iron, the other half faces the free side ("faces"). Together
+        # they are one smooth circle, so the quad layers go all round, the free half too.
+        centre = (20 * math.cos(math.radians(15)), 20 * math.sin(math.radians(15)))
+        half = math.acos(-9 / 120)  # the wire's circle crosses r 20 this far either side of its outward direction
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            occ = gmsh.model.occ
+            for name in ("wire", "iron", "free"):
+                if name == "free":
+                    a = math.radians(15)
+                    occ.addCircle(*centre, 0, 3, angle1=a - half, angle2=a + half)
+                else:
+                    disk = [(2, occ.addDisk(*centre, 0, 3, 3))]
+                    if name == "iron":
+                        occ.cut(add_sector(10, 20, 0, 30), disk)
+                occ.synchronize()
+                gmsh.write(self.geo(f"{name}.brep"))
+                gmsh.clear()
+        finally:
+            gmsh.finalize()
+        skin = dict(self.skin(1, 0.5), quads=True, faces=[{"mat_id": 1, "file": "geometry/free.brep"}])
+        group = self.two_cell_group("wire.brep", "iron.brep", self.TWELVE, [skin], size=1.5, iron_size=2.0)
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, [10, 20])[1], 0)  # the free half of each wire is open: loose edges there
+        self.assertEqual(edges_in_three(mesh), 0)
+        xyz, found = read_mesh(mesh)
+        centroids = xyz[found[3]].mean(axis=1)  # gmsh type 3: the 4-node quads
+        outside = centroids[np.hypot(centroids[:, 0], centroids[:, 1]) > 20]  # along the free half
+        copy = (np.degrees(np.arctan2(outside[:, 1], outside[:, 0])) % 360 // 30).astype(int)
+        per_copy = np.bincount(copy, minlength=12)
+        self.assertGreater(per_copy[0], 100)  # measured 160; 6 before the free faces were picked
+        self.assertEqual(list(per_copy), [per_copy[0]] * 12)
+
+    def test_skin_on_a_cell_conductor_facing_the_air_3d(self):
+        # The cell: an iron block z 0..5 under a conductor block z 5..8 (both size 1), copied once 30 mm along x. The
+        # conductor's top face (z 8) faces the free side ("faces"); its bottom is its real surface in the cell job.
+        depth, size = 0.5, 1.0
+        write_boxes(self.geo("conductor.brep"), (0, 0, 5, 4, 4, 3))
+        write_boxes(self.geo("iron.brep"), (0, 0, 0, 4, 4, 5))
+        write_face(self.geo("free.brep"), corners=[(0, 0, 8), (4, 0, 8), (4, 4, 8), (0, 4, 8)])
+        skin = dict(self.skin(1, depth), faces=[{"mat_id": 1, "file": "geometry/free.brep"}])
+        group = self.two_cell_group("conductor.brep", "iron.brep", [ID, translation(30)], [skin], dim=3)
+        mesh = self.meshed([group], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+        def in_copy(k):  # the depth below the top face of the conductor of copy k, inf outside that copy
+            return lambda p: np.where(np.abs(p[:, 0] - 2 - 30 * k) < 2, 8 - p[:, 2], np.inf)
+
+        bands = [self.mean_edge(mesh, 4, in_copy(k), 0, depth) for k in range(2)]
+        self.assertLess(bands[0], 0.6 * size)  # measured 0.32; 1.02 before the free faces were picked
+        self.assertAlmostEqual(bands[1], bands[0], places=6)
+
     SKIN_PLATE = (-6, -6, -4, 12, 12, 8)  # in the bore of the ring (radius 10), inside the air BOX
 
     def test_skin_on_a_free_conductor_grades_its_volume_3d(self):
