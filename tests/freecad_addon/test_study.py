@@ -381,6 +381,40 @@ class StudyTest(unittest.TestCase):
         item.FarSize = 30.0
         self.assertEqual(objects._size_text(item), "grows over 50 mm to 30 mm")
 
+    def test_skin_depth_formula(self):
+        self.assertAlmostEqual(objects.skin_depth(50, 5.8e7, 1), 9.35, places=2)
+        self.assertAlmostEqual(objects.skin_depth(1000, 3.5e7, 1), 2.69, places=2)
+
+    def test_skin_layer_defaults_and_row(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        self.assertEqual(item.SkinDepth.Value, 2.69)
+        self.assertEqual((item.ElementsPerDepth, item.LayerDepth, item.QuadLayers), (2.0, 3.0, False))
+        self.assertEqual((item.Frequency, item.Conductivity, item.RelativePermeability), (50.0, 5.8e7, 1.0))
+        self.assertEqual(objects.skin_layers(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "δ 2.69 mm, 2/δ, 3δ")
+        item.QuadLayers = True
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "δ 2.69 mm, 2/δ, 3δ, quads")
+
+    def test_skin_layer_refuses_the_air(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        self.assertEqual(
+            objects.air_refusal(objects.SkinLayer, [air]),
+            f"Air Region {objects.display_name(air)} cannot have a Skin Layer.",
+        )
+
+    def test_skin_layer_mu_r_from_the_material(self):
+        a, b = self.box("A"), self.box("B", 10)
+        props = {"electromagnetic": {"relative_permeability": {"type": "scalar", "value": 1000, "unit": "1"}}}
+        lib = objects.make_library_material(self.study, json.dumps(record("user:iron", "Iron", "generic", props)))
+        objects.assign(self.study, [a], lib, 0)
+        self.assertEqual(objects.body_mu_r(self.study, a), 1000)
+        self.assertIsNone(objects.body_mu_r(self.study, b))
+        self.assertEqual(objects.make_skin_layer(self.study, [(a, "")]).RelativePermeability, 1000)
+        self.assertEqual(objects.make_skin_layer(self.study, [(b, "")]).RelativePermeability, 1)
+
     def test_air_keeps_its_own_mesh_name(self):
         self.box("A")
         air = objects.make_air_region(self.study)

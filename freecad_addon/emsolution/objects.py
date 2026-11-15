@@ -1,6 +1,7 @@
 """Study tree objects and the ID table. No GUI code here, apart from attaching view providers."""
 
 import json
+import math
 import re
 
 from . import symmetry
@@ -357,6 +358,33 @@ class AirGrading(_Proxy):
         obj.addProperty(
             "App::PropertyLength", "FarSize", "EMSolution", "Element size far from the bodies; 0 = the air's own size"
         )
+
+
+class SkinLayer(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "Conductors with a skin layer (whole bodies)"
+        )
+        obj.addProperty("App::PropertyLength", "SkinDepth", "EMSolution", "Skin depth δ")
+        obj.addProperty(
+            "App::PropertyFloatConstraint",
+            "ElementsPerDepth",
+            "EMSolution",
+            "Elements per skin depth; fine size = δ / this",
+        )
+        obj.ElementsPerDepth = (2.0, 0.01, 1000.0, 0.5)
+        obj.addProperty(
+            "App::PropertyFloatConstraint", "LayerDepth", "EMSolution", "How deep the layer reaches, in skin depths"
+        )
+        obj.LayerDepth = (3.0, 0.01, 1000.0, 0.5)
+        obj.addProperty("App::PropertyBool", "QuadLayers", "EMSolution", "2D: quad layers along smooth surfaces")
+        obj.addProperty("App::PropertyFloat", "Frequency", "EMSolution", "Calculator: frequency in Hz")
+        obj.Frequency = 50.0
+        obj.addProperty("App::PropertyFloat", "Conductivity", "EMSolution", "Calculator: conductivity in S/m")
+        obj.Conductivity = 5.8e7
+        obj.addProperty("App::PropertyFloat", "RelativePermeability", "EMSolution", "Calculator: relative permeability")
+        obj.RelativePermeability = 1.0
 
 
 class TransfiniteBody(_Proxy):
@@ -974,6 +1002,17 @@ def make_air_grading(study, refs=None, growth=None, far=0.0):
     return obj
 
 
+def make_skin_layer(study, refs, depth=1.0):
+    """refs: list of (body, ""), the conductors; depth: the skin depth in mm. The calculator's permeability starts at
+    the first body's material."""
+    obj = _add(study, "MeshSizesGroup", SkinLayer, "SkinLayer")
+    obj.SkinDepth = depth
+    obj.References = refs
+    mu_r = body_mu_r(study, refs[0][0]) if refs else None
+    obj.RelativePermeability = 1.0 if mu_r is None else mu_r
+    return obj
+
+
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
     object, all its solids (faces in 2D); split_row splits a row into blocks."""
@@ -998,6 +1037,24 @@ def refine_items(study):
 
 def air_gradings(study):
     return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), AirGrading)]
+
+
+def skin_layers(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SkinLayer)]
+
+
+def skin_depth(frequency, conductivity, mu_r):
+    """The skin depth in mm of a conductor: 1000 * sqrt(2 / (2 pi f mu0 mu_r sigma))."""
+    return 1000 * math.sqrt(2 / (2 * math.pi * frequency * 4e-7 * math.pi * mu_r * conductivity))
+
+
+def body_mu_r(study, body):
+    """The scalar relative permeability in the library material of body's Material, else None."""
+    m = assignment_of(study).get(body.Name)
+    if m is None or m.LibraryMaterial is None:
+        return None
+    mu = json.loads(m.LibraryMaterial.Record)["properties"].get("electromagnetic", {}).get("relative_permeability", {})
+    return mu["value"] if mu.get("type") == "scalar" and isinstance(mu.get("value"), (int, float)) else None
 
 
 def whole_body_size(study, body):
@@ -1615,8 +1672,10 @@ def air_refusal(item_cls, bodies):
     takes Materials, Mesh Sizes and Refine Nears: it is not recombined or structured, and an excitation goes on a
     body."""
     airs = list(dict.fromkeys(display_name(b) for b in bodies if is_air(b)))
-    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine):
+    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine, SkinLayer):
         return ""
+    if item_cls is SkinLayer:
+        return f"Air Region {', '.join(airs)} cannot have a Skin Layer."
     what = "an Excitation" if item_cls is Excitation else "recombined or structured"
     return f"Air Region {', '.join(airs)} cannot be {what}."
 
@@ -1693,6 +1752,7 @@ def is_item(obj):
         MeshSize,
         RefineNear,
         AirGrading,
+        SkinLayer,
         TransfiniteBody,
         TransfiniteEdges,
         Recombine,
@@ -1786,6 +1846,9 @@ def _size_text(item):
         return text
     if isinstance(item.Proxy, AirGrading):
         return f"grows over {item.GrowthDistance.Value:g} mm to {far_size(item):g} mm"
+    if isinstance(item.Proxy, SkinLayer):
+        text = f"δ {item.SkinDepth.Value:g} mm, {item.ElementsPerDepth:g}/δ, {item.LayerDepth:g}δ"
+        return text + ", quads" if item.QuadLayers else text
     if isinstance(item.Proxy, TransfiniteBody):
         return "structured"
     if isinstance(item.Proxy, Recombine):
