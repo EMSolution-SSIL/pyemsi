@@ -32,6 +32,8 @@ from meshcommon import (
     slide_split,
     orient_faces,
     apply_refinements,
+    graded_air,
+    apply_air_grading,
 )
 import meshgroups
 
@@ -139,6 +141,9 @@ def build(job, folder):
                 if not _on_bodies(d, t, placed):
                     raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
                 by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
+    sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
+    sizes = {x["mat_id"]: float(x["size"]) for x in bodies} | {a["mat_id"]: float(air["size"]) for a in airs}
+    graded = graded_air(by_size, job.get("air_grading", []), body_faces, sizes, 2, sliding_air)
     apply_size_fields(by_size)
     mapped = [
         (kind, item, os.path.basename(path), [dt for dimtags in out_map[start:end] for dt in dimtags])
@@ -152,9 +157,9 @@ def build(job, folder):
                 if not _on_bodies(d, t, placed):
                     raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
                 picked.setdefault(d, []).append(t)
-    sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_faces, 2, sliding_air, apart)  # (entry, Distance field) pairs
+    job["air_grading_fields"] = apply_air_grading(job.get("air_grading", []), graded, sizes, 2)  # (entry, Extend)
     tf = apply_transfinite(job, mapped, body_faces, 2)
     apply_recombine(job, body_faces, 2, tf, mapped)
     if job.get("periodic"):

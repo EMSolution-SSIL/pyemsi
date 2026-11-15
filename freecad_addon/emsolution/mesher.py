@@ -31,6 +31,8 @@ from meshcommon import (
     import_brep,
     slide_split,
     apply_refinements,
+    graded_air,
+    apply_air_grading,
 )
 import meshgroups
 
@@ -134,6 +136,9 @@ def build(job, folder):
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
                 raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
             by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
+    sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
+    sizes = {x["mat_id"]: float(x["size"]) for x in vols} | {a["mat_id"]: float(air["size"]) for a in airs}
+    graded = graded_air(by_size, job.get("air_grading", []), body_vols, sizes, 3, sliding_air)
     apply_size_fields(by_size)
     tf_maps = rest[first + len(size_files) : first + len(size_files) + len(tf_files)]
     picks = [(e, {}) for e in job.get("refine", [])]  # (entry, {dim: [final tags]})
@@ -144,9 +149,9 @@ def build(job, folder):
             if len(gmsh.model.getAdjacencies(d, t)[0]) == 0:  # nothing above it: not merged
                 raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
             picked.setdefault(d, []).append(t)
-    sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_vols, 3, sliding_air, apart)  # (entry, Distance field) pairs
+    job["air_grading_fields"] = apply_air_grading(job.get("air_grading", []), graded, sizes, 3)  # (entry, Extend)
     mapped = [(kind, item, os.path.basename(path), dimtags) for (kind, item, path), dimtags in zip(tf_files, tf_maps)]
     tf = apply_transfinite(job, mapped, body_vols, 3)
     apply_recombine(job, body_vols, 3, tf, mapped)

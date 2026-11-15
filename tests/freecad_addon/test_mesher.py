@@ -155,6 +155,56 @@ def box_lines(x=0.0):
     return [(p, q) for a, p in enumerate(pts) for q in pts[a + 1 :] if sum(abs(u - v) for u, v in zip(p, q)) == 1]
 
 
+def air_grading(name="Grow", mat_ids=(2,), growth=60.0, far=20.0):
+    """An entry of job["air_grading"]."""
+    return {"name": name, "mat_ids": list(mat_ids), "growth": growth, "far": far}
+
+
+def simplices(path, dim, group=None):
+    """[(corner points)] of the dim-dimensional triangles (2D) or tetrahedra (3D) of a mesh file, of one physical
+    group if given."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        at = {int(t): tuple(float(x) for x in coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
+        if group is None:
+            ents = [t for _, t in gmsh.model.getEntities(dim)]
+        else:
+            ents = gmsh.model.getEntitiesForPhysicalGroup(dim, group)
+        out = []
+        for e in ents:
+            for nodes in gmsh.model.mesh.getElements(dim, e)[2]:
+                n = dim + 1
+                out += [tuple(at[int(t)] for t in nodes[k : k + n]) for k in range(0, len(nodes), n)]
+    finally:
+        gmsh.finalize()
+    return out
+
+
+def facets(elements, keep):
+    """The faces (of tetrahedra) or edges (of triangles) that only one of the elements has, with every corner passing
+    keep(point): the boundary of the elements, or a part of it."""
+    count = {}
+    for e in elements:
+        for k in range(len(e)):
+            f = tuple(sorted(e[:k] + e[k + 1 :]))
+            count[f] = count.get(f, 0) + 1
+    return [f for f, n in count.items() if n == 1 and all(keep(p) for p in f)]
+
+
+def band_edge(elements, half, lo, hi):
+    """Mean length of the first edge of the elements whose centre lies lo..hi from the box |x_i| <= half_i (the spikes'
+    measure of the local size)."""
+    lengths = []
+    for e in elements:
+        c = [sum(p[i] for p in e) / len(e) for i in range(3)]
+        if lo <= math.hypot(*(max(abs(x) - h, 0) for x, h in zip(c, half))) < hi:
+            lengths.append(math.dist(e[0], e[1]))
+    return sum(lengths) / len(lengths)
+
+
 class MesherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -826,6 +876,61 @@ class MesherTest(unittest.TestCase):
         sizes = [{"name": "Fine", "size": 0.4, "files": ["geometry/size_1.brep"]}]
         r = self.run_job([self.vol(1, "Body", "vol_1.brep", size=0.8)], sizes=sizes, air=air)
         self.assertEqual(r.returncode, 0, r.stderr)
+
+    # ---- Air Grading. The numbers are the spike's (mean edge in bands 0-3 / 3-10 / 10-25 / 25-50 / 50-80 mm from the
+    # block), block size 2, air size 20, growth 60
+
+    def graded_block(
+        self, grading=None, size=2.0, block=(-10, -10, -5, 20, 20, 10), box=(-100, -100, -100, 200, 200, 200)
+    ):
+        """The block (MAT_ID 1, mesh size `size`) in an air box (MAT_ID 2, size 20), with one Air Grading entry if
+        given. Returns the tetrahedra."""
+        write_box(self.geo("vol_1.brep"), *block)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        extra = {"air_grading": [grading]} if grading else None
+        r = self.run_job([self.vol(1, "Block", "vol_1.brep", size=size)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return simplices(os.path.join(self.dir, "pre_geom.msh"), 3)
+
+    def test_air_grading_grows_from_the_block(self):
+        # today 2.48 / 9.20 / 18.6 / 27.4 / 28.2, graded 2.61 / 4.86 / 8.95 / 16.7 / 25.8
+        half = (10, 10, 5)
+        today = band_edge(self.graded_block(), half, 3, 10)
+        graded = self.graded_block(air_grading())
+        self.assertLess(band_edge(graded, half, 3, 10), 0.7 * today, today)
+        self.assertGreater(band_edge(graded, half, 50, 80), 0.6 * 20)
+
+    def test_far_size_larger_than_the_air_size(self):
+        # far 40: 2.69 / 6.24 / 14.6 / 30.1 / 48.8, 7.8k elements against today's 9.2k
+        today = len(self.graded_block())
+        graded = self.graded_block(air_grading(far=40.0))
+        self.assertLess(len(graded), today)
+        self.assertGreater(band_edge(graded, (10, 10, 5), 50, 80), 30)
+
+    def test_far_size_does_not_coarsen_the_body_surface(self):
+        # block size 30 in air size 20: the block's faces keep the smaller size, 20, as today; far 40 must not make
+        # them 30. An 80 mm block: on the spike's 20 mm one an edge cannot get much longer than 20 either way. Mean
+        # edge of its faces 18.65 today and graded, 24.2 when its faces lose the air's size
+        self.graded_block(
+            air_grading(far=40.0), size=30.0, block=(-40, -40, -40, 80, 80, 80), box=(-150,) * 3 + (300,) * 3
+        )
+        block = simplices(os.path.join(self.dir, "pre_geom.msh"), 3, group=1)
+        edges = [math.dist(f[a], f[b]) for f in facets(block, lambda p: True) for a, b in ((0, 1), (1, 2), (0, 2))]
+        self.assertLessEqual(sum(edges) / len(edges), 22)
+
+    def test_air_face_on_the_domain_boundary_grades_3d(self):
+        # a half model, the block on the plane z = 0; the air's triangles on that plane: today 2.30 / 6.17 / 18.0 /
+        # 19.7, graded 2.19 / 3.54 / 6.73 / 12.2 / 19.0 (without the outer faces in the Restrict and the inner faces'
+        # curves in the Extend the plane's mesh jumps to the far size). Taken here from the tetrahedra's faces (the
+        # first edge of each differs): band 3-10 today 9.04, graded 3.41
+        def plane(grading):
+            tets = self.graded_block(grading, block=(-10, -10, 0, 20, 20, 5), box=(-100, -100, 0, 200, 200, 100))
+            return facets(tets, lambda p: abs(p[2]) < 1e-9)
+
+        half = (10, 10, 0)
+        today = band_edge(plane(None), half, 3, 10)
+        self.assertLess(band_edge(plane(air_grading()), half, 3, 10), 0.7 * today, today)
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 

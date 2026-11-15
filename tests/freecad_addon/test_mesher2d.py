@@ -13,7 +13,7 @@ import gmsh
 
 from emsolution import meshcommon
 
-from .test_mesher import write_line, write_point
+from .test_mesher import air_grading, band_edge, facets, simplices, write_line, write_point
 from .meshreport import report
 
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -979,6 +979,58 @@ class Mesher2DTest(unittest.TestCase):
         r = self.run_job([self.body(1, "Body", "vol_1.brep")], sizes=sizes, air=air)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    # ---- Air Grading. The numbers are the spike's (mean edge in bands 0-3 / 3-10 / 10-25 / 25-50 / 50-80 mm from the
+    # rectangle), rectangle size 2, air size 20, growth 60
+
+    def graded_rect(self, grading=None, rect=(-10, -5, 20, 10), square=(-100, -100, 200, 200), keys=None):
+        """The rectangle (MAT_ID 1, size 2) in an air square (MAT_ID 2, size 20), with one Air Grading entry if given.
+        keys: more job keys. Returns the triangles."""
+        write_rects(self.geo("vol_1.brep"), [rect])
+        write_rects(self.geo("air.brep"), [square])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        extra = dict(keys or {}, **({"air_grading": [grading]} if grading else {}))
+        r = self.run_job([self.body(1, "Rect", "vol_1.brep", size=2.0)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2)
+
+    def test_air_grading_grows_from_the_rectangle_2d(self):
+        # band 3-10: today 10.8, graded 3.55
+        half = (10, 5, 0)
+        today = band_edge(self.graded_rect(), half, 3, 10)
+        graded = self.graded_rect(air_grading())
+        self.assertLess(band_edge(graded, half, 3, 10), 0.7 * today, today)
+        self.assertGreater(band_edge(graded, half, 50, 80), 0.6 * 20)
+
+    def test_air_face_on_the_domain_boundary_grades_2d(self):
+        # a half model, the rectangle on the line y = 0; the air's line elements there: today 2.27 / 8.61 / 7.19 /
+        # 13.8 / 19.1, graded 2.11 / 3.22 / 6.51 / 12.8 / 18.0 (the line is meshed before any curve mesh exists to
+        # extend from: it needs the Distance on the points where it meets the rectangle)
+        def plane(grading):
+            triangles = self.graded_rect(grading, rect=(-10, 0, 20, 5), square=(-100, 0, 200, 100))
+            return facets(triangles, lambda p: abs(p[1]) < 1e-9)
+
+        half = (10, 0, 0)
+        today = band_edge(plane(None), half, 3, 10)
+        self.assertLess(band_edge(plane(air_grading()), half, 3, 10), 0.7 * today, today)
+
+    def test_air_grading_and_refine_near_on_the_air_both_apply(self):
+        write_line(self.geo("refine_1_1_1.brep"), (-100, -100, 0), (100, -100, 0))  # the air square's bottom edge
+        refine = self.refine(["refine_1_1_1.brep"], fine=2.0, coarse=20.0, growth=30.0)
+
+        def near_edge(keys):
+            self.graded_rect(air_grading(), keys=keys)
+            return sum(y < -95 for x, y, z in read_nodes(os.path.join(self.dir, "pre_geom2D.msh")).values())
+
+        alone = near_edge(None)
+        self.assertGreaterEqual(near_edge({"refine": [refine]}), 3 * alone, alone)
+
+    def test_air_grading_with_no_body_notes(self):
+        write_rects(self.geo("air.brep"), [(-100, -100, 200, 200)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        r = self.run_job([], air=air, extra={"air_grading": [air_grading(far=40.0)]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: Air Grading Grow: the air touches no body; it is meshed at the far size", r.stderr)
+
     # ---- sliding motion: the fixed side goes to pre_geom2D.msh, the moving side to rotor_mesh2D.msh
 
     def files(self):
@@ -996,9 +1048,10 @@ class Mesher2DTest(unittest.TestCase):
             "full": full,
         }
 
-    def slide_job(self, bodies, moving, slides, periodic=None, fine=None):
+    def slide_job(self, bodies, moving, slides, periodic=None, fine=None, keys=None):
         """Run a slide job: air from geometry/air.brep (fixed ID 10, moving 11), moving cell geometry/cell_1.brep.
-        fine: (p, q), a line on the second periodic boundary meshed at size 1; the period must undo it."""
+        fine: (p, q), a line on the second periodic boundary meshed at size 1; the period must undo it.
+        keys: more job keys."""
         sides = {"fixed": {"mat_id": 10, "name": "Air_fixed"}, "moving": {"mat_id": 11, "name": "Air_moving"}}
         air = {"sides": sides, "file": "geometry/air.brep", "size": 5.0}
         extra = {
@@ -1006,6 +1059,7 @@ class Mesher2DTest(unittest.TestCase):
             "moving": moving,
             "moving_cells": ["geometry/cell_1.brep"],
             "slides": slides,
+            **(keys or {}),
         }
         if periodic:
             extra["periodic"] = periodic
@@ -1015,9 +1069,10 @@ class Mesher2DTest(unittest.TestCase):
             sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
         return self.run_job(bodies, sizes=sizes, air=air, extra=extra)
 
-    def motor_job(self, tooth=None, rotor=40):
+    def motor_job(self, tooth=None, rotor=40, keys=None):
         """Full turn: stator ring 45..80 fixed (tooth: plus a tooth 42.5..45 between these two angles), rotor disc r 40
-        (rotor) moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0)."""
+        (rotor) moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0).
+        keys: more job keys."""
         write_sectors(self.geo("vol_1.brep"), (45, 80), *([(42.5, 45, *tooth)] if tooth else []))
         write_sectors(self.geo("vol_2.brep"), (0, rotor))
         write_sectors(self.geo("air.brep"), (0, 100))
@@ -1026,7 +1081,8 @@ class Mesher2DTest(unittest.TestCase):
         write_arc(self.geo("slide_20_2.brep"), 42.5, 180, 360)
         write_point(self.geo("marker_20.brep"), (42.5, 0, 0))
         bodies = [self.body(1, "Stator", "vol_1.brep", 5), self.body(2, "Rotor", "vol_2.brep", 5)]
-        return self.slide_job(bodies, [2], [self.slide("Slide", 20, ["slide_20_1.brep", "slide_20_2.brep"], 72, True)])
+        slide = self.slide("Slide", 20, ["slide_20_1.brep", "slide_20_2.brep"], 72, True)
+        return self.slide_job(bodies, [2], [slide], keys=keys)
 
     def sector_job(self, stator=(82, 149, 0, 45)):
         """The 45° machine: shaft r < 30 and rotor 30..78 moving, stator fixed, air sector r 200, slide arc
@@ -1060,6 +1116,16 @@ class Mesher2DTest(unittest.TestCase):
         self.assertEqual(fixed, moving)
         for got, want in zip(self.angles(fixed), range(0, 360, 5)):
             self.assertAlmostEqual(got, want, places=6)
+
+    def test_sliding_divisions_unchanged_with_air_grading(self):
+        def on_slide(keys):
+            r = self.motor_job(keys=keys)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return [len(self.on_circle(f, 42.5)) for f in self.files()]
+
+        plain = on_slide(None)
+        self.assertEqual(on_slide({"air_grading": [air_grading(mat_ids=(10, 11))]}), plain)
+        self.assertEqual(plain, [72, 72])
 
     def test_rotor_file_has_slide_point_at_start_angle(self):
         r = self.motor_job()

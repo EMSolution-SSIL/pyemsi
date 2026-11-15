@@ -114,6 +114,117 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
     return made
 
 
+def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):
+    """Air Grading, before apply_size_fields. entries: job["air_grading"]. Each air's tags (dimension dim) leave by_size:
+    apply_air_grading sizes them. Its inner boundary, the (dim-1) entities it shares with bodies, keeps the air's size
+    (sizes[mat_id]), so a shared face stays at the smaller of the body's size and the air's, as without the grading.
+    sizes: {mat_id: size} of every body and air side. same_body: as in apply_refinements (the two sides of a sliding
+    air). Returns {entry name: (the air's tags, inner boundary, outer boundary: the air's other (dim-1) entities)}."""
+    joined = {m: list(group) for group in same_body for m in group}
+    graded = {}
+    for entry in entries:
+        tags = [t for m in entry["mat_ids"] for t in body_tags.get(m, [])]
+        mats = dict.fromkeys(j for m in entry["mat_ids"] for j in joined.get(m, [m]))
+        inner = real_boundary(dim, [t for m in mats for t in body_tags.get(m, [])])
+        whole = gmsh.model.getBoundary([(dim, t) for t in tags], combined=False, oriented=False)
+        shared = set(inner)
+        outer = [b for b in dict.fromkeys(abs(t) for _, t in whole) if b not in shared]
+        gone = set(tags)
+        for size in list(by_size):
+            if dim in by_size[size]:
+                by_size[size][dim] = [t for t in by_size[size][dim] if t not in gone]
+                if not by_size[size][dim]:
+                    del by_size[size][dim]
+            if not by_size[size]:
+                del by_size[size]
+        if inner:
+            size = min(float(sizes[m]) for m in entry["mat_ids"])
+            by_size.setdefault(size, {}).setdefault(dim - 1, []).extend(inner)
+        graded[entry["name"]] = (tags, inner, outer)
+    return graded
+
+
+def _curves(dim, tags):
+    """The curves of (dim-1) entities tags: their curves in 3D, the tags themselves in 2D."""
+    if dim == 2:
+        return list(tags)
+    faces = [(2, f) for f in tags]
+    return list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary(faces, combined=False, oriented=False)))
+
+
+def _ends(curves):
+    """The end points of curves."""
+    lines = [(1, c) for c in curves]
+    return list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary(lines, combined=False, oriented=False)))
+
+
+def _start_size(point, air_size, sizes, dim):
+    """The smallest size of the bodies whose boundary holds point (found by their physical groups, the MAT_IDs), and
+    air_size."""
+    above = {point}
+    for d in range(dim):  # up to the dim-entities that hold the point
+        above = {u for t in above for u in gmsh.model.getAdjacencies(d, t)[0]}
+    mats = {m for t in above for m in gmsh.model.getPhysicalGroupsForEntity(dim, t)}
+    return min([air_size] + [float(sizes[m]) for m in mats if m in sizes])
+
+
+def _field(kind, **values):
+    """A new field of kind with values (a list goes in with setNumbers)."""
+    field = gmsh.model.mesh.field
+    f = field.add(kind)
+    for key, value in values.items():
+        if isinstance(value, list):
+            field.setNumbers(f, key, value)
+        else:
+            field.setNumber(f, key, value)
+    return f
+
+
+def apply_air_grading(entries, graded, sizes, dim):
+    """The Air Grading fields, after apply_refinements. graded: what graded_air returned; sizes: the map it took.
+    Per entry: the far size on the air and on its outer boundary; an Extend that grows from the inner boundary's sizes
+    to the far size over the growth distance, inside the air and on its outer boundary; and along the outer curves a
+    Threshold from each point where they meet the inner boundary (a curve is meshed before any mesh exists to extend
+    from). Returns [(entry, its Extend field)]."""
+    fields, made = [], []
+    for entry in entries:
+        tags, inner, outer = graded[entry["name"]]
+        if not tags:
+            continue
+        far, growth = float(entry["far"]), float(entry["growth"])
+        fields.append(_field("Constant", VIn=far, IncludeBoundary=0, **{FIELD_LISTS[dim]: tags}))
+        if outer:
+            fields.append(_field("Constant", VIn=far, IncludeBoundary=1, **{FIELD_LISTS[dim - 1]: outer}))
+        if not inner:
+            _note(f"Air Grading {entry['name']}: the air touches no body; it is meshed at the far size")
+            continue
+        inner_curves = _curves(dim, inner)
+        lists = {FIELD_LISTS[dim - 1]: inner}
+        if dim == 3:  # surfaces are meshed before any surface mesh exists to extend from
+            lists["CurvesList"] = inner_curves
+        extend = _field("Extend", DistMax=growth, SizeMax=far, Power=1, **lists)
+        within = {FIELD_LISTS[dim]: tags, FIELD_LISTS[dim - 1]: outer}
+        fields.append(_field("Restrict", InField=extend, IncludeBoundary=1, **within))
+        made.append((entry, extend))
+        on_inner = set(inner_curves)
+        free = [c for c in _curves(dim, outer) if c not in on_inner]  # the outer curves off the inner boundary
+        meets = set(_ends(inner_curves))
+        air_size = min(float(sizes[m]) for m in entry["mat_ids"])
+        starts = {}  # start size -> the points where the free curves meet the inner boundary
+        for p in _ends(free):
+            if p in meets:
+                starts.setdefault(_start_size(p, air_size, sizes, dim), []).append(p)
+        for size, points in starts.items():
+            dist = _field("Distance", PointsList=points)
+            grow = _field(
+                "Threshold", InField=dist, SizeMin=size, SizeMax=far, DistMin=0, DistMax=growth, StopAtDistMax=1
+            )
+            fields.append(_field("Restrict", InField=grow, CurvesList=free))
+    if fields:
+        add_to_background(fields)
+    return made
+
+
 def claim_air(air_tags, owner):
     """The air's final top-dimension tags that no body owns, sorted. air_tags: all the air's final tags.
     owner: {final tag: body name}. A body wins where it overlaps the air."""
