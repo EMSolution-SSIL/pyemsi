@@ -1369,8 +1369,9 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims, gradings=()):
     gone_volumes = set(volumes)
     _carry_size_picks({v: [] for v in gone_volumes}, 3)  # a size field naming a volume that is gone would fail
     by_size = {}
+    graded = {m for entry, _ in gradings for m in entry["mat_ids"]}  # sized by the carried Air Grading fields
     for s in surveys:
-        if s.entity in gone_volumes:
+        if s.entity in gone_volumes and s.body["mat_id"] not in graded:
             for f in s.faces:
                 by_size.setdefault(s.body["size"], set()).update(replaced.get(f, [f]))
     if by_size:

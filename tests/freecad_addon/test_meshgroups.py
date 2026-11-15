@@ -1307,6 +1307,15 @@ class GroupJobTest(unittest.TestCase):
         self.assertLess(bottom_edge(), 0.6 * 12)  # asked 6.4 at 7.5 mm; measured 5.82
         self.assertGreater(bottom_edge(self.FROZEN_LINES_OFF), 0.6 * 12)  # measured 10.36
 
+    def test_far_size_reaches_the_faces_of_a_rebuilt_air_3d(self):  # the copies stand on the bottom face, z = 0
+        groups_, free = self.ring_in_air_region(self.air_grading(30), box=(-30, -30, 0, 60, 60, 30), size=6.0)
+        xyz, elements, _ = _physical_mesh(self.meshed(groups_, free=free, dim=3), (30,))
+        tri = meshfrozen.boundary(xyz, [elements[30]], 3).tri
+        top = tri[np.abs(xyz[tri][:, :, 2] - 30).max(axis=1) < 1e-6]  # 25 mm above the copies, past the growth
+        pairs = [(0, 1), (1, 2), (0, 2)]
+        edge = float(np.mean([np.linalg.norm(xyz[top[:, a]] - xyz[top[:, b]], axis=1) for a, b in pairs]))
+        self.assertGreater(edge, 6 * 1.3)  # far 12 against the air's 6: measured 11.17, 5.81 before the fix
+
     def test_air_line_beside_a_copy_grades_2d(self):  # the copies stand on the air's bottom line, y = 0, from below
         def first_edges(patch=""):  # the air's edges on y = 0 that start at a copy's corner
             group = self.rect_group((5, -6, 4, 6), [translation(20 * k) for k in range(3)])
