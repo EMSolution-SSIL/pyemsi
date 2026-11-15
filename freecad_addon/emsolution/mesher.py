@@ -33,6 +33,7 @@ from meshcommon import (
     apply_refinements,
     graded_air,
     apply_air_grading,
+    graded_ids,
 )
 import meshgroups
 
@@ -128,7 +129,8 @@ def build(job, folder):
         gmsh.model.addPhysicalGroup(2, sorted(set(surf_tags[s["smat_id"]])), s["smat_id"], name=s["name"])
 
     by_size = {}  # size -> {dim: [tags]}
-    for v, size in [(v, v["size"]) for v in vols] + [(a, air["size"]) for a in airs]:
+    graded_mats = graded_ids(job)  # sized by apply_air_grading
+    for v, size in [(v, v["size"]) for v in vols] + [(a, air["size"]) for a in airs if a["mat_id"] not in graded_mats]:
         by_size.setdefault(float(size), {}).setdefault(3, []).extend(body_vols[v["mat_id"]])
     first = len(surf_files)
     for (z, path), dimtags in zip(size_files, rest[first:]):

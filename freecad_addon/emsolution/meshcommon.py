@@ -115,11 +115,12 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
 
 
 def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):
-    """Air Grading, before apply_size_fields. entries: job["air_grading"]. Each air's tags (dimension dim) leave by_size:
-    apply_air_grading sizes them. Its inner boundary, the (dim-1) entities it shares with bodies, keeps the air's size
-    (sizes[mat_id]), so a shared face stays at the smaller of the body's size and the air's, as without the grading.
-    sizes: {mat_id: size} of every body and air side. same_body: as in apply_refinements (the two sides of a sliding
-    air). Returns {entry name: (the air's tags, inner boundary, outer boundary: the air's other (dim-1) entities)}."""
+    """Air Grading, before apply_size_fields. entries: job["air_grading"]. The caller leaves each graded air's own size
+    out of by_size (see graded_ids): apply_air_grading sizes the air, and a Mesh Size item on it stays. The air's inner
+    boundary, the (dim-1) entities it shares with bodies, goes into by_size at the air's size (sizes[mat_id]), so a
+    shared face stays at the smaller of the body's size and the air's, as without the grading. sizes: {mat_id: size} of
+    every body and air side. same_body: as in apply_refinements (the two sides of a sliding air).
+    Returns {entry name: (the air's tags, inner boundary, outer boundary: the air's other (dim-1) entities)}."""
     joined = {m: list(group) for group in same_body for m in group}
     graded = {}
     for entry in entries:
@@ -129,19 +130,16 @@ def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):
         whole = gmsh.model.getBoundary([(dim, t) for t in tags], combined=False, oriented=False)
         shared = set(inner)
         outer = [b for b in dict.fromkeys(abs(t) for _, t in whole) if b not in shared]
-        gone = set(tags)
-        for size in list(by_size):
-            if dim in by_size[size]:
-                by_size[size][dim] = [t for t in by_size[size][dim] if t not in gone]
-                if not by_size[size][dim]:
-                    del by_size[size][dim]
-            if not by_size[size]:
-                del by_size[size]
         if inner:
             size = min(float(sizes[m]) for m in entry["mat_ids"])
             by_size.setdefault(size, {}).setdefault(dim - 1, []).extend(inner)
         graded[entry["name"]] = (tags, inner, outer)
     return graded
+
+
+def graded_ids(job):
+    """The MAT_IDs of the airs that have an Air Grading: their own size does not go into by_size."""
+    return {m for entry in job.get("air_grading", []) for m in entry["mat_ids"]}
 
 
 def _curves(dim, tags):
@@ -160,7 +158,7 @@ def _ends(curves):
 
 def _start_size(point, air_size, sizes, dim):
     """The smallest size of the bodies whose boundary holds point (found by their physical groups, the MAT_IDs), and
-    air_size."""
+    air_size. Needs the bodies' physical groups (both builds add them before sizing)."""
     above = {point}
     for d in range(dim):  # up to the dim-entities that hold the point
         above = {u for t in above for u in gmsh.model.getAdjacencies(d, t)[0]}

@@ -1024,6 +1024,16 @@ class Mesher2DTest(unittest.TestCase):
         alone = near_edge(None)
         self.assertGreaterEqual(near_edge({"refine": [refine]}), 3 * alone, alone)
 
+    def test_mesh_size_face_inside_a_graded_air_keeps_its_size(self):
+        # the face splits the air, and its piece is one of the air's faces: it must keep the Mesh Size's 1, not get
+        # the grading's sizes (about 6-12 there)
+        write_rects(self.geo("size_1.brep"), [(30, -10, 20, 20)])
+        sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
+        triangles = self.graded_rect(air_grading(), keys={"sizes": sizes})
+        inside = [t for t in triangles if all(30 <= x <= 50 and -10 <= y <= 10 for x, y, z in t)]
+        mean = sum(math.dist(t[0], t[1]) for t in inside) / len(inside)
+        self.assertLess(mean, 1.5)
+
     def test_air_grading_with_no_body_notes(self):
         write_rects(self.geo("air.brep"), [(-100, -100, 200, 200)])
         air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
