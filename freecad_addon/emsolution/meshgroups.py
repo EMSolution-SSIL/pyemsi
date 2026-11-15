@@ -1434,8 +1434,8 @@ def _free_rules(built, dim):
         points = np.unique(np.vstack(points), axis=0)
         if not len(points):  # the carry emptied it: every pick was under frozen facets
             _note(
-                f"Refine Near {entry['name']}: its picks lie under the copies of a Symmetric Group; it refines nothing"
-                " there"
+                f"{entry.get('label', 'Refine Near')} {entry['name']}: its picks lie under the copies of a Symmetric"
+                " Group; it refines nothing there"
             )
         rules.append((entry, points))
     return rules

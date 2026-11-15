@@ -67,14 +67,15 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
     fields = []
     made = []
     for entry, picked in items:
+        item = f"{entry.get('label', 'Refine Near')} {entry['name']}"  # a Skin Layer's entries say so
         picked = {d: list(tags) for d, tags in picked.items()}
         for body in dict.fromkeys(tuple(joined.get(m, [m])) for m in entry["whole"]):
             faces = real_boundary(dim, [t for m in body for t in body_tags.get(m, [])])
             if not faces:
                 other = "free object; the copies are meshed apart" if copies_apart else "region"
                 _note(
-                    f"Refine Near {entry['name']}: MAT_ID {'/'.join(map(str, body))} has no face shared with another"
-                    f" {other}; it refines nothing there"
+                    f"{item}: MAT_ID {'/'.join(map(str, body))} has no face shared with another {other}; it refines"
+                    " nothing there"
                 )
             picked.setdefault(dim - 1, []).extend(faces)
         picked = {d: list(dict.fromkeys(tags)) for d, tags in picked.items() if tags}
@@ -82,7 +83,7 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
             continue
         limit = [t for m in entry["limit_to"] for t in body_tags.get(m, [])]
         if entry["limit_to"] and not limit:
-            _note(f"Refine Near {entry['name']}: its Limit to bodies are not in this mesh; it refines nothing")
+            _note(f"{item}: its Limit to bodies are not in this mesh; it refines nothing")
             continue
         field = gmsh.model.mesh.field
         dist = field.add("Distance")
@@ -112,6 +113,31 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
     if fields:
         add_to_background(fields)
     return made
+
+
+def skin_refinements(entries, sizes):
+    """Refine Near entries for apply_refinements, one per Skin Layer entry (job["skin"]) and MAT_ID: the size is
+    depth / per_depth within min(1, layer) skin depths of the body's real surface and grows to the body's own size
+    (sizes: {mat_id: size}) at layer skin depths, inside the body only."""
+    out = []
+    for e in entries:
+        depth = e["depth"]
+        fine_distance = min(1, e["layer"]) * depth
+        for m in e["mat_ids"]:
+            out.append(
+                {
+                    "name": e["name"],
+                    "label": "Skin Layer",
+                    "files": [],
+                    "whole": [m],
+                    "fine": depth / e["per_depth"],
+                    "fine_distance": fine_distance,
+                    "coarse": sizes[m],
+                    "growth": e["layer"] * depth - fine_distance,
+                    "limit_to": [m],
+                }
+            )
+    return out
 
 
 def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):

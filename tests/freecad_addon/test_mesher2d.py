@@ -13,7 +13,7 @@ import gmsh
 
 from emsolution import meshcommon
 
-from .test_mesher import air_grading, band_edge, facets, simplices, write_line, write_point
+from .test_mesher import air_grading, band_edge, facets, simplices, write_line, write_point, skin, depth_edge
 from .meshreport import report
 
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -1040,6 +1040,77 @@ class Mesher2DTest(unittest.TestCase):
         r = self.run_job([], air=air, extra={"air_grading": [air_grading(far=40.0)]})
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("NOTE: Air Grading Grow: the air touches no body; it is meshed at the far size", r.stderr)
+
+    # ---- Skin Layer: a round wire r 5 (MAT_ID 1), skin depth 1, body size 3, in an air square of 120 at size 6
+
+    def skin_wire(self, entry=None, size=3.0, sizes=(), half=False):
+        """The wire (the half above y = 0 when half) in the air, with one Skin Layer entry if given. Returns its
+        triangles."""
+        write_sectors(self.geo("vol_1.brep"), (0, 5, 0, 180) if half else (0, 5))
+        write_rects(self.geo("air.brep"), [(-60, 0, 120, 60) if half else (-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        extra = {"skin": [entry]} if entry else None
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=size)], sizes=sizes, air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2, group=1)
+
+    @staticmethod
+    def wire_depth(c):
+        return 5 - math.hypot(c[0], c[1])
+
+    def test_skin_grades_the_wire_2d(self):
+        # mean edge 0-1 / 1-2 / 2-3 / beyond 3: 0.47 / 0.70 / 1.32 / 2.13; without the skin about 2.6 throughout
+        wire = self.skin_wire(skin())
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 1), 0.6)
+        self.assertGreater(depth_edge(wire, self.wire_depth, 3), 1.5)
+
+    def test_skin_stays_inside_the_conductor_2d(self):
+        # a bar 20 x 10 (MAT_ID 1) on an iron block (MAT_ID 3), both at size 3, in the air. Mean edge 0-1 / 1-2 mm from
+        # the shared edge: the bar 0.50 / 0.70, the block 0.85 / 2.55 (2.59 / 2.64 without the skin). The block's row on
+        # the edge must take the edge's 0.5 mm nodes; past it the block is at its own size (0.82 at 1-2 mm with no
+        # Limit to: the grading leaks into it)
+        write_rects(self.geo("vol_1.brep"), [(-10, 0, 20, 10)])
+        write_rects(self.geo("vol_3.brep"), [(-30, -20, 60, 20)])
+        write_rects(self.geo("air.brep"), [(-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        bodies = [self.body(1, "Bar", "vol_1.brep", size=3.0), self.body(3, "Iron", "vol_3.brep", size=3.0)]
+        r = self.run_job(bodies, air=air, extra={"skin": [skin()]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        path = os.path.join(self.dir, "pre_geom2D.msh")
+
+        def from_edge(sign):  # depth from the shared edge y = 0, |x| < 9, into the bar (1) or the block (-1)
+            return lambda c: sign * c[1] if abs(c[0]) < 9 else -1
+
+        self.assertGreater(depth_edge(simplices(path, 2, group=3), from_edge(-1), 1, 2), 1.5)
+        self.assertLess(depth_edge(simplices(path, 2, group=1), from_edge(1), 0, 1), 0.6)
+
+    def test_skin_skips_the_symmetry_plane_2d(self):
+        # the half wire on y = 0: the line there is not a surface, only the arc is. Its line elements: 0.48 within δ of the
+        # arc, 1.55 at 3δ and more (the middle 4 mm, its ends graded); all would be 0.5 if the line were a surface
+        on_plane = facets(self.skin_wire(skin(), half=True), lambda p: abs(p[1]) < 1e-9)
+        self.assertGreater(depth_edge(on_plane, self.wire_depth, 3), 1.2)
+        self.assertLess(depth_edge(on_plane, self.wire_depth, 0, 1), 0.75)
+
+    def test_skin_layer_thinner_than_delta(self):
+        # fine distance 0.5, no growth: 0.53 within 0.5, 0.78 at 0.5-1, 2.56 beyond 3
+        wire = self.skin_wire(skin(layer=0.5))
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 0.5), 0.75)
+
+    def test_skin_grows_to_the_body_mesh_size(self):
+        # beyond 3δ 1.76 at body size 2; with the whole wire at 0.3 the layer is 0.29
+        beyond = depth_edge(self.skin_wire(skin(), size=2.0), self.wire_depth, 3)
+        self.assertTrue(1.4 < beyond < 2.6, beyond)
+        write_sectors(self.geo("size_1.brep"), (0, 5))  # the whole wire at 0.3, below the skin's fine size
+        sizes = [{"name": "Fine", "size": 0.3, "files": ["geometry/size_1.brep"]}]
+        wire = self.skin_wire(skin(), size=2.0, sizes=sizes)
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 1), 0.4)
+
+    def test_skin_with_no_real_surface_notes(self):
+        write_sectors(self.geo("vol_1.brep"), (0, 5))
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], extra={"skin": [skin()]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        note = "Skin Layer Skin: MAT_ID 1 has no face shared with another region; it refines nothing"
+        self.assertIn(note, r.stderr)
 
     # ---- sliding motion: the fixed side goes to pre_geom2D.msh, the moving side to rotor_mesh2D.msh
 

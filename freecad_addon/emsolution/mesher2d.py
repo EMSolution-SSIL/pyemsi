@@ -32,6 +32,7 @@ from meshcommon import (
     slide_split,
     orient_faces,
     apply_refinements,
+    skin_refinements,
     graded_air,
     apply_air_grading,
     graded_ids,
@@ -160,6 +161,7 @@ def build(job, folder):
                 if not _on_bodies(d, t, placed):
                     raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
                 picked.setdefault(d, []).append(t)
+    picks += [(e, {}) for e in skin_refinements(job.get("skin", []), sizes)]  # graded skins of conductors
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_faces, 2, sliding_air, apart)  # (entry, Distance field) pairs
     job["air_grading_fields"] = apply_air_grading(

@@ -205,6 +205,27 @@ def band_edge(elements, half, lo, hi):
     return sum(lengths) / len(lengths)
 
 
+def skin(name="Skin", mat_ids=(1,), depth=1.0, per_depth=2.0, layer=3.0):
+    """An entry of job["skin"]."""
+    return {
+        "name": name,
+        "mat_ids": list(mat_ids),
+        "depth": depth,
+        "per_depth": per_depth,
+        "layer": layer,
+        "quads": False,
+    }
+
+
+def depth_edge(elements, depth, lo, hi=math.inf):
+    """Mean length of the first edge of the elements whose centre c lies lo..hi below the surface, depth(c) deep."""
+    lengths = []
+    for e in elements:
+        if lo <= depth([sum(p[i] for p in e) / len(e) for i in range(3)]) < hi:
+            lengths.append(math.dist(e[0], e[1]))
+    return sum(lengths) / len(lengths)
+
+
 class MesherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -931,6 +952,31 @@ class MesherTest(unittest.TestCase):
         half = (10, 10, 0)
         today = band_edge(plane(None), half, 3, 10)
         self.assertLess(band_edge(plane(air_grading()), half, 3, 10), 0.7 * today, today)
+
+    # ---- Skin Layer: an aluminium block 40 x 40 x 20 (MAT_ID 1), skin depth 2.69, in an air box of 200 at size 20
+
+    def skin_block(self, entry=None, size=8.0):
+        """The block at mesh size `size` in the air box, with one Skin Layer entry if given. Returns its tetrahedra."""
+        write_box(self.geo("vol_1.brep"), -20, -20, -10, 40, 40, 20)
+        write_box(self.geo("air.brep"), -100, -100, -100, 200, 200, 200)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        extra = {"skin": [entry]} if entry else None
+        r = self.run_job([self.vol(1, "Block", "vol_1.brep", size=size)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return simplices(os.path.join(self.dir, "pre_geom.msh"), 3, group=1)
+
+    def test_skin_grades_the_block_3d(self):
+        # mean edge 0-δ / δ-2δ / 2δ-3δ / beyond: 1.72 / 2.56 / 4.97 / 6.58, 35.9k tetrahedra; a uniform 1.35 block 1.71 to
+        # 1.87 and 60.9k (the first edge of a tetrahedron is longer than its size)
+        d = 2.69
+        block = self.skin_block(skin(depth=d))
+
+        def depth(c):
+            return min(20 - abs(c[0]), 20 - abs(c[1]), 10 - abs(c[2]))
+
+        self.assertLess(depth_edge(block, depth, 0, d), 0.75 * d)
+        self.assertGreater(depth_edge(block, depth, 3 * d), 0.6 * 8)
+        self.assertLess(len(block), len(self.skin_block(size=d / 2)))
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 
