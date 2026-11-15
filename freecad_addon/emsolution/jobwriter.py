@@ -188,6 +188,31 @@ def air_grading_entries(study, ids):
     return entries
 
 
+def skin_entries(study, ids, quads=True):
+    """The job's "skin" list: one entry per Skin Layer with a whole-body reference in ids ({body or air Name:
+    [MAT_ID, ...]}, the map refine_entries takes), in tree order. Quad layers only in a 2D Study and when quads."""
+    entries = []
+    for item in objects.skin_layers(study):
+        mat_ids = [
+            mat_id
+            for body, sub in objects.item_refs(item)
+            if sub == "" and not objects.is_air(body) and body.Name in ids
+            for mat_id in ids[body.Name]
+        ]
+        if mat_ids:
+            entries.append(
+                {
+                    "name": item.Label,
+                    "mat_ids": mat_ids,
+                    "depth": item.SkinDepth.Value,
+                    "per_depth": item.ElementsPerDepth,
+                    "layer": item.LayerDepth,
+                    "quads": bool(item.QuadLayers and study.Dimension == "2D" and quads),
+                }
+            )
+    return entries
+
+
 def write_slides(study, folder, job):
     """Add the slide keys to job and write their BREPs: the moving cells, each interface's surface and slide marker."""
     plane = airshapes.study_plane(study)
@@ -351,6 +376,9 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
     refine = refine_entries(study, folder, {name: [n] for name, n in ids.items()}, prefix)
     if refine:
         cell_job["refine"] = refine
+    skin = skin_entries(study, {name: [n] for name, n in ids.items()})
+    if skin:
+        cell_job["skin"] = skin
     assignments = {m.PartKey: m for m in objects.part_assignments(study)}
     rows, parts, index, written = objects.rows_of(item), [], {}, []
     for k, row in enumerate(rows, 1):
@@ -433,6 +461,9 @@ def write_groups(study, folder, checked=None):
             grading = air_grading_entries(study, refine_ids)
             if grading:
                 job["air_grading"] = grading
+            skin = skin_entries(study, refine_ids, quads=False)
+            if skin:
+                job["skin"] = skin
             free_jobs.append({"side": side, "job": job})
     if free_jobs:
         block["free"] = free_jobs
@@ -496,6 +527,9 @@ def write_job(study):
         grading = air_grading_entries(study, refine_ids)
         if grading:
             job["air_grading"] = grading
+        skin = skin_entries(study, refine_ids)
+        if skin:
+            job["skin"] = skin
         if sliding:
             moving = sides.moving(study)
             job["moving"] = [int(study.MatIds[b.Name]) for b, _ in volumes if b.Name in moving]

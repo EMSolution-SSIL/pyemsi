@@ -270,6 +270,32 @@ def test_refine_near_on_a_free_body_goes_to_the_free_job(motor):
     assert len(entry["files"]) == 1 and entry["files"][0].startswith("geometry/free_fixed_refine_")
 
 
+def test_skin_goes_to_the_cell_job(motor):
+    cell = _cell(motor)
+    objects.make_skin_layer(motor, [(cell, "")], 2.0)
+    job = _job_of(motor)
+    group = objects.symmetric_groups(motor)[0]
+    skins = [g["job"].get("skin") for g in job["symmetric"]["groups"]]
+    n = list(group.Cells).index(cell) + 1
+    assert skins[0] == [
+        {"name": "SkinLayer", "mat_ids": [n], "depth": 2.0, "per_depth": 2.0, "layer": 3.0, "quads": False}
+    ]
+    assert skins[1] is None and not any(f["job"].get("skin") for f in job["symmetric"].get("free", []))
+
+
+def test_skin_on_a_free_object_has_no_quads(motor):
+    body = _free_ring(motor)
+    item = objects.make_skin_layer(motor, [(body, "")], 2.0)
+    item.QuadLayers = True
+    job = _job_of(motor)
+    assert not any(g["job"].get("skin") for g in job["symmetric"]["groups"])
+    (free,) = [f["job"] for f in job["symmetric"]["free"] if f["side"] == "fixed"]
+    mat_id = int(motor.MatIds[body.Name])
+    assert free["skin"] == [
+        {"name": "SkinLayer", "mat_ids": [mat_id], "depth": 2.0, "per_depth": 2.0, "layer": 3.0, "quads": False}
+    ]
+
+
 def test_refine_near_on_a_cell_and_a_free_body_goes_to_both_jobs(motor):
     body = _free_ring(motor)
     objects.make_refine_near(motor, [(_cell(motor), "Edge1"), (body, "Edge1")])

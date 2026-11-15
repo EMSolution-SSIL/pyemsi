@@ -1104,6 +1104,35 @@ class StudyTest(unittest.TestCase):
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             self.assertNotIn("recombine", json.load(fh))
 
+    def test_job_without_skin_has_no_skin_key(self):
+        self.box("A")
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("skin", json.load(fh))
+
+    def test_skin_goes_to_the_job(self):
+        a = self.box("A")
+        objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        mat_id = job["volumes"][0]["mat_id"]
+        self.assertEqual(
+            job["skin"],
+            [{"name": "SkinLayer", "mat_ids": [mat_id], "depth": 2.69, "per_depth": 2.0, "layer": 3.0, "quads": False}],
+        )
+
+    def test_skin_quads_only_in_2d(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        item.QuadLayers = True
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertIs(json.load(fh)["skin"][0]["quads"], False)
+        f = self.face("F")
+        study = self.make_2d_study(f)
+        item = objects.make_skin_layer(study, [(f, "")], 2.69)
+        item.QuadLayers = True
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            self.assertIs(json.load(fh)["skin"][0]["quads"], True)
+
     def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
         a, b = self.face("A"), self.face("B")
         b.Placement.Base = App.Vector(10, 0, 0)
