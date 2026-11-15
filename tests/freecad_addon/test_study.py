@@ -1778,6 +1778,42 @@ class StudyTest(unittest.TestCase):
             f"Refine Near {item.Label}: the coarse size must not be smaller than the fine size.", self.problems()
         )
 
+    def test_air_grading_settings_are_checked(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_air_grading(self.study, [(air, "")], 0.0)
+        self.assertIn(f"Air Grading {item.Label}: the growth distance must be greater than 0.", self.problems())
+        item.GrowthDistance = 5.0
+        self.assertFalse([t for t in self.problems() if t.startswith(f"Air Grading {item.Label}")])
+
+    def test_air_grading_on_a_body_is_refused(self):
+        a = self.box("A")
+        item = objects.make_air_grading(self.study, [(a, "")], 5.0)
+        self.assertIn(
+            f"Air Grading {item.Label}: A is not an air. Pick the Air Region (or, in a Study with Symmetric Groups,"
+            " a free object that is air).",
+            self.problems("error"),
+        )
+
+    def test_air_grading_on_an_air_face_is_refused(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_air_grading(self.study, [(air, "Face1")], 5.0)
+        self.assertIn(f"Air Grading {item.Label}: pick the whole air, not {air.Label}.Face1.", self.problems("error"))
+
+    def test_two_air_gradings_on_one_air(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        first = objects.make_air_grading(self.study, [(air, "")], 5.0)
+        second = objects.make_air_grading(self.study, [(air, "")], 6.0)
+        texts = self.problems("error")
+        self.assertIn(
+            f"Air Grading {second.Label}: {objects.display_name(air)} already has Air Grading {first.Label}; one per"
+            " air.",
+            texts,
+        )
+        self.assertFalse([t for t in texts if t.startswith(f"Air Grading {first.Label}:")])
+
     def test_refine_near_on_a_deleted_body_refers_to_nothing(self):
         self.box("A")
         b = self.box("B", 20)

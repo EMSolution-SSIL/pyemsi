@@ -209,6 +209,18 @@ def _refine_keys(job):
     return [g["job"].get("refine") for g in sym["groups"]], [f["job"].get("refine") for f in sym.get("free", [])]
 
 
+def test_air_grading_on_a_free_object_is_allowed_and_on_a_cell_refused(motor):
+    body = _free_ring(motor)
+    objects.make_air_grading(motor, [(body, "")], 5.0)
+    assert not [t for t in _texts(motor) if t.startswith("Air Grading")]
+    cell = _cell(motor)
+    item = objects.make_air_grading(motor, [(cell, "")], 5.0)
+    assert (
+        f"Air Grading {item.Label}: {objects.display_name(cell)} is not an air. Pick the Air Region (or, in a Study"
+        " with Symmetric Groups, a free object that is air)." in _texts(motor)
+    )
+
+
 def test_refine_near_on_a_cell_goes_to_the_cell_job(motor):
     cell = _cell(motor)
     objects.make_refine_near(motor, [(cell, "")])

@@ -169,6 +169,7 @@ def _kind(item):
         objects.Excitation: "Excitation",
         objects.MeshSize: "Mesh Size",
         objects.RefineNear: "Refine Near",
+        objects.AirGrading: "Air Grading",
         objects.TransfiniteBody: "Transfinite Body",
         objects.TransfiniteEdges: "Transfinite Edges",
         objects.Recombine: "Recombine",
@@ -299,6 +300,41 @@ def _settings(study, included, r):
             if b.Name in included and b.Name not in lost and any(p.startswith("free") for p in parts[b.Name])
         ]
         _free_picks_on_copies(study, n, free, r)
+    _air_gradings(study, included, r)
+
+
+def _air_gradings(study, included, r):
+    """Air Grading items: each reference is an air (the Air Region, or a free object in a Study with Symmetric
+    Groups), picked whole, and an air has one item, the first in the tree."""
+    owners = {}  # air Name -> the first Air Grading that references it
+    for g in objects.air_gradings(study):
+        meshed = [(b, next((s for s in subs if s), "")) for b, subs in objects.subs_by_body(g) if b.Name in included]
+        if not meshed:
+            continue
+        if g.GrowthDistance.Value <= 0:
+            r.error(f"Air Grading {g.Label}: the growth distance must be greater than 0.", g)
+        for b, sub in meshed:
+            name = objects.display_name(b)
+            if not objects.is_air(b) and not (objects.is_grouped(study) and _is_free(study, b)):
+                r.error(
+                    f"Air Grading {g.Label}: {name} is not an air. Pick the Air Region (or, in a Study with Symmetric"
+                    " Groups, a free object that is air).",
+                    g,
+                    [(b, "")],
+                )
+            elif sub:
+                r.error(f"Air Grading {g.Label}: pick the whole air, not {b.Label}.{sub}.", g, [(b, sub)])
+            elif owners.setdefault(b.Name, g) is not g:
+                r.error(
+                    f"Air Grading {g.Label}: {name} already has Air Grading {owners[b.Name].Label}; one per air.",
+                    g,
+                    [(b, "")],
+                )
+
+
+def _is_free(study, body):
+    """True for a body that no Symmetric Group holds as a cell object and that is not a group's drawing."""
+    return any(p.startswith("free") for p in _mesh_part(study, body))
 
 
 def _free_picks_on_copies(study, n, free, r):
