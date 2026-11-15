@@ -128,6 +128,7 @@ def skin_refinements(entries, sizes):
                 {
                     "name": e["name"],
                     "label": "Skin Layer",
+                    "skin": True,
                     "files": [],
                     "whole": [m],
                     "fine": depth / e["per_depth"],
@@ -142,7 +143,9 @@ def skin_refinements(entries, sizes):
 
 def _smooth(curves, radius):
     """True when the layer curves turn by at most 15 degrees where two of them meet (never where three do) and none
-    has a radius of curvature below radius: at a corner a gmsh BoundaryLayer fails ("Edge not recovered") or hangs."""
+    has a radius of curvature below radius: at a corner a gmsh BoundaryLayer fails ("Edge not recovered") or hangs.
+    This check is the only guard against the hang: the generate retry catches only the exception, and a hung gmsh is
+    stopped only by Cancel in the progress dialog."""
     ends = []  # (where, unit tangent leading away from there along the curve) at both ends of every curve
     for c in curves:
         lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, c))
@@ -169,10 +172,12 @@ def apply_quad_layers(entries, body_tags, recombined=()):
     """2D: quad layers in the skins with "quads" (job["skin"] entries), after apply_refinements made their graded
     fields: one BoundaryLayer field per smooth body, growing from its real surface into the body only. A body with a
     sharp corner on that surface, or structured or recombined (recombined: those MAT_IDs), keeps the graded triangles.
+    One BoundaryLayer per MAT_ID, the first skin's in job order: two on the same curves leave the body's core unmeshed.
     Returns the BoundaryLayer fields."""
     field = gmsh.model.mesh.field
     surfaces = [t for _, t in gmsh.model.getEntities(2)]
     made = []
+    layered = {}  # {MAT_ID: the name of the skin that made its quad layers}
     for e in entries:
         if not e["quads"]:
             continue
@@ -181,6 +186,12 @@ def apply_quad_layers(entries, body_tags, recombined=()):
             tags = body_tags.get(m, [])
             curves = real_boundary(2, tags)
             if not curves:  # apply_refinements said so
+                continue
+            if m in layered:
+                _note(
+                    f"Skin Layer {e['name']}: MAT_ID {m} already has quad layers from Skin Layer {layered[m]};"
+                    " graded only"
+                )
                 continue
             if m in recombined:
                 _note(f"Skin Layer {e['name']}: MAT_ID {m} is structured or recombined; no quad layers")
@@ -204,6 +215,7 @@ def apply_quad_layers(entries, body_tags, recombined=()):
             )
             field.setAsBoundaryLayer(f)
             made.append(f)
+            layered[m] = e["name"]
     return made
 
 

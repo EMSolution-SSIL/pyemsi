@@ -247,8 +247,8 @@ def main():
     Gui.Selection.clearSelection()
     log.append("refine near ok")
 
-    # Skin Layer: a whole body, its depth from the calculator (aluminium at 1 kHz).
-    Gui.Selection.addSelection(doc.Name, "B")
+    # Skin Layer: a whole body (a 3D-view click on a face picks it), its depth from the calculator (aluminium at 1 kHz).
+    Gui.Selection.addSelection(doc.Name, "B", "Face1")
     Gui.runCommand("EMS_SkinLayer")
     assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_SkinLayer"].IsActive())
     panel = opened.pop()
@@ -1239,6 +1239,12 @@ def main():
     assert os.path.basename(run2d.mesh_file) == "pre_geom2D.msh" and os.path.isfile(run2d.mesh_file)
     assert second.MeshResult.FemMesh.NodeCount > 0
     log.append("2D mesh ok")
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sec.Name, section.Name, "Face1")  # a click on a 2D body: the Skin Layer is offered
+    menu2d = commands.context_menu()
+    assert "EMS_SkinLayer" in menu2d, menu2d
+    Gui.Selection.addSelection(sec.Name, section.Name, "Edge1")
+    assert "EMS_SkinLayer" not in commands.context_menu()
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sec.Name, section.Name)
     Gui.runCommand("EMS_TransfiniteBody")

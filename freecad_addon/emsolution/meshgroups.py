@@ -1573,9 +1573,8 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             added, elements, excited, count = [], {}, {}, 0
             entry = next((e for e in free_job.get("air_grading", []) if body["mat_id"] in e["mat_ids"]), None)
             grading = {"growth": entry["growth"], "far": entry["far"]} if entry else None
-            skin = next(
-                (e for e, _ in rules if e.get("label") == "Skin Layer" and body["mat_id"] in e["limit_to"]), None
-            )
+            skins = [e for e, _ in rules if e.get("skin") and body["mat_id"] in e["limit_to"]]
+            skin = min(skins, key=lambda e: e["fine"], default=None)  # two on one body: the finest, as its size wins
             if skin and not grading:  # grown from its fine skin to its own size, not extended inward from the skin
                 grading = {"growth": skin["fine_distance"] + skin["growth"], "far": body["size"]}
             for survey in surveys:

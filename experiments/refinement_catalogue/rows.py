@@ -869,11 +869,11 @@ def sl_wire(name, r, size, quads=False, **depth):
 
 
 def sl03():
-    return sl_wire("SL-03", 30, 10, f=50, sigma=5.8e7)
+    return sl_wire("SL-03", 30, 10, f=1000, sigma=5.8e7)
 
 
 def sl04():
-    return sl_wire("SL-04", 30, 10, quads=True, f=50, sigma=5.8e7)
+    return sl_wire("SL-04", 30, 10, quads=True, f=1000, sigma=5.8e7)
 
 
 def sl05():
@@ -1034,8 +1034,8 @@ CASES += [
         BLOCK_CUT,
     ),
     ("SL-02", "SL-01 at 5 kHz (δ 1.20), cut at y = 0", sl02, "meshes", BLOCK_CUT),
-    ("SL-03", "2D round copper wire r 30 (size 10): calculator 50 Hz, σ 5.8e7 (δ 9.35), graded", sl03, "meshes", WIRE),
-    ("SL-04", "SL-03 with quad layers", sl04, "meshes", WIRE),
+    ("SL-03", "2D round copper wire r 30 (size 10): calculator 1 kHz, σ 5.8e7 (δ 2.09), graded", sl03, "meshes", WIRE),
+    ("SL-04", "SL-03 with quad layers (3δ, about 6.3 mm)", sl04, "meshes", WIRE),
     (
         "SL-05",
         "2D bar 40 x 10 (size 6), δ 2 with quad layers: sharp corners, graded triangles instead",

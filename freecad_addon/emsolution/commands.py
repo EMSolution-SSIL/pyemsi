@@ -243,7 +243,7 @@ class AddSkinLayer(_StudyCommand):
         study = assignment_study()
         if study is None:
             return
-        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
+        refs = taskpanels.picked_bodies(study)  # whole conductors, as the panel picks them
         if gate(study, [b for b, _ in refs], objects.SkinLayer):
             _create_and_edit(study, "Add Skin Layer", lambda: objects.make_skin_layer(study, refs))
 
@@ -551,7 +551,8 @@ def context_names(study, kinds):
     if "Face" in kinds and not two_d:
         out.append("EMS_Excitation")
     out += ["Separator", "EMS_MeshSize", "EMS_RefineNear"] if out else ["EMS_MeshSize", "EMS_RefineNear"]
-    if kinds & {"Body", "Cell"} and not kinds & {"Face", "Edge", "Vertex"}:  # whole bodies: conductors
+    parts = {"Edge", "Vertex"} if two_d else {"Face", "Edge", "Vertex"}  # a click on a body in 2D is a Face
+    if (kinds & {"Body", "Cell"} or (two_d and "Face" in kinds)) and not kinds & parts:  # whole bodies: conductors
         out.insert(out.index("EMS_RefineNear") + 1, "EMS_SkinLayer")
     if "Body" in kinds or (two_d and "Face" in kinds):
         out += ["EMS_TransfiniteBody", "EMS_Recombine"]

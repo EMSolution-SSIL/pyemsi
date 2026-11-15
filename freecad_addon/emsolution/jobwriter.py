@@ -199,6 +199,7 @@ def skin_entries(study, ids, quads=True):
             if sub == "" and not objects.is_air(body) and body.Name in ids
             for mat_id in ids[body.Name]
         ]
+        mat_ids = list(dict.fromkeys(mat_ids))  # a body picked twice is one skin
         if mat_ids:
             entries.append(
                 {

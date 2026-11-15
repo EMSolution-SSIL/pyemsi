@@ -1120,6 +1120,14 @@ class StudyTest(unittest.TestCase):
             [{"name": "SkinLayer", "mat_ids": [mat_id], "depth": 2.69, "per_depth": 2.0, "layer": 3.0, "quads": False}],
         )
 
+    def test_skin_lists_a_body_once(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        item.References = [(a, ""), (a, "")]
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual(job["skin"][0]["mat_ids"], [job["volumes"][0]["mat_id"]])
+
     def test_skin_quads_only_in_2d(self):
         a = self.box("A")
         item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
@@ -1989,16 +1997,47 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         self.assertTrue(self.skin_texts(item))
 
-    def test_skin_layer_on_a_recombined_body_warns(self):
+    def test_skin_layer_on_a_structured_body_warns(self):
         self.make_2d_study()
         bar = self.shape_body("Bar", Part.makePlane(20, 10))
-        objects.make_recombine(self.study, [bar])
+        objects.make_transfinite_body(self.study, [bar])
         item = objects.make_skin_layer(self.study, [(bar, "")])
         self.assertEqual(
             self.skin_texts(item),
+            [f"Skin Layer {item.Label}: Bar is structured, and that wins; the Skin Layer does nothing there."],
+        )
+
+    def test_skin_layer_quads_on_a_recombined_body_warns(self):
+        """A recombined body gets the graded layer as quads, so only quad layers are lost; the depth is checked too."""
+        self.make_2d_study()
+        wire = self.disk("Wire", 2)
+        objects.make_recombine(self.study, [wire])
+        item = objects.make_skin_layer(self.study, [(wire, "")])
+        item.LayerDepth = 1.0
+        self.assertFalse(self.skin_texts(item))
+        item.QuadLayers = True
+        self.assertEqual(
+            self.skin_texts(item),
+            [f"Skin Layer {item.Label}: Wire is recombined; it gets the graded layer but no quad layers."],
+        )
+        item.LayerDepth = 3.0
+        self.assertIn(
+            f"Skin Layer {item.Label}: the layer (3 mm) is deeper than half of Wire (about 4 mm thick); the whole body"
+            " is skin, so a Mesh Size of 0.5 mm on it does the same.",
+            self.skin_texts(item),
+        )
+
+    def test_skin_layer_on_a_body_of_another_skin_layer_warns(self):
+        self.make_2d_study()
+        wire = self.disk("Wire", 5)
+        first = objects.make_skin_layer(self.study, [(wire, "")])
+        second = objects.make_skin_layer(self.study, [(wire, "")])
+        self.assertFalse([t for t in self.problems() if t.startswith(f"Skin Layer {first.Label}:")])
+        self.assertEqual(
+            self.skin_texts(second),
             [
-                f"Skin Layer {item.Label}: Bar is structured or recombined, and that wins; the Skin Layer does nothing"
-                " there."
+                f"Skin Layer {second.Label}: Wire already has Skin Layer {first.Label}; the smallest size wins, and"
+                " only the first makes quad layers."
             ],
         )
 

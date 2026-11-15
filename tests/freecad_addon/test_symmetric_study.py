@@ -231,6 +231,31 @@ def test_skin_layer_quads_on_a_free_object_warns(motor):
     ]
 
 
+def test_skin_layer_quads_on_a_cell_cut_by_a_seam_not(tmp_path):
+    """A half wire on the mirror seam, in an iron cell: its edge on the seam is a cut to the cell job, not a surface, so
+    the 90 degree corners where the seam meets the arc are not sharp corners of the layer."""
+    doc = App.newDocument("SeamSkin")
+    try:
+        study = objects.make_study(doc, "2D")
+        half = Part.Face(
+            Part.Wire(
+                [
+                    Part.makeCircle(5, App.Vector(20, 0, 0), App.Vector(0, 0, 1), 0, 180),
+                    Part.makeLine((15, 0, 0), (25, 0, 0)),
+                ]
+            )
+        )
+        wire = symcases.feature(doc, "WireCell", half)
+        iron = symcases.feature(doc, "IronCell", symcases.sector(10, 30, 0, 30).cut(half).Faces[0])
+        symcases.group(study, "G", [iron, wire], [symcases.mirror_rule(0), symcases.rotate_rule(60, 6)])
+        symcases.add_air_region(study, Center=App.Vector(), Length=100, Width=100)
+        item = objects.make_skin_layer(study, [(wire, "")])
+        item.QuadLayers = True
+        assert not [t for t in _texts(study, "warning") if t.startswith(f"Skin Layer {item.Label}")]
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def test_air_grading_goes_to_the_free_job_of_its_air(motor):
     air = symcases.add_air_region(
         motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=130

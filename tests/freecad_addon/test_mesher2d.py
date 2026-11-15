@@ -1205,6 +1205,22 @@ class Mesher2DTest(unittest.TestCase):
         for group in (1, 3):
             self.assertGreater(self.element_counts(group).get("Quadrilateral 4", 0), 100, group)
 
+    def test_quad_layers_of_two_skins_on_one_wire(self):
+        # two BoundaryLayer fields on the same curves leave the wire's core unmeshed (504 quads, no triangles): only the
+        # first skin makes quad layers
+        write_sectors(self.geo("vol_1.brep"), (0, 5))
+        write_rects(self.geo("air.brep"), [(-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        entry = dict(skin(), quads=True)
+        skins = [entry, dict(entry, name="Skin2")]
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], air=air, extra={"skin": skins})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Skin Layer Skin2: MAT_ID 1 already has quad layers from Skin Layer Skin; graded only", r.stderr)
+        self.open_msh()
+        counts = self.element_counts(1)
+        self.assertTrue(100 < counts.get("Quadrilateral 4", 0) < 400, counts)  # one skin: 252 quads
+        self.assertGreater(counts.get("Triangle 3", 0), 0, counts)
+
     # the mesher's first gmsh.model.mesh.generate raises, as gmsh does when it cannot build a layer at a corner. A bar
     # with its corners let through the smooth check does that only sometimes: as often it hangs in gmsh
     FAIL_ONCE = "exec(%r)" % (

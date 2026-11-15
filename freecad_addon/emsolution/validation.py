@@ -309,9 +309,10 @@ def _settings(study, included, r, bodies=()):
 def _skin_layers(study, included, bodies, r):
     """Skin Layer items: whole conductors, positive settings, and warnings where the layer does not do what it says.
     The air is refused in _links."""
-    structured = objects.transfinite_bodies(study) + objects.recombine_items(study)
-    structured = {b.Name for t in structured for b, _ in objects.subs_by_body(t)}
+    structured = {b.Name for t in objects.transfinite_bodies(study) for b, _ in objects.subs_by_body(t)}
+    recombined = {b.Name for t in objects.recombine_items(study) for b, _ in objects.subs_by_body(t)}
     three = study.Dimension == "3D"
+    owners = {}  # body Name -> the first Skin Layer that has it
     for s in objects.skin_layers(study):
         if not any(b.Name in included for b, _ in s.References):
             continue
@@ -336,14 +337,28 @@ def _skin_layers(study, included, bodies, r):
                 r.error(f"Skin Layer {s.Label}: pick whole conductors, not {b.Label}.{sub}.", s, [(b, sub)])
             if parts:
                 continue
+            first = owners.setdefault(b.Name, s)
+            if first is not s:
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} already has Skin Layer {first.Label}; the smallest size wins, and"
+                    " only the first makes quad layers.",
+                    s,
+                    [(b, "")],
+                )
             if b.Name in structured:
                 r.warning(
-                    f"Skin Layer {s.Label}: {name} is structured or recombined, and that wins; the Skin Layer does"
-                    " nothing there.",
+                    f"Skin Layer {s.Label}: {name} is structured, and that wins; the Skin Layer does nothing there.",
                     s,
                     [(b, "")],
                 )
                 continue
+            quads = s.QuadLayers and not three
+            if quads and b.Name in recombined:
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} is recombined; it gets the graded layer but no quad layers.",
+                    s,
+                    [(b, "")],
+                )
             if bad:
                 continue
             shape = geometry.global_shape(b)
@@ -356,7 +371,7 @@ def _skin_layers(study, included, bodies, r):
                     s,
                     [(b, "")],
                 )
-            if three or not s.QuadLayers:
+            if not quads or b.Name in recombined:
                 continue
             if objects.is_grouped(study) and _is_free(study, b):
                 r.warning(
@@ -377,11 +392,15 @@ def _skin_layers(study, included, bodies, r):
 def _sharp(study, body, shape, bodies, layer):
     """True when a 2D body's layer edges are not smooth: two meet with the direction turning by more than 15°, or one
     is curved tighter than the layer's depth. A layer edge is an edge of the body's boundary shared with another meshed
-    body, or inside the Air Region's face (not on its outline)."""
+    body, or inside the Air Region's face (not on its outline). For a cell object only the edges it shares with the
+    other cell objects of its groups: its cell job holds nothing else, so an edge on a seam or against a copy is a cut."""
     tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
     outline = None
     airs = objects.air_regions(study)
-    if airs:
+    cells = {c.Name for g in objects.symmetric_groups(study) if body in g.Cells for c in g.Cells}
+    if cells:
+        bodies = [o for o in bodies if o.Name in cells]
+    elif airs:
         try:
             outline = Part.Compound(airshapes.air_shape(airs[0], airshapes.study_plane(study)).Edges)
         except ValueError:  # _air reports it
