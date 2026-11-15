@@ -361,6 +361,26 @@ class StudyTest(unittest.TestCase):
         objects.assign(self.study, [b], self.steel(), 0, name="Coil_1")
         self.assertTrue(any("group names are the same" in t for t in self.problems("error")))
 
+    def test_air_grading_defaults_and_row(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        self.study.MeshSizesGroup.DefaultMeshSize = 4.0
+        item = objects.make_air_grading(self.study)
+        self.assertEqual(objects.item_refs(item), [(air, "")])
+        self.assertEqual((item.GrowthDistance.Value, item.FarSize.Value), (40.0, 0.0))
+        self.assertEqual(objects.air_gradings(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "grows over 40 mm to 4 mm")
+
+    def test_air_grading_far_size_reads_the_air_size(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        objects.make_mesh_size(self.study, 12.0, [(air, "")])
+        item = objects.make_air_grading(self.study, growth=50.0)
+        self.assertEqual(objects.far_size(item), 12.0)
+        item.FarSize = 30.0
+        self.assertEqual(objects._size_text(item), "grows over 50 mm to 30 mm")
+
     def test_air_keeps_its_own_mesh_name(self):
         self.box("A")
         air = objects.make_air_region(self.study)

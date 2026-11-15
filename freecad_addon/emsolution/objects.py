@@ -342,6 +342,23 @@ class RefineNear(_Proxy):
         obj.addProperty("App::PropertyLinkListGlobal", "LimitTo", "EMSolution", "Bodies the refinement is limited to")
 
 
+class AirGrading(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "The air whose element size grows"
+        )
+        obj.addProperty(
+            "App::PropertyLength",
+            "GrowthDistance",
+            "EMSolution",
+            "Distance over which the air's size grows to the far size",
+        )
+        obj.addProperty(
+            "App::PropertyLength", "FarSize", "EMSolution", "Element size far from the bodies; 0 = the air's own size"
+        )
+
+
 class TransfiniteBody(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
@@ -945,6 +962,18 @@ def make_refine_near(study, refs, fine=None, coarse=None, growth=None, fine_dist
     return obj
 
 
+def make_air_grading(study, refs=None, growth=None, far=0.0):
+    """refs: list of (air, ""); None takes the Study's Air Region. None growth takes ten default sizes; far 0 = the
+    air's own size."""
+    if refs is None:
+        refs = [(a, "") for a in air_regions(study)[:1]]
+    obj = _add(study, "MeshSizesGroup", AirGrading, "AirGrading")
+    obj.GrowthDistance = 10 * study.MeshSizesGroup.DefaultMeshSize.Value if growth is None else growth
+    obj.FarSize = far
+    obj.References = refs
+    return obj
+
+
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
     object, all its solids (faces in 2D); split_row splits a row into blocks."""
@@ -965,6 +994,27 @@ def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
 
 def refine_items(study):
     return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), RefineNear)]
+
+
+def air_gradings(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), AirGrading)]
+
+
+def whole_body_size(study, body):
+    """The smallest whole-body Mesh Size on body, else the Study's DefaultMeshSize."""
+    sizes = [
+        s.Size.Value for s in mesh_sizes(study) for b, subs in subs_by_body(s) if b.Name == body.Name and "" in subs
+    ]
+    return min(sizes, default=study.MeshSizesGroup.DefaultMeshSize.Value)
+
+
+def far_size(item):
+    """An Air Grading's far size: its FarSize, or 0 = the size of its first referenced body (the air's own size)."""
+    if item.FarSize.Value > 0:
+        return item.FarSize.Value
+    study = owner_study(item)
+    refs = item_refs(item)
+    return whole_body_size(study, refs[0][0]) if refs else study.MeshSizesGroup.DefaultMeshSize.Value
 
 
 def symmetric_groups(study):
@@ -1638,6 +1688,7 @@ def is_item(obj):
         Excitation,
         MeshSize,
         RefineNear,
+        AirGrading,
         TransfiniteBody,
         TransfiniteEdges,
         Recombine,
@@ -1729,6 +1780,8 @@ def _size_text(item):
         if item.LimitTo:
             text += f" in {', '.join(display_name(b) for b in item.LimitTo)}"
         return text
+    if isinstance(item.Proxy, AirGrading):
+        return f"grows over {item.GrowthDistance.Value:g} mm to {far_size(item):g} mm"
     if isinstance(item.Proxy, TransfiniteBody):
         return "structured"
     if isinstance(item.Proxy, Recombine):
