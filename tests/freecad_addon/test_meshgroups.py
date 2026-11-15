@@ -1381,6 +1381,18 @@ class GroupJobTest(unittest.TestCase):
         for k, band in enumerate(bands):
             self.assertAlmostEqual(band, bands[0], places=6, msg=f"copy {k}")
 
+    def test_refine_near_whole_cell_with_only_free_faces_has_no_note(self):
+        # The cell is a conductor r 16..20 alone: in its cell job it shares no face with another region, and its whole
+        # pick refines its arc r 20 toward the free side (a file, as jobwriter writes it), so the mesher says nothing.
+        write_arc(self.geo("free.brep"), 20, 0, 30)
+        refine = self.free_refine("bar", files=["geometry/free.brep"], whole=[1], limit_to=[1], coarse=2.0)
+        group = self.sector_group((16, 20, 0, 30), self.TWELVE, self.IRON, extra={"refine": [refine]})
+        self.meshed([group])
+        self.assertNotIn("has no face shared", self.result.stderr)
+        group["job"]["refine"] = [self.free_refine("bar", whole=[1], limit_to=[1], coarse=2.0)]
+        self.meshed([group])
+        self.assertIn("NOTE: Refine Near bar: MAT_ID 1 has no face shared with another region", self.result.stderr)
+
     def test_quad_layers_on_a_cell_conductor_facing_the_air_2d(self):
         # The cell: iron r 10..20 over 30 degrees (size 2) and a round wire r 3 centred on its arc r 20 (size 1.5):
         # half of the wire's circle lies against the iron, the other half faces the free side ("faces"). Together

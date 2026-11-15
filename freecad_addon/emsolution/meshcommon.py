@@ -70,8 +70,10 @@ def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
         item = f"{entry.get('label', 'Refine Near')} {entry['name']}"  # a Skin Layer's entries say so
         picked = {d: list(tags) for d, tags in picked.items()}
         for body in dict.fromkeys(tuple(joined.get(m, [m])) for m in entry["whole"]):
-            faces = real_boundary(dim, [t for m in body for t in body_tags.get(m, [])])
-            if not faces and not (entry.get("skin") and picked):  # a skin's picks are its faces toward the free side
+            tags = [t for m in body for t in body_tags.get(m, [])]
+            faces = real_boundary(dim, tags)
+            own = {abs(t) for _, t in gmsh.model.getBoundary([(dim, t) for t in tags], combined=False, oriented=False)}
+            if not faces and not own & set(picked.get(dim - 1, [])):  # its picked faces (a cell's toward the free side)
                 other = "free object; the copies are meshed apart" if copies_apart else "region"
                 _note(
                     f"{item}: MAT_ID {'/'.join(map(str, body))} has no face shared with another {other}; it refines"
