@@ -542,10 +542,24 @@ def _options(values):
             gmsh.option.setNumber(name, value)
 
 
-def _size_field(rules, points):
+def _extend(grading, dim, tags):
+    """The Extend field that grows the size from the boundary entities tags (surfaces in 3D, lines in 2D) to
+    grading["far"] over grading["growth"]. Returns its tag."""
+    import gmsh
+
+    field = gmsh.model.mesh.field
+    extend = field.add("Extend")
+    field.setNumbers(extend, "SurfacesList" if dim == 3 else "CurvesList", tags)
+    field.setNumber(extend, "DistMax", grading["growth"])
+    field.setNumber(extend, "SizeMax", grading["far"])
+    field.setNumber(extend, "Power", 1)
+    return extend
+
+
+def _size_field(rules, points, *extra):
     """Grade the size of the current gmsh model from the size rules (see mesh_region), as its background field.
     points: the tags of the model points added at each rule's points, in order. Every rule has points: mesh_region
-    leaves out those without."""
+    leaves out those without. extra: tags of other fields joined with the rules' thresholds."""
     import gmsh
 
     field = gmsh.model.mesh.field
@@ -561,6 +575,7 @@ def _size_field(rules, points):
         field.setNumber(threshold, "DistMax", rule["fine_distance"] + rule["growth"])
         field.setNumber(threshold, "StopAtDistMax", 1)
         thresholds.append(threshold)
+    thresholds += extra
     if len(thresholds) > 1:
         joined = field.add("Min")
         field.setNumbers(joined, "FieldsList", thresholds)
@@ -569,9 +584,10 @@ def _size_field(rules, points):
         field.setAsBackgroundMesh(thresholds[0])
 
 
-def _region_3d(V, facets, rings, rules):
+def _region_3d(V, facets, rings, rules, grading=None):
     """In the current, empty gmsh model: mesh the volume bounded by the triangles of the shells rings, the outer shell
-    first, graded by the size rules (with points). The nodes' gmsh tags are their indexes in V + 1."""
+    first, graded by the size rules (with points) and by grading (see mesh_region). The nodes' gmsh tags are their indexes in
+    V + 1."""
     import gmsh
 
     triangles = facets[np.concatenate(rings)]
@@ -596,14 +612,15 @@ def _region_3d(V, facets, rings, rules):
             gmsh.model.geo.addPoint(*p, tag=t)
         tag += len(rule["points"])
     gmsh.model.geo.synchronize()
-    _size_field(rules, points)
+    extend = [_extend(grading, 3, [t for tags in surfaces for t in tags])] if grading else []
+    _size_field(rules, points, *extend)
     gmsh.model.mesh.generate(3)
 
 
-def _region_2d(V, facets, rings, rules):
+def _region_2d(V, facets, rings, rules, grading=None):
     """In the current, empty gmsh model: mesh the plane surface bounded by the polygons of the shells rings, the outer
     one first, through the nodes' real coordinates, each polygon line one element, graded by the size rules (with
-    points)."""
+    points) and by grading (see mesh_region)."""
     import gmsh
 
     occ = gmsh.model.occ
@@ -618,18 +635,21 @@ def _region_2d(V, facets, rings, rules):
     occ.synchronize()
     for line in lines:
         gmsh.model.mesh.setTransfiniteCurve(line, 2)
-    _size_field(rules, points)
+    extend = [_extend(grading, 2, lines)] if grading else []
+    _size_field(rules, points, *extend)
     gmsh.model.mesh.generate(2)
 
 
-def mesh_region(V, facets, outer, inners, size, dim, rules=()):
+def mesh_region(V, facets, outer, inners, size, dim, rules=(), grading=None):
     """Mesh the region bounded by the shell outer (indexes into facets, whose node numbers refer to V), minus the
     shells inners. Returns (V2, {etype: connectivity}): V with the new nodes the elements use appended, nodes 0 to
     len(V) - 1 unchanged, connectivity into V2. A frozen node moved by gmsh raises FrozenError. The current gmsh model
     stays as it was.
     rules: size rules, each {"points": (n, 3), "fine", "fine_distance", "coarse", "growth"}: the size is fine within
     fine_distance of the points and grows to coarse over growth beyond it. Points farther than fine_distance + growth
-    from the region's bounding box are left out, and so are the rules left without points."""
+    from the region's bounding box are left out, and so are the rules left without points.
+    grading: None, or {"growth", "far"}: the size grows from every boundary of the region, from the size of its facets
+    to far over the distance growth, and stays at far beyond it (size is then not used): see _extend."""
     import gmsh
 
     V = np.asarray(V, dtype=float).reshape(-1, 3)
@@ -643,13 +663,15 @@ def mesh_region(V, facets, outer, inners, size, dim, rules=()):
         r["points"] = r["points"][((r["points"] >= lo - reach) & (r["points"] <= hi + reach)).all(axis=1)]
     rules = [r for r in rules if len(r["points"])]
     options = {"Mesh.Renumber": 0, "Mesh.MeshSizeMax": size, "Mesh.MeshSizeExtendFromBoundary": 1, "Mesh.Optimize": 1}
+    if grading:
+        options.update({"Mesh.MeshSizeMax": grading["far"], "Mesh.MeshSizeExtendFromBoundary": 0})
     if dim == 3:
         options["Mesh.Algorithm3D"] = 1
     current = gmsh.model.getCurrent()
     gmsh.model.add("region")
     try:
         with _options(options):
-            (_region_3d if dim == 3 else _region_2d)(V, facets, rings, rules)
+            (_region_3d if dim == 3 else _region_2d)(V, facets, rings, rules, *([grading] if grading else []))
         tags, coords, _ = gmsh.model.mesh.getNodes()
         tags = np.asarray(tags, dtype=np.int64)
         xyz = np.asarray(coords, dtype=float).reshape(-1, 3)
