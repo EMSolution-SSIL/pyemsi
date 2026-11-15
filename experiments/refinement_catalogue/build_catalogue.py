@@ -1,5 +1,5 @@
 r"""The refinement catalogue (spec 9): each row of rows.CASES is built as a Study, its set-up saved, meshed with
-its Refine Near and Air Grading items ("new") and again with them deleted ("today"), and its pictures drawn.
+its Refine Near, Air Grading and Skin Layer items ("new") and again with them deleted ("today"), and its pictures drawn.
 
 Run: pixi run -e addon python experiments/refinement_catalogue/build_catalogue.py [--only ID ...]
 Output: experiments/refinement_catalogue/<id>/<id>.FCStd, the set-up Study (git-ignored; rebuild it with this script),
@@ -92,7 +92,7 @@ def run(row):
         verdict, out["new"] = mesh_into(study, os.path.join(OUT, name, "new"), name, picture)
         out["verdict"] = verdict
         if verdict == "meshes":
-            for item in objects.refine_items(study) + objects.air_gradings(study):
+            for item in objects.refine_items(study) + objects.air_gradings(study) + objects.skin_layers(study):
                 study.Document.removeObject(item.Name)
             study.Document.recompute()
             today, out["today"] = mesh_into(study, os.path.join(OUT, name, "today"), name, picture)

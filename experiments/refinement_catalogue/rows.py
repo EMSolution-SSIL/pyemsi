@@ -1,5 +1,6 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
-(RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, and Stage 3 (AG-01..AG-S2), Air Grading. Each row is
+(RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
+(SL-01..SL-08), Skin Layer. Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -19,6 +20,7 @@ import FreeCAD as App  # noqa: E402 - after the add-on path
 import Part  # noqa: E402
 
 from emsolution import geometry, objects  # noqa: E402
+from emsolution import jobwriter, validation  # noqa: E402
 from tests.freecad_addon import cases  # noqa: E402
 from tests.freecad_addon import symcases  # noqa: E402
 
@@ -469,8 +471,8 @@ def side(e):
     return all(near(polar(v.Point)[1], 10, 1e-6) for v in e.Vertexes)
 
 
-def part_elements(msh, name):
-    """The elements of the 2D physical group name in a mesh file."""
+def part_elements(msh, name, dim=2):
+    """The elements of the physical group name of dimension dim in a mesh file."""
     import gmsh
 
     gmsh.initialize()
@@ -479,7 +481,7 @@ def part_elements(msh, name):
         gmsh.open(msh)
         return sum(
             len(t)
-            for d, tag in gmsh.model.getPhysicalGroups(2)
+            for d, tag in gmsh.model.getPhysicalGroups(dim)
             if gmsh.model.getPhysicalName(d, tag) == name
             for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag)
             for t in gmsh.model.mesh.getElements(d, ent)[1]
@@ -818,3 +820,251 @@ CASES += [
     ),
 ]
 AFTER.update({"AG-01": ag01_after, "AG-03": ag03_after, "AG-04": rn08_after, "AG-S1": ags1_after})
+
+
+# --- Stage 4: Skin Layer ---------------------------------------------------------------------------------------------
+# A calculator row sets Frequency, Conductivity and a relative permeability of 1 on the item, and its SkinDepth from
+# objects.skin_depth, as the panel's calculator does.
+
+
+def skin(study, body, depth=None, f=None, sigma=None, quads=False):
+    """A Skin Layer on the whole body: depth in mm, or the calculator's depth at f Hz and sigma S/m (mu_r 1)."""
+    item = objects.make_skin_layer(study, [(body, "")])
+    if f is not None:
+        item.Frequency, item.Conductivity, item.RelativePermeability = f, sigma, 1.0
+        depth = objects.skin_depth(f, sigma, 1.0)
+    item.SkinDepth = depth
+    item.QuadLayers = quads
+    study.Document.recompute()
+    return item
+
+
+def sl_block(name, f):
+    """An aluminium block 40 x 40 x 20 at size 8 (the default) in a Padding Box Air Region (50 %); a Skin Layer at f
+    Hz, sigma 3.5e7 (2/δ, 3δ)."""
+    doc, study, (body,) = study_of(name, "3D", [("Block", block(-20, -20, -10, 20, 20, 10))], size=8)
+    done(study, [body], cases.fit_air(study, [body], 50))
+    skin(study, body, f=f, sigma=3.5e7)
+    return study
+
+
+def sl01():
+    return sl_block("SL-01", 1000)
+
+
+def sl02():
+    return sl_block("SL-02", 5000)
+
+
+def disc(r, x=0.0, y=0.0):
+    return Part.Face(Part.Wire(Part.makeCircle(r, V(x, y, 0))))
+
+
+def sl_wire(name, r, size, quads=False, **depth):
+    """A 2D round wire of radius r at size (the default) in a Padding Box Air Region (50 %) with a Skin Layer."""
+    doc, study, (wire,) = study_of(name, "2D", [("Wire", disc(r))], size=size)
+    done(study, [wire], cases.fit_air(study, [wire], 50))
+    skin(study, wire, quads=quads, **depth)
+    return study
+
+
+def sl03():
+    return sl_wire("SL-03", 30, 10, f=50, sigma=5.8e7)
+
+
+def sl04():
+    return sl_wire("SL-04", 30, 10, quads=True, f=50, sigma=5.8e7)
+
+
+def sl05():
+    """A 2D bar 40 x 10 at size 6 in a Padding Box Air Region (50 %), δ 2 with quad layers: its corners are sharp."""
+    doc, study, (bar,) = study_of("SL-05", "2D", [("Bar", cases.face(cases.rect(-20, -5, 20, 5)))], size=6)
+    done(study, [bar], cases.fit_air(study, [bar], 50))
+    skin(study, bar, depth=2, quads=True)
+    return study
+
+
+def sl07():
+    return sl_wire("SL-07", 3, SIZE, depth=2)
+
+
+BAR = (22.0, 11.25, 3.0)  # SL-06's round bar in the rotor iron cell: centred at r 22, 11.25 deg, radius 3
+BAR_DEPTH = 0.5
+
+
+def sl06():
+    """The 2D motor of RN-S1 (default size 5) with a copper round bar in its rotor iron cell, a cell of its own in
+    the rotor's Symmetric Group (16 copies); a Skin Layer δ 0.5 on the bar cell."""
+    study = motor("SL-06")
+    doc = study.Document
+    r, a, radius = BAR
+    bar_face = disc(radius, r * math.cos(math.radians(a)), r * math.sin(math.radians(a)))
+    iron = cell(study, "RotorIronCell")
+    iron.Shape = iron.Shape.cut(bar_face).Faces[0]
+    bar = symcases.feature(doc, "Bar", bar_face)
+    bar.Visibility = False
+    rotor = objects.symmetric_groups(study)[1]
+    rotor.Cells = list(rotor.Cells) + [bar]
+    objects.sync_rows(rotor)
+    row = [x["cell"] for x in objects.rows_of(rotor)].index(bar.Name)
+    objects.set_row_material(study, rotor, row, symcases.libraries(study)["Copper"])
+    doc.recompute()
+    objects.sync_parts(study)
+    doc.recompute()
+    skin(study, bar, depth=BAR_DEPTH)
+    return study
+
+
+SENSOR_DEPTH = 0.6
+
+
+def sl08():
+    """The 3D motor of RN-S4 (default size 1.5) in a Sector Air Region r 60..90, z 0..10 round the copies, with RN-S5's
+    free sensor block 6 x 6 (x 72..78) in the air as a copper conductor, z 2..8; a Skin Layer δ 0.6 on it."""
+    study = symcases.motor_study_3d(App.newDocument("SL_08"))
+    lib = symcases.libraries(study)
+    ring = {"InnerRadius": 60, "OuterRadius": 90, "ZMin": 0, "Height": 10}
+    symcases.add_air_region(study, lib["Air"], AirShape="Sector", **ring)
+    sensor = symcases.add_free(study, "Sensor", block(72, -3, 2, 78, 3, 8), lib["Copper"])
+    skin(study, sensor, depth=SENSOR_DEPTH)
+    return study
+
+
+def part_types(msh, name):
+    """{gmsh element type: elements} of the 2D physical group name in a mesh file (3 is a quadrangle)."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        out = {}
+        for d, tag in gmsh.model.getPhysicalGroups(2):
+            if gmsh.model.getPhysicalName(d, tag) != name:
+                continue
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag):
+                for etype, elements, _ in zip(*gmsh.model.mesh.getElements(2, ent)):
+                    out[int(etype)] = out.get(int(etype), 0) + len(elements)
+        return out
+    finally:
+        gmsh.finalize()
+
+
+def sl01_after(folder):
+    """(passed, text): the block's elements in new and today, printed; new has more."""
+    n = {w: part_elements(os.path.join(folder, w, "pre_geom.msh"), "Block", 3) for w in ("new", "today")}
+    return n["new"] > n["today"] > 0, f"Block elements: new {n['new']}, today {n['today']}"
+
+
+def sl04_after(folder):
+    """(passed, text): the wire of new has quadrangles."""
+    t = {w: part_types(os.path.join(folder, w, "pre_geom2D.msh"), "Wire") for w in ("new", "today")}
+    quads = t["new"].get(3, 0)
+    text = f"quads in the Wire: new {quads} of {sum(t['new'].values())}, today {t['today'].get(3, 0)}"
+    return quads > 0, text
+
+
+def new_warnings(folder, name):
+    """The Validate warnings of the Study saved in folder/new/name.FCStd."""
+    doc = App.openDocument(os.path.join(folder, "new", name + ".FCStd"))
+    try:
+        return [p.text for p in validation.validate(objects.find_study(doc)) if p.severity == validation.WARNING]
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def mesher_notes(folder):
+    """The NOTE lines mesher2d prints for the job of the 2D Study saved in folder/new (the mesher is run again)."""
+    import subprocess
+
+    _, where = job_of(os.path.join(folder, "new"))
+    script = os.path.join(os.path.dirname(jobwriter.__file__), "mesher2d.py")
+    r = subprocess.run([sys.executable, script, os.path.join(where, "job.json")], capture_output=True, text=True)
+    return [x[len("NOTE: ") :] for x in r.stderr.splitlines() if x.startswith("NOTE: ")]
+
+
+SHARP_WARNING = "Bar has sharp corners on its surface; quad layers need a smooth surface, so it gets graded triangles."
+SHARP_NOTE = "has a sharp corner on its surface; graded triangles instead of quad layers"
+DEEPER = "is deeper than half of"
+
+
+def sl05_after(folder):
+    """(passed, text): no quadrangles in the bar, and the sharp-corner note and Validate warning printed."""
+    quads = part_types(os.path.join(folder, "new", "pre_geom2D.msh"), "Bar").get(3, 0)
+    notes = [x for x in mesher_notes(folder) if SHARP_NOTE in x]
+    warnings = [x for x in new_warnings(folder, "SL-05") if SHARP_WARNING in x]
+    text = (
+        f"quads in the Bar: {quads}; mesher: {' | '.join(notes) or 'no note'}; Validate: {' | '.join(warnings) or '-'}"
+    )
+    return quads == 0 and bool(notes) and bool(warnings), text
+
+
+def sl07_after(folder):
+    """(passed, text): the "layer is deeper than half" warning printed."""
+    warnings = [x for x in new_warnings(folder, "SL-07") if DEEPER in x]
+    return bool(warnings), "Validate: " + (" | ".join(warnings) or "no warning")
+
+
+def in_copy(k):
+    """True for a point (x, y) in the rotor's k-th 22.5 deg sector."""
+    return lambda x, y: 22.5 * k < math.degrees(math.atan2(y, x)) % 360 < 22.5 * (k + 1)
+
+
+def sl06_after(folder):
+    """(passed, text): each of the 16 copies of the bar (one per 22.5 deg of the rotor) has the same elements, more
+    than today."""
+    out = {}
+    for w in ("new", "today"):
+        msh = os.path.join(folder, w, "rotor_mesh2D.msh")
+        out[w] = [air_band(msh, in_copy(k), "Bar")[0] for k in range(16)]
+    new, today = out["new"], out["today"]
+    passed = len(set(new)) == 1 and len(set(today)) == 1 and new[0] > today[0] > 0
+    return passed, f"Bar elements per copy: new {sorted(set(new))}, today {sorted(set(today))} (16 copies)"
+
+
+WIRE = {"zoom": (-35, -35, 35, 35)}
+BLOCK_CUT = {"clip": "y", "at": 0.0, "zoom": (-22, -12, 22, 12)}
+CASES += [
+    (
+        "SL-01",
+        "3D aluminium block 40 x 40 x 20 (size 8): Skin Layer from the calculator, 1 kHz, σ 3.5e7 (δ 2.69), 2/δ, 3δ,"
+        " cut at y = 0",
+        sl01,
+        "meshes",
+        BLOCK_CUT,
+    ),
+    ("SL-02", "SL-01 at 5 kHz (δ 1.20), cut at y = 0", sl02, "meshes", BLOCK_CUT),
+    ("SL-03", "2D round copper wire r 30 (size 10): calculator 50 Hz, σ 5.8e7 (δ 9.35), graded", sl03, "meshes", WIRE),
+    ("SL-04", "SL-03 with quad layers", sl04, "meshes", WIRE),
+    (
+        "SL-05",
+        "2D bar 40 x 10 (size 6), δ 2 with quad layers: sharp corners, graded triangles instead",
+        sl05,
+        "meshes",
+        {"zoom": (-24, -8, 24, 8)},
+    ),
+    (
+        "SL-06",
+        "2D motor of RN-S1 with a copper round bar r 3 in the rotor iron cell: Skin Layer δ 0.5 on the bar cell, graded"
+        " in every copy",
+        sl06,
+        "meshes",
+        {"zoom": (8, -4, 34, 18)},
+    ),
+    (
+        "SL-07",
+        "2D wire r 3, δ 2, layer 3δ: the layer is deeper than half the wire",
+        sl07,
+        "meshes",
+        {"zoom": (-8, -8, 8, 8)},
+    ),
+    (
+        "SL-08",
+        "3D motor in an air r 60..90 with RN-S5's free sensor block as a conductor (z 2..8): Skin Layer δ 0.6, cut at"
+        " z = 5",
+        sl08,
+        "meshes",
+        {"clip": "z", "at": 5.0, "zoom": (69, -4.5, 81, 4.5)},
+    ),
+]
+AFTER.update({"SL-01": sl01_after, "SL-04": sl04_after, "SL-05": sl05_after, "SL-06": sl06_after, "SL-07": sl07_after})
