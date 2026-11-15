@@ -1356,10 +1356,7 @@ class ItemPanel:
         self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
         labels.set_refs(self.obj, self.current)
         if self.far_hint is not None:
-            study = objects.owner_study(self.obj)
-            air = self.current[0][0] if self.current else next(iter(objects.air_regions(study)), None)
-            size = objects.whole_body_size(study, air) if air else study.MeshSizesGroup.DefaultMeshSize.Value
-            self.far_hint.setText(f"0 = the air's size ({size:g} mm)")
+            self.far_hint.setText(f"0 = the air's size ({objects.far_size(self.obj, 0, self.current):g} mm)")
 
     def refresh_limit(self):
         self.limit.clear()

@@ -1316,6 +1316,20 @@ class GroupJobTest(unittest.TestCase):
         edge = float(np.mean([np.linalg.norm(xyz[top[:, a]] - xyz[top[:, b]], axis=1) for a, b in pairs]))
         self.assertGreater(edge, 6 * 1.3)  # far 12 against the air's 6: measured 11.17, 5.81 before the fix
 
+    def test_far_size_reaches_a_free_body_used_as_air_3d(
+        self,
+    ):  # the plate has no air around it, the copies don't touch it
+        write_boxes(self.geo("plate.brep"), (-6, -6, 0, 12, 12, 12))
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": 2.0}
+        job = {"volumes": [plate], "surfaces": [], "sizes": [], "air_grading": [self.air_grading(20, far=12.0)]}
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[{"side": "fixed", "job": job}], dim=3)
+        xyz, elements, _ = _physical_mesh(mesh, (20,))
+        tri = meshfrozen.boundary(xyz, [elements[20]], 3).tri
+        side = tri[np.abs(xyz[tri][:, :, 0] - 6).max(axis=1) < 1e-6]  # the outer face x = 6
+        pairs = [(0, 1), (1, 2), (0, 2)]
+        edge = float(np.mean([np.linalg.norm(xyz[side[:, a]] - xyz[side[:, b]], axis=1) for a, b in pairs]))
+        self.assertGreater(edge, 2 * 1.5)  # far 12 against the plate's 2: capped at the plate's own size before the fix
+
     def test_air_line_beside_a_copy_grades_2d(self):  # the copies stand on the air's bottom line, y = 0, from below
         def first_edges(patch=""):  # the air's edges on y = 0 that start at a copy's corner
             group = self.rect_group((5, -6, 4, 6), [translation(20 * k) for k in range(3)])

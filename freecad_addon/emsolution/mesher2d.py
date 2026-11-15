@@ -135,10 +135,9 @@ def build(job, folder):
 
     by_size = {}  # size -> {dim: [tags]}
     graded_mats = graded_ids(job)  # sized by apply_air_grading
-    for b, size in [(b, b["size"]) for b in bodies] + [
-        (a, air["size"]) for a in airs if a["mat_id"] not in graded_mats
-    ]:
-        by_size.setdefault(float(size), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
+    for b, size in [(b, b["size"]) for b in bodies] + [(a, air["size"]) for a in airs]:
+        if b["mat_id"] not in graded_mats:
+            by_size.setdefault(float(size), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
     for (z, path), (start, end) in zip(size_files, size_spans):
         for dimtags in out_map[start:end]:
             for d, t in dimtags:
@@ -163,7 +162,9 @@ def build(job, folder):
                 picked.setdefault(d, []).append(t)
     apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
     job["refine_fields"] = apply_refinements(picks, body_faces, 2, sliding_air, apart)  # (entry, Distance field) pairs
-    job["air_grading_fields"] = apply_air_grading(job.get("air_grading", []), graded, sizes, 2, apart)  # entry, Extend
+    job["air_grading_fields"] = apply_air_grading(
+        job.get("air_grading", []), graded, sizes, 2, apart
+    )  # (entry, Extend field) pairs
     tf = apply_transfinite(job, mapped, body_faces, 2)
     apply_recombine(job, body_faces, 2, tf, mapped)
     if job.get("periodic"):

@@ -56,8 +56,9 @@ def anchors(body, sub):
     return [Part.Vertex(element.CenterOfMass).distToShape(element)[1][0][1]]  # on the face, not off a hole
 
 
-def tag_text(item, values):
-    """The text of the tags of an item; values: what a panel has typed in but not saved ({property: value})."""
+def tag_text(item, values, refs=None):
+    """The text of the tags of an item; values: what a panel has typed in but not saved ({property: value}), refs: its
+    unsaved picks."""
     kind = kind_of(item)
     if kind == "TransfiniteEdges":
         elements, distribution = values.get("Elements", item.Elements), values.get("Distribution", item.Distribution)
@@ -69,11 +70,7 @@ def tag_text(item, values):
             f"{values.get('FineSize', item.FineSize.Value):g} → {values.get('CoarseSize', item.CoarseSize.Value):g} mm"
         )
     if kind == "AirGrading":
-        far = values.get("FarSize", item.FarSize.Value)
-        if far <= 0:  # 0 = the air's own size, as far_size resolves it
-            refs = objects.item_refs(item)
-            study = objects.owner_study(item)
-            far = objects.whole_body_size(study, refs[0][0]) if refs else study.MeshSizesGroup.DefaultMeshSize.Value
+        far = objects.far_size(item, values.get("FarSize"), refs)
         return f"→ {far:g} mm over {values.get('GrowthDistance', item.GrowthDistance.Value):g}"
     if kind == "Material":
         return values.get("Material", item.LibraryMaterial.Label if item.LibraryMaterial else objects.NO_MATERIAL)
@@ -142,7 +139,8 @@ def build(focus, others, refs, values):
         color = QtGui.QColor(KINDS[kind_of(item)][0])
         if item.Name not in names:
             color.setAlpha(FAINT)
-        for body, sub in _one_per_copy(item, refs.get(item.Name, objects.item_refs(item))):
+        item_refs = refs.get(item.Name, objects.item_refs(item))
+        for body, sub in _one_per_copy(item, item_refs):
             if not (shown(cells[body.Name]) if body.Name in cells else shown(body)):
                 continue
             try:
@@ -151,7 +149,9 @@ def build(focus, others, refs, values):
                 continue
             for point in points:
                 if sub:
-                    tags.append({"point": point, "text": tag_text(item, values.get(item.Name, {})), "color": color})
+                    tags.append(
+                        {"point": point, "text": tag_text(item, values.get(item.Name, {}), item_refs), "color": color}
+                    )
                 else:
                     key = tuple(round(c, 3) for c in point)
                     badges.setdefault(key, {"point": point, "items": []})["items"].append(

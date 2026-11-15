@@ -586,8 +586,8 @@ def _size_field(rules, points, *extra):
 
 def _region_3d(V, facets, rings, rules, grading=None):
     """In the current, empty gmsh model: mesh the volume bounded by the triangles of the shells rings, the outer shell
-    first, graded by the size rules (with points) and by grading (see mesh_region). The nodes' gmsh tags are their indexes in
-    V + 1."""
+    first, graded by the size rules (with points) and by grading (see mesh_region). The nodes' gmsh tags are their
+    indexes in V + 1."""
     import gmsh
 
     triangles = facets[np.concatenate(rings)]
@@ -671,7 +671,7 @@ def mesh_region(V, facets, outer, inners, size, dim, rules=(), grading=None):
     gmsh.model.add("region")
     try:
         with _options(options):
-            (_region_3d if dim == 3 else _region_2d)(V, facets, rings, rules, *([grading] if grading else []))
+            (_region_3d if dim == 3 else _region_2d)(V, facets, rings, rules, grading)
         tags, coords, _ = gmsh.model.mesh.getNodes()
         tags = np.asarray(tags, dtype=np.int64)
         xyz = np.asarray(coords, dtype=float).reshape(-1, 3)

@@ -1008,13 +1008,17 @@ def whole_body_size(study, body):
     return min(sizes, default=study.MeshSizesGroup.DefaultMeshSize.Value)
 
 
-def far_size(item):
-    """An Air Grading's far size: its FarSize, or 0 = the size of its first referenced body (the air's own size)."""
-    if item.FarSize.Value > 0:
-        return item.FarSize.Value
+def far_size(item, far=None, refs=None):
+    """An Air Grading's far size: its FarSize, or 0 = the size of its first referenced body (the air's own size), else
+    of the Study's Air Region, else the default size. far, refs: a panel's unsaved FarSize and picks, else the
+    item's."""
+    far = item.FarSize.Value if far is None else far
+    if far > 0:
+        return far
     study = owner_study(item)
-    refs = item_refs(item)
-    return whole_body_size(study, refs[0][0]) if refs else study.MeshSizesGroup.DefaultMeshSize.Value
+    refs = item_refs(item) if refs is None else refs
+    air = refs[0][0] if refs else next(iter(air_regions(study)), None)
+    return whole_body_size(study, air) if air else study.MeshSizesGroup.DefaultMeshSize.Value
 
 
 def symmetric_groups(study):

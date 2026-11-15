@@ -138,7 +138,8 @@ def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):
 
 
 def graded_ids(job):
-    """The MAT_IDs of the airs that have an Air Grading: their own size does not go into by_size."""
+    """The MAT_IDs of the airs and free objects used as air that have an Air Grading: their own size does not go into
+    by_size."""
     return {m for entry in job.get("air_grading", []) for m in entry["mat_ids"]}
 
 
