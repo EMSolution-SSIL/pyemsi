@@ -104,7 +104,7 @@ def validate(study):
     _body_overlaps(bodies, study.Dimension, r)
     known = {"bodies": bodies}  # what geometry.not_meshed needs, worked out once
     _links(study, with_air, r, known)
-    _settings(study, with_air, r)
+    _settings(study, with_air, r, bodies + objects.cell_bodies(study))
     if grouped:
         _groups(study, bodies, r)
     else:
@@ -170,6 +170,7 @@ def _kind(item):
         objects.MeshSize: "Mesh Size",
         objects.RefineNear: "Refine Near",
         objects.AirGrading: "Air Grading",
+        objects.SkinLayer: "Skin Layer",
         objects.TransfiniteBody: "Transfinite Body",
         objects.TransfiniteEdges: "Transfinite Edges",
         objects.Recombine: "Recombine",
@@ -230,7 +231,8 @@ def _links(study, included, r, known=None):
             r.warning(f"Material assignment {m.Label} has no body (was it deleted?). Delete the assignment.", m)
 
 
-def _settings(study, included, r):
+def _settings(study, included, r, bodies=()):
+    """bodies: what the mesh holds besides the Air Region, for the Skin Layer's layer edges."""
     settings = study.MeshSizesGroup
     if settings.DefaultMeshSize.Value <= 0:
         r.error("The default mesh size must be greater than 0.", settings)
@@ -300,7 +302,118 @@ def _settings(study, included, r):
             if b.Name in included and b.Name not in lost and any(p.startswith("free") for p in parts[b.Name])
         ]
         _free_picks_on_copies(study, n, free, r)
+    _skin_layers(study, included, bodies, r)
     _air_gradings(study, included, r)
+
+
+def _skin_layers(study, included, bodies, r):
+    """Skin Layer items: whole conductors, positive settings, and warnings where the layer does not do what it says.
+    The air is refused in _links."""
+    structured = objects.transfinite_bodies(study) + objects.recombine_items(study)
+    structured = {b.Name for t in structured for b, _ in objects.subs_by_body(t)}
+    three = study.Dimension == "3D"
+    for s in objects.skin_layers(study):
+        if not any(b.Name in included for b, _ in s.References):
+            continue
+        picked = [(b, subs) for b, subs in objects.subs_by_body(s) if b.Name in included and not objects.is_air(b)]
+        depth = s.SkinDepth.Value
+        bad = False
+        for ok, what in (
+            (depth > 0, "the skin depth"),
+            (s.ElementsPerDepth > 0, "elements per depth"),
+            (s.LayerDepth > 0, "the layer depth"),
+        ):
+            if not ok:
+                bad = True
+                r.error(f"Skin Layer {s.Label}: {what} must be greater than 0.", s)
+        if three and s.QuadLayers:
+            r.warning(f"Skin Layer {s.Label}: quad layers are made in 2D Studies only; ignored.", s)
+        layer = s.LayerDepth * depth
+        for b, subs in picked:
+            name = objects.display_name(b)
+            parts = [sub for sub in subs if sub]
+            for sub in parts:
+                r.error(f"Skin Layer {s.Label}: pick whole conductors, not {b.Label}.{sub}.", s, [(b, sub)])
+            if parts:
+                continue
+            if b.Name in structured:
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} is structured or recombined, and that wins; the Skin Layer does"
+                    " nothing there.",
+                    s,
+                    [(b, "")],
+                )
+                continue
+            if bad:
+                continue
+            shape = geometry.global_shape(b)
+            t = thickness(shape) if three else thickness_2d(shape)
+            if 0 < t < 2 * layer:
+                r.warning(
+                    f"Skin Layer {s.Label}: the layer ({layer:g} mm) is deeper than half of {name} (about {t:.2g} mm"
+                    f" thick); the whole body is skin, so a Mesh Size of {depth / s.ElementsPerDepth:g} mm on it does"
+                    " the same.",
+                    s,
+                    [(b, "")],
+                )
+            if three or not s.QuadLayers:
+                continue
+            if objects.is_grouped(study) and _is_free(study, b):
+                r.warning(
+                    f"Skin Layer {s.Label}: quad layers are not made on free objects of a Study with Symmetric Groups;"
+                    f" {name} gets graded triangles.",
+                    s,
+                    [(b, "")],
+                )
+            elif _sharp(study, b, shape, bodies, layer):
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} has sharp corners on its surface; quad layers need a smooth surface,"
+                    " so it gets graded triangles.",
+                    s,
+                    [(b, "")],
+                )
+
+
+def _sharp(study, body, shape, bodies, layer):
+    """True when a 2D body's layer edges are not smooth: two meet with the direction turning by more than 15°, or one
+    is curved tighter than the layer's depth. A layer edge is an edge of the body's boundary shared with another meshed
+    body, or inside the Air Region's face (not on its outline)."""
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    outline = None
+    airs = objects.air_regions(study)
+    if airs:
+        try:
+            outline = Part.Compound(airshapes.air_shape(airs[0], airshapes.study_plane(study)).Edges)
+        except ValueError:  # _air reports it
+            pass
+    box = shape.BoundBox
+    box.enlarge(tol)
+    others = [geometry.global_shape(o) for o in bodies if o.Name != body.Name]
+    others = [o for o in others if box.intersect(o.BoundBox)]
+    face_edges = [e for f in shape.Faces for e in f.Edges]
+    edges = [e for e in shape.Edges if e.Length > tol and sum(e.isSame(f) for f in face_edges) == 1]  # the boundary
+    ends = []  # (point, direction leaving the point along the edge)
+    for e in edges:
+        samples = [e.valueAt(e.FirstParameter + k * (e.LastParameter - e.FirstParameter) / 4) for k in (1, 2, 3)]
+        shared = any(_on(samples, o, tol) for o in others)
+        if not shared and (outline is None or _on(samples, outline, tol)):
+            continue
+        u0, u1 = e.FirstParameter, e.LastParameter
+        if any(e.curvatureAt(u0 + k * (u1 - u0) / 8) * layer > 1 for k in range(9)):
+            return True
+        ends.append((e.valueAt(u0), e.tangentAt(u0).normalize()))
+        ends.append((e.valueAt(u1), -e.tangentAt(u1).normalize()))
+    limit = math.cos(math.radians(15))
+    for i, (p, a) in enumerate(ends):
+        for q, b in ends[i + 1 :]:
+            if p.distanceToPoint(q) < tol and -a.dot(b) < limit:  # the turn from arriving along -a to leaving along b
+                return True
+    return False
+
+
+def _on(points, shape, tol):
+    """True if every point lies on shape."""
+    return all(shape.distToShape(Part.Vertex(p))[0] < tol for p in points)
 
 
 def _air_gradings(study, included, r):
@@ -415,6 +528,12 @@ def _mesh_part(study, body):
 def thickness(shape):
     """About how thick a solid is, 4 V / A: the diameter of a long round wire."""
     return 4 * shape.Volume / shape.Area if shape.Area > 0 else 0.0
+
+
+def thickness_2d(face):
+    """About how thick a face is, 4 A / perimeter: the diameter of a round wire."""
+    perimeter = sum(e.Length for e in face.Edges)
+    return 4 * face.Area / perimeter if perimeter > 0 else 0.0
 
 
 def _coarse(study, bodies, r):

@@ -221,6 +221,16 @@ def test_air_grading_on_a_free_object_is_allowed_and_on_a_cell_refused(motor):
     )
 
 
+def test_skin_layer_quads_on_a_free_object_warns(motor):
+    body = _free_ring(motor)
+    item = objects.make_skin_layer(motor, [(body, "")])
+    item.QuadLayers = True
+    assert [t for t in _texts(motor, "warning") if t.startswith(f"Skin Layer {item.Label}")] == [
+        f"Skin Layer {item.Label}: quad layers are not made on free objects of a Study with Symmetric Groups;"
+        f" {objects.display_name(body)} gets graded triangles."
+    ]
+
+
 def test_air_grading_goes_to_the_free_job_of_its_air(motor):
     air = symcases.add_air_region(
         motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=130

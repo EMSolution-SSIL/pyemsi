@@ -1848,6 +1848,131 @@ class StudyTest(unittest.TestCase):
         )
         self.assertFalse([t for t in texts if t.startswith(f"Air Grading {first.Label}:")])
 
+    def skin_texts(self, item, severity=None):
+        return [t for t in self.problems(severity) if t.startswith(f"Skin Layer {item.Label}")]
+
+    def shape_body(self, name, shape):
+        body = self.doc.addObject("Part::Feature", name)
+        body.Shape = shape
+        self.doc.recompute()
+        return body
+
+    def disk(self, name, radius):
+        return self.shape_body(name, Part.Face(Part.Wire(Part.makeCircle(radius))))
+
+    def test_skin_layer_settings_are_checked(self):
+        """The FloatConstraints stop ElementsPerDepth and LayerDepth at 0.01, so only the skin depth can reach 0."""
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 0.0)
+        self.assertIn(f"Skin Layer {item.Label}: the skin depth must be greater than 0.", self.problems("error"))
+        item.ElementsPerDepth = 0.0
+        self.assertEqual(item.ElementsPerDepth, 0.01)
+        item.SkinDepth = 1.0
+        self.assertFalse(self.skin_texts(item, "error"))
+
+    def test_skin_layer_on_a_face_is_refused(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "Face1")])
+        self.assertIn(f"Skin Layer {item.Label}: pick whole conductors, not A.Face1.", self.problems("error"))
+
+    def test_skin_layer_on_the_air_is_refused(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_skin_layer(self.study, [(air, "")])
+        self.assertIn(
+            f"Skin Layer {item.Label}: Air Region {objects.display_name(air)} cannot have a Skin Layer. Remove it from"
+            " the item.",
+            self.problems("error"),
+        )
+
+    def test_skin_layer_quads_in_3d_warns(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")])
+        self.assertFalse(self.skin_texts(item))
+        item.QuadLayers = True
+        self.assertEqual(
+            self.skin_texts(item),
+            [f"Skin Layer {item.Label}: quad layers are made in 2D Studies only; ignored."],
+        )
+
+    def test_skin_layer_filling_the_body_warns(self):
+        self.make_2d_study()
+        wire = self.disk("Wire", 2)
+        item = objects.make_skin_layer(self.study, [(wire, "")])
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: the layer (3 mm) is deeper than half of Wire (about 4 mm thick); the whole"
+                " body is skin, so a Mesh Size of 0.5 mm on it does the same."
+            ],
+        )
+        item.LayerDepth = 1.0
+        self.assertFalse(self.skin_texts(item))
+
+    def test_skin_layer_quads_on_a_bar_warns_and_on_a_wire_not(self):
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        wire = self.disk("Wire", 5)
+        wire.Placement.Base = App.Vector(40, 5, 0)
+        objects.make_air_region(self.study, Center=App.Vector(20, 5, 0), Length=100, Width=60)
+        self.doc.recompute()
+        on_bar = objects.make_skin_layer(self.study, [(bar, "")])
+        on_wire = objects.make_skin_layer(self.study, [(wire, "")])
+        on_bar.QuadLayers = on_wire.QuadLayers = True
+        self.assertEqual(
+            self.skin_texts(on_bar),
+            [
+                f"Skin Layer {on_bar.Label}: Bar has sharp corners on its surface; quad layers need a smooth surface,"
+                " so it gets graded triangles."
+            ],
+        )
+        self.assertFalse(self.skin_texts(on_wire))
+        on_wire.LayerDepth = 6.0  # the wire's radius 5 is below the layer's 6 mm (and the layer fills the wire)
+        self.assertIn(
+            f"Skin Layer {on_wire.Label}: Wire has sharp corners on its surface; quad layers need a smooth surface, so"
+            " it gets graded triangles.",
+            self.skin_texts(on_wire),
+        )
+
+    def test_skin_layer_quads_on_a_half_wire_not(self):
+        self.make_2d_study()
+        half = Part.Face(
+            Part.Wire(
+                [Part.makeCircle(5, App.Vector(), App.Vector(0, 0, 1), 0, 180), Part.makeLine((-5, 0, 0), (5, 0, 0))]
+            )
+        )
+        wire = self.shape_body("Half", half)
+        objects.make_air_region(self.study, Center=App.Vector(0, 25, 0), Length=100, Width=50)
+        self.doc.recompute()
+        item = objects.make_skin_layer(self.study, [(wire, "")])
+        item.QuadLayers = True
+        self.assertFalse(self.skin_texts(item))
+
+    def test_skin_layer_quads_on_a_bar_beside_another_body_warns(self):
+        """Without an Air Region, the bar's edge shared with the other body is a layer edge; it meets no other one."""
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        self.shape_body("Other", Part.makePlane(20, 10, App.Vector(20, 0, 0)))
+        item = objects.make_skin_layer(self.study, [(bar, "")])
+        item.QuadLayers = True
+        self.assertFalse(self.skin_texts(item))
+        objects.make_air_region(self.study, Center=App.Vector(20, 5, 0), Length=100, Width=60)
+        self.doc.recompute()
+        self.assertTrue(self.skin_texts(item))
+
+    def test_skin_layer_on_a_recombined_body_warns(self):
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        objects.make_recombine(self.study, [bar])
+        item = objects.make_skin_layer(self.study, [(bar, "")])
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Bar is structured or recombined, and that wins; the Skin Layer does nothing"
+                " there."
+            ],
+        )
+
     def test_refine_near_on_a_deleted_body_refers_to_nothing(self):
         self.box("A")
         b = self.box("B", 20)
