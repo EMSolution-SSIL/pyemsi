@@ -1197,6 +1197,8 @@ ITEM_PICKS = {
     ),
 }
 ITEM_PICKS[objects.RefineNear] = ITEM_PICKS[objects.MeshSize]
+AIR_HINT = "Select the Air Region in the tree (or, in a Study with Symmetric Groups, a free object that is air)."
+ITEM_PICKS[objects.AirGrading] = (picked_bodies, "Air", ("Body",), True, AIR_HINT, AIR_HINT)
 # in a 2D Study: (pick, list label, gate kinds, hint) replacing those of ITEM_PICKS
 ITEM_PICKS_2D = {
     objects.TransfiniteBody: (
@@ -1231,7 +1233,7 @@ class ItemPanel:
             self.pick, label, kinds, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
         # the air is not recombined, structured or excited
-        air = isinstance(obj.Proxy, (objects.MeshSize, objects.RefineNear))
+        air = isinstance(obj.Proxy, (objects.MeshSize, objects.RefineNear, objects.AirGrading))
         self.gate = ItemGate(study, kinds, whole, air, regions)
         Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.current = objects.item_refs(obj)
@@ -1254,6 +1256,16 @@ class ItemPanel:
             layout.addRow("Size", self.size)
         self.fine = self.fine_distance = self.coarse = self.growth = self.limit = None
         self.limit_to = []
+        self.far = self.far_hint = None
+        if isinstance(obj.Proxy, objects.AirGrading):
+            self.growth = _length_box(obj.GrowthDistance.Value)
+            layout.addRow("Growth distance", self.growth)
+            self.far = _length_box(obj.FarSize.Value, minimum=0.0)
+            self.far_hint = QtWidgets.QLabel()
+            far_row = QtWidgets.QHBoxLayout()
+            far_row.addWidget(self.far)
+            far_row.addWidget(self.far_hint, 1)
+            layout.addRow("Far size", far_row)
         if isinstance(obj.Proxy, objects.RefineNear):
             self.fine = _length_box(obj.FineSize.Value)
             layout.addRow("Fine size", self.fine)
@@ -1314,6 +1326,7 @@ class ItemPanel:
             self.fine_distance and self.fine_distance.valueChanged,
             self.coarse and self.coarse.valueChanged,
             self.growth and self.growth.valueChanged,
+            self.far and self.far.valueChanged,
             self.elements and self.elements.valueChanged,
             self.distribution and self.distribution.currentTextChanged,
         ):
@@ -1332,6 +1345,8 @@ class ItemPanel:
                 CoarseSize=self.coarse.value(),
                 GrowthDistance=self.growth.value(),
             )
+        if self.far is not None:
+            values.update(GrowthDistance=self.growth.value(), FarSize=self.far.value())
         if self.elements is not None:
             values.update(Elements=self.elements.value(), Distribution=self.distribution.currentText())
         return values
@@ -1340,6 +1355,11 @@ class ItemPanel:
         self.refs.clear()
         self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
         labels.set_refs(self.obj, self.current)
+        if self.far_hint is not None:
+            study = objects.owner_study(self.obj)
+            air = self.current[0][0] if self.current else next(iter(objects.air_regions(study)), None)
+            size = objects.whole_body_size(study, air) if air else study.MeshSizesGroup.DefaultMeshSize.Value
+            self.far_hint.setText(f"0 = the air's size ({size:g} mm)")
 
     def refresh_limit(self):
         self.limit.clear()
@@ -1432,6 +1452,9 @@ class ItemPanel:
             self.obj.CoarseSize = self.coarse.value()
             self.obj.GrowthDistance = self.growth.value()
             self.obj.LimitTo = list(self.limit_to)
+        if self.far is not None:
+            self.obj.GrowthDistance = self.growth.value()
+            self.obj.FarSize = self.far.value()
         if self.elements is not None:
             self.obj.Elements = self.elements.value()
             self.obj.Distribution = self.distribution.currentText()

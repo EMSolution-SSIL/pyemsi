@@ -21,6 +21,7 @@ KINDS = {
     "Material": ("#3366cc", "M", "Material"),
     "MeshSize": ("#2e9e44", "S", "Mesh size"),
     "RefineNear": ("#c92a2a", "R", "Refine near"),
+    "AirGrading": ("#1864ab", "G", "Air grading"),
     "TransfiniteEdges": ("#e8590c", "E", "Transfinite edges"),
     "TransfiniteBody": ("#7b3fb3", "T", "Transfinite body"),
     "Recombine": ("#0b9eb3", "Q", "Recombine"),
@@ -67,6 +68,13 @@ def tag_text(item, values):
         return (
             f"{values.get('FineSize', item.FineSize.Value):g} → {values.get('CoarseSize', item.CoarseSize.Value):g} mm"
         )
+    if kind == "AirGrading":
+        far = values.get("FarSize", item.FarSize.Value)
+        if far <= 0:  # 0 = the air's own size, as far_size resolves it
+            refs = objects.item_refs(item)
+            study = objects.owner_study(item)
+            far = objects.whole_body_size(study, refs[0][0]) if refs else study.MeshSizesGroup.DefaultMeshSize.Value
+        return f"→ {far:g} mm over {values.get('GrowthDistance', item.GrowthDistance.Value):g}"
     if kind == "Material":
         return values.get("Material", item.LibraryMaterial.Label if item.LibraryMaterial else objects.NO_MATERIAL)
     if kind == "TransfiniteBody":
@@ -82,7 +90,7 @@ def description(item, values):
         return f"{name}: {values.get('Name', objects.display_name(item))}"
     if kind == "Material":
         return f"{name}: {item.Label}"
-    if kind in ("MeshSize", "RefineNear"):
+    if kind in ("MeshSize", "RefineNear", "AirGrading"):
         return f"{name}: {tag_text(item, values)}"
     if kind == "TransfiniteEdges":
         return f"{name}: {values.get('Elements', item.Elements)} el, {values.get('Distribution', item.Distribution)}"

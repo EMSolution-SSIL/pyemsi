@@ -897,6 +897,32 @@ def main():
     assert Gui.Selection.getSelection() == [air], "the Mesh Size gate refused the Air Region"
     ok(size=4.0)
     air_size = objects.mesh_sizes(study)[-1]
+    # Air Grading: the right click of the Air Region offers it; with nothing selected the command takes the Air Region.
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, air.Name)
+    assert commands.context_menu() == ["EMS_Material", "EMS_MeshSize", "EMS_RefineNear", "EMS_AirGrading"], (
+        commands.context_menu()
+    )
+    Gui.Selection.clearSelection()
+    opened.clear()
+    Gui.runCommand("EMS_AirGrading")
+    assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_AirGrading"].IsActive())
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog() and panel.current == [(air, "")], panel.current
+    assert any("the air's size (4 mm)" in w.text() for w in panel.form.findChildren(QtWidgets.QLabel)), "no far hint"
+    panel.growth.setValue(30)
+    panel.far.setValue(0)
+    assert panel.accept()
+    (grading,) = objects.air_gradings(study)
+    assert grading.GrowthDistance.Value == 30 and grading.FarSize.Value == 0, grading.GrowthDistance.Value
+    assert grading.References == [(air, ("",))], grading.References
+    from emsolution import labels as label_text
+
+    assert label_text.tag_text(grading, {}) == "→ 4 mm over 30", label_text.tag_text(grading, {})
+    grading_errors = [p.text for p in validation.errors(validation.validate(study)) if "Air Grading" in p.text]
+    assert not grading_errors, grading_errors
+    doc.removeObject(grading.Name)
+    log.append("air grading ok")
     # The air is not recombined or structured: the commands and an open Recombine panel refuse it.
     for command, sub in (("EMS_Recombine", ""), ("EMS_TransfiniteBody", ""), ("EMS_TransfiniteEdges", "Edge1")):
         Gui.Selection.clearSelection()

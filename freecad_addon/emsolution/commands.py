@@ -231,6 +231,25 @@ class AddRefineNear(_StudyCommand):
             _create_and_edit(study, "Add Refine Near", lambda: objects.make_refine_near(study, refs))
 
 
+class AddAirGrading(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("airgrading"),
+            "MenuText": "Air Grading",
+            "ToolTip": "Grow the air's element size from the bodies' surface sizes to a far size",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
+        if not refs:  # nothing picked: the Study's Air Region
+            return _create_and_edit(study, "Add Air Grading", lambda: objects.make_air_grading(study))
+        if gate(study, [b for b, _ in refs]):
+            _create_and_edit(study, "Add Air Grading", lambda: objects.make_air_grading(study, refs))
+
+
 class AddAirRegion(_StudyCommand):
     def GetResources(self):
         return {
@@ -434,6 +453,7 @@ COMMANDS = {
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
     "EMS_RefineNear": AddRefineNear(),
+    "EMS_AirGrading": AddAirGrading(),
     "EMS_AddAirRegion": AddAirRegion(),
     "EMS_AddSlidingInterface": AddSlidingInterface(),
     "EMS_TransfiniteBody": AddTransfiniteBody(),
@@ -444,7 +464,7 @@ COMMANDS = {
     "EMS_RunMesh": RunMesh(),
 }
 STRUCTURED = ("EMS_TransfiniteBody", "EMS_TransfiniteEdges", "EMS_Recombine")
-REFINEMENTS = ("EMS_RefineNear",)
+REFINEMENTS = ("EMS_RefineNear", "EMS_AirGrading")
 
 
 class StructuredMesh:
@@ -470,7 +490,7 @@ class Refinement(StructuredMesh):
         return REFINEMENTS
 
     def GetResources(self):
-        return {"Pixmap": icon("refinement"), "MenuText": "Refinement", "ToolTip": "Refine Near"}
+        return {"Pixmap": icon("refinement"), "MenuText": "Refinement", "ToolTip": "Refine Near or Air Grading"}
 
 
 COMMANDS["EMS_StructuredMesh"] = StructuredMesh()
@@ -496,12 +516,12 @@ MENU = [
 
 def context_names(study, kinds):
     """Commands for a right click, given the Study and the kinds of picks: "Body", "Face", "Edge", "Vertex", plus
-    "Air" when an Air Region is picked (it takes only a Material, a Mesh Size and a Refine Near) and "Cell" when a
+    "Air" when an Air Region is picked (it takes only a Material, a Mesh Size, a Refine Near and an Air Grading) and "Cell" when a
     model body is picked as a whole (a Symmetric Group's cell object)."""
     if study is None or not kinds:
         return []
     if "Air" in kinds:
-        return ["EMS_Material", "EMS_MeshSize", "EMS_RefineNear"]
+        return ["EMS_Material", "EMS_MeshSize", "EMS_RefineNear", "EMS_AirGrading"]
     two_d = study.Dimension == "2D"
     out = []
     if kinds & {"Body", "Face"}:
