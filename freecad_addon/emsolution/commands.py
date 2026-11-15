@@ -231,6 +231,23 @@ class AddRefineNear(_StudyCommand):
             _create_and_edit(study, "Add Refine Near", lambda: objects.make_refine_near(study, refs))
 
 
+class AddSkinLayer(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("skinlayer"),
+            "MenuText": "Skin Layer",
+            "ToolTip": "Fine elements inside conductors along their surface, sized from the skin depth",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
+        if gate(study, [b for b, _ in refs], objects.SkinLayer):
+            _create_and_edit(study, "Add Skin Layer", lambda: objects.make_skin_layer(study, refs))
+
+
 class AddAirGrading(_StudyCommand):
     def GetResources(self):
         return {
@@ -453,6 +470,7 @@ COMMANDS = {
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
     "EMS_RefineNear": AddRefineNear(),
+    "EMS_SkinLayer": AddSkinLayer(),
     "EMS_AirGrading": AddAirGrading(),
     "EMS_AddAirRegion": AddAirRegion(),
     "EMS_AddSlidingInterface": AddSlidingInterface(),
@@ -464,7 +482,7 @@ COMMANDS = {
     "EMS_RunMesh": RunMesh(),
 }
 STRUCTURED = ("EMS_TransfiniteBody", "EMS_TransfiniteEdges", "EMS_Recombine")
-REFINEMENTS = ("EMS_RefineNear", "EMS_AirGrading")
+REFINEMENTS = ("EMS_RefineNear", "EMS_SkinLayer", "EMS_AirGrading")
 
 
 class StructuredMesh:
@@ -490,7 +508,11 @@ class Refinement(StructuredMesh):
         return REFINEMENTS
 
     def GetResources(self):
-        return {"Pixmap": icon("refinement"), "MenuText": "Refinement", "ToolTip": "Refine Near or Air Grading"}
+        return {
+            "Pixmap": icon("refinement"),
+            "MenuText": "Refinement",
+            "ToolTip": "Refine Near, Skin Layer or Air Grading",
+        }
 
 
 COMMANDS["EMS_StructuredMesh"] = StructuredMesh()
@@ -529,6 +551,8 @@ def context_names(study, kinds):
     if "Face" in kinds and not two_d:
         out.append("EMS_Excitation")
     out += ["Separator", "EMS_MeshSize", "EMS_RefineNear"] if out else ["EMS_MeshSize", "EMS_RefineNear"]
+    if kinds & {"Body", "Cell"} and not kinds & {"Face", "Edge", "Vertex"}:  # whole bodies: conductors
+        out.insert(out.index("EMS_RefineNear") + 1, "EMS_SkinLayer")
     if "Body" in kinds or (two_d and "Face" in kinds):
         out += ["EMS_TransfiniteBody", "EMS_Recombine"]
     if "Edge" in kinds:

@@ -132,7 +132,7 @@ def main():
     menus.append(commands.context_menu())
     assert menus == [
         [
-            *["EMS_Material", "Separator", "EMS_MeshSize", "EMS_RefineNear"],
+            *["EMS_Material", "Separator", "EMS_MeshSize", "EMS_RefineNear", "EMS_SkinLayer"],
             *["EMS_TransfiniteBody", "EMS_Recombine", "EMS_SymmetricGroup"],
         ],
         ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize", "EMS_RefineNear"],
@@ -246,6 +246,34 @@ def main():
     assert not refine_errors, refine_errors
     Gui.Selection.clearSelection()
     log.append("refine near ok")
+
+    # Skin Layer: a whole body, its depth from the calculator (aluminium at 1 kHz).
+    Gui.Selection.addSelection(doc.Name, "B")
+    Gui.runCommand("EMS_SkinLayer")
+    assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_SkinLayer"].IsActive())
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog() and panel.current == [(doc.B, "")], panel.current
+    assert panel.quads is None, "quad layers offered in a 3D Study"
+    panel.mu_r.setText("0")
+    panel.calculate.click()
+    assert panel.depth_result.text() == "Frequency, conductivity and permeability must be greater than 0."
+    assert panel.depth.value() == 1.0, panel.depth.value()
+    panel.frequency.setText("1000")
+    panel.conductivity.setText("3.5e7")
+    panel.mu_r.setText("1")
+    panel.calculate.click()
+    assert panel.depth_result.text() == "δ = 2.69 mm", panel.depth_result.text()
+    skin_tag = labels.tag_text(panel.obj, panel.unsaved())
+    assert skin_tag == "δ 2.69 mm, 2/δ, 3δ", skin_tag
+    assert panel.accept()
+    (skin,) = objects.skin_layers(study)
+    assert abs(skin.SkinDepth.Value - 2.69) < 0.01, skin.SkinDepth.Value
+    assert skin.Frequency == 1000 and skin.Conductivity == 3.5e7 and skin.References == [(doc.B, ("",))]
+    skin_errors = [p.text for p in validation.errors(validation.validate(study)) if "Skin Layer" in p.text]
+    assert not skin_errors, skin_errors
+    doc.removeObject(skin.Name)
+    Gui.Selection.clearSelection()
+    log.append("skin layer ok")
 
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)

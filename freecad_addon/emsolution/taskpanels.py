@@ -387,6 +387,23 @@ class ViewProviderSlidingInterface(_ViewProvider):
         return True
 
 
+def _factor_box(value):
+    """A spin box for a factor of at least 0.01, as a Skin Layer's elements per depth."""
+    box = QtWidgets.QDoubleSpinBox()
+    box.setDecimals(2)
+    box.setRange(0.01, 1000.0)
+    box.setValue(value)
+    return box
+
+
+def _float_text(edit, fallback):
+    """The number typed into a line edit (3.5e7 too), else fallback."""
+    try:
+        return float(edit.text())
+    except ValueError:
+        return fallback
+
+
 def _length_box(value, minimum=0.001, no_limit=False):
     box = QtWidgets.QDoubleSpinBox()
     box.setDecimals(3)
@@ -1199,6 +1216,8 @@ ITEM_PICKS = {
 ITEM_PICKS[objects.RefineNear] = ITEM_PICKS[objects.MeshSize]
 AIR_HINT = "Select the Air Region in the tree (or, in a Study with Symmetric Groups, a free object that is air)."
 ITEM_PICKS[objects.AirGrading] = (picked_bodies, "Air", ("Body",), True, AIR_HINT, AIR_HINT)
+SKIN_HINT = "Select the conductors (whole bodies) in the 3D view or the tree."
+ITEM_PICKS[objects.SkinLayer] = (picked_bodies, "Conductors", ("Body",), True, SKIN_HINT, SKIN_HINT)
 # in a 2D Study: (pick, list label, gate kinds, hint) replacing those of ITEM_PICKS
 ITEM_PICKS_2D = {
     objects.TransfiniteBody: (
@@ -1257,6 +1276,9 @@ class ItemPanel:
         self.fine = self.fine_distance = self.coarse = self.growth = self.limit = None
         self.limit_to = []
         self.far = self.far_hint = None
+        self.depth = self.per_depth = self.layer_depth = self.quads = None
+        if isinstance(obj.Proxy, objects.SkinLayer):
+            self.add_skin_rows(layout, study)
         if isinstance(obj.Proxy, objects.AirGrading):
             self.growth = _length_box(obj.GrowthDistance.Value)
             layout.addRow("Growth distance", self.growth)
@@ -1327,6 +1349,10 @@ class ItemPanel:
             self.coarse and self.coarse.valueChanged,
             self.growth and self.growth.valueChanged,
             self.far and self.far.valueChanged,
+            self.depth and self.depth.valueChanged,
+            self.per_depth and self.per_depth.valueChanged,
+            self.layer_depth and self.layer_depth.valueChanged,
+            self.quads and self.quads.toggled,
             self.elements and self.elements.valueChanged,
             self.distribution and self.distribution.currentTextChanged,
         ):
@@ -1347,9 +1373,61 @@ class ItemPanel:
             )
         if self.far is not None:
             values.update(GrowthDistance=self.growth.value(), FarSize=self.far.value())
+        if self.depth is not None:
+            values.update(
+                SkinDepth=self.depth.value(),
+                ElementsPerDepth=self.per_depth.value(),
+                LayerDepth=self.layer_depth.value(),
+                Frequency=_float_text(self.frequency, self.obj.Frequency),
+                Conductivity=_float_text(self.conductivity, self.obj.Conductivity),
+                RelativePermeability=_float_text(self.mu_r, self.obj.RelativePermeability),
+            )
+            if self.quads is not None:
+                values["QuadLayers"] = self.quads.isChecked()
         if self.elements is not None:
             values.update(Elements=self.elements.value(), Distribution=self.distribution.currentText())
         return values
+
+    def add_skin_rows(self, layout, study):
+        """A Skin Layer's settings and its skin depth calculator."""
+        obj = self.obj
+        self.depth = _length_box(obj.SkinDepth.Value)
+        layout.addRow("Skin depth δ", self.depth)
+        self.per_depth = _factor_box(obj.ElementsPerDepth)
+        layout.addRow("Elements per depth", self.per_depth)
+        self.layer_depth = _factor_box(obj.LayerDepth)
+        layout.addRow("Layer depth (× δ)", self.layer_depth)
+        if study.Dimension == "2D":
+            self.quads = QtWidgets.QCheckBox("Quad layers")
+            self.quads.setChecked(obj.QuadLayers)
+            layout.addRow(self.quads)
+        mu_r = obj.RelativePermeability
+        if self.new and self.current:  # a material's permeability may be missing or not physical
+            found = objects.body_mu_r(study, self.current[0][0])
+            mu_r = found if found is not None and found > 0 else 1.0
+        box = QtWidgets.QGroupBox("Skin depth calculator")
+        form = QtWidgets.QFormLayout(box)
+        self.frequency = QtWidgets.QLineEdit(f"{obj.Frequency:g}")
+        form.addRow("Frequency (Hz)", self.frequency)
+        self.conductivity = QtWidgets.QLineEdit(f"{obj.Conductivity:g}")
+        form.addRow("Conductivity (S/m)", self.conductivity)
+        self.mu_r = QtWidgets.QLineEdit(f"{mu_r:g}")
+        form.addRow("Relative permeability", self.mu_r)
+        self.calculate = QtWidgets.QPushButton("Calculate")
+        self.calculate.clicked.connect(self.calculate_depth)
+        self.depth_result = QtWidgets.QLabel()
+        self.depth_result.setWordWrap(True)
+        form.addRow(self.calculate, self.depth_result)
+        layout.addRow(box)
+
+    def calculate_depth(self):
+        inputs = [_float_text(edit, 0.0) for edit in (self.frequency, self.conductivity, self.mu_r)]
+        if not all(v > 0 for v in inputs):
+            self.depth_result.setText("Frequency, conductivity and permeability must be greater than 0.")
+            return
+        d = objects.skin_depth(*inputs)
+        self.depth.setValue(d)
+        self.depth_result.setText(f"δ = {d:.3g} mm")
 
     def refresh(self):
         self.refs.clear()
@@ -1452,6 +1530,10 @@ class ItemPanel:
         if self.far is not None:
             self.obj.GrowthDistance = self.growth.value()
             self.obj.FarSize = self.far.value()
+        if self.depth is not None:
+            for prop, value in self.unsaved().items():
+                if prop != "Name":
+                    setattr(self.obj, prop, value)
         if self.elements is not None:
             self.obj.Elements = self.elements.value()
             self.obj.Distribution = self.distribution.currentText()
