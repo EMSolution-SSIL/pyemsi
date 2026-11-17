@@ -451,6 +451,15 @@ def _swept_bodies(study, included, bodies, r):
             # a stale start face is reported in _links; recognise_body only gets faces the body has
             starts = [s for sb, sub_list in w.StartFace if sb.Name == b.Name for s in sub_list if _has(b, s)]
             result = sweeps.recognise_body(shape, starts)
+            if isinstance(result, str) and starts:
+                alone = sweeps.recognise_body(shape)  # a start face a closed ring cannot have
+                if not isinstance(alone, str) and any(s.closed for s in alone):
+                    r.error(
+                        f"Swept Body {w.Label}: {name} is a closed ring; it has no start face. Remove the start face.",
+                        w,
+                        [(b, "")],
+                    )
+                    continue
             if isinstance(result, str):
                 r.error(f"Swept Body {w.Label}: {name} is not a sweep: {result}.", w, [(b, "")])
                 continue

@@ -1204,6 +1204,46 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(job["swept"][0]["skin"], {"depth": 1.0, "per_depth": 2.0, "layer": 3.0})
         self.assertNotIn("skin", job)
 
+    def tube(self, outer=15, inner=10, height=8):
+        return Part.makeCylinder(outer, height).cut(Part.makeCylinder(inner, height))
+
+    def test_swept_ring_goes_to_the_job(self):
+        self.swept_job(self.tube())
+        (entry,) = self.read_job()["swept"]
+        (solid,) = entry["solids"]
+        self.assertIs(solid["closed"], True)
+        (piece,) = solid["pieces"]
+        self.assertEqual((piece["angle"], piece["advance"]), (360, 0))
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        self.assertEqual(len(face.Faces), 1)
+        plane = face.Faces[0].Surface
+        self.assertTrue(isinstance(plane, Part.Plane))
+        self.assertAlmostEqual(App.Vector(plane.Axis).dot(App.Vector(*piece["axis"])), 0)
+        self.assertAlmostEqual(face.Area, 5 * 8)
+
+    def test_swept_bend_goes_to_the_job(self):
+        pts = [App.Vector(x, 0, z) for x, z in [(10, 0), (14, 0), (14, 4), (10, 4), (10, 0)]]
+        bend = Part.Face(Part.makePolygon(pts)).revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 90)
+        self.swept_job(bend)
+        (entry,) = self.read_job()["swept"]
+        (solid,) = entry["solids"]
+        self.assertIs(solid["closed"], False)
+        (piece,) = solid["pieces"]
+        self.assertAlmostEqual(piece["angle"], 90)
+        self.assertEqual(piece["advance"], 0)
+
+    def test_swept_straight_is_not_closed(self):
+        self.swept_job()
+        self.assertIs(self.read_job()["swept"][0]["solids"][0]["closed"], False)
+
+    def test_swept_tube_start_face_makes_it_straight(self):
+        tube, item = self.swept_job(self.tube(10, 8, 20))
+        face = next(k for k, f in enumerate(tube.Shape.Faces, 1) if isinstance(f.Surface, Part.Plane))
+        item.StartFace = [(tube, (f"Face{face}",))]
+        (piece,) = self.read_job()["swept"][0]["solids"][0]["pieces"]
+        self.assertAlmostEqual(piece["advance"], 20)
+        self.assertEqual(piece["angle"], 0)
+
     def test_swept_two_solids(self):
         shape = Part.makeCompound([Part.makeBox(10, 4, 40), Part.makeBox(10, 4, 40, App.Vector(30, 0, 0))])
         self.swept_job(shape)
@@ -2252,6 +2292,22 @@ class StudyTest(unittest.TestCase):
         texts = self.problems("error")  # no IndexError from recognise_body
         self.assertIn(f"Swept Body {item.Label}: A has no Face99. Reselect the start face.", texts)
         self.assertFalse([t for t in texts if "is not a sweep" in t])
+
+    def test_swept_ring_start_face_is_refused(self):
+        ring = self.shape_body("Ring", Part.makeTorus(20, 3))
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(ring, "")])
+        item.StartFace = [(ring, ("Face1",))]
+        self.assertIn(
+            f"Swept Body {item.Label}: Ring is a closed ring; it has no start face. Remove the start face.",
+            self.problems("error"),
+        )
+
+    def test_swept_ring_is_valid(self):
+        ring = self.shape_body("Ring", self.tube())
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(ring, "")])
+        self.assertFalse(self.swept_texts(item))
 
     def test_swept_body_whole_mesh_size_is_fine(self):
         a = self.box("A")
