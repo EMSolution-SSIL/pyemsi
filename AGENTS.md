@@ -22,8 +22,8 @@ Human-oriented setup details are in [BUILDING.md](BUILDING.md).
   by plain module name, not relative imports.
 - GUI code (FreeCADGui, Qt, coin) lives only in `commands.py`, `taskpanels.py`, `runner.py`, `labels.py`,
   `highlight.py` and `materialstandins.py`. Keep the other modules (`objects.py`, `geometry.py`, `jobwriter.py`,
-  `studymaterials.py`, `sides.py`, `validation.py`, `airshapes.py`, `symmetry.py`, `winding.py`) GUI-free, so the
-  unit tests can import them.
+  `studymaterials.py`, `sides.py`, `validation.py`, `airshapes.py`, `symmetry.py`, `winding.py`, `sweeps.py`)
+  GUI-free, so the unit tests can import them.
 - Unit tests: `pixi run -e addon test-addon`.
 - GUI changes also need the smoke test, which drives the real FreeCAD GUI (steps in the docstring of
   `tests/freecad_addon/gui_smoke.py`). Use `pixi run -e addon freecad tests\freecad_addon\gui_smoke.py`, then read the last
