@@ -1207,11 +1207,13 @@ def run(job_path, build, dim):
                     "Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without"
                 )
                 extra = {"optimize_pyramids": 0}
-            except AirFailed as exc:  # only around swept bodies
+            except AirFailed:  # only around swept bodies; its advice is for the final failure
                 if retried:
                     raise
                 retried = True
-                _note(f"Swept Body: {exc}; meshing once more from the start")
+                _note(
+                    "Swept Body: gmsh could not mesh the air around the swept bodies; meshing once more from the start"
+                )
                 extra = {k: job[k] for k in ("optimize_pyramids",) if k in job}
             gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
             gmsh.initialize()

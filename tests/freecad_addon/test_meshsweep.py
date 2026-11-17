@@ -526,7 +526,11 @@ def test_failed_air_mesh_is_tried_once_more(tmp_path, monkeypatch, capsys, failu
     if failures == 1:
         meshcommon.run(path, mesher.build, 3)
         assert os.path.isfile(tmp_path / "pre_geom.msh")
-        assert "meshing once more from the start" in capsys.readouterr().err
+        err = capsys.readouterr().err  # a plain note: the advice is only for the final failure
+        assert (
+            "Swept Body: gmsh could not mesh the air around the swept bodies; meshing once more from the start" in err
+        )
+        assert "overlapping facets" not in err
     else:
         with pytest.raises(meshcommon.AirFailed, match="overlapping facets"):
             meshcommon.run(path, mesher.build, 3)

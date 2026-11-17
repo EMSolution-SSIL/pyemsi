@@ -88,12 +88,16 @@ def _whole_faces(job, vols, pieces, inputs, span):
     return out
 
 
-def _body_face(tags, shape, size, name):
-    """The final face of the body (its final 3D tags) that a face from _whole_faces is."""
+def _body_face(tags, shape, size, name, path):
+    """The final face of the body (its final 3D tags; name its region name) that a face from _whole_faces (read from
+    path) is."""
     for _, t in gmsh.model.getBoundary([(3, t) for t in tags], combined=False, oriented=False):
         if _same_face(shape, _face_shape(abs(t)), size):
             return abs(t)
-    raise JobError(f"{name}: a whole face of a swept body is no longer one face after the fragment")
+    raise JobError(
+        f"Swept Body {name}: {os.path.basename(path)} is a whole face of it, but the fragment split that face; check"
+        " what touches it"
+    )
 
 
 def build(job, folder):
@@ -124,6 +128,8 @@ def build(job, folder):
     ]
     inputs += [_import_one(path, 2) for _, _, path in skin_files]
     span = (files_start, len(inputs))  # the face, size, transfinite, refine and skin files
+    span_paths = [p for _, p in surf_files] + [p for _, p in size_files] + [p for _, _, p in tf_files]
+    span_paths += [p for _, p in refine_files] + [p for _, _, p in skin_files]
     whole = _whole_faces(job, vols, pieces, inputs, span) if job.get("swept") else {}  # {index: (MAT_ID, shape, size)}
     if whole:
         gmsh.model.occ.remove([inputs[i] for i in whole], recursive=True)
@@ -157,8 +163,9 @@ def build(job, folder):
                 raise JobError(f"bodies {owner[t]} and {v['name']} overlap")
             owner[t] = v["name"]
         body_vols[v["mat_id"]] = tags
+    names = {v["mat_id"]: v["name"] for v in vols}
     for i, (m, shape, size) in whole.items():  # on the body's own face, as the fragment would have put it
-        out_map[i] = [(2, _body_face(body_vols[m], shape, size, f"MAT_ID {m}"))]
+        out_map[i] = [(2, _body_face(body_vols[m], shape, size, names[m], span_paths[i - files_start]))]
 
     def at(span):  # the final dimtags of inputs[span]
         return [dt for dimtags in out_map[span[0] : span[1]] for dt in dimtags]

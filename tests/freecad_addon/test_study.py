@@ -18,7 +18,7 @@ from BOPTools import SplitAPI
 from emsolution import geometry, jobwriter, objects, sweeps, validation
 
 from .materialdata import STEEL, record
-from .test_sweeps import helix_pipe
+from .test_sweeps import helix_pipe, racetrack
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -1304,6 +1304,16 @@ class StudyTest(unittest.TestCase):
         c += App.Vector(*last["axis"]) * last["advance"]
         self.assertLess((c - App.Vector(50, 50, 0)).Length, 1e-6)
 
+    def test_swept_racetrack_goes_to_the_job(self):
+        _, item = self.swept_job(racetrack())
+        objects.make_air_region(self.study)
+        self.assertFalse(self.swept_texts(item))
+        (solid,) = self.read_job()["swept"][0]["solids"]
+        self.assertIs(solid["closed"], True)
+        self.assertEqual([round(p["angle"], 6) for p in solid["pieces"]], [0, 180, 0, 180])
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        self.assertAlmostEqual(face.Area, 8)
+
     def test_swept_rebuilt_strand_exports_the_rebuilt_solid(self):
         strand = helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False)
         self.assertTrue(sweeps.recognise(strand).rebuild)
@@ -1316,6 +1326,20 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(sweep.rebuild)  # its seam follows the screw
         self.assertAlmostEqual(sweep.pieces[0].angle, 540, places=3)
         self.assertLess(abs(solid.Volume - strand.Volume), 1e-6 * strand.Volume)
+
+    def test_swept_job_recognises_and_rebuilds_once(self):
+        # validation's check and the job it then writes share one recognition and one rebuild of the body
+        self.swept_job(helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        with (
+            mock.patch.object(sweeps, "_recognise", wraps=sweeps._recognise) as recognise,
+            mock.patch.object(sweeps, "_rebuilt", wraps=sweeps._rebuilt) as rebuilt,
+        ):
+            self.read_job()
+        self.assertEqual((recognise.call_count, rebuilt.call_count), (1, 1))
+        self.assertIsNone(sweeps.memo)  # kept only while write_job writes the job
+        with mock.patch.object(sweeps, "_recognise", wraps=sweeps._recognise) as recognise:
+            self.read_job()
+        self.assertEqual(recognise.call_count, 1)  # a new job recognises it anew
 
     def rebuilt_strand_with_excitation(self):
         """A Standard-mode strand (its seam twists: rebuilt) with an excitation on the original body's far end face.

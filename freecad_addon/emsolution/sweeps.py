@@ -8,7 +8,9 @@ piece's side faces. Recognised are:
 - closed rings: no end faces, every face invariant under a whole turn about one line; the profile is the body cut by a
   half-plane through the line;
 - chains: walked from the start face, each group of side faces touching the current section is a piece whose far
-  boundary is a flat section congruent with the profile, the last one ending on a flat end face."""
+  boundary is a flat section congruent with the profile, the last one ending on a flat end face;
+- closed chains (a racetrack): no end faces; cut at a joint, a flat section where the faces of two pieces meet
+  without a corner, and walked as a chain until a piece ends back on that section."""
 
 import math
 from collections import namedtuple
@@ -25,10 +27,11 @@ from . import objects
 # advance 0, a helical one both. For those, origin is the axis point nearest the profile's centre of mass, and the axis
 # is turned so that a positive angle runs from the start face to the end face; a helix's advance is signed along it.
 Piece = namedtuple("Piece", "origin axis angle advance")
-# profile, end: face names of the solid (end is None when closed, both None for a closed ring); pieces: a list of
-# Piece in path order, each starting where the last ended; face: the profile as a Part.Face in the solid's coordinates
-# (the start face, or a closed ring's cut); rebuild: True when the side surfaces follow the pieces but an edge along
-# them does not (a round pipe made without Frenet mode: its seam twists), so the solid is exported rebuilt.
+# profile, end: face names of the solid (both None when closed); pieces: a list of Piece in path order, each starting
+# where the last ended (a closed chain's last ending on its first's start); face: the profile as a Part.Face in the
+# solid's coordinates (the start face, a closed ring's cut, or the joint a closed chain is cut at); rebuild: True when
+# the side surfaces follow the pieces but an edge along them does not (a round pipe made without Frenet mode: its seam
+# twists), so the solid is exported rebuilt.
 Sweep = namedtuple("Sweep", "profile end pieces closed face rebuild", defaults=(False,))
 
 NO_END = "it has no flat end face that matches another end face moved"
@@ -51,6 +54,12 @@ FOLLOW_TOL = 2.5e-5
 # as the B-spline side surfaces (a plain makePipeShell helix is a few 1e-6 off). Straight and revolved sweeps: tol.
 HELIX_VOLUME = 2.5e-5
 MAX_TURN = 2 * math.pi * 1000  # radians: a fitted helix turning further is a turn (a rise per radian of about 0)
+SMOOTH = 1e-4  # 1 - the cosine of the largest angle between two faces' normals across an edge that is a joint
+CLOSES = -1  # _edge_step's end when its piece ends back on a closed walk's start section
+# {key: result} of recognise_body and rebuilt while jobwriter.write_job writes a job, so that its checks and the job
+# then written share one recognition and one rebuild of each body (a coil of 20 turns takes seconds); None otherwise.
+# Keyed by the shape's BREP, so a body changed in between is recognised anew.
+memo = None
 
 
 def _planar(face):
@@ -338,7 +347,10 @@ def _ends_screw(a, b, na, nb, origin, d, theta, advance):
 
 def _helix(a, b, na, nb, others, state, length_tol, size):
     """(helical Piece, rebuild) from face a to face b, fitted to others (the side faces, all curved); TWISTS when the
-    fit is close but the profile turns about its normal along the way; None when it is no helix."""
+    fit is close but the profile turns about its normal along the way (the moved start face misses the end face);
+    SIDE_FACE (fit close) or PATH when it lands but a side face does not follow the helix; None when it is no helix.
+    The side faces are checked at FOLLOW_TOL x size: B-spline side surfaces of a coil of many turns lie a few 1e-4
+    off the screw."""
     fit = _screw_fit(others, size)
     if fit is None:
         return None
@@ -356,8 +368,8 @@ def _helix(a, b, na, nb, others, state, length_tol, size):
     if not _lands(moved, b, length_tol):
         lands = moved.CenterOfMass.distanceToPoint(cb) <= TWIST_FIT * size and _normal(moved).dot(nb) < -1 + TWIST_FIT
         return TWISTS if close and lands else None
-    if not all(_invariant(f, piece, state, length_tol) for f in others):
-        return TWISTS if close else None
+    if not all(_invariant(f, piece, state, FOLLOW_TOL * size) for f in others):
+        return SIDE_FACE if close else PATH
     return piece, not _follows(a, b, others, piece, FOLLOW_TOL * size)
 
 
@@ -653,19 +665,24 @@ def _walk(solid, i, topology, tol, length_tol, size):
     return length, Sweep(f"Face{i + 1}", f"Face{end + 1}", _merged(pieces, tol, length_tol), False, faces[i], rebuild)
 
 
-def _edge_step(solid, cur, used, boundary, topology, tol, length_tol, size):
+def _edge_step(solid, cur, used, boundary, topology, tol, length_tol, size, closing=None, behind=()):
     """The next piece of a chain from section cur whose far boundary is made of edges (_walk): (piece, rebuild, end,
-    group, far edges), a piece's reason, or None when the edges make no section."""
+    group, far edges), a piece's reason, or None when the edges make no section. closing: (edges, face) of a closed
+    walk's start section; a piece whose far boundary is those edges ends on it, with end CLOSES. behind: faces left
+    out of the piece but not used (the closed walk's first step, which goes one way from its start section)."""
     faces, edges = solid.Faces, solid.Edges
     owners, face_edges = topology
     end = None
-    group = {k for k in range(len(faces)) if k not in used and face_edges[k] & boundary}
+    group = {k for k in range(len(faces)) if k not in used and k not in behind and face_edges[k] & boundary}
     inner = set().union(*(face_edges[k] for k in group))
     far = {n for n in inner - boundary if not owners[n] <= group}
     beyond = set().union(*(owners[n] for n in far)) - group
-    if not far or beyond & used:
+    if closing is not None and far and far == closing[0]:
+        end, b = CLOSES, closing[1]
+        nb = -_normal(b)
+    elif not far or beyond & used:
         return None
-    if len(beyond) == 1 and face_edges[min(beyond)] == far and _planar(faces[min(beyond)]):
+    elif len(beyond) == 1 and face_edges[min(beyond)] == far and _planar(faces[min(beyond)]):
         end = min(beyond)
         b = faces[end]
         nb = _normal(b)
@@ -679,6 +696,97 @@ def _edge_step(solid, cur, used, boundary, topology, tol, length_tol, size):
         return result or PATH
     piece, bent = result
     return piece, bent, end, group, far
+
+
+def _smooth(edge, f, g):
+    """True if faces f and g meet along edge (at its middle) without a corner: their outward normals agree."""
+    u0, u1 = edge.ParameterRange
+    p = edge.valueAt((u0 + u1) / 2)
+    n = [face.normalAt(*face.Surface.parameter(p)) for face in (f, g)]
+    return n[0].dot(n[1]) >= 1 - SMOOTH
+
+
+def _joints(solid, topology, length_tol):
+    """The flat sections of solid bounded by edges along which two faces meet without a corner (the joints of a closed
+    chain), none a face of solid: [(section face, its edge indexes)], each once."""
+    faces, edges, vertexes = solid.Faces, solid.Edges, solid.Vertexes
+    owners, face_edges = topology
+    smooth = [
+        n
+        for n, e in enumerate(edges)
+        if len(owners[n]) == 2 and e.Length > length_tol and _smooth(e, *(faces[k] for k in owners[n]))
+    ]
+    ends = {n: {next(i for i, w in enumerate(vertexes) if w.isSame(v)) for v in edges[n].Vertexes} for n in smooth}
+    at = {}  # vertex index -> the smooth edges there
+    for n in smooth:
+        for i in ends[n]:
+            at.setdefault(i, []).append(n)
+    # the planes to look in: of each curved smooth edge, and of each two that meet
+    seeds = [(n,) for n in smooth if not isinstance(edges[n].Curve, Part.Line)]
+    seeds += [(a, b) for there in at.values() for k, a in enumerate(there) for b in there[k + 1 :]]
+    out, seen = [], set()
+    for seed in seeds:
+        plane = Part.Compound([edges[n] for n in seed]).findPlane()
+        if plane is None:
+            continue
+        c, normal = plane.Position, plane.Axis
+        members = set()
+        for n in smooth:
+            u0, u1 = edges[n].ParameterRange
+            if all(abs(normal.dot(edges[n].valueAt(u0 + (u1 - u0) * k / 4) - c)) <= length_tol for k in range(5)):
+                members.add(n)
+        while members:  # each connected loop of them
+            loop, todo = set(), [members.pop()]
+            while todo:
+                n = todo.pop()
+                loop.add(n)
+                near = {m for m in members if ends[m] & ends[n]}
+                members -= near
+                todo.extend(near)
+            key = frozenset(loop)
+            if key in seen or key in face_edges:
+                continue
+            seen.add(key)
+            section = _section([edges[n] for n in loop])
+            if section is not None:
+                out.append((section, set(loop)))
+    return out
+
+
+def _closed_walk(solid, section, edges, topology, tol, length_tol, size):
+    """(path length, Sweep) of solid as a closed chain walked from section (a joint from _joints, edges its edge
+    indexes) the way its normal points, until a piece ends back on it. The reason the walk stops when it found a piece
+    before; None when section starts no closed chain (an open chain's joint: the walk reaches an end face)."""
+    faces = solid.Faces
+    face_edges = topology[1]
+    c, forward = section.CenterOfMass, _normal(section)
+    behind = {k for k, f in enumerate(faces) if face_edges[k] & edges and forward.dot(f.CenterOfMass - c) < 0}
+    start = section.copy()
+    start.reverse()  # its outward normal back along the path, as a start face's
+    used, boundary, cur = set(), edges, start
+    pieces, rebuild, volume, length = [], False, 0.0, 0.0
+    while True:
+        step = _edge_step(solid, cur, used, boundary, topology, tol, length_tol, size, (edges, start), behind)
+        if step is None or isinstance(step, str):
+            return (step or PATH) if pieces else None
+        piece, bent, end, group, far = step
+        if end not in (None, CLOSES) or not group:
+            return None
+        pieces.append(piece)
+        rebuild = rebuild or bent
+        volume += _swept_volume(cur, piece)
+        length += _length(cur, piece)
+        used |= set(group)
+        behind = ()
+        if end == CLOSES:
+            break
+        boundary = far
+        cur = _moved(cur, piece)
+    if len(used) != len(faces):
+        return PATH
+    if not _volume_ok(solid, volume, pieces, tol):
+        return VOLUME
+    return length, Sweep(None, None, _merged(pieces, tol, length_tol), True, start, rebuild)
 
 
 def _recognise(solid, start, label, tol):
@@ -740,6 +848,15 @@ def _recognise(solid, start, label, tol):
             elif chain is not None and (best is None or chain[0] > best[0] + length_tol):
                 best = chain
         reasons = reasons or stops  # a walk's reason only when no single piece gave one
+    if start is None and best is None:  # no end faces: a closed chain, cut at a joint
+        topology = _topology(solid)
+        for section, edges in _joints(solid, topology, length_tol):
+            chain = _closed_walk(solid, section, edges, topology, tol, length_tol, size)
+            if isinstance(chain, str):
+                reasons.append(chain)
+            elif chain is not None:
+                best = chain
+                break
     if best:
         return best[1]
     for reason in (TWISTS, PATH, SIDE_FACE, VOLUME, NO_AXIS):
@@ -805,7 +922,14 @@ def _apart(a, b):
 def rebuilt(solid, sweep):
     """solid made anew from sweep's profile along its pieces (a helical one piped in Frenet mode, so that its edges
     follow the screw), or None when that solid is not solid: a point of one more than FOLLOW_TOL x size from the
-    other."""
+    other. Once per solid and Sweep while memo is kept (the Sweep then comes from memo, which keeps it)."""
+    if memo is None:
+        return _rebuilt(solid, sweep)
+    return remembered(("rebuilt", solid.exportBrepToString(), id(sweep)), lambda: _rebuilt(solid, sweep))
+
+
+def _rebuilt(solid, sweep):
+    """rebuilt, not remembered."""
     size = max(1.0, solid.BoundBox.DiagonalLength)
     try:
         face, parts = sweep.face, []
@@ -830,9 +954,27 @@ def rebuilt_shape(shape, result):
     return solids[0] if len(solids) == 1 else Part.makeCompound(solids)
 
 
+def remembered(key, make):
+    """make() once per key while memo is kept (else every time)."""
+    if memo is None:
+        return make()
+    if key not in memo:
+        memo[key] = make()
+    return memo[key]
+
+
 def recognise_body(shape, start_faces=(), tol=1e-6):
     """One Sweep per solid of shape, in shape.Solids order, or the first refusal (a string, prefixed "solid k: " when
-    there are several solids). start_faces: face names of shape, each matched to the solid holding it."""
+    there are several solids). start_faces: face names of shape, each matched to the solid holding it. Once per shape
+    while memo is kept."""
+    if memo is None:
+        return _recognise_body(shape, start_faces, tol)
+    key = ("recognise", shape.exportBrepToString(), tuple(start_faces), tol)
+    return remembered(key, lambda: _recognise_body(shape, start_faces, tol))
+
+
+def _recognise_body(shape, start_faces, tol):
+    """recognise_body, not remembered."""
     solids = shape.Solids
     starts = {}
     for name in start_faces:

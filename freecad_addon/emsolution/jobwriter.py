@@ -606,14 +606,16 @@ def write_job(study):
     if stale:  # validation checks the sub-elements of Mesh Sizes on the air's Shape: make it current
         study.Document.recompute(stale)
     _rebuilt.clear()
+    sweeps.memo = {}  # the checks' recognitions and rebuilds, for the job
     try:
         return _write_job(study)
     finally:
         _rebuilt.clear()
+        sweeps.memo = None
 
 
 def _write_job(study):
-    """write_job after the reset of _rebuilt."""
+    """write_job after the reset of _rebuilt and sweeps.memo."""
     checked = check(study)
     volumes, surfaces, elements = checked
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change

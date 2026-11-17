@@ -300,6 +300,33 @@ def padded_busbar():
     return Part.Face(outline).extrude(V(0, 0, 4))
 
 
+def plain_pipe_coil(turns):
+    """A 2 x 4 rectangle piped (makePipeShell, Frenet) along Part.makeHelix of pitch 6, r 20."""
+    helix = Part.Wire(Part.makeHelix(6, 6 * turns, 20))
+    edge = helix.Edges[0]
+    p0, t = edge.valueAt(edge.FirstParameter), edge.tangentAt(edge.FirstParameter).normalize()
+    u = V(1, 0, 0) - t * t.x
+    u.normalize()
+    w = t.cross(u)
+    rect = Part.makePolygon([p0 + u * x + w * y for x, y in ((-1, -2), (1, -2), (1, 2), (-1, 2), (-1, -2))])
+    return helix.makePipeShell([rect], True, True)
+
+
+def racetrack(leg=30.0, r=10.0, w=4.0, h=2.0):
+    """A closed racetrack pipe (makePipeShell, Frenet): along +x at y = -r for leg, a half circle about (leg, 0), back
+    along -x at y = r and a half circle about the origin; a w x h section (w across the path in the plane z = 0)."""
+    path = Part.Wire(
+        [
+            Part.makeLine(V(0, -r, 0), V(leg, -r, 0)),
+            Part.Edge(Part.ArcOfCircle(Part.Circle(V(leg, 0, 0), V(0, 0, 1), r), -math.pi / 2, math.pi / 2)),
+            Part.makeLine(V(leg, r, 0), V(0, r, 0)),
+            Part.Edge(Part.ArcOfCircle(Part.Circle(V(0, 0, 0), V(0, 0, 1), r), math.pi / 2, 3 * math.pi / 2)),
+        ]
+    )
+    corners = ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2), (-w / 2, -h / 2))
+    return path.makePipeShell([Part.makePolygon([V(0, -r + y, z) for y, z in corners])], True, True).Solids[0]
+
+
 def end_faces(solid):
     """(start, end) face names: the planar faces, the one nearer the origin first."""
     flat = [(f.CenterOfMass.Length, k) for k, f in enumerate(solid.Faces, 1) if isinstance(f.Surface, Part.Plane)]
@@ -413,6 +440,16 @@ class HelixAndChainTest(unittest.TestCase):
         twisted = Part.makeLoft([square(0, 0), square(10, math.pi / 4)], True, True)  # equal ends, a screw apart
         self.assertIsInstance(sweeps.recognise(twisted), str)
 
+    def test_ten_turn_plain_pipe_coil_is_a_helix(self):
+        """A 10-turn makePipeShell coil: its B-spline side faces lie about 5e-4 off the fitted helix, within
+        FOLLOW_TOL x size, not the straight and revolved tolerance."""
+        coil = plain_pipe_coil(10)
+        sweep = sweeps.recognise(coil)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertEqual(len(sweep.pieces), 1)
+        self.assertAlmostEqual(sweep.pieces[0].angle, 3600, places=2)
+        self.assertAlmostEqual(abs(sweep.pieces[0].advance), 60, places=3)
+
     def test_plain_pipe_helix_is_a_helix(self):
         """A Part workbench pipe (makePipeShell, Frenet) along Part.makeHelix: its volume is a few 1e-6 off the fitted
         helix's, within the helical tolerance."""
@@ -455,6 +492,24 @@ class HelixAndChainTest(unittest.TestCase):
         self.assertEqual(len(sweep.pieces), 1)
         self.assertEqual(sweep.pieces[0].angle, 0)
         self.assertAlmostEqual(sweep.pieces[0].advance, 4)
+
+    def test_racetrack_is_a_closed_chain(self):
+        """A racetrack coil turn: lines of 30 and half circles of r 10 piped with a 4 x 2 section, no end faces. It is
+        cut at a joint and walked back round to it."""
+        track = racetrack()
+        sweep = sweeps.recognise(track)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertTrue(sweep.closed)
+        self.assertEqual((sweep.profile, sweep.end), (None, None))
+        self.assertEqual(len(sweep.pieces), 4)
+        self.assertEqual(sorted(round(p.advance, 6) for p in sweep.pieces), [0, 0, 30, 30])
+        self.assertEqual(sorted(round(p.angle, 6) for p in sweep.pieces), [0, 0, 180, 180])
+        self.assertAlmostEqual(sweep.face.Area, 8, places=6)
+        face = sweep.face.copy()  # the pieces take the section once round, back onto itself
+        for piece in sweep.pieces:
+            face.rotate(V(*piece.origin), V(*piece.axis), piece.angle)
+            face.translate(V(*piece.axis) * piece.advance)
+        self.assertLess(face.CenterOfMass.distanceToPoint(sweep.face.CenterOfMass), 1e-6)
 
     def test_stage_1_and_2_sweeps_do_not_rebuild(self):
         for solid in (Part.makeBox(10, 4, 40), Part.makeCylinder(0.45, 20), Part.makeTorus(20, 3)):

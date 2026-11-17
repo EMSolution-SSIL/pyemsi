@@ -401,11 +401,35 @@ def write_bent_busbar(path, profile_path, x0, x1, z0, z1, leg):
         gmsh.finalize()
 
 
-def swept_chain(profile, pieces, name="Bend", path_size=4.0, section_size=2.0, skin=None):
-    """An entry of job["swept"]: one solid along pieces."""
+def swept_chain(profile, pieces, name="Bend", path_size=4.0, section_size=2.0, skin=None, closed=False):
+    """An entry of job["swept"]: one solid along pieces (closed: back round to its profile)."""
     entry = swept(profile, name=name, path_size=path_size, section_size=section_size, recombine=False, skin=skin)
-    entry["solids"] = [{"profile": "geometry/" + profile, "pieces": pieces}]
+    entry["solids"] = [{"profile": "geometry/" + profile, "closed": closed, "pieces": pieces}]
     return entry
+
+
+def write_racetrack(path, profile_path, leg=30.0, r=10.0):
+    """A closed racetrack: the rectangle y -r - 2..-r + 2, z -1..1 in the plane x = 0 (the profile) extruded leg along
+    +x, turned half round about the line x = leg, y = 0, extruded leg along -x and turned half round about Z, fused
+    into one solid (the joints' edges stay)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        corners = [occ.addPoint(0, -r + y, z) for y, z in ((-2, -1), (2, -1), (2, 1), (-2, 1))]
+        loop = occ.addCurveLoop([occ.addLine(corners[k], corners[(k + 1) % 4]) for k in range(4)])
+        face = occ.addPlaneSurface([loop])
+        occ.synchronize()
+        gmsh.write(profile_path)
+        first = occ.extrude([(2, face)], leg, 0, 0)
+        bend = occ.revolve([first[0]], leg, 0, 0, 0, 0, 1, math.pi)
+        back = occ.extrude([bend[0]], -leg, 0, 0)
+        turn = occ.revolve([back[0]], 0, 0, 0, 0, 0, 1, math.pi)
+        occ.fuse([first[1]], [bend[1], back[1], turn[1]])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
 
 
 FACES_3D = {  # gmsh element type: (nodes, its faces)
@@ -1366,6 +1390,24 @@ class MesherTest(unittest.TestCase):
         tags = [t for e in gmsh.model.getEntitiesForPhysicalGroup(3, 2) for t in gmsh.model.mesh.getElements(3, e)[1]]
         return min(float(gmsh.model.mesh.getElementQualities(t, "minSICN").min()) for t in tags if len(t))
 
+    def test_swept_whole_face_split_by_the_fragment_names_the_body(self):
+        # a block on half of the bar's far end face splits it in the fragment; the excitation file is that whole face
+        write_box(self.geo("vol_1.brep"), -5, -2, -20, 10, 4, 40)
+        write_rect(self.geo("sweep_1_1.brep"), -5, -2, -20, 10, 4)
+        write_box(self.geo("vol_3.brep"), 0, -2, 20, 10, 4, 5)
+        write_rect(self.geo("surf_10_1.brep"), -5, -2, 20, 10, 4)
+        write_box(self.geo("air.brep"), *self.AIR_BOX)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        surface = {"smat_id": 10, "name": "In", "mat_id": 1, "files": ["geometry/surf_10_1.brep"]}
+        vols = [self.vol(1, "Bar", "vol_1.brep", size=2.0), self.vol(3, "Block", "vol_3.brep", size=2.0)]
+        r = self.run_job(vols, [surface], recombine=[1], air=air, extra={"swept": [swept("sweep_1_1.brep")]})
+        self.assertEqual(r.returncode, 1)
+        self.assertIn(
+            "Swept Body Bar: surf_10_1.brep is a whole face of it, but the fragment split that face; check what"
+            " touches it",
+            r.stderr,
+        )
+
     def test_swept_end_face_excitation_keeps_the_pyramids(self):
         # fragmented in, a whole end face turned gmsh's normals of the bar's other faces inward: the pushed-out
         # pyramids then always failed ("PLC Error") and the fallback left slivers in the air. It now goes on the bar's
@@ -1587,6 +1629,35 @@ class MesherTest(unittest.TestCase):
         self.assertIn("Swept Body Bend: a side of MAT_ID 1 is a cut in one piece and real in another", r.stderr)
         x = sorted({round(float(p[0]), 6) for p in self.bar_nodes() if p[1] < -1e-6})  # leg 1
         self.assertAlmostEqual(x[-1] - x[-2], 0.5, delta=0.125)  # the outer curve is skinned though cut in leg 1
+
+    RACETRACK_PIECES = [  # as sweeps.recognise gives them for the racetrack (test_sweeps)
+        {"origin": [0.0, -10.0, 0.0], "axis": [1.0, 0.0, 0.0], "angle": 0.0, "advance": 30.0},
+        {"origin": [30.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0], "angle": 180.0, "advance": 0.0},
+        {"origin": [30.0, 10.0, 0.0], "axis": [-1.0, 0.0, 0.0], "angle": 0.0, "advance": 30.0},
+        {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0], "angle": 180.0, "advance": 0.0},
+    ]
+
+    def test_swept_racetrack_is_conformal(self):
+        # a closed chain: line 30 + half circle r 10 + line 30 + half circle, 4 x 2, with a skin; no ends to grade
+        write_racetrack(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"))
+        box = (-25, -25, -10, 80, 50, 20)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 8.0}
+        skin = {"depth": 0.5, "per_depth": 2.0, "layer": 2.0}
+        track = swept_chain("sweep_1_1.brep", self.RACETRACK_PIECES, "Track", 4.0, 1.0, skin, closed=True)
+        r = self.run_job([self.vol(1, "Track", "vol_1.brep", size=1.0)], air=air, extra={"swept": [track]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        self.assertEqual(inner_free_faces(box), [])
+        p = self.bar_nodes()
+        section = int(((abs(p[:, 0]) < 1e-9) & (p[:, 1] < 0)).sum())  # the profile's nodes
+        self.assertGreater(section, 4)
+        for x, below in ((30, True), (30, False), (0, False)):  # a station at each other joint
+            self.assertEqual(int(((abs(p[:, 0] - x) < 1e-9) & ((p[:, 1] < 0) == below)).sum()), section)
+        x = sorted({round(float(q[0]), 6) for q in p if q[1] < -7 and -1e-9 <= q[0] <= 30 + 1e-9})  # the first leg
+        for a, b in zip(x, x[1:]):  # path size 4: 8 steps of 3.75, none graded at the profile
+            self.assertAlmostEqual(b - a, 3.75, delta=1e-6)
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 
