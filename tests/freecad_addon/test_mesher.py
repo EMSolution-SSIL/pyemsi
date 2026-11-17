@@ -1,5 +1,6 @@
 """Mesher tests. Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_mesher.py"""
 
+import hashlib
 import json
 import math
 import os
@@ -257,6 +258,51 @@ def swept(profile, mat_id=1, name="Bar", path_size=4.0, section_size=2.0, recomb
         "skin": skin,
         "solids": [{"profile": "geometry/" + profile, "pieces": [piece]}],
     }
+
+
+def write_revolved_rect(path, profile_path, x0, x1, z0, z1, angle):
+    """A rectangle x0..x1, z0..z1 in the plane y = 0 (the profile) and the solid it sweeps turning about Z by angle
+    (degrees; 360: a closed ring, its seams on the profile)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        face = occ.addRectangle(x0, z0, 0, x1 - x0, z1 - z0)
+        occ.rotate([(2, face)], 0, 0, 0, 1, 0, 0, math.pi / 2)  # (x, y, 0) turns to (x, 0, y)
+        occ.synchronize()
+        gmsh.write(profile_path)
+        out = occ.revolve([(2, face)], 0, 0, 0, 0, 0, 1, math.radians(angle))
+        occ.remove([(2, face)] + [dt for dt in out if dt[0] == 2], recursive=False)
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_torus(path, profile_path, big, small):
+    """A torus about Z (gmsh's addTorus) and its profile, the disc in the plane y = 0 whose circle starts where the
+    torus's two seam circles meet, (big + small, 0, 0)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        occ.addDisk(big, 0, 0, small, small, zAxis=[0, 1, 0], xAxis=[1, 0, 0])
+        occ.synchronize()
+        gmsh.write(profile_path)
+        occ.remove(occ.getEntities(2), recursive=True)
+        occ.addTorus(0, 0, 0, big, small)
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def swept_turn(profile, angle, name="Ring", path_size=4.0, section_size=2.0, recombine=False, skin=None):
+    """An entry of job["swept"]: one solid turning about Z from its profile by angle (degrees; 360: a closed ring)."""
+    piece = {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0], "angle": float(angle), "advance": 0.0}
+    entry = swept(profile, name=name, path_size=path_size, section_size=section_size, recombine=recombine, skin=skin)
+    entry["solids"] = [{"profile": "geometry/" + profile, "closed": angle == 360, "pieces": [piece]}]
+    return entry
 
 
 FACES_3D = {  # gmsh element type: (nodes, its faces)
@@ -1212,6 +1258,78 @@ class MesherTest(unittest.TestCase):
         hexes = self.element_counts(1)["Hexahedron 8"]
         self.assertEqual(self.element_counts(10, dim=2), {"Quadrilateral 4": hexes // len(self.steps(2))})
         self.assertEqual(inner_free_faces(self.AIR_BOX), [])  # the air is meshed (it took the pyramids retry)
+
+    def test_straight_sweep_unchanged_by_stage2(self):
+        # the bar of test_swept_bar_with_skin: its node coordinates as at Stage 1 (7b39a49)
+        self.swept_bar(swept("sweep_1_1.brep", skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0}))
+        self.open_msh()
+        rows = sorted(tuple(round(float(x), 6) + 0.0 for x in p) for p in self.bar_nodes())
+        self.assertEqual(
+            hashlib.sha256(repr(rows).encode()).hexdigest(),
+            "9c7657b4f37d066c2acbbb8ed32a08f52fff2efbfdb69785144491c26aded40e",
+        )
+
+    # ---- revolved Swept Bodies about Z in an air box 120 x 120 x 60 at size 8 (MAT_ID 2)
+
+    TURN_BOX = (-60, -60, -30, 120, 120, 60)
+
+    def swept_turn_job(self, entry):
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 8.0}
+        write_box(self.geo("air.brep"), *self.TURN_BOX)
+        r = self.run_job([self.vol(1, entry["name"], "vol_1.brep", size=2.0)], air=air, extra={"swept": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        return r
+
+    def angles(self):
+        """The bar's distinct node angles about Z, in degrees from 0 to 360, sorted."""
+        p = self.bar_nodes()
+        return sorted({round(math.degrees(math.atan2(y, x)), 6) % 360 for x, y in p[:, :2]})
+
+    def test_swept_closed_ring_is_conformal(self):
+        write_revolved_rect(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 30, -2, 2, 360)
+        self.swept_turn_job(swept_turn("sweep_1_1.brep", 360, skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0}))
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        self.assertEqual(inner_free_faces(self.TURN_BOX), [])
+        angles = self.angles()
+        stations = len(angles)
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        at = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+        seam = set()  # the section's quads: the hexahedra's faces in the half-plane y = 0, x > 0
+        for e in gmsh.model.getEntitiesForPhysicalGroup(3, 1):
+            for nodes in gmsh.model.mesh.getElements(3, e)[2]:
+                for k in range(0, len(nodes), 8):
+                    for f in FACES_3D[5][1]:
+                        q = [int(nodes[k + i]) for i in f]
+                        if all(abs(at[n][1]) < 1e-9 and at[n][0] > 0 for n in q):
+                            seam.add(tuple(sorted(q)))
+        self.assertEqual(self.element_counts(1)["Hexahedron 8"], len(seam) * stations)
+        steps = [math.radians(b - a) * 25 for a, b in zip(angles, angles[1:] + [angles[0] + 360])]
+        for s in steps:  # rc 25
+            self.assertAlmostEqual(s, 4.0, delta=1.0)
+
+    def test_swept_torus(self):
+        write_torus(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 3)
+        self.swept_turn_job(
+            swept_turn("sweep_1_1.brep", 360, section_size=1.0, skin={"depth": 0.5, "per_depth": 2.0, "layer": 3.0})
+        )
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8", "Prism 6"})
+        self.assertEqual(inner_free_faces(self.TURN_BOX), [])
+
+    def test_swept_bend_grades_both_ends(self):
+        write_revolved_rect(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 30, -2, 2, 90)
+        self.swept_turn_job(swept_turn("sweep_1_1.brep", 90, skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0}))
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        self.assertEqual(inner_free_faces(self.TURN_BOX), [])
+        angles = self.angles()
+        self.assertAlmostEqual(angles[0], 0, places=6)
+        self.assertAlmostEqual(angles[-1], 90, places=6)
+        steps = [math.radians(b - a) * 25 for a, b in zip(angles, angles[1:])]  # at rc 25
+        self.assertAlmostEqual(steps[0], 0.5, delta=0.125)
+        self.assertAlmostEqual(steps[-1], 0.5, delta=0.125)
+        middle = steps[len(steps) // 2]
+        self.assertAlmostEqual(middle, 4.0, delta=0.5)
+        self.assertLessEqual(max(steps), 4.0 + 1e-6)
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 

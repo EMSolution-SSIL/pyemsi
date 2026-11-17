@@ -16,6 +16,7 @@ RATIO = 1.2  # the growth of a skin's steps away from the surface
 SIZE_OPTIONS = ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints", "Mesh.MeshSizeFromCurvature")
 SECTION_OPTIONS = ("Mesh.Algorithm", "Mesh.Smoothing", "Mesh.RecombinationAlgorithm")  # the user's, for the section
 JACOBIAN = {5: (1, 3, 4), 6: (1, 2, 3)}  # the nodes whose edges from node 0 make a positive triple product
+NOT_STRAIGHT = "only straight and revolved sweeps are made so far"  # as sweeps.NOT_STRAIGHT
 
 # xyz: the section's nodes in global coordinates (n x 3); tri (t x 3) and quad (q x 4): its elements as node indexes;
 # edges: {curve key: ordered node indexes} per profile curve, the key being the curve's index in gmsh.model.getBoundary
@@ -188,17 +189,55 @@ def section_mesh(entry, solid_index, real_curves, folder, options=None):
         gmsh.model.setCurrent(main)
 
 
-def stations(piece, positions):
-    """One 4 x 4 transform per position along the piece: a translation by position * axis (a straight sweep)."""
-    if piece.get("angle", 0.0):
-        raise JobError("only straight sweeps are made so far")
-    axis = np.asarray(piece["axis"], float)
+def stations(piece, positions, rc=None):
+    """One 4 x 4 transform per position along the piece. A straight piece: a translation by position * axis. A
+    revolved one (advance 0): positions are arc lengths at rc, each the rotation about (origin, axis) by position / rc
+    radians, positive by the right-hand rule. A helical piece (angle and advance) is refused."""
+    angle, advance = float(piece.get("angle", 0.0)), float(piece["advance"])
+    if angle and advance:
+        raise JobError(NOT_STRAIGHT)
     out = []
+    if not angle:
+        axis = np.asarray(piece["axis"], float)
+        for p in positions:
+            t = np.eye(4)
+            t[:3, 3] = float(p) * axis
+            out.append(t)
+        return out
+    axis = np.asarray(piece["axis"], float)
+    axis = axis / np.linalg.norm(axis)
+    origin = np.asarray(piece["origin"], float)
+    k = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
     for p in positions:
+        a = float(p) / rc
+        r = np.eye(3) + math.sin(a) * k + (1 - math.cos(a)) * (k @ k)  # Rodrigues
         t = np.eye(4)
-        t[:3, 3] = float(p) * axis
+        t[:3, :3], t[:3, 3] = r, origin - r @ origin
         out.append(t)
     return out
+
+
+def _chain(pieces, centre):
+    """Per piece: (piece, rc, length, start). rc: for a revolved piece the distance from its axis to the profile's
+    centre of mass (centre) where the piece starts, else None; length: the piece's path length (at rc); start: the
+    4 x 4 transform taking the profile to where the piece starts (each piece starts where the last ended)."""
+    out, start = [], np.eye(4)
+    for piece in pieces:
+        rc, length = None, float(piece["advance"])
+        if float(piece.get("angle", 0.0)):
+            axis = np.asarray(piece["axis"], float)
+            axis = axis / np.linalg.norm(axis)
+            d = start[:3, :3] @ centre + start[:3, 3] - np.asarray(piece["origin"], float)
+            rc = float(np.linalg.norm(d - axis * axis.dot(d)))
+            length = rc * math.radians(float(piece["angle"]))
+        out.append((piece, rc, length, start))
+        start = stations(piece, [length], rc)[0] @ start
+    return out
+
+
+def _moved(points, t):
+    """The points (n x 3) moved by the 4 x 4 transform t."""
+    return np.asarray(points, float) @ t[:3, :3].T + t[:3, 3]
 
 
 def _volume(V, cells, etype):
@@ -235,8 +274,8 @@ PRISM_QUADS = ((0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5))
 
 
 def _profile(path, name):
-    """The profile face's bounding box (2 x 3) and the midpoint of each of its curves, in the getBoundary order
-    section_mesh uses, read in a model of its own."""
+    """The profile face's bounding box (2 x 3), the midpoint of each of its curves, in the getBoundary order
+    section_mesh uses, and its centre of mass, read in a model of its own."""
     main = gmsh.model.getCurrent()
     gmsh.model.add(f"swept profile {name}")
     try:
@@ -250,10 +289,11 @@ def _profile(path, name):
             lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, abs(c)))
             mids.append(gmsh.model.getValue(1, abs(c), [(lo + hi) / 2]))
         box = np.reshape(gmsh.model.getBoundingBox(2, face), (2, 3))
+        centre = np.array(gmsh.model.occ.getCenterOfMass(2, face), float)
     finally:
         gmsh.model.remove()
         gmsh.model.setCurrent(main)
-    return box, np.array(mids, float).reshape(-1, 3)
+    return box, np.array(mids, float).reshape(-1, 3), centre
 
 
 def _nearest(dim, tags, points, tol):
@@ -415,12 +455,24 @@ def _at(dim, tag):
     return "(" + ", ".join(f"{c:g}" for c in gmsh.model.getBoundingBox(dim, tag)[:3]) + ")"
 
 
-def _volume_of(tags, box, shift, name):
-    """Of the volumes tags, the one whose bounding box is the profile's (box) swept by shift."""
+def _swept_box(box, chain):
+    """The bounding box (2 x 3) of the profile swept along the pieces (chain, from _chain): of its box's corners (box:
+    the profile's bounding box) at each end of a straight piece and every 10 degrees of a revolved one, plus its
+    end."""
+    corners = np.array([[box[i, 0], box[j, 1], box[k, 2]] for i in (0, 1) for j in (0, 1) for k in (0, 1)])
+    swept = [corners]
+    for piece, rc, length, start in chain:
+        n = max(1, math.ceil(float(piece.get("angle", 0.0)) / 10 - 1e-9))
+        swept += [_moved(corners, t @ start) for t in stations(piece, np.linspace(0, length, n + 1)[1:], rc)]
+    swept = np.vstack(swept)
+    return np.array([swept.min(axis=0), swept.max(axis=0)])
+
+
+def _volume_of(tags, swept, name):
+    """Of the volumes tags, the one whose bounding box is nearest swept (the profile's, from _swept_box)."""
     if not tags:
         raise JobError(f"Swept Body {name}: it has more solids than volumes in the model")
-    lo, hi = np.minimum(box[0], box[0] + shift), np.maximum(box[1], box[1] + shift)
-    off = [np.abs(np.reshape(gmsh.model.getBoundingBox(3, t), (2, 3)) - [lo, hi]).max() for t in tags]
+    off = [np.abs(np.reshape(gmsh.model.getBoundingBox(3, t), (2, 3)) - swept).max() for t in tags]
     return tags[int(np.argmin(off))]
 
 
@@ -432,29 +484,30 @@ def _graded_end(face, vol, skinned):
     return bool(others) and not any(v in skinned for v in others)
 
 
-def _transforms(entry, section, pieces, faces, vol, skinned, tol):
-    """The stations along the solid's pieces: every path size, graded toward a real end face when there is a skin."""
+def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
+    """The stations along the solid's pieces (chain, from _chain): every path size (arc length at rc on a revolved
+    piece), graded toward a real end face when there is a skin. A closed ring has no ends and no last station (it is
+    the first)."""
     skin, size = entry["skin"], float(entry["path_size"])
-    shift = sum(float(p["advance"]) * np.asarray(p["axis"], float) for p in pieces)
-    first = section.quad[0] if len(section.quad) else section.tri[0]
-    centre = section.xyz[first].mean(axis=0)
-    start, end = _nearest(2, faces, [centre, centre + shift], tol)[0]
-    graded = (_graded_end(start, vol, skinned), _graded_end(end, vol, skinned))
-    out, offset = [], np.zeros(3)
-    for i, piece in enumerate(pieces):
-        length = float(piece["advance"])
-        ends = (graded[0] and i == 0, graded[1] and i == len(pieces) - 1)
+    graded = (False, False)
+    if not closed:
+        first = section.quad[0] if len(section.quad) else section.tri[0]
+        centre = section.xyz[first].mean(axis=0)
+        piece, rc, length, start = chain[-1]
+        far = _moved([centre], stations(piece, [length], rc)[0] @ start)[0]
+        ends = _nearest(2, faces, [centre, far], tol)[0]
+        graded = tuple(_graded_end(f, vol, skinned) for f in ends)
+    out = []
+    for i, (piece, rc, length, start) in enumerate(chain):
+        ends = (graded[0] and i == 0, graded[1] and i == len(chain) - 1)
         if skin and any(ends):
             first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
             positions = graded_positions(length, size, first, depth, RATIO, ends)
         else:
             positions = graded_positions(length, size)
-        steps = stations(piece, positions)
-        for t in steps:
-            t[:3, 3] += offset
+        steps = [t @ start for t in stations(piece, positions, rc)]
         out += steps if i == 0 else steps[1:]  # pieces join at shared stations
-        offset = offset + length * np.asarray(piece["axis"], float)
-    return out
+    return out[:-1] if closed else out
 
 
 def apply_swept(job, folder, body_vols):
@@ -470,18 +523,20 @@ def apply_swept(job, folder, body_vols):
         entry = scaled(entry, options)
         left = list(body_vols[entry["mat_id"]])
         for k, solid in enumerate(entry["solids"]):
-            box, mids = _profile(os.path.join(folder, solid["profile"]), entry["name"])
-            pieces = solid["pieces"]
-            shift = sum(float(p["advance"]) * np.asarray(p["axis"], float) for p in pieces)
-            vol = _volume_of(left, box, shift, entry["name"])
+            box, mids, centre = _profile(os.path.join(folder, solid["profile"]), entry["name"])
+            chain, closed = _chain(solid["pieces"], centre), bool(solid.get("closed", False))
+            swept = _swept_box(box, chain)
+            vol = _volume_of(left, swept, entry["name"])
             left.remove(vol)
             faces = [abs(t) for _, t in gmsh.model.getBoundary([(3, vol)], oriented=False)]
-            tol = TOL * float(np.linalg.norm(box[1] - box[0] + np.abs(shift)))
+            tol = TOL * float(np.linalg.norm(swept[1] - swept[0]))
             real = set(real_boundary(3, [vol]))
-            along = 0.5 * float(pieces[0]["advance"]) * np.asarray(pieces[0]["axis"], float)
-            side = _nearest(2, faces, mids + along, tol)[0]  # the side face of each profile curve
+            piece, rc, length, _ = chain[0]
+            half = _moved(mids, stations(piece, [0.5 * length], rc)[0])  # half way along the first piece
+            side = _nearest(2, faces, half, tol)[0]  # the side face of each profile curve
             section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder, options)
-            V, cells = sweep(section, _transforms(entry, section, pieces, faces, vol, skinned, tol))
+            transforms = _transforms(entry, section, chain, closed, faces, vol, skinned, tol)
+            V, cells = sweep(section, transforms, closed)
             adds.append(_join(vol, V, cells, entry["name"]))
             tags.append(vol)
     job["swept_tags"], job["swept_add"] = tags, adds

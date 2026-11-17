@@ -235,6 +235,40 @@ def test_stations_translate_along_the_axis():
     assert np.allclose(ts[1][:3, 3], [0, 0, 4]) and np.allclose(ts[1][:3, :3], np.eye(3))
 
 
+def test_stations_rotate():
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 90.0, "advance": 0.0}
+    ts = meshsweep.stations(piece, [0.0, 20 * np.pi / 2], rc=20)
+    assert np.allclose(ts[0], np.eye(4))
+    assert np.allclose(ts[1][:3, :3], [[0, -1, 0], [1, 0, 0], [0, 0, 1]]) and np.allclose(ts[1][:3, 3], 0)
+
+
+def test_stations_rotate_about_an_offset_axis():
+    piece = {"origin": [10, 0, 0], "axis": [0, 0, 1], "angle": 180.0, "advance": 0.0}
+    (t,) = meshsweep.stations(piece, [5 * np.pi], rc=5)
+    assert np.allclose(t @ [15, 0, 3, 1], [5, 0, 3, 1])
+
+
+def test_stations_refuse_a_helix():
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 90.0, "advance": 5.0}
+    with pytest.raises(meshcommon.JobError, match="only straight and revolved sweeps are made so far"):
+        meshsweep.stations(piece, [0.0, 1.0], rc=20)
+
+
+def test_sweep_closed_ring_joins():
+    flat = grid(2, 2)  # 4 quads, turned into the plane y = 0 at x 20..22
+    xyz = np.column_stack([20 + flat.xyz[:, 0], np.zeros(len(flat.xyz)), flat.xyz[:, 1]])
+    section = meshsweep.Section(xyz, flat.tri, flat.quad, {})
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 360.0, "advance": 0.0}
+    rc = 21.0
+    positions = np.linspace(0, 2 * np.pi * rc, 37)[:-1]
+    V, cells = meshsweep.sweep(section, meshsweep.stations(piece, positions, rc=rc), closed=True)
+    assert len(cells[5]) == 36 * 4 and len(cells[6]) == 0
+    assert len(V) == 36 * len(xyz)
+    assert len(np.unique(np.round(V, 9), axis=0)) == len(V)  # no duplicate nodes
+    assert len(np.unique(cells[5])) == len(V)  # every node used, the last station joined to the first
+    assert (jacobians(V, cells[5], 1, 3, 4) > 0).all()
+
+
 @pytest.mark.parametrize("axis", [[0, 0, 1], [0, 0, -1]])
 def test_sweep_counts(axis):
     section = grid(10, 4)
