@@ -193,11 +193,28 @@ def air_grading_entries(study, ids):
     return entries
 
 
-def swept_entries(study, folder, ids, prefix=""):
+def recognised_sweeps(study, names):
+    """{body Name: [Sweep per solid]} for the whole bodies of Swept Body items whose Names are in names, each body
+    from the first item that has it. A body that is no sweep is left out: validation refuses it before a job is
+    written."""
+    found, seen = {}, set()
+    for item in objects.swept_bodies(study):
+        for body, sub in objects.item_refs(item):
+            if sub != "" or body.Name not in names or body.Name in seen:
+                continue
+            seen.add(body.Name)
+            starts = [s for b, subs in item.StartFace if b.Name == body.Name for s in subs]
+            result = sweeps.recognise_body(meshed_shape(body), starts)
+            if not isinstance(result, str):
+                found[body.Name] = result
+    return found
+
+
+def swept_entries(study, folder, ids, found, prefix=""):
     """The job's "swept" list: one entry per whole body of a Swept Body item that is in ids ({body Name: MAT_ID}), in
-    tree order. The profile face of each solid (its start face, or a closed ring's cut) is written to
-    geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global coordinates. The skin comes from the first Skin Layer on the
-    body."""
+    tree order. found: recognised_sweeps for ids. The profile face of each solid (its start face, or a closed ring's
+    cut) is written to geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global coordinates. The skin comes from the first
+    Skin Layer on the body."""
     entries, seen = [], set()
     picks = [pick for item in objects.recombine_items(study) for pick in objects.face_picks(item)]
     recombined = {body.Name for body, faces in picks if not faces}
@@ -206,11 +223,8 @@ def swept_entries(study, folder, ids, prefix=""):
             if sub != "" or body.Name not in ids or body.Name in seen:
                 continue
             seen.add(body.Name)
-            shape = meshed_shape(body)
-            result = sweeps.recognise_body(
-                shape, [s for b, subs in item.StartFace if b.Name == body.Name for s in subs]
-            )
-            if isinstance(result, str):  # validation refuses these before a job is written
+            result = found.get(body.Name)
+            if result is None:  # validation refuses these before a job is written
                 continue
             mat_id = ids[body.Name]
             size = objects.whole_body_size(study, body)
@@ -350,10 +364,14 @@ def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
     two_d = study.Dimension == "2D"
     job = {"bodies": []} if two_d else {"volumes": [], "surfaces": []}
     job["sizes"] = []
+    found = recognised_sweeps(study, ids)
     for body, size in volumes:
         mat_id = ids[body.Name]
         rel = f"geometry/{prefix}vol_{mat_id}.brep"
-        global_shape(body).exportBrep(os.path.join(folder, rel))
+        shape = global_shape(body)
+        if body.Name in found:  # a sweep whose seam twists gets its rebuild (sweeps.rebuilt)
+            shape = sweeps.rebuilt_shape(shape, found[body.Name])
+        shape.exportBrep(os.path.join(folder, rel))
         job["bodies" if two_d else "volumes"].append(
             {"mat_id": mat_id, "name": objects.region_name(study, body), "file": rel, "size": size}
         )
@@ -410,7 +428,7 @@ def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
             job["recombine_faces"].append(
                 {"name": objects.region_name(study, body), "mat_id": ids[body.Name], "face": face, "file": rel}
             )
-    swept = swept_entries(study, folder, ids, prefix)
+    swept = swept_entries(study, folder, ids, found, prefix)
     if swept:
         job["swept"] = swept
     return job

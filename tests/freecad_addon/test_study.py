@@ -2,11 +2,13 @@
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_study.py"""
 
 import json
+import math
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 import Part
@@ -16,6 +18,7 @@ from BOPTools import SplitAPI
 from emsolution import geometry, jobwriter, objects, sweeps, validation
 
 from .materialdata import STEEL, record
+from .test_sweeps import helix_pipe
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -1267,6 +1270,53 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(len(entry["solids"]), 2)
         self.assertEqual(len({s["profile"] for s in entry["solids"]}), 2)
 
+    def test_swept_helix_goes_to_the_job(self):
+        self.swept_job(helix_pipe(10, 15, 1.2, ("circle", 0.45)))
+        (piece,) = self.read_job()["swept"][0]["solids"][0]["pieces"]
+        self.assertAlmostEqual(piece["angle"], 540, places=4)
+        self.assertAlmostEqual(piece["advance"], 15, places=5)
+        self.assertAlmostEqual(abs(piece["axis"][2]), 1, places=6)
+
+    def test_swept_chain_goes_to_the_job(self):
+        path = Part.Wire(
+            [
+                Part.makeLine(App.Vector(0, 0, 0), App.Vector(30, 0, 0)),
+                Part.Edge(
+                    Part.ArcOfCircle(Part.Circle(App.Vector(30, 20, 0), App.Vector(0, 0, 1), 20), -math.pi / 2, 0)
+                ),
+                Part.makeLine(App.Vector(50, 20, 0), App.Vector(50, 50, 0)),
+            ]
+        )
+        profile = Part.makePolygon([App.Vector(0, y, z) for y, z in ((-5, -2), (5, -2), (5, 2), (-5, 2), (-5, -2))])
+        bar, item = self.swept_job(path.makePipeShell([profile], True, True))
+        start = next(k for k, f in enumerate(bar.Shape.Faces, 1) if abs(f.CenterOfMass.x) < 1e-9)
+        item.StartFace = [(bar, (f"Face{start}",))]
+        first, arc, last = self.read_job()["swept"][0]["solids"][0]["pieces"]
+        self.assertEqual((first["angle"], arc["advance"], last["angle"]), (0, 0, 0))
+        self.assertAlmostEqual(arc["angle"], 90, places=6)
+        # the profile's centre, moved by each piece: piece 2 turns it from where piece 1 ended, piece 3 starts there
+        c = App.Vector(*first["origin"]) + App.Vector(*first["axis"]) * first["advance"]
+        o, d = App.Vector(*arc["origin"]), App.Vector(*arc["axis"])
+        self.assertLess(abs(d.dot(c - o)), 1e-6)
+        self.assertAlmostEqual((c - o).Length, 20, places=6)
+        c = o + App.Rotation(d, arc["angle"]).multVec(c - o)
+        self.assertLess((App.Vector(*last["origin"]) - c).Length, 1e-6)
+        c += App.Vector(*last["axis"]) * last["advance"]
+        self.assertLess((c - App.Vector(50, 50, 0)).Length, 1e-6)
+
+    def test_swept_rebuilt_strand_exports_the_rebuilt_solid(self):
+        strand = helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False)
+        self.assertTrue(sweeps.recognise(strand).rebuild)
+        self.swept_job(strand)
+        job = self.read_job()
+        vol = Part.read(os.path.join(jobwriter.scratch_folder(self.study), job["volumes"][0]["file"]))
+        (solid,) = vol.Solids
+        sweep = sweeps.recognise(solid)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertFalse(sweep.rebuild)  # its seam follows the screw
+        self.assertAlmostEqual(sweep.pieces[0].angle, 540, places=3)
+        self.assertLess(abs(solid.Volume - strand.Volume), 1e-6 * strand.Volume)
+
     def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
         a, b = self.face("A"), self.face("B")
         b.Placement.Base = App.Vector(10, 0, 0)
@@ -2170,6 +2220,13 @@ class StudyTest(unittest.TestCase):
         sphere = self.shape_body("Ball", Part.makeSphere(5))
         item = objects.make_swept_body(self.study, [(sphere, "")])
         self.assertIn(f"Swept Body {item.Label}: Ball is not a sweep: {sweeps.NO_END}.", self.problems("error"))
+
+    def test_swept_body_rebuilt_unlike_the_original_is_refused(self):
+        strand = self.shape_body("Strand", helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        item = objects.make_swept_body(self.study, [(strand, "")])
+        self.assertFalse(self.swept_texts(item, "error"))  # the rebuild matches the strand
+        with mock.patch.object(sweeps, "rebuilt", return_value=None):
+            self.assertIn(f"Swept Body {item.Label}: Strand is not a sweep: {sweeps.TWISTS}.", self.problems("error"))
 
     def test_swept_body_twice_is_refused(self):
         a = self.box("A")

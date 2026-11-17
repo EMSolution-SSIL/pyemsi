@@ -755,6 +755,81 @@ def recognise(solid, start_face=None, tol=1e-6):
     return _recognise(solid, start, start_face, tol)
 
 
+def _piece_solid(face, piece):
+    """face swept along piece: extruded, revolved, or piped along a helix in Frenet mode (each wire of face piped, the
+    holes cut out)."""
+    o, d = App.Vector(*piece.origin), App.Vector(*piece.axis)
+    if not piece.angle:
+        return face.extrude(d * piece.advance)
+    if not piece.advance:
+        return face.revolve(o, d, piece.angle)
+    c = face.CenterOfMass
+    o = _nearest(o, d, c)
+    x = c - o
+    rc = x.Length
+    x.normalize()
+    up = d if piece.advance > 0 else -d
+    y = up.cross(x)
+    pitch = 2 * math.pi * abs(piece.advance / math.radians(piece.angle))
+    helix = Part.makeHelix(float(pitch), float(abs(piece.advance)), float(rc), 0.0, bool(piece.advance < 0))
+    helix.transformShape(App.Matrix(x.x, y.x, up.x, o.x, x.y, y.y, up.y, o.y, x.z, y.z, up.z, o.z, 0, 0, 0, 1))
+    spine = Part.Wire(helix.Edges)
+    outer = face.OuterWire
+    solids = []
+    for wire in [outer] + [w for w in face.Wires if not w.isSame(outer)]:
+        mk = Part.BRepOffsetAPI.MakePipeShell(spine)
+        mk.setFrenetMode(True)
+        mk.setTolerance(1e-7, 1e-7, 1e-9)
+        mk.add(wire, False, False)
+        mk.build()
+        mk.makeSolid()
+        solids.append(mk.shape())
+    out = solids[0]
+    for hole in solids[1:]:
+        out = out.cut(hole)
+    return out
+
+
+def _apart(a, b):
+    """The largest distance of points sampled on the faces of a (8 x 8, inside their trims) from b's faces, and of
+    b's from a's."""
+    worst = 0.0
+    for p, q in ((a, b), (b, a)):
+        faces = Part.Compound(q.Faces)
+        for f in p.Faces:
+            for point, _ in _samples(f, 8):
+                worst = max(worst, faces.distToShape(Part.Vertex(point))[0])
+    return worst
+
+
+def rebuilt(solid, sweep):
+    """solid made anew from sweep's profile along its pieces (a helical one piped in Frenet mode, so that its edges
+    follow the screw), or None when that solid is not solid: a point of one more than FOLLOW_TOL x size from the
+    other."""
+    size = max(1.0, solid.BoundBox.DiagonalLength)
+    try:
+        face, parts = sweep.face, []
+        for piece in sweep.pieces:
+            parts.append(_piece_solid(face, piece))
+            face = _moved(face, piece)
+        out = parts[0] if len(parts) == 1 else parts[0].multiFuse(parts[1:])
+    except (Part.OCCError, RuntimeError):
+        return None
+    if len(out.Solids) != 1 or not out.isValid():
+        return None
+    out = out.Solids[0]
+    return out if _apart(out, solid) <= FOLLOW_TOL * size else None
+
+
+def rebuilt_shape(shape, result):
+    """shape with each solid whose Sweep (result: recognise_body's list) is to be rebuilt replaced by rebuilt; shape
+    itself when none is. A rebuild that does not match keeps its solid (validation refuses such a body)."""
+    if not any(s.rebuild for s in result):
+        return shape
+    solids = [(rebuilt(solid, s) or solid) if s.rebuild else solid for solid, s in zip(shape.Solids, result)]
+    return solids[0] if len(solids) == 1 else Part.makeCompound(solids)
+
+
 def recognise_body(shape, start_faces=(), tol=1e-6):
     """One Sweep per solid of shape, in shape.Solids order, or the first refusal (a string, prefixed "solid k: " when
     there are several solids). start_faces: face names of shape, each matched to the solid holding it."""

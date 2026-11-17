@@ -467,6 +467,10 @@ def _swept_bodies(study, included, bodies, r):
             if isinstance(result, str):
                 r.error(f"Swept Body {w.Label}: {name} is not a sweep: {result}.", w, [(b, "")])
                 continue
+            # a seam that twists is meshed on the solid rebuilt in Frenet mode, which must be this one
+            if any(s.rebuild and sweeps.rebuilt(solid, s) is None for solid, s in zip(shape.Solids, result)):
+                r.error(f"Swept Body {w.Label}: {name} is not a sweep: {sweeps.TWISTS}.", w, [(b, "")])
+                continue
             found.append((w, b, shape))
     swept = {b.Name for _, b, _ in found}
     _swept_win(study, included, swept, r)
