@@ -3,6 +3,7 @@ Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_sweeps
 
 import math
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 import Part
@@ -281,6 +282,24 @@ def helix_pipe(pitch, height, radius, profile, frenet=True, left=False):
         App.closeDocument(doc.Name)
 
 
+def padded_busbar():
+    """A bent busbar made as a Pad is: the plan of a band 10 wide along line 30 + arc r 20, 90 deg + line 30,
+    extruded 4. Its top and bottom are single flat faces across all three pieces."""
+    outline = Part.Wire(
+        [
+            Part.makeLine(V(0, -5, 0), V(30, -5, 0)),
+            Part.Arc(V(30, -5, 0), V(30 + 25 * math.sqrt(0.5), 20 - 25 * math.sqrt(0.5), 0), V(55, 20, 0)).toShape(),
+            Part.makeLine(V(55, 20, 0), V(55, 50, 0)),
+            Part.makeLine(V(55, 50, 0), V(45, 50, 0)),
+            Part.makeLine(V(45, 50, 0), V(45, 20, 0)),
+            Part.Arc(V(45, 20, 0), V(30 + 15 * math.sqrt(0.5), 20 - 15 * math.sqrt(0.5), 0), V(30, 5, 0)).toShape(),
+            Part.makeLine(V(30, 5, 0), V(0, 5, 0)),
+            Part.makeLine(V(0, 5, 0), V(0, -5, 0)),
+        ]
+    )
+    return Part.Face(outline).extrude(V(0, 0, 4))
+
+
 def end_faces(solid):
     """(start, end) face names: the planar faces, the one nearer the origin first."""
     flat = [(f.CenterOfMass.Length, k) for k, f in enumerate(solid.Faces, 1) if isinstance(f.Surface, Part.Plane)]
@@ -393,6 +412,49 @@ class HelixAndChainTest(unittest.TestCase):
 
         twisted = Part.makeLoft([square(0, 0), square(10, math.pi / 4)], True, True)  # equal ends, a screw apart
         self.assertIsInstance(sweeps.recognise(twisted), str)
+
+    def test_plain_pipe_helix_is_a_helix(self):
+        """A Part workbench pipe (makePipeShell, Frenet) along Part.makeHelix: its volume is a few 1e-6 off the fitted
+        helix's, within the helical tolerance."""
+        helix = Part.Wire(Part.makeHelix(6, 6, 20))
+        edge = helix.Edges[0]
+        p0, t = edge.valueAt(edge.FirstParameter), edge.tangentAt(edge.FirstParameter).normalize()
+        u = V(1, 0, 0) - t * t.x
+        u.normalize()
+        w = t.cross(u)
+        rect = Part.makePolygon([p0 + u * x + w * y for x, y in ((-1, -2), (1, -2), (1, 2), (-1, 2), (-1, -2))])
+        coil = helix.makePipeShell([rect], True, True)
+        with mock.patch.object(sweeps, "HELIX_VOLUME", 1e-6):  # the straight and revolved tolerance refuses it
+            self.assertEqual(sweeps.recognise(coil), "its volume is not the start face swept to the end face")
+        sweep = sweeps.recognise(coil)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertAlmostEqual(sweep.pieces[0].angle, 360, places=3)
+        self.assertAlmostEqual(abs(sweep.pieces[0].advance), 6, places=4)
+
+    def test_padded_bent_busbar_is_a_chain(self):
+        bar = padded_busbar()
+        start = face_name(bar, lambda c: abs(c.x) < 1e-9)
+        for sweep in (sweeps.recognise(bar, start_face=start), sweeps.recognise(bar)):
+            self.assertIsInstance(sweep, sweeps.Sweep)
+            first, arc, last = sweep.pieces
+            self.assertEqual((first.angle, last.angle), (0, 0))
+            self.assertAlmostEqual(first.advance, 30)
+            self.assertAlmostEqual(last.advance, 30)
+            self.assertAlmostEqual(arc.angle, 90, places=6)
+            self.assertEqual(arc.advance, 0.0)
+            self.assertAlmostEqual(math.hypot(arc.origin[0] - 30, arc.origin[1] - 20), 0, places=6)
+        sweep = sweeps.recognise(bar, start_face=start)
+        self.assertEqual(sweep.end, face_name(bar, lambda c: abs(c.y - 50) < 1e-9))
+        self.assertScrewsOnto(sweep, bar)
+
+    def test_padded_bent_busbar_start_face_top_is_straight(self):
+        bar = padded_busbar()
+        top = face_name(bar, lambda c: abs(c.z - 4) < 1e-9)
+        sweep = sweeps.recognise(bar, start_face=top)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertEqual(len(sweep.pieces), 1)
+        self.assertEqual(sweep.pieces[0].angle, 0)
+        self.assertAlmostEqual(sweep.pieces[0].advance, 4)
 
     def test_stage_1_and_2_sweeps_do_not_rebuild(self):
         for solid in (Part.makeBox(10, 4, 40), Part.makeCylinder(0.45, 20), Part.makeTorus(20, 3)):
