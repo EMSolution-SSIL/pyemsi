@@ -200,6 +200,15 @@ def test_section_without_skin_is_sized(tmp_path):
         assert steps(s, key).max() <= 2 * 1.01
 
 
+def test_section_of_a_bar_without_skin_is_a_grid(tmp_path):
+    write_rect(str(tmp_path / "bar.brep"), -5, -2, 0, 10, 4)
+    s = section("bar.brep", [0, 1, 2, 3], tmp_path, skin=None, recombine=False)
+    assert (len(s.quad), len(s.tri)) == (10, 0)  # 5 x 2 quads at size 2, without Recombine
+    assert sorted(len(nodes) for nodes in s.edges.values()) == [3, 3, 6, 6]
+    for key in s.edges:
+        assert np.allclose(steps(s, key), 2.0)
+
+
 def grid(nx, ny):
     """A flat section of nx x ny unit quads."""
     x, y = np.meshgrid(np.arange(nx + 1.0), np.arange(ny + 1.0), indexing="ij")

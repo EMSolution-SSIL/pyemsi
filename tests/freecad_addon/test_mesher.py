@@ -1074,12 +1074,16 @@ class MesherTest(unittest.TestCase):
 
     AIR_BOX = (-30, -30, -50, 60, 60, 100)
 
-    def swept_bar(self, entry=None, box=AIR_BOX, volumes=(), surfaces=(), sizes=(), recombine=(1,), options=None):
+    def swept_bar(
+        self, entry=None, box=AIR_BOX, volumes=(), surfaces=(), sizes=(), recombine=(1,), options=None, skins=()
+    ):
         write_box(self.geo("vol_1.brep"), -5, -2, -20, 10, 4, 40)
         write_rect(self.geo("sweep_1_1.brep"), -5, -2, -20, 10, 4)
         write_box(self.geo("air.brep"), *box)
         air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
         extra = {"swept": [entry or swept("sweep_1_1.brep")]}
+        if skins:
+            extra["skin"] = list(skins)
         vols = [self.vol(1, "Bar", "vol_1.brep", size=2.0), *volumes]
         r = self.run_job(vols, surfaces, sizes, options, recombine=list(recombine), air=air, extra=extra)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -1097,7 +1101,7 @@ class MesherTest(unittest.TestCase):
         return [b - a for a, b in zip(values, values[1:])]
 
     def test_swept_bar_meshes(self):
-        r = self.swept_bar()
+        r = self.swept_bar(swept("sweep_1_1.brep", recombine=False), recombine=())  # four sides: a grid, hexahedra
         self.open_msh()
         self.assertIn("Swept           Bar", r.stdout)
         self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
@@ -1137,16 +1141,28 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8", "Prism 6"})
         self.assertEqual(inner_free_faces((-3, -3, -15, 6, 6, 30)), [])
 
-    def test_swept_bar_end_on_a_terminal(self):
+    def bar_on_block(self, skins=()):
+        """The bar with a skin, its profile's end on a 30 x 30 x 10 block (MAT_ID 3, size 3). Returns the steps along
+        the bar."""
         write_box(self.geo("vol_3.brep"), -15, -15, -30, 30, 30, 10)
         skin_ = {"depth": 1.0, "per_depth": 2.0, "layer": 3.0}
-        self.swept_bar(swept("sweep_1_1.brep", skin=skin_), volumes=[self.vol(3, "Terminal", "vol_3.brep", 3.0)])
+        block = self.vol(3, "Block", "vol_3.brep", 3.0)
+        self.swept_bar(swept("sweep_1_1.brep", skin=skin_), volumes=[block], skins=skins)
         self.open_msh()
-        z = self.steps(2)
+        return self.steps(2)
+
+    def test_swept_bar_end_on_a_terminal(self):
+        z = self.bar_on_block([skin(mat_ids=(3,), depth=1.0)])  # a terminal: a conductor with its own skin
         self.assertGreater(z[0], 0.8 * 4.0)  # the profile's end lies on the terminal: no grading
         self.assertLessEqual(z[0], 4.0 + 1e-9)
         self.assertAlmostEqual(z[-1], 0.5, delta=0.01)  # the free end in the air
         self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4", "Pyramid 5"})  # pyramids on the quads
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
+    def test_swept_bar_end_on_iron_is_graded(self):
+        z = self.bar_on_block()  # a block without a skin (iron): real surface for the bar's skin
+        self.assertAlmostEqual(z[0], 0.5, delta=0.01)
+        self.assertAlmostEqual(z[-1], 0.5, delta=0.01)
         self.assertEqual(inner_free_faces(self.AIR_BOX), [])
 
     def test_swept_bar_cut_end_is_not_graded(self):

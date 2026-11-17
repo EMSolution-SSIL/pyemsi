@@ -9,7 +9,7 @@ import gmsh
 import numpy as np
 
 from meshcommon import JobError, apply_size_fields, apply_refinements, skin_refinements, apply_quad_layers, _smooth
-from meshcommon import _note, import_brep, mesh_with_fallback, real_boundary, air_items
+from meshcommon import _note, import_brep, mesh_with_fallback, real_boundary
 from meshfrozen import FLIP, _options
 
 RATIO = 1.2  # the growth of a skin's steps away from the surface
@@ -62,10 +62,10 @@ def _ends_of(curve):
 
 
 def _structured(face, curves, real, entry):
-    """Four straight curves: transfinite curves graded toward the real neighbouring sides, a recombined transfinite
-    surface. Meshes the curves (generate(1)) and puts their nodes at the graded positions."""
+    """Four straight curves: transfinite curves graded toward the real neighbouring sides (with a skin), else in equal
+    steps of about the section size, a recombined transfinite surface. Meshes the curves (generate(1)) and puts their
+    nodes at the graded positions."""
     skin, size = entry["skin"], float(entry["section_size"])
-    first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
     info = {c: _ends_of(c) for c in curves}
     length = {c: float(np.linalg.norm(b - a)) for c, (_, _, a, b) in info.items()}
     tol = 1e-6 * max(1.0, *length.values())
@@ -81,7 +81,11 @@ def _structured(face, curves, real, entry):
     for k, c in enumerate(curves):
         mean = (length[c] + length[curves[(k + 2) % 4]]) / 2  # opposite sides need the same node count
         ends = (real_at(c, info[c][2]), real_at(c, info[c][3]))
-        positions[c] = graded_positions(mean, size, first, depth, RATIO, ends) * (length[c] / mean)
+        if skin and any(ends):
+            first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
+            positions[c] = graded_positions(mean, size, first, depth, RATIO, ends) * (length[c] / mean)
+        else:
+            positions[c] = graded_positions(mean, size) * (length[c] / mean)
     for c in curves:
         gmsh.model.mesh.setTransfiniteCurve(c, len(positions[c]))
     gmsh.model.mesh.setTransfiniteSurface(face)
@@ -142,11 +146,12 @@ def section_mesh(entry, solid_index, real_curves, folder):
         # apply_size_fields sets options, which hold for every model: the main model gets its own back
         with _options({o: gmsh.option.getNumber(o) for o in SIZE_OPTIONS}):
             apply_size_fields({size: {2: [face]}})
-            if entry["skin"] and real:
+            four = len(curves) == 4 and all(gmsh.model.getType(1, c) == "Line" for c in curves)
+            if four:  # a busbar or plate: a grid, with or without a skin
+                _structured(face, curves, set(real) if entry["skin"] else set(), entry)
+            elif entry["skin"] and real:
                 skin = entry["skin"]
-                if len(curves) == 4 and all(gmsh.model.getType(1, c) == "Line" for c in curves):
-                    _structured(face, curves, set(real), entry)
-                elif _smooth(real, skin["layer"] * skin["depth"]):
+                if _smooth(real, skin["layer"] * skin["depth"]):
                     _graded(face, real, entry, True)
                 else:
                     _graded(face, real, entry, False)
@@ -400,20 +405,22 @@ def _volume_of(tags, box, shift, name):
     return tags[int(np.argmin(off))]
 
 
-def _graded_end(face, vol, air):
-    """True when the end face is real surface against the air only: not a cut and not on another body (a terminal)."""
+def _graded_end(face, vol, skinned):
+    """True when the end face is real surface (not a cut of the domain) that no body with a skin of its own (skinned:
+    their volumes; a Skin Layer marks a conductor) shares: the air and an iron core are graded toward, a terminal with
+    a skin is not."""
     others = [v for v in gmsh.model.getAdjacencies(2, face)[0] if v != vol]
-    return bool(others) and all(v in air for v in others)
+    return bool(others) and not any(v in skinned for v in others)
 
 
-def _transforms(entry, section, pieces, faces, vol, air, tol):
+def _transforms(entry, section, pieces, faces, vol, skinned, tol):
     """The stations along the solid's pieces: every path size, graded toward a real end face when there is a skin."""
     skin, size = entry["skin"], float(entry["path_size"])
     shift = sum(float(p["advance"]) * np.asarray(p["axis"], float) for p in pieces)
     first = section.quad[0] if len(section.quad) else section.tri[0]
     centre = section.xyz[first].mean(axis=0)
     start, end = _nearest(2, faces, [centre, centre + shift], tol)[0]
-    graded = (_graded_end(start, vol, air), _graded_end(end, vol, air))
+    graded = (_graded_end(start, vol, skinned), _graded_end(end, vol, skinned))
     out, offset = [], np.zeros(3)
     for i, piece in enumerate(pieces):
         length = float(piece["advance"])
@@ -436,7 +443,8 @@ def apply_swept(job, folder, body_vols):
     final tags}), its section meshed with the skin on the profile curves whose side faces are real surface, swept along
     its pieces and classified on the volume's entities. job["swept_tags"] gets the volumes and job["swept_add"] one
     add(dim) per volume, for meshcommon.generate. Returns the volumes."""
-    air = {t for a in air_items(job) for t in body_vols.get(a["mat_id"], [])}
+    skins = {m for e in job.get("skin", []) for m in e["mat_ids"]} | {e["mat_id"] for e in job["swept"] if e["skin"]}
+    skinned = {t for m in skins for t in body_vols.get(m, [])}
     tags, adds = [], []
     for entry in job.get("swept", []):
         left = list(body_vols[entry["mat_id"]])
@@ -452,7 +460,7 @@ def apply_swept(job, folder, body_vols):
             along = 0.5 * float(pieces[0]["advance"]) * np.asarray(pieces[0]["axis"], float)
             side = _nearest(2, faces, mids + along, tol)[0]  # the side face of each profile curve
             section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder)
-            V, cells = sweep(section, _transforms(entry, section, pieces, faces, vol, air, tol))
+            V, cells = sweep(section, _transforms(entry, section, pieces, faces, vol, skinned, tol))
             adds.append(_join(vol, V, cells, entry["name"]))
             tags.append(vol)
     job["swept_tags"], job["swept_add"] = tags, adds
