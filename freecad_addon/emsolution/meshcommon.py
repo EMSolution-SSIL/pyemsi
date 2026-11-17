@@ -1124,6 +1124,11 @@ def _mesh_swept(job, dim):
     gmsh.model.mesh.renumberElements()
 
 
+class AirFailed(JobError):
+    """gmsh failed to mesh the air around the swept bodies. Its result differs from run to run, so run meshes the job
+    once more from the start before it gives up."""
+
+
 class PyramidsFailed(Exception):
     """gmsh failed to make the 3D mesh around the swept bodies with the pyramids' apex pushed out: run meshes the job
     again from the start without that (meshing again in the same model leaves the volumes empty)."""
@@ -1143,7 +1148,7 @@ def _swept_stages(job, dim):
             except Exception as exc:
                 if gmsh.option.getNumber("Mesh.OptimizePyramids"):
                     raise PyramidsFailed(str(exc)) from exc
-                raise JobError(
+                raise AirFailed(
                     f"gmsh could not mesh around the swept bodies ({exc}); give the air more room or use a finer size"
                     " there"
                 ) from exc
@@ -1161,7 +1166,7 @@ def _check_filled(swept, log):
                 errors = [m.split(":", 1)[-1].strip() for m in log if m.startswith("Error")]
                 why = f" ({errors[-1]})" if errors else ""
                 name = gmsh.model.getPhysicalName(3, group)
-                raise JobError(
+                raise AirFailed(
                     f"gmsh could not mesh {name} (MAT_ID {group}) around the swept bodies{why}; give the air more room"
                     " or use a finer size there"
                 )
@@ -1192,18 +1197,29 @@ def run(job_path, build, dim):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         split = build(job, folder)
-        try:
-            generate(job, dim)
-        except PyramidsFailed:  # it fails the same way around gmsh's own Transfinite Body, depending on OCC's faces
-            _note("Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without")
+        retried = False
+        while True:  # at most once more without the pyramids pushed out and once more after a failed air mesh
+            try:
+                generate(job, dim)
+                break
+            except PyramidsFailed:  # it fails the same way around gmsh's own Transfinite Body, depending on OCC's faces
+                _note(
+                    "Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without"
+                )
+                extra = {"optimize_pyramids": 0}
+            except AirFailed as exc:  # only around swept bodies
+                if retried:
+                    raise
+                retried = True
+                _note(f"Swept Body: {exc}; meshing once more from the start")
+                extra = {k: job[k] for k in ("optimize_pyramids",) if k in job}
             gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
             gmsh.initialize()
             gmsh.option.setNumber("General.Terminal", 1)
             with open(job_path, encoding="utf-8") as fh:
-                job = json.load(fh) | {"optimize_pyramids": 0}
+                job = json.load(fh) | extra
             gmsh.model.add(job["model_name"])
             split = build(job, folder)
-            generate(job, dim)
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         if split:

@@ -1,6 +1,7 @@
 """Swept Body: the cross-section mesh and the swept volume mesh (meshsweep.py, a mesher module).
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_meshsweep.py"""
 
+import json
 import os
 import sys
 
@@ -8,7 +9,7 @@ import gmsh
 import numpy as np
 import pytest
 
-from .test_mesher import MESHER, write_rect
+from .test_mesher import MESHER, write_box, write_rect
 from .test_mesher2d import write_polygons
 
 sys.path.insert(0, os.path.dirname(MESHER))  # meshsweep imports its neighbours by bare name, as in the mesher process
@@ -141,6 +142,38 @@ def test_section_of_a_bar_is_a_graded_grid(tmp_path):
         d = steps(s, key)
         assert d[0] == pytest.approx(d[-1]) and d.min() == pytest.approx(0.5, rel=0.25)
         assert d.sum() == pytest.approx(4)
+
+
+def write_spline_rect(path, x, y, z, dx, dy):
+    """The rectangle of write_rect with each side a straight B-spline whose parameter is not its length (the middle
+    control point a tenth along), as a pipe's start face stores its straight edges."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        corners = [(x, y, z), (x + dx, y, z), (x + dx, y + dy, z), (x, y + dy, z)]
+        tags = [occ.addPoint(*c) for c in corners]
+        sides = []
+        for k, (p, q) in enumerate(zip(corners, corners[1:] + corners[:1])):
+            mid = occ.addPoint(*(a + 0.1 * (b - a) for a, b in zip(p, q)))
+            sides.append(occ.addBSpline([tags[k], mid, tags[(k + 1) % 4]], degree=2))
+        occ.addPlaneSurface([occ.addCurveLoop(sides)])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def test_section_with_straight_spline_sides_is_a_graded_grid(tmp_path):
+    write_rect(str(tmp_path / "lines.brep"), -5, -2, 3, 10, 4)
+    write_spline_rect(str(tmp_path / "bar.brep"), -5, -2, 3, 10, 4)
+    s = section("bar.brep", [0, 1, 2, 3], tmp_path)
+    grid = section("lines.brep", [0, 1, 2, 3], tmp_path)
+    assert len(s.tri) == 0 and len(s.quad) == len(grid.quad)
+    assert np.allclose(sorted(map(tuple, s.xyz.round(9))), sorted(map(tuple, grid.xyz.round(9))))
+    for key in (side(s, 1, -2), side(s, 1, 2)):
+        d = steps(s, key)
+        assert d[0] == pytest.approx(0.5) and d[-1] == pytest.approx(0.5)
 
 
 def test_section_of_a_wire_has_quad_layers(tmp_path):
@@ -417,3 +450,85 @@ def test_cuts_on_the_second_turn_of_a_helix():
     corner = _moved_all(meshsweep.stations(piece, [5 * length / 6], rc), xyz[2])[0]
     cuts = meshsweep._cuts(piece, rc, length, start, section, [corner], 1e-6)
     assert len(cuts) == 1 and np.isclose(cuts[0], 5 * length / 6)  # not at a sixth, the same angle on turn one
+
+
+def strand_section(rc=1.2, pitch=10.0, r=0.45, n=16):
+    """A round strand's section at (rc, 0, 0), in the plane normal to the helix about z there (tilted to the axis),
+    and its unit normal and binormal."""
+    c = pitch / (2 * np.pi)
+    tangent = np.array([0, rc, c]) / np.hypot(rc, c)
+    normal, binormal = np.array([-1.0, 0, 0]), np.cross(tangent, [-1.0, 0, 0])
+    a = 2 * np.pi * np.arange(n) / n
+    xyz = np.vstack([[rc, 0, 0], [rc, 0, 0] + r * (np.cos(a)[:, None] * normal + np.sin(a)[:, None] * binormal)])
+    tri = np.array([[0, 1 + k, 1 + (k + 1) % n] for k in range(n)])
+    return meshsweep.Section(xyz, tri, np.zeros((0, 4), int), {}), normal, binormal
+
+
+def test_helix_end_face_corners_are_no_cuts():
+    # the end faces' own corners (a seam vertex anywhere on the circle) lie on the end stations: no sliver beside them
+    section, normal, binormal = strand_section()
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 432.0, "advance": 12.0}
+    chain = meshsweep._chain([piece], np.array([1.2, 0, 0]))
+    ((_, rc, length, start),) = chain
+    (end,) = meshsweep.stations(piece, [length], rc)
+    rim = [np.array([1.2, 0, 0]) + 0.45 * (np.cos(a) * normal + np.sin(a) * binormal) for a in np.linspace(0, 6, 7)]
+    corners = rim + [end[:3, :3] @ q + end[:3, 3] for q in rim]
+    cuts = meshsweep._cuts(piece, rc, length, start, section, corners, 2.5e-5 * 15)
+    assert cuts == []
+    skin = {"depth": 0.2, "per_depth": 2.0, "layer": 2.0}
+    at = _moved_all(meshsweep._path(chain, 0.4, skin, (True, True), [cuts]), np.array([1.2, 0, 0]))
+    steps = np.linalg.norm(np.diff(at, axis=0), axis=1)
+    assert abs(steps[0] - 0.1) < 1e-3 and abs(steps[-1] - 0.1) < 1e-3
+
+
+def test_helix_cut_near_an_end_is_merged():
+    section, normal, _ = strand_section()
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 432.0, "advance": 12.0}
+    chain = meshsweep._chain([piece], np.array([1.2, 0, 0]))
+    ((_, rc, length, start),) = chain
+    near = meshsweep.stations(piece, [0.003], rc)[0]
+    corner = near[:3, :3] @ (np.array([1.2, 0, 0]) + 0.45 * normal) + near[:3, 3]
+    cuts = meshsweep._cuts(piece, rc, length, start, section, [corner], 1e-6)
+    assert len(cuts) == 1 and abs(cuts[0] - 0.003) < 1e-9  # found at its station
+    at = _moved_all(meshsweep._path(chain, 0.4, None, (False, False), [cuts]), np.array([1.2, 0, 0]))
+    assert np.linalg.norm(np.diff(at, axis=0), axis=1).min() > 0.3  # merged into the end station
+
+
+def box_job(folder):
+    """A job meshing one box, for meshcommon.run."""
+    os.mkdir(folder / "geometry")
+    write_box(str(folder / "geometry" / "vol_1.brep"), 0, 0, 0, 1, 1, 1)
+    job = {
+        "model_name": "Model",
+        "mesh_file": str(folder / "pre_geom.msh"),
+        "volumes": [{"mat_id": 1, "name": "Box", "file": "geometry/vol_1.brep", "size": 0.5}],
+        "surfaces": [],
+        "sizes": [],
+    }
+    (folder / "job.json").write_text(json.dumps(job), encoding="utf-8")
+    return str(folder / "job.json")
+
+
+@pytest.mark.parametrize("failures", [1, 2])
+def test_failed_air_mesh_is_tried_once_more(tmp_path, monkeypatch, capsys, failures):
+    import mesher  # here: it needs the path above, and only this test runs it in-process
+
+    real, calls = meshcommon.generate, []
+
+    def generate(job, dim):  # gmsh's air mesh beside a swept body fails the first failures times
+        calls.append(dim)
+        if len(calls) <= failures:
+            raise meshcommon.AirFailed("gmsh could not mesh around the swept bodies (overlapping facets)")
+        real(job, dim)
+
+    monkeypatch.setattr(meshcommon, "generate", generate)
+    path = box_job(tmp_path)
+    if failures == 1:
+        meshcommon.run(path, mesher.build, 3)
+        assert os.path.isfile(tmp_path / "pre_geom.msh")
+        assert "meshing once more from the start" in capsys.readouterr().err
+    else:
+        with pytest.raises(meshcommon.AirFailed, match="overlapping facets"):
+            meshcommon.run(path, mesher.build, 3)
+        assert not os.path.isfile(tmp_path / "pre_geom.msh")
+    assert len(calls) == 2

@@ -93,6 +93,22 @@ def _ends_of(curve):
     return lo, hi, np.array(gmsh.model.getValue(1, curve, [lo])), np.array(gmsh.model.getValue(1, curve, [hi]))
 
 
+def _straight(curve, face):
+    """True for a line, or for a curve of another type (a B-spline edge of a pipe's face) whose points lie within TOL x
+    the face's size of its chord."""
+    if gmsh.model.getType(1, curve) == "Line":
+        return True
+    lo, hi, a, b = _ends_of(curve)
+    box = np.reshape(gmsh.model.getBoundingBox(2, face), (2, 3))
+    size = float(np.linalg.norm(box[1] - box[0]))
+    chord = b - a
+    if np.linalg.norm(chord) < TOL * size:
+        return False
+    p = np.reshape(gmsh.model.getValue(1, curve, list(np.linspace(lo, hi, 33))), (-1, 3)) - a
+    off = p - np.outer(p @ chord / (chord @ chord), chord)
+    return float(np.linalg.norm(off, axis=1).max()) <= TOL * size
+
+
 def _structured(face, curves, real, entry):
     """Four straight curves: transfinite curves graded toward the real neighbouring sides (with a skin), else in equal
     steps of about the section size, a recombined transfinite surface. Meshes the curves (generate(1)) and puts their
@@ -127,8 +143,13 @@ def _structured(face, curves, real, entry):
         lo, hi, _, _ = info[c]
         tags, _, params = gmsh.model.mesh.getNodes(1, c)
         order = np.argsort(params)
+        line = gmsh.model.getType(1, c) == "Line"
         for tag, t in zip(np.asarray(tags)[order], positions[c][1:-1]):
-            u = lo + (hi - lo) * t / length[c]
+            if line:
+                u = lo + (hi - lo) * t / length[c]
+            else:  # a straight B-spline: its parameter is not the length along it
+                a, b = info[c][2], info[c][3]
+                u = gmsh.model.getParametrization(1, c, list(a + (b - a) * t / length[c]))[0]
             gmsh.model.mesh.setNode(int(tag), gmsh.model.getValue(1, c, [u]), [u])
 
 
@@ -197,7 +218,7 @@ def section_mesh(entry, solid_index, real_curves, folder, options=None, points=(
         user = {o: v for o, v in (options or {}).items() if o in SECTION_OPTIONS}
         with _options({**{o: gmsh.option.getNumber(o) for o in SIZE_OPTIONS}, **user}):
             apply_size_fields({size: {2: [face]}})
-            four = len(curves) == 4 and all(gmsh.model.getType(1, c) == "Line" for c in curves)
+            four = len(curves) == 4 and all(_straight(c, face) for c in curves)
             if four:  # a busbar or plate: a grid, with or without a skin
                 _structured(face, curves, set(real) if entry["skin"] else set(), entry)
             elif entry["skin"] and real:
@@ -589,7 +610,9 @@ def _cuts(piece, rc, length, start, section, points, tol):
     """The path lengths (at rc) along the turned piece where it must have a station: of points (the volume's corners),
     those on the piece, each at its angle about the piece's axis from where the piece starts (or that angle plus whole
     turns, on a helix of more than one). A point is on the piece when, moved back by the piece to its start, it lies in
-    the box of the section where the piece starts."""
+    the box of the section where the piece starts. A helical piece's corners: _helical_cuts."""
+    if float(piece["advance"]):
+        return _helical_cuts(piece, rc, length, start, section, points, tol)
     axis = np.asarray(piece["axis"], float)
     axis = axis / np.linalg.norm(axis)
     origin = np.asarray(piece["origin"], float)
@@ -614,6 +637,48 @@ def _cuts(piece, rc, length, start, section, points, tol):
             if ((back >= lo) & (back <= hi)).all():
                 out.append(arc)
     return out
+
+
+def _helical_cuts(piece, rc, length, start, section, points, tol):
+    """_cuts on a helical piece, whose station planes are tilted to its axis (so a corner's angle about the axis is not
+    its station's): of points, those on the piece, each at the path length where the station plane passes through it,
+    found by bisection between samples (72 per turn) of its distance to the plane. A point is on the piece when, moved
+    back by the piece to its start, it lies in the box of the section where the piece starts."""
+    xyz = np.asarray(section.xyz, float)
+    lo, hi = xyz.min(axis=0) - tol, xyz.max(axis=0) + tol
+    centre = xyz.mean(axis=0)
+    normal = np.linalg.svd(xyz - centre)[2][-1]  # the section's plane
+
+    def back(q, at):  # q moved back to the start section by the piece's stations at the path lengths at
+        return [_moved([q], np.linalg.inv(t @ start))[0] for t in stations(piece, at, rc)]
+
+    samples = np.linspace(0.0, length, 72 * math.ceil(float(piece["angle"]) / 360 - 1e-9) + 1)
+    out = []
+    for q in np.asarray(points, float).reshape(-1, 3):
+        f = np.array([(p - centre) @ normal for p in back(q, samples)])
+        for i in np.flatnonzero(f[:-1] * f[1:] <= 0):
+            a, b = samples[i], samples[i + 1]
+            for _ in range(60):
+                m = 0.5 * (a + b)
+                if ((back(q, [m])[0] - centre) @ normal) * f[i] > 0:
+                    a = m
+                else:
+                    b = m
+            s = 0.5 * (a + b)
+            p = back(q, [s])[0]
+            if tol < s < length - tol and ((p >= lo) & (p <= hi)).all():
+                out.append(s)
+    return out
+
+
+def _merged(cuts, length, step):
+    """The cuts at least half a step from either end and from each other (a nearer one is merged into the station
+    beside it, so no sliver station is left)."""
+    kept = []
+    for c in sorted(cuts):
+        if step / 2 <= c <= length - step / 2 and all(abs(c - k) >= step / 2 for k in kept):
+            kept.append(c)
+    return kept
 
 
 def _flat(V, cells):
@@ -658,6 +723,8 @@ def _path(chain, size, skin=None, graded=(False, False), cuts=None):
         ends = (graded[0] and i == 0, graded[1] and i == len(chain) - 1)
         angle = float(piece.get("angle", 0.0))
         here = cuts[i] if cuts else []
+        if angle and float(piece["advance"]):  # a helix: no sliver beside an end or a cut (revolved pieces as before)
+            here = _merged(here, length, min(size, length / max(1, math.ceil(angle / MIN_TURN - 1e-9))))
         if angle:  # a station at each corner of the body on the piece, at least one per MIN_TURN
             if skin and any(ends):
                 positions = turned_positions(length, angle, size, here, first, depth, ends)
