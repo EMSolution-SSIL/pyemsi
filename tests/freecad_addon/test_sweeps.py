@@ -230,6 +230,20 @@ class RevolvedSweepTest(unittest.TestCase):
         self.assertEqual(pipe.ShapeType, "Solid")
         self.assertEqual(sweeps.recognise(pipe), "only straight and revolved sweeps are made so far")
 
+    def test_whole_turn_helix_still_refused(self):
+        for height in (20, 30):  # ends exactly opposite: a translation matches them too
+            with self.subTest(height=height):
+                helix = Part.makeHelix(10, height, 20)
+                circle = Part.Wire(Part.makeCircle(2, V(20, 0, 0), V(0, 1, 0)))
+                pipe = Part.Wire(helix).makePipeShell([circle], True, True)
+                self.assertEqual(pipe.ShapeType, "Solid")
+                self.assertEqual(sweeps.recognise(pipe), "only straight and revolved sweeps are made so far")
+
+    def test_bulged_wire_keeps_side_face(self):
+        pts = [V(0, 0, 0), V(3, 0, 0), V(5, 0, 10), V(3, 0, 20), V(0, 0, 20), V(0, 0, 0)]
+        barrel = Part.Face(Part.makePolygon(pts)).revolve(V(0, 0, 0), V(0, 0, 1), 360)
+        self.assertEqual(sweeps.recognise(barrel), "a side face does not run straight from one end to the other")
+
 
 if __name__ == "__main__":
     unittest.main()

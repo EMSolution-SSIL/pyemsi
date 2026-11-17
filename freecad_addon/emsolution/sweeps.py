@@ -143,6 +143,16 @@ def _screw_maps(a, b, na, nb, length_tol):
     return objects.coincident_faces(moved, b, length_tol)
 
 
+def _leaves_line(solid, faces, i, j, d, length_tol):
+    """True if, of end faces i and j matched by the translation d, every other face is curved and the straight line
+    between their centres leaves solid: a helix of whole turns, whose ends a screw motion and a translation both
+    match (a straight body with a bulge or a groove keeps its centre line inside)."""
+    if any(_planar(f) for k, f in enumerate(faces) if k not in (i, j)):
+        return False
+    c = faces[i].CenterOfMass
+    return any(not solid.isInside(c + d * (k / 8), length_tol, True) for k in range(1, 8))
+
+
 def _meridian(solid, point, axis, length_tol):
     """The unit direction, normal to axis, of a half-plane bounded by the line (point, axis) that holds an edge of
     solid (a seam, or the joint of two half rings), or None when no edge lies in such a half-plane."""
@@ -250,7 +260,7 @@ def _recognise(solid, start, label, tol):
                 continue
             unit = App.Vector(d).normalize()
             if not all(_runs_along(f, unit, tol) for k, f in enumerate(faces) if k not in (i, j)):
-                reasons.append(SIDE_FACE)
+                reasons.append(NOT_STRAIGHT if _leaves_line(solid, faces, i, j, d, length_tol) else SIDE_FACE)
                 continue
             if abs(solid.Volume - a.Area * abs(d.dot(na))) > tol * solid.Volume:
                 reasons.append(VOLUME)
