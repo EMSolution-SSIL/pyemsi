@@ -17,8 +17,8 @@ Human-oriented setup details are in [BUILDING.md](BUILDING.md).
 ## FreeCAD add-on (`freecad_addon/`)
 
 - Workbench `EMSolution`, package `freecad_addon/emsolution/`. FreeCAD 1.1.0 is pinned in pixi; run it with `pixi run -e addon freecad` (the `addon` environment; the default one has no FreeCAD).
-- The mesher modules (`mesher.py`, `mesher2d.py`, `meshcommon.py`, `meshgroups.py`, `meshsym.py`, `meshfrozen.py`)
-  run in a separate Python process (gmsh) started by `runner.py`. Never import FreeCAD there; they import each other
+- The mesher modules (`mesher.py`, `mesher2d.py`, `meshcommon.py`, `meshgroups.py`, `meshsym.py`, `meshfrozen.py`,
+  `meshsweep.py`) run in a separate Python process (gmsh) started by `runner.py`. Never import FreeCAD there; they import each other
   by plain module name, not relative imports.
 - GUI code (FreeCADGui, Qt, coin) lives only in `commands.py`, `taskpanels.py`, `runner.py`, `labels.py`,
   `highlight.py` and `materialstandins.py`. Keep the other modules (`objects.py`, `geometry.py`, `jobwriter.py`,
