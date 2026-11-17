@@ -1108,6 +1108,12 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(len(self.steps(2)), 10)
         self.assertEqual(inner_free_faces(self.AIR_BOX), [])
 
+    def test_swept_size_factor_halves_the_steps(self):
+        self.swept_bar(swept("sweep_1_1.brep", recombine=False), recombine=(), options={"Mesh.MeshSizeFactor": 0.5})
+        self.open_msh()
+        self.assertEqual(len(self.steps(2)), 20)
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
     def test_swept_bar_sets_delaunay(self):
         r = self.swept_bar(options={"Mesh.Algorithm3D": 10})  # HXT refuses quads on the air's boundary
         self.assertIn("the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces", r.stderr)

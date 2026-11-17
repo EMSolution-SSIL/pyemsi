@@ -14,6 +14,7 @@ from meshfrozen import FLIP, _options
 
 RATIO = 1.2  # the growth of a skin's steps away from the surface
 SIZE_OPTIONS = ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints", "Mesh.MeshSizeFromCurvature")
+SECTION_OPTIONS = ("Mesh.Algorithm", "Mesh.Smoothing", "Mesh.RecombinationAlgorithm")  # the user's, for the section
 JACOBIAN = {5: (1, 3, 4), 6: (1, 2, 3)}  # the nodes whose edges from node 0 make a positive triple product
 
 # xyz: the section's nodes in global coordinates (n x 3); tri (t x 3) and quad (q x 4): its elements as node indexes;
@@ -126,10 +127,27 @@ def _read(face, curves):
     return Section(np.asarray(xyz, float).reshape(-1, 3), tri, quad, edges)
 
 
-def section_mesh(entry, solid_index, real_curves, folder):
+def scaled(entry, options):
+    """The entry with its path and section sizes as the user's global mesh settings (options: job["options"]) make
+    them: times Mesh.MeshSizeFactor, clamped to Mesh.MeshSizeMin and Mesh.MeshSizeMax when those are set (> 0). The
+    skin's steps are physical sizes and stay."""
+    factor = float(options.get("Mesh.MeshSizeFactor", 1.0))
+    lo, hi = float(options.get("Mesh.MeshSizeMin", 0.0)), float(options.get("Mesh.MeshSizeMax", 0.0))
+
+    def size(s):
+        s = float(s) * factor
+        if hi > 0:
+            s = min(s, hi)
+        return max(s, lo) if lo > 0 else s
+
+    return {**entry, "path_size": size(entry["path_size"]), "section_size": size(entry["section_size"])}
+
+
+def section_mesh(entry, solid_index, real_curves, folder, options=None):
     """Mesh the profile of entry["solids"][solid_index] in a model of its own, removed afterwards; the current
     (main) model stays current. real_curves: the indexes (in getBoundary order of the profile face) of the profile
-    curves whose side faces are real surface; the others are cuts and get no skin."""
+    curves whose side faces are real surface; the others are cuts and get no skin. options: the user's mesh settings
+    (job["options"]), of which the 2D ones (SECTION_OPTIONS) hold while the section is meshed."""
     main = gmsh.model.getCurrent()
     name, m = entry["name"], entry["mat_id"]
     gmsh.model.add(f"swept section {name} {solid_index}")
@@ -144,7 +162,8 @@ def section_mesh(entry, solid_index, real_curves, folder):
         real = [curves[k] for k in real_curves]
         size = float(entry["section_size"])
         # apply_size_fields sets options, which hold for every model: the main model gets its own back
-        with _options({o: gmsh.option.getNumber(o) for o in SIZE_OPTIONS}):
+        user = {o: v for o, v in (options or {}).items() if o in SECTION_OPTIONS}
+        with _options({**{o: gmsh.option.getNumber(o) for o in SIZE_OPTIONS}, **user}):
             apply_size_fields({size: {2: [face]}})
             four = len(curves) == 4 and all(gmsh.model.getType(1, c) == "Line" for c in curves)
             if four:  # a busbar or plate: a grid, with or without a skin
@@ -446,7 +465,9 @@ def apply_swept(job, folder, body_vols):
     skins = {m for e in job.get("skin", []) for m in e["mat_ids"]} | {e["mat_id"] for e in job["swept"] if e["skin"]}
     skinned = {t for m in skins for t in body_vols.get(m, [])}
     tags, adds = [], []
+    options = job.get("options", {})  # applied only in generate, after this: the sizes and the section get them here
     for entry in job.get("swept", []):
+        entry = scaled(entry, options)
         left = list(body_vols[entry["mat_id"]])
         for k, solid in enumerate(entry["solids"]):
             box, mids = _profile(os.path.join(folder, solid["profile"]), entry["name"])
@@ -459,7 +480,7 @@ def apply_swept(job, folder, body_vols):
             real = set(real_boundary(3, [vol]))
             along = 0.5 * float(pieces[0]["advance"]) * np.asarray(pieces[0]["axis"], float)
             side = _nearest(2, faces, mids + along, tol)[0]  # the side face of each profile curve
-            section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder)
+            section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder, options)
             V, cells = sweep(section, _transforms(entry, section, pieces, faces, vol, skinned, tol))
             adds.append(_join(vol, V, cells, entry["name"]))
             tags.append(vol)
