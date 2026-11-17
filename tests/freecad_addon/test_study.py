@@ -1163,6 +1163,54 @@ class StudyTest(unittest.TestCase):
         with open(jobwriter.write_job(study), encoding="utf-8") as fh:
             self.assertIs(json.load(fh)["skin"][0]["quads"], True)
 
+    def test_job_without_swept_has_no_swept_key(self):
+        self.box("A")
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("swept", json.load(fh))
+
+    def swept_job(self, shape=None, path_size=0):
+        bar = self.shape_body("Bar", shape or Part.makeBox(10, 4, 40))
+        self.study.MeshSizesGroup.DefaultMeshSize = 2
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        item.PathSize = path_size
+        return bar, item
+
+    def read_job(self):
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_swept_goes_to_the_job(self):
+        self.swept_job(path_size=4)
+        job = self.read_job()
+        (entry,) = job["swept"]
+        self.assertEqual(entry["mat_id"], job["volumes"][0]["mat_id"])
+        self.assertEqual((entry["path_size"], entry["section_size"], entry["skin"]), (4, 2, None))
+        self.assertIs(entry["recombine"], False)
+        (solid,) = entry["solids"]
+        (piece,) = solid["pieces"]
+        self.assertAlmostEqual(piece["advance"], 40)
+        self.assertEqual(piece["angle"], 0)
+        self.assertAlmostEqual(abs(piece["axis"][2]), 1)
+        self.assertEqual(len(piece["origin"]), 3)
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        self.assertEqual(len(face.Faces), 1)
+        self.assertTrue(isinstance(face.Faces[0].Surface, Part.Plane))
+        self.assertAlmostEqual(face.Area, 40)
+
+    def test_swept_takes_the_skin(self):
+        bar, _ = self.swept_job()
+        objects.make_skin_layer(self.study, [(bar, "")], 1)
+        job = self.read_job()
+        self.assertEqual(job["swept"][0]["skin"], {"depth": 1.0, "per_depth": 2.0, "layer": 3.0})
+        self.assertNotIn("skin", job)
+
+    def test_swept_two_solids(self):
+        shape = Part.makeCompound([Part.makeBox(10, 4, 40), Part.makeBox(10, 4, 40, App.Vector(30, 0, 0))])
+        self.swept_job(shape)
+        (entry,) = self.read_job()["swept"]
+        self.assertEqual(len(entry["solids"]), 2)
+        self.assertEqual(len({s["profile"] for s in entry["solids"]}), 2)
+
     def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
         a, b = self.face("A"), self.face("B")
         b.Placement.Base = App.Vector(10, 0, 0)

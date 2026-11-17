@@ -3,7 +3,7 @@
 import json
 import os
 
-from . import airshapes, geometry, objects, sides, validation
+from . import airshapes, geometry, objects, sides, sweeps, validation
 from .geometry import global_shape
 
 
@@ -193,6 +193,62 @@ def air_grading_entries(study, ids):
     return entries
 
 
+def swept_entries(study, folder, ids, prefix=""):
+    """The job's "swept" list: one entry per whole body of a Swept Body item that is in ids ({body Name: MAT_ID}), in
+    tree order. The profile face of each solid is written to geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global
+    coordinates. The skin comes from the first Skin Layer on the body."""
+    entries, seen = [], set()
+    picks = [pick for item in objects.recombine_items(study) for pick in objects.face_picks(item)]
+    recombined = {body.Name for body, faces in picks if not faces}
+    for item in objects.swept_bodies(study):
+        for body, sub in objects.item_refs(item):
+            if sub != "" or body.Name not in ids or body.Name in seen:
+                continue
+            seen.add(body.Name)
+            shape = meshed_shape(body)
+            result = sweeps.recognise_body(
+                shape, [s for b, subs in item.StartFace if b.Name == body.Name for s in subs]
+            )
+            if isinstance(result, str):  # validation refuses these before a job is written
+                continue
+            mat_id = ids[body.Name]
+            size = objects.whole_body_size(study, body)
+            skin = next(
+                (
+                    {"depth": layer.SkinDepth.Value, "per_depth": layer.ElementsPerDepth, "layer": layer.LayerDepth}
+                    for layer in objects.skin_layers(study)
+                    if any(b.Name == body.Name and s == "" for b, s in objects.item_refs(layer))
+                ),
+                None,
+            )
+            solids = []
+            for k, (solid, sweep) in enumerate(zip(shape.Solids, result), 1):
+                rel = f"geometry/{prefix}sweep_{mat_id}_{k}.brep"
+                solid.getElement(sweep.profile).exportBrep(os.path.join(folder, rel))
+                pieces = [
+                    {"origin": list(p.origin), "axis": list(p.axis), "angle": p.angle, "advance": p.advance}
+                    for p in sweep.pieces
+                ]
+                solids.append({"profile": rel, "pieces": pieces})
+            entries.append(
+                {
+                    "name": objects.region_name(study, body),
+                    "mat_id": mat_id,
+                    "path_size": item.PathSize.Value or size,
+                    "section_size": item.SectionSize.Value or size,
+                    "recombine": body.Name in recombined,
+                    "skin": skin,
+                    "solids": solids,
+                }
+            )
+    return entries
+
+
+def swept_names(study):
+    """The Names of the bodies in a Swept Body item: skin_entries leaves them out, the swept entry holds their skin."""
+    return {body.Name for item in objects.swept_bodies(study) for body, sub in objects.item_refs(item) if sub == ""}
+
+
 def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
     """The job's "skin" list: one entry per Skin Layer with a whole-body reference in ids ({body or air Name:
     [MAT_ID, ...]}, the map refine_entries takes), in tree order. Quad layers only in a 2D Study and when quads.
@@ -200,11 +256,12 @@ def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
     (validation.free_faces) are written to geometry/<prefix>skin_<item>_<body>_<n>.brep and listed in "faces" with
     the MAT_ID of their body."""
     entries = []
+    swept = swept_names(study)
     for k, item in enumerate(objects.skin_layers(study), 1):
         mat_ids = [
             mat_id
             for body, sub in objects.item_refs(item)
-            if sub == "" and not objects.is_air(body) and body.Name in ids
+            if sub == "" and not objects.is_air(body) and body.Name in ids and body.Name not in swept
             for mat_id in ids[body.Name]
         ]
         mat_ids = list(dict.fromkeys(mat_ids))  # a body picked twice is one skin
@@ -352,6 +409,9 @@ def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
             job["recombine_faces"].append(
                 {"name": objects.region_name(study, body), "mat_id": ids[body.Name], "face": face, "file": rel}
             )
+    swept = swept_entries(study, folder, ids, prefix)
+    if swept:
+        job["swept"] = swept
     return job
 
 
