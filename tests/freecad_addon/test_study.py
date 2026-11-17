@@ -405,6 +405,28 @@ class StudyTest(unittest.TestCase):
             f"Air Region {objects.display_name(air)} cannot have a Skin Layer.",
         )
 
+    def test_swept_body_defaults_and_row(self):
+        a = self.box("A")
+        item = objects.make_swept_body(self.study, [(a, "")])
+        self.assertEqual((item.PathSize.Value, item.SectionSize.Value), (0.0, 0.0))
+        self.assertEqual(list(item.StartFace), [])
+        self.assertEqual(objects.swept_bodies(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "along body size")
+        item.PathSize = 2.0
+        item.SectionSize = 0.5
+        self.assertEqual(objects._size_text(item), "along 2 mm, section 0.5 mm")
+        objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        self.assertEqual(objects._size_text(item), "along 2 mm, section 0.5 mm, skin")
+
+    def test_swept_body_refuses_the_air(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        self.assertEqual(
+            objects.air_refusal(objects.SweptBody, [air]),
+            f"Air Region {objects.display_name(air)} cannot be a Swept Body.",
+        )
+
     def test_skin_layer_mu_r_from_the_material(self):
         a, b = self.box("A"), self.box("B", 10)
         props = {"electromagnetic": {"relative_permeability": {"type": "scalar", "value": 1000, "unit": "1"}}}

@@ -387,6 +387,32 @@ class SkinLayer(_Proxy):
         obj.RelativePermeability = 1.0
 
 
+class SweptBody(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "References",
+            "EMSolution",
+            "Bodies meshed by sweeping their cross-section",
+        )
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "StartFace",
+            "EMSolution",
+            "Optional: the flat end face to start from, one per solid",
+        )
+        obj.addProperty(
+            "App::PropertyLength", "PathSize", "EMSolution", "Element length along the path; 0 = the body's size"
+        )
+        obj.addProperty(
+            "App::PropertyLength",
+            "SectionSize",
+            "EMSolution",
+            "Element size in the cross-section away from the skin; 0 = the body's size",
+        )
+
+
 class TransfiniteBody(_Proxy):
     def __init__(self, obj):
         obj.Proxy = self
@@ -1013,6 +1039,15 @@ def make_skin_layer(study, refs, depth=1.0):
     return obj
 
 
+def make_swept_body(study, refs, path_size=0.0):
+    """refs: list of (body, ""), the bodies meshed by sweeping; path_size: the element length along the path in mm,
+    0 = the body's size."""
+    obj = _add(study, "MeshSizesGroup", SweptBody, "SweptBody")
+    obj.PathSize = path_size
+    obj.References = refs
+    return obj
+
+
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
     object, all its solids (faces in 2D); split_row splits a row into blocks."""
@@ -1041,6 +1076,10 @@ def air_gradings(study):
 
 def skin_layers(study):
     return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SkinLayer)]
+
+
+def swept_bodies(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SweptBody)]
 
 
 def skin_depth(frequency, conductivity, mu_r):
@@ -1672,10 +1711,12 @@ def air_refusal(item_cls, bodies):
     takes Materials, Mesh Sizes and Refine Nears: it is not recombined or structured, and an excitation goes on a
     body."""
     airs = list(dict.fromkeys(display_name(b) for b in bodies if is_air(b)))
-    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine, SkinLayer):
+    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine, SkinLayer, SweptBody):
         return ""
     if item_cls is SkinLayer:
         return f"Air Region {', '.join(airs)} cannot have a Skin Layer."
+    if item_cls is SweptBody:
+        return f"Air Region {', '.join(airs)} cannot be a Swept Body."
     what = "an Excitation" if item_cls is Excitation else "recombined or structured"
     return f"Air Region {', '.join(airs)} cannot be {what}."
 
@@ -1753,6 +1794,7 @@ def is_item(obj):
         RefineNear,
         AirGrading,
         SkinLayer,
+        SweptBody,
         TransfiniteBody,
         TransfiniteEdges,
         Recombine,
@@ -1849,6 +1891,16 @@ def _size_text(item):
     if isinstance(item.Proxy, SkinLayer):
         text = f"δ {item.SkinDepth.Value:g} mm, {item.ElementsPerDepth:g}/δ, {item.LayerDepth:g}δ"
         return text + ", quads" if item.QuadLayers else text
+    if isinstance(item.Proxy, SweptBody):
+        p, s = item.PathSize.Value, item.SectionSize.Value
+        text = f"along {p:g} mm" if p else "along body size"
+        if s > 0:
+            text += f", section {s:g} mm"
+        study = owner_study(item)
+        skinned = {b.Name for sk in skin_layers(study) for b, _ in sk.References} if study else set()
+        if any(b.Name in skinned for b, _ in item.References):
+            text += ", skin"
+        return text
     if isinstance(item.Proxy, TransfiniteBody):
         return "structured"
     if isinstance(item.Proxy, Recombine):
