@@ -13,7 +13,7 @@ import Part
 import gmsh
 from BOPTools import SplitAPI
 
-from emsolution import geometry, jobwriter, objects, validation
+from emsolution import geometry, jobwriter, objects, sweeps, validation
 
 from .materialdata import STEEL, record
 
@@ -2028,6 +2028,175 @@ class StudyTest(unittest.TestCase):
             self.skin_texts(item),
             [f"Skin Layer {item.Label}: Bar is structured, and that wins; the Skin Layer does nothing there."],
         )
+
+    # --- Swept Body validation ---------------------------------------------------
+
+    def swept_texts(self, item, severity=None):
+        return [t for t in self.problems(severity) if t.startswith(f"Swept Body {item.Label}:")]
+
+    def block(self, name, size, base=(0, 0, 0)):
+        return self.shape_body(name, Part.makeBox(*size, App.Vector(*base)))
+
+    def test_swept_body_on_a_face_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "Face1")])
+        self.assertIn(f"Swept Body {item.Label}: pick whole bodies, not A.Face1.", self.problems("error"))
+
+    def test_swept_body_on_the_air_is_refused(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(air, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: Air Region {objects.display_name(air)} cannot be a Swept Body. Remove it from"
+            " the item.",
+            self.problems("error"),
+        )
+
+    def test_swept_body_in_2d_is_refused(self):
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: a 2D Study is already a cross-section; Swept Body is for 3D Studies.",
+            self.problems("error"),
+        )
+
+    def test_swept_body_not_a_sweep(self):
+        sphere = self.shape_body("Ball", Part.makeSphere(5))
+        item = objects.make_swept_body(self.study, [(sphere, "")])
+        self.assertIn(f"Swept Body {item.Label}: Ball is not a sweep: {sweeps.NO_END}.", self.problems("error"))
+
+    def test_swept_body_twice_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        first = objects.make_swept_body(self.study, [(a, "")])
+        second = objects.make_swept_body(self.study, [(a, "")])
+        self.assertIn(f"Swept Body {second.Label}: A is already in Swept Body {first.Label}.", self.problems("error"))
+        self.assertFalse(self.swept_texts(first, "error"))
+
+    def test_swept_body_with_transfinite_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        t = objects.make_transfinite_body(self.study, [a])
+        item = objects.make_swept_body(self.study, [(a, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: A also has Transfinite Body {t.Label}; a body is swept or structured, not both.",
+            self.problems("error"),
+        )
+
+    def test_swept_bodies_touching_are_refused(self):
+        a, b = self.box("A"), self.box("B", x=10)
+        objects.make_air_region(self.study)
+        first = objects.make_swept_body(self.study, [(a, "")])
+        second = objects.make_swept_body(self.study, [(b, "")])
+        texts = self.problems("error")
+        self.assertEqual(
+            [t for t in texts if "touches" in t],
+            [
+                f"Swept Body {first.Label}: A touches B, which is swept; a swept body may touch only the air and"
+                " unstructured bodies."
+            ],
+        )
+        self.assertFalse(self.swept_texts(second, "error"))
+
+    def test_swept_body_touching_a_structured_or_recombined_body_is_refused(self):
+        a, b = self.box("A"), self.box("B", x=10)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        t = objects.make_transfinite_body(self.study, [b])
+        text = (
+            f"Swept Body {item.Label}: A touches B, which is structured; a swept body may touch only the air and"
+            " unstructured bodies."
+        )
+        self.assertIn(text, self.problems("error"))
+        self.doc.removeObject(t.Name)
+        objects.make_recombine(self.study, [b])
+        self.assertIn(text.replace("structured", "recombined", 1), self.problems("error"))
+
+    def test_swept_body_solids_touching_each_other_are_refused(self):
+        shape = Part.makeCompound([Part.makeBox(10, 10, 10), Part.makeBox(10, 10, 10, App.Vector(10, 0, 0))])
+        both = self.shape_body("Pair", shape)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(both, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: Pair touches Pair, which is swept; a swept body may touch only the air and"
+            " unstructured bodies.",
+            self.problems("error"),
+        )
+
+    def test_swept_body_on_a_tet_block_is_fine(self):
+        self.block("Block", (30, 30, 10), (-10, -10, 0))
+        bar = self.block("Bar", (10, 4, 40), (0, 0, 10))
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_body_partial_contact_is_refused(self):
+        bar = self.block("Bar", (10, 4, 40))
+        self.block("Block", (10, 4, 20), (10, 0, 0))  # touches half of the bar's face x = 10
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertEqual(
+            [t for t in self.swept_texts(item, "error") if "touches only part" in t],
+            [
+                f"Swept Body {item.Label}: Block touches only part of Bar.Face2 of Bar; a swept body's faces must be"
+                " touched whole or not at all."
+            ],
+        )
+
+    def test_swept_body_alone_in_the_air_is_fine(self):
+        bar = self.block("Bar", (10, 4, 40))
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_body_on_a_sliding_interface_is_refused(self):
+        a = self.box("A", x=-5)
+        objects.make_air_region(self.study, Center=App.Vector(0, 0, 5), Length=100, Width=100, Height=60)
+        iface = objects.make_sliding_interface(self.study)
+        self.study.Movement = "Sliding motion"
+        item = objects.make_swept_body(self.study, [(a, "")])
+        text = (
+            f"Swept Body {item.Label}: A touches the sliding interface {iface.Label}; swept bodies must keep clear of"
+            " it."
+        )
+        self.assertEqual([t for t in self.problems("error") if "sliding interface" in t], [text])
+
+    def test_swept_body_wins_over_mesh_size(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        size = objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        near = objects.make_refine_near(self.study, [(a, "Face1")])
+        texts = self.problems("warning")
+        self.assertIn(
+            f"Mesh Size {size.Label}: A is swept, and that wins; the Mesh Size does nothing inside it.", texts
+        )
+        self.assertIn(
+            f"Refine Near {near.Label}: A is swept, and that wins; the Refine Near does nothing inside it.", texts
+        )
+
+    def test_swept_body_with_skin_quads_has_no_3d_warning(self):
+        a, b = self.box("A"), self.box("B", x=30)
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        on_swept = objects.make_skin_layer(self.study, [(a, "")])
+        on_plain = objects.make_skin_layer(self.study, [(b, "")])
+        on_swept.QuadLayers = on_plain.QuadLayers = True
+        self.assertFalse([t for t in self.skin_texts(on_swept) if f"Skin Layer {on_swept.Label}:" in t])
+        self.assertEqual(
+            [t for t in self.skin_texts(on_plain) if f"Skin Layer {on_plain.Label}:" in t],
+            [f"Skin Layer {on_plain.Label}: quad layers are made in 2D Studies only; ignored."],
+        )
+
+    def test_swept_body_recombine_is_fine(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        objects.make_recombine(self.study, [a])
+        self.assertFalse(self.swept_texts(item))
+        self.assertFalse([t for t in self.problems() if t.startswith("Recombine")])
 
     def test_skin_layer_quads_on_a_recombined_body_warns(self):
         """A recombined body gets the graded layer as quads, so only quad layers are lost; the depth is checked too."""

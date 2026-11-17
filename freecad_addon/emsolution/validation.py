@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import FreeCAD as App
 import Part
 
-from . import airshapes, geometry, objects, sides, symmetry
+from . import airshapes, geometry, objects, sides, symmetry, sweeps
 
 ERROR, WARNING = "error", "warning"
 
@@ -171,6 +171,7 @@ def _kind(item):
         objects.RefineNear: "Refine Near",
         objects.AirGrading: "Air Grading",
         objects.SkinLayer: "Skin Layer",
+        objects.SweptBody: "Swept Body",
         objects.TransfiniteBody: "Transfinite Body",
         objects.TransfiniteEdges: "Transfinite Edges",
         objects.Recombine: "Recombine",
@@ -303,6 +304,7 @@ def _settings(study, included, r, bodies=()):
         ]
         _free_picks_on_copies(study, n, free, r)
     _skin_layers(study, included, bodies, r)
+    _swept_bodies(study, included, bodies, r)
     _air_gradings(study, included, r)
 
 
@@ -312,6 +314,7 @@ def _skin_layers(study, included, bodies, r):
     structured = {b.Name for t in objects.transfinite_bodies(study) for b, _ in objects.subs_by_body(t)}
     recombined = {b.Name for t in objects.recombine_items(study) for b, _ in objects.subs_by_body(t)}
     three = study.Dimension == "3D"
+    swept = {b.Name for w in objects.swept_bodies(study) for b, _ in objects.subs_by_body(w)}
     owners = {}  # body Name -> the first Skin Layer that has it
     for s in objects.skin_layers(study):
         if not any(b.Name in included for b, _ in s.References):
@@ -327,7 +330,7 @@ def _skin_layers(study, included, bodies, r):
             if not ok:
                 bad = True
                 r.error(f"Skin Layer {s.Label}: {what} must be greater than 0.", s)
-        if three and s.QuadLayers:
+        if three and s.QuadLayers and not (picked and all(b.Name in swept for b, _ in picked)):  # a section has quads
             r.warning(f"Skin Layer {s.Label}: quad layers are made in 2D Studies only; ignored.", s)
         layer = s.LayerDepth * depth
         for b, subs in picked:
@@ -385,6 +388,139 @@ def _skin_layers(study, included, bodies, r):
                     f"Skin Layer {s.Label}: {name} has sharp corners on its surface; quad layers need a smooth surface,"
                     " so it gets graded triangles.",
                     s,
+                    [(b, "")],
+                )
+
+
+def _swept_bodies(study, included, bodies, r):
+    """Swept Body items: whole bodies that are sweeps, in a 3D Study without Symmetric Groups, each in one item, not
+    structured, and touching only the air and unstructured bodies by whole faces. The air is refused in _links."""
+    items = [w for w in objects.swept_bodies(study) if any(b.Name in included for b, _ in w.References)]
+    if not items:
+        return
+    three, grouped = study.Dimension == "3D", objects.is_grouped(study)
+    structured = {}  # body Name -> the first Transfinite Body that has it
+    for t in objects.transfinite_bodies(study):
+        for b, _ in objects.subs_by_body(t):
+            structured.setdefault(b.Name, t)
+    recombined = {b.Name for t in objects.recombine_items(study) for b, _ in objects.subs_by_body(t)}
+    owners = {}  # body Name -> the first Swept Body that has it
+    found = []  # (item, body, shape): the sweeps, for the checks of their contacts
+    for w in items:
+        if not three:
+            r.error(f"Swept Body {w.Label}: a 2D Study is already a cross-section; Swept Body is for 3D Studies.", w)
+        if grouped:
+            r.error(f"Swept Body {w.Label}: Studies with Symmetric Groups are not swept yet.", w)
+        picked = [(b, subs) for b, subs in objects.subs_by_body(w) if b.Name in included and not objects.is_air(b)]
+        for b, subs in picked:
+            parts = [sub for sub in subs if sub]
+            for sub in parts:
+                r.error(f"Swept Body {w.Label}: pick whole bodies, not {b.Label}.{sub}.", w, [(b, sub)])
+            if parts or not three or grouped:
+                continue
+            name = objects.display_name(b)
+            first = owners.setdefault(b.Name, w)
+            if first is not w:
+                r.error(f"Swept Body {w.Label}: {name} is already in Swept Body {first.Label}.", w, [(b, "")])
+                continue
+            if b.Name in structured:
+                r.error(
+                    f"Swept Body {w.Label}: {name} also has Transfinite Body {structured[b.Name].Label}; a body is"
+                    " swept or structured, not both.",
+                    w,
+                    [(b, "")],
+                )
+                continue
+            shape = geometry.global_shape(b)
+            starts = [sub for sb, sub_list in w.StartFace if sb.Name == b.Name for sub in sub_list]
+            result = sweeps.recognise_body(shape, starts)
+            if isinstance(result, str):
+                r.error(f"Swept Body {w.Label}: {name} is not a sweep: {result}.", w, [(b, "")])
+                continue
+            found.append((w, b, shape))
+    swept = {b.Name for _, b, _ in found}
+    _swept_win(study, included, swept, r)
+    others = [(o, geometry.global_shape(o)) for o in bodies if o.Name in included and not objects.is_air(o)]
+    order = {b.Name: i for i, (_, b, _) in enumerate(found)}
+    for i, (w, b, shape) in enumerate(found):
+        name = objects.display_name(b)
+        tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+        box = shape.BoundBox
+        box.enlarge(tol)
+        solids = shape.Solids
+        for k, solid in enumerate(solids):  # the solids of one reference touching each other
+            if any(_shared_area(f, other) > tol * tol for f in solid.Faces for other in solids[k + 1 :]):
+                r.error(_touch_text(w, name, name, "swept"), w, [(b, "")])
+                break
+        for o, o_shape in others:
+            if o.Name == b.Name or not box.intersect(o_shape.BoundBox):
+                continue
+            if o.Name in swept and order[o.Name] < i:
+                continue  # the earlier of two swept bodies reports the contact
+            areas = [_shared_area(f, o_shape) for f in shape.Faces]
+            what = "swept" if o.Name in swept else "structured" if o.Name in structured else None
+            what = what or ("recombined" if o.Name in recombined else None)
+            if what and any(a > 1e-6 * f.Area for a, f in zip(areas, shape.Faces)):
+                r.error(_touch_text(w, name, objects.display_name(o), what), w, [(b, ""), (o, "")])
+            for n, (f, a) in enumerate(zip(shape.Faces, areas), 1):
+                if 1e-6 * f.Area < a < (1 - 1e-6) * f.Area:
+                    r.error(
+                        f"Swept Body {w.Label}: {objects.display_name(o)} touches only part of {b.Label}.Face{n} of"
+                        f" {name}; a swept body's faces must be touched whole or not at all.",
+                        w,
+                        [(b, f"Face{n}"), (o, "")],
+                    )
+    _swept_clear_of_sliding(study, found, r)
+
+
+def _touch_text(w, name, other, what):
+    return (
+        f"Swept Body {w.Label}: {name} touches {other}, which is {what}; a swept body may touch only the air and"
+        " unstructured bodies."
+    )
+
+
+def _shared_area(face, shape):
+    """The area face shares with shape, 0 where OCC cannot tell."""
+    try:
+        return face.common(shape).Area
+    except Part.OCCError:
+        return 0.0
+
+
+def _swept_win(study, included, swept, r):
+    """A Mesh Size or Refine Near that picks a swept body does nothing inside it: the sweep sets its own sizes."""
+    for item, kind in [(m, "Mesh Size") for m in objects.mesh_sizes(study)] + [
+        (n, "Refine Near") for n in objects.refine_items(study)
+    ]:
+        for b in dict.fromkeys(b for b, _ in item.References):
+            if b.Name in swept and b.Name in included:
+                r.warning(
+                    f"{kind} {item.Label}: {objects.display_name(b)} is swept, and that wins; the {kind} does nothing"
+                    " inside it.",
+                    item,
+                    [(b, "")],
+                )
+
+
+def _swept_clear_of_sliding(study, found, r):
+    """A swept body may not touch a Sliding Interface's surface."""
+    interfaces, airs = objects.sliding_interfaces(study), objects.air_regions(study)
+    if not found or study.Movement != "Sliding motion" or not interfaces or not airs:
+        return
+    plane = airshapes.study_plane(study)
+    try:
+        air_shape = airshapes.air_shape(airs[0], plane)
+    except ValueError:
+        return  # _air reports it
+    surfaces = _surfaces(interfaces, airs[0], air_shape, plane, _Report())
+    for iface, surface in zip(interfaces, surfaces or []):
+        for w, b, shape in found:
+            if surface.distToShape(shape)[0] < 1e-6:
+                r.error(
+                    f"Swept Body {w.Label}: {objects.display_name(b)} touches the sliding interface {iface.Label};"
+                    " swept bodies must keep clear of it.",
+                    w,
                     [(b, "")],
                 )
 
