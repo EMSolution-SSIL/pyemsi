@@ -493,7 +493,10 @@ def _swept_win(study, included, swept, r):
     for item, kind in [(m, "Mesh Size") for m in objects.mesh_sizes(study)] + [
         (n, "Refine Near") for n in objects.refine_items(study)
     ]:
-        for b in dict.fromkeys(b for b, _ in item.References):
+        for b, subs in objects.subs_by_body(item):
+            # a whole-body Mesh Size is the size a sweep falls back to, so only its sub-element picks are lost
+            if kind == "Mesh Size" and "" in subs and not any(subs):
+                continue
             if b.Name in swept and b.Name in included:
                 r.warning(
                     f"{kind} {item.Label}: {objects.display_name(b)} is swept, and that wins; the {kind} does nothing"

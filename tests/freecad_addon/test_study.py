@@ -2167,7 +2167,7 @@ class StudyTest(unittest.TestCase):
         a = self.box("A")
         objects.make_air_region(self.study)
         objects.make_swept_body(self.study, [(a, "")])
-        size = objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        size = objects.make_mesh_size(self.study, 2.0, [(a, "Face1")])
         near = objects.make_refine_near(self.study, [(a, "Face1")])
         texts = self.problems("warning")
         self.assertIn(
@@ -2176,6 +2176,13 @@ class StudyTest(unittest.TestCase):
         self.assertIn(
             f"Refine Near {near.Label}: A is swept, and that wins; the Refine Near does nothing inside it.", texts
         )
+
+    def test_swept_body_whole_mesh_size_is_fine(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        self.assertFalse([t for t in self.problems("warning") if "is swept" in t])
 
     def test_swept_body_with_skin_quads_has_no_3d_warning(self):
         a, b = self.box("A"), self.box("B", x=30)
