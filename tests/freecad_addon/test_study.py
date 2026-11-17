@@ -2319,6 +2319,17 @@ class StudyTest(unittest.TestCase):
             self.problems("error"),
         )
 
+    def test_swept_start_face_beside_a_ring_is_not_called_a_ring(self):
+        # a torus and a cylinder in one body, the start face on the cylinder's side: only that solid is wrong
+        shape = Part.makeCompound([Part.makeTorus(20, 3), Part.makeCylinder(3, 20, App.Vector(50, 0, 0))])
+        body = self.shape_body("Ring", shape)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(body, "")])
+        item.StartFace = [(body, ("Face2",))]
+        texts = self.problems("error")
+        self.assertFalse([t for t in texts if "closed ring" in t])
+        self.assertTrue([t for t in texts if t.startswith(f"Swept Body {item.Label}: Ring is not a sweep: solid 2:")])
+
     def test_swept_ring_is_valid(self):
         ring = self.shape_body("Ring", self.tube())
         objects.make_air_region(self.study)
