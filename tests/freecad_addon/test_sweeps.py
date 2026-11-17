@@ -223,26 +223,180 @@ class RevolvedSweepTest(unittest.TestCase):
         self.assertEqual(len(crossed.Solids), 1)
         self.assertEqual(sweeps.recognise(crossed.Solids[0]), "its faces do not all turn about one axis")
 
-    def test_helix_still_refused(self):
-        helix = Part.makeHelix(10, 25, 20)
-        circle = Part.Wire(Part.makeCircle(2, V(20, 0, 0), V(0, 1, 0)))
-        pipe = Part.Wire(helix).makePipeShell([circle], True, True)
-        self.assertEqual(pipe.ShapeType, "Solid")
-        self.assertEqual(sweeps.recognise(pipe), "only straight and revolved sweeps are made so far")
+    def test_helix_pipe_is_a_helix(self):
+        sweep = sweeps.recognise(helix_pipe(10, 25, 20, ("circle", 2)))
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertEqual(len(sweep.pieces), 1)
+        self.assertAlmostEqual(sweep.pieces[0].angle, 900, places=4)
+        self.assertAlmostEqual(abs(sweep.pieces[0].advance), 25, places=5)
 
-    def test_whole_turn_helix_still_refused(self):
+    def test_whole_turn_helix_is_a_helix(self):
         for height in (20, 30):  # ends exactly opposite: a translation matches them too
             with self.subTest(height=height):
-                helix = Part.makeHelix(10, height, 20)
-                circle = Part.Wire(Part.makeCircle(2, V(20, 0, 0), V(0, 1, 0)))
-                pipe = Part.Wire(helix).makePipeShell([circle], True, True)
-                self.assertEqual(pipe.ShapeType, "Solid")
-                self.assertEqual(sweeps.recognise(pipe), "only straight and revolved sweeps are made so far")
+                sweep = sweeps.recognise(helix_pipe(10, height, 20, ("circle", 2)))
+                self.assertIsInstance(sweep, sweeps.Sweep)
+                self.assertAlmostEqual(sweep.pieces[0].angle, 36 * height, places=4)
+                self.assertAlmostEqual(abs(sweep.pieces[0].advance), height, places=5)
 
     def test_bulged_wire_keeps_side_face(self):
         pts = [V(0, 0, 0), V(3, 0, 0), V(5, 0, 10), V(3, 0, 20), V(0, 0, 20), V(0, 0, 0)]
         barrel = Part.Face(Part.makePolygon(pts)).revolve(V(0, 0, 0), V(0, 0, 1), 360)
         self.assertEqual(sweeps.recognise(barrel), "a side face does not run straight from one end to the other")
+
+
+def helix_pipe(pitch, height, radius, profile, frenet=True, left=False):
+    """A PartDesign pipe along a Part Helix about z from (radius, 0, 0), made as litz1 was: the profile sketch
+    attached FrenetNB to the helix start. profile: ("circle", r) or ("rect", w, h). frenet False: PartDesign's default
+    Standard mode, whose profile turns about the path."""
+    import Sketcher  # noqa: F401 - registers Sketcher::SketchObject
+    import PartDesign  # noqa: F401 - registers PartDesign::AdditivePipe
+
+    doc = App.newDocument("HelixPipe")
+    try:
+        helix = doc.addObject("Part::Helix", "Helix")
+        helix.Pitch, helix.Height, helix.Radius = pitch, height, radius
+        helix.LocalCoord = "Left-handed" if left else "Right-handed"
+        body = doc.addObject("PartDesign::Body", "Body")
+        body.BaseFeature = helix
+        doc.recompute()
+        base = body.Group[0]
+        sketch = body.newObject("Sketcher::SketchObject", "Sketch")
+        sketch.AttachmentSupport = [(base, ("Edge1",))]
+        sketch.MapMode = "FrenetNB"
+        if profile[0] == "circle":
+            sketch.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), profile[1]))
+        else:
+            w, h = profile[1] / 2, profile[2] / 2
+            corners = [V(-w, -h, 0), V(w, -h, 0), V(w, h, 0), V(-w, h, 0)]
+            for p, q in zip(corners, corners[1:] + corners[:1]):
+                sketch.addGeometry(Part.LineSegment(p, q))
+        pipe = body.newObject("PartDesign::AdditivePipe", "Pipe")
+        pipe.Profile = sketch
+        pipe.Spine = (base, ["Edge1"])
+        pipe.Mode = "Frenet" if frenet else "Standard"
+        pipe.Refine = True
+        doc.recompute()
+        return pipe.Shape.Solids[0].copy()
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def end_faces(solid):
+    """(start, end) face names: the planar faces, the one nearer the origin first."""
+    flat = [(f.CenterOfMass.Length, k) for k, f in enumerate(solid.Faces, 1) if isinstance(f.Surface, Part.Plane)]
+    return tuple(f"Face{k}" for _, k in sorted(flat))
+
+
+class HelixAndChainTest(unittest.TestCase):
+    def assertHelix(self, sweep, angle, advance):
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertEqual(len(sweep.pieces), 1)
+        piece = sweep.pieces[0]
+        self.assertAlmostEqual(piece.angle, angle, places=4)
+        self.assertAlmostEqual(piece.advance, advance, places=5)
+        self.assertAlmostEqual(abs(piece.axis[2]), 1, places=6)  # along the helix axis z
+        self.assertAlmostEqual(math.hypot(piece.origin[0], piece.origin[1]), 0, places=5)  # on it
+        return piece
+
+    def assertScrewsOnto(self, sweep, solid):
+        """Each piece's screw motion maps its start section onto the next; the last one lands on the end face."""
+        face = sweep.face.copy()
+        for piece in sweep.pieces:
+            face.rotate(V(*piece.origin), V(*piece.axis), piece.angle)
+            face.translate(V(*piece.axis) * piece.advance)
+        end = solid.getElement(sweep.end)
+        self.assertLess(face.CenterOfMass.distanceToPoint(end.CenterOfMass), 1e-5)
+
+    def test_helix_strand_is_a_helix(self):
+        strand = helix_pipe(10, 15, 1.2, ("circle", 0.45))
+        start, _ = end_faces(strand)
+        sweep = sweeps.recognise(strand, start_face=start)
+        piece = self.assertHelix(sweep, 540, 15)
+        self.assertGreater(piece.axis[2], 0)  # right-handed: turns positively about +z while it rises
+        self.assertFalse(sweep.rebuild)  # a Frenet pipe's seam follows the screw
+        self.assertScrewsOnto(sweep, strand)
+
+    def test_left_handed_helix(self):
+        strand = helix_pipe(10, 15, 1.2, ("circle", 0.45), left=True)
+        start, _ = end_faces(strand)
+        sweep = sweeps.recognise(strand, start_face=start)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        piece = sweep.pieces[0]
+        self.assertAlmostEqual(piece.angle, 540, places=4)
+        self.assertAlmostEqual(piece.axis[2], -1, places=6)  # a positive turn about -z
+        self.assertAlmostEqual(piece.advance, -15, places=5)  # the rise is along -axis
+        self.assertScrewsOnto(sweep, strand)
+
+    def test_whole_turn_coil_is_a_helix(self):
+        coil = helix_pipe(6, 6, 20, ("rect", 2, 4))
+        start, _ = end_faces(coil)
+        sweep = sweeps.recognise(coil, start_face=start)
+        self.assertHelix(sweep, 360, 6)
+        self.assertScrewsOnto(sweep, coil)
+        self.assertAlmostEqual(sweeps.recognise(coil).pieces[0].angle, 360, places=4)  # without a start face
+
+    def test_bent_busbar_is_a_chain(self):
+        path = Part.Wire(
+            [
+                Part.makeLine(V(0, 0, 0), V(30, 0, 0)),
+                Part.Edge(Part.ArcOfCircle(Part.Circle(V(30, 20, 0), V(0, 0, 1), 20), -math.pi / 2, 0)),
+                Part.makeLine(V(50, 20, 0), V(50, 50, 0)),
+            ]
+        )
+        profile = Part.makePolygon([V(0, y, z) for y, z in ((-5, -2), (5, -2), (5, 2), (-5, 2), (-5, -2))])
+        bar = path.makePipeShell([profile], True, True)
+        start = face_name(bar, lambda c: abs(c.x) < 1e-9)
+        sweep = sweeps.recognise(bar, start_face=start)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertEqual(sweep.end, face_name(bar, lambda c: abs(c.y - 50) < 1e-9))
+        self.assertFalse(sweep.rebuild)
+        first, arc, last = sweep.pieces
+        self.assertEqual((first.angle, last.angle), (0, 0))
+        self.assertAlmostEqual(first.advance, 30)
+        self.assertAlmostEqual(last.advance, 30)
+        for p, q in zip(first.axis + last.axis, (1, 0, 0, 0, 1, 0)):
+            self.assertAlmostEqual(p, q, places=6)
+        self.assertAlmostEqual(arc.angle, 90, places=6)
+        self.assertEqual(arc.advance, 0.0)
+        for p, q in zip(arc.origin, (30, 20, 0)):
+            self.assertAlmostEqual(p, q, places=6)
+        self.assertScrewsOnto(sweep, bar)
+        both = sweeps.recognise(bar)  # without a start face: the same chain, from either end
+        self.assertEqual(len(both.pieces), 3)
+
+    def test_spline_path_is_refused(self):
+        spline = Part.BSplineCurve()
+        spline.interpolate([V(0, 0, 0), V(10, 5, 0), V(20, 0, 5), V(30, 8, 3)])
+        edge = spline.toShape()
+        circle = Part.Wire(Part.makeCircle(1, edge.valueAt(edge.FirstParameter), edge.tangentAt(edge.FirstParameter)))
+        bent = Part.Wire(edge).makePipeShell([circle], True, True)
+        self.assertEqual(sweeps.recognise(bent), "its path is not made of straight, arc and helical pieces")
+
+    def test_non_frenet_strand(self):
+        """A round strand along a helix in PartDesign's Standard mode: its side surface follows the screw but its seam
+        twists, so the solid is exported rebuilt."""
+        strand = helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False)
+        start, _ = end_faces(strand)
+        sweep = sweeps.recognise(strand, start_face=start)
+        self.assertHelix(sweep, 540, 15)
+        self.assertTrue(sweep.rebuild)
+
+    def test_twisting_rectangle_is_refused(self):
+        coil = helix_pipe(6, 6, 20, ("rect", 2, 4), frenet=False)
+        self.assertEqual(sweeps.recognise(coil), "the profile twists along the path; make the pipe with Frenet mode")
+
+    def test_loft_is_still_refused(self):
+        def square(z, turn):
+            c, s = math.cos(turn), math.sin(turn)
+            corners = ((-5, -5), (5, -5), (5, 5), (-5, 5), (-5, -5))
+            return Part.makePolygon([V(c * x - s * y, s * x + c * y, z) for x, y in corners])
+
+        twisted = Part.makeLoft([square(0, 0), square(10, math.pi / 4)], True, True)  # equal ends, a screw apart
+        self.assertIsInstance(sweeps.recognise(twisted), str)
+
+    def test_stage_1_and_2_sweeps_do_not_rebuild(self):
+        for solid in (Part.makeBox(10, 4, 40), Part.makeCylinder(0.45, 20), Part.makeTorus(20, 3)):
+            self.assertFalse(sweeps.recognise(solid).rebuild)
 
 
 if __name__ == "__main__":
