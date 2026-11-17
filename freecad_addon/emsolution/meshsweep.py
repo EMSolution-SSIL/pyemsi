@@ -17,6 +17,7 @@ SIZE_OPTIONS = ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints", "M
 SECTION_OPTIONS = ("Mesh.Algorithm", "Mesh.Smoothing", "Mesh.RecombinationAlgorithm")  # the user's, for the section
 JACOBIAN = {5: (1, 3, 4), 6: (1, 2, 3)}  # the nodes whose edges from node 0 make a positive triple product
 NOT_STRAIGHT = "only straight and revolved sweeps are made so far"  # as sweeps.NOT_STRAIGHT
+MIN_TURN = 30.0  # degrees: the largest turn of one step of a revolved piece
 
 # xyz: the section's nodes in global coordinates (n x 3); tri (t x 3) and quad (q x 4): its elements as node indexes;
 # edges: {curve key: ordered node indexes} per profile curve, the key being the curve's index in gmsh.model.getBoundary
@@ -55,6 +56,36 @@ def graded_positions(length, size, first=None, depth=0.0, ratio=RATIO, ends=(Tru
     p = np.concatenate([[0.0], np.cumsum(d)])
     p[-1] = length
     return p
+
+
+def turned_positions(length, angle, size, cuts=(), first=None, depth=0.0, ends=(False, False)):
+    """The positions (arc lengths, 0 to length) along a turned piece of angle degrees: as graded_positions, with a
+    position at each of cuts (arc lengths inside the piece, where the body has a corner) and the parts between them
+    spaced alike, graded at the piece's ends in ends (with first). At least ceil(angle / MIN_TURN) steps, so no cell is
+    flat: a coarse ring still has 12, a 90 degree bend 3."""
+    need = max(1, math.ceil(angle / MIN_TURN - 1e-9))
+    tol = 1e-9 * length
+    marks = [0.0]
+    for c in sorted(float(c) for c in cuts):
+        if tol < c < length - tol and c - marks[-1] > tol:
+            marks.append(c)
+    marks.append(length)
+    step = min(size, length / need)
+    for _ in range(200):  # each try with smaller steps
+        out = [np.zeros(1)]
+        for k, (a, b) in enumerate(zip(marks, marks[1:])):
+            graded = (ends[0] and k == 0, ends[1] and k == len(marks) - 2)
+            if first is not None and any(graded):
+                p = graded_positions(b - a, step, first, depth, RATIO, graded)
+            else:
+                p = graded_positions(b - a, step)
+            out.append(a + p[1:])
+        out = np.concatenate(out)
+        out[-1] = length
+        if len(out) - 1 >= need:
+            return out
+        step *= 0.9
+    raise JobError(f"a turn of {angle:g} degrees could not be split into {need} steps")
 
 
 def _ends_of(curve):
@@ -261,9 +292,13 @@ def sweep(section, transforms, closed=False):
         (6, np.asarray(section.tri, int).reshape(-1, 3)),
     ):
         joined = [np.hstack([base + j * n, base + (j + 1) % len(transforms) * n]) for j in range(layers)]
-        c = np.vstack(joined) if joined and len(base) else np.zeros((0, 2 * base.shape[1]), int)
-        if len(c) and _volume(V, c[:1], etype)[0] < 0:
-            c = c[:, FLIP[etype]]
+        if joined and len(base):
+            # per section element, as its first cell turns (gmsh's quad layers and the rest may face either way);
+            # a later layer turned inside out stays so, for _flat to find
+            turned = _volume(V, joined[0], etype) < 0
+            c = np.vstack([np.where(turned[:, None], j[:, FLIP[etype]], j) for j in joined])
+        else:
+            c = np.zeros((0, 2 * base.shape[1]), int)
         cells[etype] = c
     return V, cells
 
@@ -543,9 +578,48 @@ def _graded_end(face, vol, skinned):
 
 def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
     """The stations along the solid's pieces (chain, from _chain): every path size (arc length at rc on a revolved
-    piece), graded toward a real end face when there is a skin. A closed ring has no ends and no last station (it is
-    the first)."""
+    piece, with a station at each of the volume's corners on it and at least one per MIN_TURN), graded toward a real
+    end face when there is a skin. A closed ring has no ends and no last station (it is the first)."""
     skin, size = entry["skin"], float(entry["path_size"])
+def _cuts(piece, rc, length, start, section, points, tol):
+    """The arc lengths (at rc) along the turned piece where it must have a station: of points (the volume's corners),
+    those on the piece, each at its angle about the piece's axis from where the piece starts. A point is on the piece
+    when, turned back by its angle, it lies in the box of the section where the piece starts."""
+    axis = np.asarray(piece["axis"], float)
+    axis = axis / np.linalg.norm(axis)
+    origin = np.asarray(piece["origin"], float)
+    xyz = np.asarray(section.xyz, float)
+    lo, hi = xyz.min(axis=0) - tol, xyz.max(axis=0) + tol
+    r0 = _moved([xyz.mean(axis=0)], start)[0] - origin
+    r0 -= axis * axis.dot(r0)
+    out = []
+    for q in np.asarray(points, float).reshape(-1, 3):
+        d = q - origin
+        d -= axis * axis.dot(d)
+        if np.linalg.norm(d) < tol:
+            continue
+        phi = math.atan2(axis.dot(np.cross(r0, d)), r0.dot(d)) % (2 * math.pi)
+        arc = phi * rc
+        if not tol < arc < length - tol:
+            continue
+        back = _moved([q], np.linalg.inv(stations(piece, [arc], rc)[0] @ start))[0]
+        if ((back >= lo) & (back <= hi)).all():
+            out.append(arc)
+    return out
+
+
+def _flat(V, cells):
+    """The number of cells (from sweep) that are flat or turned inside out: a triple product at their first node not
+    above 1e-9 times the product of its edges' lengths."""
+    n = 0
+    for etype, c in cells.items():
+        if len(c):
+            a, b, e = (V[c[:, k]] - V[c[:, 0]] for k in JACOBIAN[etype])
+            scale = np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1) * np.linalg.norm(e, axis=1)
+            n += int((_volume(V, c, etype) <= 1e-9 * scale).sum())
+    return n
+
+
     graded = (False, False)
     if not closed:
         first = section.quad[0] if len(section.quad) else section.tri[0]
@@ -557,8 +631,17 @@ def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
     out = []
     for i, (piece, rc, length, start) in enumerate(chain):
         ends = (graded[0] and i == 0, graded[1] and i == len(chain) - 1)
-        if skin and any(ends):
+        angle = float(piece.get("angle", 0.0))
+        if angle:  # a station at each corner of the body on the piece, at least one per MIN_TURN
+            cuts = _cuts(piece, rc, length, start, section, corners, tol)
+            if skin and any(ends):
+                first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
+                positions = turned_positions(length, angle, size, cuts, first, depth, ends)
+            else:
+                positions = turned_positions(length, angle, size, cuts)
+        elif skin and any(ends):
             first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
+    corners = [gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(3, vol)], False, False, True)]
             positions = graded_positions(length, size, first, depth, RATIO, ends)
         else:
             positions = graded_positions(length, size)
@@ -602,3 +685,9 @@ def apply_swept(job, folder, body_vols):
             tags.append(vol)
     job["swept_tags"], job["swept_add"] = tags, adds
     return tags
+            flat = _flat(V, cells)
+            if flat:
+                raise JobError(
+                    f"Swept Body {entry['name']}: {flat} of its swept cells are flat or inside out; make its Path Size"
+                    " smaller"
+                )

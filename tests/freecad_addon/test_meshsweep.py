@@ -320,3 +320,50 @@ def test_empty_volume_around_swept_fails_loudly():
             meshcommon._check_filled([(3, 1)], ["Error: PLC Error: A segment and a facet intersect at point"])
     finally:
         gmsh.finalize()
+
+
+def bar_section(x0=18.0, x1=22.0):
+    """One quad x x0..x1, z -1..1 in the plane y = 0."""
+    xyz = np.array([[x0, 0, -1], [x1, 0, -1], [x1, 0, 1], [x0, 0, 1]], float)
+    return meshsweep.Section(xyz, np.zeros((0, 3), int), np.array([[0, 1, 2, 3]]), {})
+
+
+def test_coarse_ring_has_twelve_stations():
+    section = bar_section()
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 360.0, "advance": 0.0}
+    ((_, rc, length, start),) = meshsweep._chain([piece], np.array([20.0, 0, 0]))
+    for size in (1000.0, 60.0, 40.0):  # 1, 2 and 3 steps before
+        positions = meshsweep.turned_positions(length, 360.0, size)
+        assert len(positions) == 13
+        V, cells = meshsweep.sweep(section, meshsweep.stations(piece, positions, rc)[:-1], closed=True)
+        assert len(cells[5]) == 12 and (meshsweep._volume(V, cells[5], 5) > 0).all()
+        assert meshsweep._flat(V, cells) == 0
+
+
+def test_coarse_u_bend_is_not_flat():
+    section = bar_section()
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 180.0, "advance": 0.0}
+    ((_, rc, length, _),) = meshsweep._chain([piece], np.array([20.0, 0, 0]))
+    one = meshsweep.stations(piece, meshsweep.graded_positions(length, 1000.0), rc)  # one step: the ends coplanar
+    assert meshsweep._flat(*meshsweep.sweep(section, one)) == 1
+    positions = meshsweep.turned_positions(length, 180.0, 1000.0)
+    assert len(positions) == 7
+    V, cells = meshsweep.sweep(section, meshsweep.stations(piece, positions, rc))
+    assert (meshsweep._volume(V, cells[5], 5) > 0).all() and meshsweep._flat(V, cells) == 0
+
+
+def test_turned_positions_station_at_each_cut():
+    p = meshsweep.turned_positions(100.0, 90.0, 4.0, cuts=[37.0, 0.0, 100.0])
+    assert np.isclose(p, 37.0).any() and p[0] == 0 and p[-1] == 100.0
+    assert np.allclose(np.diff(p), 4.0, atol=0.5)
+    assert np.allclose(meshsweep.turned_positions(100.0, 90.0, 4.0), meshsweep.graded_positions(100.0, 4.0))
+
+
+def test_sweep_turns_each_element_as_it_faces():
+    flat = grid(2, 1)
+    quad = flat.quad.copy()
+    quad[1] = quad[1][::-1]  # the second quad faces the other way, as gmsh's quad layers may
+    section = meshsweep.Section(flat.xyz, flat.tri, quad, {})
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 0.0, "advance": 2.0}
+    V, cells = meshsweep.sweep(section, meshsweep.stations(piece, [0, 1, 2]))
+    assert (jacobians(V, cells[5], 1, 3, 4) > 0).all() and meshsweep._flat(V, cells) == 0

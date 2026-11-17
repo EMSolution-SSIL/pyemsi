@@ -279,6 +279,30 @@ def write_revolved_rect(path, profile_path, x0, x1, z0, z1, angle):
         gmsh.finalize()
 
 
+def write_two_half_rings(path, profile_path, x0, x1, z0, z1, seam):
+    """The closed ring of write_revolved_rect made of two half rings fused, from angles 0 and seam (degrees) about Z:
+    its corners on two meridians, the profile's (angle 0) and seam."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        face = occ.addRectangle(x0, z0, 0, x1 - x0, z1 - z0)
+        occ.rotate([(2, face)], 0, 0, 0, 1, 0, 0, math.pi / 2)  # (x, y, 0) turns to (x, 0, y)
+        occ.synchronize()
+        gmsh.write(profile_path)
+        other = occ.copy([(2, face)])
+        occ.rotate(other, 0, 0, 0, 0, 0, 1, math.radians(seam))
+        a = [dt for dt in occ.revolve([(2, face)], 0, 0, 0, 0, 0, 1, math.radians(seam)) if dt[0] == 3]
+        b = [dt for dt in occ.revolve(other, 0, 0, 0, 0, 0, 1, math.radians(360 - seam)) if dt[0] == 3]
+        gmsh.option.setNumber("Geometry.OCCUnionUnify", 0)  # keep the faces split at the seams
+        occ.fuse(a, b)
+        occ.remove(occ.getEntities(2), recursive=False)
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
 def write_torus(path, profile_path, big, small, start=(1, 0, 0)):
     """A torus about Z (gmsh's addTorus) and its profile, the disc in the plane y = 0 whose circle starts in the
     direction start from its centre: by default where the torus's two seam circles meet, (big + small, 0, 0)."""
@@ -1307,6 +1331,13 @@ class MesherTest(unittest.TestCase):
         steps = [math.radians(b - a) * 25 for a, b in zip(angles, angles[1:] + [angles[0] + 360])]
         for s in steps:  # rc 25
             self.assertAlmostEqual(s, 4.0, delta=1.0)
+
+    def test_swept_ring_with_two_seams(self):
+        # corners at 0 and 180 degrees: 39 equal steps from the cut (rc 25, path size 4) would miss the ones at 180
+        write_two_half_rings(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 30, -2, 2, 180)
+        self.swept_turn_job(swept_turn("sweep_1_1.brep", 360))
+        self.assertEqual(inner_free_faces(self.TURN_BOX), [])
+        self.assertIn(180.0, self.angles())
 
     def test_swept_torus(self):
         write_torus(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 3)
