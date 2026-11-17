@@ -1496,9 +1496,10 @@ class MesherTest(unittest.TestCase):
         for s in middle:
             self.assertAlmostEqual(s, 0.4, delta=0.1)
 
-    def test_swept_rebuilt_strand_excitation(self):
-        # an excitation face on the far end of a helical strand, as a rebuilt strand's. It is the vol file's own end
-        # face: one from other geometry (the exact screw image of the profile) does not merge in gmsh's fragment
+    def test_swept_strand_excitation(self):
+        # an excitation face on the far end of a helical strand: the vol file's own end face. One from other geometry
+        # (the exact screw image of the profile) does not merge in gmsh's fragment, so the jobwriter exports a rebuilt
+        # strand's faces from the rebuild (test_study's test_swept_rebuilt_strand_excitation)
         write_helix_pipe(
             self.geo("vol_1.brep"),
             self.geo("sweep_1_1.brep"),

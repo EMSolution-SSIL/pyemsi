@@ -406,3 +406,14 @@ def test_sweep_turns_each_element_as_it_faces():
     piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 0.0, "advance": 2.0}
     V, cells = meshsweep.sweep(section, meshsweep.stations(piece, [0, 1, 2]))
     assert (jacobians(V, cells[5], 1, 3, 4) > 0).all() and meshsweep._flat(V, cells) == 0
+
+
+def test_cuts_on_the_second_turn_of_a_helix():
+    # a corner a quarter turn past the first whole turn of a 1.5-turn helix: at 2.5 of its 3 pi radians
+    xyz = np.array([[1.0, 0, -0.2], [1.4, 0, -0.2], [1.4, 0, 0.2], [1.0, 0, 0.2]])
+    section = meshsweep.Section(xyz, np.zeros((0, 3), int), np.array([[0, 1, 2, 3]]), {})
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 540.0, "advance": 15.0}
+    ((_, rc, length, start),) = meshsweep._chain([piece], np.array([1.2, 0, 0]))
+    corner = _moved_all(meshsweep.stations(piece, [5 * length / 6], rc), xyz[2])[0]
+    cuts = meshsweep._cuts(piece, rc, length, start, section, [corner], 1e-6)
+    assert len(cuts) == 1 and np.isclose(cuts[0], 5 * length / 6)  # not at a sixth, the same angle on turn one

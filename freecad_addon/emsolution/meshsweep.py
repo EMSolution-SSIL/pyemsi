@@ -652,18 +652,18 @@ def _path(chain, size, skin=None, graded=(False, False), cuts=None):
     ends in graded when there is a skin; on a turned piece at least one per MIN_TURN and one at each of its cuts (path
     lengths along it). Each joint is a station, once."""
     out = []
+    if skin:
+        first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
     for i, (piece, rc, length, start) in enumerate(chain):
         ends = (graded[0] and i == 0, graded[1] and i == len(chain) - 1)
         angle = float(piece.get("angle", 0.0))
         here = cuts[i] if cuts else []
         if angle:  # a station at each corner of the body on the piece, at least one per MIN_TURN
             if skin and any(ends):
-                first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
                 positions = turned_positions(length, angle, size, here, first, depth, ends)
             else:
                 positions = turned_positions(length, angle, size, here)
         elif skin and any(ends):
-            first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
             positions = graded_positions(length, size, first, depth, RATIO, ends)
         else:
             positions = graded_positions(length, size)

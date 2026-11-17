@@ -125,13 +125,40 @@ def meshed_shape(body):
     return global_shape(body)
 
 
+# {body Name: the shape its vol file holds} for the bodies whose sweep is rebuilt, while write_job writes a job
+_rebuilt = {}
+
+
+def _on_rebuild(element, rebuilt):
+    """Of rebuilt's sub-shapes of element's type (face, edge or vertex), the one whose centre of mass lies nearest
+    element's, within sweeps.FOLLOW_TOL x size; element itself when none does. A face picked on the original body
+    would be about 1e-5 off the rebuild's and split by the mesher's fragment."""
+    kind = {"Face": "Faces", "Edge": "Edges", "Vertex": "Vertexes"}.get(element.ShapeType)
+    if kind is None:
+        return element
+
+    def centre(shape):
+        return shape.Point if shape.ShapeType == "Vertex" else shape.CenterOfMass
+
+    tol = sweeps.FOLLOW_TOL * max(1.0, rebuilt.BoundBox.DiagonalLength)
+    at = centre(element)
+    near = [(centre(other).distanceToPoint(at), k) for k, other in enumerate(getattr(rebuilt, kind))]
+    best = min(near, default=None)
+    return getattr(rebuilt, kind)[best[1]] if best is not None and best[0] <= tol else element
+
+
 def export_subs(folder, body, subs, prefix):
-    """Write each sub-element of body to geometry/<prefix>_<n>.brep. Returns the relative paths."""
+    """Write each sub-element of body to geometry/<prefix>_<n>.brep. Returns the relative paths. A body whose sweep is
+    rebuilt (_rebuilt) gets each sub-element's match on the rebuild (_on_rebuild)."""
     shape = meshed_shape(body)
+    rebuilt = _rebuilt.get(body.Name)
     files = []
     for n, sub in enumerate(subs, 1):
         rel = f"geometry/{prefix}_{n}.brep"
-        shape.getElement(sub).exportBrep(os.path.join(folder, rel))
+        element = shape.getElement(sub)
+        if rebuilt is not None:
+            element = _on_rebuild(element, rebuilt)
+        element.exportBrep(os.path.join(folder, rel))
         files.append(rel)
     return files
 
@@ -370,7 +397,9 @@ def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
         rel = f"geometry/{prefix}vol_{mat_id}.brep"
         shape = global_shape(body)
         if body.Name in found:  # a sweep whose seam twists gets its rebuild (sweeps.rebuilt)
-            shape = sweeps.rebuilt_shape(shape, found[body.Name])
+            original, shape = shape, sweeps.rebuilt_shape(shape, found[body.Name])
+            if shape is not original:  # its faces and edges are exported from the rebuild (export_subs)
+                _rebuilt[body.Name] = shape
         shape.exportBrep(os.path.join(folder, rel))
         job["bodies" if two_d else "volumes"].append(
             {"mat_id": mat_id, "name": objects.region_name(study, body), "file": rel, "size": size}
@@ -576,6 +605,15 @@ def write_job(study):
     stale = [a for a in objects.air_regions(study) if "Touched" in a.State or a.Shape.isNull()]
     if stale:  # validation checks the sub-elements of Mesh Sizes on the air's Shape: make it current
         study.Document.recompute(stale)
+    _rebuilt.clear()
+    try:
+        return _write_job(study)
+    finally:
+        _rebuilt.clear()
+
+
+def _write_job(study):
+    """write_job after the reset of _rebuilt."""
     checked = check(study)
     volumes, surfaces, elements = checked
     folder = scratch_folder(study)  # raises for an unsaved document, before the IDs change

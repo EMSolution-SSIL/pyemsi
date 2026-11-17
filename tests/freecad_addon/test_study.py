@@ -1317,6 +1317,53 @@ class StudyTest(unittest.TestCase):
         self.assertAlmostEqual(sweep.pieces[0].angle, 540, places=3)
         self.assertLess(abs(solid.Volume - strand.Volume), 1e-6 * strand.Volume)
 
+    def rebuilt_strand_with_excitation(self):
+        """A Standard-mode strand (its seam twists: rebuilt) with an excitation on the original body's far end face.
+        Returns the body and that face."""
+        bar, item = self.swept_job(helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        k, end = max(
+            ((k, f) for k, f in enumerate(bar.Shape.Faces, 1) if f.Surface.TypeId == "Part::GeomPlane"),
+            key=lambda kf: kf[1].CenterOfMass.z,
+        )
+        objects.make_excitation(self.study, "In", [(bar, f"Face{k}")])
+        return bar, item, end
+
+    def test_swept_rebuilt_strand_exports_faces_of_the_rebuild(self):
+        _, _, end = self.rebuilt_strand_with_excitation()
+        job = self.read_job()
+        folder = jobwriter.scratch_folder(self.study)
+        (solid,) = Part.read(os.path.join(folder, job["volumes"][0]["file"])).Solids
+        (face,) = Part.read(os.path.join(folder, job["surfaces"][0]["files"][0])).Faces
+        rebuilt = min(solid.Faces, key=lambda f: f.CenterOfMass.distanceToPoint(end.CenterOfMass))
+        # the seam vertex: the rebuild's follows the screw, the original's is 0.55 mm away (its seam twists)
+        (vertex,) = face.Vertexes
+        self.assertLess(vertex.Point.distanceToPoint(rebuilt.Vertexes[0].Point), 1e-9)
+        self.assertGreater(vertex.Point.distanceToPoint(end.Vertexes[0].Point), 0.1)
+
+    def test_swept_rebuilt_strand_excitation(self):
+        bar, item, end = self.rebuilt_strand_with_excitation()
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item.PathSize, item.SectionSize = 0.4, 0.2  # as the mesher's strand test, which gmsh meets every time
+        air = objects.make_air_region(self.study)
+        air.SizeMode = "Manual"
+        air.Center, air.Length, air.Width, air.Height = App.Vector(0, 0, 7.5), 6, 6, 25
+        self.doc.recompute()
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        smat_id = self.read_job()["surfaces"][0]["smat_id"]
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        tags, xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, smat_id)
+        self.assertGreater(len(tags), 10)
+        normal = end.normalAt(*end.Surface.parameter(end.CenterOfMass))
+        for k in range(0, len(xyz), 3):  # on the strand's end face: its plane, within its circle
+            p = App.Vector(*xyz[k : k + 3])
+            self.assertLess(abs((p - end.CenterOfMass).dot(normal)), 1e-4)
+            self.assertLess((p - end.CenterOfMass).Length, 0.45 + 1e-4)
+
     def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
         a, b = self.face("A"), self.face("B")
         b.Placement.Base = App.Vector(10, 0, 0)
