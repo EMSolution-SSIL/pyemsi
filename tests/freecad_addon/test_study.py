@@ -2225,6 +2225,34 @@ class StudyTest(unittest.TestCase):
             f"Refine Near {near.Label}: A is swept, and that wins; the Refine Near does nothing inside it.", texts
         )
 
+    def test_swept_body_wins_over_transfinite_edges(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        edges = objects.make_transfinite_edges(self.study, 4, [(a, "Edge1")])
+        self.assertIn(
+            f"Transfinite Edges {edges.Label}: A is swept, and that wins; the Transfinite Edges does nothing inside it.",
+            self.problems("warning"),
+        )
+
+    def test_swept_start_face_on_another_body_is_refused(self):
+        a, b = self.box("A"), self.box("B", x=30)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        item.StartFace = [(b, ("Face1",))]
+        self.assertIn(
+            f"Swept Body {item.Label}: the start face B.Face1 is not on one of its bodies.", self.problems("error")
+        )
+
+    def test_swept_stale_start_face_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        item.StartFace = [(a, ("Face99",))]
+        texts = self.problems("error")  # no IndexError from recognise_body
+        self.assertIn(f"Swept Body {item.Label}: A has no Face99. Reselect the start face.", texts)
+        self.assertFalse([t for t in texts if "is not a sweep" in t])
+
     def test_swept_body_whole_mesh_size_is_fine(self):
         a = self.box("A")
         objects.make_air_region(self.study)

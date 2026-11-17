@@ -226,6 +226,22 @@ def _links(study, included, r, known=None):
                                 item,
                                 [(b, "")],
                             )
+        if isinstance(item.Proxy, objects.SweptBody):
+            refs = {b.Name for b, _ in by_body}
+            for b, subs in item.StartFace:
+                if b.Name not in refs:
+                    r.error(
+                        f"Swept Body {item.Label}: the start face {b.Label}.{subs[0]} is not on one of its bodies.",
+                        item,
+                    )
+                elif b.Name in included:
+                    for sub in subs:
+                        if sub and not _has(b, sub):
+                            r.error(
+                                f"Swept Body {item.Label}: {b.Label} has no {sub}. Reselect the start face.",
+                                item,
+                                [(b, "")],
+                            )
     for m in objects.materials(study):
         # the assignment of a part has no body
         if m.Body is None and not getattr(m, "PartKey", ""):
@@ -432,7 +448,8 @@ def _swept_bodies(study, included, bodies, r):
                 )
                 continue
             shape = geometry.global_shape(b)
-            starts = [sub for sb, sub_list in w.StartFace if sb.Name == b.Name for sub in sub_list]
+            # a stale start face is reported in _links; recognise_body only gets faces the body has
+            starts = [s for sb, sub_list in w.StartFace if sb.Name == b.Name for s in sub_list if _has(b, s)]
             result = sweeps.recognise_body(shape, starts)
             if isinstance(result, str):
                 r.error(f"Swept Body {w.Label}: {name} is not a sweep: {result}.", w, [(b, "")])
@@ -489,10 +506,13 @@ def _shared_area(face, shape):
 
 
 def _swept_win(study, included, swept, r):
-    """A Mesh Size or Refine Near that picks a swept body does nothing inside it: the sweep sets its own sizes."""
-    for item, kind in [(m, "Mesh Size") for m in objects.mesh_sizes(study)] + [
-        (n, "Refine Near") for n in objects.refine_items(study)
-    ]:
+    """A Mesh Size, Refine Near or Transfinite Edges that picks a swept body does nothing inside it: the sweep sets
+    its own sizes."""
+    for item, kind in (
+        [(m, "Mesh Size") for m in objects.mesh_sizes(study)]
+        + [(n, "Refine Near") for n in objects.refine_items(study)]
+        + [(e, "Transfinite Edges") for e in objects.transfinite_edges(study)]
+    ):
         for b, subs in objects.subs_by_body(item):
             # a whole-body Mesh Size is the size a sweep falls back to, so only its sub-element picks are lost
             if kind == "Mesh Size" and "" in subs and not any(subs):
