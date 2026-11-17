@@ -1,6 +1,6 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
 (RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
-(SL-01..SL-10), Skin Layer, and Swept Body Stages 1 and 2 (SW-01..SW-12). Each row is
+(SL-01..SL-10), Skin Layer, and Swept Body Stages 1 to 3 (SW-01..SW-14). Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -21,8 +21,10 @@ import Part  # noqa: E402
 
 from emsolution import airshapes, geometry, objects  # noqa: E402
 from emsolution import jobwriter, validation  # noqa: E402
+from emsolution import sweeps  # noqa: E402
 from tests.freecad_addon import cases  # noqa: E402
 from tests.freecad_addon import symcases  # noqa: E402
+from tests.freecad_addon.test_sweeps import helix_pipe  # noqa: E402
 
 V = App.Vector
 SIZE = 4.0
@@ -1620,3 +1622,322 @@ CASES += [
     ),
 ]
 AFTER.update({"SW-06": sw06_after, "SW-07": sw07_after, "SW-08": sw08_after})
+
+
+# --- Swept Body, Stage 3: helical and chained sweeps -------------------------------------------------------------------
+# Strands and coil turns are PartDesign pipes along a Part Helix about z in Frenet mode (test_sweeps.helix_pipe, made as
+# litz1 was), the bent busbar a Pad of a plan-view sketch, as a user would make them. The after-checks print the counts,
+# the air's worst elements, the free faces inside and the steps along the path. The air's min SICN next to a skinned
+# swept body is low (about 0.008 by a strand): a known limit of gmsh's air mesh on the thin skin quads, printed only.
+
+COPPER = 5.8e7  # S/m
+LITZ1 = r"C:\Users\hamed\Desktop\delme\litz\litz1.FCStd"
+# A strand's air does not always mesh at its sizes 0.3: gmsh's air mesh sometimes stops at "overlapping facets" on the
+# stretched quads (path 0.6, section 0.15 failed in about half the runs). Path 0.4, section 0.2 meet it every time.
+STRAND_SIZES = {"path_size": 0.4, "section_size": 0.2}
+
+
+def swept_items(f, path_size=0.0, section_size=0.0, then=None, layer=None):
+    """items(study, body) of bar_study: a copper Skin Layer at f Hz (layer: its Layer Depth in δ, else the default 3)
+    and a Swept Body; then(study, body) adds more."""
+
+    def items(study, body):
+        item = skin(study, body, f=f, sigma=COPPER)
+        if layer:
+            item.LayerDepth = layer
+        item = objects.make_swept_body(study, [(body, "")], path_size=path_size)
+        item.SectionSize = section_size
+        if then:
+            then(study, body)
+
+    return items
+
+
+def strand_study(name, shape, then=None):
+    """A litz strand (round r 0.45 on a helix r 1.2) of size 0.3 in a Padding Box Air Region (3 mm, size 0.6): Skin
+    Layer 100 kHz (δ 0.21) 2 δ deep (the default 3 δ is deeper than the radius: graded triangles, prisms only) and a
+    Swept Body of STRAND_SIZES."""
+    items = swept_items(100000, then=then, layer=2.0, **STRAND_SIZES)
+    return bar_study(name, items, size=0.3, pad=3, shape=shape, air_size=0.6, label="Strand")
+
+
+def sw09():
+    return strand_study("SW-09", helix_pipe(10, 15, 1.2, ("circle", 0.45)))
+
+
+def sw10():
+    """A coil turn: a 2 x 4 rectangle on a Frenet helix r 20, pitch 6, one turn, size 1."""
+    coil = helix_pipe(6, 6, 20, ("rect", 2, 4))
+    return bar_study("SW-10", swept_items(10000), size=1, pad=6, shape=coil, air_size=4, label="Coil")
+
+
+def padded_bend():
+    """A bent busbar made as a Pad of a plan-view sketch on the XY plane: a band 10 wide along line 30 + arc r 20, 90
+    deg + line 30 (centre line from (0, 0) along x, about (30, 20), then along y to (50, 50)), padded 4."""
+    import Sketcher  # noqa: F401 - registers Sketcher::SketchObject
+    import PartDesign  # noqa: F401 - registers PartDesign::Pad
+
+    def arc(r):
+        return Part.ArcOfCircle(Part.Circle(V(30, 20, 0), V(0, 0, 1), r), -math.pi / 2, 0)
+
+    line = Part.LineSegment
+    doc = App.newDocument("PaddedBend")
+    try:
+        body = doc.addObject("PartDesign::Body", "Body")
+        sketch = body.newObject("Sketcher::SketchObject", "Sketch")
+        sketch.AttachmentSupport = [(next(f for f in body.Origin.OriginFeatures if f.Role == "XY_Plane"), "")]
+        sketch.MapMode = "FlatFace"
+        for g in (
+            line(V(0, -5, 0), V(30, -5, 0)),
+            arc(25),
+            line(V(55, 20, 0), V(55, 50, 0)),
+            line(V(55, 50, 0), V(45, 50, 0)),
+            line(V(45, 50, 0), V(45, 20, 0)),
+            arc(15),
+            line(V(30, 5, 0), V(0, 5, 0)),
+            line(V(0, 5, 0), V(0, -5, 0)),
+        ):
+            sketch.addGeometry(g)
+        pad = body.newObject("PartDesign::Pad", "Pad")
+        pad.Profile = sketch
+        pad.Length = 4
+        doc.recompute()
+        return pad.Shape.Solids[0].copy()
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def sw11():
+    return bar_study("SW-11", swept_items(1000), pad=10, shape=padded_bend(), label="Bend")
+
+
+def litz1_strand():
+    """litz1's strand as the user built it (a PartDesign AdditivePipe, Frenet, 1.2 turns): its solid, read from a copy
+    of the file, so the file itself is never opened or saved."""
+    import shutil
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = os.path.join(tmp, "litz1.FCStd")
+        shutil.copyfile(LITZ1, copy)
+        doc = App.openDocument(copy)
+        try:
+            return doc.getObject("AdditivePipe").Shape.Solids[0].copy()
+        finally:
+            App.closeDocument(doc.Name)
+
+
+def sw13():
+    return strand_study("SW-13", litz1_strand())
+
+
+def far_end(body):
+    """(name, face) of the body's flat face highest in z: a strand's far end."""
+    return max(
+        ((f"Face{k}", f) for k, f in enumerate(body.Shape.Faces, 1) if f.Surface.TypeId == "Part::GeomPlane"),
+        key=lambda nf: nf[1].CenterOfMass.z,
+    )
+
+
+def sw14():
+    """SW-13's strand made in PartDesign's Standard mode (its seam twists: exported rebuilt), with an excitation on the
+    original body's far end face."""
+
+    def excitation(study, body):
+        objects.make_excitation(study, "In", [(body, far_end(body)[0])])
+        study.Document.recompute()
+
+    return strand_study("SW-14", helix_pipe(10, 12, 1.2, ("circle", 0.45), frenet=False), then=excitation)
+
+
+def helix_steps(msh, angle, length):
+    """The steps along the path (mm, at the profile's centre, of length) between the stations of a sweep along a helix
+    about z turning angle degrees, read off the first curve of the mesh that turns by angle about z: a lateral edge
+    or the seam of the swept body, with a node at each station."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        for _, c in gmsh.model.getEntities(1):
+            xyz = gmsh.model.mesh.getNodes(1, c, includeBoundary=True)[1]
+            z_phi = sorted((xyz[k + 2], math.atan2(xyz[k + 1], xyz[k])) for k in range(0, len(xyz), 3))
+            turns = [z_phi[0][1]] if z_phi else []
+            for _, p in z_phi[1:]:
+                turns.append(turns[-1] + (p - turns[-1] + math.pi) % (2 * math.pi) - math.pi)
+            if len(turns) > 2 and abs(abs(math.degrees(turns[-1] - turns[0])) - angle) < 1:
+                return [abs(b - a) * length / math.radians(angle) for a, b in zip(turns, turns[1:])]
+        return []
+    finally:
+        gmsh.finalize()
+
+
+def helix_text(folder, name, angle, advance, rc):
+    """(text, types, free, steps): ring_text with the steps along the helix printed; steps is None when they do not
+    add up to the path's length."""
+    text, types, msh, free = ring_text(folder, name)
+    length = math.hypot(rc * math.radians(angle), advance)
+    steps = helix_steps(msh, angle, length)
+    if not steps:
+        return text + "; no curve of the mesh runs along the helix", types, free, None
+    text += (
+        f"; {len(steps)} steps along the path ({length:.2f}): first {steps[0]:.3f}, last {steps[-1]:.3f}, largest"
+        f" {max(steps):.3f}"
+    )
+    return text, types, free, steps if abs(sum(steps) - length) < 1e-3 * length else None
+
+
+def strand_after(angle, advance):
+    def after(folder):
+        """(passed, text): hexahedra and prisms, no free faces inside, stations all along the helix, no step shorter
+        than half the skin's first (δ 0.21 / 2 per δ)."""
+        text, types, free, steps = helix_text(folder, "Strand", angle, advance, 1.2)
+        ok = types.get("Hexahedron 8", 0) > 0 and types.get("Prism 6", 0) > 0 and not free and steps is not None
+        ok = ok and min(steps) > 0.05
+        return ok, text
+
+    return after
+
+
+def sw10_after(folder):
+    """(passed, text): hexahedra only, no free faces inside, stations all along the helix."""
+    text, types, free, steps = helix_text(folder, "Coil", 360, 6, 20)
+    return set(types) == {"Hexahedron 8"} and not free and steps is not None, text
+
+
+JOINTS = (30.0, 30.0 + 10 * math.pi)  # along SW-11's centre line: where the arc starts and ends
+
+
+def bend_path(x, y):
+    """The distance along SW-11's centre line of the station through (x, y)."""
+    if x <= 30:
+        return x
+    if y <= 20:
+        return 30 + 20 * (math.atan2(y - 20, x - 30) + math.pi / 2)
+    return JOINTS[1] + y - 20
+
+
+def sw11_after(folder):
+    """(passed, text): hexahedra only, no free faces inside, a station at each joint, the steps graded at both ends."""
+    import gmsh
+
+    text, types, msh, free = ring_text(folder, "Bend")
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        s = set()
+        for d, tag in gmsh.model.getPhysicalGroups(3):
+            if gmsh.model.getPhysicalName(d, tag) == "Bend":
+                xyz = gmsh.model.mesh.getNodesForPhysicalGroup(d, tag)[1]
+                s |= {round(bend_path(xyz[k], xyz[k + 1]), 5) for k in range(0, len(xyz), 3)}
+    finally:
+        gmsh.finalize()
+    s = sorted(s)
+    steps = [b - a for a, b in zip(s, s[1:])]
+    joints = [bool(min(abs(x - j) for x in s) < 1e-4) for j in JOINTS]
+    graded = steps[0] < 0.8 * SIZE and steps[-1] < 0.8 * SIZE and max(steps) > 0.8 * SIZE
+    ok = set(types) == {"Hexahedron 8"} and not free and all(joints) and graded
+    text += (
+        f"; {len(steps)} steps along the path ({s[-1] - s[0]:.2f}): first {steps[0]:.2f}, last {steps[-1]:.2f},"
+        f" largest {max(steps):.2f}; a station at the joints {JOINTS[0]:.2f} and {JOINTS[1]:.2f}: {joints}"
+    )
+    return ok, text
+
+
+def sw14_after(folder):
+    """(passed, text): rebuilt, then SW-13's check; the excitation's nodes lie on the strand's far end face."""
+    import gmsh
+
+    doc = App.openDocument(os.path.join(folder, "new", "SW-14.FCStd"))
+    try:
+        body = doc.getObject("Strand")
+        rebuilt = sweeps.recognise(body.Shape.Solids[0]).rebuild
+        end = far_end(body)[1]
+        centre, normal = end.CenterOfMass, end.normalAt(*end.Surface.parameter(end.CenterOfMass))
+    finally:
+        App.closeDocument(doc.Name)
+    ok, text = strand_after(432, 12)(folder)
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(os.path.join(folder, "new", "pre_geom.msh"))
+        tag = next(t for d, t in gmsh.model.getPhysicalGroups(2) if gmsh.model.getPhysicalName(d, t).startswith("In"))
+        xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, tag)[1]
+    finally:
+        gmsh.finalize()
+    points = [V(*xyz[k : k + 3]) for k in range(0, len(xyz), 3)]
+    on_end = all(abs((p - centre).dot(normal)) < 1e-4 and (p - centre).Length < 0.45 + 1e-4 for p in points)
+    text = (
+        f"rebuilt: {rebuilt}; {text}; excitation In (picked on the original end face): {len(points)} nodes, all on"
+        f" the end face: {on_end}"
+    )
+    return ok and rebuilt and on_end and len(points) > 10, text
+
+
+def helix_cut(top, across_z, across_box):
+    """The picture hints of a strand: cut through the helix axis (y = 0), and across the strand at z = across_z."""
+    return {
+        "clip": "y",
+        "at": 0.0,
+        "zoom": (-2.4, -1.0, 2.4, top + 1.0),
+        "across": {"clip": "z", "at": across_z, "zoom": across_box},
+    }
+
+
+CASES += [
+    (
+        "SW-09",
+        "3D litz strand: round r 0.45 on a Frenet helix r 1.2, pitch 10, 1.5 turns (size 0.3): Skin Layer 100 kHz"
+        " (δ 0.21) 2 δ deep, Swept Body (path 0.4, section 0.2: gmsh's air mesh is not reliable at 0.6 / 0.15), cut"
+        " through the helix axis",
+        sw09,
+        "meshes",
+        helix_cut(15, 7.5, (-1.8, -2.0, 1.8, -0.4)),
+    ),
+    (
+        "SW-10",
+        "3D copper coil turn: 2 x 4 rectangle on a Frenet helix r 20, pitch 6, 1 turn (size 1): Skin Layer 10 kHz"
+        " (δ 0.66), Swept Body, cut at z = 3",
+        sw10,
+        "meshes",
+        {
+            "clip": "z",
+            "at": 3.0,
+            "zoom": (-25, -25, 25, 25),
+            "across": {"clip": "x", "at": 0.0, "zoom": (14, -3, 26, 7)},
+        },
+    ),
+    (
+        "SW-11",
+        "3D copper bent busbar, a Pad 4 thick of a plan sketch 10 wide along line 30 + arc r 20, 90 deg + line 30"
+        " (size 4): Skin Layer 1 kHz (δ 2.09), Swept Body, cut at z = 2",
+        sw11,
+        "meshes",
+        {
+            "clip": "z",
+            "at": 2.0,
+            "zoom": (-5, -10, 60, 55),
+            "across": {"clip": "x", "at": 15.0, "zoom": (-9, -4, 9, 8)},
+        },
+    ),
+    (
+        "SW-13",
+        "litz1's strand as the user built it (PartDesign pipe, Frenet, 1.2 turns), copied into a new Study: Skin"
+        " Layer 100 kHz 2 δ deep, Swept Body (path 0.4, section 0.2), cut through the helix axis",
+        sw13,
+        "meshes",
+        helix_cut(12, 6.0, (-2.0, -1.5, 0.0, 1.0)),
+    ),
+    (
+        "SW-14",
+        "SW-13's strand made in PartDesign's Standard mode (its seam twists: meshed rebuilt as a Frenet pipe), with an"
+        " excitation picked on its end face, cut through the helix axis",
+        sw14,
+        "meshes",
+        helix_cut(12, 6.0, (-2.0, -1.5, 0.0, 1.0)),
+    ),
+]
+AFTER.update({"SW-09": strand_after(540, 15), "SW-10": sw10_after, "SW-11": sw11_after, "SW-13": strand_after(432, 12)})
+AFTER["SW-14"] = sw14_after
