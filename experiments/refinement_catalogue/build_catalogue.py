@@ -1,5 +1,5 @@
 r"""The refinement catalogue (spec 9): each row of rows.CASES is built as a Study, its set-up saved, meshed with
-its Refine Near, Air Grading and Skin Layer items ("new") and again with them deleted ("today"), and its pictures drawn.
+its Refine Near, Air Grading, Skin Layer and Swept Body items ("new") and again with them deleted ("today"), and its pictures drawn.
 
 Run: pixi run -e addon python experiments/refinement_catalogue/build_catalogue.py [--only ID ...]
 Output: experiments/refinement_catalogue/<id>/<id>.FCStd, the set-up Study (git-ignored; rebuild it with this script),
@@ -75,6 +75,12 @@ def mesh_into(study, folder, name, picture):
         os.remove(png)
     render.picture(msh, png, dim, **hints)
     record = {"elements": part_counts(msh), "seconds": round(r.seconds, 1), "study": path, "msh": msh, "png": png}
+    if "across" in picture:  # a second cut of the same mesh, e.g. across a swept conductor
+        across = os.path.join(folder, os.path.basename(folder) + "_across.png")
+        if os.path.exists(across):
+            os.remove(across)
+        render.picture(msh, across, dim, **picture["across"])
+        record["png_across"] = across
     record["inverted"] = r.inverted
     return "meshes", record
 
@@ -92,7 +98,8 @@ def run(row):
         verdict, out["new"] = mesh_into(study, os.path.join(OUT, name, "new"), name, picture)
         out["verdict"] = verdict
         if verdict == "meshes":
-            for item in objects.refine_items(study) + objects.air_gradings(study) + objects.skin_layers(study):
+            items = objects.refine_items(study) + objects.air_gradings(study) + objects.skin_layers(study)
+            for item in items + objects.swept_bodies(study):
                 study.Document.removeObject(item.Name)
             study.Document.recompute()
             today, out["today"] = mesh_into(study, os.path.join(OUT, name, "today"), name, picture)

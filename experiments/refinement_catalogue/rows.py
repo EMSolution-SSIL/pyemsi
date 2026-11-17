@@ -1,6 +1,6 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
 (RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
-(SL-01..SL-09), Skin Layer. Each row is
+(SL-01..SL-10), Skin Layer, and Swept Body Stage 1 (SW-01..SW-12). Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 import FreeCAD as App  # noqa: E402 - after the add-on path
 import Part  # noqa: E402
 
-from emsolution import geometry, objects  # noqa: E402
+from emsolution import airshapes, geometry, objects  # noqa: E402
 from emsolution import jobwriter, validation  # noqa: E402
 from tests.freecad_addon import cases  # noqa: E402
 from tests.freecad_addon import symcases  # noqa: E402
@@ -1170,3 +1170,326 @@ CASES += [
 AFTER.update({"SL-01": sl01_after, "SL-04": sl04_after, "SL-05": sl05_after, "SL-06": sl06_after, "SL-07": sl07_after})
 AFTER["SL-09"] = sl09_after
 AFTER["SL-10"] = sl10_after
+
+
+# --- Swept Body, Stage 1 ----------------------------------------------------------------------------------------------
+# A busbar 10 x 4 x 100 (z 0..100) of the Study's size 4 in a Padding Box Air Region, swept along z. The after-checks
+# print the element types of each part, today's and new, and the air's worst elements (min SICN, and how many are
+# below 0.1): gmsh puts pyramids on the long thin skin quads, so those are poor.
+
+POOR = 0.1
+
+
+def pad_air(study, bodies, mm):
+    """A Box Air Region in Padding mode, mm on every side (a thin air shell round a long thin body does not mesh)."""
+    air = cases.fit_air(study, bodies, 0)
+    sides = airshapes.padding_sides("Box", "3D")
+    for key, _ in sides:
+        setattr(air, f"Pad{key}", mm)
+    return air
+
+
+def bar_study(name, items, size=SIZE, pad=30, shape=None, air_size=None, label="Busbar"):
+    """A busbar (or shape) in a Padding Box Air Region; items(study, body) adds the items."""
+    shape = shape or block(-5, -2, 0, 5, 2, 100)
+    doc, study, (body,) = study_of(name, "3D", [(label, shape)], size=size)
+    air = pad_air(study, [body], pad)
+    done(study, [body], air)
+    if air_size:
+        objects.make_mesh_size(study, air_size, [(air, "")])
+    items(study, body)
+    return study
+
+
+def sw01_items(study, body):
+    skin(study, body, f=1000, sigma=5.8e7)
+    objects.make_swept_body(study, [(body, "")], path_size=4.0)
+
+
+def sw01():
+    return bar_study("SW-01", sw01_items)
+
+
+def sw02():
+    def items(study, body):
+        skin(study, body, f=10000, sigma=5.8e7)
+        objects.make_swept_body(study, [(body, "")])
+
+    return bar_study("SW-02", items, size=2, pad=20, shape=Part.makeCylinder(3, 100), air_size=8, label="Wire")
+
+
+def sw03():
+    def items(study, body):
+        skin(study, body, f=1000, sigma=3.5e7)
+        objects.make_swept_body(study, [(body, "")])
+
+    return bar_study("SW-03", items, size=10, pad=20, shape=block(-50, -50, 0, 50, 50, 2), label="Plate")
+
+
+def sw04():
+    return bar_study("SW-04", lambda study, body: objects.make_swept_body(study, [(body, "")], path_size=4.0))
+
+
+def sw12():
+    """SW-01's busbar with its end face (z = 0) on a 40 x 40 x 10 terminal block (z -10..0); both have a Skin Layer."""
+    shapes = [("Busbar", block(-5, -2, 0, 5, 2, 100)), ("Terminal", block(-20, -20, -10, 20, 20, 0))]
+    doc, study, (bar, term) = study_of("SW-12", "3D", shapes)
+    done(study, [bar, term], pad_air(study, [bar, term], 12))
+    sw01_items(study, bar)
+    skin(study, term, f=1000, sigma=5.8e7)
+    return study
+
+
+def refusal(name, shapes, items):
+    """A Study of the bodies [(name, shape)] in a Padding Box Air Region (12 mm); items(study, bodies, air) adds the
+    items that are refused."""
+    doc, study, bodies = study_of(name, "3D", shapes)
+    air = pad_air(study, bodies, 12)
+    done(study, bodies, air)
+    items(study, bodies, air)
+    return study
+
+
+def bar_shape():
+    return ("Busbar", block(-5, -2, 0, 5, 2, 100))
+
+
+def sw05a():
+    return refusal(
+        "SW-05a", [("Ball", Part.makeSphere(5))], lambda s, bodies, air: objects.make_swept_body(s, [(bodies[0], "")])
+    )
+
+
+def sw05b():
+    return refusal("SW-05b", [bar_shape()], lambda s, bodies, air: objects.make_swept_body(s, [(air, "")]))
+
+
+def sw05c():
+    def items(study, bodies, air):
+        objects.make_swept_body(study, [(bodies[0], "")])
+        objects.make_transfinite_body(study, bodies)
+
+    return refusal("SW-05c", [bar_shape()], items)
+
+
+def sw05d():
+    def items(study, bodies, air):
+        for body in bodies:
+            objects.make_swept_body(study, [(body, "")])
+
+    return refusal("SW-05d", [bar_shape(), ("Next", block(5, -2, 0, 15, 2, 100))], items)
+
+
+def sw05e():
+    def items(study, bodies, air):
+        objects.make_swept_body(study, [(bodies[0], "")])
+
+    return refusal("SW-05e", [bar_shape(), ("Block", block(5, -2, 0, 15, 0, 50))], items)
+
+
+def types3(msh, name):
+    """{element type name: elements} of the 3D physical group name in a mesh file."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        out = {}
+        for d, tag in gmsh.model.getPhysicalGroups(3):
+            if gmsh.model.getPhysicalName(d, tag) != name:
+                continue
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag):
+                for etype, elements, _ in zip(*gmsh.model.mesh.getElements(3, ent)):
+                    key = gmsh.model.mesh.getElementProperties(etype)[0]
+                    out[key] = out.get(key, 0) + len(elements)
+        return out
+    finally:
+        gmsh.finalize()
+
+
+def air_quality(msh):
+    """(minimum SICN, elements below POOR) of the 3D physical group Air of a mesh file."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        worst, poor = 1.0, 0
+        for d, tag in gmsh.model.getPhysicalGroups(3):
+            if gmsh.model.getPhysicalName(d, tag) != "Air":
+                continue
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag):
+                for etype, elements, _ in zip(*gmsh.model.mesh.getElements(3, ent)):
+                    q = gmsh.model.mesh.getElementQualities(elements, "minSICN")
+                    worst, poor = min(worst, float(min(q))), poor + int((q < POOR).sum())
+        return worst, poor
+    finally:
+        gmsh.finalize()
+
+
+FACES_3D = {  # gmsh element type: (nodes, its faces), as tests/freecad_addon/test_mesher.py
+    4: (4, ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3))),
+    5: (8, ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7))),
+    6: (6, ((0, 2, 1), (3, 4, 5), (0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5))),
+    7: (5, ((0, 3, 2, 1), (0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4))),
+}
+
+
+def free_faces_inside(msh):
+    """The faces of the 3D elements used once that are not on the model's bounding box: none in a conformal mesh."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        at = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+        box = gmsh.model.getBoundingBox(-1, -1)
+        count = {}
+        for _, e in gmsh.model.getEntities(3):
+            for typ, nodes in zip(*gmsh.model.mesh.getElements(3, e)[::2]):
+                n, faces = FACES_3D[int(typ)]
+                for k in range(0, len(nodes), n):
+                    cell = nodes[k : k + n]
+                    for f in faces:
+                        key = tuple(sorted(int(cell[i]) for i in f))
+                        count[key] = count.get(key, 0) + 1
+        lo, hi = box[:3], box[3:]
+
+        def on_box(f):
+            return any(all(abs(at[n][i] - b[i]) < 1e-6 for n in f) for i in range(3) for b in (lo, hi))
+
+        return [f for f, c in count.items() if c == 1 and not on_box(f)]
+    finally:
+        gmsh.finalize()
+
+
+def z_steps(msh, name):
+    """The steps between the z of the nodes of the 3D physical group name, from the lowest z up."""
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        z = set()
+        for d, tag in gmsh.model.getPhysicalGroups(3):
+            if gmsh.model.getPhysicalName(d, tag) == name:
+                z |= {round(float(x), 6) for x in gmsh.model.mesh.getNodesForPhysicalGroup(d, tag)[1][2::3]}
+        z = sorted(z)
+        return [b - a for a, b in zip(z, z[1:])]
+    finally:
+        gmsh.finalize()
+
+
+def sw_report(folder, name):
+    """(text, new types of the part, new msh): the part's element types, today's and new, and the air's worst elements."""
+    msh = {w: os.path.join(folder, w, "pre_geom.msh") for w in ("new", "today")}
+    types = {w: types3(msh[w], name) for w in msh}
+    air = {w: air_quality(msh[w]) for w in msh}
+    text = (
+        f"{name} elements: new {sum(types['new'].values())} {types['new']}, today {sum(types['today'].values())}"
+        f" {types['today']}; Air minimum SICN: new {air['new'][0]:.3f} ({air['new'][1]} elements below {POOR}),"
+        f" today {air['today'][0]:.3f} ({air['today'][1]} below {POOR})"
+    )
+    return text, types["new"], msh["new"]
+
+
+def sw01_after(folder):
+    """(passed, text): the busbar is hexahedra only; the counts today and new and the air's quality printed."""
+    text, types, msh = sw_report(folder, "Busbar")
+    return set(types) == {"Hexahedron 8"}, text + f"; free faces inside: {len(free_faces_inside(msh))}"
+
+
+def sw02_after(folder):
+    """(passed, text): hexahedra (the quads of the section) and prisms."""
+    text, types, msh = sw_report(folder, "Wire")
+    return types.get("Hexahedron 8", 0) > 0 and types.get("Prism 6", 0) > 0, text
+
+
+def sw03_after(folder):
+    """(passed, text): the "deeper than half" warning printed."""
+    warnings = [x for x in new_warnings(folder, "SW-03") if DEEPER in x]
+    text, _, _ = sw_report(folder, "Plate")
+    return bool(warnings), "Validate: " + (" | ".join(warnings) or "no warning") + "; " + text
+
+
+def sw04_after(folder):
+    """(passed, text): hexahedra only, every step along the path the same."""
+    text, types, msh = sw_report(folder, "Busbar")
+    steps = z_steps(msh, "Busbar")
+    ok = set(types) == {"Hexahedron 8"} and max(steps) - min(steps) < 1e-6
+    return ok, text + f"; steps along z {min(steps):.2f}..{max(steps):.2f}"
+
+
+def sw12_after(folder):
+    """(passed, text): no free faces inside, and the busbar's steps along z at the terminal end (z 0) are not graded
+    while the free end (z 100) is."""
+    text, types, msh = sw_report(folder, "Busbar")
+    free = free_faces_inside(msh)
+    steps = z_steps(msh, "Busbar")
+    ok = not free and steps[0] > 0.8 * SIZE and steps[-1] < 0.8 * SIZE
+    text += (
+        f"; free faces inside: {len(free)}; first step at the terminal {steps[0]:.2f}, at the free end {steps[-1]:.2f}"
+    )
+    return ok, text
+
+
+SW_CUT = {
+    "clip": "y",
+    "at": 0.0,
+    "zoom": (-12, -6, 12, 106),
+    "across": {"clip": "z", "at": 50.0, "zoom": (-12, -8, 12, 8)},
+}
+CASES += [
+    (
+        "SW-01",
+        "3D copper busbar 10 x 4 x 100 (size 4) in a Padding Box Air Region: Skin Layer 1 kHz (δ 2.09), Swept Body"
+        " (path size 4), cut at y = 0",
+        sw01,
+        "meshes",
+        SW_CUT,
+    ),
+    (
+        "SW-02",
+        "3D round wire r 3 x 100 (size 2): Skin Layer 10 kHz (δ 0.66), Swept Body, cut at y = 0",
+        sw02,
+        "meshes",
+        {
+            "clip": "y",
+            "at": 0.0,
+            "zoom": (-8, -4, 8, 104),
+            "across": {"clip": "z", "at": 50.0, "zoom": (-10, -8, 10, 8)},
+        },
+    ),
+    (
+        "SW-03",
+        "3D aluminium plate 100 x 100 x 2 (size 10): Skin Layer 1 kHz (δ 2.69, fills the plate), Swept Body",
+        sw03,
+        "meshes",
+        {"clip": "y", "at": 0.0, "zoom": (-30, -3, 30, 5)},
+    ),
+    ("SW-04", "SW-01's busbar with a Swept Body only: uniform hexahedra, cut at y = 0", sw04, "meshes", SW_CUT),
+    ("SW-05a", "A swept sphere: refused", sw05a, "is not a sweep", {}),
+    ("SW-05b", "The Air Region swept: refused", sw05b, "cannot be a Swept Body", {}),
+    ("SW-05c", "A swept bar with a Transfinite Body: refused", sw05c, "a body is swept or structured, not both", {}),
+    ("SW-05d", "Two swept bars touching: refused", sw05d, "which is swept", {}),
+    ("SW-05e", "A block on half of a swept bar's side: refused", sw05e, "touches only part of", {}),
+    (
+        "SW-12",
+        "SW-01's busbar with its end on a 40 x 40 x 10 terminal block (own Skin Layer): conformal, no grading at the"
+        " terminal end, cut at y = 0",
+        sw12,
+        "meshes",
+        {
+            "clip": "y",
+            "at": 0.0,
+            "zoom": (-25, -14, 25, 106),
+            "across": {"clip": "z", "at": 50.0, "zoom": (-12, -8, 12, 8)},
+        },
+    ),
+]
+AFTER.update({"SW-01": sw01_after, "SW-02": sw02_after, "SW-03": sw03_after, "SW-04": sw04_after, "SW-12": sw12_after})

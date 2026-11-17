@@ -68,6 +68,12 @@ def card(r):
             out.append(f'<figure><img alt="{side} mesh of {e(r["id"])}" src="{picture(p.get("png"))}">')
             out.append(f"<figcaption>{caption}, {p.get('seconds', '?')} s</figcaption></figure>")
         out.append("</div>")
+    if any(p.get("png_across") for _, p in pics):
+        out.append('<div class="pics">')
+        for side, p in pics:
+            out.append(f'<figure><img alt="{side} mesh of {e(r["id"])} across" src="{picture(p.get("png_across"))}">')
+            out.append(f"<figcaption>{side}, cut across</figcaption></figure>")
+        out.append("</div>")
     parts = sorted(set(r.get("today", {}).get("elements", {})) | set(r.get("new", {}).get("elements", {})))
     if parts:
         out.append("<table><tr><th>part</th><th>today</th><th>new</th></tr>")
