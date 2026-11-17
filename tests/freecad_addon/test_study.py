@@ -1232,6 +1232,22 @@ class StudyTest(unittest.TestCase):
         self.assertAlmostEqual(piece["angle"], 90)
         self.assertEqual(piece["advance"], 0)
 
+    def test_swept_placed_bend_is_global(self):
+        pts = [App.Vector(x, 0, z) for x, z in [(10, 0), (14, 0), (14, 4), (10, 4), (10, 0)]]
+        bend = Part.Face(Part.makePolygon(pts)).revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 90)
+        body, _ = self.swept_job(bend)
+        body.Placement = App.Placement(App.Vector(100, 50, 0), App.Rotation(App.Vector(1, 0, 0), 30))
+        self.doc.recompute()
+        (solid,) = self.read_job()["swept"][0]["solids"]
+        (piece,) = solid["pieces"]
+        placement = body.Placement
+        axis = placement.Rotation.multVec(App.Vector(0, 0, 1))
+        self.assertLess((App.Vector(*piece["origin"]) - placement.multVec(App.Vector(0, 0, 2))).Length, 1e-6)
+        self.assertAlmostEqual(abs(App.Vector(*piece["axis"]).dot(axis)), 1)
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        ends = [f.CenterOfMass for f in body.Shape.Faces if isinstance(f.Surface, Part.Plane)]
+        self.assertTrue(any((face.Faces[0].CenterOfMass - c).Length < 1e-6 for c in ends))
+
     def test_swept_straight_is_not_closed(self):
         self.swept_job()
         self.assertIs(self.read_job()["swept"][0]["solids"][0]["closed"], False)

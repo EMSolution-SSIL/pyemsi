@@ -195,8 +195,9 @@ def air_grading_entries(study, ids):
 
 def swept_entries(study, folder, ids, prefix=""):
     """The job's "swept" list: one entry per whole body of a Swept Body item that is in ids ({body Name: MAT_ID}), in
-    tree order. The profile face of each solid (its start face, or a closed ring's cut) is written to geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global
-    coordinates. The skin comes from the first Skin Layer on the body."""
+    tree order. The profile face of each solid (its start face, or a closed ring's cut) is written to
+    geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global coordinates. The skin comes from the first Skin Layer on the
+    body."""
     entries, seen = [], set()
     picks = [pick for item in objects.recombine_items(study) for pick in objects.face_picks(item)]
     recombined = {body.Name for body, faces in picks if not faces}
@@ -222,7 +223,7 @@ def swept_entries(study, folder, ids, prefix=""):
                 None,
             )
             solids = []
-            for k, (solid, sweep) in enumerate(zip(shape.Solids, result), 1):
+            for k, sweep in enumerate(result, 1):
                 rel = f"geometry/{prefix}sweep_{mat_id}_{k}.brep"
                 sweep.face.exportBrep(os.path.join(folder, rel))
                 pieces = [
