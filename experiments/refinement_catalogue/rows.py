@@ -1847,7 +1847,8 @@ def sw11_after(folder):
 
 
 def sw14_after(folder):
-    """(passed, text): rebuilt, then SW-13's check; the excitation's nodes lie on the strand's far end face."""
+    """(passed, text): rebuilt, then SW-13's check; the excitation's nodes lie on the strand's far end face; the air's
+    min SICN at least 0.005 (the pyramids' fallback left slivers of 0.0004)."""
     import gmsh
 
     doc = App.openDocument(os.path.join(folder, "new", "SW-14.FCStd"))
@@ -1873,7 +1874,9 @@ def sw14_after(folder):
         f"rebuilt: {rebuilt}; {text}; excitation In (picked on the original end face): {len(points)} nodes, all on"
         f" the end face: {on_end}"
     )
-    return ok and rebuilt and on_end and len(points) > 10, text
+    worst, poor = air_quality(os.path.join(folder, "new", "pre_geom.msh"))
+    text += f"; Air min SICN {worst:.4f} ({poor} below {POOR})"
+    return ok and rebuilt and on_end and len(points) > 10 and worst >= 0.005, text
 
 
 def helix_cut(top, across_z, across_box):

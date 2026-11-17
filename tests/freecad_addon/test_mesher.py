@@ -1360,7 +1360,33 @@ class MesherTest(unittest.TestCase):
         self.open_msh()
         hexes = self.element_counts(1)["Hexahedron 8"]
         self.assertEqual(self.element_counts(10, dim=2), {"Quadrilateral 4": hexes // len(self.steps(2))})
-        self.assertEqual(inner_free_faces(self.AIR_BOX), [])  # the air is meshed (it took the pyramids retry)
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])  # the air is meshed
+
+    def air_min_sicn(self):
+        tags = [t for e in gmsh.model.getEntitiesForPhysicalGroup(3, 2) for t in gmsh.model.mesh.getElements(3, e)[1]]
+        return min(float(gmsh.model.mesh.getElementQualities(t, "minSICN").min()) for t in tags if len(t))
+
+    def test_swept_end_face_excitation_keeps_the_pyramids(self):
+        # fragmented in, a whole end face turned gmsh's normals of the bar's other faces inward: the pushed-out
+        # pyramids then always failed ("PLC Error") and the fallback left slivers in the air. It now goes on the bar's
+        # own end face, not into the fragment
+        self.swept_bar()
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(self.msh())
+            plain = self.air_min_sicn()
+        finally:
+            gmsh.finalize()
+        write_rect(self.geo("surf_10_1.brep"), -5, -2, 20, 10, 4)  # the far end face
+        surface = {"smat_id": 10, "name": "In", "mat_id": 1, "files": ["geometry/surf_10_1.brep"]}
+        r = self.swept_bar(surfaces=[surface])
+        self.assertNotIn("could not optimise the pyramids", r.stderr)
+        self.open_msh()
+        nodes = gmsh.model.mesh.getNodesForPhysicalGroup(2, 10)[1].reshape(-1, 3)
+        self.assertTrue(len(nodes))
+        self.assertTrue(all(abs(z - 20) < 1e-9 for z in nodes[:, 2]))
+        self.assertGreaterEqual(self.air_min_sicn(), 0.5 * plain)
 
     def test_straight_sweep_unchanged_by_stage2(self):
         # the bar of test_swept_bar_with_skin: its node coordinates as at Stage 1 (7b39a49)

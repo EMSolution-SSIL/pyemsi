@@ -47,6 +47,55 @@ def _import_one(path, *dims):
     return tags[0]
 
 
+def _face_shape(tag):
+    """(centre of mass + bounding box, area) of an OCC face: how _whole_faces and _body_face tell faces apart."""
+    occ = gmsh.model.occ
+    return list(occ.getCenterOfMass(2, tag)) + list(occ.getBoundingBox(2, tag)), occ.getMass(2, tag)
+
+
+def _same_face(a, b, size):
+    """True when two _face_shape results are one face, within meshsweep.TOL x size (the body's size)."""
+    tol = meshsweep.TOL * size
+    return max(abs(x - y) for x, y in zip(a[0], b[0])) <= tol and abs(a[1] - b[1]) <= tol * size
+
+
+def _size(dim, tag):
+    x0, y0, z0, x1, y1, z1 = gmsh.model.occ.getBoundingBox(dim, tag)
+    return ((x1 - x0) ** 2 + (y1 - y0) ** 2 + (z1 - z0) ** 2) ** 0.5
+
+
+def _whole_faces(job, vols, pieces, inputs, span):
+    """The face files among inputs[span] that are a whole boundary face of a swept body's piece, before the fragment:
+    {index in inputs: (MAT_ID, face shape, size)}. Fragmented in, such a face turned gmsh's normals of the body's other
+    faces inward, and the 3D mesh then failed with the pyramids pushed out; build puts them on the body's own face.
+    A face of another body, or only part of a face, goes through the fragment as before."""
+    swept = {e["mat_id"] for e in job.get("swept", [])}
+    faces = []  # (MAT_ID, face shape, piece size) of every boundary face of a swept body's pieces
+    for v, p in zip(vols, pieces):
+        if v["mat_id"] in swept:
+            for _, t in p:
+                size = _size(3, t)
+                faces += [
+                    (v["mat_id"], _face_shape(f), size) for loop in gmsh.model.occ.getSurfaceLoops(t)[1] for f in loop
+                ]
+    out = {}
+    for i in range(*span):
+        if inputs[i][0] == 2:
+            shape = _face_shape(inputs[i][1])
+            hit = next(((m, size) for m, s, size in faces if _same_face(shape, s, size)), None)
+            if hit:
+                out[i] = (hit[0], shape, hit[1])
+    return out
+
+
+def _body_face(tags, shape, size, name):
+    """The final face of the body (its final 3D tags) that a face from _whole_faces is."""
+    for _, t in gmsh.model.getBoundary([(3, t) for t in tags], combined=False, oriented=False):
+        if _same_face(shape, _face_shape(abs(t)), size):
+            return abs(t)
+    raise JobError(f"{name}: a whole face of a swept body is no longer one face after the fragment")
+
+
 def build(job, folder):
     """Import, fragment, check, tag and size the model. Gmsh must be initialized.
     Sliding motion: returns the split of the model into the fixed and the moving side (see meshcommon.run)."""
@@ -59,6 +108,7 @@ def build(job, folder):
     if air:  # after the bodies, so the fragment keeps the bodies' pieces whole
         air_pieces = import_brep(os.path.join(folder, air["file"]), 3)
         inputs += air_pieces
+    files_start = len(inputs)
     surf_files = [(s, os.path.join(folder, f)) for s in surfs for f in s["files"]]
     inputs += [_import_one(path, 2) for _, path in surf_files]
     size_files = [(z, os.path.join(folder, f)) for z in job["sizes"] for f in z["files"]]
@@ -73,6 +123,10 @@ def build(job, folder):
         for f in e.get("faces", [])
     ]
     inputs += [_import_one(path, 2) for _, _, path in skin_files]
+    span = (files_start, len(inputs))  # the face, size, transfinite, refine and skin files
+    whole = _whole_faces(job, vols, pieces, inputs, span) if job.get("swept") else {}  # {index: (MAT_ID, shape, size)}
+    if whole:
+        gmsh.model.occ.remove([inputs[i] for i in whole], recursive=True)
 
     def add(file, *dims):  # sliding: last, so the spans above keep their places
         start = len(inputs)
@@ -83,11 +137,14 @@ def build(job, folder):
     slides = job.get("slides", [])
     slide_spans = [([(f, add(f, 2)) for f in s["files"]], (s["marker"], add(s["marker"], 1))) for s in slides]
 
-    if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
-        out_map = [inputs]
+    kept = [dt for i, dt in enumerate(inputs) if i not in whole]
+    if len(kept) == 1:  # Gmsh skips a fragment with no tools and returns no map
+        kept_map = [kept]
     else:
-        _, out_map = gmsh.model.occ.fragment(inputs[:1], inputs[1:])
+        _, kept_map = gmsh.model.occ.fragment(kept[:1], kept[1:])
     gmsh.model.occ.synchronize()
+    maps = iter(kept_map)
+    out_map = [None if i in whole else next(maps) for i in range(len(inputs))]  # whole faces: set below
 
     body_vols = {}  # MAT_ID -> list of final 3D tags of all its pieces
     owner = {}  # final 3D tag -> body name
@@ -100,6 +157,8 @@ def build(job, folder):
                 raise JobError(f"bodies {owner[t]} and {v['name']} overlap")
             owner[t] = v["name"]
         body_vols[v["mat_id"]] = tags
+    for i, (m, shape, size) in whole.items():  # on the body's own face, as the fragment would have put it
+        out_map[i] = [(2, _body_face(body_vols[m], shape, size, f"MAT_ID {m}"))]
 
     def at(span):  # the final dimtags of inputs[span]
         return [dt for dimtags in out_map[span[0] : span[1]] for dt in dimtags]
