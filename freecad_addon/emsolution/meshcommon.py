@@ -1049,14 +1049,11 @@ def slide_report(job):
     return lines
 
 
-def generate(job, dim):
-    """Apply the user's mesh settings and mesh the current model to dimension dim; a transfinite face or volume
-    that would fall back to unstructured is an error."""
-    for name, value in job.get("options", {}).items():  # the user's mesh settings
-        gmsh.option.setNumber(name, value)
-    gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
-    gmsh.option.setNumber("Mesh.Optimize", 1)
-    gmsh.logger.start()  # Gmsh only warns when a transfinite face or volume falls back to unstructured
+def mesh_with_fallback(dim):
+    """Mesh the current model to dimension dim. When gmsh cannot make apply_quad_layers' BoundaryLayer quads, mesh
+    again with graded triangles instead; a transfinite face or volume that would fall back to unstructured is an error
+    (gmsh only warns)."""
+    gmsh.logger.start()
     try:
         try:
             gmsh.model.mesh.generate(dim)
@@ -1075,6 +1072,15 @@ def generate(job, dim):
         gmsh.logger.stop()
     if failed:
         raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
+
+
+def generate(job, dim):
+    """Apply the user's mesh settings and mesh the current model to dimension dim (mesh_with_fallback)."""
+    for name, value in job.get("options", {}).items():  # the user's mesh settings
+        gmsh.option.setNumber(name, value)
+    gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
+    gmsh.option.setNumber("Mesh.Optimize", 1)
+    mesh_with_fallback(dim)
 
 
 def publish(outputs):

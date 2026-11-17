@@ -179,6 +179,19 @@ def test_section_of_an_l_has_triangles(tmp_path, capsys):
     )
 
 
+def test_section_recombine_with_skin(tmp_path):
+    write_disc(tmp_path / "wire.brep", 5)
+    s = section("wire.brep", [0], tmp_path, recombine=True)
+    assert len(s.tri) == 0 and len(s.quad) > 0
+
+
+def test_section_recombine_with_sharp_corners(tmp_path, capsys):
+    write_polygons(str(tmp_path / "l.brep"), [[(0, 0), (10, 0), (10, 3), (3, 3), (3, 10), (0, 10)]])
+    s = section("l.brep", list(range(6)), tmp_path, recombine=True)
+    assert len(s.tri) == 0 and len(s.quad) > 0
+    assert "so prisms" not in capsys.readouterr().err
+
+
 def test_section_without_skin_is_sized(tmp_path):
     write_rect(str(tmp_path / "bar.brep"), -5, -2, 0, 10, 4)
     s = section("bar.brep", [0, 1, 2, 3], tmp_path, skin=None, recombine=True)

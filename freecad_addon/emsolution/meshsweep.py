@@ -9,7 +9,7 @@ import gmsh
 import numpy as np
 
 from meshcommon import JobError, apply_size_fields, apply_refinements, skin_refinements, apply_quad_layers, _smooth
-from meshcommon import _note, import_brep
+from meshcommon import _note, import_brep, mesh_with_fallback
 from meshfrozen import FLIP, _options
 
 RATIO = 1.2  # the growth of a skin's steps away from the surface
@@ -106,22 +106,6 @@ def _graded(face, real, entry, quads):
         apply_quad_layers(skins, {m: [face]}, (), {(0, m): {1: real}})
 
 
-def _generate():
-    """Mesh the section in 2D; when gmsh cannot make the quad layers, graded triangles instead (as meshcommon)."""
-    try:
-        gmsh.model.mesh.generate(2)
-    except Exception:
-        field = gmsh.model.mesh.field
-        layers = [f for f in field.list() if field.getType(f) == "BoundaryLayer"]
-        if not layers:
-            raise
-        for f in layers:
-            field.remove(f)
-        gmsh.model.mesh.clear()
-        _note("Skin Layer: gmsh could not make the quad layers; graded triangles instead")
-        gmsh.model.mesh.generate(2)
-
-
 def _read(face, curves):
     """The section model's mesh as a Section."""
     tags, xyz, _ = gmsh.model.mesh.getNodes()
@@ -166,13 +150,14 @@ def section_mesh(entry, solid_index, real_curves, folder):
                     _graded(face, real, entry, True)
                 else:
                     _graded(face, real, entry, False)
-                    _note(
-                        f"Swept Body {name}: the cross-section of MAT_ID {m} has sharp corners and is not"
-                        " four-sided; graded triangles, so prisms"
-                    )
-            elif entry["recombine"]:
+                    if not entry["recombine"]:
+                        _note(
+                            f"Swept Body {name}: the cross-section of MAT_ID {m} has sharp corners and is not"
+                            " four-sided; graded triangles, so prisms"
+                        )
+            if entry["recombine"]:  # every branch: Recombine on a swept body gives hexahedra only
                 gmsh.model.mesh.setRecombine(2, face)
-            _generate()
+            mesh_with_fallback(2)
         return _read(face, curves)
     finally:
         gmsh.model.remove()
