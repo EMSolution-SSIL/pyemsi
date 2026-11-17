@@ -354,6 +354,24 @@ class AddTransfiniteBody(_StudyCommand):
             _create_and_edit(study, "Add Transfinite Body", make)
 
 
+class AddSweptBody(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("sweptbody"),
+            "MenuText": "Swept Body",
+            "ToolTip": "Mesh bodies that are a cross-section moved along a path: hexahedra and prisms, long along the"
+            " path and fine across",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        bodies = [b for b, _ in taskpanels.picked_bodies(study)]
+        if gate(study, bodies, objects.SweptBody):
+            _create_and_edit(study, "Add Swept Body", lambda: objects.make_swept_body(study, [(b, "") for b in bodies]))
+
+
 class AddTransfiniteEdges(_StudyCommand):
     def GetResources(self):
         return {
@@ -475,13 +493,14 @@ COMMANDS = {
     "EMS_AddAirRegion": AddAirRegion(),
     "EMS_AddSlidingInterface": AddSlidingInterface(),
     "EMS_TransfiniteBody": AddTransfiniteBody(),
+    "EMS_SweptBody": AddSweptBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
     "EMS_SymmetricGroup": AddSymmetricGroup(),
     "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),
 }
-STRUCTURED = ("EMS_TransfiniteBody", "EMS_TransfiniteEdges", "EMS_Recombine")
+STRUCTURED = ("EMS_TransfiniteBody", "EMS_SweptBody", "EMS_TransfiniteEdges", "EMS_Recombine")
 REFINEMENTS = ("EMS_RefineNear", "EMS_SkinLayer", "EMS_AirGrading")
 
 
@@ -495,7 +514,10 @@ class StructuredMesh:
         return 0
 
     def GetResources(self):
-        return {"MenuText": "Structured Mesh", "ToolTip": "Transfinite Body, Transfinite Edges or Recombine"}
+        return {
+            "MenuText": "Structured Mesh",
+            "ToolTip": "Transfinite Body, Swept Body, Transfinite Edges or Recombine",
+        }
 
     def IsActive(self):
         return active_study() is not None and not Gui.Control.activeDialog()
@@ -555,7 +577,11 @@ def context_names(study, kinds):
     if (kinds & {"Body", "Cell"} or (two_d and "Face" in kinds)) and not kinds & parts:  # whole bodies: conductors
         out.insert(out.index("EMS_RefineNear") + 1, "EMS_SkinLayer")
     if "Body" in kinds or (two_d and "Face" in kinds):
-        out += ["EMS_TransfiniteBody", "EMS_Recombine"]
+        out += (
+            ["EMS_TransfiniteBody", "EMS_Recombine"]
+            if two_d
+            else ["EMS_TransfiniteBody", "EMS_SweptBody", "EMS_Recombine"]
+        )
     if "Edge" in kinds:
         out.append("EMS_TransfiniteEdges")
     if "Cell" in kinds:

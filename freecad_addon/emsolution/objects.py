@@ -1878,7 +1878,9 @@ def air_region_rows(study):
     return [(a, [(a, "")], [display_name(a), a.AirShape, _id_text(study, a)]) for a in air_regions(study)]
 
 
-def _size_text(item):
+def _size_text(item, values=None):
+    """The text of an item's sizes; values: what a panel has typed in but not saved ({property: value}), for a Swept
+    Body."""
     if isinstance(item.Proxy, MeshSize):
         return f"{item.Size.Value:g} mm"
     if isinstance(item.Proxy, RefineNear):
@@ -1892,7 +1894,8 @@ def _size_text(item):
         text = f"δ {item.SkinDepth.Value:g} mm, {item.ElementsPerDepth:g}/δ, {item.LayerDepth:g}δ"
         return text + ", quads" if item.QuadLayers else text
     if isinstance(item.Proxy, SweptBody):
-        p, s = item.PathSize.Value, item.SectionSize.Value
+        values = values or {}
+        p, s = values.get("PathSize", item.PathSize.Value), values.get("SectionSize", item.SectionSize.Value)
         text = f"along {p:g} mm" if p else "along body size"
         if s > 0:
             text += f", section {s:g} mm"

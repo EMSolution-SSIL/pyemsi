@@ -133,7 +133,7 @@ def main():
     assert menus == [
         [
             *["EMS_Material", "Separator", "EMS_MeshSize", "EMS_RefineNear", "EMS_SkinLayer"],
-            *["EMS_TransfiniteBody", "EMS_Recombine", "EMS_SymmetricGroup"],
+            *["EMS_TransfiniteBody", "EMS_SweptBody", "EMS_Recombine", "EMS_SymmetricGroup"],
         ],
         ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize", "EMS_RefineNear"],
         ["EMS_MeshSize", "EMS_RefineNear", "EMS_TransfiniteEdges"],
@@ -274,6 +274,31 @@ def main():
     doc.removeObject(skin.Name)
     Gui.Selection.clearSelection()
     log.append("skin layer ok")
+
+    # Swept Body: a whole box body, its length along the path from the panel; a start face is a face pick.
+    Gui.Selection.addSelection(doc.Name, "B")
+    Gui.runCommand("EMS_SweptBody")
+    assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_SweptBody"].IsActive())
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog() and panel.current == [(doc.B, "")], panel.current
+    assert panel.path_size.value() == 0 and panel.section_size.value() == 0
+    panel.path_size.setValue(4)
+    sweep_tag = labels.tag_text(panel.obj, panel.unsaved())
+    assert sweep_tag == "along 4 mm", sweep_tag
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "B", "Face1")
+    panel.add_start()
+    assert panel.start == [(doc.B, "Face1")], panel.start
+    panel.remove_start()  # nothing selected in the list: kept
+    assert panel.accept()
+    (swept,) = objects.swept_bodies(study)
+    assert swept.PathSize.Value == 4 and swept.SectionSize.Value == 0, swept.PathSize.Value
+    assert swept.References == [(doc.B, ("",))] and swept.StartFace == [(doc.B, ("Face1",))], swept.StartFace
+    swept_errors = [p.text for p in validation.errors(validation.validate(study)) if "Swept Body" in p.text]
+    assert not swept_errors, swept_errors
+    doc.removeObject(swept.Name)
+    Gui.Selection.clearSelection()
+    log.append("swept body ok")
 
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)

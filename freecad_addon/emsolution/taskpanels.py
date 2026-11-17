@@ -404,13 +404,13 @@ def _float_text(edit, fallback):
         return fallback
 
 
-def _length_box(value, minimum=0.001, no_limit=False):
+def _length_box(value, minimum=0.001, no_limit=False, zero_text="no limit"):
     box = QtWidgets.QDoubleSpinBox()
     box.setDecimals(3)
     box.setRange(0.0 if no_limit else minimum, 1e6)
     box.setSuffix(" mm")
     if no_limit:
-        box.setSpecialValueText("no limit")  # shown for 0
+        box.setSpecialValueText(zero_text)  # shown for 0
     box.setValue(value)
     return box
 
@@ -1218,6 +1218,8 @@ AIR_HINT = "Select the Air Region in the tree (or, in a Study with Symmetric Gro
 ITEM_PICKS[objects.AirGrading] = (picked_bodies, "Air", ("Body",), True, AIR_HINT, AIR_HINT)
 SKIN_HINT = "Select the conductors (whole bodies) in the 3D view or the tree."
 ITEM_PICKS[objects.SkinLayer] = (picked_bodies, "Conductors", ("Body",), True, SKIN_HINT, SKIN_HINT)
+SWEPT_HINT = "Select the bodies to sweep (whole bodies) in the 3D view or the tree."
+ITEM_PICKS[objects.SweptBody] = (picked_bodies, "Bodies", ("Face",), True, SWEPT_HINT, SWEPT_HINT)  # faces: Start face
 # in a 2D Study: (pick, list label, gate kinds, hint) replacing those of ITEM_PICKS
 ITEM_PICKS_2D = {
     objects.TransfiniteBody: (
@@ -1277,8 +1279,29 @@ class ItemPanel:
         self.limit_to = []
         self.far = self.far_hint = None
         self.depth = self.per_depth = self.layer_depth = self.quads = None
+        self.path_size = self.section_size = self.start_list = None
+        self.start = (
+            [(b, s) for b, subs in obj.StartFace for s in subs] if isinstance(obj.Proxy, objects.SweptBody) else []
+        )
         if isinstance(obj.Proxy, objects.SkinLayer):
             self.add_skin_rows(layout, study)
+        if isinstance(obj.Proxy, objects.SweptBody):
+            self.path_size = _length_box(obj.PathSize.Value, no_limit=True, zero_text="body size")
+            layout.addRow("Length along the path", self.path_size)
+            self.section_size = _length_box(obj.SectionSize.Value, no_limit=True, zero_text="body size")
+            layout.addRow("Section size", self.section_size)
+            self.start_list = QtWidgets.QListWidget()
+            self.start_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+            layout.addRow("Start face", self.start_list)
+            add_start = QtWidgets.QPushButton("Add selection")
+            remove_start = QtWidgets.QPushButton("Remove")
+            add_start.clicked.connect(self.add_start)
+            remove_start.clicked.connect(self.remove_start)
+            start_buttons = QtWidgets.QHBoxLayout()
+            start_buttons.addWidget(add_start)
+            start_buttons.addWidget(remove_start)
+            layout.addRow(start_buttons)
+            self.refresh_start()
         if isinstance(obj.Proxy, objects.AirGrading):
             self.growth = _length_box(obj.GrowthDistance.Value)
             layout.addRow("Growth distance", self.growth)
@@ -1353,6 +1376,8 @@ class ItemPanel:
             self.per_depth and self.per_depth.valueChanged,
             self.layer_depth and self.layer_depth.valueChanged,
             self.quads and self.quads.toggled,
+            self.path_size and self.path_size.valueChanged,
+            self.section_size and self.section_size.valueChanged,
             self.elements and self.elements.valueChanged,
             self.distribution and self.distribution.currentTextChanged,
         ):
@@ -1384,6 +1409,8 @@ class ItemPanel:
             )
             if self.quads is not None:
                 values["QuadLayers"] = self.quads.isChecked()
+        if self.path_size is not None:
+            values.update(PathSize=self.path_size.value(), SectionSize=self.section_size.value())
         if self.elements is not None:
             values.update(Elements=self.elements.value(), Distribution=self.distribution.currentText())
         return values
@@ -1435,6 +1462,23 @@ class ItemPanel:
         labels.set_refs(self.obj, self.current)
         if self.far_hint is not None:
             self.far_hint.setText(f"0 = the air's size ({objects.far_size(self.obj, 0, self.current):g} mm)")
+
+    def refresh_start(self):
+        self.start_list.clear()
+        self.start_list.addItems([objects.ref_label(b, f) for b, f in self.start])
+
+    def add_start(self):
+        """The faces picked are start faces; one per solid is checked by Validate."""
+        new = [(b, s) for b, s in selected_faces() if (b.Name, s) not in {(x.Name, y) for x, y in self.start}]
+        if not new:
+            warn("Nothing new to add: pick faces of the bodies in the 3D view.")
+        self.start += new
+        self.refresh_start()
+
+    def remove_start(self):
+        rows = {i.row() for i in self.start_list.selectedIndexes()}
+        self.start = [r for i, r in enumerate(self.start) if i not in rows]
+        self.refresh_start()
 
     def refresh_limit(self):
         self.limit.clear()
@@ -1538,6 +1582,10 @@ class ItemPanel:
             self.obj.Elements = self.elements.value()
             self.obj.Distribution = self.distribution.currentText()
             self.obj.BumpCoefficient = self.bump.value()
+        if self.path_size is not None:
+            self.obj.PathSize = self.path_size.value()
+            self.obj.SectionSize = self.section_size.value()
+            self.obj.StartFace = [(b, (s,)) for b, s in self.start]
         if isinstance(self.obj.Proxy, objects.TransfiniteBody):
             self.obj.References, self.obj.Corners = objects.split_corners(self.current)
         else:

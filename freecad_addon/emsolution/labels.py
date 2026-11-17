@@ -25,6 +25,7 @@ KINDS = {
     "SkinLayer": ("#087f5b", "L", "Skin layer"),
     "TransfiniteEdges": ("#e8590c", "E", "Transfinite edges"),
     "TransfiniteBody": ("#7b3fb3", "T", "Transfinite body"),
+    "SweptBody": ("#1c7ed6", "W", "Swept body"),
     "Recombine": ("#0b9eb3", "Q", "Recombine"),
     "Excitation": ("#d6249f", "X", "Excitation"),
     "SymmetricGroup": ("#8d6e3f", "Y", "Symmetric group"),
@@ -80,6 +81,8 @@ def tag_text(item, values, refs=None):
         return text + ", quads" if values.get("QuadLayers", item.QuadLayers) else text
     if kind == "Material":
         return values.get("Material", item.LibraryMaterial.Label if item.LibraryMaterial else objects.NO_MATERIAL)
+    if kind == "SweptBody":
+        return objects._size_text(item, values)
     if kind == "TransfiniteBody":
         return "corner"
     return values.get("Name", objects.display_name(item))
@@ -93,7 +96,7 @@ def description(item, values):
         return f"{name}: {values.get('Name', objects.display_name(item))}"
     if kind == "Material":
         return f"{name}: {item.Label}"
-    if kind in ("MeshSize", "RefineNear", "AirGrading", "SkinLayer"):
+    if kind in ("MeshSize", "RefineNear", "AirGrading", "SkinLayer", "SweptBody"):
         return f"{name}: {tag_text(item, values)}"
     if kind == "TransfiniteEdges":
         return f"{name}: {values.get('Elements', item.Elements)} el, {values.get('Distribution', item.Distribution)}"
