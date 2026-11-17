@@ -13,6 +13,7 @@ from .test_mesher2d import write_polygons
 
 sys.path.insert(0, os.path.dirname(MESHER))  # meshsweep imports its neighbours by bare name, as in the mesher process
 import meshsweep  # noqa: E402 - needs the path above
+import meshcommon  # noqa: E402 - needs the path above
 
 SKIN = {"depth": 1.0, "per_depth": 2.0, "layer": 3.0}
 
@@ -261,3 +262,27 @@ def test_closed_sweep_joins_the_last_station_to_the_first():
     V, cells = meshsweep.sweep(section, ts, closed=True)
     assert len(V) == 3 * 4 and len(cells[5]) == 3
     assert set(cells[5][-1].tolist()) == {8, 9, 10, 11, 0, 1, 2, 3}
+
+
+def test_empty_volume_around_swept_fails_loudly():
+    """gmsh may log an error and leave a volume empty without raising: _check_filled names the body."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("main")
+        gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)
+        gmsh.model.occ.addBox(1, 0, 0, 1, 1, 1)
+        gmsh.model.occ.fragment([(3, 1)], [(3, 2)])
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(3, [1], 1, name="Bar")
+        gmsh.model.addPhysicalGroup(3, [2], 2, name="Air")
+        gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.generate(3)
+        meshcommon._check_filled([], [])  # both filled
+        gmsh.model.mesh.clear([(3, 2)])
+        with pytest.raises(
+            meshcommon.JobError, match=r"gmsh could not mesh Air \(MAT_ID 2\) around the swept bodies \(PLC"
+        ):
+            meshcommon._check_filled([(3, 1)], ["Error: PLC Error: A segment and a facet intersect at point"])
+    finally:
+        gmsh.finalize()

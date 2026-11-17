@@ -1165,6 +1165,22 @@ class MesherTest(unittest.TestCase):
         self.assertAlmostEqual(z[-1], 0.5, delta=0.01)
         self.assertEqual(inner_free_faces(self.AIR_BOX), [])
 
+    def test_swept_tight_air_is_meshed_again(self):
+        # 1 mm of air around the bar at size 6: the pushed-out pyramids cut the air's faces ("PLC Error"); meshing
+        # again in the same model left the air with no elements and exit code 0. Now gmsh starts afresh without that
+        write_box(self.geo("vol_1.brep"), -5, -2, -20, 10, 4, 40)
+        write_rect(self.geo("sweep_1_1.brep"), -5, -2, -20, 10, 4)
+        box = (-6, -3, -21, 12, 6, 42)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        bar = swept("sweep_1_1.brep", recombine=False, skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0})
+        r = self.run_job([self.vol(1, "Bar", "vol_1.brep", size=2.0)], air=air, extra={"swept": [bar]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("gmsh could not optimise the pyramids", r.stderr)
+        self.open_msh()
+        self.assertIn("Tetrahedron 4", self.element_counts(2))
+        self.assertEqual(inner_free_faces(box), [])
+
     def test_swept_bar_cut_end_is_not_graded(self):
         box = (-30, -30, -20, 60, 60, 70)  # the bar's end at z = -20 on the air box's outer face
         self.swept_bar(swept("sweep_1_1.brep", skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0}), box=box)
@@ -1189,6 +1205,7 @@ class MesherTest(unittest.TestCase):
         self.open_msh()
         hexes = self.element_counts(1)["Hexahedron 8"]
         self.assertEqual(self.element_counts(10, dim=2), {"Quadrilateral 4": hexes // len(self.steps(2))})
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])  # the air is meshed (it took the pyramids retry)
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 

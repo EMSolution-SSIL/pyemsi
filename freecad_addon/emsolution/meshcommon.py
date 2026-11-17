@@ -1055,7 +1055,7 @@ def slide_report(job):
 def mesh_with_fallback(dim):
     """Mesh the current model to dimension dim. When gmsh cannot make apply_quad_layers' BoundaryLayer quads, mesh
     again with graded triangles instead; a transfinite face or volume that would fall back to unstructured is an error
-    (gmsh only warns)."""
+    (gmsh only warns). Returns gmsh's log of the meshing."""
     gmsh.logger.start()
     try:
         try:
@@ -1070,11 +1070,13 @@ def mesh_with_fallback(dim):
             gmsh.model.mesh.clear()
             _note("Skin Layer: gmsh could not make the quad layers; graded triangles instead")
             gmsh.model.mesh.generate(dim)
-        failed = [m for m in gmsh.logger.get() if "cannot be meshed using the transfinite" in m]
+        log = gmsh.logger.get()
     finally:
         gmsh.logger.stop()
+    failed = [m for m in log if "cannot be meshed using the transfinite" in m]
     if failed:
         raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
+    return log
 
 
 def generate(job, dim):
@@ -1099,7 +1101,8 @@ def _mesh_swept(job, dim):
         _note("Swept Body: the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces")
     for name, value in (
         ("Mesh.Algorithm3D", 1),
-        ("Mesh.OptimizePyramids", -0.6),  # the apex pushed out: the best transition quality in the spike
+        # the apex pushed out: the best transition quality in the spike; 0 when run meshes again (PyramidsFailed)
+        ("Mesh.OptimizePyramids", job.get("optimize_pyramids", -0.6)),
         ("Mesh.MeshOnlyEmpty", 1),
         ("Mesh.MeshOnlyVisible", 1),
         ("Mesh.Renumber", 0),  # the added nodes keep their tags; renumbered at the end
@@ -1110,13 +1113,9 @@ def _mesh_swept(job, dim):
         gmsh.model.mesh.setTransfiniteVolume(t)
     gmsh.model.setVisibility(swept, 0, recursive=True)
     try:
-        for d in range(dim + 1):
-            for add in job["swept_add"]:
-                add(d)
-            if d == 3:
-                _mesh_around(swept)
-            elif d:  # points and curves go in together
-                mesh_with_fallback(d)
+        log = _swept_stages(job, dim)
+        if dim == 3:
+            _check_filled(swept, log)
     finally:
         gmsh.model.setVisibility(swept, 1, recursive=True)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
@@ -1125,17 +1124,47 @@ def _mesh_swept(job, dim):
     gmsh.model.mesh.renumberElements()
 
 
-def _mesh_around(swept):
-    """The 3D mesh around the swept volumes. gmsh cannot always push the pyramids' apex out (it fails the same way
-    around its own Transfinite Body, depending on how OCC turned the faces): then the volumes are meshed again
-    without that."""
-    try:
-        mesh_with_fallback(3)
-    except Exception:
-        _note("Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without that")
-        gmsh.option.setNumber("Mesh.OptimizePyramids", 0)
-        gmsh.model.mesh.clear([dt for dt in gmsh.model.getEntities(3) if dt not in swept])
-        mesh_with_fallback(3)
+class PyramidsFailed(Exception):
+    """gmsh failed to make the 3D mesh around the swept bodies with the pyramids' apex pushed out: run meshes the job
+    again from the start without that (meshing again in the same model leaves the volumes empty)."""
+
+
+def _swept_stages(job, dim):
+    """Add the swept mesh one dimension at a time and mesh the rest after each. Returns gmsh's log of the 3D mesh."""
+    log = []
+    for d in range(dim + 1):
+        for add in job["swept_add"]:
+            add(d)
+        if d == 3:
+            try:
+                log = mesh_with_fallback(3)
+            except JobError:
+                raise
+            except Exception as exc:
+                if gmsh.option.getNumber("Mesh.OptimizePyramids"):
+                    raise PyramidsFailed(str(exc)) from exc
+                raise JobError(
+                    f"gmsh could not mesh around the swept bodies ({exc}); give the air more room or use a finer size"
+                    " there"
+                ) from exc
+        elif d:  # points and curves go in together
+            mesh_with_fallback(d)
+    return log
+
+
+def _check_filled(swept, log):
+    """gmsh may log an error and leave a volume empty without raising (too little room beside a swept body): a volume
+    of a 3D physical group without elements is an error."""
+    for _, group in gmsh.model.getPhysicalGroups(3):
+        for t in gmsh.model.getEntitiesForPhysicalGroup(3, group):
+            if (3, t) not in swept and not sum(len(e) for e in gmsh.model.mesh.getElements(3, t)[1]):
+                errors = [m.split(":", 1)[-1].strip() for m in log if m.startswith("Error")]
+                why = f" ({errors[-1]})" if errors else ""
+                name = gmsh.model.getPhysicalName(3, group)
+                raise JobError(
+                    f"gmsh could not mesh {name} (MAT_ID {group}) around the swept bodies{why}; give the air more room"
+                    " or use a finer size there"
+                )
 
 
 def publish(outputs):
@@ -1163,7 +1192,18 @@ def run(job_path, build, dim):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         split = build(job, folder)
-        generate(job, dim)
+        try:
+            generate(job, dim)
+        except PyramidsFailed:  # it fails the same way around gmsh's own Transfinite Body, depending on OCC's faces
+            _note("Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without")
+            gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
+            gmsh.initialize()
+            gmsh.option.setNumber("General.Terminal", 1)
+            with open(job_path, encoding="utf-8") as fh:
+                job = json.load(fh) | {"optimize_pyramids": 0}
+            gmsh.model.add(job["model_name"])
+            split = build(job, folder)
+            generate(job, dim)
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         if split:
