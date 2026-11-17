@@ -329,6 +329,85 @@ def swept_turn(profile, angle, name="Ring", path_size=4.0, section_size=2.0, rec
     return entry
 
 
+def write_helix_pipe(path, profile_path, radius, pitch, turns, section, end_path=None):
+    """A Frenet pipe along a helix about Z from (radius, 0, 0) rising pitch per turn (a spline through 288 points per
+    turn: its far end within 1e-5 of the screw's), and the face it is piped from (the profile of a Swept Body).
+    section: ("disc", r), or ("rect", w, h) with w toward the axis and h along the binormal. end_path: also a copy of
+    the pipe's end face."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        c = pitch / (2 * math.pi)
+        n = math.ceil(288 * turns)
+        a = [2 * math.pi * turns * k / n for k in range(n + 1)]
+        spline = occ.addSpline([occ.addPoint(radius * math.cos(t), radius * math.sin(t), c * t) for t in a])
+        p0 = (radius, 0.0, 0.0)
+        tangent = [0.0, radius / math.hypot(radius, c), c / math.hypot(radius, c)]
+        normal = [-1.0, 0.0, 0.0]
+        binormal = [0.0, -tangent[2], tangent[1]]  # tangent x normal
+        if section[0] == "disc":
+            loop = occ.addCurveLoop([occ.addCircle(*p0, section[1], zAxis=tangent, xAxis=normal)])
+        else:
+            w, h = section[1] / 2, section[2] / 2
+            corners = [
+                occ.addPoint(*(p0[i] + u * normal[i] + v * binormal[i] for i in range(3)))
+                for u, v in ((-w, -h), (w, -h), (w, h), (-w, h))
+            ]
+            loop = occ.addCurveLoop([occ.addLine(corners[k], corners[(k + 1) % 4]) for k in range(4)])
+        face = occ.addPlaneSurface([loop])
+        occ.synchronize()
+        gmsh.write(profile_path)
+        occ.addPipe([(2, face)], occ.addWire([spline]), "Frenet")
+        occ.remove([(2, face), (1, spline)], recursive=True)
+        occ.synchronize()
+        gmsh.write(path)
+        if end_path:
+            vol = gmsh.model.getEntities(3)
+            ends = [
+                abs(f)
+                for _, f in gmsh.model.getBoundary(vol, oriented=False)
+                if gmsh.model.getType(2, abs(f)) == "Plane"
+            ]
+            end = max(ends, key=lambda f: math.dist(occ.getCenterOfMass(2, f), p0))
+            occ.copy([(2, end)])
+            occ.remove(vol, recursive=True)
+            occ.synchronize()
+            gmsh.write(end_path)
+    finally:
+        gmsh.finalize()
+
+
+def write_bent_busbar(path, profile_path, x0, x1, z0, z1, leg):
+    """A busbar along +Y from y = -leg to 0, a 90 degree bend about Z, then along -X for leg: the rectangle x0..x1,
+    z0..z1 in the plane y = -leg (the profile) extruded, revolved and extruded, fused into one solid (its top and bottom
+    faces each one plane across the three pieces)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        face = occ.addRectangle(x0, z0, 0, x1 - x0, z1 - z0)
+        occ.rotate([(2, face)], 0, 0, 0, 1, 0, 0, math.pi / 2)  # (x, y, 0) turns to (x, 0, y)
+        occ.translate([(2, face)], 0, -leg, 0)
+        occ.synchronize()
+        gmsh.write(profile_path)
+        first = occ.extrude([(2, face)], 0, leg, 0)
+        bend = occ.revolve([first[0]], 0, 0, 0, 0, 0, 1, math.pi / 2)
+        last = occ.extrude([bend[0]], -leg, 0, 0)
+        occ.fuse([first[1]], [bend[1], last[1]])
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def swept_chain(profile, pieces, name="Bend", path_size=4.0, section_size=2.0, skin=None):
+    """An entry of job["swept"]: one solid along pieces."""
+    entry = swept(profile, name=name, path_size=path_size, section_size=section_size, recombine=False, skin=skin)
+    entry["solids"] = [{"profile": "geometry/" + profile, "pieces": pieces}]
+    return entry
+
+
 FACES_3D = {  # gmsh element type: (nodes, its faces)
     4: (4, ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3))),
     5: (8, ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7))),
@@ -1371,6 +1450,116 @@ class MesherTest(unittest.TestCase):
         middle = steps[len(steps) // 2]
         self.assertAlmostEqual(middle, 4.0, delta=0.5)
         self.assertLessEqual(max(steps), 4.0 + 1e-6)
+
+    # ---- helical and chained Swept Bodies
+
+    STRAND_BOX = (-3, -3, -5, 6, 6, 25)
+    HELIX = {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0]}
+
+    def strand_job(self, surfaces=()):
+        """litz1's strand: r 0.45 along 1.5 turns of a helix r 1.2, pitch 10, in an air box 6 x 6 x 25 at 0.6. Path size
+        0.4, section 0.2: the spike's 0.6 and 0.15 (quads 4 : 1) left gmsh's air mesh "overlapping facets" in about half
+        the runs (gmsh's 3D mesh differs from run to run); these met it in 11 of 11."""
+        write_box(self.geo("air.brep"), *self.STRAND_BOX)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.6}
+        piece = {**self.HELIX, "angle": 540.0, "advance": 15.0}
+        wire = swept_chain("sweep_1_1.brep", [piece], name="Wire", path_size=0.4, section_size=0.2)
+        wire["skin"] = {"depth": 0.2, "per_depth": 2.0, "layer": 2.0}
+        r = self.run_job([self.vol(1, "Wire", "vol_1.brep", size=0.15)], surfaces, air=air, extra={"swept": [wire]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8", "Prism 6"})
+        self.assertEqual(inner_free_faces(self.STRAND_BOX), [])
+        return r
+
+    def test_swept_helix_strand_is_conformal(self):
+        write_helix_pipe(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 1.2, 10.0, 1.5, ("disc", 0.45))
+        self.strand_job()
+        # the seam: the one body curve that runs along the helix, a node at each station
+        seam = []
+        for _, c in gmsh.model.getEntities(1):
+            xyz = gmsh.model.mesh.getNodes(1, c, includeBoundary=True)[1]
+            nodes = [xyz[k : k + 3] for k in range(0, len(xyz), 3)]
+            z, x = [p[2] for p in nodes], [abs(p[0]) for p in nodes]
+            if nodes and max(z) - min(z) > 10 and max(x) < 2:  # not the air box's edges
+                seam.append(nodes)
+        self.assertEqual(len(seam), 1)
+        z_phi = sorted((z, math.atan2(y, x)) for x, y, z in seam[0])  # in z order, unwrapped below
+        phi = [p for _, p in z_phi]
+        turns = [phi[0]]
+        for p in phi[1:]:
+            turns.append(turns[-1] + (p - turns[-1] + math.pi) % (2 * math.pi) - math.pi)
+        length = math.hypot(1.2 * 3 * math.pi, 15.0)
+        steps = [(b - a) * length / (3 * math.pi) for a, b in zip(turns, turns[1:])]
+        self.assertAlmostEqual(sum(steps), length, delta=1e-3)
+        middle = steps[len(steps) // 4 : -len(steps) // 4]  # past the graded ends
+        for s in middle:
+            self.assertAlmostEqual(s, 0.4, delta=0.1)
+
+    def test_swept_rebuilt_strand_excitation(self):
+        # an excitation face on the far end of a helical strand, as a rebuilt strand's. It is the vol file's own end
+        # face: one from other geometry (the exact screw image of the profile) does not merge in gmsh's fragment
+        write_helix_pipe(
+            self.geo("vol_1.brep"),
+            self.geo("sweep_1_1.brep"),
+            1.2,
+            10.0,
+            1.5,
+            ("disc", 0.45),
+            end_path=self.geo("surf_10_1.brep"),
+        )
+        surface = {"smat_id": 10, "name": "In", "mat_id": 1, "files": ["geometry/surf_10_1.brep"]}
+        self.strand_job([surface])
+        faces = self.element_counts(10, dim=2)
+        self.assertTrue(faces)
+        self.assertLessEqual(set(faces), {"Quadrilateral 4", "Triangle 3"})
+
+    def test_swept_coil_turn(self):
+        write_helix_pipe(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20.0, 6.0, 1.0, ("rect", 2.0, 4.0))
+        box = (-26, -26, -6, 52, 52, 18)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 4.0}
+        coil = swept_chain("sweep_1_1.brep", [{**self.HELIX, "angle": 360.0, "advance": 6.0}], "Coil", 4.0, 1.0)
+        r = self.run_job([self.vol(1, "Coil", "vol_1.brep", size=1.0)], air=air, extra={"swept": [coil]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        self.assertEqual(inner_free_faces(box), [])
+
+    BEND_PIECES = [
+        {"origin": [20.0, -30.0, 0.0], "axis": [0.0, 1.0, 0.0], "angle": 0.0, "advance": 30.0},
+        {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0], "angle": 90.0, "advance": 0.0},
+        {"origin": [0.0, 20.0, 0.0], "axis": [-1.0, 0.0, 0.0], "angle": 0.0, "advance": 30.0},
+    ]
+
+    def bent_busbar(self, box):
+        """The bent busbar 10 x 4 along line 30 + arc r 20 90 degrees + line 30, with a skin, in the air box at 8."""
+        write_bent_busbar(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 15, 25, -2, 2, 30)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 8.0}
+        bar = swept_chain("sweep_1_1.brep", self.BEND_PIECES, skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0})
+        r = self.run_job([self.vol(1, "Bend", "vol_1.brep", size=2.0)], air=air, extra={"swept": [bar]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        self.assertEqual(inner_free_faces(box), [])
+        return r
+
+    def test_swept_bent_busbar_is_conformal(self):
+        r = self.bent_busbar((-40, -40, -12, 75, 75, 24))
+        self.assertNotIn("is a cut in one piece", r.stderr)
+        p = self.bar_nodes()
+        section = sum(1 for x in p if abs(x[1] + 30) < 1e-9)  # the nodes of the start face
+        for joint in (abs(p[:, 1]) < 1e-9) & (p[:, 0] > 0), (abs(p[:, 0]) < 1e-9) & (p[:, 1] > 0):
+            self.assertEqual(int(joint.sum()), section)
+
+    def test_swept_chain_mixed_real_sides(self):
+        # the outer side of the first leg (x = 25) on the air box's outer face, as on a symmetry plane: a cut there,
+        # real surface along the bend and the other leg
+        r = self.bent_busbar((-40, -40, -12, 65, 75, 24))
+        self.assertIn("Swept Body Bend: a side of MAT_ID 1 is a cut in one piece and real in another", r.stderr)
+        x = sorted({round(float(p[0]), 6) for p in self.bar_nodes() if p[1] < -1e-6})  # leg 1
+        self.assertAlmostEqual(x[-1] - x[-2], 0.5, delta=0.125)  # the outer curve is skinned though cut in leg 1
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 

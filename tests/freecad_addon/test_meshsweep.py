@@ -248,10 +248,35 @@ def test_stations_rotate_about_an_offset_axis():
     assert np.allclose(t @ [15, 0, 3, 1], [5, 0, 3, 1])
 
 
-def test_stations_refuse_a_helix():
-    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 90.0, "advance": 5.0}
-    with pytest.raises(meshcommon.JobError, match="only straight and revolved sweeps are made so far"):
-        meshsweep.stations(piece, [0.0, 1.0], rc=20)
+def test_stations_helix():
+    piece = {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 360.0, "advance": 6.0}
+    length = np.hypot(20 * 2 * np.pi, 6.0)
+    t0, half, end = meshsweep.stations(piece, [0.0, length / 2, length], rc=20)
+    assert np.allclose(t0, np.eye(4))
+    assert np.allclose(half[:3, :3], [[-1, 0, 0], [0, -1, 0], [0, 0, 1]]) and np.allclose(half[:3, 3], [0, 0, 3])
+    assert np.allclose(half @ [20, 0, 0, 1], [-20, 0, 3, 1])
+    assert np.allclose(end[:3, :3], np.eye(3)) and np.allclose(end[:3, 3], [0, 0, 6])
+
+
+def test_chain_joints_are_stations():
+    pieces = [
+        {"origin": [25, -30, 0], "axis": [0, 1, 0], "angle": 0.0, "advance": 30.0},
+        {"origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 90.0, "advance": 0.0},
+        {"origin": [0, 25, 0], "axis": [-1, 0, 0], "angle": 0.0, "advance": 30.0},
+    ]
+    centre = np.array([25.0, -30, 0])
+    chain = meshsweep._chain(pieces, centre)
+    assert [round(length, 9) for _, _, length, _ in chain] == [30, round(25 * np.pi / 2, 9), 30]
+    at = _moved_all(meshsweep._path(chain, 4.0), centre)
+    for joint in ([25, 0, 0], [0, 25, 0]):
+        assert np.linalg.norm(at - joint, axis=1).min() < 1e-9
+    assert np.allclose(at[0], centre) and np.allclose(at[-1], [-30, 25, 0])
+    steps = np.linalg.norm(np.diff(at, axis=0), axis=1)
+    assert steps.min() > 1.0 and steps.max() < 4.0 + 1e-9  # no repeated station at a joint, chords at most a step
+
+
+def _moved_all(transforms, point):
+    return np.array([t[:3, :3] @ point + t[:3, 3] for t in transforms])
 
 
 def test_sweep_closed_ring_joins():

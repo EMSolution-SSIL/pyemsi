@@ -16,8 +16,7 @@ RATIO = 1.2  # the growth of a skin's steps away from the surface
 SIZE_OPTIONS = ("Mesh.MeshSizeExtendFromBoundary", "Mesh.MeshSizeFromPoints", "Mesh.MeshSizeFromCurvature")
 SECTION_OPTIONS = ("Mesh.Algorithm", "Mesh.Smoothing", "Mesh.RecombinationAlgorithm")  # the user's, for the section
 JACOBIAN = {5: (1, 3, 4), 6: (1, 2, 3)}  # the nodes whose edges from node 0 make a positive triple product
-NOT_STRAIGHT = "only straight and revolved sweeps are made so far"  # as sweeps.NOT_STRAIGHT
-MIN_TURN = 30.0  # degrees: the largest turn of one step of a revolved piece
+MIN_TURN = 30.0  # degrees: the largest turn of one step of a turned piece
 
 # xyz: the section's nodes in global coordinates (n x 3); tri (t x 3) and quad (q x 4): its elements as node indexes;
 # edges: {curve key: ordered node indexes} per profile curve, the key being the curve's index in gmsh.model.getBoundary
@@ -222,12 +221,12 @@ def section_mesh(entry, solid_index, real_curves, folder, options=None, points=(
 
 
 def stations(piece, positions, rc=None):
-    """One 4 x 4 transform per position along the piece. A straight piece: a translation by position * axis. A
-    revolved one (advance 0): positions are arc lengths at rc, each the rotation about (origin, axis) by position / rc
-    radians, positive by the right-hand rule. A helical piece (angle and advance) is refused."""
+    """One 4 x 4 transform per position along the piece. A straight piece: a translation by position * axis. A turned
+    one: positions are path lengths of the profile's centre, at rc from the axis, each the rotation about (origin, axis)
+    by angle * position / length (positive by the right-hand rule), then a helical piece's (with advance) move by
+    advance * position / length along axis; length is hypot(rc * angle, advance), the angle in radians. A revolved
+    piece's (advance 0) rotation is position / rc."""
     angle, advance = float(piece.get("angle", 0.0)), float(piece["advance"])
-    if angle and advance:
-        raise JobError(NOT_STRAIGHT)
     out = []
     if not angle:
         axis = np.asarray(piece["axis"], float)
@@ -240,19 +239,24 @@ def stations(piece, positions, rc=None):
     axis = axis / np.linalg.norm(axis)
     origin = np.asarray(piece["origin"], float)
     k = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    theta = math.radians(angle)
+    length = math.hypot(rc * theta, advance)
     for p in positions:
-        a = float(p) / rc
+        a = theta * float(p) / length if advance else float(p) / rc
         r = np.eye(3) + math.sin(a) * k + (1 - math.cos(a)) * (k @ k)  # Rodrigues
         t = np.eye(4)
         t[:3, :3], t[:3, 3] = r, origin - r @ origin
+        if advance:
+            t[:3, 3] += advance * float(p) / length * axis
         out.append(t)
     return out
 
 
 def _chain(pieces, centre):
-    """Per piece: (piece, rc, length, start). rc: for a revolved piece the distance from its axis to the profile's
-    centre of mass (centre) where the piece starts, else None; length: the piece's path length (at rc); start: the
-    4 x 4 transform taking the profile to where the piece starts (each piece starts where the last ended)."""
+    """Per piece: (piece, rc, length, start). rc: for a turned piece the distance from its axis to the profile's
+    centre of mass (centre) where the piece starts, else None; length: the path length of the centre along the piece,
+    hypot(rc * angle, advance); start: the 4 x 4 transform taking the profile to where the piece starts (each piece
+    starts where the last ended)."""
     out, start = [], np.eye(4)
     for piece in pieces:
         rc, length = None, float(piece["advance"])
@@ -261,7 +265,7 @@ def _chain(pieces, centre):
             axis = axis / np.linalg.norm(axis)
             d = start[:3, :3] @ centre + start[:3, 3] - np.asarray(piece["origin"], float)
             rc = float(np.linalg.norm(d - axis * axis.dot(d)))
-            length = rc * math.radians(float(piece["angle"]))
+            length = math.hypot(rc * math.radians(float(piece["angle"])), float(piece["advance"]))
         out.append((piece, rc, length, start))
         start = stations(piece, [length], rc)[0] @ start
     return out
@@ -582,9 +586,10 @@ def _graded_end(face, vol, skinned):
 
 
 def _cuts(piece, rc, length, start, section, points, tol):
-    """The arc lengths (at rc) along the turned piece where it must have a station: of points (the volume's corners),
-    those on the piece, each at its angle about the piece's axis from where the piece starts. A point is on the piece
-    when, turned back by its angle, it lies in the box of the section where the piece starts."""
+    """The path lengths (at rc) along the turned piece where it must have a station: of points (the volume's corners),
+    those on the piece, each at its angle about the piece's axis from where the piece starts (or that angle plus whole
+    turns, on a helix of more than one). A point is on the piece when, moved back by the piece to its start, it lies in
+    the box of the section where the piece starts."""
     axis = np.asarray(piece["axis"], float)
     axis = axis / np.linalg.norm(axis)
     origin = np.asarray(piece["origin"], float)
@@ -592,6 +597,8 @@ def _cuts(piece, rc, length, start, section, points, tol):
     lo, hi = xyz.min(axis=0) - tol, xyz.max(axis=0) + tol
     r0 = _moved([xyz.mean(axis=0)], start)[0] - origin
     r0 -= axis * axis.dot(r0)
+    per_radian = length / math.radians(float(piece["angle"]))  # rc on a revolved piece
+    turns = math.ceil(float(piece["angle"]) / 360 - 1e-9)
     out = []
     for q in np.asarray(points, float).reshape(-1, 3):
         d = q - origin
@@ -599,12 +606,13 @@ def _cuts(piece, rc, length, start, section, points, tol):
         if np.linalg.norm(d) < tol:
             continue
         phi = math.atan2(axis.dot(np.cross(r0, d)), r0.dot(d)) % (2 * math.pi)
-        arc = phi * rc
-        if not tol < arc < length - tol:
-            continue
-        back = _moved([q], np.linalg.inv(stations(piece, [arc], rc)[0] @ start))[0]
-        if ((back >= lo) & (back <= hi)).all():
-            out.append(arc)
+        for turn in range(turns):
+            arc = (phi + 2 * math.pi * turn) * per_radian
+            if not tol < arc < length - tol:
+                continue
+            back = _moved([q], np.linalg.inv(stations(piece, [arc], rc)[0] @ start))[0]
+            if ((back >= lo) & (back <= hi)).all():
+                out.append(arc)
     return out
 
 
@@ -621,9 +629,9 @@ def _flat(V, cells):
 
 
 def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
-    """The stations along the solid's pieces (chain, from _chain): every path size (arc length at rc on a revolved
-    piece, with a station at each of the volume's corners on it and at least one per MIN_TURN), graded toward a real
-    end face when there is a skin. A closed ring has no ends and no last station (it is the first)."""
+    """The stations along the solid's pieces (chain, from _chain), as _path makes them: graded toward a real end face
+    when there is a skin, with a station on each turned piece at each of the volume's corners on it. A closed ring has
+    no ends and no last station (it is the first)."""
     skin, size = entry["skin"], float(entry["path_size"])
     graded = (False, False)
     if not closed:
@@ -634,17 +642,26 @@ def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
         ends = _nearest(2, faces, [centre, far], tol)[0]
         graded = tuple(_graded_end(f, vol, skinned) for f in ends)
     corners = [gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(3, vol)], False, False, True)]
+    cuts = [_cuts(p, rc, n, start, section, corners, tol) if rc else [] for p, rc, n, start in chain]
+    out = _path(chain, size, skin, graded, cuts)
+    return out[:-1] if closed else out
+
+
+def _path(chain, size, skin=None, graded=(False, False), cuts=None):
+    """The stations along the pieces (chain, from _chain), made per piece: every path size, graded toward the chain's
+    ends in graded when there is a skin; on a turned piece at least one per MIN_TURN and one at each of its cuts (path
+    lengths along it). Each joint is a station, once."""
     out = []
     for i, (piece, rc, length, start) in enumerate(chain):
         ends = (graded[0] and i == 0, graded[1] and i == len(chain) - 1)
         angle = float(piece.get("angle", 0.0))
+        here = cuts[i] if cuts else []
         if angle:  # a station at each corner of the body on the piece, at least one per MIN_TURN
-            cuts = _cuts(piece, rc, length, start, section, corners, tol)
             if skin and any(ends):
                 first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
-                positions = turned_positions(length, angle, size, cuts, first, depth, ends)
+                positions = turned_positions(length, angle, size, here, first, depth, ends)
             else:
-                positions = turned_positions(length, angle, size, cuts)
+                positions = turned_positions(length, angle, size, here)
         elif skin and any(ends):
             first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
             positions = graded_positions(length, size, first, depth, RATIO, ends)
@@ -652,7 +669,7 @@ def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
             positions = graded_positions(length, size)
         steps = [t @ start for t in stations(piece, positions, rc)]
         out += steps if i == 0 else steps[1:]  # pieces join at shared stations
-    return out[:-1] if closed else out
+    return out
 
 
 def apply_swept(job, folder, body_vols):
@@ -680,10 +697,20 @@ def apply_swept(job, folder, body_vols):
             points = _crossings(vol, centre, normal, tol)
             if len(points):  # split the profile where the body's edges cross it: the mids of the split curves
                 _, mids, _, _, points = _profile(path, entry["name"], points, tol)
-            piece, rc, length, _ = chain[0]
-            half = _moved(mids, stations(piece, [0.5 * length], rc)[0])  # half way along the first piece
-            side = _nearest(2, faces, half, tol)[0]  # the side face of each profile curve
-            section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder, options, points)
+            # a profile curve is real when its side face (half way along a piece) is real in any piece
+            sides = np.array(
+                [
+                    [f in real for f in _nearest(2, faces, _moved(mids, stations(p, [0.5 * n], rc)[0] @ s), tol)[0]]
+                    for p, rc, n, s in chain
+                ]
+            )
+            is_real = sides.any(axis=0)
+            if entry["skin"] and (sides != is_real).any():
+                _note(
+                    f"Swept Body {entry['name']}: a side of MAT_ID {entry['mat_id']} is a cut in one piece and real in"
+                    " another; it gets the skin everywhere"
+                )
+            section = section_mesh(entry, k, [int(i) for i in np.flatnonzero(is_real)], folder, options, points)
             transforms = _transforms(entry, section, chain, closed, faces, vol, skinned, tol)
             V, cells = sweep(section, transforms, closed)
             flat = _flat(V, cells)
