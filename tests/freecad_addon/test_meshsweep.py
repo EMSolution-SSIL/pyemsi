@@ -359,6 +359,20 @@ def test_turned_positions_station_at_each_cut():
     assert np.allclose(meshsweep.turned_positions(100.0, 90.0, 4.0), meshsweep.graded_positions(100.0, 4.0))
 
 
+def test_crossings_bisect_a_sample_near_the_plane():
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("crossings")
+        vol = gmsh.model.occ.addBox(0, 0, -1, 1, 1, 2.0002)  # the vertical edges' middle samples at z = 1e-4
+        gmsh.model.occ.synchronize()
+        points = meshsweep._crossings(vol, np.zeros(3), np.array([0, 0, 1.0]), 1e-3)
+    finally:
+        gmsh.finalize()
+    assert len(points) == 4
+    assert np.abs(points[:, 2]).max() < 1e-9
+
+
 def test_sweep_turns_each_element_as_it_faces():
     flat = grid(2, 1)
     quad = flat.quad.copy()

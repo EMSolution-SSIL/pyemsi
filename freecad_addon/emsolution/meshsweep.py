@@ -375,12 +375,17 @@ def _crossings(vol, centre, normal, tol):
         d = (at(u) - centre) @ normal
         if (np.abs(d) < tol).all():  # in the plane: a curve of the profile itself
             continue
-        out += list(at(u[np.abs(d) < tol]))
-        for k in np.where((d[:-1] * d[1:] < 0) & (np.abs(d[:-1]) >= tol) & (np.abs(d[1:]) >= tol))[0]:
-            a, b = u[k], u[k + 1]
+        far = np.where(np.abs(d) >= tol)[0]  # the samples off the plane; a crossing lies between two of opposite sides
+        crossed = [(i, j) for i, j in zip(far, far[1:]) if d[i] * d[j] < 0]
+        inside = np.zeros(len(u), bool)
+        for i, j in crossed:
+            inside[i + 1 : j] = True
+        out += list(at(u[(np.abs(d) < tol) & ~inside]))  # in the plane without crossing it: an end, or a touch
+        for i, j in crossed:
+            a, b = u[i], u[j]
             for _ in range(60):  # bisection on the distance to the plane
                 m = 0.5 * (a + b)
-                if ((at(m)[0] - centre) @ normal) * d[k] <= 0:
+                if ((at(m)[0] - centre) @ normal) * d[i] <= 0:
                     b = m
                 else:
                     a = m
@@ -576,11 +581,6 @@ def _graded_end(face, vol, skinned):
     return bool(others) and not any(v in skinned for v in others)
 
 
-def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
-    """The stations along the solid's pieces (chain, from _chain): every path size (arc length at rc on a revolved
-    piece, with a station at each of the volume's corners on it and at least one per MIN_TURN), graded toward a real
-    end face when there is a skin. A closed ring has no ends and no last station (it is the first)."""
-    skin, size = entry["skin"], float(entry["path_size"])
 def _cuts(piece, rc, length, start, section, points, tol):
     """The arc lengths (at rc) along the turned piece where it must have a station: of points (the volume's corners),
     those on the piece, each at its angle about the piece's axis from where the piece starts. A point is on the piece
@@ -620,6 +620,11 @@ def _flat(V, cells):
     return n
 
 
+def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
+    """The stations along the solid's pieces (chain, from _chain): every path size (arc length at rc on a revolved
+    piece, with a station at each of the volume's corners on it and at least one per MIN_TURN), graded toward a real
+    end face when there is a skin. A closed ring has no ends and no last station (it is the first)."""
+    skin, size = entry["skin"], float(entry["path_size"])
     graded = (False, False)
     if not closed:
         first = section.quad[0] if len(section.quad) else section.tri[0]
@@ -628,6 +633,7 @@ def _flat(V, cells):
         far = _moved([centre], stations(piece, [length], rc)[0] @ start)[0]
         ends = _nearest(2, faces, [centre, far], tol)[0]
         graded = tuple(_graded_end(f, vol, skinned) for f in ends)
+    corners = [gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(3, vol)], False, False, True)]
     out = []
     for i, (piece, rc, length, start) in enumerate(chain):
         ends = (graded[0] and i == 0, graded[1] and i == len(chain) - 1)
@@ -641,7 +647,6 @@ def _flat(V, cells):
                 positions = turned_positions(length, angle, size, cuts)
         elif skin and any(ends):
             first, depth = skin["depth"] / skin["per_depth"], skin["layer"] * skin["depth"]
-    corners = [gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(3, vol)], False, False, True)]
             positions = graded_positions(length, size, first, depth, RATIO, ends)
         else:
             positions = graded_positions(length, size)
@@ -681,13 +686,13 @@ def apply_swept(job, folder, body_vols):
             section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder, options, points)
             transforms = _transforms(entry, section, chain, closed, faces, vol, skinned, tol)
             V, cells = sweep(section, transforms, closed)
-            adds.append(_join(vol, V, cells, entry["name"]))
-            tags.append(vol)
-    job["swept_tags"], job["swept_add"] = tags, adds
-    return tags
             flat = _flat(V, cells)
             if flat:
                 raise JobError(
                     f"Swept Body {entry['name']}: {flat} of its swept cells are flat or inside out; make its Path Size"
                     " smaller"
                 )
+            adds.append(_join(vol, V, cells, entry["name"]))
+            tags.append(vol)
+    job["swept_tags"], job["swept_add"] = tags, adds
+    return tags
