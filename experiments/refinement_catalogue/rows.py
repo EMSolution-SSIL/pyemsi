@@ -1,6 +1,6 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
 (RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
-(SL-01..SL-10), Skin Layer, and Swept Body Stage 1 (SW-01..SW-12). Each row is
+(SL-01..SL-10), Skin Layer, and Swept Body Stages 1 and 2 (SW-01..SW-12). Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -1493,3 +1493,131 @@ CASES += [
     ),
 ]
 AFTER.update({"SW-01": sw01_after, "SW-02": sw02_after, "SW-03": sw03_after, "SW-04": sw04_after, "SW-12": sw12_after})
+
+
+# --- Swept Body, Stage 2: revolved and closed sweeps --------------------------------------------------------------------
+# A rectangle in the XZ plane revolved about an axis parallel to z, as a user would make it. The rings are meshed with a
+# Swept Body (stations by angle) and compared with the graded Skin Layer alone.
+
+
+def revolved(x0, x1, z0, z1, angle, about_x=0.0):
+    """The rectangle x x0..x1, z z0..z1 (y = 0) revolved by angle degrees about the line parallel to z through (about_x, 0)."""
+    pts = [V(x0, 0, z0), V(x1, 0, z0), V(x1, 0, z1), V(x0, 0, z1), V(x0, 0, z0)]
+    return Part.Face(Part.makePolygon(pts)).revolve(V(about_x, 0, 0), V(0, 0, 1), angle)
+
+
+def sw06():
+    """A winding turn: a closed ring of 10 x 4 section (radius 20..30, z 0..4), copper, size 4, Padding Box air."""
+
+    def items(study, body):
+        skin(study, body, f=1000, sigma=5.8e7)
+        objects.make_swept_body(study, [(body, "")])
+
+    return bar_study("SW-06", items, pad=10, shape=revolved(20, 30, 0, 4, 360), label="Turn")
+
+
+def sw07():
+    """A toroidal conductor: torus R 20, r 3 (size 2) with a Skin Layer at 10 kHz."""
+
+    def items(study, body):
+        skin(study, body, f=10000, sigma=5.8e7)
+        objects.make_swept_body(study, [(body, "")])
+
+    return bar_study("SW-07", items, size=2, pad=8, shape=Part.makeTorus(20, 3), air_size=6, label="Torus")
+
+
+def sw08():
+    """A busbar bend: 10 x 4 section revolved 90 deg about an axis 30 from its inner side (axis through x = -30)."""
+
+    def items(study, body):
+        skin(study, body, f=1000, sigma=5.8e7)
+        objects.make_swept_body(study, [(body, "")])
+
+    return bar_study("SW-08", items, pad=10, shape=revolved(0, 10, 0, 4, 90, about_x=-30), label="Bend")
+
+
+def angle_steps(msh, name, cx):
+    """The steps of arc length (at the radius 35) between the angles about (cx, 0) of the nodes of the 3D physical
+    group name, from the lowest angle up."""
+    import math
+
+    import gmsh
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        a = set()
+        for d, tag in gmsh.model.getPhysicalGroups(3):
+            if gmsh.model.getPhysicalName(d, tag) == name:
+                xyz = gmsh.model.mesh.getNodesForPhysicalGroup(d, tag)[1]
+                a |= {round(math.atan2(xyz[k + 1], xyz[k] - cx), 5) for k in range(0, len(xyz), 3)}
+        a = sorted(a)
+        return [35 * (y - x) for x, y in zip(a, a[1:])]
+    finally:
+        gmsh.finalize()
+
+
+def ring_text(folder, name):
+    text, types, msh = sw_report(folder, name)
+    free = free_faces_inside(msh)
+    return text + f"; free faces inside: {len(free)}", types, msh, free
+
+
+def sw06_after(folder):
+    """(passed, text): hexahedra only, no free faces inside."""
+    text, types, msh, free = ring_text(folder, "Turn")
+    return set(types) == {"Hexahedron 8"} and not free, text
+
+
+def sw07_after(folder):
+    """(passed, text): hexahedra and prisms, no free faces inside."""
+    text, types, msh, free = ring_text(folder, "Torus")
+    return types.get("Hexahedron 8", 0) > 0 and types.get("Prism 6", 0) > 0 and not free, text
+
+
+def sw08_after(folder):
+    """(passed, text): hexahedra only; the steps along the arc are graded at both ends."""
+    text, types, msh, free = ring_text(folder, "Bend")
+    steps = angle_steps(msh, "Bend", -30.0)
+    ok = set(types) == {"Hexahedron 8"} and steps[0] < 0.8 * SIZE and steps[-1] < 0.8 * SIZE and max(steps) > 0.8 * SIZE
+    return ok, text + f"; arc steps first {steps[0]:.2f}, last {steps[-1]:.2f}, largest {max(steps):.2f} ({len(steps)})"
+
+
+RING_ACROSS = {"clip": "y", "at": 0.0, "zoom": (8, -10, 42, 14)}
+CASES += [
+    (
+        "SW-06",
+        "3D copper winding turn: closed ring, section 10 x 4, inner radius 20 (size 4) in a Padding Box Air Region: Skin"
+        " Layer 1 kHz (δ 2.09), Swept Body, cut at z = 2",
+        sw06,
+        "meshes",
+        {"clip": "z", "at": 2.0, "zoom": (-40, -40, 40, 40), "across": RING_ACROSS},
+    ),
+    (
+        "SW-07",
+        "3D toroidal conductor R 20, r 3 (size 2): Skin Layer 10 kHz (δ 0.66), Swept Body, cut at z = 0",
+        sw07,
+        "meshes",
+        {
+            "clip": "z",
+            "at": 0.0,
+            "zoom": (-34, -34, 34, 34),
+            "across": {"clip": "y", "at": 0.0, "zoom": (10, -8, 34, 8)},
+        },
+    ),
+    (
+        "SW-08",
+        "3D copper busbar bend: 10 x 4 section revolved 90 deg about an axis 30 from its inner side (size 4): Skin"
+        " Layer 1 kHz, Swept Body, cut at z = 2",
+        sw08,
+        "meshes",
+        {
+            "clip": "z",
+            "at": 2.0,
+            "zoom": (-52, -12, 12, 52),
+            "across": {"clip": "y", "at": 1.5, "zoom": (-12, -10, 22, 14)},
+        },
+    ),
+]
+AFTER.update({"SW-06": sw06_after, "SW-07": sw07_after, "SW-08": sw08_after})
