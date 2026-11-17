@@ -1501,7 +1501,8 @@ AFTER.update({"SW-01": sw01_after, "SW-02": sw02_after, "SW-03": sw03_after, "SW
 
 
 def revolved(x0, x1, z0, z1, angle, about_x=0.0):
-    """The rectangle x x0..x1, z z0..z1 (y = 0) revolved by angle degrees about the line parallel to z through (about_x, 0)."""
+    """The rectangle x x0..x1, z z0..z1 (y = 0) revolved by angle degrees about the line parallel to z through
+    (about_x, 0)."""
     pts = [V(x0, 0, z0), V(x1, 0, z0), V(x1, 0, z1), V(x0, 0, z1), V(x0, 0, z0)]
     return Part.Face(Part.makePolygon(pts)).revolve(V(about_x, 0, 0), V(0, 0, 1), angle)
 
@@ -1536,11 +1537,9 @@ def sw08():
     return bar_study("SW-08", items, pad=10, shape=revolved(0, 10, 0, 4, 90, about_x=-30), label="Bend")
 
 
-def angle_steps(msh, name, cx):
-    """The steps of arc length (at the radius 35) between the angles about (cx, 0) of the nodes of the 3D physical
+def angle_steps(msh, name, cx, rc):
+    """The steps of arc length (at the radius rc) between the angles about (cx, 0) of the nodes of the 3D physical
     group name, from the lowest angle up."""
-    import math
-
     import gmsh
 
     gmsh.initialize()
@@ -1553,7 +1552,7 @@ def angle_steps(msh, name, cx):
                 xyz = gmsh.model.mesh.getNodesForPhysicalGroup(d, tag)[1]
                 a |= {round(math.atan2(xyz[k + 1], xyz[k] - cx), 5) for k in range(0, len(xyz), 3)}
         a = sorted(a)
-        return [35 * (y - x) for x, y in zip(a, a[1:])]
+        return [rc * (y - x) for x, y in zip(a, a[1:])]
     finally:
         gmsh.finalize()
 
@@ -1566,20 +1565,20 @@ def ring_text(folder, name):
 
 def sw06_after(folder):
     """(passed, text): hexahedra only, no free faces inside."""
-    text, types, msh, free = ring_text(folder, "Turn")
+    text, types, _, free = ring_text(folder, "Turn")
     return set(types) == {"Hexahedron 8"} and not free, text
 
 
 def sw07_after(folder):
     """(passed, text): hexahedra and prisms, no free faces inside."""
-    text, types, msh, free = ring_text(folder, "Torus")
+    text, types, _, free = ring_text(folder, "Torus")
     return types.get("Hexahedron 8", 0) > 0 and types.get("Prism 6", 0) > 0 and not free, text
 
 
 def sw08_after(folder):
     """(passed, text): hexahedra only; the steps along the arc are graded at both ends."""
     text, types, msh, free = ring_text(folder, "Bend")
-    steps = angle_steps(msh, "Bend", -30.0)
+    steps = angle_steps(msh, "Bend", -30.0, 35.0)  # rc: the section x 0..10 is 30..40 from the axis
     ok = set(types) == {"Hexahedron 8"} and steps[0] < 0.8 * SIZE and steps[-1] < 0.8 * SIZE and max(steps) > 0.8 * SIZE
     return ok, text + f"; arc steps first {steps[0]:.2f}, last {steps[-1]:.2f}, largest {max(steps):.2f} ({len(steps)})"
 
@@ -1588,8 +1587,8 @@ RING_ACROSS = {"clip": "y", "at": 0.0, "zoom": (8, -10, 42, 14)}
 CASES += [
     (
         "SW-06",
-        "3D copper winding turn: closed ring, section 10 x 4, inner radius 20 (size 4) in a Padding Box Air Region: Skin"
-        " Layer 1 kHz (δ 2.09), Swept Body, cut at z = 2",
+        "3D copper winding turn: closed ring, section 10 x 4, inner radius 20 (size 4) in a Padding Box Air Region:"
+        " Skin Layer 1 kHz (δ 2.09), Swept Body, cut at z = 2",
         sw06,
         "meshes",
         {"clip": "z", "at": 2.0, "zoom": (-40, -40, 40, 40), "across": RING_ACROSS},
