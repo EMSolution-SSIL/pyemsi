@@ -25,7 +25,9 @@ Section = namedtuple("Section", "xyz tri quad edges")
 def graded_positions(length, size, first=None, depth=0.0, ratio=RATIO, ends=(True, True)):
     """Node positions from 0 to length, increasing. Without first: equal steps of about size. With first, at each
     end in ends: steps first * ratio^k (each at most size) until they reach depth, the one that crosses it kept; the
-    middle in equal steps of at most size. When both ends' steps exceed length, they are scaled down to fill it."""
+    middle in equal steps of at most size. A middle under half the largest graded step beside it is left out: each
+    graded end then fills its share of the length (half of it, or all with one graded end) with the first of its steps
+    whose sum is nearest that share, scaled to fill it, so the first step stays near first and no sliver is left."""
     if first is None:
         return np.linspace(0.0, length, max(1, round(length / size)) + 1)
     graded = []
@@ -34,13 +36,20 @@ def graded_positions(length, size, first=None, depth=0.0, ratio=RATIO, ends=(Tru
         while end and sum(layer) < depth:
             layer.append(min(first * ratio ** len(layer), size))
         graded.append(layer)
-    total = sum(graded[0]) + sum(graded[1])
-    if total >= length * (1 - 1e-9):  # the layers fill the length: no middle
-        d = np.array(graded[0] + graded[1][::-1]) * (length / total)
-    else:
-        middle = length - total
+    middle = length - sum(graded[0]) - sum(graded[1])
+    beside = max([layer[-1] for layer in graded if layer], default=0.0)
+    if middle >= 0.5 * beside and middle > 1e-9 * length:
         n = max(1, math.ceil(middle / size - 1e-9))  # ceil, so no step exceeds size
-        d = np.array(graded[0] + [middle / n] * n + graded[1][::-1])
+        steps = [middle / n] * n
+    else:  # the layers meet: no middle
+        steps = []
+        share = length / sum(1 for layer in graded if layer)
+        for layer in graded:
+            if layer:
+                sums = np.cumsum(layer)
+                k = int(np.argmin(np.abs(np.log(sums / share)))) + 1  # the prefix nearest the share
+                layer[:] = [s * share / sums[k - 1] for s in layer[:k]]
+    d = np.array(graded[0] + steps + graded[1][::-1])
     p = np.concatenate([[0.0], np.cumsum(d)])
     p[-1] = length
     return p

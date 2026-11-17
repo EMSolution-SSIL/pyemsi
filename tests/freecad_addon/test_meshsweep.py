@@ -114,6 +114,15 @@ def test_graded_positions_layer_fills_the_length():
     assert (d > 0).all()
     assert np.allclose(d, d[::-1])
     assert d[0] < d[1]
+    assert d[0] == pytest.approx(0.5, rel=0.25)  # the first step stays near first
+
+
+def test_graded_positions_meeting_layers_leave_no_sliver():
+    for length, ends in [(4, (True, True)), (4, (True, False)), (7.6, (True, True)), (8, (True, True))]:
+        d = np.diff(meshsweep.graded_positions(length, 2, first=0.5, depth=3, ends=ends))
+        assert d.sum() == pytest.approx(length)
+        assert d[0] == pytest.approx(0.5, rel=0.25)
+        assert (d[1:] >= 0.5 * d[:-1]).all() and (d[:-1] >= 0.5 * d[1:]).all()
 
 
 def test_section_of_a_bar_is_a_graded_grid(tmp_path):
@@ -127,9 +136,9 @@ def test_section_of_a_bar_is_a_graded_grid(tmp_path):
         d = steps(s, key)
         assert d[0] == pytest.approx(0.5) and d[-1] == pytest.approx(0.5)
         assert d.max() <= 2 + 1e-9
-    for key in (side(s, 0, -5), side(s, 0, 5)):  # the short sides, 4: the two layers fill it (scaled down)
+    for key in (side(s, 0, -5), side(s, 0, 5)):  # the short sides, 4: the two layers meet and fill it
         d = steps(s, key)
-        assert d[0] == pytest.approx(d[-1]) and d[0] == pytest.approx(0.5 * 4 / 7.4416)
+        assert d[0] == pytest.approx(d[-1]) and d.min() == pytest.approx(0.5, rel=0.25)
         assert d.sum() == pytest.approx(4)
 
 
@@ -153,8 +162,9 @@ def test_section_skips_cut_sides(tmp_path):
     d = steps(s, side(s, 0, -5))  # a short side, graded toward y = 2 only
     if s.xyz[s.edges[side(s, 0, -5)][0], 1] > 0:
         d = d[::-1]  # from y = -2 to y = 2
-    assert d[-1] == pytest.approx(0.5)
-    assert d[0] == pytest.approx(4 - 3.7208)  # the middle step, not 0.5
+    assert d[-1] == pytest.approx(0.5, rel=0.25)
+    assert d[0] > d[-1]  # not graded toward the cut
+    assert (d[1:] >= 0.5 * d[:-1]).all() and (d[:-1] >= 0.5 * d[1:]).all()  # no sliver beside the cut
     assert len(s.edges[side(s, 1, -2)]) == len(s.edges[side(s, 1, 2)])
 
 
