@@ -37,6 +37,7 @@ from meshcommon import (
     graded_ids,
 )
 import meshgroups
+import meshsweep
 
 
 def _import_one(path, *dims):
@@ -177,6 +178,8 @@ def build(job, folder):
     apply_recombine(job, body_vols, 3, tf, mapped)
     if job.get("periodic"):
         apply_periodic(job["periodic"], 3)
+    if job.get("swept"):
+        meshsweep.apply_swept(job, folder, body_vols)
     if not slides:
         return None
     base = os.path.basename
@@ -216,8 +219,11 @@ def run_job(job_path):
         print(f"SMAT_ID {item['smat_id']:>6}  {item['name']}")
     for item in (job.get("transfinite") or {}).get("bodies", []):
         print(f"Structured      {item['name']}")
+    for item in job.get("swept", []):
+        print(f"Swept           {item['name']}")
+    swept = {item["mat_id"] for item in job.get("swept", [])}  # their Recombine is for the section
     for item in job["volumes"]:
-        if item["mat_id"] in job.get("recombine", []):
+        if item["mat_id"] in job.get("recombine", []) and item["mat_id"] not in swept:
             print(f"Recombined      {item['name']}")
     if job.get("slides"):
         print("\n".join(slide_report(job)))

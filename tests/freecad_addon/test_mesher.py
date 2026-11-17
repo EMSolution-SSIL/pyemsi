@@ -226,6 +226,87 @@ def depth_edge(elements, depth, lo, hi=math.inf):
     return sum(lengths) / len(lengths)
 
 
+def write_cylinder_and_end(path, end_path, r, z0, length):
+    """A cylinder about Z from z0, and its end face at z0 (the profile of a Swept Body), the same OCC face."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        cyl = occ.addCylinder(0, 0, z0, 0, 0, length, r)
+        occ.synchronize()
+        gmsh.write(path)
+        faces = [abs(f) for _, f in gmsh.model.getBoundary([(3, cyl)])]
+        face = next(f for f in faces if abs(gmsh.model.getBoundingBox(2, f)[5] - z0) < 1e-6)
+        occ.copy([(2, face)])
+        occ.remove([(3, cyl)], recursive=True)
+        occ.synchronize()
+        gmsh.write(end_path)
+    finally:
+        gmsh.finalize()
+
+
+def swept(profile, mat_id=1, name="Bar", path_size=4.0, section_size=2.0, recombine=True, skin=None, advance=40.0):
+    """An entry of job["swept"]: one straight solid along +Z from its profile."""
+    piece = {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0], "angle": 0.0, "advance": advance}
+    return {
+        "name": name,
+        "mat_id": mat_id,
+        "path_size": path_size,
+        "section_size": section_size,
+        "recombine": recombine,
+        "skin": skin,
+        "solids": [{"profile": "geometry/" + profile, "pieces": [piece]}],
+    }
+
+
+FACES_3D = {  # gmsh element type: (nodes, its faces)
+    4: (4, ((0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3))),
+    5: (8, ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7))),
+    6: (6, ((0, 2, 1), (3, 4, 5), (0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5))),
+    7: (5, ((0, 3, 2, 1), (0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4))),
+}
+
+
+def inner_free_faces(box):
+    """The faces of the open model's 3D elements used once that do not lie on a face of box (x, y, z, dx, dy, dz):
+    none in a conformal mesh."""
+    tags, coords = gmsh.model.mesh.getNodes()[:2]
+    at = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+    count = {}
+    for _, e in gmsh.model.getEntities(3):
+        for typ, nodes in zip(*gmsh.model.mesh.getElements(3, e)[::2]):
+            n, faces = FACES_3D[int(typ)]
+            for k in range(0, len(nodes), n):
+                cell = nodes[k : k + n]
+                for f in faces:
+                    key = tuple(sorted(int(cell[i]) for i in f))
+                    count[key] = count.get(key, 0) + 1
+    lo, hi = box[:3], [box[i] + box[i + 3] for i in range(3)]
+
+    def on_box(f):
+        return any(all(abs(at[n][i] - b[i]) < 1e-9 for n in f) for i in range(3) for b in (lo, hi))
+
+    return [f for f, c in count.items() if c == 1 and not on_box(f)]
+
+
+def group_cells(path, group):
+    """The 3D elements of a physical group of a mesh file as sorted tuples of their node coordinates."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        at = {int(t): tuple(round(float(x), 6) + 0.0 for x in coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
+        out = []
+        for e in gmsh.model.getEntitiesForPhysicalGroup(3, group):
+            for typ, nodes in zip(*gmsh.model.mesh.getElements(3, e)[::2]):
+                n = gmsh.model.mesh.getElementProperties(typ)[3]
+                out += [tuple(sorted(at[int(t)] for t in nodes[k : k + n])) for k in range(0, len(nodes), n)]
+    finally:
+        gmsh.finalize()
+    return sorted(out)
+
+
 class MesherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -977,6 +1058,121 @@ class MesherTest(unittest.TestCase):
         self.assertLess(depth_edge(block, depth, 0, d), 0.75 * d)
         self.assertGreater(depth_edge(block, depth, 3 * d), 0.6 * 8)
         self.assertLess(len(block), len(self.skin_block(size=d / 2)))
+
+    def test_empty_swept_key_is_unchanged(self):
+        self.skin_block(skin(depth=2.69))
+        before = read_nodes(os.path.join(self.dir, "pre_geom.msh"))
+        write_box(self.geo("air.brep"), -100, -100, -100, 200, 200, 200)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        extra = {"skin": [skin(depth=2.69)], "swept": []}
+        r = self.run_job([self.vol(1, "Block", "vol_1.brep", size=8.0)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(read_nodes(os.path.join(self.dir, "pre_geom.msh")), before)
+
+    # ---- Swept Body: a bar 10 x 4 x 40 (MAT_ID 1) along Z, its profile the end face at z = -20, in an air box
+    # 60 x 60 x 100 at size 6 (MAT_ID 2)
+
+    AIR_BOX = (-30, -30, -50, 60, 60, 100)
+
+    def swept_bar(self, entry=None, box=AIR_BOX, volumes=(), surfaces=(), sizes=(), recombine=(1,), options=None):
+        write_box(self.geo("vol_1.brep"), -5, -2, -20, 10, 4, 40)
+        write_rect(self.geo("sweep_1_1.brep"), -5, -2, -20, 10, 4)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        extra = {"swept": [entry or swept("sweep_1_1.brep")]}
+        vols = [self.vol(1, "Bar", "vol_1.brep", size=2.0), *volumes]
+        r = self.run_job(vols, surfaces, sizes, options, recombine=list(recombine), air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r
+
+    def msh(self):
+        return os.path.join(self.dir, "pre_geom.msh")
+
+    def bar_nodes(self):
+        return gmsh.model.mesh.getNodesForPhysicalGroup(3, 1)[1].reshape(-1, 3)
+
+    def steps(self, axis):
+        """The steps between the bar's node coordinates along axis (0, 1, 2)."""
+        values = sorted({round(float(x), 6) for x in self.bar_nodes()[:, axis]})
+        return [b - a for a, b in zip(values, values[1:])]
+
+    def test_swept_bar_meshes(self):
+        r = self.swept_bar()
+        self.open_msh()
+        self.assertIn("Swept           Bar", r.stdout)
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        self.assertEqual(len(self.steps(2)), 10)
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
+    def test_swept_bar_sets_delaunay(self):
+        r = self.swept_bar(options={"Mesh.Algorithm3D": 10})  # HXT refuses quads on the air's boundary
+        self.assertIn("the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces", r.stderr)
+        self.open_msh()
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
+    def test_swept_bar_with_skin(self):
+        self.swept_bar(swept("sweep_1_1.brep", skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0}))
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8"})
+        for axis in (0, 1):  # across each side
+            steps = self.steps(axis)
+            self.assertAlmostEqual(steps[0], 0.5, delta=0.125)
+            self.assertAlmostEqual(steps[-1], 0.5, delta=0.125)
+        z = self.steps(2)  # both ends are real surface in the air
+        self.assertAlmostEqual(z[0], 0.5, delta=0.01)
+        self.assertAlmostEqual(z[-1], 0.5, delta=0.01)
+        self.assertLessEqual(max(z), 4.0 + 1e-9)
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
+    def test_swept_round_wire_is_conformal(self):
+        write_cylinder_and_end(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 0.45, -10, 20)
+        write_box(self.geo("air.brep"), -3, -3, -15, 6, 6, 30)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.6}
+        wire = swept("sweep_1_1.brep", name="Wire", path_size=0.6, section_size=0.15, recombine=False, advance=20.0)
+        wire["skin"] = {"depth": 0.2, "per_depth": 2.0, "layer": 2.0}  # 3 skin depths are more than the radius
+        extra = {"swept": [wire]}
+        r = self.run_job([self.vol(1, "Wire", "vol_1.brep", size=0.15)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8", "Prism 6"})
+        self.assertEqual(inner_free_faces((-3, -3, -15, 6, 6, 30)), [])
+
+    def test_swept_bar_end_on_a_terminal(self):
+        write_box(self.geo("vol_3.brep"), -15, -15, -30, 30, 30, 10)
+        skin_ = {"depth": 1.0, "per_depth": 2.0, "layer": 3.0}
+        self.swept_bar(swept("sweep_1_1.brep", skin=skin_), volumes=[self.vol(3, "Terminal", "vol_3.brep", 3.0)])
+        self.open_msh()
+        z = self.steps(2)
+        self.assertGreater(z[0], 0.8 * 4.0)  # the profile's end lies on the terminal: no grading
+        self.assertLessEqual(z[0], 4.0 + 1e-9)
+        self.assertAlmostEqual(z[-1], 0.5, delta=0.01)  # the free end in the air
+        self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4", "Pyramid 5"})  # pyramids on the quads
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
+    def test_swept_bar_cut_end_is_not_graded(self):
+        box = (-30, -30, -20, 60, 60, 70)  # the bar's end at z = -20 on the air box's outer face
+        self.swept_bar(swept("sweep_1_1.brep", skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0}), box=box)
+        self.open_msh()
+        z = self.steps(2)
+        self.assertGreater(z[0], 0.8 * 4.0)
+        self.assertAlmostEqual(z[-1], 0.5, delta=0.01)
+        self.assertEqual(inner_free_faces(box), [])
+
+    def test_swept_ignores_size_fields(self):
+        self.swept_bar()
+        plain = group_cells(self.msh(), 1)
+        write_rect_x(self.geo("size_1.brep"), 5, -2, -20, 4, 40)  # the bar's side x = 5
+        size = {"name": "Fine", "size": 0.5, "files": ["geometry/size_1.brep"]}
+        self.swept_bar(sizes=[size])
+        self.assertEqual(group_cells(self.msh(), 1), plain)
+
+    def test_swept_excitation_surface(self):
+        write_rect(self.geo("surf_10_1.brep"), -5, -2, 20, 10, 4)  # the far end face
+        surface = {"smat_id": 10, "name": "In", "mat_id": 1, "files": ["geometry/surf_10_1.brep"]}
+        self.swept_bar(surfaces=[surface])
+        self.open_msh()
+        hexes = self.element_counts(1)["Hexahedron 8"]
+        self.assertEqual(self.element_counts(10, dim=2), {"Quadrilateral 4": hexes // len(self.steps(2))})
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 

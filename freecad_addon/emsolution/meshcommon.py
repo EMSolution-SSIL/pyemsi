@@ -649,8 +649,11 @@ def apply_recombine(job, body_tags, dim, tf, mapped):
 
 
 def _recombine_3d(job, body_tags, tf_curves):
-    """Quad faces on the boundary of the chosen bodies, except where Gmsh could not build the pyramids."""
-    chosen = set(job.get("recombine", []))
+    """Quad faces on the boundary of the chosen bodies, except where Gmsh could not build the pyramids. A swept body
+    (job["swept"]) is left out: its Recombine is for its section (meshsweep)."""
+    swept = {e["mat_id"] for e in job.get("swept", [])}
+    recombined = [m for m in job.get("recombine", []) if m not in swept]
+    chosen = set(recombined)
     structured = {b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])}
     names = {v["mat_id"]: v["name"] for v in job["volumes"] + air_items(job)}
     mat_of = {t: m for m, tags in body_tags.items() for t in tags}
@@ -660,7 +663,7 @@ def _recombine_3d(job, body_tags, tf_curves):
         return "hex" if m in chosen & structured else "stet" if m in structured else "tet"
 
     candidates = {}
-    for m in job.get("recombine", []):
+    for m in recombined:
         for v in body_tags[m]:
             candidates.update(dict.fromkeys(_boundary(3, v)))
     kept, pairs, tet_side, plain = [], set(), None, []  # plain: (body, face) of kept faces with no hex side
@@ -690,7 +693,7 @@ def _recombine_3d(job, body_tags, tf_curves):
             f"recombine: faces between {a} and {b} stay triangles (a quad face there would need pyramids on both sides)"
         )
     kept_set = set(kept)
-    for m in job.get("recombine", []):
+    for m in recombined:
         if not kept_set & {f for v in body_tags[m] for f in _boundary(3, v)}:
             _note(f"recombine: {names[m]} has no face that can be recombined; it stays all triangles")
     if tet_side and job.get("options", {}).get("Mesh.Algorithm3D", 1) != 1:
@@ -1075,12 +1078,64 @@ def mesh_with_fallback(dim):
 
 
 def generate(job, dim):
-    """Apply the user's mesh settings and mesh the current model to dimension dim (mesh_with_fallback)."""
+    """Apply the user's mesh settings and mesh the current model to dimension dim (mesh_with_fallback). With swept
+    bodies (job["swept_tags"], meshsweep.apply_swept) their hand-made mesh goes in first, see _mesh_swept."""
     for name, value in job.get("options", {}).items():  # the user's mesh settings
         gmsh.option.setNumber(name, value)
     gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
     gmsh.option.setNumber("Mesh.Optimize", 1)
-    mesh_with_fallback(dim)
+    if job.get("swept_tags"):
+        _mesh_swept(job, dim)
+    else:
+        mesh_with_fallback(dim)
+
+
+def _mesh_swept(job, dim):
+    """Mesh around the swept bodies (spike 7.1): gmsh meshes only the empty, visible entities, so the swept volumes
+    and their faces, curves and points are hidden and get their mesh one dimension at a time (generate(n) meshes the
+    lower dimensions again, wiping what was added there). Each swept volume is marked transfinite, which makes
+    Delaunay leave it empty; Delaunay (Algorithm3D 1) is the algorithm that puts pyramids on the quad faces."""
+    if job.get("options", {}).get("Mesh.Algorithm3D", 1) != 1:
+        _note("Swept Body: the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces")
+    for name, value in (
+        ("Mesh.Algorithm3D", 1),
+        ("Mesh.OptimizePyramids", -0.6),  # the apex pushed out: the best transition quality in the spike
+        ("Mesh.MeshOnlyEmpty", 1),
+        ("Mesh.MeshOnlyVisible", 1),
+        ("Mesh.Renumber", 0),  # the added nodes keep their tags; renumbered at the end
+    ):
+        gmsh.option.setNumber(name, value)
+    swept = [(3, t) for t in job["swept_tags"]]
+    for _, t in swept:
+        gmsh.model.mesh.setTransfiniteVolume(t)
+    gmsh.model.setVisibility(swept, 0, recursive=True)
+    try:
+        for d in range(dim + 1):
+            for add in job["swept_add"]:
+                add(d)
+            if d == 3:
+                _mesh_around(swept)
+            elif d:  # points and curves go in together
+                mesh_with_fallback(d)
+    finally:
+        gmsh.model.setVisibility(swept, 1, recursive=True)
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
+        gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 0)
+    gmsh.model.mesh.renumberNodes()
+    gmsh.model.mesh.renumberElements()
+
+
+def _mesh_around(swept):
+    """The 3D mesh around the swept volumes. gmsh cannot always push the pyramids' apex out (it fails the same way
+    around its own Transfinite Body, depending on how OCC turned the faces): then the volumes are meshed again
+    without that."""
+    try:
+        mesh_with_fallback(3)
+    except Exception:
+        _note("Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without that")
+        gmsh.option.setNumber("Mesh.OptimizePyramids", 0)
+        gmsh.model.mesh.clear([dt for dt in gmsh.model.getEntities(3) if dt not in swept])
+        mesh_with_fallback(3)
 
 
 def publish(outputs):
