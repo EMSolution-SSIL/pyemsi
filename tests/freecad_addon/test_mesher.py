@@ -279,14 +279,14 @@ def write_revolved_rect(path, profile_path, x0, x1, z0, z1, angle):
         gmsh.finalize()
 
 
-def write_torus(path, profile_path, big, small):
-    """A torus about Z (gmsh's addTorus) and its profile, the disc in the plane y = 0 whose circle starts where the
-    torus's two seam circles meet, (big + small, 0, 0)."""
+def write_torus(path, profile_path, big, small, start=(1, 0, 0)):
+    """A torus about Z (gmsh's addTorus) and its profile, the disc in the plane y = 0 whose circle starts in the
+    direction start from its centre: by default where the torus's two seam circles meet, (big + small, 0, 0)."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         occ = gmsh.model.occ
-        occ.addDisk(big, 0, 0, small, small, zAxis=[0, 1, 0], xAxis=[1, 0, 0])
+        occ.addDisk(big, 0, 0, small, small, zAxis=[0, 1, 0], xAxis=list(start))
         occ.synchronize()
         gmsh.write(profile_path)
         occ.remove(occ.getEntities(2), recursive=True)
@@ -1315,6 +1315,16 @@ class MesherTest(unittest.TestCase):
         )
         self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8", "Prism 6"})
         self.assertEqual(inner_free_faces(self.TURN_BOX), [])
+
+    def test_swept_torus_profile_vertex_elsewhere(self):
+        # the profile circle starts at (22.4, 0, 1.8), 37 degrees from where the torus's seam circles cross the profile
+        write_torus(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 3, start=(0.8, 0, 0.6))
+        self.swept_turn_job(
+            swept_turn("sweep_1_1.brep", 360, section_size=1.0, skin={"depth": 0.5, "per_depth": 2.0, "layer": 3.0})
+        )
+        self.assertEqual(set(self.element_counts(1)), {"Hexahedron 8", "Prism 6"})
+        self.assertEqual(inner_free_faces(self.TURN_BOX), [])
+        self.assertIn((23.0, 0.0, 0.0), {tuple(round(float(x), 6) + 0.0 for x in p) for p in self.bar_nodes()})
 
     def test_swept_bend_grades_both_ends(self):
         write_revolved_rect(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 20, 30, -2, 2, 90)

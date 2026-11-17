@@ -144,11 +144,12 @@ def scaled(entry, options):
     return {**entry, "path_size": size(entry["path_size"]), "section_size": size(entry["section_size"])}
 
 
-def section_mesh(entry, solid_index, real_curves, folder, options=None):
+def section_mesh(entry, solid_index, real_curves, folder, options=None, points=()):
     """Mesh the profile of entry["solids"][solid_index] in a model of its own, removed afterwards; the current
-    (main) model stays current. real_curves: the indexes (in getBoundary order of the profile face) of the profile
-    curves whose side faces are real surface; the others are cuts and get no skin. options: the user's mesh settings
-    (job["options"]), of which the 2D ones (SECTION_OPTIONS) hold while the section is meshed."""
+    (main) model stays current. real_curves: the indexes (in getBoundary order of the profile face, split at points)
+    of the profile curves whose side faces are real surface; the others are cuts and get no skin. options: the user's
+    mesh settings (job["options"]), of which the 2D ones (SECTION_OPTIONS) hold while the section is meshed. points:
+    where the profile's curves are split (from _profile), so the section has a node there."""
     main = gmsh.model.getCurrent()
     name, m = entry["name"], entry["mat_id"]
     gmsh.model.add(f"swept section {name} {solid_index}")
@@ -158,7 +159,7 @@ def section_mesh(entry, solid_index, real_curves, folder, options=None):
         gmsh.model.occ.synchronize()
         if len(faces) != 1:
             raise JobError(f"Swept Body {name}: {os.path.basename(path)} holds {len(faces)} faces, not one")
-        face = faces[0][1]
+        face = _split(faces[0][1], points)
         curves = [abs(t) for _, t in gmsh.model.getBoundary([(2, face)], oriented=False)]
         real = [curves[k] for k in real_curves]
         size = float(entry["section_size"])
@@ -273,9 +274,10 @@ PRISM_TRIS = ((0, 2, 1), (3, 4, 5))
 PRISM_QUADS = ((0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5))
 
 
-def _profile(path, name):
+def _profile(path, name, points=(), tol=0.0):
     """The profile face's bounding box (2 x 3), the midpoint of each of its curves, in the getBoundary order
-    section_mesh uses, and its centre of mass, read in a model of its own."""
+    section_mesh uses, its centre of mass, its unit normal and, of points, those on its boundary within tol but not on
+    a corner of it, read in a model of its own. The curves are split at those points (as section_mesh splits them)."""
     main = gmsh.model.getCurrent()
     gmsh.model.add(f"swept profile {name}")
     try:
@@ -284,16 +286,71 @@ def _profile(path, name):
         if len(faces) != 1:
             raise JobError(f"Swept Body {name}: {os.path.basename(path)} holds {len(faces)} faces, not one")
         face = faces[0][1]
+        kept = []
+        if len(points):
+            curves = [abs(t) for _, t in gmsh.model.getBoundary([(2, face)], oriented=False)]
+            corners = [
+                gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(2, face)], False, False, True)
+            ]
+            for q in np.asarray(points, float).reshape(-1, 3):
+                near = _nearest(1, curves, [q], tol)[1][0] < tol
+                if near and all(np.linalg.norm(q - np.asarray(x)) >= tol for x in corners + kept):
+                    kept.append(q)
+            face = _split(face, kept)
         mids = []
         for _, c in gmsh.model.getBoundary([(2, face)], oriented=False):
             lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, abs(c)))
             mids.append(gmsh.model.getValue(1, abs(c), [(lo + hi) / 2]))
         box = np.reshape(gmsh.model.getBoundingBox(2, face), (2, 3))
         centre = np.array(gmsh.model.occ.getCenterOfMass(2, face), float)
+        normal = np.array(gmsh.model.getNormal(face, gmsh.model.getParametrization(2, face, centre.tolist())), float)
     finally:
         gmsh.model.remove()
         gmsh.model.setCurrent(main)
-    return box, np.array(mids, float).reshape(-1, 3), centre
+    return box, np.array(mids, float).reshape(-1, 3), centre, normal / np.linalg.norm(normal), kept
+
+
+def _split(face, points):
+    """The profile face (current model) with its boundary curves split at points (on them, not on a corner), or the
+    face itself without points."""
+    if not len(points):
+        return face
+    occ = gmsh.model.occ
+    out, _ = occ.fragment([(2, face)], [(0, occ.addPoint(*map(float, q))) for q in points])
+    occ.synchronize()
+    faces = [t for d, t in out if d == 2]
+    if len(faces) != 1:
+        raise JobError(f"splitting the swept profile at the body's edges gave {len(faces)} faces, not one")
+    return faces[0]
+
+
+def _crossings(vol, centre, normal, tol):
+    """The points where the curves of vol that do not lie in the profile's plane (through centre, normal) meet it:
+    where the section must have a node (a seam circle crossing a ring's profile), wherever its own corners are."""
+    faces = [(2, abs(t)) for _, t in gmsh.model.getBoundary([(3, vol)], oriented=False)]
+    curves = list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary(faces, False, False)))
+    out = []
+    for c in curves:
+        lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, c))
+
+        def at(v):
+            return np.reshape(gmsh.model.getValue(1, c, list(np.atleast_1d(v))), (-1, 3))
+
+        u = np.linspace(lo, hi, 129)
+        d = (at(u) - centre) @ normal
+        if (np.abs(d) < tol).all():  # in the plane: a curve of the profile itself
+            continue
+        out += list(at(u[np.abs(d) < tol]))
+        for k in np.where((d[:-1] * d[1:] < 0) & (np.abs(d[:-1]) >= tol) & (np.abs(d[1:]) >= tol))[0]:
+            a, b = u[k], u[k + 1]
+            for _ in range(60):  # bisection on the distance to the plane
+                m = 0.5 * (a + b)
+                if ((at(m)[0] - centre) @ normal) * d[k] <= 0:
+                    b = m
+                else:
+                    a = m
+            out.append(at(0.5 * (a + b))[0])
+    return np.array(out, float).reshape(-1, 3)
 
 
 def _nearest(dim, tags, points, tol):
@@ -523,7 +580,8 @@ def apply_swept(job, folder, body_vols):
         entry = scaled(entry, options)
         left = list(body_vols[entry["mat_id"]])
         for k, solid in enumerate(entry["solids"]):
-            box, mids, centre = _profile(os.path.join(folder, solid["profile"]), entry["name"])
+            path = os.path.join(folder, solid["profile"])
+            box, mids, centre, normal, _ = _profile(path, entry["name"])
             chain, closed = _chain(solid["pieces"], centre), bool(solid.get("closed", False))
             swept = _swept_box(box, chain)
             vol = _volume_of(left, swept, entry["name"])
@@ -531,10 +589,13 @@ def apply_swept(job, folder, body_vols):
             faces = [abs(t) for _, t in gmsh.model.getBoundary([(3, vol)], oriented=False)]
             tol = TOL * float(np.linalg.norm(swept[1] - swept[0]))
             real = set(real_boundary(3, [vol]))
+            points = _crossings(vol, centre, normal, tol)
+            if len(points):  # split the profile where the body's edges cross it: the mids of the split curves
+                _, mids, _, _, points = _profile(path, entry["name"], points, tol)
             piece, rc, length, _ = chain[0]
             half = _moved(mids, stations(piece, [0.5 * length], rc)[0])  # half way along the first piece
             side = _nearest(2, faces, half, tol)[0]  # the side face of each profile curve
-            section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder, options)
+            section = section_mesh(entry, k, [i for i, f in enumerate(side) if f in real], folder, options, points)
             transforms = _transforms(entry, section, chain, closed, faces, vol, skinned, tol)
             V, cells = sweep(section, transforms, closed)
             adds.append(_join(vol, V, cells, entry["name"]))
