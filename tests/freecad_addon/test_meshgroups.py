@@ -1031,6 +1031,27 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(faces_in_three(mesh), 0)
         self.assertAlmostEqual(free_area(mesh), 2 * 10 - 2 * 1.5, delta=1e-6)
 
+    def test_swept_cell_touched_in_part_by_a_copy_is_refused(self):  # validation leaves its own copies to the mesher
+        write_boxes(self.geo("a.brep"), (0, 0, 0, 1, 1, 1))
+        write_boxes(self.geo("b.brep"), (1, 0, 0, 1, 1, 1))
+        up = [1, 0, 0, 0.5, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1]  # A's copy on half of A's top and half of B's
+        group = self.two_cells("Steps", "volumes", "geometry/a.brep", "geometry/b.brep", [ID, up], (0.3, 0.4))
+        group["job"]["swept"] = [{"name": "Iron", "mat_id": 1}]  # prepare_images reads only its MAT_ID
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            contacts = meshgroups.contact_table(group, group["job"], self.dir, 3)
+            with self.assertRaises(meshcommon.JobError) as err:
+                meshgroups.prepare_images(group, contacts, self.dir, 3)
+        finally:
+            gmsh.finalize()
+        self.assertEqual(
+            str(err.exception),
+            "group Steps: the swept cell Iron would have to be split where a copy touches part of its face; meshing"
+            " that is not handled yet, a limit of the tool, not of the drawing",
+        )
+        self.assertEqual([n for n in os.listdir(self.dir) if n.startswith("images_")], [])
+
     def test_curved_seam_is_not_refused(self):  # the mesh's chords are shorter than the arc they follow
         group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
         write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)

@@ -630,9 +630,11 @@ def _check_swept_seams(group, contacts, dim):
             pairs += [(c, f, image["transform"]) for image, f, partner, on_real in images if on_real and partner == c]
         for c, d, m in pairs:
             if not matches(c, d, m, tol):
+                where = _text(np.reshape(gmsh.model.getBoundingBox(dim - 1, c), (2, 3)).mean(axis=0), dim)
                 raise JobError(
                     f"group {group['name']}: the swept cell {names.get(mat_id, '?')} meets a copy on a face whose mesh"
                     " the copy cannot share; meshing that is not handled yet, a limit of the tool, not of the drawing"
+                    f" near ({where})"
                 )
 
 
@@ -645,6 +647,7 @@ def _generate_cell(group, job, dim, late=None):
         settings["optimize_pyramids"] = job["optimize_pyramids"]
     if late is not None:
         settings["swept_periodic"] = late
+    settings["swept_group"] = group["name"]  # a failure around its swept cells names the group, not the air
     try:
         generate(settings, dim)
     except Exception as err:

@@ -2551,8 +2551,37 @@ class StudyTest(unittest.TestCase):
         self.doc.recompute()
         return cell, iron, item
 
-    def test_swept_cell_beside_a_copy_of_another_cell_is_fine(self):
-        _, _, item = self.swept_beside_iron()
+    def test_swept_cell_beside_a_copy_of_another_cell_is_refused(self):
+        """The iron's copies fill the sector's gaps: the sector's two cuts (0° and 22.5°) meet copies of the iron,
+        whose own mesh the swept cell's hand-made section cannot share (the mesher refuses it after meshing)."""
+        cell, _, item = self.swept_beside_iron()
+        shape = geometry.global_shape(cell)
+        cuts = [
+            n
+            for n, f in enumerate(shape.Faces, 1)
+            if isinstance(f.Surface, Part.Plane) and abs(f.normalAt(0, 0).z) < 1e-6
+        ]
+        self.assertEqual(len(cuts), 2)
+        texts = self.swept_texts(item, "error")
+        for n in cuts:
+            self.assertIn(
+                f"Swept Body {item.Label}: Sector meets a copy of Iron on Sector.Face{n}; a swept cell can share faces"
+                " only with its own copies. Put the cell's boundary through the middle of Sector or of Iron instead.",
+                texts,
+            )
+        self.assertEqual(len(texts), 2)
+        (problem,) = [p for p in validation.validate(self.study) if f"Sector.Face{cuts[0]};" in p.text]
+        self.assertIn((cell, f"Face{cuts[0]}"), [(b, s) for b, s in problem.refs])
+
+    def test_swept_cell_beside_another_cell_where_drawn_is_fine(self):
+        """A second cell object touching the swept cell where both are drawn is a contact inside the cell model."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2, angle=22.5)
+        iron = self.ring_piece("Iron", 19, 21, -2, 2, start=22.5, angle=22.5)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 90, "count": 4}
+        objects.make_symmetric_group(self.study, [cell, iron], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        item = objects.make_swept_body(self.study, [(cell, "")])
+        self.doc.recompute()
         self.assertFalse(self.swept_texts(item))
 
     def test_swept_cell_beside_a_copy_of_a_structured_cell_is_refused(self):
@@ -2613,6 +2642,36 @@ class StudyTest(unittest.TestCase):
                 kinds.append(f"r {round(face.Surface.Radius)}")
         self.assertEqual(sorted(kinds), ["r 19", "r 21", "z -2", "z 2"])
 
+    def sector_on_terminal(self):
+        """The 45° sector, cell of 4 rotations by 90°, swept; a free terminal 45°..55° on its end at 45°, the other end
+        (0°) in the air. Returns the terminal."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 90, "count": 4}
+        ring = objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        terminal = self.ring_piece("Terminal", 19, 21, -2, 2, start=45, angle=10)
+        air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        for side in objects.SIDES:
+            setattr(air, f"Pad{side}", 6)
+        objects.make_swept_body(self.study, [(cell, "")])
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        return terminal
+
+    def test_swept_cell_job_has_skinned_faces(self):
+        """The sector's end on a terminal with a Skin Layer of its own is listed in "skinned_faces" (not graded)."""
+        terminal = self.sector_on_terminal()
+        (entry,) = self.read_job()["symmetric"]["groups"][0]["job"]["swept"]
+        self.assertEqual(entry["skinned_faces"], [])  # no Skin Layer on the terminal yet
+        objects.make_skin_layer(self.study, [(terminal, "")], 0.5)
+        self.doc.recompute()
+        (entry,) = self.read_job()["symmetric"]["groups"][0]["job"]["swept"]
+        self.assertEqual(entry["skinned_faces"], ["geometry/g1_swept_skinned_1_1.brep"])
+        (face,) = Part.read(os.path.join(jobwriter.scratch_folder(self.study), entry["skinned_faces"][0])).Faces
+        c = face.CenterOfMass
+        self.assertAlmostEqual(math.degrees(math.atan2(c.y, c.x)), 45, delta=1e-6)
+        self.assertEqual(len(entry["free_faces"]), 6)  # the skinned end is still one of the free faces
+
     def test_swept_rebuilt_strand_cell_meshes(self):
         """A Standard-mode strand (rebuilt: its seam twists) as the cell of 6 rotations by 60°: its faces toward the
         free side come from the rebuild, and its copies mesh with the skin on them, conformal in the air."""
@@ -2658,6 +2717,57 @@ class StudyTest(unittest.TestCase):
         xyz = gmsh.model.mesh.getNodes()[1].reshape(-1, 3)
         lo, hi = xyz.min(axis=0), xyz.max(axis=0)
         self.assertEqual(inner_free_faces([*lo, *(hi - lo)]), [])
+
+    def test_swept_rebuilt_strand_cell_excitation_on_every_copy(self):
+        """An Excitation on the far end faces of all 6 copies of a rebuilt (Standard-mode) strand cell, picked on the
+        group's drawing: it lands on the copied swept mesh's end quads of each copy."""
+        strand = self.shape_body("Strand", helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 60, "count": 6}
+        ring = objects.make_symmetric_group(self.study, [strand], rules=[rotate], name="Litz")
+        air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        for side in objects.SIDES:
+            setattr(air, f"Pad{side}", 3)
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item = objects.make_swept_body(self.study, [(strand, "")])
+        item.PathSize, item.SectionSize = 0.4, 0.2
+        layer = objects.make_skin_layer(self.study, [(strand, "")], 0.2)
+        layer.LayerDepth = 2.0
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        top = max(f.CenterOfMass.z for f in ring.Shape.Faces)
+        ends = [
+            (i, f)
+            for i, f in enumerate(ring.Shape.Faces, 1)
+            if isinstance(f.Surface, Part.Plane) and abs(f.CenterOfMass.z - top) < 1e-6
+        ]
+        self.assertEqual(len(ends), 6)
+        exc = objects.make_excitation(self.study, "End", [(ring, f"Face{i}") for i, _ in ends])
+        self.doc.recompute()
+        self.assertFalse(validation.errors(validation.validate(self.study)))
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        smat_id = int(self.study.SmatIds[f"{exc.Name}|{ring.Name}"])
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        kinds = {}
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, smat_id):
+            for t, tags in zip(*gmsh.model.mesh.getElements(2, e)[:2]):
+                name = gmsh.model.mesh.getElementProperties(t)[0]
+                kinds[name] = kinds.get(name, 0) + len(tags)
+        self.assertIn("Quadrilateral 4", kinds)  # the swept section's quads (the skin's), not new triangles
+        self.assertEqual(sum(kinds.values()) % 6, 0)
+        centres = [f.CenterOfMass for _, f in ends]
+        hits = set()
+        xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, smat_id)[1].reshape(-1, 3)
+        for p in xyz:
+            k = min(range(6), key=lambda c: (App.Vector(*p) - centres[c]).Length)
+            self.assertLess((App.Vector(*p) - centres[k]).Length, 0.45 + 1e-4)  # on the end disc of copy k
+            hits.add(k)
+        self.assertEqual(hits, set(range(6)))
 
     def test_swept_entry_unchanged_outside_groups(self):
         self.swept_job()

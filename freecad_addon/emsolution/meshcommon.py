@@ -1115,7 +1115,7 @@ def _mesh_swept(job, dim):
     try:
         log = _swept_stages(job, dim)
         if dim == 3:
-            _check_filled(swept, log)
+            _check_filled(swept, log, job.get("swept_group"))
     finally:
         gmsh.model.setVisibility(swept, 1, recursive=True)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
@@ -1137,8 +1137,10 @@ class PyramidsFailed(Exception):
 def _swept_stages(job, dim):
     """Add the swept mesh one dimension at a time and mesh the rest after each. Returns gmsh's log of the 3D mesh.
     job["swept_periodic"], when given, is called once the swept points and curves are in, before gmsh meshes the
-    curves: gmsh finds no periodic counterpart for nodes added after a setPeriodic (meshgroups.mesh_cell)."""
+    curves: gmsh finds no periodic counterpart for nodes added after a setPeriodic (meshgroups.mesh_cell).
+    job["swept_group"]: the group whose cell model this is (no air in it, so the advice is the sizes)."""
     log = []
+    group = job.get("swept_group")
     for d in range(dim + 1):
         for add in job["swept_add"]:
             add(d)
@@ -1152,6 +1154,8 @@ def _swept_stages(job, dim):
             except Exception as exc:
                 if gmsh.option.getNumber("Mesh.OptimizePyramids"):
                     raise PyramidsFailed(str(exc)) from exc
+                if group is not None:
+                    raise AirFailed(f"group {group}: gmsh could not mesh around the swept cell ({exc}); {CELL_ADVICE}")
                 raise AirFailed(
                     f"gmsh could not mesh around the swept bodies ({exc}); give the air more room or use a finer size"
                     " there"
@@ -1161,15 +1165,23 @@ def _swept_stages(job, dim):
     return log
 
 
-def _check_filled(swept, log):
+CELL_ADVICE = "make the cell objects' Mesh Size or the Swept Body's Path Size and Section Size smaller"
+
+
+def _check_filled(swept, log, cell_group=None):
     """gmsh may log an error and leave a volume empty without raising (too little room beside a swept body): a volume
-    of a 3D physical group without elements is an error."""
+    of a 3D physical group without elements is an error. cell_group: the group whose cell model this is, or None."""
     for _, group in gmsh.model.getPhysicalGroups(3):
         for t in gmsh.model.getEntitiesForPhysicalGroup(3, group):
             if (3, t) not in swept and not sum(len(e) for e in gmsh.model.mesh.getElements(3, t)[1]):
                 errors = [m.split(":", 1)[-1].strip() for m in log if m.startswith("Error")]
                 why = f" ({errors[-1]})" if errors else ""
                 name = gmsh.model.getPhysicalName(3, group)
+                if cell_group is not None:
+                    raise AirFailed(
+                        f"group {cell_group}: gmsh could not mesh {name} (MAT_ID {group}) around the swept cell{why};"
+                        f" {CELL_ADVICE}"
+                    )
                 raise AirFailed(
                     f"gmsh could not mesh {name} (MAT_ID {group}) around the swept bodies{why}; give the air more room"
                     " or use a finer size there"

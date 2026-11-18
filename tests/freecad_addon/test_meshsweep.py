@@ -381,6 +381,53 @@ def test_empty_volume_around_swept_fails_loudly():
         gmsh.finalize()
 
 
+def test_empty_volume_in_a_cell_model_names_the_group():
+    """In a cell model (meshgroups.mesh_cell) there is no air: the advice names the group and the sizes."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("main")
+        gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)
+        gmsh.model.occ.addBox(1, 0, 0, 1, 1, 1)
+        gmsh.model.occ.fragment([(3, 1)], [(3, 2)])
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(3, [1], 1, name="Bar")
+        gmsh.model.addPhysicalGroup(3, [2], 2, name="Iron")
+        gmsh.model.mesh.generate(2)
+        with pytest.raises(meshcommon.AirFailed) as err:
+            meshcommon._check_filled([(3, 1)], ["Error: PLC Error"], "Ring")
+        assert str(err.value) == (
+            "group Ring: gmsh could not mesh Iron (MAT_ID 2) around the swept cell (PLC Error); make the cell objects'"
+            " Mesh Size or the Swept Body's Path Size and Section Size smaller"
+        )
+    finally:
+        gmsh.finalize()
+
+
+def test_failed_3d_mesh_in_a_cell_model_names_the_group(monkeypatch):
+    def fail(dim):
+        if dim == 3:
+            raise Exception("boom")
+        return []
+
+    monkeypatch.setattr(meshcommon, "mesh_with_fallback", fail)
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.option.setNumber("Mesh.OptimizePyramids", 0)
+        gmsh.model.add("main")
+        with pytest.raises(meshcommon.AirFailed) as err:
+            meshcommon._swept_stages({"swept_add": [], "swept_group": "Ring"}, 3)
+        assert str(err.value) == (
+            "group Ring: gmsh could not mesh around the swept cell (boom); make the cell objects' Mesh Size or the"
+            " Swept Body's Path Size and Section Size smaller"
+        )
+        with pytest.raises(meshcommon.AirFailed, match=r"\(boom\); give the air more room or use a finer size there"):
+            meshcommon._swept_stages({"swept_add": []}, 3)  # an ordinary Study: as before
+    finally:
+        gmsh.finalize()
+
+
 def bar_section(x0=18.0, x1=22.0):
     """One quad x x0..x1, z -1..1 in the plane y = 0."""
     xyz = np.array([[x0, 0, -1], [x1, 0, -1], [x1, 0, 1], [x0, 0, 1]], float)

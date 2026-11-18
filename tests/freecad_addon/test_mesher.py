@@ -1783,9 +1783,12 @@ class MesherTest(unittest.TestCase):
     # ---- Swept Body on the cell of a Symmetric Group: the cell job holds the cell, its copies are meshed in the free
     # job's air (MAT_ID 30); each copy c takes the part MAT_ID 5 + c when parts are per copy
 
-    def group_job(self, cell, transforms, free_box=None, air_size=4.0, per_copy=False, excitations=None, cells=()):
+    def group_job(
+        self, cell, transforms, free_box=None, air_size=4.0, per_copy=False, excitations=None, cells=(), free=None
+    ):
         """Run mesher.py on a job of one group "Ring" of the swept cell job entry cell (a volumes entry with its
-        "swept"), with more cell objects cells (volumes entries), and free air in free_box."""
+        "swept"), with more cell objects cells (volumes entries), and free air in free_box; free: more keys of the
+        free job (its "volumes", "skin")."""
         n = len(transforms)
         parts = [{"mat_id": 5 + c, "name": f"Copy{c}"} for c in range(n if per_copy else 1)]
         volumes = [cell["volume"], *cells]
@@ -1807,7 +1810,7 @@ class MesherTest(unittest.TestCase):
             write_box(self.geo("air.brep"), *free_box)
             air = {"name": "Air", "mat_id": 30, "file": "geometry/air.brep", "size": air_size}
             job["symmetric"]["free"] = [
-                {"side": "fixed", "job": {"volumes": [], "surfaces": [], "sizes": [], "air": air}}
+                {"side": "fixed", "job": {"volumes": [], "surfaces": [], "sizes": [], "air": air, **(free or {})}}
             ]
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
@@ -1981,6 +1984,32 @@ class MesherTest(unittest.TestCase):
         below = [1 - y for x, y, z in p if 0.75 < x < 0.95 and 1 < z < 3 and y < 1 - 1e-9]  # under the free piece
         self.assertLess(min(below), 0.15)  # the skin (first layer 0.1; section size 0.25 without)
 
+    def test_swept_cell_end_on_a_skinned_free_block_is_not_graded(self):
+        # the bar x 0..1, y 0..1, z 0..4 with a skin, one copy; its end z = 4 on a free terminal z 4..6 with a skin of
+        # its own ("skinned_faces"), its end z = 0 in the air: graded toward z = 0 only, as in an ordinary Study
+        write_box(self.geo("cell_1.brep"), 0, 0, 0, 1, 1, 4)
+        write_rect(self.geo("sweep_1_1.brep"), 0, 0, 0, 1, 1)
+        write_box(self.geo("terminal.brep"), 0, 0, 4, 1, 1, 2)
+        folder = os.path.join(self.dir, "geometry")
+        files = write_faces(self.geo("cell_1.brep"), folder, "swept_free_1")
+        ends = write_faces(self.geo("cell_1.brep"), folder, "swept_skinned_1", lambda c: abs(c[2] - 4) < 1e-6)
+        bar = swept("sweep_1_1.brep", name="Bar", path_size=1.0, section_size=0.25, recombine=False, advance=4.0)
+        bar["skin"] = {"depth": 0.2, "per_depth": 2.0, "layer": 2.0}
+        bar["free_faces"] = ["geometry/" + f for f in files]
+        bar["skinned_faces"] = ["geometry/" + f for f in ends]
+        cell = {"volume": self.vol(1, "Bar", "cell_1.brep", size=0.25), "swept": bar}
+        box = (-3, -3, -3, 7, 7, 12)
+        terminal = self.vol(40, "Terminal", "terminal.brep", size=0.5)
+        free = {"volumes": [terminal], "skin": [skin(mat_ids=(40,), depth=0.2)]}
+        r = self.group_job(cell, [turn_z(0)], box, air_size=1.0, free=free)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(inner_free_faces(box), [])
+        p = gmsh.model.mesh.getNodesForPhysicalGroup(3, 5)[1].reshape(-1, 3)
+        z = sorted({round(float(v), 6) for v in p[:, 2]})
+        self.assertAlmostEqual(z[1] - z[0], 0.1, delta=0.01)  # the end in the air: the skin's first layer
+        self.assertGreater(z[-1] - z[-2], 0.8 * 1.0)  # the end on the terminal: no grading (path size 1)
+
     def test_swept_cell_seam_with_a_meshed_copy_is_refused(self):
         # the sector beside a tetrahedral cell 45..90°, 4 rotations by 90°: the sector's cut at 0° meets the copy of
         # the other cell's face at 90°, which gmsh meshes on its own, not as the sector's hand-made section
@@ -1992,9 +2021,13 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn(
             "group Ring: the swept cell Sector meets a copy on a face whose mesh the copy cannot share; meshing that"
-            " is not handled yet, a limit of the tool, not of the drawing",
+            " is not handled yet, a limit of the tool, not of the drawing near (",
             r.stderr,
         )
+        where = r.stderr.split("of the drawing near (", 1)[1].split(")", 1)[0]
+        x, y, z = (float(v) for v in where.split(", "))
+        self.assertAlmostEqual(abs(z), 0, delta=1e-6)  # on one of the sector's cuts, at 0° or 45°, half way out
+        self.assertAlmostEqual(math.hypot(x, y), 20, delta=1.5)
 
     def test_swept_cell_needing_a_vertex_is_refused(self):
         # the bar x 0..1, y 0..1 along z 0..4 and its copy moved by x + 1; the block x 0..0.5, y 1..2, z 0..2 beside

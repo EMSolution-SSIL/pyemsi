@@ -494,7 +494,8 @@ def _swept_bodies(study, included, bodies, r):
                 r.error(_touch_text(w, name, name, "swept"), w, [(b, "")])
                 break
         said = set()  # a neighbour met in several frames (copies) is reported once
-        for o, o_shape in _swept_neighbours(study, b, box, others) if grouped else others:
+        neighbours = _swept_neighbours(study, b, box, others) if grouped else [(o, s, False) for o, s in others]
+        for o, o_shape, copy in neighbours:
             if o.Name == b.Name or not box.intersect(o_shape.BoundBox):
                 continue
             if o.Name in swept and order[o.Name] < i:
@@ -505,6 +506,17 @@ def _swept_bodies(study, included, bodies, r):
             found_here = []
             if what and any(a > 1e-6 * f.Area for a, f in zip(areas, shape.Faces)):
                 found_here.append((_touch_text(w, name, objects.display_name(o), what), [(b, ""), (o, "")]))
+            if copy and o.Name not in swept and o.Name not in structured:
+                # a seam with another cell's copy: gmsh meshes that face itself, so the hand-made section cannot match
+                for n, (f, a) in enumerate(zip(shape.Faces, areas), 1):
+                    if a > 1e-6 * f.Area:
+                        other = objects.display_name(o)
+                        text = (
+                            f"Swept Body {w.Label}: {name} meets a copy of {other} on {b.Label}.Face{n}; a swept cell"
+                            f" can share faces only with its own copies. Put the cell's boundary through the middle of"
+                            f" {name} or of {other} instead."
+                        )
+                        found_here.append((text, [(b, f"Face{n}")]))
             for n, (f, a) in enumerate(zip(shape.Faces, areas), 1):
                 if 1e-6 * f.Area < a < (1 - 1e-6) * f.Area:
                     text = (
@@ -520,15 +532,16 @@ def _swept_bodies(study, included, bodies, r):
 
 
 def _swept_neighbours(study, body, box, others):
-    """[(body, shape)] near box that a swept body of a Study with Symmetric Groups may touch, from others (the free
-    objects and cell objects, [(body, shape)]), seen from body where it is drawn. For a cell object of a group they are
-    moved into its frame from each of its copies: the free objects, and every copy of the other cell objects of its
-    group and of the cell objects of the other groups. The faces toward its own copies are seams, which the cell job
-    meshes, so those copies are left out. A body that is no cell object keeps others."""
+    """[(body, shape, copy)] near box that a swept body of a Study with Symmetric Groups may touch, from others (the
+    free objects and cell objects, [(body, shape)]), seen from body where it is drawn. For a cell object of a group they
+    are moved into its frame from each of its copies: the free objects, and every copy of the other cell objects of its
+    group and of the cell objects of the other groups. copy: True for a moved copy of another cell object of body's
+    group (a seam the cell job meshes, not a contact where both are drawn). The faces toward its own copies are seams,
+    which the cell job meshes, so those copies are left out. A body that is no cell object keeps others."""
     groups = objects.symmetric_groups(study)
     mine = next((g for g in groups if body in g.Cells), None)
     if mine is None:
-        return others
+        return [(o, s, False) for o, s in others]
     cells = {c.Name: g for g in groups for c in g.Cells}
     frames = [App.Matrix(*t).inverse() for t in objects.group_transforms(mine)]  # a copy of body back onto body
     moves = {g.Name: [App.Matrix(*t) for t in objects.group_transforms(g)] for g in groups}
@@ -546,7 +559,8 @@ def _swept_neighbours(study, body, box, others):
                     continue
                 seen.add(key)
                 if box.intersect(o_shape.BoundBox.transformed(m)):
-                    out.append((o, o_shape.transformed(m)))
+                    moved = max(abs(a - b) for a, b in zip(m.A, App.Matrix().A)) > symmetry.TOL
+                    out.append((o, o_shape.transformed(m), moved and group is not None and group.Name == mine.Name))
     return out
 
 
@@ -743,6 +757,37 @@ def free_faces(study, group, body):
         points = _beyond(element, shape, step, tol)
         if points and all(not _inside(q, own, tol) and _inside(q, beside, tol) for q in points):
             found.append(f"{'Face' if three else 'Edge'}{n}")
+    return found
+
+
+def skinned_faces(study, group, body):
+    """Of free_faces(study, group, body), those against a body with a Skin Layer of its own (picked whole): a free
+    object, or a copy of a cell object of another group. A swept cell's end there is not graded (a terminal with a
+    skin, as in an ordinary Study)."""
+    layered = {b.Name for item in objects.skin_layers(study) for b, sub in objects.item_refs(item) if sub == ""}
+    if not layered:
+        return []
+    cells = {c.Name for c in objects.cell_bodies(study)}
+    skinned = [
+        geometry.global_shape(b)
+        for b in geometry.study_geometry(study)[0]
+        if b.Name in layered and b.Name not in cells and not objects.is_air(b)
+    ]
+    for g in objects.symmetric_groups(study):
+        if g.Name == group.Name:
+            continue
+        for cell in g.Cells:
+            if cell.Name in layered:
+                shape = geometry.global_shape(cell)
+                skinned += [shape.transformed(App.Matrix(*t)) for t in objects.group_transforms(g)]
+    shape = geometry.global_shape(body)
+    size = max(1.0, shape.BoundBox.DiagonalLength)
+    tol, step = 1e-6 * size, 1e-4 * size
+    found = []
+    for name in free_faces(study, group, body):
+        points = _beyond(shape.getElement(name), shape, step, tol)
+        if any(_inside(q, skinned, tol) for q in points):
+            found.append(name)
     return found
 
 

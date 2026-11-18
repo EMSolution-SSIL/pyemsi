@@ -243,7 +243,9 @@ def swept_entries(study, folder, ids, found, prefix="", group=None):
     cut) is written to geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global coordinates. The skin comes from the first
     Skin Layer on the body. group: the Symmetric Group whose cell job this is; each entry then lists in "free_faces"
     the cell's faces toward the free side (validation.free_faces), written to
-    geometry/<prefix>swept_free_<MAT_ID>_<n>.brep: the cell model has nothing beyond them, so it cannot see them."""
+    geometry/<prefix>swept_free_<MAT_ID>_<n>.brep: the cell model has nothing beyond them, so it cannot see them. Of
+    those, the ones against a body with a skin of its own (validation.skinned_faces) are also in "skinned_faces",
+    written to geometry/<prefix>swept_skinned_<MAT_ID>_<n>.brep: an end there is not graded."""
     entries, seen = [], set()
     picks = [pick for item in objects.recombine_items(study) for pick in objects.face_picks(item)]
     recombined = {body.Name for body, faces in picks if not faces}
@@ -288,6 +290,8 @@ def swept_entries(study, folder, ids, found, prefix="", group=None):
             if group is not None:
                 free = validation.free_faces(study, group, body)
                 entries[-1]["free_faces"] = export_subs(folder, body, free, f"{prefix}swept_free_{mat_id}")
+                skinned = validation.skinned_faces(study, group, body)
+                entries[-1]["skinned_faces"] = export_subs(folder, body, skinned, f"{prefix}swept_skinned_{mat_id}")
     return entries
 
 
