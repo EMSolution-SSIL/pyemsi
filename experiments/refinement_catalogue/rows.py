@@ -1,10 +1,10 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
 (RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
-(SL-01..SL-10), Skin Layer, and Swept Body Stages 1 to 4 (SW-01..SW-14, SW-S1..SW-S3). Each row is
-(id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
-or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
-axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
-(see AFTER), a check of its meshes. Sizes in mm, default mesh size 4."""
+(SL-01..SL-10), Skin Layer, Swept Body Stages 1 to 4 (SW-01..SW-14, SW-S1..SW-S3) and 3D prism layers (PL-01..PL-04,
+PL-S1). Each row is (id, title, build, expected, picture): build() makes the Study in a new document and returns it;
+expected is "meshes" or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value}
+cuts a 3D mesh at axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry
+after(folder) (see AFTER), a check of its meshes. Sizes in mm, default mesh size 4."""
 
 import json
 import math
@@ -2147,3 +2147,194 @@ CASES += [
     ),
 ]
 AFTER.update({"SW-S1": sws1_after, "SW-S2": sws2_after})
+
+
+# --- 3D prism layers, Stage 5 ---------------------------------------------------------------------------------------
+# A copper Skin Layer at 10 kHz (δ 0.66, 2 per δ, 3 δ deep) with Prism layers ticked: prisms grown inward from the
+# body's surface round a tetrahedral core. Today is the same Study with Prism layers off (the graded Skin Layer). The
+# after-checks print the counts, the air's worst elements and the free faces inside.
+
+SWEEP_WARNING = "is a sweep; a Swept Body on it gives fewer and better elements than prism layers."
+SHARP_3D = "has sharp edges on its surface; prism layers need a smooth surface, so it gets graded tetrahedra."
+SHARP_NOTE_3D = "has a sharp edge on its surface; graded tetrahedra instead of prism layers"
+
+
+def pl_items(study, body):
+    skin(study, body, f=10000, sigma=COPPER, quads=True)
+
+
+def pl01():
+    """SW-02's wire with prism layers, its Padding Box 0 along z: the wire's ends lie on the Air Region's faces."""
+
+    def items(study, body):
+        (air,) = [o for o in study.Document.Objects if hasattr(o, "PadZPlus")]
+        air.PadZPlus = air.PadZMinus = 0
+        pl_items(study, body)
+
+    return bar_study("PL-01", items, size=2, pad=20, shape=Part.makeCylinder(3, 100), air_size=8, label="Wire")
+
+
+def pl02():
+    """A rounded busbar. The plan's 12 x 6 with r 2 (and r 2.5) folds at size 2 (note N3): the 1.98 mm layer is 99 %
+    (79 %) of the fillet radius. 12 x 8 with r 3 keeps the wire's ratio of layer to radius (2/3)."""
+    bar = block(-6, -4, 0, 6, 4, 60)
+    return bar_study("PL-02", pl_items, size=2, pad=20, shape=bar.makeFillet(3, bar.Edges), air_size=8)
+
+
+def pl03():
+    return bar_study("PL-03", pl_items, size=2, pad=20, shape=Part.makeSphere(5), air_size=8, label="Ball")
+
+
+def pl04():
+    return bar_study("PL-04", pl_items, size=2, pad=20, shape=Part.makeCylinder(6, 3), air_size=8, label="Disc")
+
+
+def pls1():
+    """A copper round ring R 20, r 3: its quarter (0..90 deg) the cell of 4 rotations by 90 deg, size 1, in a Padding
+    Box Air Region (6 mm, Mesh Size 4), with prism layers on the cell."""
+    section = Part.Face(Part.Wire(Part.makeCircle(3, V(20, 0, 0), V(0, 1, 0))))
+    doc = App.newDocument("PL_S1")
+    study, (ring,) = cases.new_study(doc, "3D", [("Ring", section.revolve(V(0, 0, 0), V(0, 0, 1), 90))])
+    study.MeshSizesGroup.DefaultMeshSize = 1.0
+    lib = symcases.libraries(study)
+    symcases.group(study, "Quarters", [ring], [symcases.rotate_rule(90, 4)], lib={ring.Name: lib["Copper"]})
+    air = pad_air(study, [ring], 6)
+    objects.assign(study, [air], lib["Air"], 0, name="Air")
+    objects.make_mesh_size(study, 4.0, [(air, "")])
+    pl_items(study, ring)
+    doc.recompute()
+    return study
+
+
+def pl_report(folder, name):
+    """(text, new types, new msh, free faces inside) of the part name."""
+    text, types, msh = sw_report(folder, name)
+    free = free_faces_inside(msh)
+    return text + f"; free faces inside: {len(free)}", types, msh, free
+
+
+def layered(types):
+    return types.get("Prism 6", 0) > 0 and types.get("Tetrahedron 4", 0) > 0
+
+
+def pl01_after(folder):
+    """(passed, text): prisms and tetrahedra in the wire, no free faces inside, Validate's sweep warning; SW-02's swept
+    count (from the catalogue's last build of it, beside this row) for comparison."""
+    text, types, _, free = pl_report(folder, "Wire")
+    warnings = [x for x in new_warnings(folder, "PL-01") if SWEEP_WARNING in x]
+    sw02 = os.path.join(os.path.dirname(folder), "SW-02", "new", "pre_geom.msh")
+    swept = f"{sum(types3(sw02, 'Wire').values())} elements" if os.path.exists(sw02) else "not built, see that row"
+    text += f"; SW-02 (the same wire swept): {swept}"
+    ok = layered(types) and not free and bool(warnings)
+    return ok, "Validate: " + (" | ".join(warnings) or "no warning") + "; " + text
+
+
+def pl02_after(folder):
+    """(passed, text): prisms in the busbar, no free faces inside."""
+    text, types, _, free = pl_report(folder, "Busbar")
+    return types.get("Prism 6", 0) > 0 and not free, text
+
+
+def pl03_after(folder):
+    """(passed, text): prisms = layers x the sphere's surface triangles (2 V - 4 of its V surface nodes), no free faces
+    inside."""
+    import numpy as np
+
+    sys.path.insert(0, os.path.dirname(jobwriter.__file__))
+    import meshlayers  # a mesher module, imported by plain name: its layer count
+
+    text, types, msh, free = pl_report(folder, "Ball")
+    xyz = mesh_nodes(msh)
+    triangles = 2 * int((abs(np.linalg.norm(xyz, axis=1) - 5.0) < 1e-6).sum()) - 4
+    n = len(meshlayers.heights(objects.skin_depth(10000, COPPER, 1.0), 2.0, 3.0))
+    ok = types.get("Prism 6", 0) == n * triangles and not free
+    return ok, text + f"; {triangles} surface triangles x {n} layers = {n * triangles} prisms"
+
+
+def mesher_notes_3d(folder):
+    """The NOTE lines mesher.py prints for the job of the 3D Study saved in folder/new (the mesher is run again)."""
+    import subprocess
+
+    _, where = job_of(os.path.join(folder, "new"))
+    script = os.path.join(os.path.dirname(jobwriter.__file__), "mesher.py")
+    r = subprocess.run([sys.executable, script, os.path.join(where, "job.json")], capture_output=True, text=True)
+    return [x[len("NOTE: ") :] for x in r.stderr.splitlines() if x.startswith("NOTE: ")]
+
+
+def pl04_after(folder):
+    """(passed, text): Validate's sharp-edge warning, the mesher's note, tetrahedra only, no free faces inside."""
+    text, types, _, free = pl_report(folder, "Disc")
+    warnings = [x for x in new_warnings(folder, "PL-04") if SHARP_3D in x]
+    notes = [x for x in mesher_notes_3d(folder) if SHARP_NOTE_3D in x]
+    ok = bool(warnings) and bool(notes) and set(types) == {"Tetrahedron 4"} and not free
+    return ok, f"Validate: {' | '.join(warnings) or 'no warning'}; mesher: {' | '.join(notes) or 'no note'}; " + text
+
+
+def pls1_after(folder):
+    """(passed, text): prisms and tetrahedra, no free faces inside, the same prisms in each of the 4 quarters."""
+    text, types, msh, free = pl_report(folder, "Ring")
+    quarter = [int(math.degrees(math.atan2(c[1], c[0])) % 360 // 90) for nodes, c in part_cells(msh, "Ring")]
+    kinds = [len(nodes) for nodes, _ in part_cells(msh, "Ring")]
+    prisms = [sum(1 for q, k in zip(quarter, kinds) if q == j and k == 6) for j in range(4)]
+    ok = layered(types) and not free and len(set(prisms)) == 1 and prisms[0] > 0
+    return ok, text + f"; prisms per quarter: {prisms}"
+
+
+PL_CUT = {
+    "clip": "y",
+    "at": 0.0,
+    "zoom": (-12, -6, 12, 66),
+    "across": {"clip": "z", "at": 30.0, "zoom": (-9, -5, 9, 5)},
+}
+CASES += [
+    (
+        "PL-01",
+        "3D copper round wire r 3 x 100 (size 2) as SW-02, its Padding Box 0 along z (the ends are cuts): Skin Layer"
+        " 10 kHz (δ 0.66) with prism layers, no Swept Body; cut at y = 0",
+        pl01,
+        "meshes",
+        {
+            "clip": "y",
+            "at": 0.0,
+            "zoom": (-8, -4, 8, 104),
+            "across": {"clip": "z", "at": 50.0, "zoom": (-10, -8, 10, 8)},
+        },
+    ),
+    (
+        "PL-02",
+        "3D copper busbar 12 x 8 x 60, all edges filleted r 3 (size 2), Padding Box 20: Skin Layer 10 kHz (δ 0.66, the"
+        " layer 3 δ = 2/3 of r) with prism layers; cut at y = 0",
+        pl02,
+        "meshes",
+        PL_CUT,
+    ),
+    (
+        "PL-03",
+        "3D copper sphere r 5 (size 2), Padding Box 20: Skin Layer 10 kHz with prism layers; cut through the centre",
+        pl03,
+        "meshes",
+        {"clip": "y", "at": 0.0, "zoom": (-8, -8, 8, 8)},
+    ),
+    (
+        "PL-04",
+        "3D copper disc r 6 x 3 (size 2), Padding Box 20: Skin Layer 10 kHz with prism layers; its sharp rims give"
+        " graded tetrahedra (Validate warning, mesher note)",
+        pl04,
+        "meshes",
+        {"clip": "y", "at": 0.0, "zoom": (-9, -3, 9, 6)},
+    ),
+    (
+        "PL-S1",
+        "3D copper round ring R 20, r 3: a quarter the cell of a Symmetric Group of 4 (size 1) in a Padding Box Air"
+        " Region (6 mm, size 4): Skin Layer 10 kHz with prism layers; cut at z = 0 and across at y = 0",
+        pls1,
+        "meshes",
+        {
+            "clip": "z",
+            "at": 0.0,
+            "zoom": (-25, -25, 25, 25),
+            "across": {"clip": "y", "at": 0.0, "zoom": (16, -4, 24, 4)},
+        },
+    ),
+]
+AFTER.update({"PL-01": pl01_after, "PL-02": pl02_after, "PL-03": pl03_after, "PL-04": pl04_after, "PL-S1": pls1_after})

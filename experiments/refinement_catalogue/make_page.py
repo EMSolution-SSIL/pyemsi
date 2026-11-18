@@ -65,6 +65,8 @@ def card(r):
         out.append('<div class="pics">')
         for side, p in pics:
             caption = "today (no Refine Near)" if side == "today" else "new (with Refine Near)"
+            if r["id"].startswith("PL-"):
+                caption = "today (graded skin)" if side == "today" else "new (prism layers)"
             out.append(f'<figure><img alt="{side} mesh of {e(r["id"])}" src="{picture(p.get("png"))}">')
             out.append(f"<figcaption>{caption}, {p.get('seconds', '?')} s</figcaption></figure>")
         out.append("</div>")

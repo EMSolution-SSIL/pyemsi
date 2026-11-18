@@ -1,6 +1,7 @@
 r"""The refinement catalogue (spec 9): each row of rows.CASES is built as a Study, its set-up saved, meshed with
 its Refine Near, Air Grading, Skin Layer and Swept Body items ("new") and again with them deleted ("today"), and its pictures drawn.
 An SW row's today copy deletes only its Swept Body items, so it keeps the graded Skin Layer the sweep replaces.
+A PL row's today copy keeps its Skin Layers with Prism layers off.
 
 Run: pixi run -e addon python experiments/refinement_catalogue/build_catalogue.py [--only ID ...]
 Output: experiments/refinement_catalogue/<id>/<id>.FCStd, the set-up Study (git-ignored; rebuild it with this script),
@@ -102,6 +103,10 @@ def run(row):
             items = objects.refine_items(study) + objects.air_gradings(study) + objects.skin_layers(study)
             if name.startswith("SW-"):  # today for a swept body: the graded Skin Layer (or the plain mesh) it replaces
                 items = []
+            if name.startswith("PL-"):  # today for prism layers: the same Skin Layers, graded
+                items = []
+                for skin in objects.skin_layers(study):
+                    skin.QuadLayers = False
             for item in items + objects.swept_bodies(study):
                 study.Document.removeObject(item.Name)
             study.Document.recompute()
