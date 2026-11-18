@@ -1081,12 +1081,13 @@ def mesh_with_fallback(dim):
 
 def generate(job, dim):
     """Apply the user's mesh settings and mesh the current model to dimension dim (mesh_with_fallback). With swept
-    bodies (job["swept_tags"], meshsweep.apply_swept) their hand-made mesh goes in first, see _mesh_swept."""
+    bodies (job["swept_tags"], meshsweep.apply_swept) or prism layers (job["layer_tags"], meshlayers.apply_layers)
+    their hand-made mesh goes in first, see _mesh_swept."""
     for name, value in job.get("options", {}).items():  # the user's mesh settings
         gmsh.option.setNumber(name, value)
     gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
     gmsh.option.setNumber("Mesh.Optimize", 1)
-    if job.get("swept_tags"):
+    if job.get("swept_tags") or job.get("layer_tags"):
         _mesh_swept(job, dim)
     else:
         mesh_with_fallback(dim)
@@ -1096,9 +1097,14 @@ def _mesh_swept(job, dim):
     """Mesh around the swept bodies (spike 7.1): gmsh meshes only the empty, visible entities, so the swept volumes
     and their faces, curves and points are hidden and get their mesh one dimension at a time (generate(n) meshes the
     lower dimensions again, wiping what was added there). Each swept volume is marked transfinite, which makes
-    Delaunay leave it empty; Delaunay (Algorithm3D 1) is the algorithm that puts pyramids on the quad faces."""
+    Delaunay leave it empty; Delaunay (Algorithm3D 1) is the algorithm that puts pyramids on the quad faces. A layered
+    volume (job["layer_hidden"]: it and its cut faces) is hidden without its curves and real faces, which gmsh meshes;
+    its add(3) fills it, or shows it again for gmsh to mesh."""
     if job.get("options", {}).get("Mesh.Algorithm3D", 1) != 1:
-        _note("Swept Body: the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces")
+        if job.get("swept_tags"):
+            _note("Swept Body: the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces")
+        else:
+            _note("Skin Layer: the 3D algorithm is set to Delaunay so the mesh can meet the prism layers")
     for name, value in (
         ("Mesh.Algorithm3D", 1),
         # the apex pushed out: the best transition quality in the spike; 0 when run meshes again (PyramidsFailed)
@@ -1108,16 +1114,19 @@ def _mesh_swept(job, dim):
         ("Mesh.Renumber", 0),  # the added nodes keep their tags; renumbered at the end
     ):
         gmsh.option.setNumber(name, value)
-    swept = [(3, t) for t in job["swept_tags"]]
+    swept = [(3, t) for t in job.get("swept_tags", [])]
+    hidden = job.get("layer_hidden", [])
     for _, t in swept:
         gmsh.model.mesh.setTransfiniteVolume(t)
     gmsh.model.setVisibility(swept, 0, recursive=True)
+    gmsh.model.setVisibility(hidden, 0)
     try:
         log = _swept_stages(job, dim)
         if dim == 3:
             _check_filled(swept, log, job.get("swept_group"))
     finally:
         gmsh.model.setVisibility(swept, 1, recursive=True)
+        gmsh.model.setVisibility(hidden, 1)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
         gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 0)
     gmsh.model.mesh.renumberNodes()

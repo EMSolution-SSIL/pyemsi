@@ -1154,12 +1154,12 @@ class StudyTest(unittest.TestCase):
             job = json.load(fh)
         self.assertEqual(job["skin"][0]["mat_ids"], [job["volumes"][0]["mat_id"]])
 
-    def test_skin_quads_only_in_2d(self):
+    def test_skin_quads_in_2d_and_3d(self):  # 3D: prism layers (Stage 5)
         a = self.box("A")
         item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
         item.QuadLayers = True
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
-            self.assertIs(json.load(fh)["skin"][0]["quads"], False)
+            self.assertIs(json.load(fh)["skin"][0]["quads"], True)
         f = self.face("F")
         study = self.make_2d_study(f)
         item = objects.make_skin_layer(study, [(f, "")], 2.69)

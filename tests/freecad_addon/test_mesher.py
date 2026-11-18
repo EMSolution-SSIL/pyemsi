@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import gmsh
 
@@ -2329,6 +2330,257 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(planes[0], planes[1])
         self.assertEqual(self.line_group(self.files()[1], 20)[0], 8)
         self.assertIn("DXYZ 0.08 0 0", r.stdout)
+
+
+def write_occ(path, make):
+    """Write the OCC solids that make(occ) adds to path."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        make(gmsh.model.occ)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_fillet_box(path, dx, dy, dz, r):
+    """A box dx x dy x dz about the origin with every edge filleted r."""
+
+    def make(occ):
+        box = occ.addBox(-dx / 2, -dy / 2, -dz / 2, dx, dy, dz)
+        occ.synchronize()
+        occ.fillet([box], sorted({abs(c) for _, c in gmsh.model.getEntities(1)}), [r])
+
+    write_occ(path, make)
+
+
+def write_slanted(path, make, c):
+    """The solid make(occ) (its dimtags) less the half space x + z >= c: cut by a plane at 45 degrees to X."""
+
+    def cut(occ):
+        body = make(occ)
+        big = occ.addBox(0, -100, -200, 200, 200, 400)  # x >= 0, turned to x + z >= 0 and moved to x + z >= c
+        occ.rotate([(3, big)], 0, 0, 0, 0, 1, 0, -math.pi / 4)
+        occ.translate([(3, big)], c, 0, 0)
+        occ.cut(body, [(3, big)])
+
+    write_occ(path, cut)
+
+
+def layer_skin(name="Skin", mat_ids=(1,), depth=1.0, per_depth=2.0, layer=2.0, quads=True):
+    """An entry of job["skin"] with prism layers (quads)."""
+    return dict(skin(name, mat_ids, depth, per_depth, layer), quads=quads)
+
+
+def faces_of(group, keep):
+    """The boundary faces of the 3D elements of a physical group of the open model with every node passing
+    keep(point): (quads, triangles), as sorted node tags."""
+    tags, coords = gmsh.model.mesh.getNodes()[:2]
+    at = {int(t): coords[3 * k : 3 * k + 3] for k, t in enumerate(tags)}
+    count = {}
+    for e in gmsh.model.getEntitiesForPhysicalGroup(3, group):
+        for typ, nodes in zip(*gmsh.model.mesh.getElements(3, e)[::2]):
+            n, faces = FACES_3D[int(typ)]
+            for k in range(0, len(nodes), n):
+                for f in faces:
+                    key = tuple(sorted(int(nodes[k + i]) for i in f))
+                    count[key] = count.get(key, 0) + 1
+    once = [f for f, c in count.items() if c == 1 and all(keep(at[t]) for t in f)]
+    return [f for f in once if len(f) == 4], [f for f in once if len(f) == 3]
+
+
+class LayerTest(unittest.TestCase):
+    """3D prism layers in ordinary Studies: a Skin Layer with "quads" in 3D (meshlayers.apply_layers). The helpers are
+    MesherTest's."""
+
+    setUp, tearDown, geo, run_job, open_msh, vol = (
+        MesherTest.setUp,
+        MesherTest.tearDown,
+        MesherTest.geo,
+        MesherTest.run_job,
+        MesherTest.open_msh,
+        MesherTest.vol,
+    )
+    element_counts, bar_nodes, air_min_sicn = MesherTest.element_counts, MesherTest.bar_nodes, MesherTest.air_min_sicn
+
+    BOX = (-20, -20, -20, 40, 40, 40)
+
+    def node_hash(self):
+        rows = sorted(tuple(round(float(x), 6) + 0.0 for x in p) for p in self.bar_nodes())
+        return hashlib.sha256(repr(rows).encode()).hexdigest()
+
+    def test_graded_skin_unchanged_by_stage5(self):
+        # SW-01's busbar 10 x 4 x 100 at size 4 as an ordinary body, Skin Layer 1 kHz in copper (LayerDepth 3, no
+        # quads), in its 30 mm Padding Box: its node coordinates as at 517d7f7, before Stage 5's mesher
+        write_box(self.geo("vol_1.brep"), -5, -2, 0, 10, 4, 100)
+        write_box(self.geo("air.brep"), -35, -32, -30, 70, 64, 160)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 4.0}
+        depth = 1000 * math.sqrt(2 / (2 * math.pi * 1000 * 4e-7 * math.pi * 5.8e7))
+        extra = {"skin": [skin(depth=depth, layer=3.0)]}
+        r = self.run_job([self.vol(1, "Busbar", "vol_1.brep", size=4.0)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(self.node_hash(), "62ae2a383b9e0c1cd5e6733a0f15b228fa3a68d0ea8937e9037e1e8f64842988")
+
+    def layered(self, make, name="Copper", size=2.0, box=BOX, air_size=4.0, skins=None, volumes=(), open_=True):
+        """The body make(occ) (MAT_ID 1) in the air box at air_size (MAT_ID 2), with skins (default: one Skin Layer
+        with prism layers on it, δ 1, 2 per depth, LayerDepth 2). Returns the run, the mesh open if open_; meshlayers
+        prints what it built (EMS_LAYER_DEBUG)."""
+        write_occ(self.geo("vol_1.brep"), make)
+        write_box(self.geo("air.brep"), *box)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": air_size}
+        extra = {"skin": list(skins or [layer_skin()])}
+        with mock.patch.dict(os.environ, {"EMS_LAYER_DEBUG": "1"}):
+            r = self.run_job([self.vol(1, name, "vol_1.brep", size=size), *volumes], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        if open_:
+            self.open_msh()
+        return r
+
+    def built(self, r):
+        """[(prisms, tets)] that meshlayers built, per volume, from its debug lines "LAYERS <volume> prisms <p> tets
+        <t>"."""
+        return [
+            tuple(int(x) for x in line.split()[3::2]) for line in r.stderr.splitlines() if line.startswith("LAYERS")
+        ]
+
+    def shared_triangles(self):
+        """The triangles that the prisms of MAT_ID 1 share with the tetrahedra of the air (MAT_ID 2)."""
+
+        def triangles(group, typ, faces):
+            n = FACES_3D[typ][0]
+            out = set()
+            for e in gmsh.model.getEntitiesForPhysicalGroup(3, group):
+                _, nodes = gmsh.model.mesh.getElementsByType(typ, e)
+                for k in range(0, len(nodes), n):
+                    out |= {tuple(sorted(int(nodes[k + i]) for i in f)) for f in faces}
+            return out
+
+        return triangles(1, 6, FACES_3D[6][1][:2]) & triangles(2, 4, FACES_3D[4][1])
+
+    def test_layered_sphere_in_air(self):
+        def sphere(occ):
+            occ.addSphere(0, 0, 0, 5)
+
+        self.layered(sphere, name="Sphere", skins=[layer_skin(quads=False)], open_=False)
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(os.path.join(self.dir, "pre_geom.msh"))
+            graded = self.air_min_sicn()  # 0.053: a sliver on the sphere, with or without layers
+        finally:
+            gmsh.finalize()
+        r = self.layered(sphere, name="Sphere")
+        counts = self.element_counts(1)
+        self.assertEqual(set(counts), {"Prism 6", "Tetrahedron 4"})
+        self.assertEqual(counts["Prism 6"], 3 * len(self.shared_triangles()))
+        self.assertEqual(self.built(r), [(counts["Prism 6"], counts["Tetrahedron 4"])])
+        self.assertEqual(inner_free_faces(self.BOX), [])
+        self.assertGreater(self.air_min_sicn(), 0.9 * graded)
+        self.assertIn("Prism layers    Sphere", r.stdout)
+
+    def test_layered_sets_delaunay(self):
+        write_occ(self.geo("vol_1.brep"), lambda occ: occ.addSphere(0, 0, 0, 3))
+        write_box(self.geo("air.brep"), *self.BOX)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 4.0}
+        extra = {"skin": [layer_skin()]}
+        options = {"Mesh.Algorithm3D": 10}
+        r = self.run_job([self.vol(1, "Ball", "vol_1.brep", size=2.0)], options=options, air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(
+            "NOTE: Skin Layer: the 3D algorithm is set to Delaunay so the mesh can meet the prism layers", r.stderr
+        )
+        self.assertIn("Prism layers    Ball", r.stdout)
+
+    def test_layered_disc_falls_back(self):
+        def disc(occ):
+            occ.addCylinder(0, 0, -1.5, 0, 0, 3, 6)
+
+        r = self.layered(disc, name="Disc", open_=False)
+        self.assertIn(
+            "Skin Layer Skin: MAT_ID 1 has a sharp edge on its surface; graded tetrahedra instead of prism layers",
+            r.stderr,
+        )
+        layered = group_cells(os.path.join(self.dir, "pre_geom.msh"), 1)
+        self.assertEqual({len(c) for c in layered}, {4})
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 4.0}
+        extra = {"skin": [layer_skin(quads=False)]}
+        r = self.run_job([self.vol(1, "Disc", "vol_1.brep", size=2.0)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(group_cells(os.path.join(self.dir, "pre_geom.msh"), 1), layered)
+
+    def test_layered_fold_falls_back(self):
+        # Task 1's thin strip: the fillets r 2.4 leave 0.2 mm flat strips, and a 2 δ layer folds there
+        write_fillet_box(self.geo("strip.brep"), 20, 8, 5, 2.4)
+        r = self.layered(lambda occ: occ.importShapes(self.geo("strip.brep")), name="Strip")
+        fold = "Skin Layer Skin: MAT_ID 1: the prism layers would fold (the layer is too deep for its curves); graded"
+        core = "Skin Layer Skin: MAT_ID 1: gmsh could not fill the core inside the prism layers ("
+        self.assertTrue(fold in r.stderr or core in r.stderr, r.stderr)
+        self.assertEqual(set(self.element_counts(1)), {"Tetrahedron 4"})
+        self.assertNotIn("Prism layers", r.stdout)
+
+    WIRE_BOX = (-5, -5, -5, 10, 10, 10)
+    WIRE_SKIN = {"depth": 0.3, "per_depth": 2.0, "layer": 2.0}
+
+    def test_layered_wire_through_box(self):
+        skins = [layer_skin(**self.WIRE_SKIN)]
+        self.layered(lambda occ: occ.addCylinder(-5, 0, 0, 10, 0, 0, 1), "Wire", 0.5, self.WIRE_BOX, 1.5, skins)
+        self.assertGreater(self.element_counts(1)["Prism 6"], 0)
+        self.assertEqual(inner_free_faces(self.WIRE_BOX), [])
+        for x in (-5, 5):
+            quads, tris = faces_of(1, lambda p: abs(p[0] - x) < 1e-9)
+            self.assertGreater(len(quads), 0, x)
+            self.assertGreater(len(tris), 0, x)
+
+    def test_layered_thin_wire_falls_back(self):
+        # a 2 δ layer deeper than the wire's radius: no folded prisms, the cut ends shown again and meshed by gmsh
+        skins = [layer_skin(depth=0.6, per_depth=2.0, layer=2.0)]
+        r = self.layered(lambda occ: occ.addCylinder(-5, 0, 0, 10, 0, 0, 1), "Wire", 0.5, self.WIRE_BOX, 1.5, skins)
+        self.assertIn("Skin Layer Skin: MAT_ID 1: the prism layers would fold", r.stderr)
+        self.assertEqual(set(self.element_counts(1)), {"Tetrahedron 4"})
+        self.assertEqual(inner_free_faces(self.WIRE_BOX), [])
+        self.assertNotIn("Prism layers", r.stdout)
+
+    def test_layered_wire_end_against_terminal(self):
+        # the wire's end at x = 3 against a copper block (a conductor with a graded skin of its own): a cut
+        box = (-5, -10, -10, 20, 20, 20)
+        write_box(self.geo("vol_3.brep"), 3, -2, -2, 4, 4, 4)
+        block = self.vol(3, "Terminal", "vol_3.brep", size=1.0)
+        skins = [layer_skin(**self.WIRE_SKIN), skin("Terminal", (3,), 1.0, 2.0, 2.0)]
+        self.layered(lambda occ: occ.addCylinder(-5, 0, 0, 8, 0, 0, 1), "Wire", 0.5, box, 2.0, skins, [block])
+        self.assertGreater(self.element_counts(1)["Prism 6"], 0)
+        self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4", "Pyramid 5"})
+        self.assertEqual(inner_free_faces(box), [])
+
+    def test_layered_two_solids_one_mat_id(self):
+        def spheres(occ):
+            occ.addSphere(-5, 0, 0, 3)
+            occ.addSphere(5, 0, 0, 3)
+
+        r = self.layered(spheres, name="Pair")
+        counts = self.element_counts(1)
+        self.assertEqual(set(counts), {"Prism 6", "Tetrahedron 4"})
+        self.assertEqual(counts["Prism 6"], 3 * len(self.shared_triangles()))
+        self.assertEqual(len(self.built(r)), 2)
+        self.assertEqual(r.stdout.count("Prism layers"), 1)
+
+    def test_layered_slanted_cut(self):
+        # the wire's end on the air box's face cut at 45 degrees: the lateral face meets it 45 degrees off square
+        box = (-5, -5, -5, 20, 10, 10)
+        write_slanted(self.geo("air.brep"), lambda occ: [(3, occ.addBox(*box))], 5)
+        write_slanted(self.geo("vol_1.brep"), lambda occ: [(3, occ.addCylinder(-5, 0, 0, 20, 0, 0, 1))], 5)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 1.5}
+        extra = {"skin": [layer_skin(**self.WIRE_SKIN)]}
+        r = self.run_job([self.vol(1, "Wire", "vol_1.brep", size=0.5)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(
+            "Skin Layer Skin: MAT_ID 1 is cut by a curved face or at a slant; graded tetrahedra instead of prism"
+            " layers",
+            r.stderr,
+        )
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Tetrahedron 4"})
 
 
 if __name__ == "__main__":

@@ -38,6 +38,7 @@ from meshcommon import (
 )
 import meshgroups
 import meshsweep
+import meshlayers
 
 
 def _import_one(path, *dims):
@@ -238,6 +239,7 @@ def build(job, folder):
         apply_periodic(job["periodic"], 3)
     if job.get("swept"):
         meshsweep.apply_swept(job, folder, body_vols)
+    meshlayers.apply_layers(job, body_vols, sizes, skin_faces)
     if not slides:
         return None
     base = os.path.basename
@@ -279,6 +281,9 @@ def run_job(job_path):
         print(f"Structured      {item['name']}")
     for item in job.get("swept", []):
         print(f"Swept           {item['name']}")
+    names = {item["mat_id"]: item["name"] for item in job["volumes"]}
+    for m in job.get("layered", []):
+        print(f"Prism layers    {names[m]}")
     swept = {item["mat_id"] for item in job.get("swept", [])}  # their Recombine is for the section
     for item in job["volumes"]:
         if item["mat_id"] in job.get("recombine", []) and item["mat_id"] not in swept:

@@ -304,7 +304,7 @@ def swept_names(study, found=None):
 
 def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
     """The job's "skin" list: one entry per Skin Layer with a whole-body reference in ids ({body or air Name:
-    [MAT_ID, ...]}, the map refine_entries takes), in tree order. Quad layers only in a 2D Study and when quads.
+    [MAT_ID, ...]}, the map refine_entries takes), in tree order. Quad layers only when quads.
     group: the Symmetric Group whose cell job this is; the faces of its cell objects toward the free side
     (validation.free_faces) are written to geometry/<prefix>skin_<item>_<body>_<n>.brep and listed in "faces" with
     the MAT_ID of their body."""
@@ -326,7 +326,7 @@ def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
                     "depth": item.SkinDepth.Value,
                     "per_depth": item.ElementsPerDepth,
                     "layer": item.LayerDepth,
-                    "quads": bool(item.QuadLayers and study.Dimension == "2D" and quads),
+                    "quads": bool(item.QuadLayers and quads),
                 }
             )
             if group is not None:
