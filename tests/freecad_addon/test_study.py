@@ -1389,6 +1389,45 @@ class StudyTest(unittest.TestCase):
             self.assertLess(abs((p - end.CenterOfMass).dot(normal)), 1e-4)
             self.assertLess((p - end.CenterOfMass).Length, 0.45 + 1e-4)
 
+    def test_standard_coil_with_leads_rebuilt(self):
+        # a Standard-mode round coil of 2 turns (its seam twists) with a straight lead 5 long piped on at each end
+        coil = helix_pipe(10, 20, 1.2, ("circle", 0.45), frenet=False)
+        start, end = sorted(
+            (f for f in coil.Faces if isinstance(f.Surface, Part.Plane)), key=lambda f: f.CenterOfMass.z
+        )
+        tangent = App.Vector(0, 1.2, 10 / (2 * math.pi)).normalize()
+        (shape,) = coil.fuse([start.extrude(tangent * -5), end.extrude(tangent * 5)]).Solids
+        sweep = sweeps.recognise(shape)
+        self.assertTrue(sweep.rebuild)
+        self.assertEqual([round(p.angle, 3) for p in sweep.pieces], [0, 720, 0])
+        bar, item = self.swept_job(shape)
+        k, lead = max(
+            ((k, f) for k, f in enumerate(bar.Shape.Faces, 1) if isinstance(f.Surface, Part.Plane)),
+            key=lambda kf: kf[1].CenterOfMass.z,
+        )
+        objects.make_excitation(self.study, "In", [(bar, f"Face{k}")])
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item.PathSize, item.SectionSize = 0.4, 0.2  # as the rebuilt strand
+        air = objects.make_air_region(self.study)
+        air.SizeMode = "Manual"
+        air.Center, air.Length, air.Width, air.Height = App.Vector(0, 0, 10), 8, 12, 40
+        self.doc.recompute()
+        self.assertEqual(len(self.read_job()["swept"][0]["solids"][0]["pieces"]), 3)
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        smat_id = self.read_job()["surfaces"][0]["smat_id"]
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        tags, xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, smat_id)
+        self.assertGreater(len(tags), 10)
+        for k in range(0, len(xyz), 3):  # on the lead's end face: its plane, within its circle
+            p = App.Vector(*xyz[k : k + 3])
+            self.assertLess(abs((p - lead.CenterOfMass).dot(tangent)), 1e-4)
+            self.assertLess((p - lead.CenterOfMass).Length, 0.45 + 1e-4)
+
     def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
         a, b = self.face("A"), self.face("B")
         b.Placement.Base = App.Vector(10, 0, 0)

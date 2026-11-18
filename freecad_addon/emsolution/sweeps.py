@@ -935,7 +935,14 @@ def _rebuilt(solid, sweep):
         face, parts = sweep.face, []
         for piece in sweep.pieces:
             parts.append(_piece_solid(face, piece))
-            face = _moved(face, piece)
+            moved = _moved(face, piece)
+            if piece.angle and piece.advance:
+                # the next piece starts from the pipe's own end face: the screw puts the vertices 2e-5 from the pipe's
+                # after 2 turns, and the fuse then split the joint's edges in two (a corner without a swept node)
+                ends = [f for f in parts[-1].Faces if isinstance(f.Surface, Part.Plane)]
+                c = moved.CenterOfMass
+                moved = min(ends, key=lambda f: f.CenterOfMass.distanceToPoint(c), default=moved)
+            face = moved
         out = parts[0] if len(parts) == 1 else parts[0].multiFuse(parts[1:])
     except (Part.OCCError, RuntimeError):
         return None
