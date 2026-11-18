@@ -19,6 +19,7 @@ from emsolution import geometry, jobwriter, objects, sweeps, validation
 
 from .materialdata import STEEL, record
 from .test_sweeps import helix_pipe, racetrack
+from .test_mesher import inner_free_faces
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -2572,6 +2573,52 @@ class StudyTest(unittest.TestCase):
             else:
                 kinds.append(f"r {round(face.Surface.Radius)}")
         self.assertEqual(sorted(kinds), ["r 19", "r 21", "z -2", "z 2"])
+
+    def test_swept_rebuilt_strand_cell_meshes(self):
+        """A Standard-mode strand (rebuilt: its seam twists) as the cell of 6 rotations by 60°: its faces toward the
+        free side come from the rebuild, and its copies mesh with the skin on them, conformal in the air."""
+        strand = self.shape_body("Strand", helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 60, "count": 6}
+        ring = objects.make_symmetric_group(self.study, [strand], rules=[rotate], name="Litz")
+        air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        for side in objects.SIDES:  # 3 mm of air all round: the strand's ends are no cuts of the domain
+            setattr(air, f"Pad{side}", 3)
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item = objects.make_swept_body(self.study, [(strand, "")])
+        item.PathSize, item.SectionSize = 0.4, 0.2
+        layer = objects.make_skin_layer(self.study, [(strand, "")], 0.2)
+        layer.LayerDepth = 2.0
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        path = jobwriter.write_job(self.study)
+        with open(path, encoding="utf-8") as fh:
+            (group,) = json.load(fh)["symmetric"]["groups"]
+        folder = jobwriter.scratch_folder(self.study)
+        (solid,) = Part.read(os.path.join(folder, group["job"]["volumes"][0]["file"])).Solids
+        (entry,) = group["job"]["swept"]
+        self.assertEqual(len(entry["free_faces"]), 3)  # its side and both ends
+        for rel in entry["free_faces"]:
+            (face,) = Part.read(os.path.join(folder, rel)).Faces
+            twin = min(solid.Faces, key=lambda f: f.CenterOfMass.distanceToPoint(face.CenterOfMass))
+            self.assertLess(twin.CenterOfMass.distanceToPoint(face.CenterOfMass), 1e-6)
+            self.assertAlmostEqual(twin.Area, face.Area, delta=1e-6 * face.Area)
+            for v in face.Vertexes:  # the rebuild's seam vertices, not the original's
+                self.assertLess(min(v.Point.distanceToPoint(w.Point) for w in solid.Vertexes), 1e-6)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        part = group["parts"][0]["mat_id"]
+        kinds = set()
+        for e in gmsh.model.getEntitiesForPhysicalGroup(3, part):
+            kinds |= {gmsh.model.mesh.getElementProperties(t)[0] for t in gmsh.model.mesh.getElements(3, e)[0]}
+        self.assertEqual(kinds, {"Hexahedron 8", "Prism 6"})  # the hexahedra: the skin on the free faces
+        xyz = gmsh.model.mesh.getNodes()[1].reshape(-1, 3)
+        lo, hi = xyz.min(axis=0), xyz.max(axis=0)
+        self.assertEqual(inner_free_faces([*lo, *(hi - lo)]), [])
 
     def test_swept_entry_unchanged_outside_groups(self):
         self.swept_job()

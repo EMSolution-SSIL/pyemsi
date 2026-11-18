@@ -598,12 +598,60 @@ def _volume_of(tags, swept, name):
     return tags[int(np.argmin(off))]
 
 
-def _graded_end(face, vol, skinned):
+def _graded_end(face, vol, skinned, real=None):
     """True when the end face is real surface (not a cut of the domain) that no body with a skin of its own (skinned:
     their volumes; a Skin Layer marks a conductor) shares: the air and an iron core are graded toward, a terminal with
-    a skin is not."""
+    a skin is not. real: the real faces of a swept cell (_real_faces), whose cell model has nothing beyond its faces
+    toward the free side; None: a face is real when a volume lies beyond it."""
     others = [v for v in gmsh.model.getAdjacencies(2, face)[0] if v != vol]
+    if real is not None:
+        return face in real and not any(v in skinned for v in others)
     return bool(others) and not any(v in skinned for v in others)
+
+
+def _face_shape(tag):
+    """(centre of mass + bounding box, area) of an OCC face: how _same_face tells faces apart."""
+    occ = gmsh.model.occ
+    return list(occ.getCenterOfMass(2, tag)) + list(occ.getBoundingBox(2, tag)), occ.getMass(2, tag)
+
+
+def _same_face(a, b, size):
+    """True when two _face_shape results are one face, within TOL x size (the body's size)."""
+    tol = TOL * size
+    return max(abs(x - y) for x, y in zip(a[0], b[0])) <= tol and abs(a[1] - b[1]) <= tol * size
+
+
+def _real_faces(entry, folder, faces, neighbours, size):
+    """The real faces of a swept cell (an entry with "free_faces", the files of its faces toward the free side), of
+    faces, its volume's: those that are one of the files (_same_face, size: the volume's size) or lie on one (the cell
+    model split it), and those it shares with another cell object (neighbours: their volumes; not the images of
+    copies), as an ordinary Study's real_boundary counts a face against another body. Its seams with its copies and the
+    cuts of the domain are not real."""
+    tol = TOL * size
+    shapes = {f: _face_shape(f) for f in faces}
+    points = {f: gmsh.model.getClosestPoint(2, f, shapes[f][0][:3])[0] for f in faces}
+    real = {f for f in faces if set(gmsh.model.getAdjacencies(2, f)[0]) & set(neighbours)}
+    main = gmsh.model.getCurrent()
+    gmsh.model.add(f"swept free faces {entry['name']}")
+    try:
+        files = [t for rel in entry["free_faces"] for _, t in import_brep(os.path.join(folder, rel), 2)]
+        gmsh.model.occ.synchronize()
+        for t in files:
+            shape = _face_shape(t)
+            box = np.reshape(shape[0][3:], (2, 3))
+            for f in faces:
+                if f in real:
+                    continue
+                p = np.asarray(points[f], float)
+                on = ((p >= box[0] - tol) & (p <= box[1] + tol)).all() and (
+                    np.linalg.norm(np.asarray(gmsh.model.getClosestPoint(2, t, list(p))[0]) - p) < tol
+                )
+                if _same_face(shapes[f], shape, size) or (on and shapes[f][1] <= shape[1] + tol * size):
+                    real.add(f)
+    finally:
+        gmsh.model.remove()
+        gmsh.model.setCurrent(main)
+    return real
 
 
 def _cuts(piece, rc, length, start, section, points, tol):
@@ -693,10 +741,10 @@ def _flat(V, cells):
     return n
 
 
-def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
+def _transforms(entry, section, chain, closed, faces, vol, skinned, tol, real=None):
     """The stations along the solid's pieces (chain, from _chain), as _path makes them: graded toward a real end face
-    when there is a skin, with a station on each turned piece at each of the volume's corners on it. A closed ring has
-    no ends and no last station (it is the first)."""
+    (_graded_end, real: the faces of _real_faces or None) when there is a skin, with a station on each turned piece at
+    each of the volume's corners on it. A closed ring has no ends and no last station (it is the first)."""
     skin, size = entry["skin"], float(entry["path_size"])
     graded = (False, False)
     if not closed:
@@ -705,7 +753,7 @@ def _transforms(entry, section, chain, closed, faces, vol, skinned, tol):
         piece, rc, length, start = chain[-1]
         far = _moved([centre], stations(piece, [length], rc)[0] @ start)[0]
         ends = _nearest(2, faces, [centre, far], tol)[0]
-        graded = tuple(_graded_end(f, vol, skinned) for f in ends)
+        graded = tuple(_graded_end(f, vol, skinned, real) for f in ends)
     corners = [gmsh.model.getValue(0, t, []) for _, t in gmsh.model.getBoundary([(3, vol)], False, False, True)]
     cuts = [_cuts(p, rc, n, start, section, corners, tol) if rc else [] for p, rc, n, start in chain]
     out = _path(chain, size, skin, graded, cuts)
@@ -743,9 +791,11 @@ def apply_swept(job, folder, body_vols):
     """The swept mesh of every solid of job["swept"], at the end of build: each solid's volume (body_vols: {MAT_ID:
     final tags}), its section meshed with the skin on the profile curves whose side faces are real surface, swept along
     its pieces and classified on the volume's entities. job["swept_tags"] gets the volumes and job["swept_add"] one
-    add(dim) per volume, for meshcommon.generate. Returns the volumes."""
+    add(dim) per volume, for meshcommon.generate. Returns the volumes. The real surface of a cell of a Symmetric Group
+    (an entry with "free_faces") is that of _real_faces; the volumes marked "image" are moved copies of cells."""
     skins = {m for e in job.get("skin", []) for m in e["mat_ids"]} | {e["mat_id"] for e in job["swept"] if e["skin"]}
     skinned = {t for m in skins for t in body_vols.get(m, [])}
+    cell_vols = {t for v in job.get("volumes", []) if not v.get("image") for t in body_vols.get(v["mat_id"], [])}
     tags, adds = [], []
     options = job.get("options", {})  # applied only in generate, after this: the sizes and the section get them here
     for entry in job.get("swept", []):
@@ -760,7 +810,12 @@ def apply_swept(job, folder, body_vols):
             left.remove(vol)
             faces = [abs(t) for _, t in gmsh.model.getBoundary([(3, vol)], oriented=False)]
             tol = TOL * float(np.linalg.norm(swept[1] - swept[0]))
-            real = set(real_boundary(3, [vol]))
+            free = "free_faces" in entry
+            if free:
+                size = float(np.linalg.norm(np.diff(np.reshape(gmsh.model.occ.getBoundingBox(3, vol), (2, 3)), axis=0)))
+                real = _real_faces(entry, folder, faces, cell_vols - {vol}, size)
+            else:
+                real = set(real_boundary(3, [vol]))
             points = _crossings(vol, centre, normal, tol)
             if len(points):  # split the profile where the body's edges cross it: the mids of the split curves
                 _, mids, _, _, points = _profile(path, entry["name"], points, tol)
@@ -778,7 +833,7 @@ def apply_swept(job, folder, body_vols):
                     " another; it gets the skin everywhere"
                 )
             section = section_mesh(entry, k, [int(i) for i in np.flatnonzero(is_real)], folder, options, points)
-            transforms = _transforms(entry, section, chain, closed, faces, vol, skinned, tol)
+            transforms = _transforms(entry, section, chain, closed, faces, vol, skinned, tol, real if free else None)
             V, cells = sweep(section, transforms, closed)
             flat = _flat(V, cells)
             if flat:

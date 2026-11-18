@@ -47,16 +47,8 @@ def _import_one(path, *dims):
     return tags[0]
 
 
-def _face_shape(tag):
-    """(centre of mass + bounding box, area) of an OCC face: how _whole_faces and _body_face tell faces apart."""
-    occ = gmsh.model.occ
-    return list(occ.getCenterOfMass(2, tag)) + list(occ.getBoundingBox(2, tag)), occ.getMass(2, tag)
-
-
-def _same_face(a, b, size):
-    """True when two _face_shape results are one face, within meshsweep.TOL x size (the body's size)."""
-    tol = meshsweep.TOL * size
-    return max(abs(x - y) for x, y in zip(a[0], b[0])) <= tol and abs(a[1] - b[1]) <= tol * size
+_face_shape = meshsweep._face_shape  # how _whole_faces and _body_face tell faces apart
+_same_face = meshsweep._same_face
 
 
 def _size(dim, tag):

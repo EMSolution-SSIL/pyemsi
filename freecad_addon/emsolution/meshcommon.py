@@ -1135,11 +1135,15 @@ class PyramidsFailed(Exception):
 
 
 def _swept_stages(job, dim):
-    """Add the swept mesh one dimension at a time and mesh the rest after each. Returns gmsh's log of the 3D mesh."""
+    """Add the swept mesh one dimension at a time and mesh the rest after each. Returns gmsh's log of the 3D mesh.
+    job["swept_periodic"], when given, is called once the swept points and curves are in, before gmsh meshes the
+    curves: gmsh finds no periodic counterpart for nodes added after a setPeriodic (meshgroups.mesh_cell)."""
     log = []
     for d in range(dim + 1):
         for add in job["swept_add"]:
             add(d)
+        if d == 1 and job.get("swept_periodic"):
+            job["swept_periodic"]()
         if d == 3:
             try:
                 log = mesh_with_fallback(3)

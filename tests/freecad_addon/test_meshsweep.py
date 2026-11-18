@@ -536,3 +536,56 @@ def test_failed_air_mesh_is_tried_once_more(tmp_path, monkeypatch, capsys, failu
             meshcommon.run(path, mesher.build, 3)
         assert not os.path.isfile(tmp_path / "pre_geom.msh")
     assert len(calls) == 2
+
+
+def box_group_job(folder):
+    """A job of one Symmetric Group: the box of box_job as its cell, one copy, for meshgroups.run."""
+    path = box_job(folder)
+    with open(path, encoding="utf-8") as fh:
+        cell = json.load(fh)
+    group = {
+        "name": "Boxes",
+        "side": "fixed",
+        "job": {"volumes": cell["volumes"], "surfaces": [], "sizes": []},
+        "cells": [1],
+        "transforms": [[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]],
+        "parts": [{"mat_id": 7, "name": "Box"}],
+        "rows": [{"cell": 1, "file": None, "parts": [0]}],
+    }
+    job = {"model_name": "Model", "mesh_file": cell["mesh_file"], "options": {}, "symmetric": {"groups": [group]}}
+    (folder / "job.json").write_text(json.dumps(job), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    "failures, meshed",
+    [(("pyramids",), True), (("air",), True), (("pyramids", "air"), True), (("air", "air"), False)],
+)
+def test_symmetric_job_is_meshed_again_like_an_ordinary_one(tmp_path, monkeypatch, capsys, failures, meshed):
+    # the bounded retry of meshcommon.run (once without the pushed-out pyramids, once more after a failed air mesh)
+    import mesher
+    import meshgroups
+
+    real, calls = meshgroups.mesh, []
+
+    def mesh(job, folder, build, dim):
+        calls.append(job.get("optimize_pyramids"))
+        if len(calls) <= len(failures):
+            if failures[len(calls) - 1] == "pyramids":
+                raise meshcommon.PyramidsFailed("PLC Error")
+            raise meshcommon.AirFailed("gmsh could not mesh Air around the swept bodies (overlapping facets)")
+        return real(job, folder, build, dim)
+
+    monkeypatch.setattr(meshgroups, "mesh", mesh)
+    path = box_group_job(tmp_path)
+    if meshed:
+        meshgroups.run(path, mesher.build, 3)
+        assert os.path.isfile(tmp_path / "pre_geom.msh")
+        assert len(calls) == len(failures) + 1
+    else:
+        with pytest.raises(meshcommon.AirFailed, match="overlapping facets"):
+            meshgroups.run(path, mesher.build, 3)
+        assert len(calls) == 2
+    if "pyramids" in failures:
+        assert calls[1:] == [0] * (len(calls) - 1)  # meshed without the pushed-out pyramids from then on
+        assert "could not optimise the pyramids" in capsys.readouterr().err
