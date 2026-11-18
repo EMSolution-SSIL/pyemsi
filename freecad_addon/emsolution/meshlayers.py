@@ -534,20 +534,23 @@ def _write(vol, tags, X, layered):
 
 def _layer_add(job, entry, m, vol, faces, rim_face, hidden, size_out):
     """add(d) for meshcommon._swept_stages: at d == 3, the prism layers and the core of vol on the mesh gmsh made on
-    its real faces (faces: _layer_faces). On LayerFailed nothing is written, hidden is shown again so gmsh meshes the
-    body, and a note says why."""
+    its real faces (faces: _layer_faces), a seam's cap (job["layer_seams"], a cell's) moved from its master's. On
+    LayerFailed nothing is written, hidden is shown again so gmsh meshes the body, each seam's slave as a copy of its
+    master (their rims are copies already, meshgroups._pair_rims), and a note says why."""
     real, cuts, signs = faces
 
     def add(d):
         if d != 3 or gmsh.model.getVisibility(3, vol):  # shown: generate did not hide it, so gmsh meshes it
             return
+        seams = [s for s in job["layer_seams"] if s[0] in cuts]
         try:
             tags, X, tris = _surface(real, signs)
             rims = _rims(cuts, rim_face, signs, tags, X)
-            seams = [s for s in job["layer_seams"] if s[0] in rims]
             hs = heights(entry["depth"], entry["per_depth"], entry["layer"])
             layered = build(X, tris, rims, hs, None, size_out, seams)
         except LayerFailed as failed:
+            for slave, master, matrix in seams:
+                gmsh.model.mesh.setPeriodic(2, [slave], [master], matrix)
             gmsh.model.setVisibility(hidden, 1)
             if failed.kind == "fold":
                 why = "the prism layers would fold (the layer is too deep for its curves)"

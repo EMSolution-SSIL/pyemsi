@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 import gmsh
+import numpy as np
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 
@@ -274,6 +275,21 @@ def write_revolved_rect(path, profile_path, x0, x1, z0, z1, angle):
         gmsh.write(profile_path)
         out = occ.revolve([(2, face)], 0, 0, 0, 0, 0, 1, math.radians(angle))
         occ.remove([(2, face)] + [dt for dt in out if dt[0] == 2], recursive=False)
+        occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_round_ring(path, big, small, angle):
+    """The disc of radius small about (big, 0, 0) in the plane y = 0 swept turning about Z by angle (degrees)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        disc = occ.addDisk(big, 0, 0, small, small, zAxis=[0, 1, 0])
+        out = occ.revolve([(2, disc)], 0, 0, 0, 0, 0, 1, math.radians(angle))
+        occ.remove([(2, disc)] + [dt for dt in out if dt[0] == 2], recursive=False)
         occ.synchronize()
         gmsh.write(path)
     finally:
@@ -1785,18 +1801,34 @@ class MesherTest(unittest.TestCase):
     # job's air (MAT_ID 30); each copy c takes the part MAT_ID 5 + c when parts are per copy
 
     def group_job(
-        self, cell, transforms, free_box=None, air_size=4.0, per_copy=False, excitations=None, cells=(), free=None
+        self,
+        cell,
+        transforms,
+        free_box=None,
+        air_size=4.0,
+        per_copy=False,
+        excitations=None,
+        cells=(),
+        free=None,
+        skins=None,
+        env=None,
     ):
         """Run mesher.py on a job of one group "Ring" of the swept cell job entry cell (a volumes entry with its
-        "swept"), with more cell objects cells (volumes entries), and free air in free_box; free: more keys of the
-        free job (its "volumes", "skin")."""
+        "swept", or without it a plain cell), with more cell objects cells (volumes entries), the cell job's Skin
+        Layers skins, and free air in free_box; free: more keys of the free job (its "volumes", "skin"); env: more
+        environment variables of the mesher."""
         n = len(transforms)
         parts = [{"mat_id": 5 + c, "name": f"Copy{c}"} for c in range(n if per_copy else 1)]
         volumes = [cell["volume"], *cells]
+        cell_job = {"volumes": volumes, "surfaces": [], "sizes": []}
+        if "swept" in cell:
+            cell_job["swept"] = [cell["swept"]]
+        if skins:
+            cell_job["skin"] = skins
         group = {
             "name": "Ring",
             "side": "fixed",
-            "job": {"volumes": volumes, "surfaces": [], "sizes": [], "swept": [cell["swept"]]},
+            "job": cell_job,
             "cells": [v["mat_id"] for v in volumes],
             "transforms": transforms,
             "parts": parts,
@@ -1816,7 +1848,10 @@ class MesherTest(unittest.TestCase):
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
-        return subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        environ = {**os.environ, **(env or {})}
+        return subprocess.run(
+            [sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace", env=environ
+        )
 
     def min_sicn(self, *groups_):
         """The lowest min SICN of the 3D elements of the physical groups (all of them when none is given)."""
@@ -2046,6 +2081,116 @@ class MesherTest(unittest.TestCase):
             " meshing that is not handled yet, a limit of the tool, not of the drawing",
             r.stderr,
         )
+
+    # ---- prism layers (a Skin Layer with QuadLayers) on the cells of a Symmetric Group (meshlayers, meshgroups)
+
+    def cell_skin(self, prefix, keep, quads, depth=0.66, per_depth=2.0, layer=2.0, name="Skin"):
+        """A Skin Layer entry of the cell job on MAT_ID 1 with its faces toward the free side: the faces of cell_1.brep
+        whose centres keep accepts, written as geometry/<prefix>_<n>.brep."""
+        files = write_faces(self.geo("cell_1.brep"), os.path.join(self.dir, "geometry"), prefix, keep)
+        entry = layer_skin(name, (1,), depth, per_depth, layer, quads)
+        entry["faces"] = [{"mat_id": 1, "file": "geometry/" + f} for f in files]
+        return entry
+
+    def copies_hash(self):
+        """The sha256 of the sorted node coordinates of the copies (MAT_ID 5) in the mesh written."""
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(self.msh())
+            p = gmsh.model.mesh.getNodesForPhysicalGroup(3, 5)[1].reshape(-1, 3)
+        finally:
+            gmsh.finalize()
+        rows = sorted(tuple(round(float(x), 6) + 0.0 for x in q) for q in p)
+        return hashlib.sha256(repr(rows).encode()).hexdigest()
+
+    def test_ordinary_cells_unchanged_by_stage5(self):
+        # SW-S2's swept sector ring, and the same sector as a tetrahedral cell with a graded Skin Layer (QuadLayers
+        # off): the copies' node coordinates as at f4a8ccb, before prism layers on cells
+        r = self.group_job(self.sector_cell(), [turn_z(45 * k) for k in range(8)], self.SECTOR_BOX)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        swept_hash = self.copies_hash()
+
+        def free(c):
+            return abs(c[1]) > 1e-6 and abs(c[0] - c[1]) > 1e-6
+
+        entry = self.cell_skin("skin_free_1", free, quads=False)
+        cell = {"volume": self.vol(1, "Sector", "cell_1.brep", size=1.0)}
+        r = self.group_job(cell, [turn_z(45 * k) for k in range(8)], self.SECTOR_BOX, skins=[entry])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        graded_hash = self.copies_hash()
+        self.assertEqual(swept_hash, "9974e46b28685fb4dc3eea4f96cb9d435014cf0484f87095335f366acbcae9f3")
+        self.assertEqual(graded_hash, "8a2406daefda1f7560b30e2265d562e85de9084881b26e4b23e9527a44027234")
+
+    RING_BOX = (-29, -29, -9, 58, 58, 18)  # 6 mm of air round the round ring R 20, r 3
+
+    def ring_cell(self, angle=90, **skin_):
+        """The round ring R 20, r 3 about Z from 0 to angle degrees (MAT_ID 1, size 1) and its Skin Layer at 10 kHz
+        in copper with prism layers (skin_: other values), its face toward the free side the round one, not the cuts."""
+        write_round_ring(self.geo("cell_1.brep"), 20, 3, angle)
+        entry = self.cell_skin("skin_free_1", lambda c: math.hypot(c[0], c[1]) < 19.9, quads=True, **skin_)
+        return {"volume": self.vol(1, "Ring", "cell_1.brep", size=1.0)}, entry
+
+    def run_ring(self, cell, entry, transforms, cells=()):
+        r = self.group_job(
+            cell,
+            transforms,
+            self.RING_BOX,
+            per_copy=True,
+            cells=cells,
+            skins=[entry],
+            env={"EMS_LAYER_DEBUG": "1"},
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(inner_free_faces(self.RING_BOX), [])
+        return r
+
+    def test_layered_ring_cells(self):
+        cell, entry = self.ring_cell()
+        r = self.run_ring(cell, entry, [turn_z(90 * k) for k in range(4)])
+        self.assertNotIn("instead of prism layers", r.stderr)
+        self.assertNotIn("graded tetrahedra instead", r.stderr)
+        counts = [self.element_counts(5 + c) for c in range(4)]
+        self.assertEqual(set(counts[0]), {"Prism 6", "Tetrahedron 4"})
+        self.assertEqual(counts, [counts[0]] * 4)  # the prisms (and the core) the same count in each copy
+        built = [line.split() for line in r.stderr.splitlines() if line.startswith("LAYERS")]
+        self.assertEqual([int(b[3]) for b in built], [counts[0]["Prism 6"]])  # the cell's, copied
+        for k in range(4):  # the seam plane at 90 k degrees, between copy k and copy k - 1
+            c, s = math.cos(math.radians(90 * k)), math.sin(math.radians(90 * k))
+            on = []
+            for copy in (k, (k - 1) % 4):
+                tags, xyz = gmsh.model.mesh.getNodesForPhysicalGroup(3, 5 + copy)
+                p = xyz.reshape(-1, 3)
+                at = (np.abs(p[:, 1] * c - p[:, 0] * s) < 1e-6) & (p[:, 0] * c + p[:, 1] * s > 0)
+                on.append(set(tags[at].astype(int).tolist()))
+            self.assertGreater(len(on[0]), 0, k)
+            self.assertEqual(on[0], on[1], k)  # every node on the seam is shared by both copies
+
+    def test_layered_ring_cell_fold_falls_back(self):
+        # a layer 6 δ deep, deeper than the ring's radius 3: no folded prisms, the cuts meshed by gmsh as copies
+        cell, entry = self.ring_cell(layer=6.0)
+        r = self.run_ring(cell, entry, [turn_z(90 * k) for k in range(4)])
+        self.assertIn("Skin Layer Skin: MAT_ID 1: the prism layers would fold", r.stderr)
+        for c in range(4):
+            self.assertEqual(set(self.element_counts(5 + c)), {"Tetrahedron 4"})
+
+    def test_layered_cell_against_other_cell_falls_back(self):
+        # the ring 0..60° (the layered cell) and a tetrahedral tooth of the same section 180..240°, 3 rotations by
+        # 120°: the ring's cuts at 0° and 60° lie against copies of the tooth, never against the tooth itself
+        cell, entry = self.ring_cell(angle=60)
+        write_round_ring(self.geo("cell_2.brep"), 20, 3, 60)
+        write_turned(self.geo("cell_2.brep"), self.geo("cell_2.brep"), 180)
+        tooth = self.vol(2, "Tooth", "cell_2.brep", size=1.0)
+        r = self.run_ring(cell, entry, [turn_z(120 * k) for k in range(3)], cells=[tooth])
+        self.assertIn(
+            "NOTE: Skin Layer Skin: MAT_ID 1 meets a copy of another cell on a cut; graded tetrahedra instead of prism"
+            " layers",
+            r.stderr,
+        )
+        self.assertEqual(r.stderr.count("meets a copy of another cell"), 1)
+        for c in range(3):
+            self.assertEqual(set(self.element_counts(5 + c)), {"Tetrahedron 4"})
 
     # ---- sliding motion: the fixed side goes to pre_geom.msh, the moving side to rotor_mesh.msh
 

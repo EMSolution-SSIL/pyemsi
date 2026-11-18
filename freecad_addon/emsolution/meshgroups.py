@@ -569,13 +569,16 @@ def _build_cell(group, contacts, folder, build, dim):
     )
 
 
+LAYER_KEYS = ("layer_tags", "layer_hidden", "layered", "layer_seams")  # meshlayers.apply_layers's, for generate
+
+
 def _with_swept(group, built):
-    """group, its cell job given the hand-made mesh of its swept cells that build(built) made (meshsweep.apply_swept's
-    swept_tags and swept_add): build works on a copy of the job, and generate needs them. A swept entry left without
-    its mesh would be meshed in tetrahedra, silently: that is refused."""
+    """group, its cell job given the hand-made mesh of its swept cells and the prism layers of its cells that
+    build(built) made (meshsweep.apply_swept's swept_tags and swept_add, meshlayers.apply_layers's LAYER_KEYS): build
+    works on a copy of the job, and generate needs them. They are the same objects: the add closures read the lists
+    of the built job, which _layer_seams fills. A swept entry left without its mesh would be meshed in tetrahedra,
+    silently: that is refused (a layered cell may fall back, with a note)."""
     swept = group["job"].get("swept", [])
-    if not swept:
-        return group
     made, count = len(built.get("swept_tags", [])), 0
     for entry in swept:
         count += len(entry["solids"])
@@ -584,26 +587,103 @@ def _with_swept(group, built):
                 f"group {group['name']}: the swept cell {entry['name']} got no swept mesh; this is a fault of the tool,"
                 " not of the drawing"
             )
-    return dict(group, job=dict(group["job"], swept_tags=built["swept_tags"], swept_add=built["swept_add"]))
+    carried = {"swept_tags": built["swept_tags"], "swept_add": built["swept_add"]} if swept else {}
+    if built.get("layer_tags"):
+        carried.update({k: built[k] for k in LAYER_KEYS}, swept_add=built["swept_add"])
+    return dict(group, job=dict(group["job"], **carried)) if carried else group
 
 
 def _swept_faces(group, dim):
-    """The faces of the volumes of the group's swept cells (after _with_swept), or none."""
-    tags = group["job"].get("swept_tags", [])
+    """The faces of the volumes of the group's swept cells and of its layered cells (after _with_swept and
+    _layer_seams), or none: their mesh is made by hand, so the periodic pairing leaves them out."""
+    tags = group["job"].get("swept_tags", []) + group["job"].get("layer_tags", [])
     return set(_boundary(dim, [(dim, t) for t in tags])) if tags else set()
 
 
+def _layer_entry(job, m):
+    """The name of the first Skin Layer of the cell job with prism layers on MAT_ID m (the one that makes them)."""
+    return next(e["name"] for e in job.get("skin", []) if e.get("quads") and m in e["mat_ids"])
+
+
+def _layer_seams(group, contacts, dim):
+    """3D, after build and _with_swept: the cuts of the layered cells (their faces that meshlayers hides) that the
+    copies meet. A cut c that a transform between copies that touch maps onto another cut d of the same volume, corners
+    and all (meshsym._same), is a seam: (slave, master, transform) goes into job["layer_seams"], the master the lower
+    tag, which the add closures read; a cut it maps onto itself (on a mirror) or onto nothing (the model boundary)
+    needs nothing. A cut that meets a copy of anything else (another cut or face, an image or an image's face) cannot
+    share the hand-made mesh: that volume gets no layers (note N5); it is taken out of layer_tags and layer_hidden,
+    so generate leaves it shown and gmsh meshes it in graded tetrahedra."""
+    job = group["job"]
+    if not job.get("layer_tags"):
+        return
+    tol = _model_tol()
+    seams = meshsym._side_seams(group, dim)
+    transforms = _seam_transforms(contacts)
+    images = group.get("images", [])
+    image_vols = {int(e) for x in images for e in gmsh.model.getEntitiesForPhysicalGroup(dim, x["id"])}
+    copied = {partner for _, _, partner, on_real in _image_faces(group, images, dim) if on_real}
+    hidden = {t for d, t in job["layer_hidden"] if d == dim - 1}
+    noted = set()
+    for vol in list(job["layer_tags"]):
+        cuts = [f for f in _boundary(dim, [(dim, vol)]) if f in hidden]
+        pairs, bad = {}, False
+        for c in cuts:
+            beyond = {int(v) for v in gmsh.model.getAdjacencies(dim - 1, c)[0]}
+            bad = bad or bool(beyond & image_vols) or c in copied
+            for m in transforms:
+                for d in seams:
+                    if d == c or not meshsym._twin(c, d, m, tol, dim - 1):
+                        continue
+                    if d not in cuts or not meshsym._same(c, d, m, tol, dim - 1):
+                        bad = True
+                    elif c < d:
+                        pairs.setdefault(d, (d, c, m))
+        if set(pairs) & {master for _, master, _ in pairs.values()}:
+            bad = True  # a cut both slave and master: build moves a cap only from a cut that is no copy
+        if not bad:
+            job["layer_seams"].extend(pairs.values())
+            continue
+        m = next(g for g in gmsh.model.getPhysicalGroupsForEntity(dim, vol) if g in group["cells"])
+        if m not in noted:
+            noted.add(m)
+            _note(
+                f"Skin Layer {_layer_entry(job, m)}: MAT_ID {m} meets a copy of another cell on a cut; graded"
+                " tetrahedra instead of prism layers"
+            )
+        job["layer_tags"].remove(vol)
+        drop = {(dim, vol)} | {(dim - 1, c) for c in cuts}
+        job["layer_hidden"][:] = [h for h in job["layer_hidden"] if h not in drop]
+
+
+def _pair_rims(group, dim):
+    """The rims of each seam in job["layer_seams"] get the same nodes: each curve of the slave is meshed as a copy of
+    the curve of the master that the transform moves onto it (meshsym._twin), so the hand-made caps match."""
+    tol = _model_tol()
+    for slave, master, m in group["job"].get("layer_seams", []):
+        rims = [abs(t) for _, t in gmsh.model.getBoundary([(dim - 1, master)], combined=False, oriented=False)]
+        for _, t in gmsh.model.getBoundary([(dim - 1, slave)], combined=False, oriented=False):
+            c = abs(t)
+            if int(gmsh.model.mesh.getPeriodic(dim - 2, [c])[0]) != c:
+                continue  # a copy already (another seam's rim)
+            mc = next((r for r in rims if r != c and meshsym._twin(r, c, m, tol, dim - 2)), None)
+            if mc is not None:
+                meshsym.set_periodic(group["name"], dim - 2, c, mc, m)
+
+
 def _check_swept_seams(group, contacts, dim):
-    """After generate: a swept cell's faces are left out of the periodic pairing (gmsh finds no counterpart for its
-    hand-made nodes), so check what the pairing would have made sure of. For each face c of a swept volume: wherever a
-    transform between copies that touch maps it onto a face d of the cells (d may be c, on a mirror), the nodes of c
-    moved by it must be the nodes of d, within meshsweep.TOL x the volume's size; and so for an image's face on a real
-    cell and its swept partner (_image_faces). The hand-made meshes match when the transform moves one end section
-    onto the other or a side onto itself; otherwise the seam is refused."""
-    tags = group["job"].get("swept_tags", [])
+    """After generate: a swept or layered cell's faces are left out of the periodic pairing (gmsh finds no
+    counterpart for its hand-made nodes), so check what the pairing would have made sure of. For each face c of a
+    swept or layered volume: wherever a transform between copies that touch maps it onto a face d of the cells (d may
+    be c, on a mirror), the nodes of c moved by it must be the nodes of d, within meshsweep.TOL x the volume's size;
+    and so for an image's face on a real cell and its partner (_image_faces). The hand-made meshes match when the
+    transform moves one end section onto the other or a side onto itself, or a seam's cap onto its slave
+    (_layer_seams); otherwise the seam is refused."""
+    swept_tags = group["job"].get("swept_tags", [])
+    tags = swept_tags + group["job"].get("layer_tags", [])
     if not tags:
         return
-    names = {e["mat_id"]: e["name"] for e in group["job"]["swept"]}
+    names = {v["mat_id"]: v["name"] for v in group["job"]["volumes"]}
+    names.update({e["mat_id"]: e["name"] for e in group["job"].get("swept", [])})
     model_tol = _model_tol()
     seams = meshsym._side_seams(group, dim)
     transforms = _seam_transforms(contacts)
@@ -631,8 +711,9 @@ def _check_swept_seams(group, contacts, dim):
         for c, d, m in pairs:
             if not matches(c, d, m, tol):
                 where = _text(np.reshape(gmsh.model.getBoundingBox(dim - 1, c), (2, 3)).mean(axis=0), dim)
+                kind = "swept" if vol in swept_tags else "layered"
                 raise JobError(
-                    f"group {group['name']}: the swept cell {names.get(mat_id, '?')} meets a copy on a face whose mesh"
+                    f"group {group['name']}: the {kind} cell {names.get(mat_id, '?')} meets a copy on a face whose mesh"
                     " the copy cannot share; meshing that is not handled yet, a limit of the tool, not of the drawing"
                     f" near ({where})"
                 )
@@ -695,11 +776,13 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
             build(built, folder)
             group = _with_swept(group, built)
         reached = _slide_cell(group, slide, dim) if slide else False
+        _layer_seams(group, contacts, dim)  # before _swept_faces: a cell that gets no layers is paired as any
         swept = _swept_faces(group, dim)
 
-        def pair():  # with swept cells: only once their points and curves are in (_generate_cell's late)
+        def pair():  # with swept or layered cells: only once their points and curves are in (_generate_cell's late)
             meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim, swept)
             pair_images(group, group.get("images", []), dim, swept)
+            _pair_rims(group, dim)
             _refine_partners(dim)  # after pair_images: the seams it makes periodic too
 
         if not swept:
