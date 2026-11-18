@@ -1888,6 +1888,67 @@ class MesherTest(unittest.TestCase):
             hits.add(k)
         self.assertEqual(hits, set(range(6)))
 
+    SIDE_BOX = (0, -3, -3, 3, 7, 10)  # the row of 3 bars, its ends x = 0 and x = 3 on the box: cuts of the domain
+
+    def side_seam_bar(self, skin=None):
+        """The bar x 0..1, y 0..1 swept along z 0..4 (MAT_ID 1), copied by x + 1 and x + 2: its side x = 1 meets the
+        copy's side x = 0. Its faces toward the free side: y = 0, y = 1 and both ends."""
+        write_box(self.geo("cell_1.brep"), 0, 0, 0, 1, 1, 4)
+        write_rect(self.geo("sweep_1_1.brep"), 0, 0, 0, 1, 1)
+
+        def free(c):
+            return abs(c[0] - 0.5) < 1e-6
+
+        files = write_faces(self.geo("cell_1.brep"), os.path.join(self.dir, "geometry"), "swept_free_1", free)
+        bar = swept("sweep_1_1.brep", name="Bar", path_size=1.0, section_size=0.25, recombine=False, advance=4.0)
+        bar["skin"] = skin
+        bar["free_faces"] = ["geometry/" + f for f in files]
+        cell = {"volume": self.vol(1, "Bar", "cell_1.brep", size=0.25), "swept": bar}
+        shifts = [[1, 0, 0, k, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] for k in range(3)]
+        r = self.group_job(cell, shifts, self.SIDE_BOX, air_size=1.0)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(5)), {"Hexahedron 8"})
+        self.assertEqual(inner_free_faces(self.SIDE_BOX), [])
+        self.assertGreater(self.min_sicn(), 0)
+        return gmsh.model.mesh.getNodesForPhysicalGroup(3, 5)[1].reshape(-1, 3)
+
+    def test_swept_side_seam_is_conformal(self):
+        p = self.side_seam_bar()
+        x = sorted({round(float(v), 6) for v in p[:, 0]})
+        for a, b in zip(x, x[1:]):  # section size 0.25 across the row: 12 equal steps
+            self.assertAlmostEqual(b - a, 0.25, delta=1e-6)
+
+    def test_swept_side_seam_with_skin_skins_only_the_free_sides(self):
+        p = self.side_seam_bar({"depth": 0.2, "per_depth": 2.0, "layer": 2.0})
+        y = sorted({round(float(v), 6) for v in p[:, 1]})
+        self.assertAlmostEqual(y[1] - y[0], 0.1, delta=0.025)  # the free sides y = 0 and y = 1: the skin
+        self.assertAlmostEqual(y[-1] - y[-2], 0.1, delta=0.025)
+        x = sorted({round(float(v), 6) for v in p[:, 0]})
+        steps = [b - a for a, b in zip(x, x[1:])]
+        self.assertGreater(min(steps), 0.2)  # the cut sides x = 0, 1, 2, 3: no skin
+
+    def test_swept_free_face_split_in_the_cell_model_keeps_its_skin(self):
+        # the bar x 0..1, y 0..1, z 0..4 and a block x 0..0.5, y 1..2, z 0..4 as a second cell object, one copy: the
+        # fragment splits the bar's free face y = 1 at x = 0.5, and its piece x 0.5..1 matches no free-face file whole
+        write_box(self.geo("cell_1.brep"), 0, 0, 0, 1, 1, 4)
+        write_rect(self.geo("sweep_1_1.brep"), 0, 0, 0, 1, 1)
+        write_box(self.geo("cell_2.brep"), 0, 1, 0, 0.5, 1, 4)
+        files = write_faces(self.geo("cell_1.brep"), os.path.join(self.dir, "geometry"), "swept_free_1")
+        bar = swept("sweep_1_1.brep", name="Bar", path_size=1.0, section_size=0.25, recombine=False, advance=4.0)
+        bar["skin"] = {"depth": 0.2, "per_depth": 2.0, "layer": 2.0}
+        bar["free_faces"] = ["geometry/" + f for f in files]
+        cell = {"volume": self.vol(1, "Bar", "cell_1.brep", size=0.25), "swept": bar}
+        box = (-3, -3, -3, 7, 8, 10)
+        block = self.vol(2, "Block", "cell_2.brep", size=0.5)
+        r = self.group_job(cell, [turn_z(0)], box, air_size=1.0, cells=[block])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertEqual(inner_free_faces(box), [])
+        p = gmsh.model.mesh.getNodesForPhysicalGroup(3, 5)[1].reshape(-1, 3)
+        below = [1 - y for x, y, z in p if 0.75 < x < 0.95 and 1 < z < 3 and y < 1 - 1e-9]  # under the free piece
+        self.assertLess(min(below), 0.15)  # the skin (first layer 0.1; section size 0.25 without)
+
     def test_swept_cell_seam_with_a_meshed_copy_is_refused(self):
         # the sector beside a tetrahedral cell 45..90°, 4 rotations by 90°: the sector's cut at 0° meets the copy of
         # the other cell's face at 90°, which gmsh meshes on its own, not as the sector's hand-made section

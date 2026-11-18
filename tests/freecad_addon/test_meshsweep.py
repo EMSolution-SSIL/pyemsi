@@ -2,6 +2,7 @@
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_meshsweep.py"""
 
 import json
+import math
 import os
 import sys
 
@@ -589,3 +590,35 @@ def test_symmetric_job_is_meshed_again_like_an_ordinary_one(tmp_path, monkeypatc
     if "pyramids" in failures:
         assert calls[1:] == [0] * (len(calls) - 1)  # meshed without the pushed-out pyramids from then on
         assert "could not optimise the pyramids" in capsys.readouterr().err
+
+
+def test_real_faces_of_a_free_face_split_in_the_cell_model(tmp_path):
+    # the bar x 0..1, y 0..1, z 0..4 fragmented with a block x 0..0.5, y 1..2: its free face y = 1 is split at x = 0.5,
+    # and neither piece is the file's face whole. With no neighbours given, only the fallback makes them real
+    (tmp_path / "geometry").mkdir()
+    write_box(str(tmp_path / "geometry" / "bar.brep"), 0, 0, 0, 1, 1, 4)
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        occ = gmsh.model.occ
+        bar = occ.addBox(0, 0, 0, 1, 1, 4)
+        occ.synchronize()
+        (top,) = [t for _, t in gmsh.model.getEntities(2) if abs(occ.getCenterOfMass(2, t)[1] - 1) < 1e-9]
+        occ.copy([(2, top)])
+        occ.remove([(3, bar)], recursive=True)
+        occ.synchronize()
+        gmsh.write(str(tmp_path / "geometry" / "free_1.brep"))  # the whole face y = 1
+        gmsh.clear()
+        _, out = occ.fragment([(3, occ.addBox(0, 0, 0, 1, 1, 4))], [(3, occ.addBox(0, 1, 0, 0.5, 1, 4))])
+        occ.synchronize()
+        vol = out[0][0][1]
+        faces = [abs(t) for _, t in gmsh.model.getBoundary([(3, vol)], oriented=False)]
+        entry = {"name": "Bar", "free_faces": ["geometry/free_1.brep"]}
+        real = meshsweep._real_faces(entry, str(tmp_path), faces, set(), math.sqrt(18))
+        on_top = sorted(
+            round(occ.getCenterOfMass(2, f)[0], 6) for f in faces if abs(occ.getCenterOfMass(2, f)[1] - 1) < 1e-9
+        )
+        assert on_top == [0.25, 0.75]  # split in two
+        assert sorted(round(occ.getCenterOfMass(2, f)[0], 6) for f in real) == [0.25, 0.75]  # both, and nothing else
+    finally:
+        gmsh.finalize()
