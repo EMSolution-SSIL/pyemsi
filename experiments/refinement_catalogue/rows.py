@@ -1,6 +1,6 @@
 """The rows of the refinement catalogue (spec 9): Stage 1 (RN-01..RN-10), Refine Near in ordinary Studies, and Stage 2
 (RN-S1..RN-S6), Refine Near in Studies with Symmetric Groups, Stage 3 (AG-01..AG-S2), Air Grading, and Stage 4
-(SL-01..SL-10), Skin Layer, and Swept Body Stages 1 to 3 (SW-01..SW-14). Each row is
+(SL-01..SL-10), Skin Layer, and Swept Body Stages 1 to 4 (SW-01..SW-14, SW-S1..SW-S3). Each row is
 (id, title, build, expected, picture): build() makes the Study in a new document and returns it; expected is "meshes"
 or a phrase of the refusal; picture holds the hints of render.render ({"clip": axis, "at": value} cuts a 3D mesh at
 axis = value, {"zoom": (x0, y0, x1, y1)} shows that box of the drawing's plane). A row may also carry after(folder)
@@ -1944,3 +1944,206 @@ CASES += [
 ]
 AFTER.update({"SW-09": strand_after(540, 15), "SW-10": sw10_after, "SW-11": sw11_after, "SW-13": strand_after(432, 12)})
 AFTER["SW-14"] = sw14_after
+
+
+# --- Swept Body, Stage 4: swept cells in Studies with Symmetric Groups ----------------------------------------------
+# The cell of a Symmetric Group is swept, its copies copied and the air meshed round them. Today is the same Study with
+# the Skin Layer as graded tetrahedra and no Swept Body. The after-checks print the counts, the air's worst elements,
+# the free faces inside and the copies meshed.
+
+
+def sws1():
+    """litz1 as the user built it, opened from a temporary copy (the file itself is never opened or saved): its
+    Symmetric Group of 6 strands (the Body rotated by 60 deg), size 0.3, in a Padding Box Air Region (3 mm, size 0.6);
+    a copper Skin Layer at 100 kHz, 2 δ deep, and a Swept Body of STRAND_SIZES on the strand cell. litz1 has no
+    Excitations."""
+    import atexit
+    import shutil
+    import tempfile
+
+    tmp = tempfile.mkdtemp()
+    atexit.register(shutil.rmtree, tmp, True)  # the catalogue saves the Study elsewhere before it ends
+    copy = os.path.join(tmp, "litz1.FCStd")
+    shutil.copyfile(LITZ1, copy)
+    doc = App.openDocument(copy)
+    study, body = doc.getObject("Study"), doc.getObject("Body")
+    assert not objects.excitations(study), "litz1 has Excitations now: check that they land on every strand end"
+    (ring,) = objects.symmetric_groups(study)
+    assert [c.Name for c in ring.Cells] == ["Body"] and len(objects.group_transforms(ring)) == 6
+    study.MeshSizesGroup.DefaultMeshSize = 0.3
+    air = pad_air(study, [body], 3)
+    objects.assign(study, [air], symcases.libraries(study)["Air"], 0, name="Air")
+    objects.make_mesh_size(study, 0.6, [(air, "")])
+    swept_items(100000, layer=2.0, **STRAND_SIZES)(study, body)
+    doc.recompute()
+    return study
+
+
+SECTOR_RING = (19.0, 21.0, -2.0, 2.0, 45.0)  # r 19..21 (rc 20), z -2..2, 0..45 deg, turned 8 times
+
+
+def sector_study(name, free_bar=False):
+    """A copper winding sector: the 2 x 4 rectangle r 19..21, z -2..2 revolved 45 deg about z, the cell of 8 rotations
+    by 45 deg, size 1, in a Padding Box Air Region (6 mm on every side, so its top and bottom are no cuts of the
+    domain; Mesh Size 4 on it); a Skin Layer 10 kHz (δ 0.66) and a Swept Body on the cell. free_bar: a free copper bar
+    4 x 4 x 4 at x 30..34 in the same Swept Body. Returns (study, Swept Body)."""
+    r1, r2, z1, z2, pitch = SECTOR_RING
+    shapes = [("Sector", revolved(r1, r2, z1, z2, pitch))]
+    if free_bar:
+        shapes.append(("Bar", block(30, -2, -2, 34, 2, 2)))
+    doc = App.newDocument(name.replace("-", "_"))
+    study, bodies = cases.new_study(doc, "3D", shapes)
+    study.MeshSizesGroup.DefaultMeshSize = 1.0
+    lib = symcases.libraries(study)
+    sector = bodies[0]
+    symcases.group(study, "Ring", [sector], [symcases.rotate_rule(pitch, 8)], lib={sector.Name: lib["Copper"]})
+    if free_bar:
+        objects.assign(study, bodies[1:], lib["Copper"], 0)
+    air = pad_air(study, bodies, 6)
+    objects.assign(study, [air], lib["Air"], 0, name="Air")
+    objects.make_mesh_size(study, 4.0, [(air, "")])
+    skin(study, sector, f=10000, sigma=COPPER)
+    item = objects.make_swept_body(study, [(b, "") for b in bodies])
+    doc.recompute()
+    return study, item
+
+
+def sws2():
+    return sector_study("SW-S2")[0]
+
+
+FREE_SWEPT = "is a free object; in a Study with Symmetric Groups only cell objects are swept."
+
+
+def sws3():
+    """SW-S2 with a free bar in the same Swept Body: Validate refuses the bar, and only the bar (the cell is still
+    swept: no text on the Sector, which SW-S2 meshes swept)."""
+    study, item = sector_study("SW-S3", free_bar=True)
+    objects.sync_parts(study)  # as symcases.finish does before the catalogue validates
+    study.Document.recompute()
+    texts = [p.text for p in validation.errors(validation.validate(study))]
+    want = f"Swept Body {item.Label}: Bar {FREE_SWEPT}"
+    shown = [t.replace(FREE_SWEPT, "(the free-object text)") for t in texts]  # so a failure never matches the row
+    assert texts == [want], f"Validate gave {shown}, not the free bar's refusal alone"
+    return study
+
+
+def part_cells(msh, name):
+    """[(corner node tags, centroid)] of the 3D elements of the physical group name in a mesh file."""
+    import gmsh
+    import numpy as np
+
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(msh)
+        tags, coords, _ = gmsh.model.mesh.getNodes()
+        at = dict(zip(tags.astype(int), np.reshape(coords, (-1, 3))))
+        out = []
+        for d, tag in gmsh.model.getPhysicalGroups(3):
+            if gmsh.model.getPhysicalName(d, tag) != name:
+                continue
+            for ent in gmsh.model.getEntitiesForPhysicalGroup(d, tag):
+                for etype, _, nodes in zip(*gmsh.model.mesh.getElements(3, ent)):
+                    each = gmsh.model.mesh.getElementProperties(etype)[3]
+                    for cell_nodes in np.reshape(nodes, (-1, each)).astype(int):
+                        out.append((list(cell_nodes), np.mean([at[n] for n in cell_nodes], axis=0)))
+        return out
+    finally:
+        gmsh.finalize()
+
+
+def pieces(cells):
+    """The element counts of the connected pieces (elements sharing a node) of cells, largest first."""
+    parent = {}
+
+    def root(n):
+        while parent.setdefault(n, n) != n:
+            parent[n] = parent[parent[n]]
+            n = parent[n]
+        return n
+
+    for nodes, _ in cells:
+        for n in nodes[1:]:
+            parent[root(n)] = root(nodes[0])
+    count = {}
+    for nodes, _ in cells:
+        count[root(nodes[0])] = count.get(root(nodes[0]), 0) + 1
+    return sorted(count.values(), reverse=True)
+
+
+def sws1_after(folder):
+    """(passed, text): the strands are hexahedra and prisms, 6 separate copies of the same elements, no free faces
+    inside, the air's min SICN above 0."""
+    text, types, msh, free = ring_text(folder, PART_S1)
+    copies = pieces(part_cells(msh, PART_S1))
+    worst = air_quality(msh)[0]
+    ok = types.get("Hexahedron 8", 0) > 0 and types.get("Prism 6", 0) > 0 and not free and worst > 0
+    ok = ok and len(copies) == 6 and len(set(copies)) == 1
+    return ok, text + f"; copies meshed: {len(copies)} of {sorted(set(copies))} elements; litz1 has no Excitations"
+
+
+def sws2_after(folder):
+    """(passed, text): hexahedra only, no free faces inside, 8 copies of the same elements (one per 45 deg); the
+    skin's first layer (about δ / 2) at the inner and outer radius and at the top and bottom; every step along the
+    path the same (no grading at the cuts)."""
+    import numpy as np
+
+    text, types, msh, free = ring_text(folder, PART_S2)
+    cells = part_cells(msh, PART_S2)
+    per_copy = [
+        sum(1 for _, c in cells if 45 * k < math.degrees(math.atan2(c[1], c[0])) % 360 < 45 * (k + 1)) for k in range(8)
+    ]
+    r1, r2, z1, z2, _ = SECTOR_RING
+    xyz = mesh_nodes(msh)
+    r = np.hypot(xyz[:, 0], xyz[:, 1])
+    xyz = xyz[(r > r1 - 1e-6) & (r < r2 + 1e-6) & (xyz[:, 2] > z1 - 1e-6) & (xyz[:, 2] < z2 + 1e-6)]
+    radii = sorted({round(float(math.hypot(x, y)), 6) for x, y in xyz[:, :2]})
+    z = sorted({round(float(v), 6) for v in xyz[:, 2]})
+    angles = sorted({round(math.degrees(math.atan2(y, x)) % 360, 5) for x, y in xyz[:, :2]})
+    steps = [b - a for a, b in zip(angles, angles[1:] + [angles[0] + 360])]
+    first = (radii[1] - radii[0], radii[-1] - radii[-2], z[1] - z[0], z[-1] - z[-2])
+    ok = set(types) == {"Hexahedron 8"} and not free and len(set(per_copy)) == 1 and per_copy[0] > 0
+    ok = ok and all(s < 0.5 for s in first) and max(steps) - min(steps) < 1e-4
+    text += (
+        f"; copies meshed: 8 sectors of {sorted(set(per_copy))} elements; first layer at r {r1:g} / {r2:g} and z"
+        f" {z1:g} / {z2:g}: {', '.join(f'{s:.2f}' for s in first)}; {len(steps)} steps along the path,"
+        f" {min(steps):.4f}..{max(steps):.4f} deg"
+    )
+    return ok, text
+
+
+PART_S1, PART_S2 = "Body", "Sector"
+CASES += [
+    (
+        "SW-S1",
+        "litz1 whole, opened from a temporary copy: its Symmetric Group of 6 strands (size 0.3) in a Padding Box Air"
+        " Region (3 mm, size 0.6), copper Skin Layer 100 kHz 2 δ deep, Swept Body (path 0.4, section 0.2) on the"
+        " strand cell; litz1 has no Excitations; cut through the helix axis and across the 6 strands at z = 6",
+        sws1,
+        "meshes",
+        {**helix_cut(12, 6.0, None), "across": {"clip": "z", "at": 6.0, "zoom": (-2.0, -2.0, 2.0, 2.0)}},
+    ),
+    (
+        "SW-S2",
+        "3D copper winding sector: 2 x 4 rectangle r 19..21 (rc 20) revolved 45 deg, the cell of 8 rotations (size 1)"
+        " in a Padding Box Air Region (6 mm, size 4): Skin Layer 10 kHz (δ 0.66), Swept Body; cut at z = 0.3 and"
+        " through the seams at 0 and 180 deg (y = 0)",
+        sws2,
+        "meshes",
+        {
+            "clip": "z",
+            "at": 0.3,
+            "zoom": (-24, -24, 24, 24),
+            "across": {"clip": "y", "at": 0.0, "zoom": (17, -4, 23, 4)},
+        },
+    ),
+    (
+        "SW-S3",
+        "SW-S2 with a free copper bar in the same Swept Body: refused for the bar only (the cell is still swept)",
+        sws3,
+        FREE_SWEPT,
+        {},
+    ),
+]
+AFTER.update({"SW-S1": sws1_after, "SW-S2": sws2_after})
