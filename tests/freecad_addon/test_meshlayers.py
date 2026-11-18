@@ -111,6 +111,7 @@ def test_folded_counts_inside_out_prisms():
     tris = np.array([[0, 1, 2]])  # outward +z
     assert meshlayers.folded([X, X - [0, 0, 0.1]], tris) == 0
     assert meshlayers.folded([X, X + [0, 0, 0.1]], tris) == 1
+    assert meshlayers.folded([X, X * np.nan], tris) == 1
 
 
 def test_rounded_busbar_layers(session):
@@ -235,3 +236,47 @@ def test_core_restores_options(session):
     assert gmsh.model.getCurrent() == "caller"
     for name, value in values.items():
         assert gmsh.option.getNumber(name) == value, name
+
+
+def test_heights_nearest_count():
+    assert len(meshlayers.heights(1, 1, 2)) == 2  # sums 1 and 2.2: 2.2 is nearer 2
+    assert len(meshlayers.heights(1, 1, 3)) == 3  # sums 2.2 and 3.64: 3.64 is nearer 3
+    assert meshlayers.heights(1, 1, 3)[-1] == pytest.approx(3.0)
+    assert len(meshlayers.heights(1, 2, 2.6)) == 4
+
+
+OPTIONS = {
+    "Mesh.MeshOnlyVisible": 1,
+    "Mesh.MeshSizeMax": 7,
+    "Mesh.MeshSizeExtendFromBoundary": 0,
+    "Mesh.Algorithm3D": 10,
+}
+
+
+def assert_restored():
+    assert gmsh.model.getCurrent() == "caller"
+    for name, value in OPTIONS.items():
+        assert gmsh.option.getNumber(name) == value, name
+
+
+def test_cap_self_crossing_loop_fails(session):
+    for name, value in OPTIONS.items():
+        gmsh.option.setNumber(name, value)
+    gmsh.model.add("caller")
+    bowtie = np.array([[0.0, 0, 0], [1, 1, 0], [1, 0, 0], [0, 1, 0]])
+    with pytest.raises(meshlayers.LayerFailed) as failed:
+        meshlayers.cap(bowtie, [], 0.2)
+    assert failed.value.kind == "core"
+    assert_restored()
+
+
+def test_core_failure_restores_options(session):
+    for name, value in OPTIONS.items():
+        gmsh.option.setNumber(name, value)
+    gmsh.model.add("caller")
+    X = np.array([[0.0, 0, 0], [2, 0, 0], [0, 2, 0], [0, 0, 2]])
+    tris = np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2]])  # a tetrahedron's surface less one face: open
+    with pytest.raises(meshlayers.LayerFailed) as failed:
+        meshlayers.core(X, tris, [], 0.5, 1.0)
+    assert failed.value.kind == "core"
+    assert_restored()

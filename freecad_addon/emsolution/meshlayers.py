@@ -70,12 +70,14 @@ class Layered:
 
 
 def heights(depth, per_depth, layer):
-    """The cumulative heights of the layers: steps depth / per_depth growing by RATIO, as many as fit in
-    layer * depth (at least one), scaled so the last one is exactly layer * depth."""
+    """The cumulative heights of the layers: steps depth / per_depth growing by RATIO, as many (at least one) as make
+    the sum nearest layer * depth, scaled so the last one is exactly layer * depth."""
     total, step, out = layer * depth, depth / per_depth, []
-    while not out or out[-1] + step <= total * (1 + 1e-9):
+    while not out or out[-1] < total:
         out.append((out[-1] if out else 0.0) + step)
         step *= RATIO
+    if len(out) > 1 and total - out[-2] <= out[-1] - total:
+        out.pop()
     return [h * total / out[-1] for h in out]
 
 
@@ -109,7 +111,7 @@ def folded(layers, tris):
             up = hi[a] - lo[a]
             bottom = np.einsum("ij,ij->i", np.cross(lo[b] - lo[a], lo[c] - lo[a]), up)
             top = np.einsum("ij,ij->i", np.cross(hi[b] - hi[a], hi[c] - hi[a]), up)
-            bad[k] |= (bottom <= 0) | (top <= 0)
+            bad[k] |= ~(bottom > 0) | ~(top > 0)  # a NaN volume counts too
     return int(bad.sum())
 
 
@@ -145,26 +147,40 @@ def cap(loop, holes, size):
     nodes."""
     rings = [np.asarray(loop, dtype=float)] + [np.asarray(h, dtype=float) for h in holes]
     with _SubModel("meshlayers_cap", {**CAP_OPTIONS, "Mesh.MeshSizeMax": size}):
-        geo = gmsh.model.geo
-        points, curve_loops = [], []
-        for ring in rings:
-            seg = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
-            lc = np.minimum((seg + np.roll(seg, 1)) / 2, size)
-            tags = [geo.addPoint(*p.tolist(), meshSize=float(s)) for p, s in zip(ring, lc)]
-            lines = [geo.addLine(tags[i], tags[(i + 1) % len(tags)]) for i in range(len(tags))]
-            curve_loops.append(geo.addCurveLoop(lines))
-            points += tags
-        surface = geo.addPlaneSurface(curve_loops)
-        geo.synchronize()
-        for _, line in gmsh.model.getEntities(1):
-            gmsh.model.mesh.setTransfiniteCurve(line, 2)
-        gmsh.model.mesh.generate(2)
-        index = {int(gmsh.model.mesh.getNodes(0, p)[0][0]): i for i, p in enumerate(points)}
-        inner, xyz, _ = gmsh.model.mesh.getNodes(2, surface)
-        index.update({int(t): len(points) + j for j, t in enumerate(inner)})
-        _, nodes = gmsh.model.mesh.getElementsByType(2, surface)
-        triangles = np.array([index[int(t)] for t in nodes], dtype=np.int64).reshape(-1, 3)
-        return np.array(xyz, dtype=float).reshape(-1, 3), triangles
+        try:
+            geo = gmsh.model.geo
+            points, curve_loops = [], []
+            for ring in rings:
+                seg = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
+                lc = np.minimum((seg + np.roll(seg, 1)) / 2, size)
+                tags = [geo.addPoint(*p.tolist(), meshSize=float(s)) for p, s in zip(ring, lc)]
+                lines = [geo.addLine(tags[i], tags[(i + 1) % len(tags)]) for i in range(len(tags))]
+                curve_loops.append(geo.addCurveLoop(lines))
+                points += tags
+            surface = geo.addPlaneSurface(curve_loops)
+            geo.synchronize()
+            for _, line in gmsh.model.getEntities(1):
+                gmsh.model.mesh.setTransfiniteCurve(line, 2)
+            gmsh.model.mesh.generate(2)
+            index = {int(gmsh.model.mesh.getNodes(0, p)[0][0]): i for i, p in enumerate(points)}
+            inner, xyz, _ = gmsh.model.mesh.getNodes(2, surface)
+            index.update({int(t): len(points) + j for j, t in enumerate(inner)})
+            _, nodes = gmsh.model.mesh.getElementsByType(2, surface)
+            triangles = np.array([index[int(t)] for t in nodes], dtype=np.int64).reshape(-1, 3)
+            coords = np.array(xyz, dtype=float).reshape(-1, 3)
+        except Exception as exc:
+            raise LayerFailed("core", f"the cap: {exc}") from exc
+    # gmsh meshes a loop that crosses itself without an error: the triangles must cover the face once, all one way
+    normal = np.cross(rings[0], np.roll(rings[0], -1, axis=0)).sum(axis=0)  # twice the loop's area along its normal
+    if len(triangles) and normal.any():
+        unit = _unit(normal)
+        P = np.vstack(rings + [coords])
+        signed = np.cross(P[triangles[:, 1]] - P[triangles[:, 0]], P[triangles[:, 2]] - P[triangles[:, 0]]) @ unit / 2
+        signed = signed * (1 if signed.sum() >= 0 else -1)  # either way round, as long as all are
+        area = np.linalg.norm(normal) / 2 - sum(_area(h, unit) for h in rings[1:])
+        if (signed > 0).all() and area > 0 and abs(signed.sum() - area) <= 1e-6 * area:
+            return coords, triangles
+    raise LayerFailed("core", "the cap's rim crosses itself")
 
 
 def core(inner, tris, caps, size_in, size_out):
