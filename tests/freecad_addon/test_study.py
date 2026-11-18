@@ -2550,6 +2550,43 @@ class StudyTest(unittest.TestCase):
         _, item = self.swept_sector()
         self.assertFalse(self.swept_texts(item))
 
+    def test_swept_cell_job_has_free_faces(self):
+        """The sector's faces toward the free side are its inner, outer, top and bottom faces, not its two cuts."""
+        self.swept_sector()
+        (air,) = objects.air_regions(self.study)
+        for side in objects.SIDES:  # 6 mm of air all round: the top and bottom are no cuts of the domain
+            setattr(air, f"Pad{side}", 6)
+        (ring,) = objects.symmetric_groups(self.study)
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        (group,) = self.read_job()["symmetric"]["groups"]
+        (entry,) = group["job"]["swept"]
+        self.assertEqual(entry["free_faces"], [f"geometry/g1_swept_free_1_{n}.brep" for n in range(1, 5)])
+        folder = jobwriter.scratch_folder(self.study)
+        kinds = []
+        for rel in entry["free_faces"]:
+            (face,) = Part.read(os.path.join(folder, rel)).Faces
+            if isinstance(face.Surface, Part.Plane):
+                kinds.append(f"z {round(face.CenterOfMass.z)}")
+            else:
+                kinds.append(f"r {round(face.Surface.Radius)}")
+        self.assertEqual(sorted(kinds), ["r 19", "r 21", "z -2", "z 2"])
+
+    def test_swept_entry_unchanged_outside_groups(self):
+        self.swept_job()
+        (entry,) = self.read_job()["swept"]
+        self.assertNotIn("free_faces", entry)
+
+    def test_skin_kept_for_unswept_body(self):
+        """A body of a Swept Body item that is no sweep gets no swept entry, so it keeps its Skin Layer entry."""
+        ball = self.shape_body("Ball", Part.makeSphere(5))
+        bar = self.shape_body("Bar", Part.makeBox(10, 4, 40))
+        objects.make_swept_body(self.study, [(ball, ""), (bar, "")])
+        objects.make_skin_layer(self.study, [(ball, ""), (bar, "")], 1)
+        (skin,) = jobwriter.skin_entries(self.study, {"Ball": [1], "Bar": [2]})
+        self.assertEqual(skin["mat_ids"], [1])
+
     def test_swept_free_object_refused(self):
         cell, item = self.swept_sector()
         bar = self.block("Bar", (4, 4, 4), (40, 0, -2))

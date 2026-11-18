@@ -237,11 +237,13 @@ def recognised_sweeps(study, names):
     return found
 
 
-def swept_entries(study, folder, ids, found, prefix=""):
+def swept_entries(study, folder, ids, found, prefix="", group=None):
     """The job's "swept" list: one entry per whole body of a Swept Body item that is in ids ({body Name: MAT_ID}), in
     tree order. found: recognised_sweeps for ids. The profile face of each solid (its start face, or a closed ring's
     cut) is written to geometry/<prefix>sweep_<MAT_ID>_<k>.brep in global coordinates. The skin comes from the first
-    Skin Layer on the body."""
+    Skin Layer on the body. group: the Symmetric Group whose cell job this is; each entry then lists in "free_faces"
+    the cell's faces toward the free side (validation.free_faces), written to
+    geometry/<prefix>swept_free_<MAT_ID>_<n>.brep: the cell model has nothing beyond them, so it cannot see them."""
     entries, seen = [], set()
     picks = [pick for item in objects.recombine_items(study) for pick in objects.face_picks(item)]
     recombined = {body.Name for body, faces in picks if not faces}
@@ -283,12 +285,17 @@ def swept_entries(study, folder, ids, found, prefix=""):
                     "solids": solids,
                 }
             )
+            if group is not None:
+                free = validation.free_faces(study, group, body)
+                entries[-1]["free_faces"] = export_subs(folder, body, free, f"{prefix}swept_free_{mat_id}")
     return entries
 
 
-def swept_names(study):
-    """The Names of the bodies in a Swept Body item: skin_entries leaves them out, the swept entry holds their skin."""
-    return {body.Name for item in objects.swept_bodies(study) for body, sub in objects.item_refs(item) if sub == ""}
+def swept_names(study, found=None):
+    """The Names of the bodies in a Swept Body item: skin_entries leaves them out, the swept entry holds their skin.
+    With found (recognised_sweeps), only those that get a swept entry: a body that is no sweep keeps its Skin Layer."""
+    names = {body.Name for item in objects.swept_bodies(study) for body, sub in objects.item_refs(item) if sub == ""}
+    return names if found is None else names & set(found)
 
 
 def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
@@ -298,7 +305,7 @@ def skin_entries(study, ids, quads=True, folder=None, prefix="", group=None):
     (validation.free_faces) are written to geometry/<prefix>skin_<item>_<body>_<n>.brep and listed in "faces" with
     the MAT_ID of their body."""
     entries = []
-    swept = swept_names(study)
+    swept = swept_names(study, recognised_sweeps(study, ids))
     for k, item in enumerate(objects.skin_layers(study), 1):
         mat_ids = [
             mat_id
@@ -383,11 +390,12 @@ def _distinct_faces(body, faces):
     return kept
 
 
-def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
+def _body_job(study, folder, volumes, surfaces, elements, ids, prefix="", group=None):
     """The part of a job that meshes bodies, as mesher.build / mesher2d.build read it: their volumes (bodies in 2D),
     excitation surfaces (3D), sizes, transfinite and recombine settings. volumes, surfaces and elements are what check
     returns, restricted to these bodies; ids: {body name: its MAT_ID in this job}. prefix starts the names of the BREP
-    files, so two jobs of one Study do not write over each other."""
+    files, so two jobs of one Study do not write over each other. group: the Symmetric Group whose cell job this is
+    (swept_entries)."""
     two_d = study.Dimension == "2D"
     job = {"bodies": []} if two_d else {"volumes": [], "surfaces": []}
     job["sizes"] = []
@@ -457,7 +465,7 @@ def _body_job(study, folder, volumes, surfaces, elements, ids, prefix=""):
             job["recombine_faces"].append(
                 {"name": objects.region_name(study, body), "mat_id": ids[body.Name], "face": face, "file": rel}
             )
-    swept = swept_entries(study, folder, ids, found, prefix)
+    swept = swept_entries(study, folder, ids, found, prefix, group)
     if swept:
         job["swept"] = swept
     return job
@@ -498,6 +506,7 @@ def _group_entry(study, folder, item, number, volumes, surfaces, elements):
         [e for e in elements if e[1].Name in ids],
         ids,
         prefix,
+        item,
     )
     refine = refine_entries(study, folder, {name: [n] for name, n in ids.items()}, prefix, item)
     if refine:
