@@ -329,21 +329,22 @@ def swept_turn(profile, angle, name="Ring", path_size=4.0, section_size=2.0, rec
     return entry
 
 
-def write_helix_pipe(path, profile_path, radius, pitch, turns, section, end_path=None):
+def write_helix_pipe(path, profile_path, radius, pitch, turns, section, end_path=None, left=False):
     """A Frenet pipe along a helix about Z from (radius, 0, 0) rising pitch per turn (a spline through 288 points per
     turn: its far end within 1e-5 of the screw's), and the face it is piped from (the profile of a Swept Body).
     section: ("disc", r), or ("rect", w, h) with w toward the axis and h along the binormal. end_path: also a copy of
-    the pipe's end face."""
+    the pipe's end face. left: a left-handed helix, turning negatively about Z while it rises."""
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         occ = gmsh.model.occ
         c = pitch / (2 * math.pi)
+        s = -1 if left else 1
         n = math.ceil(288 * turns)
         a = [2 * math.pi * turns * k / n for k in range(n + 1)]
-        spline = occ.addSpline([occ.addPoint(radius * math.cos(t), radius * math.sin(t), c * t) for t in a])
+        spline = occ.addSpline([occ.addPoint(radius * math.cos(t), s * radius * math.sin(t), c * t) for t in a])
         p0 = (radius, 0.0, 0.0)
-        tangent = [0.0, radius / math.hypot(radius, c), c / math.hypot(radius, c)]
+        tangent = [0.0, s * radius / math.hypot(radius, c), c / math.hypot(radius, c)]
         normal = [-1.0, 0.0, 0.0]
         binormal = [0.0, -tangent[2], tangent[1]]  # tangent x normal
         if section[0] == "disc":
@@ -1406,6 +1407,25 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4", "Pyramid 5"})  # pyramids on the quads
         self.assertEqual(inner_free_faces(self.AIR_BOX), [])
 
+    def test_swept_end_against_terminal_with_excitation(self):
+        # the bar's whole end face at z = -20 shared with the terminal, an excitation on it
+        write_box(self.geo("vol_3.brep"), -15, -15, -30, 30, 30, 10)
+        write_rect(self.geo("surf_10_1.brep"), -5, -2, -20, 10, 4)
+        surface = {"smat_id": 10, "name": "In", "mat_id": 1, "files": ["geometry/surf_10_1.brep"]}
+        block = self.vol(3, "Block", "vol_3.brep", 3.0)
+        bar = swept("sweep_1_1.brep", skin={"depth": 1.0, "per_depth": 2.0, "layer": 3.0})
+        r = self.swept_bar(bar, volumes=[block], surfaces=[surface], skins=[skin(mat_ids=(3,), depth=1.0)])
+        self.assertNotIn("could not optimise the pyramids", r.stderr)
+        self.open_msh()
+        nodes = gmsh.model.mesh.getNodesForPhysicalGroup(2, 10)[1].reshape(-1, 3)
+        self.assertTrue(len(nodes))
+        for x, y, z in nodes:  # on the shared face
+            self.assertAlmostEqual(z, -20, delta=1e-9)
+            self.assertLessEqual(abs(x), 5 + 1e-9)
+            self.assertLessEqual(abs(y), 2 + 1e-9)
+        self.assertEqual(set(self.element_counts(3)), {"Tetrahedron 4", "Pyramid 5"})
+        self.assertEqual(inner_free_faces(self.AIR_BOX), [])
+
     def test_swept_bar_end_on_iron_is_graded(self):
         z = self.bar_on_block()  # a block without a skin (iron): real surface for the bar's skin
         self.assertAlmostEqual(z[0], 0.5, delta=0.01)
@@ -1613,13 +1633,13 @@ class MesherTest(unittest.TestCase):
     STRAND_BOX = (-3, -3, -5, 6, 6, 25)
     HELIX = {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0]}
 
-    def strand_job(self, surfaces=()):
+    def strand_job(self, surfaces=(), piece=None):
         """litz1's strand: r 0.45 along 1.5 turns of a helix r 1.2, pitch 10, in an air box 6 x 6 x 25 at 0.6. Path size
         0.4, section 0.2: the spike's 0.6 and 0.15 (quads 4 : 1) left gmsh's air mesh "overlapping facets" in about half
         the runs (gmsh's 3D mesh differs from run to run); these met it in 11 of 11."""
         write_box(self.geo("air.brep"), *self.STRAND_BOX)
         air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 0.6}
-        piece = {**self.HELIX, "angle": 540.0, "advance": 15.0}
+        piece = piece or {**self.HELIX, "angle": 540.0, "advance": 15.0}
         wire = swept_chain("sweep_1_1.brep", [piece], name="Wire", path_size=0.4, section_size=0.2)
         wire["skin"] = {"depth": 0.2, "per_depth": 2.0, "layer": 2.0}
         r = self.run_job([self.vol(1, "Wire", "vol_1.brep", size=0.15)], surfaces, air=air, extra={"swept": [wire]})
@@ -1629,10 +1649,9 @@ class MesherTest(unittest.TestCase):
         self.assertEqual(inner_free_faces(self.STRAND_BOX), [])
         return r
 
-    def test_swept_helix_strand_is_conformal(self):
-        write_helix_pipe(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 1.2, 10.0, 1.5, ("disc", 0.45))
-        self.strand_job()
-        # the seam: the one body curve that runs along the helix, a node at each station
+    def strand_steps(self):
+        """(The path length, the steps along the strand's seam): the seam is the one body curve that runs along the
+        helix, a node at each station."""
         seam = []
         for _, c in gmsh.model.getEntities(1):
             xyz = gmsh.model.mesh.getNodes(1, c, includeBoundary=True)[1]
@@ -1647,11 +1666,24 @@ class MesherTest(unittest.TestCase):
         for p in phi[1:]:
             turns.append(turns[-1] + (p - turns[-1] + math.pi) % (2 * math.pi) - math.pi)
         length = math.hypot(1.2 * 3 * math.pi, 15.0)
-        steps = [(b - a) * length / (3 * math.pi) for a, b in zip(turns, turns[1:])]
+        return length, [abs(b - a) * length / (3 * math.pi) for a, b in zip(turns, turns[1:])]
+
+    def test_swept_helix_strand_is_conformal(self):
+        write_helix_pipe(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 1.2, 10.0, 1.5, ("disc", 0.45))
+        self.strand_job()
+        length, steps = self.strand_steps()
         self.assertAlmostEqual(sum(steps), length, delta=1e-3)
         middle = steps[len(steps) // 4 : -len(steps) // 4]  # past the graded ends
         for s in middle:
             self.assertAlmostEqual(s, 0.4, delta=0.1)
+
+    def test_swept_left_handed_helix(self):
+        # the strand turning the other way, as sweeps.recognise gives it: a positive turn about -Z, the rise along -axis
+        write_helix_pipe(self.geo("vol_1.brep"), self.geo("sweep_1_1.brep"), 1.2, 10.0, 1.5, ("disc", 0.45), left=True)
+        piece = {"origin": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, -1.0], "angle": 540.0, "advance": -15.0}
+        self.strand_job(piece=piece)
+        length, steps = self.strand_steps()
+        self.assertAlmostEqual(sum(steps), length, delta=1e-3)
 
     def test_swept_strand_excitation(self):
         # an excitation face on the far end of a helical strand: the vol file's own end face. One from other geometry
