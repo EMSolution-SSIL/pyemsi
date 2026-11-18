@@ -12,7 +12,7 @@ import pytest
 import FreeCAD as App
 import Part
 
-from emsolution import icon, jobwriter, objects, validation
+from emsolution import icon, jobwriter, objects
 
 from . import meshreport, symcases
 from .materialdata import STEEL, record
@@ -829,10 +829,3 @@ def test_static_study_writes_one_file(tmp_path):
     finally:
         for name in list(App.listDocuments()):
             App.closeDocument(name)
-
-
-def test_swept_body_in_a_symmetric_study_is_refused(motor):
-    cell = objects.cell_bodies(motor)[0]
-    item = objects.make_swept_body(motor, [(cell, "")])
-    texts = [p.text for p in validation.validate(motor) if p.severity == "error"]
-    assert f"Swept Body {item.Label}: Studies with Symmetric Groups are not swept yet." in texts

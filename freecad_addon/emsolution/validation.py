@@ -409,8 +409,9 @@ def _skin_layers(study, included, bodies, r):
 
 
 def _swept_bodies(study, included, bodies, r):
-    """Swept Body items: whole bodies that are sweeps, in a 3D Study without Symmetric Groups, each in one item, not
-    structured, and touching only the air and unstructured bodies by whole faces. The air is refused in _links."""
+    """Swept Body items: whole bodies that are sweeps, in a 3D Study (cell objects only, with Symmetric Groups), each in
+    one item, not structured, and touching only the air and unstructured bodies by whole faces; a cell's faces toward
+    the copies of its own group are seams, which meshgroups checks. The air is refused in _links."""
     items = [w for w in objects.swept_bodies(study) if any(b.Name in included for b, _ in w.References)]
     if not items:
         return
@@ -425,16 +426,22 @@ def _swept_bodies(study, included, bodies, r):
     for w in items:
         if not three:
             r.error(f"Swept Body {w.Label}: a 2D Study is already a cross-section; Swept Body is for 3D Studies.", w)
-        if grouped:
-            r.error(f"Swept Body {w.Label}: Studies with Symmetric Groups are not swept yet.", w)
         picked = [(b, subs) for b, subs in objects.subs_by_body(w) if b.Name in included and not objects.is_air(b)]
         for b, subs in picked:
             parts = [sub for sub in subs if sub]
             for sub in parts:
                 r.error(f"Swept Body {w.Label}: pick whole bodies, not {b.Label}.{sub}.", w, [(b, sub)])
-            if parts or not three or grouped:
+            if parts or not three:
                 continue
             name = objects.display_name(b)
+            if grouped and _is_free(study, b):
+                r.error(
+                    f"Swept Body {w.Label}: {name} is a free object; in a Study with Symmetric Groups only cell objects"
+                    " are swept.",
+                    w,
+                    [(b, "")],
+                )
+                continue
             first = owners.setdefault(b.Name, w)
             if first is not w:
                 r.error(f"Swept Body {w.Label}: {name} is already in Swept Body {first.Label}.", w, [(b, "")])
@@ -486,7 +493,8 @@ def _swept_bodies(study, included, bodies, r):
             if any(_shared_area(f, other) > tol * tol for f in solid.Faces for other in solids[k + 1 :]):
                 r.error(_touch_text(w, name, name, "swept"), w, [(b, "")])
                 break
-        for o, o_shape in others:
+        said = set()  # a neighbour met in several frames (copies) is reported once
+        for o, o_shape in _swept_neighbours(study, b, box, others) if grouped else others:
             if o.Name == b.Name or not box.intersect(o_shape.BoundBox):
                 continue
             if o.Name in swept and order[o.Name] < i:
@@ -494,17 +502,53 @@ def _swept_bodies(study, included, bodies, r):
             areas = [_shared_area(f, o_shape) for f in shape.Faces]
             what = "swept" if o.Name in swept else "structured" if o.Name in structured else None
             what = what or ("recombined" if o.Name in recombined else None)
+            found_here = []
             if what and any(a > 1e-6 * f.Area for a, f in zip(areas, shape.Faces)):
-                r.error(_touch_text(w, name, objects.display_name(o), what), w, [(b, ""), (o, "")])
+                found_here.append((_touch_text(w, name, objects.display_name(o), what), [(b, ""), (o, "")]))
             for n, (f, a) in enumerate(zip(shape.Faces, areas), 1):
                 if 1e-6 * f.Area < a < (1 - 1e-6) * f.Area:
-                    r.error(
+                    text = (
                         f"Swept Body {w.Label}: {objects.display_name(o)} touches only part of {b.Label}.Face{n} of"
-                        f" {name}; a swept body's faces must be touched whole or not at all.",
-                        w,
-                        [(b, f"Face{n}"), (o, "")],
+                        f" {name}; a swept body's faces must be touched whole or not at all."
                     )
+                    found_here.append((text, [(b, f"Face{n}"), (o, "")]))
+            for text, refs in found_here:
+                if text not in said:
+                    said.add(text)
+                    r.error(text, w, refs)
     _swept_clear_of_sliding(study, found, r)
+
+
+def _swept_neighbours(study, body, box, others):
+    """[(body, shape)] near box that a swept body of a Study with Symmetric Groups may touch, from others (the free
+    objects and cell objects, [(body, shape)]), seen from body where it is drawn. For a cell object of a group they are
+    moved into its frame from each of its copies: the other cell objects of its group, the free objects and the copies
+    of the other groups. The faces toward the copies of its own group are seams, which the cell job meshes, so those
+    copies are left out. A body that is no cell object keeps others."""
+    groups = objects.symmetric_groups(study)
+    mine = next((g for g in groups if body in g.Cells), None)
+    if mine is None:
+        return others
+    cells = {c.Name: g for g in groups for c in g.Cells}
+    frames = [App.Matrix(*t).inverse() for t in objects.group_transforms(mine)]  # a copy of body back onto body
+    out = []
+    for o, o_shape in others:
+        group = cells.get(o.Name)
+        if group is mine:
+            out.append((o, o_shape))  # the other cell objects of its group, beside it in every copy
+            continue
+        moves = [App.Matrix(*t) for t in objects.group_transforms(group)] if group else [App.Matrix()]
+        seen = set()
+        for frame in frames:
+            for move in moves:
+                m = frame * move
+                key = tuple(round(v, 9) for v in m.A)
+                if key in seen:
+                    continue
+                seen.add(key)
+                if box.intersect(o_shape.BoundBox.transformed(m)):
+                    out.append((o, o_shape.transformed(m)))
+    return out
 
 
 def _touch_text(w, name, other, what):

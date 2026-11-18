@@ -2492,6 +2492,55 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(self.swept_texts(item))
         self.assertFalse([t for t in self.problems() if t.startswith("Recombine")])
 
+    def ring_piece(self, name, r0, r1, z0, z1, start=0):
+        """A body: the rectangle r0..r1 × z0..z1 (radial × axial) revolved 45° about z from the angle start."""
+        pts = [App.Vector(r0, 0, z0), App.Vector(r1, 0, z0), App.Vector(r1, 0, z1), App.Vector(r0, 0, z1)]
+        face = Part.Face(Part.makePolygon(pts + pts[:1]))
+        face.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), start)
+        return self.shape_body(name, face.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 45))
+
+    def swept_sector(self):
+        """The cell of a group of 8 rotations by 45°: a 2 × 4 sector at rc 20, in a Padding Box air, swept."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        item = objects.make_swept_body(self.study, [(cell, "")])
+        self.doc.recompute()
+        return cell, item
+
+    def test_swept_cell_validates(self):
+        _, item = self.swept_sector()
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_free_object_refused(self):
+        cell, item = self.swept_sector()
+        bar = self.block("Bar", (4, 4, 4), (40, 0, -2))
+        item.References = [(cell, ""), (bar, "")]
+        self.doc.recompute()
+        self.assertEqual(
+            self.swept_texts(item),
+            [
+                f"Swept Body {item.Label}: Bar is a free object; in a Study with Symmetric Groups only cell objects"
+                " are swept."
+            ],
+        )
+
+    def test_swept_cell_touching_part_of_a_copy(self):
+        cell, item = self.swept_sector()
+        # drawn at 45°..90°, so only its copy rotated by -45° touches the sector, over the half z < 0 of r = 21
+        tooth = self.ring_piece("Tooth", 21, 25, -2, 0, start=45)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [tooth], rules=[rotate], name="Teeth")
+        self.doc.recompute()
+        shape = geometry.global_shape(cell)
+        (n,) = [n for n, f in enumerate(shape.Faces, 1) if abs(getattr(f.Surface, "Radius", 0) - 21) < 1e-6]
+        self.assertIn(
+            f"Swept Body {item.Label}: Tooth touches only part of Sector.Face{n} of Sector; a swept body's faces must"
+            " be touched whole or not at all.",
+            self.swept_texts(item, "error"),
+        )
+
     def test_skin_layer_quads_on_a_recombined_body_warns(self):
         """A recombined body gets the graded layer as quads, so only quad layers are lost; the depth is checked too."""
         self.make_2d_study()
