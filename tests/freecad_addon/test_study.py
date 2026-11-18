@@ -2492,12 +2492,49 @@ class StudyTest(unittest.TestCase):
         self.assertFalse(self.swept_texts(item))
         self.assertFalse([t for t in self.problems() if t.startswith("Recombine")])
 
-    def ring_piece(self, name, r0, r1, z0, z1, start=0):
-        """A body: the rectangle r0..r1 × z0..z1 (radial × axial) revolved 45° about z from the angle start."""
+    def ring_piece(self, name, r0, r1, z0, z1, start=0, angle=45):
+        """A body: the rectangle r0..r1 × z0..z1 (radial × axial) revolved by angle about z from the angle start."""
         pts = [App.Vector(r0, 0, z0), App.Vector(r1, 0, z0), App.Vector(r1, 0, z1), App.Vector(r0, 0, z1)]
         face = Part.Face(Part.makePolygon(pts + pts[:1]))
         face.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), start)
-        return self.shape_body(name, face.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 45))
+        return self.shape_body(name, face.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), angle))
+
+    def swept_beside_iron(self):
+        """A swept 22.5° sector (0°..22.5°) and an iron sector of the same ring drawn at 67.5°..90°, cells of one group
+        of 8 rotations by 45°: the two touch only in other frames, the iron's copies filling the sector's gaps."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2, angle=22.5)
+        iron = self.ring_piece("Iron", 19, 21, -2, 2, start=67.5, angle=22.5)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell, iron], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        item = objects.make_swept_body(self.study, [(cell, "")])
+        self.doc.recompute()
+        return cell, iron, item
+
+    def test_swept_cell_beside_a_copy_of_another_cell_is_fine(self):
+        _, _, item = self.swept_beside_iron()
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_cell_beside_a_copy_of_a_structured_cell_is_refused(self):
+        _, iron, item = self.swept_beside_iron()
+        objects.make_transfinite_body(self.study, [iron])
+        self.doc.recompute()
+        self.assertIn(
+            f"Swept Body {item.Label}: Sector touches Iron, which is structured; a swept body may touch only the air"
+            " and unstructured bodies.",
+            self.swept_texts(item, "error"),
+        )
+
+    def test_swept_cell_touched_in_part_by_a_free_object(self):
+        cell, item = self.swept_sector()
+        self.block("Lid", (2, 1, 2), (-3, 19.5, 2))  # on the top of the copy rotated by 90°, over part of it
+        shape = geometry.global_shape(cell)
+        (n,) = [n for n, f in enumerate(shape.Faces, 1) if abs(f.CenterOfMass.z - 2) < 1e-6]
+        self.assertIn(
+            f"Swept Body {item.Label}: Lid touches only part of Sector.Face{n} of Sector; a swept body's faces must be"
+            " touched whole or not at all.",
+            self.swept_texts(item, "error"),
+        )
 
     def swept_sector(self):
         """The cell of a group of 8 rotations by 45°: a 2 × 4 sector at rc 20, in a Padding Box air, swept."""

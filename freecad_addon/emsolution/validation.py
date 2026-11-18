@@ -522,25 +522,24 @@ def _swept_bodies(study, included, bodies, r):
 def _swept_neighbours(study, body, box, others):
     """[(body, shape)] near box that a swept body of a Study with Symmetric Groups may touch, from others (the free
     objects and cell objects, [(body, shape)]), seen from body where it is drawn. For a cell object of a group they are
-    moved into its frame from each of its copies: the other cell objects of its group, the free objects and the copies
-    of the other groups. The faces toward the copies of its own group are seams, which the cell job meshes, so those
-    copies are left out. A body that is no cell object keeps others."""
+    moved into its frame from each of its copies: the free objects, and every copy of the other cell objects of its
+    group and of the cell objects of the other groups. The faces toward its own copies are seams, which the cell job
+    meshes, so those copies are left out. A body that is no cell object keeps others."""
     groups = objects.symmetric_groups(study)
     mine = next((g for g in groups if body in g.Cells), None)
     if mine is None:
         return others
     cells = {c.Name: g for g in groups for c in g.Cells}
     frames = [App.Matrix(*t).inverse() for t in objects.group_transforms(mine)]  # a copy of body back onto body
+    moves = {g.Name: [App.Matrix(*t) for t in objects.group_transforms(g)] for g in groups}
     out = []
     for o, o_shape in others:
+        if o.Name == body.Name:
+            continue  # its own copies: seams
         group = cells.get(o.Name)
-        if group is mine:
-            out.append((o, o_shape))  # the other cell objects of its group, beside it in every copy
-            continue
-        moves = [App.Matrix(*t) for t in objects.group_transforms(group)] if group else [App.Matrix()]
         seen = set()
         for frame in frames:
-            for move in moves:
+            for move in moves[group.Name] if group else [App.Matrix()]:
                 m = frame * move
                 key = tuple(round(v, 9) for v in m.A)
                 if key in seen:
