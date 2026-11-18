@@ -428,6 +428,94 @@ def test_failed_3d_mesh_in_a_cell_model_names_the_group(monkeypatch):
         gmsh.finalize()
 
 
+def test_failures_around_prism_layers_alone_name_no_swept_body(monkeypatch):
+    # a job with prism layers and no swept body (meshcommon.layers_only): its retries and failures say so
+    def fail(dim):
+        if dim == 3:
+            raise Exception("boom")
+        return []
+
+    monkeypatch.setattr(meshcommon, "mesh_with_fallback", fail)
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.option.setNumber("Mesh.OptimizePyramids", 0)
+        gmsh.model.add("main")
+        with pytest.raises(meshcommon.AirFailed) as err:
+            meshcommon._swept_stages({"swept_add": [], "layer_tags": [1], "swept_group": "Ring"}, 3)
+        assert str(err.value) == (
+            "group Ring: gmsh could not mesh around the layered cell (boom); make the cell objects' Mesh Size smaller"
+        )
+        with pytest.raises(meshcommon.AirFailed) as err:
+            meshcommon._swept_stages({"swept_add": [], "layer_tags": [1]}, 3)
+        assert str(err.value) == (
+            "gmsh could not mesh around the prism layers (boom); give the air more room or use a finer size there"
+        )
+        with pytest.raises(meshcommon.AirFailed, match=r"\(boom\); make the cell objects' Mesh Size or the Swept"):
+            meshcommon._swept_stages({"swept_add": [], "layer_tags": [1], "swept_tags": [2], "swept_group": "R"}, 3)
+    finally:
+        gmsh.finalize()
+    assert meshcommon.retry_note("air", True) == (
+        "Skin Layer: gmsh could not mesh the air around the prism layers; meshing once more from the start"
+    )
+    assert meshcommon.retry_note("pyramids", True) == (
+        "Skin Layer: gmsh could not optimise the pyramids on the prism layers' quad faces; meshed without"
+    )
+    assert meshcommon.retry_note("pyramids", False) == (
+        "Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without"
+    )
+
+
+def test_empty_volume_around_prism_layers_alone():
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("main")
+        gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)
+        gmsh.model.occ.addBox(1, 0, 0, 1, 1, 1)
+        gmsh.model.occ.fragment([(3, 1)], [(3, 2)])
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(3, [1], 1, name="Bar")
+        gmsh.model.addPhysicalGroup(3, [2], 2, name="Air")
+        gmsh.model.mesh.generate(2)
+        with pytest.raises(meshcommon.AirFailed) as err:
+            meshcommon._check_filled([], ["Error: PLC Error"], layers=True)
+        assert str(err.value) == (
+            "gmsh could not mesh Bar (MAT_ID 1) around the prism layers (PLC Error); give the air more room or use a"
+            " finer size there"
+        )
+    finally:
+        gmsh.finalize()
+
+
+def test_symmetric_layer_only_retry_note(tmp_path, monkeypatch, capsys):
+    # a group job with prism layers and no swept cell: the retry after a failed air mesh says "prism layers"
+    import mesher
+    import meshgroups
+
+    real, calls = meshgroups.mesh, []
+
+    def mesh(job, folder, build, dim):
+        calls.append(1)
+        if len(calls) == 1:
+            raise meshcommon.AirFailed("gmsh could not mesh Air around the prism layers (overlapping facets)")
+        return real(job, folder, build, dim)
+
+    monkeypatch.setattr(meshgroups, "mesh", mesh)
+    path = box_group_job(tmp_path)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    job["symmetric"]["groups"][0]["job"]["skin"] = [
+        {"name": "Skin", "mat_ids": [1], "depth": 1.0, "per_depth": 2.0, "layer": 2.0, "quads": True}
+    ]
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(job, fh)
+    meshgroups.run(path, mesher.build, 3)
+    err = capsys.readouterr().err
+    assert "Skin Layer: gmsh could not mesh the air around the prism layers; meshing once more from the start" in err
+    assert "Swept Body" not in err
+
+
 def bar_section(x0=18.0, x1=22.0):
     """One quad x x0..x1, z -1..1 in the plane y = 0."""
     xyz = np.array([[x0, 0, -1], [x1, 0, -1], [x1, 0, 1], [x0, 0, 1]], float)

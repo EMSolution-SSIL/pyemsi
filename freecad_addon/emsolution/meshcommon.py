@@ -392,8 +392,15 @@ def orient_faces():
             gmsh.model.mesh.setReverse(2, tag)
 
 
+_noted = set()  # the notes printed for this job: a retry builds again, and one MAT_ID may have several solids
+
+
 def _note(text):
-    """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view."""
+    """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view. Each text once per job
+    (run, check and meshgroups's run and check clear _noted)."""
+    if text in _noted:
+        return
+    _noted.add(text)
     print(f"NOTE: {text}", file=sys.stderr)
 
 
@@ -1123,7 +1130,7 @@ def _mesh_swept(job, dim):
     try:
         log = _swept_stages(job, dim)
         if dim == 3:
-            _check_filled(swept, log, job.get("swept_group"))
+            _check_filled(swept, log, job.get("swept_group"), layers_only(job))
     finally:
         gmsh.model.setVisibility(swept, 1, recursive=True)
         gmsh.model.setVisibility(hidden, 1)
@@ -1141,6 +1148,11 @@ class AirFailed(JobError):
 class PyramidsFailed(Exception):
     """gmsh failed to make the 3D mesh around the swept bodies with the pyramids' apex pushed out: run meshes the job
     again from the start without that (meshing again in the same model leaves the volumes empty)."""
+
+
+def layers_only(job):
+    """True for a built job whose hand-made mesh is prism layers alone, no swept body: its texts say so."""
+    return bool(job.get("layer_tags")) and not job.get("swept_tags")
 
 
 def _swept_stages(job, dim):
@@ -1163,11 +1175,11 @@ def _swept_stages(job, dim):
             except Exception as exc:
                 if gmsh.option.getNumber("Mesh.OptimizePyramids"):
                     raise PyramidsFailed(str(exc)) from exc
+                cell, around, advice = _around(layers_only(job))
                 if group is not None:
-                    raise AirFailed(f"group {group}: gmsh could not mesh around the swept cell ({exc}); {CELL_ADVICE}")
+                    raise AirFailed(f"group {group}: gmsh could not mesh around the {cell} ({exc}); {advice}")
                 raise AirFailed(
-                    f"gmsh could not mesh around the swept bodies ({exc}); give the air more room or use a finer size"
-                    " there"
+                    f"gmsh could not mesh around the {around} ({exc}); give the air more room or use a finer size there"
                 ) from exc
         elif d:  # points and curves go in together
             mesh_with_fallback(d)
@@ -1177,22 +1189,32 @@ def _swept_stages(job, dim):
 CELL_ADVICE = "make the cell objects' Mesh Size or the Swept Body's Path Size and Section Size smaller"
 
 
-def _check_filled(swept, log, cell_group=None):
+def _around(layers):
+    """(the cell, the bodies, the advice in a cell model) of a failure around the hand-made mesh: in the prism layers'
+    words when layers (layers_only), else the swept bodies'."""
+    if layers:
+        return "layered cell", "prism layers", "make the cell objects' Mesh Size smaller"
+    return "swept cell", "swept bodies", CELL_ADVICE
+
+
+def _check_filled(swept, log, cell_group=None, layers=False):
     """gmsh may log an error and leave a volume empty without raising (too little room beside a swept body): a volume
-    of a 3D physical group without elements is an error. cell_group: the group whose cell model this is, or None."""
+    of a 3D physical group without elements is an error. cell_group: the group whose cell model this is, or None;
+    layers: the hand-made mesh is prism layers alone (layers_only)."""
     for _, group in gmsh.model.getPhysicalGroups(3):
         for t in gmsh.model.getEntitiesForPhysicalGroup(3, group):
             if (3, t) not in swept and not sum(len(e) for e in gmsh.model.mesh.getElements(3, t)[1]):
                 errors = [m.split(":", 1)[-1].strip() for m in log if m.startswith("Error")]
                 why = f" ({errors[-1]})" if errors else ""
                 name = gmsh.model.getPhysicalName(3, group)
+                cell, around, advice = _around(layers)
                 if cell_group is not None:
                     raise AirFailed(
-                        f"group {cell_group}: gmsh could not mesh {name} (MAT_ID {group}) around the swept cell{why};"
-                        f" {CELL_ADVICE}"
+                        f"group {cell_group}: gmsh could not mesh {name} (MAT_ID {group}) around the {cell}{why};"
+                        f" {advice}"
                     )
                 raise AirFailed(
-                    f"gmsh could not mesh {name} (MAT_ID {group}) around the swept bodies{why}; give the air more room"
+                    f"gmsh could not mesh {name} (MAT_ID {group}) around the {around}{why}; give the air more room"
                     " or use a finer size there"
                 )
 
@@ -1206,6 +1228,15 @@ def publish(outputs):
             raise JobError(f"Could not replace {target}: it is read-only or open in another program.") from None
 
 
+def retry_note(kind, layers):
+    """The note of a retry after PyramidsFailed (kind "pyramids") or AirFailed ("air"): in the prism layers' words when
+    layers (the hand-made mesh is prism layers alone), else the swept bodies'."""
+    who, what = ("Skin Layer", "prism layers") if layers else ("Swept Body", "swept bodies")
+    if kind == "pyramids":
+        return f"{who}: gmsh could not optimise the pyramids on the {what}' quad faces; meshed without"
+    return f"{who}: gmsh could not mesh the air around the {what}; meshing once more from the start"
+
+
 def run(job_path, build, dim):
     """Read the job, call build(job, folder) on a fresh model, mesh to dimension dim, write mesh.unv and
     replace job["mesh_file"] with the finished .msh. Returns the job.
@@ -1217,6 +1248,7 @@ def run(job_path, build, dim):
         job = json.load(fh)
     msh = os.path.join(folder, "mesh.msh")
     outputs = [(msh, job["mesh_file"])]
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)
@@ -1228,17 +1260,13 @@ def run(job_path, build, dim):
                 generate(job, dim)
                 break
             except PyramidsFailed:  # it fails the same way around gmsh's own Transfinite Body, depending on OCC's faces
-                _note(
-                    "Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without"
-                )
+                _note(retry_note("pyramids", layers_only(job)))
                 extra = {"optimize_pyramids": 0}
             except AirFailed:  # only around swept bodies; its advice is for the final failure
                 if retried:
                     raise
                 retried = True
-                _note(
-                    "Swept Body: gmsh could not mesh the air around the swept bodies; meshing once more from the start"
-                )
+                _note(retry_note("air", layers_only(job)))
                 extra = {k: job[k] for k in ("optimize_pyramids",) if k in job}
             gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
             gmsh.initialize()
@@ -1267,6 +1295,7 @@ def check(job_path, build):
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)

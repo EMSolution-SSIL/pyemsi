@@ -20,6 +20,7 @@ from meshcommon import _field, add_to_background
 from meshcommon import face_normal, plane_normal
 from meshcommon import air_items
 from meshcommon import AirFailed, PyramidsFailed
+from meshcommon import retry_note, _noted
 import meshfrozen
 import meshsym
 import meshsweep
@@ -610,9 +611,11 @@ def _layer_seams(group, contacts, dim):
     copies meet. A cut c that a transform between copies that touch maps onto another cut d of the same volume, corners
     and all (meshsym._same), is a seam: (slave, master, transform) goes into job["layer_seams"], the master the lower
     tag, which the add closures read; a cut it maps onto itself (on a mirror) or onto nothing (the model boundary)
-    needs nothing. A cut that meets a copy of anything else (another cut or face, an image or an image's face) cannot
-    share the hand-made mesh: that volume gets no layers (note N5); it is taken out of layer_tags and layer_hidden,
-    so generate leaves it shown and gmsh meshes it in graded tetrahedra."""
+    needs nothing. A cut that meets a copy of anything else (another cell's face, an image or an image's face) cannot
+    share the hand-made mesh: that volume gets no layers (note N5); nor when its seams with its own copies do not
+    match (note N8: a cut onto a copy of its own real face, a seam whose corners differ, a cut both slave and master).
+    It is taken out of layer_tags and layer_hidden, so generate leaves it shown and gmsh meshes it in graded
+    tetrahedra."""
     job = group["job"]
     if not job.get("layer_tags"):
         return
@@ -625,31 +628,41 @@ def _layer_seams(group, contacts, dim):
     hidden = {t for d, t in job["layer_hidden"] if d == dim - 1}
     noted = set()
     for vol in list(job["layer_tags"]):
-        cuts = [f for f in _boundary(dim, [(dim, vol)]) if f in hidden]
-        pairs, bad = {}, False
+        faces = _boundary(dim, [(dim, vol)])
+        cuts = [f for f in faces if f in hidden]
+        pairs, other, own = {}, False, False  # other: meets a copy of something else (N5); own: of itself (N8)
         for c in cuts:
             beyond = {int(v) for v in gmsh.model.getAdjacencies(dim - 1, c)[0]}
-            bad = bad or bool(beyond & image_vols) or c in copied
+            other = other or bool(beyond & image_vols) or c in copied
             for m in transforms:
                 for d in seams:
                     if d == c or not meshsym._twin(c, d, m, tol, dim - 1):
                         continue
-                    if d not in cuts or not meshsym._same(c, d, m, tol, dim - 1):
-                        bad = True
+                    if d not in cuts:
+                        own, other = own or d in faces, other or d not in faces  # its own real face, or another's
+                    elif not meshsym._same(c, d, m, tol, dim - 1):
+                        own = True  # a seam whose corners differ
                     elif c < d:
                         pairs.setdefault(d, (d, c, m))
         if set(pairs) & {master for _, master, _ in pairs.values()}:
-            bad = True  # a cut both slave and master: build moves a cap only from a cut that is no copy
-        if not bad:
+            own = True  # a cut both slave and master: build moves a cap only from a cut that is no copy
+        if not (other or own):
             job["layer_seams"].extend(pairs.values())
             continue
         m = next(g for g in gmsh.model.getPhysicalGroupsForEntity(dim, vol) if g in group["cells"])
         if m not in noted:
             noted.add(m)
-            _note(
-                f"Skin Layer {_layer_entry(job, m)}: MAT_ID {m} meets a copy of another cell on a cut; graded"
-                " tetrahedra instead of prism layers"
-            )
+            entry = _layer_entry(job, m)
+            if other:
+                _note(
+                    f"Skin Layer {entry}: MAT_ID {m} meets a copy of another cell on a cut; graded tetrahedra instead"
+                    " of prism layers"
+                )
+            else:
+                _note(
+                    f"Skin Layer {entry}: MAT_ID {m}: its seams with its own copies do not match; graded tetrahedra"
+                    " instead of prism layers"
+                )
         job["layer_tags"].remove(vol)
         drop = {(dim, vol)} | {(dim - 1, c) for c in cuts}
         job["layer_hidden"][:] = [h for h in job["layer_hidden"] if h not in drop]
@@ -1905,19 +1918,22 @@ def mesh(job, folder, build, dim):
 def _mesh_retried(job_path, job, folder, build, dim):
     """mesh, on the current model, as meshcommon.run generates: around swept cells gmsh may fail with the pyramids'
     apex pushed out (meshed again without) or fail on the air (its result differs from run to run: meshed once more),
-    each time on a fresh gmsh and the job read anew. At most three passes. Returns (job, Model)."""
+    each time on a fresh gmsh and the job read anew. At most three passes. Returns (job, Model). The notes are in the
+    prism layers' words when the groups have prism layers and no swept cell."""
+    groups = [g["job"] for g in job["symmetric"]["groups"]]
+    layers = not any(g.get("swept") for g in groups) and any(e.get("quads") for g in groups for e in g.get("skin", []))
     retried = False
     while True:
         try:
             return job, mesh(job, folder, build, dim)
         except PyramidsFailed:
-            _note("Swept Body: gmsh could not optimise the pyramids on the swept bodies' quad faces; meshed without")
+            _note(retry_note("pyramids", layers))
             extra = {"optimize_pyramids": 0}
         except AirFailed:
             if retried:
                 raise
             retried = True
-            _note("Swept Body: gmsh could not mesh the air around the swept bodies; meshing once more from the start")
+            _note(retry_note("air", layers))
             extra = {k: job[k] for k in ("optimize_pyramids",) if k in job}
         terminal = gmsh.option.getNumber("General.Terminal")
         gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
@@ -1933,6 +1949,7 @@ def check(job_path, build, dim=2):
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
@@ -1967,6 +1984,7 @@ def run(job_path, build, dim=2):
     msh = os.path.join(folder, "mesh.msh")
     outputs = [(msh, job["mesh_file"])]
     slide = job["symmetric"].get("slide")
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)

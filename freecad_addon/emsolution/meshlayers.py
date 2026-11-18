@@ -532,6 +532,22 @@ def _write(vol, tags, X, layered):
             element += n
 
 
+INWARD_SAMPLES = 25  # the inner-layer nodes _inward tests
+
+
+def _inward(vol, layered, n, L):
+    """Raise LayerFailed("fold") unless the layers grew into vol: most of a sample of the inner layer's nodes off the
+    cut faces (layered from build on n surface nodes, L layers) lie inside it. A wrong sign from _signs (no grid
+    point of a face found inside it) turns the surface inside out: the layers grow outward, unfolded, into the air."""
+    inner = (L - 1) * n + np.flatnonzero([w == (3, 0) for w in layered.where[(L - 1) * n : L * n]])
+    if not len(inner):
+        return
+    pick = inner[np.linspace(0, len(inner) - 1, min(INWARD_SAMPLES, len(inner))).astype(int)]
+    inside = gmsh.model.isInside(3, vol, layered.coords[pick].ravel().tolist())
+    if 2 * inside <= len(pick):
+        raise LayerFailed("fold", f"{len(pick) - inside} of {len(pick)} inner nodes are outside the body")
+
+
 def _layer_add(job, entry, m, vol, faces, rim_face, hidden, size_out):
     """add(d) for meshcommon._swept_stages: at d == 3, the prism layers and the core of vol on the mesh gmsh made on
     its real faces (faces: _layer_faces), a seam's cap (job["layer_seams"], a cell's) moved from its master's. On
@@ -548,6 +564,7 @@ def _layer_add(job, entry, m, vol, faces, rim_face, hidden, size_out):
             rims = _rims(cuts, rim_face, signs, tags, X)
             hs = heights(entry["depth"], entry["per_depth"], entry["layer"])
             layered = build(X, tris, rims, hs, None, size_out, seams)
+            _inward(vol, layered, len(X), len(hs))
         except LayerFailed as failed:
             for slave, master, matrix in seams:
                 gmsh.model.mesh.setPeriodic(2, [slave], [master], matrix)
@@ -568,10 +585,21 @@ def _layer_add(job, entry, m, vol, faces, rim_face, hidden, size_out):
     return add
 
 
+def _periodic_faces():
+    """The faces that gmsh copies the mesh of (setPeriodic, meshcommon.apply_periodic) or copies it to."""
+    out = set()
+    for _, f in gmsh.model.getEntities(2):
+        master = int(gmsh.model.mesh.getPeriodic(2, [f])[0])
+        if master != f:
+            out |= {f, master}
+    return out
+
+
 def apply_layers(job, body_vols, sizes, skin_faces=None):
     """3D prism layers in the skins with "quads" (job["skin"] entries), at the end of mesher.build: the first such skin
     in job order makes them per MAT_ID (not swept, structured or recombined), each volume of it on its own. A volume
-    that is not smooth, or whose cuts are not flat and square (spec 6), keeps the graded tetrahedra, with a note.
+    that is not smooth, whose cuts are not flat and square (spec 6) or that a periodic boundary cuts keeps the graded
+    tetrahedra, with a note.
     body_vols: {MAT_ID: final tags}; sizes: {MAT_ID: size}; skin_faces: {(index of the skin entry, MAT_ID): {dim:
     [final tags]}}, a cell's faces toward the free side. job gets "layer_tags" (the volumes), "layer_hidden" (each
     volume and its cut faces, which meshcommon.generate hides), "layer_seams" (seam pairs of cells, filled by
@@ -586,9 +614,11 @@ def apply_layers(job, body_vols, sizes, skin_faces=None):
     layering = {m for e in entries if e.get("quads") for m in e["mat_ids"]}
     skins = {m for e in entries for m in e["mat_ids"]} | {e["mat_id"] for e in job.get("swept", []) if e.get("skin")}
     # a face against another conductor with a skin of its own (a terminal) is a cut, as no skin is there; one against
-    # a body that may get layers too or is swept is real (both sides meet its triangles, or Validate refuses it)
+    # a body that may get layers too is real (both sides meet its triangles); one against a swept body is real too,
+    # and Validate refuses a swept body touching a body that gets prism layers (validation._swept_bodies)
     cut_against = {t for m in skins - layering - swept for t in body_vols.get(m, [])}
     images = {t for v in job.get("volumes", []) if v.get("image") for t in body_vols.get(v["mat_id"], [])}
+    periodic = _periodic_faces() if any(e.get("quads") for e in entries) else set()
     done = set()
     for k, e in enumerate(entries):
         if not e.get("quads"):
@@ -607,14 +637,16 @@ def apply_layers(job, body_vols, sizes, skin_faces=None):
                 if not faces[0]:  # no real surface: apply_refinements said so
                     continue
                 why, rim_face = _check(*faces)
+                if not why and periodic.intersection(faces[1]):  # each cut capped on its own: no periodic copy
+                    why = "periodic"
                 if why:
                     if why not in noted:
                         noted.add(why)
-                        what = (
-                            "has a sharp edge on its surface"
-                            if why == "sharp"
-                            else "is cut by a curved face or at a slant"
-                        )
+                        what = {
+                            "sharp": "has a sharp edge on its surface",
+                            "cut": "is cut by a curved face or at a slant",
+                            "periodic": "is cut by a periodic boundary",
+                        }[why]
                         _note(f"Skin Layer {e['name']}: MAT_ID {m} {what}; graded tetrahedra instead of prism layers")
                     continue
                 hidden = [(3, vol)] + [(2, c) for c in faces[1]]

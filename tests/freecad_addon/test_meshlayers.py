@@ -1,6 +1,7 @@
 """Prism layers grown inward from a body's surface mesh, and the tetrahedral core inside them (meshlayers.py, a mesher
 module). Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_meshlayers.py"""
 
+import json
 import os
 import sys
 
@@ -280,3 +281,134 @@ def test_core_failure_restores_options(session):
         meshlayers.core(X, tris, [], 0.5, 1.0)
     assert failed.value.kind == "core"
     assert_restored()
+
+
+def test_note_printed_once_per_job(capsys):
+    import meshcommon
+
+    meshcommon._noted.clear()
+    text = "Skin Layer Skin: MAT_ID 1 has a sharp edge on its surface; graded tetrahedra instead of prism layers"
+    for _ in range(3):  # a retried job builds again, and one MAT_ID may have several solids
+        meshcommon._note(text)
+    meshcommon._note(
+        "Skin Layer Skin: MAT_ID 2 has a sharp edge on its surface; graded tetrahedra instead of prism layers"
+    )
+    err = capsys.readouterr().err
+    assert err.count(f"NOTE: {text}") == 1
+    assert err.count("NOTE: ") == 2
+    meshcommon._noted.clear()  # what run and check do for the next job
+    meshcommon._note(text)
+    assert capsys.readouterr().err.count("NOTE: ") == 1
+
+
+def sphere_job(folder):
+    """A job of the sphere r 5 (MAT_ID 1) with prism layers in an air box, for meshcommon.run in-process."""
+    from .test_mesher import layer_skin, write_box, write_occ
+
+    os.makedirs(os.path.join(folder, "geometry"))
+    write_occ(os.path.join(folder, "geometry", "vol_1.brep"), lambda occ: occ.addSphere(0, 0, 0, 5))
+    write_box(os.path.join(folder, "geometry", "air.brep"), -20, -20, -20, 40, 40, 40)
+    job = {
+        "model_name": "Model",
+        "mesh_file": os.path.join(folder, "pre_geom.msh"),
+        "volumes": [{"mat_id": 1, "name": "Sphere", "file": "geometry/vol_1.brep", "size": 2.0}],
+        "surfaces": [],
+        "sizes": [],
+        "air": {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 4.0},
+        "skin": [layer_skin()],
+    }
+    path = os.path.join(folder, "job.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(job, fh)
+    return path
+
+
+def element_types(path, group):
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(path)
+        return {
+            gmsh.model.mesh.getElementProperties(int(t))[0]
+            for e in gmsh.model.getEntitiesForPhysicalGroup(3, group)
+            for t in gmsh.model.mesh.getElements(3, e)[0]
+        }
+    finally:
+        gmsh.finalize()
+
+
+def test_wrong_sign_grows_no_layers_outward(tmp_path, monkeypatch, capsys):
+    # every face's sign turned: the surface is inside out and the layers would grow outward, into the air, unfolded
+    import mesher
+    import meshcommon
+
+    real = meshlayers._signs
+    monkeypatch.setattr(meshlayers, "_signs", lambda vol: {f: -s for f, s in real(vol).items()})
+    path = sphere_job(str(tmp_path))
+    meshcommon.run(path, mesher.build, 3)
+    err = capsys.readouterr().err
+    assert (
+        "NOTE: Skin Layer Skin: MAT_ID 1: the prism layers would fold (the layer is too deep for its curves); graded"
+        " tetrahedra instead" in err
+    )
+    assert element_types(str(tmp_path / "pre_geom.msh"), 1) == {"Tetrahedron 4"}
+
+
+def test_seams_that_do_not_match_say_so(tmp_path, monkeypatch, capsys):
+    # the ring cell of test_mesher's test_layered_ring_cells with its seams' corners taken to differ (meshsym._same
+    # False while _layer_seams runs): note N8, not N5, and graded tetrahedra
+    import math
+
+    import mesher
+    import meshgroups
+    import meshsym
+    from .test_mesher import layer_skin, turn_z, write_box, write_faces, write_round_ring
+
+    folder = str(tmp_path)
+    geometry = os.path.join(folder, "geometry")
+    os.makedirs(geometry)
+    write_round_ring(os.path.join(geometry, "cell_1.brep"), 20, 3, 90)
+    files = write_faces(
+        os.path.join(geometry, "cell_1.brep"), geometry, "skin_free_1", lambda c: math.hypot(c[0], c[1]) < 19.9
+    )
+    entry = layer_skin("Skin", (1,), 0.66, 2.0, 2.0, True)
+    entry["faces"] = [{"mat_id": 1, "file": "geometry/" + f} for f in files]
+    write_box(os.path.join(geometry, "air.brep"), -29, -29, -9, 58, 58, 18)
+    volume = {"mat_id": 1, "name": "Ring", "file": "geometry/cell_1.brep", "size": 1.0}
+    group = {
+        "name": "Ring",
+        "side": "fixed",
+        "job": {"volumes": [volume], "surfaces": [], "sizes": [], "skin": [entry]},
+        "cells": [1],
+        "transforms": [turn_z(90 * k) for k in range(4)],
+        "parts": [{"mat_id": 5 + c, "name": f"Copy{c}"} for c in range(4)],
+        "rows": [{"cell": 1, "file": None, "parts": [0, 1, 2, 3]}],
+    }
+    air = {"name": "Air", "mat_id": 30, "file": "geometry/air.brep", "size": 4.0}
+    free = [{"side": "fixed", "job": {"volumes": [], "surfaces": [], "sizes": [], "air": air}}]
+    job = {
+        "model_name": "Model",
+        "mesh_file": os.path.join(folder, "pre_geom.msh"),
+        "options": {},
+        "symmetric": {"groups": [group], "free": free},
+    }
+    path = os.path.join(folder, "job.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(job, fh)
+    real = meshgroups._layer_seams
+
+    def layer_seams(*args):
+        with monkeypatch.context() as patch:
+            patch.setattr(meshsym, "_same", lambda *a: False)
+            real(*args)
+
+    monkeypatch.setattr(meshgroups, "_layer_seams", layer_seams)
+    meshgroups.run(path, mesher.build, 3)
+    err = capsys.readouterr().err
+    assert (
+        "NOTE: Skin Layer Skin: MAT_ID 1: its seams with its own copies do not match; graded tetrahedra instead of"
+        " prism layers" in err
+    )
+    assert "meets a copy of another cell" not in err
+    for c in range(4):
+        assert element_types(str(tmp_path / "pre_geom.msh"), 5 + c) == {"Tetrahedron 4"}

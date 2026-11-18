@@ -2352,6 +2352,24 @@ class StudyTest(unittest.TestCase):
         objects.make_swept_body(self.study, [(body, "")])
         self.assertFalse(self.skin_texts(item))
 
+    def test_prism_layers_cut_by_a_periodic_boundary(self):
+        """A wire along X from one end of a Box Air Region with a Linear interface to the other: its ends lie on the
+        two periodic boundaries, where the mesher makes no prism layers yet."""
+        body = self.shape_body("Wire", Part.makeCylinder(5, 100, App.Vector(-50, 0, 0), App.Vector(1, 0, 0)))
+        objects.make_air_region(self.study, Center=App.Vector(0, 0, 0), Length=100, Width=60, Height=60)
+        objects.make_sliding_interface(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(body)
+        self.assertNotIn("periodic", " ".join(self.skin_texts(item)))  # no sliding motion: no periodic boundaries
+        self.study.Movement = "Sliding motion"
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Wire is cut by a periodic boundary; prism layers are not made there yet, so"
+                " it gets graded tetrahedra."
+            ],
+        )
+
     def test_prism_layers_free_object(self):
         cell = self.ring_piece("Sector", 19, 21, -2, 2)
         rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
@@ -2498,6 +2516,24 @@ class StudyTest(unittest.TestCase):
         self.doc.removeObject(t.Name)
         objects.make_recombine(self.study, [b])
         self.assertIn(text.replace("structured", "recombined", 1), self.problems("error"))
+
+    def test_swept_body_touching_a_body_with_prism_layers_is_refused(self):
+        """A swept rod inside a tube with prism layers, both from the bottom of the air to its top: the tube's inner
+        face lies on the rod, and its layers would grow on the rod's quads. Without QuadLayers the tube is fine."""
+        rod = self.shape_body("Rod", Part.makeCylinder(3, 100, App.Vector(0, 0, -50)))
+        outer = Part.makeCylinder(5, 100, App.Vector(0, 0, -50))
+        tube = self.shape_body("Tube", outer.cut(Part.makeCylinder(3, 100, App.Vector(0, 0, -50))))
+        objects.make_air_region(self.study, Center=App.Vector(0, 0, 0), Length=60, Width=60, Height=100)
+        self.doc.recompute()
+        item = objects.make_swept_body(self.study, [(rod, "")])
+        skin = self.prism_skin(tube)
+        text = (
+            f"Swept Body {item.Label}: Rod touches Tube, which has prism layers; a swept body may touch only the air"
+            " and unstructured bodies without prism layers."
+        )
+        self.assertEqual([t for t in self.swept_texts(item, "error") if "touches" in t], [text])
+        skin.QuadLayers = False
+        self.assertFalse([t for t in self.swept_texts(item, "error") if "touches" in t])
 
     def test_swept_body_solids_touching_each_other_are_refused(self):
         shape = Part.makeCompound([Part.makeBox(10, 10, 10), Part.makeBox(10, 10, 10, App.Vector(10, 0, 0))])

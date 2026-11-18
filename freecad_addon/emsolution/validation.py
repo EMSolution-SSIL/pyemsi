@@ -410,6 +410,11 @@ def _skin_layers(study, included, bodies, r):
                         f"{name} is cut by a curved face or at a slant; prism layers need flat cuts square to its"
                         " surface, so it gets graded tetrahedra."
                     )
+                elif _cut_on_period(study, b, shape, bodies):
+                    text = (
+                        f"{name} is cut by a periodic boundary; prism layers are not made there yet, so it gets graded"
+                        " tetrahedra."
+                    )
                 elif _cut_on_copy(study, b, shape, bodies):
                     text = (
                         f"{name} meets a copy of another cell object on a cut; prism layers need its cuts to be seams"
@@ -524,8 +529,11 @@ def _swept_bodies(study, included, bodies, r):
             areas = [_shared_area(f, o_shape) for f in shape.Faces]
             what = "swept" if o.Name in swept else "structured" if o.Name in structured else None
             what = what or ("recombined" if o.Name in recombined else None)
+            touching = any(a > 1e-6 * f.Area for a, f in zip(areas, shape.Faces))
+            if not what and touching and not copy and _gets_prisms(study, o, bodies):
+                what = "layered"  # the mesher grows its layers on the swept body's quads
             found_here = []
-            if what and any(a > 1e-6 * f.Area for a, f in zip(areas, shape.Faces)):
+            if what and touching:
                 found_here.append((_touch_text(w, name, objects.display_name(o), what), [(b, ""), (o, "")]))
             if copy and o.Name not in swept and o.Name not in structured:
                 # a seam with another cell's copy: gmsh meshes that face itself, so the hand-made section cannot match
@@ -586,6 +594,11 @@ def _swept_neighbours(study, body, box, others):
 
 
 def _touch_text(w, name, other, what):
+    if what == "layered":
+        return (
+            f"Swept Body {w.Label}: {name} touches {other}, which has prism layers; a swept body may touch only the air"
+            " and unstructured bodies without prism layers."
+        )
     return (
         f"Swept Body {w.Label}: {name} touches {other}, which is {what}; a swept body may touch only the air and"
         " unstructured bodies."
@@ -805,6 +818,55 @@ def _cut_on_copy(study, body, shape, bodies):
         if copy and box.intersect(o_shape.BoundBox) and any(_shared_area(f, o_shape) > 1e-6 * f.Area for f in cuts):
             return True
     return False
+
+
+def _cut_on_period(study, body, shape, bodies):
+    """True when a cut face of a body of an ordinary Study with sliding motion lies on one of the two periodic
+    boundaries (airshapes.period, which the job gets): the mesher makes no prism layers there yet."""
+    if objects.is_grouped(study) or study.Movement != "Sliding motion":
+        return False
+    period = airshapes.period(study)
+    if not period:
+        return False
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    if period["kind"] == "rotation":
+        planes = []
+        for side in (0, 1):
+            a = math.radians(period["start"] + side * period["angle"])
+            c, s = math.cos(a), math.sin(a)
+            planes.append(lambda p, c=c, s=s: abs(p.x * s - p.y * c) < tol and p.x * c + p.y * s > -tol)
+    else:
+        length = math.hypot(*period["vector"])
+        n = App.Vector(*period["vector"]) / length
+        planes = [lambda p, at=period["start"] + side * length: abs(p.dot(n) - at) < tol for side in (0, 1)]
+    for _, _, cuts in _surface_3d(study, body, shape, bodies):
+        for f in cuts:
+            points = _face_points(f) + [v.Point for v in f.Vertexes]
+            if any(all(on(p) for p in points) for on in planes):
+                return True
+    return False
+
+
+def _gets_prisms(study, body, bodies):
+    """True when body gets prism layers in a 3D Study, as _skin_layers tells: a whole-body pick of a Skin Layer with
+    QuadLayers, not swept, structured or recombined, not a free object of a Study with Symmetric Groups, smooth with
+    flat square cuts, none on a periodic boundary or a copy of another cell object."""
+    if study.Dimension != "3D" or not any(
+        s.QuadLayers and any(b.Name == body.Name and not any(subs) for b, subs in objects.subs_by_body(s))
+        for s in objects.skin_layers(study)
+    ):
+        return False
+    for items in (objects.swept_bodies(study), objects.transfinite_bodies(study), objects.recombine_items(study)):
+        if any(b.Name == body.Name for t in items for b, _ in objects.subs_by_body(t)):
+            return False
+    if objects.is_grouped(study) and _is_free(study, body):
+        return False
+    shape = geometry.global_shape(body)
+    return not (
+        _sharp_3d(study, body, shape, bodies, 0.0)
+        or _cut_on_period(study, body, shape, bodies)
+        or _cut_on_copy(study, body, shape, bodies)
+    )
 
 
 def _on(points, shape, tol):

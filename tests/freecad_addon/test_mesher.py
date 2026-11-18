@@ -2678,6 +2678,26 @@ class LayerTest(unittest.TestCase):
             self.assertGreater(len(quads), 0, x)
             self.assertGreater(len(tris), 0, x)
 
+    def test_layered_wire_across_period_falls_back(self):
+        # the wire's ends on the two periodic boundaries x = -5 and x = 5: gmsh copies one end's mesh to the other,
+        # which two caps made on their own would not match, so no layers there (note N7)
+        write_occ(self.geo("vol_1.brep"), lambda occ: occ.addCylinder(-5, 0, 0, 10, 0, 0, 1))
+        write_box(self.geo("air.brep"), *self.WIRE_BOX)
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 1.5}
+        extra = {
+            "skin": [layer_skin(**self.WIRE_SKIN)],
+            "periodic": {"kind": "translation", "vector": [10.0, 0.0, 0.0], "start": -5.0},
+        }
+        r = self.run_job([self.vol(1, "Wire", "vol_1.brep", size=0.5)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(
+            "NOTE: Skin Layer Skin: MAT_ID 1 is cut by a periodic boundary; graded tetrahedra instead of prism layers",
+            r.stderr,
+        )
+        self.open_msh()
+        self.assertEqual(set(self.element_counts(1)), {"Tetrahedron 4"})
+        self.assertNotIn("Prism layers", r.stdout)
+
     def test_layered_thin_wire_falls_back(self):
         # a 2 δ layer deeper than the wire's radius: no folded prisms, the cut ends shown again and meshed by gmsh
         skins = [layer_skin(depth=0.6, per_depth=2.0, layer=2.0)]
