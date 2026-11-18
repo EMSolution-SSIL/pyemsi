@@ -253,7 +253,7 @@ def main():
     assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_SkinLayer"].IsActive())
     panel = opened.pop()
     assert panel.new and Gui.Control.activeDialog() and panel.current == [(doc.B, "")], panel.current
-    assert panel.quads is None, "quad layers offered in a 3D Study"
+    assert panel.quads is not None and panel.quads.text() == "Prism layers", "no prism layers in a 3D Study"
     panel.mu_r.setText("0")
     panel.calculate.click()
     assert panel.depth_result.text() == "Frequency, conductivity and permeability must be greater than 0."

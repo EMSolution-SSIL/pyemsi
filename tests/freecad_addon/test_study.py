@@ -2213,11 +2213,8 @@ class StudyTest(unittest.TestCase):
         a = self.box("A")
         item = objects.make_skin_layer(self.study, [(a, "")])
         self.assertFalse(self.skin_texts(item))
-        item.QuadLayers = True
-        self.assertEqual(
-            self.skin_texts(item),
-            [f"Skin Layer {item.Label}: quad layers are made in 2D Studies only; ignored."],
-        )
+        item.QuadLayers = True  # 3D: prism layers; without an Air Region the box has no real surface
+        self.assertFalse([t for t in self.skin_texts(item) if "2D Studies only" in t])
 
     def test_skin_layer_filling_the_body_warns(self):
         self.make_2d_study()
@@ -2292,6 +2289,122 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(
             self.skin_texts(item),
             [f"Skin Layer {item.Label}: Bar is structured, and that wins; the Skin Layer does nothing there."],
+        )
+
+    # --- 3D prism layers ---------------------------------------------------------
+
+    def prism_skin(self, body):
+        item = objects.make_skin_layer(self.study, [(body, "")])
+        item.LayerDepth = 1.0
+        item.QuadLayers = True
+        return item
+
+    def test_prism_layers_no_ignored_warning(self):
+        ball = self.shape_body("Ball", Part.makeSphere(10))
+        objects.make_air_region(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(ball)
+        self.assertFalse([t for t in self.skin_texts(item) if "2D Studies only" in t])
+
+    def test_prism_layers_sharp_edges(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(a)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: A has sharp edges on its surface; prism layers need a smooth surface, so it"
+                " gets graded tetrahedra."
+            ],
+        )
+        (problem,) = [p for p in validation.validate(self.study) if p.text.startswith(f"Skin Layer {item.Label}")]
+        self.assertEqual(problem.refs, [(a, "")])
+
+    def test_prism_layers_slanted_cut(self):
+        """A wire at 45° through the air, ending on its top and bottom: its cuts are 45° off square."""
+        objects.make_air_region(self.study, Length=100, Width=300, Height=100)
+        wire = Part.makeCylinder(5, 400, App.Vector(0, 0, -200))
+        wire.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 45)
+        body = self.shape_body("Wire", wire.common(Part.makeBox(100, 300, 100, App.Vector(-50, -150, -50))))
+        item = self.prism_skin(body)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Wire is cut by a curved face or at a slant; prism layers need flat cuts"
+                " square to its surface, so it gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_sweep_hint(self):
+        """A straight wire from the bottom of the air to its top: smooth, its cuts square, and a sweep."""
+        body = self.shape_body("Wire", Part.makeCylinder(5, 100, App.Vector(0, 0, -50)))
+        objects.make_air_region(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(body)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Wire is a sweep; a Swept Body on it gives fewer and better elements than"
+                " prism layers."
+            ],
+        )
+        objects.make_swept_body(self.study, [(body, "")])
+        self.assertFalse(self.skin_texts(item))
+
+    def test_prism_layers_free_object(self):
+        cell = self.ring_piece("Sector", 19, 21, -2, 2)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        ball = self.shape_body("Ball", Part.makeSphere(3, App.Vector(0, 0, 20)))
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        self.doc.recompute()
+        item = self.prism_skin(ball)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: prism layers are not made on free objects of a Study with Symmetric Groups;"
+                " Ball gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_cell_on_a_copy(self):
+        """A round wire piece (0°..22.5°) and an iron sector at 67.5°..90°, cells of one group of 8 rotations by 45°:
+        the wire's two flat ends meet copies of the iron."""
+        disk = Part.Face(Part.Wire(Part.makeCircle(1, App.Vector(20, 0, 0), App.Vector(0, 1, 0))))
+        cell = self.shape_body("Strand", disk.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 22.5))
+        iron = self.ring_piece("Iron", 19, 21, -2, 2, start=67.5, angle=22.5)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell, iron], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        self.doc.recompute()
+        item = self.prism_skin(cell)
+        item.SkinDepth = 0.2  # the strand is 2 mm thick
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Strand meets a copy of another cell object on a cut; prism layers need its"
+                " cuts to be seams with its own copies, so it gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_cell_seams_with_own_copies(self):
+        """The round wire piece alone, 16 rotations by 22.5°: its ends are seams with its own copies, so it is smooth
+        with square cuts, and only the sweep hint is left."""
+        disk = Part.Face(Part.Wire(Part.makeCircle(1, App.Vector(20, 0, 0), App.Vector(0, 1, 0))))
+        cell = self.shape_body("Strand", disk.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 22.5))
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 22.5, "count": 16}
+        objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        self.doc.recompute()
+        item = self.prism_skin(cell)
+        item.SkinDepth = 0.2
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Strand is a sweep; a Swept Body on it gives fewer and better elements than"
+                " prism layers."
+            ],
         )
 
     # --- Swept Body validation ---------------------------------------------------
@@ -2519,10 +2632,7 @@ class StudyTest(unittest.TestCase):
         on_plain = objects.make_skin_layer(self.study, [(b, "")])
         on_swept.QuadLayers = on_plain.QuadLayers = True
         self.assertFalse([t for t in self.skin_texts(on_swept) if f"Skin Layer {on_swept.Label}:" in t])
-        self.assertEqual(
-            [t for t in self.skin_texts(on_plain) if f"Skin Layer {on_plain.Label}:" in t],
-            [f"Skin Layer {on_plain.Label}: quad layers are made in 2D Studies only; ignored."],
-        )
+        self.assertFalse([t for t in self.skin_texts(on_plain) if "2D Studies only" in t])
 
     def test_swept_body_recombine_is_fine(self):
         a = self.box("A")

@@ -1424,10 +1424,9 @@ class ItemPanel:
         layout.addRow("Elements per depth", self.per_depth)
         self.layer_depth = _factor_box(obj.LayerDepth)
         layout.addRow("Layer depth (× δ)", self.layer_depth)
-        if study.Dimension == "2D":
-            self.quads = QtWidgets.QCheckBox("Quad layers")
-            self.quads.setChecked(obj.QuadLayers)
-            layout.addRow(self.quads)
+        self.quads = QtWidgets.QCheckBox("Quad layers" if study.Dimension == "2D" else "Prism layers")
+        self.quads.setChecked(obj.QuadLayers)
+        layout.addRow(self.quads)
         mu_r = obj.RelativePermeability
         if self.new and self.current:  # a material's permeability may be missing or not physical
             found = objects.body_mu_r(study, self.current[0][0])

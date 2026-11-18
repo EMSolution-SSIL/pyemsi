@@ -378,7 +378,12 @@ class SkinLayer(_Proxy):
             "App::PropertyFloatConstraint", "LayerDepth", "EMSolution", "How deep the layer reaches, in skin depths"
         )
         obj.LayerDepth = (3.0, 0.01, 1000.0, 0.5)
-        obj.addProperty("App::PropertyBool", "QuadLayers", "EMSolution", "2D: quad layers along smooth surfaces")
+        obj.addProperty(
+            "App::PropertyBool",
+            "QuadLayers",
+            "EMSolution",
+            "Quad layers (2D) or prism layers (3D) along smooth surfaces",
+        )
         obj.addProperty("App::PropertyFloat", "Frequency", "EMSolution", "Calculator: frequency in Hz")
         obj.Frequency = 50.0
         obj.addProperty("App::PropertyFloat", "Conductivity", "EMSolution", "Calculator: conductivity in S/m")

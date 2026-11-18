@@ -346,8 +346,6 @@ def _skin_layers(study, included, bodies, r):
             if not ok:
                 bad = True
                 r.error(f"Skin Layer {s.Label}: {what} must be greater than 0.", s)
-        if three and s.QuadLayers and not (picked and all(b.Name in swept for b, _ in picked)):  # a section has quads
-            r.warning(f"Skin Layer {s.Label}: quad layers are made in 2D Studies only; ignored.", s)
         layer = s.LayerDepth * depth
         for b, subs in picked:
             name = objects.display_name(b)
@@ -371,10 +369,11 @@ def _skin_layers(study, included, bodies, r):
                     [(b, "")],
                 )
                 continue
-            quads = s.QuadLayers and not three
+            quads = s.QuadLayers and not (three and b.Name in swept)  # a swept body's section has quads of its own
+            kind, fill = ("prism", "tetrahedra") if three else ("quad", "triangles")
             if quads and b.Name in recombined:
                 r.warning(
-                    f"Skin Layer {s.Label}: {name} is recombined; it gets the graded layer but no quad layers.",
+                    f"Skin Layer {s.Label}: {name} is recombined; it gets the graded layer but no {kind} layers.",
                     s,
                     [(b, "")],
                 )
@@ -394,11 +393,33 @@ def _skin_layers(study, included, bodies, r):
                 continue
             if objects.is_grouped(study) and _is_free(study, b):
                 r.warning(
-                    f"Skin Layer {s.Label}: quad layers are not made on free objects of a Study with Symmetric Groups;"
-                    f" {name} gets graded triangles.",
+                    f"Skin Layer {s.Label}: {kind} layers are not made on free objects of a Study with Symmetric Groups;"
+                    f" {name} gets graded {fill}.",
                     s,
                     [(b, "")],
                 )
+            elif three:
+                why = _sharp_3d(study, b, shape, bodies, layer)
+                if why == "edge":
+                    text = (
+                        f"{name} has sharp edges on its surface; prism layers need a smooth surface, so it gets graded"
+                        " tetrahedra."
+                    )
+                elif why == "cut":
+                    text = (
+                        f"{name} is cut by a curved face or at a slant; prism layers need flat cuts square to its"
+                        " surface, so it gets graded tetrahedra."
+                    )
+                elif _cut_on_copy(study, b, shape, bodies):
+                    text = (
+                        f"{name} meets a copy of another cell object on a cut; prism layers need its cuts to be seams"
+                        " with its own copies, so it gets graded tetrahedra."
+                    )
+                elif not isinstance(sweeps.recognise_body(shape), str):
+                    text = f"{name} is a sweep; a Swept Body on it gives fewer and better elements than prism layers."
+                else:
+                    continue
+                r.warning(f"Skin Layer {s.Label}: {text}", s, [(b, "")])
             elif _sharp(study, b, shape, bodies, layer):
                 r.warning(
                     f"Skin Layer {s.Label}: {name} has sharp corners on its surface; quad layers need a smooth surface,"
@@ -663,6 +684,126 @@ def _sharp(study, body, shape, bodies, layer):
         for q, b in ends[i + 1 :]:
             if p.distanceToPoint(q) < tol and -a.dot(b) < limit:  # the turn from arriving along -a to leaving along b
                 return True
+    return False
+
+
+def _surface_3d(study, body, shape, bodies):
+    """[(solid, real faces, cut faces)] for each solid of a 3D body with prism layers, as meshlayers sees them. A face
+    is real when it lies on another meshed body (another solid of body too), or inside the Air Region (not on its
+    outside); one on a conductor with a Skin Layer of its own and no prism layers (a terminal) is a cut, as no skin is
+    there. For a cell object, its faces toward the other cell objects of its groups and its faces toward the free side
+    (free_faces), as its cell job sees them: a face on a seam or against a copy is a cut. Every other face is a cut."""
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    outline = None
+    airs = objects.air_regions(study)
+    mine = [g for g in objects.symmetric_groups(study) if body in g.Cells]
+    cells = {c.Name for g in mine for c in g.Cells}
+    free = [shape.getElement(n) for g in mine for n in free_faces(study, g, body)]
+    if cells:
+        bodies = [o for o in bodies if o.Name in cells]
+    elif airs:
+        try:
+            outline = Part.Compound(airshapes.air_shape(airs[0], "3D").Faces)
+        except ValueError:  # _air reports it
+            pass
+    swept = {b.Name for w in objects.swept_bodies(study) for b, _ in objects.subs_by_body(w)}
+    skins = [(s.QuadLayers, b.Name) for s in objects.skin_layers(study) for b, _ in objects.subs_by_body(s)]
+    layering = {n for quads, n in skins if quads}
+    terminals = {n for _, n in skins} - layering - swept
+    box = shape.BoundBox
+    box.enlarge(tol)
+    others = [(o.Name in terminals, geometry.global_shape(o)) for o in bodies if o.Name != body.Name]
+    others = [(t, o) for t, o in others if box.intersect(o.BoundBox)]
+    out = []
+    for k, solid in enumerate(shape.Solids):
+        near = others + [(False, s) for j, s in enumerate(shape.Solids) if j != k]
+        real, cuts = [], []
+        for f in solid.Faces:
+            points = _face_points(f)
+            beside = [t for t, o in near if _on(points, o, tol)]
+            inside = outline is not None and not _on(points, outline, tol)
+            mesh_face = any(f.isSame(g) for g in free) or (not all(beside) if beside else inside)
+            (real if mesh_face else cuts).append(f)
+        out.append((solid, real, cuts))
+    return out
+
+
+def _face_points(face):
+    """A few points inside face, away from its edges."""
+    u0, u1, v0, v1 = face.ParameterRange
+    grid = [(u0 + i * (u1 - u0) / 4, v0 + j * (v1 - v0) / 4) for i in (1, 2, 3) for j in (1, 2, 3)]
+    return [face.valueAt(u, v) for u, v in grid if face.isPartOfDomain(u, v)] or [face.CenterOfMass]
+
+
+def _normal(face, point):
+    return face.normalAt(*face.Surface.parameter(point)).normalize()
+
+
+def _sharp_3d(study, body, shape, bodies, layer):
+    """Why a 3D body gets no prism layers (spec 6), as meshlayers decides it: "edge" when two of its real faces meet
+    with the normals turning by more than 15°; "cut" when a cut face is not planar, meets a real face more than 30° off
+    square, has an edge on no real face or a corner on another cut; None when it is smooth or has no real surface.
+    The normals are compared at the quarter points of each shared edge. layer: the layer's depth, for the 2D call's
+    shape (a fold shows only in the mesh)."""
+    smooth, square = math.cos(math.radians(15)), 0.5
+    for solid, real, cuts in _surface_3d(study, body, shape, bodies):
+        if not real:
+            continue  # no real surface: no layers, and nothing to say here
+
+        def faces_at(edge):
+            found = []
+            for f in solid.ancestorsOfType(edge, Part.Face):
+                if not any(f.isSame(g) for g in found):
+                    found.append(f)
+            return found
+
+        def quarters(edge):
+            u0, u1 = edge.FirstParameter, edge.LastParameter
+            return [edge.valueAt(u0 + k * (u1 - u0) / 4) for k in (1, 2, 3)]
+
+        def is_real(f):
+            return any(f.isSame(g) for g in real)
+
+        tol = 1e-6 * max(1.0, solid.BoundBox.DiagonalLength)
+        for e in solid.Edges:
+            faces = faces_at(e)
+            if e.Length > tol and len(faces) == 2 and all(is_real(f) for f in faces):
+                a, b = faces
+                if any(_normal(a, p).dot(_normal(b, p)) < smooth for p in quarters(e)):
+                    return "edge"
+        corners = []
+        for cut in cuts:
+            normals = [cut.normalAt(*cut.Surface.parameter(p)) for p in _face_points(cut)]
+            if any(n.normalize().dot(normals[0]) < 1 - 1e-9 for n in normals):
+                return "cut"
+            for e in cut.Edges:
+                if e.Length <= tol:
+                    continue
+                beside = [f for f in faces_at(e) if is_real(f)]
+                if not beside:
+                    return "cut"
+                if any(abs(_normal(beside[0], p).dot(_normal(cut, p))) > square for p in quarters(e)):
+                    return "cut"
+            if any(v.isSame(w) for v in cut.Vertexes for w in corners):
+                return "cut"
+            corners += cut.Vertexes
+    return None
+
+
+def _cut_on_copy(study, body, shape, bodies):
+    """True when a cut face of a cell object lies on a copy of another cell object of its group: the cell job meshes
+    that face itself, so prism layers cannot end there. The face test is that of a swept cell (_swept_bodies)."""
+    if not any(body in g.Cells for g in objects.symmetric_groups(study)):
+        return False
+    cuts = [f for _, _, c in _surface_3d(study, body, shape, bodies) for f in c]
+    if not cuts:
+        return False
+    box = shape.BoundBox
+    box.enlarge(1e-6 * max(1.0, box.DiagonalLength))
+    others = [(o, geometry.global_shape(o)) for o in bodies if not objects.is_air(o)]
+    for o, o_shape, copy in _swept_neighbours(study, body, box, others):
+        if copy and box.intersect(o_shape.BoundBox) and any(_shared_area(f, o_shape) > 1e-6 * f.Area for f in cuts):
+            return True
     return False
 
 
