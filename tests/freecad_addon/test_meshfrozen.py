@@ -237,6 +237,120 @@ def test_mesh_region_leaves_the_options_as_they_were(model):
     assert gmsh.option.getNumber("Mesh.Renumber") == 1 and gmsh.option.getNumber("Mesh.MeshSizeMax") == 7.0
 
 
+def cube_shell():
+    """Nodes and triangles of the surface of the cube [0, 4]^3 meshed at size 0.5, from a scratch gmsh model."""
+    current = gmsh.model.getCurrent()
+    gmsh.model.add("shell")
+    gmsh.model.occ.addBox(0, 0, 0, 4, 4, 4)
+    gmsh.model.occ.synchronize()
+    gmsh.option.setNumber("Mesh.MeshSizeMax", 0.5)
+    gmsh.model.mesh.generate(2)
+    V, out = meshfrozen.read_model(2, {0: [t for _, t in gmsh.model.getEntities(2)]})
+    gmsh.model.remove()
+    gmsh.model.setCurrent(current)
+    return V, out[0][2]
+
+
+def edge_lengths(V, per_type, near, far):
+    """Mean edge length of the elements whose centroids lie within near of the origin, and mean length of the unique
+    element edges whose midpoints lie beyond far."""
+    edges, inside = [], []
+    for etype, conn in per_type.items():
+        n = conn.shape[1]
+        local = (
+            [(i, j) for i in range(n) for j in range(i + 1, n)] if etype == 4 else [(i, (i + 1) % n) for i in range(n)]
+        )
+        own = [np.linalg.norm(V[conn[:, j]] - V[conn[:, i]], axis=1) for i, j in local]
+        inside.append(np.mean(own, axis=0)[np.linalg.norm(V[conn].mean(axis=1), axis=1) < near])
+        edges += [conn[:, [i, j]] for i, j in local]
+    edges = np.unique(np.sort(np.vstack(edges), axis=1), axis=0)
+    length = np.linalg.norm(V[edges[:, 1]] - V[edges[:, 0]], axis=1)
+    middle = np.linalg.norm(V[edges].mean(axis=1), axis=1)
+    return float(np.concatenate(inside).mean()), float(length[middle > far].mean())
+
+
+def corner_rule(V):
+    points = V[np.linalg.norm(V, axis=1) <= 0.5 + 1e-9]
+    return {"points": points, "fine": 0.1, "fine_distance": 0.0, "coarse": 0.5, "growth": 2.0}
+
+
+def test_rule_grades_from_its_points(model):
+    V, tris = cube_shell()
+    outer = np.arange(len(tris))
+    plain = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3)
+    V2, per_type = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=[corner_rule(V)])
+    # at 1.0: the frozen surface stays at 0.5, so nothing next to it can be finer; the band at 1.0 is where the rule acts
+    near0, far0 = edge_lengths(plain[0], plain[1], 1.0, 3)
+    near, far = edge_lengths(V2, per_type, 1.0, 3)
+    assert near < 0.8 * near0
+    assert far == pytest.approx(far0, rel=0.1)
+    assert np.array_equal(V2[: len(V)], V)
+
+
+def test_rules_leave_no_unused_nodes(model):
+    V, tris = cube_shell()
+    V2, per_type = meshfrozen.mesh_region(V, tris, np.arange(len(tris)), [], 0.5, 3, rules=[corner_rule(V)])
+    used = np.unique(np.concatenate([c.ravel() for c in per_type.values()]))
+    assert set(range(len(V), len(V2))) <= set(used.tolist())
+
+
+def test_no_rules_mesh_unchanged(model):
+    V, tris = cube_shell()
+    outer = np.arange(len(tris))
+    V0, before = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3)
+    V1, after = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=())
+    assert {t: len(c) for t, c in after.items()} == {t: len(c) for t, c in before.items()}
+    assert np.array_equal(V1, V0)
+
+
+def test_rule_without_points_is_ignored(model):
+    V, tris = cube_shell()
+    outer = np.arange(len(tris))
+    V0, before = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3)
+    rule = dict(corner_rule(V), points=np.zeros((0, 3)))
+    V1, after = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=[rule])
+    assert {t: len(c) for t, c in after.items()} == {t: len(c) for t, c in before.items()}
+    assert np.array_equal(V1, V0)
+
+
+def test_rule_out_of_reach_is_left_out(model, monkeypatch):
+    # points farther than fine_distance + growth from the region's box size nothing in it: the mesh of no rules, and
+    # gmsh never sees them
+    V, tris = cube_shell()
+    outer = np.arange(len(tris))
+    V0, before = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3)
+    seen = []
+    size_field = meshfrozen._size_field
+    monkeypatch.setattr(
+        meshfrozen, "_size_field", lambda rules, points: seen.append(rules) or size_field(rules, points)
+    )
+    far = dict(corner_rule(V), points=np.array([[4.0 + 2.1, 2.0, 2.0], [-3.0, -3.0, -3.0]]))
+    V1, after = meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=[far])
+    assert {t: len(c) for t, c in after.items()} == {t: len(c) for t, c in before.items()}
+    assert np.array_equal(V1, V0)
+    assert seen == [[]]
+    near = dict(far, points=np.array([[4.0 + 1.9, 2.0, 2.0], [-3.0, -3.0, -3.0]]))  # one point within reach
+    meshfrozen.mesh_region(V, tris, outer, [], 0.5, 3, rules=[near])
+    assert [len(r["points"]) for r in seen[-1]] == [1]
+
+
+def test_rule_grades_from_its_points_2d(model):
+    s, o, f = np.arange(8) * 0.5, np.zeros(8), np.full(8, 4.0)  # a square of side 4, its sides split at 0.5
+    V = np.vstack([np.column_stack(c + (o,)) for c in ((s, o), (f, s), (f - s, f), (o, f - s))])
+    edges = np.column_stack([np.arange(len(V)), np.roll(np.arange(len(V)), -1)])
+    outer = np.arange(len(edges))
+    plain = meshfrozen.mesh_region(V, edges, outer, [], 0.5, 2)
+    V2, per_type = meshfrozen.mesh_region(V, edges, outer, [], 0.5, 2, rules=[corner_rule(V)])
+    # at 1.0: the frozen surface stays at 0.5, so nothing next to it can be finer; the band at 1.0 is where the rule acts
+    near0, far0 = edge_lengths(plain[0], plain[1], 1.0, 3)
+    near, far = edge_lengths(V2, per_type, 1.0, 3)
+    assert near < 0.6 * near0
+    assert far == pytest.approx(far0, rel=0.1)
+    assert np.array_equal(V2[: len(V)], V)
+    used = np.unique(np.concatenate([c.ravel() for c in per_type.values()]))
+    assert set(range(len(V), len(V2))) <= set(used.tolist())
+
+
 def test_on_surface(model):
     """A chord of the lateral face, a rim triangle of the end cap and a facet of the top with its owner outside."""
     gmsh.model.occ.addCylinder(0, 0, 0, 0, 0, 2, 1)
@@ -277,3 +391,101 @@ def test_on_facets_of_edges_in_2d():
     edge = np.array([[0, 1]])
     assert meshfrozen.on_facets(V, edge, np.array([1.0, 0.1, 0.0]), 1e-6)
     assert not meshfrozen.on_facets(V, edge, np.array([3.0, 0.0, 0.0]), 1e-6)
+
+
+def _two_shells(dim):
+    """V, facets, outer shell, inner shells: a gmsh boundary mesh of a block (size 2) inside a box (size 20)."""
+    current = gmsh.model.getCurrent()
+    gmsh.model.add("src")
+    occ = gmsh.model.occ
+    if dim == 3:
+        b = occ.addBox(-10, -10, -5, 20, 20, 10)
+        a = occ.addBox(-100, -100, -100, 200, 200, 200)
+    else:
+        b = occ.addRectangle(-10, -5, 0, 20, 10)
+        a = occ.addRectangle(-100, -100, 0, 200, 200)
+    occ.cut([(dim, a)], [(dim, b)], removeTool=False)
+    occ.synchronize()
+    for d, t in gmsh.model.getEntities(dim - 1):
+        x0, y0, z0, x1, y1, z1 = gmsh.model.getBoundingBox(d, t)
+        s = 2.0 if max(abs(x0), abs(x1)) <= 10.01 else 20.0
+        gmsh.model.mesh.setSize(gmsh.model.getBoundary([(d, t)], recursive=True), s)
+    gmsh.model.mesh.generate(dim - 1)
+    tags, xyz, _ = gmsh.model.mesh.getNodes()
+    V = xyz.reshape(-1, 3)
+    idx = np.zeros(int(tags.max()) + 1, dtype=int)
+    idx[tags.astype(int)] = np.arange(len(tags))
+    outer, inner, facets = [], [], []
+    for d, t in gmsh.model.getEntities(dim - 1):
+        _, conn = gmsh.model.mesh.getElementsByType(2 if dim == 3 else 1, t)
+        conn = idx[conn.astype(int)].reshape(-1, dim)
+        box = gmsh.model.getBoundingBox(d, t)
+        target = inner if max(abs(box[0]), abs(box[3])) <= 10.01 else outer
+        target += list(range(len(facets), len(facets) + len(conn)))
+        facets += conn.tolist()
+    gmsh.model.remove()
+    gmsh.model.setCurrent(current)
+    return V, np.array(facets), np.array(outer), [np.array(inner)]
+
+
+def _band_mean(dim, V, per_type, lo, hi):
+    """Mean edge length of the elements whose centroids are lo to hi from the block."""
+    conn = next(iter(per_type.values()))
+    c = V[conn].mean(axis=1)
+    e = np.linalg.norm(V[conn[:, 0]] - V[conn[:, 1]], axis=1)
+    half = np.array([10, 10, 5]) if dim == 3 else np.array([10, 5, 0])
+    d = np.linalg.norm(np.maximum(np.abs(c) - half, 0), axis=1)
+    return float(e[(d >= lo) & (d < hi)].mean())
+
+
+def _count(per_type):
+    return sum(len(c) for c in per_type.values())
+
+
+def test_grading_none_is_unchanged(model):
+    V, facets, outer, inners = _two_shells(3)
+    V0, before = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3)
+    V1, after = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3, grading=None)
+    assert {t: len(c) for t, c in after.items()} == {t: len(c) for t, c in before.items()}
+    assert np.array_equal(V1, V0)
+
+
+def test_grading_grows_from_the_frozen_boundary_3d(model):
+    V, facets, outer, inners = _two_shells(3)
+    plain = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3)
+    V2, per_type = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3, grading={"growth": 20.0, "far": 20.0})
+    assert np.array_equal(V2[: len(V)], V)
+    assert _band_mean(3, V2, per_type, 3, 10) > 1.2 * _band_mean(3, *plain, 3, 10)
+    assert _count(per_type) < _count(plain[1])
+
+
+def test_grading_far_size_above_the_region_size_3d(model):
+    V, facets, outer, inners = _two_shells(3)
+    near = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3, grading={"growth": 20.0, "far": 20.0})
+    far = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3, grading={"growth": 60.0, "far": 40.0})
+    assert _count(far[1]) < _count(near[1])
+
+
+def test_grading_grows_from_the_frozen_boundary_2d(model):
+    V, facets, outer, inners = _two_shells(2)
+    plain = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 2)
+    V2, per_type = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 2, grading={"growth": 20.0, "far": 20.0})
+    assert np.array_equal(V2[: len(V)], V)
+    assert _band_mean(2, V2, per_type, 3, 10) > 1.2 * _band_mean(2, *plain, 3, 10)
+
+
+def test_grading_with_rules(model):
+    V, facets, outer, inners = _two_shells(3)
+    grading = {"growth": 20.0, "far": 20.0}
+    point = np.array([[0.0, 0.0, -50.0]])
+    rule = {"points": point, "fine": 1.0, "fine_distance": 10.0, "coarse": 20.0, "growth": 30.0}
+    plain = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3, grading=grading)
+    V2, per_type = meshfrozen.mesh_region(V, facets, outer, inners, 20.0, 3, rules=[rule], grading=grading)
+
+    def near_mean(V, per_type):
+        conn = next(iter(per_type.values()))
+        close = (np.linalg.norm(V[conn] - point, axis=2) < 10.0).any(axis=1)  # the elements around the point
+        return float(np.linalg.norm(V[conn[close][:, 0]] - V[conn[close][:, 1]], axis=1).mean())
+
+    assert near_mean(V2, per_type) < 0.6 * near_mean(*plain)
+    assert np.array_equal(V2[: len(V)], V)

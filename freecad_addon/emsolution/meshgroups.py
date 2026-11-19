@@ -16,10 +16,14 @@ import numpy as np
 
 from meshcommon import JobError, generate, import_brep, publish, slide_report, write_split, FIELD_LISTS, MSH_VERSION
 from meshcommon import _note
+from meshcommon import _field, add_to_background
 from meshcommon import face_normal, plane_normal
 from meshcommon import air_items
+from meshcommon import AirFailed, PyramidsFailed
+from meshcommon import retry_note, _noted
 import meshfrozen
 import meshsym
+import meshsweep
 
 POOR = 0.1  # an element whose min SICN is below this is reported as poor
 
@@ -270,7 +274,9 @@ def prepare_images(group, contacts, folder, dim, points=None):
     contacts first, so that its faces pair one to one with those of its image; its image is then added to the job as
     a new body. group["cells"] is unchanged, so an image is meshed but never copied. group["images"] lists them for
     pair_images: {"id", "source", "transform"}; their BREPs are in group["images_folder"], for mesh_cell to delete.
-    points: {cell: [vertices]} that _unmatched found missing; such a cell is split too, with them on its edges."""
+    Their volumes entries are marked "image" (meshsweep.apply_swept tells cells from moved copies by it).
+    points: {cell: [vertices]} that _unmatched found missing; such a cell is split too, with them on its edges. A
+    structured or swept cell is never split: its mesh would not follow."""
     needed = _images_needed(contacts)
     points = points or {}
     if not needed and not points:
@@ -279,18 +285,24 @@ def prepare_images(group, contacts, folder, dim, points=None):
     entries = [dict(e) for e in group["job"][key]]
     by_id = {e["mat_id"]: e for e in entries}
     structured = {b["mat_id"] for b in (group["job"].get("transfinite") or {}).get("bodies", [])}
+    swept = {e["mat_id"] for e in group["job"].get("swept", [])}
+    structured |= swept
+
+    def kind(x):
+        return "swept" if x in swept else "structured"
+
     stuck = sorted(structured & set(points))
     if stuck:
         raise JobError(
-            f"group {group['name']}: the structured cell {by_id[stuck[0]]['name']} would need a mesh node on its edge"
-            " where an edge of a copy ends on it; meshing that is not handled yet, a limit of the tool, not of the"
+            f"group {group['name']}: the {kind(stuck[0])} cell {by_id[stuck[0]]['name']} would need a mesh node on its"
+            " edge where an edge of a copy ends on it; meshing that is not handled yet, a limit of the tool, not of the"
             " drawing"
         )
     for x in sorted(structured & ({c.a for c in needed} | {c.b for c in needed})):
         with _scratch("split"):
             if _split_cell(group, x, contacts, folder, dim)[1]:
                 raise JobError(
-                    f"group {group['name']}: the structured cell {by_id[x]['name']} would have to be split where a copy"
+                    f"group {group['name']}: the {kind(x)} cell {by_id[x]['name']} would have to be split where a copy"
                     " touches part of its face; meshing that is not handled yet, a limit of the tool, not of the drawing"
                 )
     where = tempfile.mkdtemp(prefix="images_", dir=folder)
@@ -306,7 +318,13 @@ def prepare_images(group, contacts, folder, dim, points=None):
         file = f"{relative}/image_{k}.brep"
         _write_moved(os.path.join(folder, by_id[c.a]["file"]), c.transform, os.path.join(folder, file), dim)
         entries.append(
-            {"mat_id": next_id, "name": f"{by_id[c.a]['name']} image", "file": file, "size": by_id[c.a]["size"]}
+            {
+                "mat_id": next_id,
+                "name": f"{by_id[c.a]['name']} image",
+                "file": file,
+                "size": by_id[c.a]["size"],
+                "image": True,
+            }
         )
         images.append({"id": next_id, "source": c.a, "transform": c.transform})
         next_id += 1
@@ -359,12 +377,12 @@ def _image_faces(group, images, dim):
     return out
 
 
-def pair_images(group, images, dim):
+def pair_images(group, images, dim, skip=()):
     """After build: mesh each face of every image as a copy of the face of its source that it was moved from
     (_image_faces). A face of both image and source is a seam of the cell: meshsym._periodic has it. A face on a real
     cell that finds no partner cannot be copied, and that is a limit of this method, not a fault in the drawing. A face
     on no real cell whose corners differ from its partner's (the build put a vertex on it) is left alone: gmsh would
-    refuse to copy it, and nothing needs it."""
+    refuse to copy it, and nothing needs it. skip: faces left out (a swept cell's, see _check_swept_seams)."""
     tol = _model_tol()
     for image, f, partner, on_real in _image_faces(group, images, dim):
         if partner is None and on_real:
@@ -373,7 +391,9 @@ def pair_images(group, images, dim):
                 f"group {group['name']}: a contact near ({', '.join(f'{v:.6g}' for v in centre[:dim])}) splits the"
                 " copy of a cell differently from the cell itself; this is a limit of the tool, not of the drawing"
             )
-        if partner is None or not (on_real or meshsym._corners_match(partner, f, image["transform"], tol, dim - 1)):
+        if partner is None or f in skip or partner in skip:
+            continue
+        if not (on_real or meshsym._corners_match(partner, f, image["transform"], tol, dim - 1)):
             continue
         if not _copied_from(dim - 1, partner, f):  # _periodic may have made it the other way round
             meshsym.set_periodic(group["name"], dim - 1, f, partner, image["transform"])
@@ -524,8 +544,10 @@ def _build_cell(group, contacts, folder, build, dim):
     for _ in range(ROUNDS):
         here = prepare_images(group, contacts, folder, dim, points)
         try:
-            build(dict(here["job"]), folder)
+            built = dict(here["job"])
+            build(built, folder)
             missing = _unmatched(here, contacts, dim)
+            here = _with_swept(here, built)
         except BaseException:
             _drop_images(here)
             raise
@@ -548,11 +570,180 @@ def _build_cell(group, contacts, folder, build, dim):
     )
 
 
-def _generate_cell(group, job, dim):
+LAYER_KEYS = ("layer_tags", "layer_hidden", "layered", "layer_seams")  # meshlayers.apply_layers's, for generate
+
+
+def _with_swept(group, built):
+    """group, its cell job given the hand-made mesh of its swept cells and the prism layers of its cells that
+    build(built) made (meshsweep.apply_swept's swept_tags and swept_add, meshlayers.apply_layers's LAYER_KEYS): build
+    works on a copy of the job, and generate needs them. They are the same objects: the add closures read the lists
+    of the built job, which _layer_seams fills. A swept entry left without its mesh would be meshed in tetrahedra,
+    silently: that is refused (a layered cell may fall back, with a note)."""
+    swept = group["job"].get("swept", [])
+    made, count = len(built.get("swept_tags", [])), 0
+    for entry in swept:
+        count += len(entry["solids"])
+        if made < count:
+            raise JobError(
+                f"group {group['name']}: the swept cell {entry['name']} got no swept mesh; this is a fault of the tool,"
+                " not of the drawing"
+            )
+    carried = {"swept_tags": built["swept_tags"], "swept_add": built["swept_add"]} if swept else {}
+    if built.get("layer_tags"):
+        carried.update({k: built[k] for k in LAYER_KEYS}, swept_add=built["swept_add"])
+    return dict(group, job=dict(group["job"], **carried)) if carried else group
+
+
+def _swept_faces(group, dim):
+    """The faces of the volumes of the group's swept cells and of its layered cells (after _with_swept and
+    _layer_seams), or none: their mesh is made by hand, so the periodic pairing leaves them out."""
+    tags = group["job"].get("swept_tags", []) + group["job"].get("layer_tags", [])
+    return set(_boundary(dim, [(dim, t) for t in tags])) if tags else set()
+
+
+def _layer_entry(job, m):
+    """The name of the first Skin Layer of the cell job with prism layers on MAT_ID m (the one that makes them)."""
+    return next(e["name"] for e in job.get("skin", []) if e.get("quads") and m in e["mat_ids"])
+
+
+def _layer_seams(group, contacts, dim):
+    """3D, after build and _with_swept: the cuts of the layered cells (their faces that meshlayers hides) that the
+    copies meet. A cut c that a transform between copies that touch maps onto another cut d of the same volume, corners
+    and all (meshsym._same), is a seam: (slave, master, transform) goes into job["layer_seams"], the master the lower
+    tag, which the add closures read; a cut it maps onto itself (on a mirror) or onto nothing (the model boundary)
+    needs nothing. A cut that meets a copy of anything else (another cell's face, an image or an image's face) cannot
+    share the hand-made mesh: that volume gets no layers (note N5); nor when its seams with its own copies do not
+    match (note N8: a cut onto a copy of its own real face, a seam whose corners differ, a cut both slave and master).
+    It is taken out of layer_tags and layer_hidden, so generate leaves it shown and gmsh meshes it in graded
+    tetrahedra."""
+    job = group["job"]
+    if not job.get("layer_tags"):
+        return
+    tol = _model_tol()
+    seams = meshsym._side_seams(group, dim)
+    transforms = _seam_transforms(contacts)
+    images = group.get("images", [])
+    image_vols = {int(e) for x in images for e in gmsh.model.getEntitiesForPhysicalGroup(dim, x["id"])}
+    copied = {partner for _, _, partner, on_real in _image_faces(group, images, dim) if on_real}
+    hidden = {t for d, t in job["layer_hidden"] if d == dim - 1}
+    noted = set()
+    for vol in list(job["layer_tags"]):
+        faces = _boundary(dim, [(dim, vol)])
+        cuts = [f for f in faces if f in hidden]
+        pairs, other, own = {}, False, False  # other: meets a copy of something else (N5); own: of itself (N8)
+        for c in cuts:
+            beyond = {int(v) for v in gmsh.model.getAdjacencies(dim - 1, c)[0]}
+            other = other or bool(beyond & image_vols) or c in copied
+            for m in transforms:
+                for d in seams:
+                    if d == c or not meshsym._twin(c, d, m, tol, dim - 1):
+                        continue
+                    if d not in cuts:
+                        own, other = own or d in faces, other or d not in faces  # its own real face, or another's
+                    elif not meshsym._same(c, d, m, tol, dim - 1):
+                        own = True  # a seam whose corners differ
+                    elif c < d:
+                        pairs.setdefault(d, (d, c, m))
+        if set(pairs) & {master for _, master, _ in pairs.values()}:
+            own = True  # a cut both slave and master: build moves a cap only from a cut that is no copy
+        if not (other or own):
+            job["layer_seams"].extend(pairs.values())
+            continue
+        m = next(g for g in gmsh.model.getPhysicalGroupsForEntity(dim, vol) if g in group["cells"])
+        if m not in noted:
+            noted.add(m)
+            entry = _layer_entry(job, m)
+            if other:
+                _note(
+                    f"Skin Layer {entry}: MAT_ID {m} meets a copy of another cell on a cut; graded tetrahedra instead"
+                    " of prism layers"
+                )
+            else:
+                _note(
+                    f"Skin Layer {entry}: MAT_ID {m}: its seams with its own copies do not match; graded tetrahedra"
+                    " instead of prism layers"
+                )
+        job["layer_tags"].remove(vol)
+        drop = {(dim, vol)} | {(dim - 1, c) for c in cuts}
+        job["layer_hidden"][:] = [h for h in job["layer_hidden"] if h not in drop]
+
+
+def _pair_rims(group, dim):
+    """The rims of each seam in job["layer_seams"] get the same nodes: each curve of the slave is meshed as a copy of
+    the curve of the master that the transform moves onto it (meshsym._twin), so the hand-made caps match."""
+    tol = _model_tol()
+    for slave, master, m in group["job"].get("layer_seams", []):
+        rims = [abs(t) for _, t in gmsh.model.getBoundary([(dim - 1, master)], combined=False, oriented=False)]
+        for _, t in gmsh.model.getBoundary([(dim - 1, slave)], combined=False, oriented=False):
+            c = abs(t)
+            if int(gmsh.model.mesh.getPeriodic(dim - 2, [c])[0]) != c:
+                continue  # a copy already (another seam's rim)
+            mc = next((r for r in rims if r != c and meshsym._twin(r, c, m, tol, dim - 2)), None)
+            if mc is not None:
+                meshsym.set_periodic(group["name"], dim - 2, c, mc, m)
+
+
+def _check_swept_seams(group, contacts, dim):
+    """After generate: a swept or layered cell's faces are left out of the periodic pairing (gmsh finds no
+    counterpart for its hand-made nodes), so check what the pairing would have made sure of. For each face c of a
+    swept or layered volume: wherever a transform between copies that touch maps it onto a face d of the cells (d may
+    be c, on a mirror), the nodes of c moved by it must be the nodes of d, within meshsweep.TOL x the volume's size;
+    and so for an image's face on a real cell and its partner (_image_faces). The hand-made meshes match when the
+    transform moves one end section onto the other or a side onto itself, or a seam's cap onto its slave
+    (_layer_seams); otherwise the seam is refused."""
+    swept_tags = group["job"].get("swept_tags", [])
+    tags = swept_tags + group["job"].get("layer_tags", [])
+    if not tags:
+        return
+    names = {v["mat_id"]: v["name"] for v in group["job"]["volumes"]}
+    names.update({e["mat_id"]: e["name"] for e in group["job"].get("swept", [])})
+    model_tol = _model_tol()
+    seams = meshsym._side_seams(group, dim)
+    transforms = _seam_transforms(contacts)
+    images = _image_faces(group, group.get("images", []), dim)
+
+    def nodes(f):
+        return np.reshape(gmsh.model.mesh.getNodes(dim - 1, f, includeBoundary=True)[1], (-1, 3))
+
+    def matches(c, d, m, tol):
+        M = np.reshape(m, (4, 4))
+        moved, there = nodes(c) @ M[:3, :3].T + M[:3, 3], nodes(d)
+        if len(moved) != len(there):
+            return False
+        return all(np.linalg.norm(there - p, axis=1).min() <= tol for p in moved)
+
+    for vol in tags:
+        mat_id = next((g for g in gmsh.model.getPhysicalGroupsForEntity(dim, vol) if g in names), None)
+        box = np.reshape(gmsh.model.getBoundingBox(dim, vol), (2, 3))
+        tol = meshsweep.TOL * float(np.linalg.norm(box[1] - box[0]))
+        pairs = []
+        for c in _boundary(dim, [(dim, vol)]):
+            for m in transforms:
+                pairs += [(c, d, m) for d in seams if meshsym._twin(c, d, m, model_tol, dim - 1)]
+            pairs += [(c, f, image["transform"]) for image, f, partner, on_real in images if on_real and partner == c]
+        for c, d, m in pairs:
+            if not matches(c, d, m, tol):
+                where = _text(np.reshape(gmsh.model.getBoundingBox(dim - 1, c), (2, 3)).mean(axis=0), dim)
+                kind = "swept" if vol in swept_tags else "layered"
+                raise JobError(
+                    f"group {group['name']}: the {kind} cell {names.get(mat_id, '?')} meets a copy on a face whose mesh"
+                    " the copy cannot share; meshing that is not handled yet, a limit of the tool, not of the drawing"
+                    f" near ({where})"
+                )
+
+
+def _generate_cell(group, job, dim, late=None):
     """generate, with gmsh's own error (it raises Exception itself) given the group's name; one about copying a mesh
-    between periodic faces is refused as a limit of the tool, with gmsh's text."""
+    between periodic faces is refused as a limit of the tool, with gmsh's text. late: called once the swept cells'
+    points and curves are in (meshcommon._swept_stages); the job's "optimize_pyramids" (run's retry) goes on too."""
+    settings = dict(group["job"], options=job.get("options", {}))
+    if "optimize_pyramids" in job:
+        settings["optimize_pyramids"] = job["optimize_pyramids"]
+    if late is not None:
+        settings["swept_periodic"] = late
+    settings["swept_group"] = group["name"]  # a failure around its swept cells names the group, not the air
     try:
-        generate(dict(group["job"], options=job.get("options", {})), dim)
+        generate(settings, dim)
     except Exception as err:
         if type(err) is not Exception:
             raise
@@ -562,6 +753,24 @@ def _generate_cell(group, job, dim):
                 f" ({err}); meshing that is not handled yet, a limit of the tool, not of the drawing"
             ) from err
         raise JobError(f"group {group['name']}: {err}") from err
+
+
+def _refine_partners(dim):
+    """After meshsym._periodic and pair_images: every Distance field (each is a refinement's) also measures from the
+    periodic partners of its picks, the master a picked entity is copied from and the entities copied from a picked
+    one. gmsh copies a seam's mesh from its master, so a pick on the copy alone would not refine the seam, and a pick
+    on the master would grade only its own side of the cell."""
+    field = gmsh.model.mesh.field
+    for f in field.list():
+        if field.getType(f) != "Distance":
+            continue
+        for d in range(dim):
+            listed = [int(t) for t in field.getNumbers(f, FIELD_LISTS[d])]
+            if not listed:
+                continue
+            master = {e: int(gmsh.model.mesh.getPeriodic(d, [e])[0]) for _, e in gmsh.model.getEntities(d)}
+            wanted = set(listed) | {master[e] for e in listed} | {e for e, m in master.items() if m in listed}
+            field.setNumbers(f, FIELD_LISTS[d], listed + sorted(wanted - set(listed)))
 
 
 def mesh_cell(group, job, folder, build, dim, slide=None):
@@ -576,11 +785,23 @@ def mesh_cell(group, job, folder, build, dim, slide=None):
             contacts = contact_table(group, group["job"], folder, dim)
             group = _build_cell(group, contacts, folder, build, dim)
         else:
-            build(dict(group["job"]), folder)
+            built = dict(group["job"])
+            build(built, folder)
+            group = _with_swept(group, built)
         reached = _slide_cell(group, slide, dim) if slide else False
-        meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim)
-        pair_images(group, group.get("images", []), dim)
-        _generate_cell(group, job, dim)
+        _layer_seams(group, contacts, dim)  # before _swept_faces: a cell that gets no layers is paired as any
+        swept = _swept_faces(group, dim)
+
+        def pair():  # with swept or layered cells: only once their points and curves are in (_generate_cell's late)
+            meshsym._periodic([dict(group, transforms=_seam_transforms(contacts))], dim, swept)
+            pair_images(group, group.get("images", []), dim, swept)
+            _pair_rims(group, dim)
+            _refine_partners(dim)  # after pair_images: the seams it makes periodic too
+
+        if not swept:
+            pair()
+        _generate_cell(group, job, dim, pair if swept else None)
+        _check_swept_seams(group, contacts, dim)
         expected = _expected_area(group, contacts, dim) if contacts else 0.0
         by_row = _by_row(group, folder, dim)
         cell_patches = meshsym._cell_patches(group, dim)
@@ -1036,11 +1257,13 @@ def _new_size_field(by_size, dim):
 
 
 def _carry_size_picks(replaced, dim):
-    """A Mesh Size picked on a face (line in 2D) that was replaced goes on to what replaced it."""
+    """A Mesh Size, Refine Near or Air Grading picked on a face (line in 2D) that was replaced goes on to what replaced
+    it."""
     field = gmsh.model.mesh.field
     for f in field.list():
-        if field.getType(f) != "Constant":
-            continue
+        kind = field.getType(f)
+        if kind not in ("Constant", "Distance", "Restrict", "Extend") or (kind in ("Distance", "Extend") and dim == 3):
+            continue  # no VolumesList
         old = [int(t) for t in field.getNumbers(f, FIELD_LISTS[dim])]
         if any(t in replaced for t in old):
             field.setNumbers(f, FIELD_LISTS[dim], [n for t in old for n in replaced.get(t, [t])])
@@ -1149,11 +1372,12 @@ def _triangles(rows):
     return np.array(tris, dtype=np.int64).reshape(-1, 3)
 
 
-def _open_lines(surveys, covered, names, V, side):
+def _open_lines(surveys, covered, names, V, side, gradings=()):
     """2D: a line of the free object that frozen edges lie on leaves room for them: dropped when no part of it is free
     (_taken), split at their end nodes otherwise, the pieces meshed as new lines. A curved line partly covered is a
     limit of the tool. A line with no frozen edge on it that ends on one and lies inside the copies is dropped too.
-    Returns {line: [its new lines]}."""
+    gradings: the Air Gradings of the free job (built["air_grading_fields"]): a new line of a graded air grows from its
+    ends on frozen nodes (_grow_from_ends). Returns {line: [its new lines]}."""
     occ = gmsh.model.occ
     tol = _tol()
     nodes = np.unique(np.vstack([np.asarray(rows) for rows in covered.values()]))
@@ -1162,7 +1386,12 @@ def _open_lines(surveys, covered, names, V, side):
     sizes = {f: s.body["size"] for s in surveys for f in s.faces}
     solid = _copies_surface(side, 2)
     frozen_labels = set(vertices.of_node.values())
-    replaced, by_size = {}, {}
+    node_of = {label: node for node, label in vertices.of_node.items()}
+    edge_size = np.full(len(V), np.inf)  # of each frozen node: the shortest frozen edge it ends
+    lengths = np.linalg.norm(V[side.edge[:, 0]] - V[side.edge[:, 1]], axis=1)
+    for k in (0, 1):
+        np.minimum.at(edge_size, side.edge[:, k], lengths)
+    replaced, by_size, on_frozen = {}, {}, []  # see _grow_from_ends
     for line in every:
         if line in covered:
             continue
@@ -1179,22 +1408,54 @@ def _open_lines(surveys, covered, names, V, side):
         replaced[line] = [occ.addLine(vertices.tag(a), vertices.tag(b)) for a, b, _ in pieces]
         if replaced[line]:
             by_size.setdefault(sizes[line], []).extend(replaced[line])
+        mat_id = next(s.body["mat_id"] for s in surveys if line in s.faces)
+        for (a, b, _), new in zip(pieces, replaced[line]):
+            at = {vertices.tag(v): float(edge_size[node_of[v]]) for v in (a, b) if v in frozen_labels}
+            if at:
+                on_frozen.append((mat_id, sizes[line], new, at))
     occ.synchronize()
     if by_size:
         _new_size_field(by_size, 1)
     _carry_size_picks(replaced, 1)
+    if gradings and on_frozen:
+        _grow_from_ends(gradings, on_frozen)
     return replaced
 
 
-def _open_faces(surveys, covered, names, V, side):
+def _grow_from_ends(gradings, ends):
+    """2D Air Grading on the lines _open_lines made: along them the size grows from the copies' edge size at their ends
+    on frozen nodes to the far size over the growth distance, as meshcommon.apply_air_grading does from the points
+    where the outer lines meet the bodies (a line is meshed before any mesh exists to extend from). ends: [(MAT_ID of
+    the line's body, its size, new line, {point tag of a frozen end: the shortest copies' edge there})]."""
+    fields = []
+    for entry, _ in gradings:
+        mine = [e for e in ends if e[0] in entry["mat_ids"]]
+        starts = {}  # start size -> points
+        for _, size, _, at in mine:
+            for point, edge in at.items():
+                starts.setdefault(min(size, edge), set()).add(point)
+        lines = [new for _, _, new, _ in mine]
+        far, growth = float(entry["far"]), float(entry["growth"])
+        for size, points in starts.items():
+            dist = _field("Distance", PointsList=sorted(points))
+            grow = _field(
+                "Threshold", InField=dist, SizeMin=size, SizeMax=far, DistMin=0, DistMax=growth, StopAtDistMax=1
+            )
+            fields.append(_field("Restrict", InField=grow, CurvesList=lines))
+    if fields:
+        add_to_background(fields)
+
+
+def _open_faces(surveys, covered, names, V, side, gradings=()):
     """3D: the faces that frozen facets lie on leave room for them, and so do the faces that share a curve with those. A
     face with no free part (_taken: under frozen facets or inside the copies) is dropped; a planar one with a free part
     is rebuilt with one hole per loop of the region's outer
     edges, through the exact nodes of the copies (each polygon line one element), and a stretch of a bounding curve that
     only reaches a frozen node is kept. A curved face the copies reach only along its rim keeps its surface and its
     curves, whose mesh goes through the frozen nodes (_chords, _place_rim_nodes). A curved face partly covered is a limit
-    of the tool. Returns ({face: [the faces in its place]}, the rims for _place_rim_nodes); the new tags come after an
-    occ.remove of the volumes: their face lists come from the surveys, read first."""
+    of the tool. gradings: as in _open_lines (see _rebuild). Returns ({face: [the faces in its place]}, the rims for
+    _place_rim_nodes); the new tags come after an occ.remove of the volumes: their face lists come from the surveys,
+    read first."""
     tol = _tol()
     faces = {f for s in surveys for f in s.faces}
     outer = {f: _outer_edges(rows, names[f], V) for f, rows in covered.items()}
@@ -1254,13 +1515,14 @@ def _open_faces(surveys, covered, names, V, side):
         if gmsh.model.getType(2, f) != "Plane":
             raise _limit(names[f], PART_OF_CURVED, _text(V[covered[f][0]].mean(axis=0), 3))
         plans[f] = edges
-    return _rebuild(plans, dropped, surveys, vertices, names, rims), rims
+    return _rebuild(plans, dropped, surveys, vertices, names, rims, gradings), rims
 
 
-def _rebuild(plans, dropped, surveys, vertices, names, rims):
+def _rebuild(plans, dropped, surveys, vertices, names, rims, gradings=()):
     """Apply _open_faces: every free volume that has a face to change is taken out of the OCC model (not its faces),
     each of those faces is removed and the planned ones are made again as plane surfaces, keeping physical groups and
-    sizes. Returns {face: [new faces]}."""
+    sizes. The Air Gradings (gradings, see _open_lines) grow from the copies' frozen lines too (_grow_from_frozen).
+    Returns {face: [new faces]}."""
     occ = gmsh.model.occ
     replaced = {f: [] for f in dropped}
     loops_of = {}
@@ -1299,6 +1561,8 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims):
     occ.synchronize()
     for tag in polygon:
         gmsh.model.mesh.setTransfiniteCurve(tag, 2)
+    if gradings and polygon:
+        _grow_from_frozen(gradings, sorted(polygon))
     for curve, targets, closed in rims:
         gmsh.model.mesh.setTransfiniteCurve(curve, len(targets) + (1 if closed else 0))
     _carry_physical_groups(saved, replaced, 2)
@@ -1306,8 +1570,9 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims):
     gone_volumes = set(volumes)
     _carry_size_picks({v: [] for v in gone_volumes}, 3)  # a size field naming a volume that is gone would fail
     by_size = {}
+    graded = {m for entry, _ in gradings for m in entry["mat_ids"]}  # sized by the carried Air Grading fields
     for s in surveys:
-        if s.entity in gone_volumes:
+        if s.entity in gone_volumes and s.body["mat_id"] not in graded:
             for f in s.faces:
                 by_size.setdefault(s.body["size"], set()).update(replaced.get(f, [f]))
     if by_size:
@@ -1315,9 +1580,18 @@ def _rebuild(plans, dropped, surveys, vertices, names, rims):
     return replaced
 
 
-def _leave_room(surveys, V, dim, side):
-    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines). Returns (the surveys with the
-    faces they have now, for the model has changed; the rims for _place_rim_nodes)."""
+def _grow_from_frozen(gradings, lines):
+    """3D Air Grading: each Extend grows from the copies' frozen lines too, so the air's faces beside the copies grow
+    from the copies' edges (gmsh meshes the surfaces before any surface mesh exists to extend from)."""
+    field = gmsh.model.mesh.field
+    for _, extend in gradings:
+        field.setNumbers(extend, "CurvesList", [int(t) for t in field.getNumbers(extend, "CurvesList")] + lines)
+
+
+def _leave_room(surveys, V, dim, side, gradings=()):
+    """Open the free surface where frozen facets lie on it (see _open_faces, _open_lines; gradings: the Air Gradings of
+    the free job, built["air_grading_fields"]). Returns (the surveys with the faces they have now, for the model has
+    changed; the rims for _place_rim_nodes)."""
     covered = {}
     for s in surveys:
         covered.update(s.covered)  # a face between two bodies has the same facets on it for both
@@ -1325,9 +1599,9 @@ def _leave_room(surveys, V, dim, side):
         return surveys, []
     names = {f: s.body["name"] for s in surveys for f in s.faces}
     replaced, rims = (
-        _open_faces(surveys, covered, names, V, side)
+        _open_faces(surveys, covered, names, V, side, gradings)
         if dim == 3
-        else (_open_lines(surveys, covered, names, V, side), [])
+        else (_open_lines(surveys, covered, names, V, side, gradings), [])
     )
     return [s._replace(faces=[n for f in s.faces for n in replaced.get(f, [f])]) for s in surveys], rims
 
@@ -1345,13 +1619,45 @@ def _meets(faces, where, dim):
     return "a copy crosses a curved face of it"
 
 
-def _mesh_free_entity(survey, side, V, dim):
+def _free_rules(built, dim):
+    """[(entry, points)], one per refinement field of the free model (built["refine_fields"]): points, the unique
+    coordinates of the mesh nodes of the entities its Distance field lists now (after _carry_size_picks). Called after
+    the free surface mesh, so they are the refined nodes of the picks."""
+    field = gmsh.model.mesh.field
+    present = {d: {t for _, t in gmsh.model.getEntities(d)} for d in range(dim)}
+    rules = []
+    for entry, distance in built.get("refine_fields", []):
+        points = [np.zeros((0, 3))]
+        for d in range(dim):  # a list never set reads as empty; a carry may have emptied one
+            for tag in (int(t) for t in field.getNumbers(distance, FIELD_LISTS[d])):
+                if tag in present[d]:
+                    points.append(np.reshape(gmsh.model.mesh.getNodes(d, tag, includeBoundary=True)[1], (-1, 3)))
+        points = np.unique(np.vstack(points), axis=0)
+        if not len(points):  # the carry emptied it: every pick was under frozen facets
+            _note(
+                f"{entry.get('label', 'Refine Near')} {entry['name']}: its picks lie under the copies of a Symmetric"
+                " Group; it refines nothing there"
+            )
+        rules.append((entry, points))
+    return rules
+
+
+def _mesh_free_entity(survey, side, V, dim, rules=(), grading=None, retry=False):
     """Mesh one OCC volume (face in 2D) of a free body whose surface is already meshed. The facets of its own surface
     and the frozen facets that bound it (survey.frozen) bound one region or several (nest), each meshed by
-    mesh_region. Returns (W, elements, own): W is V with the apexes of the pyramids and the new nodes appended,
-    elements numbered into it, own {face: {etype: connectivity}} the mesh of each of its own faces, for excitations."""
+    mesh_region, graded by the rules (from _free_rules) whose Limit to is empty or holds the body, and by grading (None,
+    or {"growth", "far"} of the body's Air Grading or Skin Layer). Returns (W, elements, own): W is V with the apexes
+    of the pyramids and the new nodes appended, elements numbered into it, own {face: {etype: connectivity}} the mesh of
+    each of its own faces, for excitations. retry: a job with swept cells, whose failed mesh around pyramids is an
+    AirFailed, for run to mesh once more (gmsh's result differs from run to run)."""
     body, entity, faces = survey.body, survey.entity, survey.faces
     name = body["name"]
+    keys = ("fine", "fine_distance", "coarse", "growth")
+    sizes = [
+        dict({k: e[k] for k in keys}, points=p)
+        for e, p in rules
+        if not e["limit_to"] or body["mat_id"] in e["limit_to"]
+    ]
     xyz, own = meshfrozen.read_model(dim - 1, {f: [f] for f in faces})
     facet_type = 2 if dim == 3 else 1
     pyramids = np.zeros((0, 5), dtype=np.int64)
@@ -1409,10 +1715,14 @@ def _mesh_free_entity(survey, side, V, dim):
         elements[7] = pyramids
     for outer, holes in regions:
         try:
-            W, region = meshfrozen.mesh_region(W, facets, found[outer], [found[h] for h in holes], body["size"], dim)
+            inners = [found[h] for h in holes]
+            W, region = meshfrozen.mesh_region(W, facets, found[outer], inners, body["size"], dim, sizes, grading)
         except Exception as err:  # gmsh could not mesh around them, or moved a frozen node
             where = W[facets[found[outer][0]]].mean(axis=0)
-            raise _limit(name, f"the mesh around the copies failed ({err})", _text(where, dim)) from None
+            error = _limit(name, f"the mesh around the copies failed ({err})", _text(where, dim))
+            if retry and len(pyramids):
+                raise AirFailed(str(error)) from None
+            raise error from None
         for etype, conn in region.items():
             elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
     if dim == 2:
@@ -1442,8 +1752,9 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
         )
     out = {}
     start = len(V)
+    retry = any(g["job"].get("swept") for g in job["symmetric"]["groups"])
     with _scratch(f"free_{free['side']}"):
-        built = dict(free_job)
+        built = dict(free_job, copies_apart=True)  # the mesher's notes then speak of free objects
         build(built, folder)
         airs = [dict(a, size=free_job["air"]["size"]) for a in air_items(free_job)]
         bodies = free_job["bodies" if dim == 2 else "volumes"] + airs  # the air: what no body owns
@@ -1453,21 +1764,29 @@ def mesh_free(free, side_boundary, V, job, folder, build, dim):
             for b in bodies
             for e in gmsh.model.getEntitiesForPhysicalGroup(dim, b["mat_id"])
         ]
+        gradings = built.get("air_grading_fields", [])
         surveys, rims = _leave_room(
-            surveys, V, dim, side_boundary
+            surveys, V, dim, side_boundary, gradings
         )  # only now: the volumes of the changed faces leave the model
         settings = dict(free_job, options=job.get("options", {}))
         if rims:  # gmsh keeps a mesh of the curves when asked for the surfaces next
             generate(settings, 1)
             _place_rim_nodes(rims)
         generate(settings, dim - 1)
+        rules = _free_rules(built, dim)  # the picks' refined surface nodes grade the volumes too
         surfaces = free_job.get("surfaces", [])
         for body in bodies:
             added, elements, excited, count = [], {}, {}, 0
+            entry = next((e for e in free_job.get("air_grading", []) if body["mat_id"] in e["mat_ids"]), None)
+            grading = {"growth": entry["growth"], "far": entry["far"]} if entry else None
+            skins = [e for e, _ in rules if e.get("skin") and body["mat_id"] in e["limit_to"]]
+            skin = min(skins, key=lambda e: e["fine"], default=None)  # two on one body: the finest, as its size wins
+            if skin and not grading:  # grown from its fine skin to its own size, not extended inward from the skin
+                grading = {"growth": skin["fine_distance"] + skin["growth"], "far": body["size"]}
             for survey in surveys:
                 if survey.body is not body:
                     continue
-                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim)
+                W, per_type, own = _mesh_free_entity(survey, side_boundary, V, dim, rules, grading, retry)
                 shifted = {t: np.where(c >= start, c + count, c) for t, c in per_type.items()}
                 for etype, conn in shifted.items():
                     elements[etype] = np.vstack([elements[etype], conn]) if etype in elements else conn
@@ -1596,16 +1915,46 @@ def mesh(job, folder, build, dim):
     return Model(split, surfaces)
 
 
+def _mesh_retried(job_path, job, folder, build, dim):
+    """mesh, on the current model, as meshcommon.run generates: around swept cells gmsh may fail with the pyramids'
+    apex pushed out (meshed again without) or fail on the air (its result differs from run to run: meshed once more),
+    each time on a fresh gmsh and the job read anew. At most three passes. Returns (job, Model). The notes are in the
+    prism layers' words when the groups have prism layers and no swept cell."""
+    groups = [g["job"] for g in job["symmetric"]["groups"]]
+    layers = not any(g.get("swept") for g in groups) and any(e.get("quads") for g in groups for e in g.get("skin", []))
+    retried = False
+    while True:
+        try:
+            return job, mesh(job, folder, build, dim)
+        except PyramidsFailed:
+            _note(retry_note("pyramids", layers))
+            extra = {"optimize_pyramids": 0}
+        except AirFailed:
+            if retried:
+                raise
+            retried = True
+            _note(retry_note("air", layers))
+            extra = {k: job[k] for k in ("optimize_pyramids",) if k in job}
+        terminal = gmsh.option.getNumber("General.Terminal")
+        gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
+        gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", terminal)
+        with open(job_path, encoding="utf-8") as fh:
+            job = json.load(fh) | extra
+        gmsh.model.add(job["model_name"])
+
+
 def check(job_path, build, dim=2):
     """--check of a group job: mesh the cells, copy them and run every check, nothing written."""
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.model.add(job["model_name"])
-        mesh(job, folder, build, dim)
+        _mesh_retried(job_path, job, folder, build, dim)
     finally:
         gmsh.finalize()
     print("CHECK OK")
@@ -1635,11 +1984,12 @@ def run(job_path, build, dim=2):
     msh = os.path.join(folder, "mesh.msh")
     outputs = [(msh, job["mesh_file"])]
     slide = job["symmetric"].get("slide")
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
-        model = mesh(job, folder, build, dim)
+        job, model = _mesh_retried(job_path, job, folder, build, dim)
         job["poor"] = _poor(model, dim)
         for name, poor, total in job["poor"]:
             if poor:  # a NOTE: line, which the runner shows when the mesh is loaded (spec section 6: warned)

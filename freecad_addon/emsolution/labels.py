@@ -20,8 +20,12 @@ from .geometry import global_shape
 KINDS = {
     "Material": ("#3366cc", "M", "Material"),
     "MeshSize": ("#2e9e44", "S", "Mesh size"),
+    "RefineNear": ("#c92a2a", "R", "Refine near"),
+    "AirGrading": ("#1864ab", "G", "Air grading"),
+    "SkinLayer": ("#087f5b", "L", "Skin layer"),
     "TransfiniteEdges": ("#e8590c", "E", "Transfinite edges"),
     "TransfiniteBody": ("#7b3fb3", "T", "Transfinite body"),
+    "SweptBody": ("#1c7ed6", "W", "Swept body"),
     "Recombine": ("#0b9eb3", "Q", "Recombine"),
     "Excitation": ("#d6249f", "X", "Excitation"),
     "SymmetricGroup": ("#8d6e3f", "Y", "Symmetric group"),
@@ -54,16 +58,31 @@ def anchors(body, sub):
     return [Part.Vertex(element.CenterOfMass).distToShape(element)[1][0][1]]  # on the face, not off a hole
 
 
-def tag_text(item, values):
-    """The text of the tags of an item; values: what a panel has typed in but not saved ({property: value})."""
+def tag_text(item, values, refs=None):
+    """The text of the tags of an item; values: what a panel has typed in but not saved ({property: value}), refs: its
+    unsaved picks."""
     kind = kind_of(item)
     if kind == "TransfiniteEdges":
         elements, distribution = values.get("Elements", item.Elements), values.get("Distribution", item.Distribution)
         return f"{elements} bump" if distribution == "Bump" else str(elements)
     if kind == "MeshSize":
         return f"{values.get('Size', item.Size.Value):g} mm"
+    if kind == "RefineNear":
+        return (
+            f"{values.get('FineSize', item.FineSize.Value):g} → {values.get('CoarseSize', item.CoarseSize.Value):g} mm"
+        )
+    if kind == "AirGrading":
+        far = objects.far_size(item, values.get("FarSize"), refs)
+        return f"→ {far:g} mm over {values.get('GrowthDistance', item.GrowthDistance.Value):g}"
+    if kind == "SkinLayer":
+        depth = values.get("SkinDepth", item.SkinDepth.Value)
+        per, layer = values.get("ElementsPerDepth", item.ElementsPerDepth), values.get("LayerDepth", item.LayerDepth)
+        text = f"δ {depth:g} mm, {per:g}/δ, {layer:g}δ"
+        return text + ", quads" if values.get("QuadLayers", item.QuadLayers) else text
     if kind == "Material":
         return values.get("Material", item.LibraryMaterial.Label if item.LibraryMaterial else objects.NO_MATERIAL)
+    if kind == "SweptBody":
+        return objects._size_text(item, values)
     if kind == "TransfiniteBody":
         return "corner"
     return values.get("Name", objects.display_name(item))
@@ -77,7 +96,7 @@ def description(item, values):
         return f"{name}: {values.get('Name', objects.display_name(item))}"
     if kind == "Material":
         return f"{name}: {item.Label}"
-    if kind == "MeshSize":
+    if kind in ("MeshSize", "RefineNear", "AirGrading", "SkinLayer", "SweptBody"):
         return f"{name}: {tag_text(item, values)}"
     if kind == "TransfiniteEdges":
         return f"{name}: {values.get('Elements', item.Elements)} el, {values.get('Distribution', item.Distribution)}"
@@ -129,7 +148,8 @@ def build(focus, others, refs, values):
         color = QtGui.QColor(KINDS[kind_of(item)][0])
         if item.Name not in names:
             color.setAlpha(FAINT)
-        for body, sub in _one_per_copy(item, refs.get(item.Name, objects.item_refs(item))):
+        item_refs = refs.get(item.Name, objects.item_refs(item))
+        for body, sub in _one_per_copy(item, item_refs):
             if not (shown(cells[body.Name]) if body.Name in cells else shown(body)):
                 continue
             try:
@@ -138,7 +158,9 @@ def build(focus, others, refs, values):
                 continue
             for point in points:
                 if sub:
-                    tags.append({"point": point, "text": tag_text(item, values.get(item.Name, {})), "color": color})
+                    tags.append(
+                        {"point": point, "text": tag_text(item, values.get(item.Name, {}), item_refs), "color": color}
+                    )
                 else:
                     key = tuple(round(c, 3) for c in point)
                     badges.setdefault(key, {"point": point, "items": []})["items"].append(
@@ -279,6 +301,11 @@ class _Watcher:
             "Corners",
             "Elements",
             "Size",
+            "FineSize",
+            "FineDistance",
+            "CoarseSize",
+            "GrowthDistance",
+            "LimitTo",
             "Distribution",
             "Label",
             "Body",

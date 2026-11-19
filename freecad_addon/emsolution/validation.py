@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import FreeCAD as App
 import Part
 
-from . import airshapes, geometry, objects, sides, symmetry
+from . import airshapes, geometry, objects, sides, symmetry, sweeps
 
 ERROR, WARNING = "error", "warning"
 
@@ -104,7 +104,7 @@ def validate(study):
     _body_overlaps(bodies, study.Dimension, r)
     known = {"bodies": bodies}  # what geometry.not_meshed needs, worked out once
     _links(study, with_air, r, known)
-    _settings(study, with_air, r)
+    _settings(study, with_air, r, bodies + objects.cell_bodies(study))
     if grouped:
         _groups(study, bodies, r)
     else:
@@ -168,6 +168,10 @@ def _kind(item):
     return {
         objects.Excitation: "Excitation",
         objects.MeshSize: "Mesh Size",
+        objects.RefineNear: "Refine Near",
+        objects.AirGrading: "Air Grading",
+        objects.SkinLayer: "Skin Layer",
+        objects.SweptBody: "Swept Body",
         objects.TransfiniteBody: "Transfinite Body",
         objects.TransfiniteEdges: "Transfinite Edges",
         objects.Recombine: "Recombine",
@@ -222,13 +226,30 @@ def _links(study, included, r, known=None):
                                 item,
                                 [(b, "")],
                             )
+        if isinstance(item.Proxy, objects.SweptBody):
+            refs = {b.Name for b, _ in by_body}
+            for b, subs in item.StartFace:
+                if b.Name not in refs:
+                    r.error(
+                        f"Swept Body {item.Label}: the start face {b.Label}.{subs[0]} is not on one of its bodies.",
+                        item,
+                    )
+                elif b.Name in included:
+                    for sub in subs:
+                        if sub and not _has(b, sub):
+                            r.error(
+                                f"Swept Body {item.Label}: {b.Label} has no {sub}. Reselect the start face.",
+                                item,
+                                [(b, "")],
+                            )
     for m in objects.materials(study):
         # the assignment of a part has no body
         if m.Body is None and not getattr(m, "PartKey", ""):
             r.warning(f"Material assignment {m.Label} has no body (was it deleted?). Delete the assignment.", m)
 
 
-def _settings(study, included, r):
+def _settings(study, included, r, bodies=()):
+    """bodies: what the mesh holds besides the Air Region, for the Skin Layer's layer edges."""
     settings = study.MeshSizesGroup
     if settings.DefaultMeshSize.Value <= 0:
         r.error("The default mesh size must be greater than 0.", settings)
@@ -240,11 +261,857 @@ def _settings(study, included, r):
     for e in objects.transfinite_edges(study):
         if e.Distribution == "Bump" and e.BumpCoefficient <= 0:
             r.error(f"Transfinite Edges {e.Label}: the Bump coefficient must be greater than 0.", e)
+    parts = {}  # body Name -> _mesh_part, worked out once and only with Symmetric Groups
+    for n in objects.refine_items(study):
+        if any(b.Name in included for b, _ in n.References):
+            if n.FineSize.Value <= 0:
+                r.error(f"Refine Near {n.Label}: the fine size must be greater than 0.", n)
+            elif n.CoarseSize.Value < n.FineSize.Value:
+                r.error(f"Refine Near {n.Label}: the coarse size must not be smaller than the fine size.", n)
+            if n.GrowthDistance.Value <= 0:
+                r.error(f"Refine Near {n.Label}: the growth distance must be greater than 0.", n)
+        unmeshed = [b for b in n.LimitTo if b.Name not in included]
+        if unmeshed and len(unmeshed) == len(n.LimitTo):  # jobwriter.refine_entries leaves the item out
+            r.warning(
+                f"Refine Near {n.Label}: no body in Limit to is meshed by the Study; the refinement is skipped.", n
+            )
+            continue
+        for b in unmeshed:
+            r.warning(
+                f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is not meshed by the Study; it has"
+                " no effect there.",
+                n,
+            )
+        if not objects.is_grouped(study):
+            continue
+        meshed_limit = [b for b in n.LimitTo if b.Name in included]
+        picked = [b for b, _ in n.References if b.Name in included]
+        for b in meshed_limit + picked:
+            parts.setdefault(b.Name, _mesh_part(study, b))
+        pick_parts = set().union(*(parts[b.Name] for b in picked))
+        lost = set()  # the picked bodies whose job leaves the item out: apart from every body in Limit to
+        if meshed_limit and pick_parts:
+            apart = [b for b in meshed_limit if not parts[b.Name] & pick_parts]
+            if len(apart) == len(meshed_limit):  # jobwriter.refine_entries leaves the item out of every job
+                r.warning(
+                    f"Refine Near {n.Label}: no body in Limit to is meshed with its picks; the refinement is skipped.",
+                    n,
+                )
+                continue
+            for b in apart:
+                r.warning(
+                    f"Refine Near {n.Label}: {objects.display_name(b)} in Limit to is meshed apart from its picks (a"
+                    " Symmetric Group's cell objects are meshed on their own); it has no effect there.",
+                    n,
+                )
+            limit_parts = set().union(*(parts[b.Name] for b in meshed_limit))
+            for b in dict.fromkeys(picked):
+                if parts[b.Name] and not parts[b.Name] & limit_parts:
+                    lost.add(b.Name)
+                    r.warning(
+                        f"Refine Near {n.Label}: {objects.display_name(b)} is meshed apart from every body in Limit"
+                        " to; it has no effect there.",
+                        n,
+                    )
+        free = [
+            (b, subs)
+            for b, subs in objects.subs_by_body(n)
+            if b.Name in included and b.Name not in lost and any(p.startswith("free") for p in parts[b.Name])
+        ]
+        _free_picks_on_copies(study, n, free, r)
+    _skin_layers(study, included, bodies, r)
+    _swept_bodies(study, included, bodies, r)
+    _air_gradings(study, included, r)
+
+
+def _skin_layers(study, included, bodies, r):
+    """Skin Layer items: whole conductors, positive settings, and warnings where the layer does not do what it says.
+    The air is refused in _links."""
+    structured = {b.Name for t in objects.transfinite_bodies(study) for b, _ in objects.subs_by_body(t)}
+    recombined = {b.Name for t in objects.recombine_items(study) for b, _ in objects.subs_by_body(t)}
+    three = study.Dimension == "3D"
+    swept = {b.Name for w in objects.swept_bodies(study) for b, _ in objects.subs_by_body(w)}
+    owners = {}  # body Name -> the first Skin Layer that has it
+    for s in objects.skin_layers(study):
+        if not any(b.Name in included for b, _ in s.References):
+            continue
+        picked = [(b, subs) for b, subs in objects.subs_by_body(s) if b.Name in included and not objects.is_air(b)]
+        depth = s.SkinDepth.Value
+        bad = False
+        for ok, what in (
+            (depth > 0, "the skin depth"),
+            (s.ElementsPerDepth > 0, "elements per depth"),
+            (s.LayerDepth > 0, "the layer depth"),
+        ):
+            if not ok:
+                bad = True
+                r.error(f"Skin Layer {s.Label}: {what} must be greater than 0.", s)
+        layer = s.LayerDepth * depth
+        for b, subs in picked:
+            name = objects.display_name(b)
+            parts = [sub for sub in subs if sub]
+            for sub in parts:
+                r.error(f"Skin Layer {s.Label}: pick whole conductors, not {b.Label}.{sub}.", s, [(b, sub)])
+            if parts:
+                continue
+            first = owners.setdefault(b.Name, s)
+            if first is not s:
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} already has Skin Layer {first.Label}; the smallest size wins, and"
+                    " only the first makes quad layers.",
+                    s,
+                    [(b, "")],
+                )
+            if b.Name in structured:
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} is structured, and that wins; the Skin Layer does nothing there.",
+                    s,
+                    [(b, "")],
+                )
+                continue
+            quads = s.QuadLayers and not (three and b.Name in swept)  # a swept body's section has quads of its own
+            kind, fill = ("prism", "tetrahedra") if three else ("quad", "triangles")
+            if quads and b.Name in recombined:
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} is recombined; it gets the graded layer but no {kind} layers.",
+                    s,
+                    [(b, "")],
+                )
+            if bad:
+                continue
+            shape = geometry.global_shape(b)
+            t = thickness(shape) if three else thickness_2d(shape)
+            if 0 < t < 2 * layer:
+                r.warning(
+                    f"Skin Layer {s.Label}: the layer ({layer:g} mm) is deeper than half of {name} (about {t:.2g} mm"
+                    f" thick); the whole body is skin, so a Mesh Size of {depth / s.ElementsPerDepth:g} mm on it does"
+                    " the same.",
+                    s,
+                    [(b, "")],
+                )
+            if not quads or b.Name in recombined:
+                continue
+            if objects.is_grouped(study) and _is_free(study, b):
+                r.warning(
+                    f"Skin Layer {s.Label}: {kind} layers are not made on free objects of a Study with Symmetric Groups;"
+                    f" {name} gets graded {fill}.",
+                    s,
+                    [(b, "")],
+                )
+            elif three:
+                why = _sharp_3d(study, b, shape, bodies, layer)
+                if why == "edge":
+                    text = (
+                        f"{name} has sharp edges on its surface; prism layers need a smooth surface, so it gets graded"
+                        " tetrahedra."
+                    )
+                elif why == "cut":
+                    text = (
+                        f"{name} is cut by a curved face or at a slant; prism layers need flat cuts square to its"
+                        " surface, so it gets graded tetrahedra."
+                    )
+                elif _cut_on_period(study, b, shape, bodies):
+                    text = (
+                        f"{name} is cut by a periodic boundary; prism layers are not made there yet, so it gets graded"
+                        " tetrahedra."
+                    )
+                elif _cut_on_copy(study, b, shape, bodies):
+                    text = (
+                        f"{name} meets a copy of another cell object on a cut; prism layers need its cuts to be seams"
+                        " with its own copies, so it gets graded tetrahedra."
+                    )
+                elif not isinstance(sweeps.recognise_body(shape), str):
+                    text = f"{name} is a sweep; a Swept Body on it gives fewer and better elements than prism layers."
+                else:
+                    continue
+                r.warning(f"Skin Layer {s.Label}: {text}", s, [(b, "")])
+            elif _sharp(study, b, shape, bodies, layer):
+                r.warning(
+                    f"Skin Layer {s.Label}: {name} has sharp corners on its surface; quad layers need a smooth surface,"
+                    " so it gets graded triangles.",
+                    s,
+                    [(b, "")],
+                )
+
+
+def _swept_bodies(study, included, bodies, r):
+    """Swept Body items: whole bodies that are sweeps, in a 3D Study (cell objects only, with Symmetric Groups), each in
+    one item, not structured, and touching only the air and unstructured bodies by whole faces; a cell's faces toward
+    the copies of its own group are seams, which meshgroups checks. The air is refused in _links."""
+    items = [w for w in objects.swept_bodies(study) if any(b.Name in included for b, _ in w.References)]
+    if not items:
+        return
+    three, grouped = study.Dimension == "3D", objects.is_grouped(study)
+    structured = {}  # body Name -> the first Transfinite Body that has it
+    for t in objects.transfinite_bodies(study):
+        for b, _ in objects.subs_by_body(t):
+            structured.setdefault(b.Name, t)
+    recombined = {b.Name for t in objects.recombine_items(study) for b, _ in objects.subs_by_body(t)}
+    owners = {}  # body Name -> the first Swept Body that has it
+    found = []  # (item, body, shape): the sweeps, for the checks of their contacts
+    for w in items:
+        if not three:
+            r.error(f"Swept Body {w.Label}: a 2D Study is already a cross-section; Swept Body is for 3D Studies.", w)
+        picked = [(b, subs) for b, subs in objects.subs_by_body(w) if b.Name in included and not objects.is_air(b)]
+        for b, subs in picked:
+            parts = [sub for sub in subs if sub]
+            for sub in parts:
+                r.error(f"Swept Body {w.Label}: pick whole bodies, not {b.Label}.{sub}.", w, [(b, sub)])
+            if parts or not three:
+                continue
+            name = objects.display_name(b)
+            if grouped and _is_free(study, b):
+                r.error(
+                    f"Swept Body {w.Label}: {name} is a free object; in a Study with Symmetric Groups only cell objects"
+                    " are swept.",
+                    w,
+                    [(b, "")],
+                )
+                continue
+            first = owners.setdefault(b.Name, w)
+            if first is not w:
+                r.error(f"Swept Body {w.Label}: {name} is already in Swept Body {first.Label}.", w, [(b, "")])
+                continue
+            if b.Name in structured:
+                r.error(
+                    f"Swept Body {w.Label}: {name} also has Transfinite Body {structured[b.Name].Label}; a body is"
+                    " swept or structured, not both.",
+                    w,
+                    [(b, "")],
+                )
+                continue
+            shape = geometry.global_shape(b)
+            # a stale start face is reported in _links; recognise_body only gets faces the body has
+            starts = [s for sb, sub_list in w.StartFace if sb.Name == b.Name for s in sub_list if _has(b, s)]
+            result = sweeps.recognise_body(shape, starts)
+            if isinstance(result, str) and starts:
+                alone = sweeps.recognise_body(shape)  # a start face a closed ring cannot have
+                faces = [shape.getElement(s) for s in starts]
+                held = {
+                    k for k, solid in enumerate(shape.Solids) if any(f.isSame(g) for f in solid.Faces for g in faces)
+                }
+                if not isinstance(alone, str) and any(alone[k].closed for k in held):
+                    r.error(
+                        f"Swept Body {w.Label}: {name} is a closed ring; it has no start face. Remove the start face.",
+                        w,
+                        [(b, "")],
+                    )
+                    continue
+            if isinstance(result, str):
+                r.error(f"Swept Body {w.Label}: {name} is not a sweep: {result}.", w, [(b, "")])
+                continue
+            # a seam that twists is meshed on the solid rebuilt in Frenet mode, which must be this one
+            if any(s.rebuild and sweeps.rebuilt(solid, s) is None for solid, s in zip(shape.Solids, result)):
+                r.error(f"Swept Body {w.Label}: {name} is not a sweep: {sweeps.TWISTS}.", w, [(b, "")])
+                continue
+            found.append((w, b, shape))
+    swept = {b.Name for _, b, _ in found}
+    _swept_win(study, included, swept, r)
+    others = [(o, geometry.global_shape(o)) for o in bodies if o.Name in included and not objects.is_air(o)]
+    order = {b.Name: i for i, (_, b, _) in enumerate(found)}
+    for i, (w, b, shape) in enumerate(found):
+        name = objects.display_name(b)
+        tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+        box = shape.BoundBox
+        box.enlarge(tol)
+        solids = shape.Solids
+        for k, solid in enumerate(solids):  # the solids of one reference touching each other
+            if any(_shared_area(f, other) > tol * tol for f in solid.Faces for other in solids[k + 1 :]):
+                r.error(_touch_text(w, name, name, "swept"), w, [(b, "")])
+                break
+        said = set()  # a neighbour met in several frames (copies) is reported once
+        neighbours = _swept_neighbours(study, b, box, others) if grouped else [(o, s, False) for o, s in others]
+        for o, o_shape, copy in neighbours:
+            if o.Name == b.Name or not box.intersect(o_shape.BoundBox):
+                continue
+            if o.Name in swept and order[o.Name] < i:
+                continue  # the earlier of two swept bodies reports the contact
+            areas = [_shared_area(f, o_shape) for f in shape.Faces]
+            what = "swept" if o.Name in swept else "structured" if o.Name in structured else None
+            what = what or ("recombined" if o.Name in recombined else None)
+            touching = any(a > 1e-6 * f.Area for a, f in zip(areas, shape.Faces))
+            if not what and touching and not copy and _gets_prisms(study, o, bodies):
+                what = "layered"  # the mesher grows its layers on the swept body's quads
+            found_here = []
+            if what and touching:
+                found_here.append((_touch_text(w, name, objects.display_name(o), what), [(b, ""), (o, "")]))
+            if copy and o.Name not in swept and o.Name not in structured:
+                # a seam with another cell's copy: gmsh meshes that face itself, so the hand-made section cannot match
+                for n, (f, a) in enumerate(zip(shape.Faces, areas), 1):
+                    if a > 1e-6 * f.Area:
+                        other = objects.display_name(o)
+                        text = (
+                            f"Swept Body {w.Label}: {name} meets a copy of {other} on {b.Label}.Face{n}; a swept cell"
+                            f" can share faces only with its own copies. Put the cell's boundary through the middle of"
+                            f" {name} or of {other} instead."
+                        )
+                        found_here.append((text, [(b, f"Face{n}")]))
+            for n, (f, a) in enumerate(zip(shape.Faces, areas), 1):
+                if 1e-6 * f.Area < a < (1 - 1e-6) * f.Area:
+                    text = (
+                        f"Swept Body {w.Label}: {objects.display_name(o)} touches only part of {b.Label}.Face{n} of"
+                        f" {name}; a swept body's faces must be touched whole or not at all."
+                    )
+                    found_here.append((text, [(b, f"Face{n}"), (o, "")]))
+            for text, refs in found_here:
+                if text not in said:
+                    said.add(text)
+                    r.error(text, w, refs)
+    _swept_clear_of_sliding(study, found, r)
+
+
+def _swept_neighbours(study, body, box, others):
+    """[(body, shape, copy)] near box that a swept body of a Study with Symmetric Groups may touch, from others (the
+    free objects and cell objects, [(body, shape)]), seen from body where it is drawn. For a cell object of a group they
+    are moved into its frame from each of its copies: the free objects, and every copy of the other cell objects of its
+    group and of the cell objects of the other groups. copy: True for a moved copy of another cell object of body's
+    group (a seam the cell job meshes, not a contact where both are drawn). The faces toward its own copies are seams,
+    which the cell job meshes, so those copies are left out. A body that is no cell object keeps others."""
+    groups = objects.symmetric_groups(study)
+    mine = next((g for g in groups if body in g.Cells), None)
+    if mine is None:
+        return [(o, s, False) for o, s in others]
+    cells = {c.Name: g for g in groups for c in g.Cells}
+    frames = [App.Matrix(*t).inverse() for t in objects.group_transforms(mine)]  # a copy of body back onto body
+    moves = {g.Name: [App.Matrix(*t) for t in objects.group_transforms(g)] for g in groups}
+    out = []
+    for o, o_shape in others:
+        if o.Name == body.Name:
+            continue  # its own copies: seams
+        group = cells.get(o.Name)
+        seen = set()
+        for frame in frames:
+            for move in moves[group.Name] if group else [App.Matrix()]:
+                m = frame * move
+                key = tuple(round(v, 9) for v in m.A)
+                if key in seen:
+                    continue
+                seen.add(key)
+                if box.intersect(o_shape.BoundBox.transformed(m)):
+                    moved = max(abs(a - b) for a, b in zip(m.A, App.Matrix().A)) > symmetry.TOL
+                    out.append((o, o_shape.transformed(m), moved and group is not None and group.Name == mine.Name))
+    return out
+
+
+def _touch_text(w, name, other, what):
+    if what == "layered":
+        return (
+            f"Swept Body {w.Label}: {name} touches {other}, which has prism layers; a swept body may touch only the air"
+            " and unstructured bodies without prism layers."
+        )
+    return (
+        f"Swept Body {w.Label}: {name} touches {other}, which is {what}; a swept body may touch only the air and"
+        " unstructured bodies."
+    )
+
+
+def _shared_area(face, shape):
+    """The area face shares with shape, 0 where OCC cannot tell."""
+    try:
+        return face.common(shape).Area
+    except Part.OCCError:
+        return 0.0
+
+
+def _swept_win(study, included, swept, r):
+    """A Mesh Size, Refine Near or Transfinite Edges that picks a swept body does nothing inside it: the sweep sets
+    its own sizes."""
+    for item, kind in (
+        [(m, "Mesh Size") for m in objects.mesh_sizes(study)]
+        + [(n, "Refine Near") for n in objects.refine_items(study)]
+        + [(e, "Transfinite Edges") for e in objects.transfinite_edges(study)]
+    ):
+        for b, subs in objects.subs_by_body(item):
+            # a whole-body Mesh Size is the size a sweep falls back to, so only its sub-element picks are lost
+            if kind == "Mesh Size" and "" in subs and not any(subs):
+                continue
+            if b.Name in swept and b.Name in included:
+                r.warning(
+                    f"{kind} {item.Label}: {objects.display_name(b)} is swept, and that wins; the {kind} does nothing"
+                    " inside it.",
+                    item,
+                    [(b, "")],
+                )
+
+
+def _swept_clear_of_sliding(study, found, r):
+    """A swept body may not touch a Sliding Interface's surface."""
+    interfaces, airs = objects.sliding_interfaces(study), objects.air_regions(study)
+    if not found or study.Movement != "Sliding motion" or not interfaces or not airs:
+        return
+    plane = airshapes.study_plane(study)
+    try:
+        air_shape = airshapes.air_shape(airs[0], plane)
+    except ValueError:
+        return  # _air reports it
+    surfaces = _surfaces(interfaces, airs[0], air_shape, plane, _Report())
+    for iface, surface in zip(interfaces, surfaces or []):
+        for w, b, shape in found:
+            if surface.distToShape(shape)[0] < 1e-6:
+                r.error(
+                    f"Swept Body {w.Label}: {objects.display_name(b)} touches the sliding interface {iface.Label};"
+                    " swept bodies must keep clear of it.",
+                    w,
+                    [(b, "")],
+                )
+
+
+def _sharp(study, body, shape, bodies, layer):
+    """True when a 2D body's layer edges are not smooth: two meet with the direction turning by more than 15°, or one
+    is curved tighter than the layer's depth. A layer edge is an edge of the body's boundary shared with another meshed
+    body, or inside the Air Region's face (not on its outline). For a cell object the edges it shares with the other
+    cell objects of its groups and its edges toward the free side (free_faces), as its cell job sees them: an edge on
+    a seam or against a copy is a cut."""
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    outline = None
+    airs = objects.air_regions(study)
+    mine = [g for g in objects.symmetric_groups(study) if body in g.Cells]
+    cells = {c.Name for g in mine for c in g.Cells}
+    free = [shape.getElement(n) for g in mine for n in free_faces(study, g, body)]
+    if cells:
+        bodies = [o for o in bodies if o.Name in cells]
+    elif airs:
+        try:
+            outline = Part.Compound(airshapes.air_shape(airs[0], airshapes.study_plane(study)).Edges)
+        except ValueError:  # _air reports it
+            pass
+    box = shape.BoundBox
+    box.enlarge(tol)
+    others = [geometry.global_shape(o) for o in bodies if o.Name != body.Name]
+    others = [o for o in others if box.intersect(o.BoundBox)]
+    face_edges = [e for f in shape.Faces for e in f.Edges]
+    edges = [e for e in shape.Edges if e.Length > tol and sum(e.isSame(f) for f in face_edges) == 1]  # the boundary
+    ends = []  # (point, direction leaving the point along the edge)
+    for e in edges:
+        samples = [e.valueAt(e.FirstParameter + k * (e.LastParameter - e.FirstParameter) / 4) for k in (1, 2, 3)]
+        shared = any(_on(samples, o, tol) for o in others) or any(e.isSame(f) for f in free)
+        if not shared and (outline is None or _on(samples, outline, tol)):
+            continue
+        u0, u1 = e.FirstParameter, e.LastParameter
+        if any(e.curvatureAt(u0 + k * (u1 - u0) / 8) * layer > 1 for k in range(9)):
+            return True
+        ends.append((e.valueAt(u0), e.tangentAt(u0).normalize()))
+        ends.append((e.valueAt(u1), -e.tangentAt(u1).normalize()))
+    limit = math.cos(math.radians(15))
+    for i, (p, a) in enumerate(ends):
+        for q, b in ends[i + 1 :]:
+            if p.distanceToPoint(q) < tol and -a.dot(b) < limit:  # the turn from arriving along -a to leaving along b
+                return True
+    return False
+
+
+def _surface_3d(study, body, shape, bodies):
+    """[(solid, real faces, cut faces)] for each solid of a 3D body with prism layers, as meshlayers sees them. A face
+    is real when it lies on another meshed body (another solid of body too), or inside the Air Region (not on its
+    outside); one on a conductor with a Skin Layer of its own and no prism layers (a terminal) is a cut, as no skin is
+    there. For a cell object, its faces toward the other cell objects of its groups and its faces toward the free side
+    (free_faces), as its cell job sees them: a face on a seam or against a copy is a cut. Every other face is a cut."""
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    outline = None
+    airs = objects.air_regions(study)
+    mine = [g for g in objects.symmetric_groups(study) if body in g.Cells]
+    cells = {c.Name for g in mine for c in g.Cells}
+    free = [shape.getElement(n) for g in mine for n in free_faces(study, g, body)]
+    if cells:
+        bodies = [o for o in bodies if o.Name in cells]
+    elif airs:
+        try:
+            outline = Part.Compound(airshapes.air_shape(airs[0], "3D").Faces)
+        except ValueError:  # _air reports it
+            pass
+    swept = {b.Name for w in objects.swept_bodies(study) for b, _ in objects.subs_by_body(w)}
+    skins = [(s.QuadLayers, b.Name) for s in objects.skin_layers(study) for b, _ in objects.subs_by_body(s)]
+    layering = {n for quads, n in skins if quads}
+    terminals = {n for _, n in skins} - layering - swept
+    box = shape.BoundBox
+    box.enlarge(tol)
+    others = [(o.Name in terminals, geometry.global_shape(o)) for o in bodies if o.Name != body.Name]
+    others = [(t, o) for t, o in others if box.intersect(o.BoundBox)]
+    out = []
+    for k, solid in enumerate(shape.Solids):
+        near = others + [(False, s) for j, s in enumerate(shape.Solids) if j != k]
+        real, cuts = [], []
+        for f in solid.Faces:
+            points = _face_points(f)
+            beside = [t for t, o in near if _on(points, o, tol)]
+            inside = outline is not None and not _on(points, outline, tol)
+            mesh_face = any(f.isSame(g) for g in free) or (not all(beside) if beside else inside)
+            (real if mesh_face else cuts).append(f)
+        out.append((solid, real, cuts))
+    return out
+
+
+def _face_points(face):
+    """A few points inside face, away from its edges."""
+    u0, u1, v0, v1 = face.ParameterRange
+    grid = [(u0 + i * (u1 - u0) / 4, v0 + j * (v1 - v0) / 4) for i in (1, 2, 3) for j in (1, 2, 3)]
+    return [face.valueAt(u, v) for u, v in grid if face.isPartOfDomain(u, v)] or [face.CenterOfMass]
+
+
+def _normal(face, point):
+    return face.normalAt(*face.Surface.parameter(point)).normalize()
+
+
+def _sharp_3d(study, body, shape, bodies, layer):
+    """Why a 3D body gets no prism layers (spec 6), as meshlayers decides it: "edge" when two of its real faces meet
+    with the normals turning by more than 15°; "cut" when a cut face is not planar, meets a real face more than 30° off
+    square, has an edge on no real face or a corner on another cut; None when it is smooth or has no real surface.
+    The normals are compared at the quarter points of each shared edge. layer: the layer's depth, for the 2D call's
+    shape (a fold shows only in the mesh)."""
+    smooth, square = math.cos(math.radians(15)), 0.5
+    for solid, real, cuts in _surface_3d(study, body, shape, bodies):
+        if not real:
+            continue  # no real surface: no layers, and nothing to say here
+
+        def faces_at(edge):
+            found = []
+            for f in solid.ancestorsOfType(edge, Part.Face):
+                if not any(f.isSame(g) for g in found):
+                    found.append(f)
+            return found
+
+        def quarters(edge):
+            u0, u1 = edge.FirstParameter, edge.LastParameter
+            return [edge.valueAt(u0 + k * (u1 - u0) / 4) for k in (1, 2, 3)]
+
+        def is_real(f):
+            return any(f.isSame(g) for g in real)
+
+        tol = 1e-6 * max(1.0, solid.BoundBox.DiagonalLength)
+        for e in solid.Edges:
+            faces = faces_at(e)
+            if e.Length > tol and len(faces) == 2 and all(is_real(f) for f in faces):
+                a, b = faces
+                if any(_normal(a, p).dot(_normal(b, p)) < smooth for p in quarters(e)):
+                    return "edge"
+        corners = []
+        for cut in cuts:
+            normals = [cut.normalAt(*cut.Surface.parameter(p)) for p in _face_points(cut)]
+            if any(n.normalize().dot(normals[0]) < 1 - 1e-9 for n in normals):
+                return "cut"
+            for e in cut.Edges:
+                if e.Length <= tol:
+                    continue
+                beside = [f for f in faces_at(e) if is_real(f)]
+                if not beside:
+                    return "cut"
+                if any(abs(_normal(beside[0], p).dot(_normal(cut, p))) > square for p in quarters(e)):
+                    return "cut"
+            if any(v.isSame(w) for v in cut.Vertexes for w in corners):
+                return "cut"
+            corners += cut.Vertexes
+    return None
+
+
+def _cut_on_copy(study, body, shape, bodies):
+    """True when a cut face of a cell object lies on a copy of another cell object of its group: the cell job meshes
+    that face itself, so prism layers cannot end there. The face test is that of a swept cell (_swept_bodies)."""
+    if not any(body in g.Cells for g in objects.symmetric_groups(study)):
+        return False
+    cuts = [f for _, _, c in _surface_3d(study, body, shape, bodies) for f in c]
+    if not cuts:
+        return False
+    box = shape.BoundBox
+    box.enlarge(1e-6 * max(1.0, box.DiagonalLength))
+    others = [(o, geometry.global_shape(o)) for o in bodies if not objects.is_air(o)]
+    for o, o_shape, copy in _swept_neighbours(study, body, box, others):
+        if copy and box.intersect(o_shape.BoundBox) and any(_shared_area(f, o_shape) > 1e-6 * f.Area for f in cuts):
+            return True
+    return False
+
+
+def _cut_on_period(study, body, shape, bodies):
+    """True when a cut face of a body of an ordinary Study with sliding motion lies on one of the two periodic
+    boundaries (airshapes.period, which the job gets): the mesher makes no prism layers there yet."""
+    if objects.is_grouped(study) or study.Movement != "Sliding motion":
+        return False
+    period = airshapes.period(study)
+    if not period:
+        return False
+    tol = 1e-6 * max(1.0, shape.BoundBox.DiagonalLength)
+    if period["kind"] == "rotation":
+        planes = []
+        for side in (0, 1):
+            a = math.radians(period["start"] + side * period["angle"])
+            c, s = math.cos(a), math.sin(a)
+            planes.append(lambda p, c=c, s=s: abs(p.x * s - p.y * c) < tol and p.x * c + p.y * s > -tol)
+    else:
+        length = math.hypot(*period["vector"])
+        n = App.Vector(*period["vector"]) / length
+        planes = [lambda p, at=period["start"] + side * length: abs(p.dot(n) - at) < tol for side in (0, 1)]
+    for _, _, cuts in _surface_3d(study, body, shape, bodies):
+        for f in cuts:
+            points = _face_points(f) + [v.Point for v in f.Vertexes]
+            if any(all(on(p) for p in points) for on in planes):
+                return True
+    return False
+
+
+def _gets_prisms(study, body, bodies):
+    """True when body gets prism layers in a 3D Study, as _skin_layers tells: a whole-body pick of a Skin Layer with
+    QuadLayers, not swept, structured or recombined, not a free object of a Study with Symmetric Groups, smooth with
+    flat square cuts, none on a periodic boundary or a copy of another cell object."""
+    if study.Dimension != "3D" or not any(
+        s.QuadLayers and any(b.Name == body.Name and not any(subs) for b, subs in objects.subs_by_body(s))
+        for s in objects.skin_layers(study)
+    ):
+        return False
+    for items in (objects.swept_bodies(study), objects.transfinite_bodies(study), objects.recombine_items(study)):
+        if any(b.Name == body.Name for t in items for b, _ in objects.subs_by_body(t)):
+            return False
+    if objects.is_grouped(study) and _is_free(study, body):
+        return False
+    shape = geometry.global_shape(body)
+    return not (
+        _sharp_3d(study, body, shape, bodies, 0.0)
+        or _cut_on_period(study, body, shape, bodies)
+        or _cut_on_copy(study, body, shape, bodies)
+    )
+
+
+def _on(points, shape, tol):
+    """True if every point lies on shape."""
+    return all(shape.distToShape(Part.Vertex(p))[0] < tol for p in points)
+
+
+def _beyond(element, body, step, tol):
+    """A few points just outside body (a face in 2D, a solid in 3D) beyond an edge (a face in 3D) of its boundary, step
+    from it along its normal, away from its ends and sides; [] where that cannot be told."""
+    if element.ShapeType == "Edge":
+        plane = body.Faces[0].normalAt(0, 0)
+        u0, u1 = element.FirstParameter, element.LastParameter
+        at = [
+            (element.valueAt(u), element.tangentAt(u).cross(plane)) for u in (u0 + k * (u1 - u0) / 4 for k in (1, 2, 3))
+        ]
+    else:
+        u0, u1, v0, v1 = element.ParameterRange
+        grid = [(u0 + i * (u1 - u0) / 4, v0 + j * (v1 - v0) / 4) for i in (1, 2, 3) for j in (1, 2, 3)]
+        at = [(element.valueAt(u, v), element.normalAt(u, v)) for u, v in grid if element.isPartOfDomain(u, v)]
+    out = []
+    for p, n in at:
+        if n.Length < 1e-12:
+            return []
+        n.normalize()
+        sides = [q for q in (p + n * step, p - n * step) if not _inside(q, [body], tol)]
+        if len(sides) != 1:
+            return []
+        out += sides
+    return out
+
+
+def _inside(q, shapes, tol):
+    """True if the point q lies in one of shapes: on a face in 2D, inside a solid in 3D."""
+    for s in shapes:
+        if s.Solids:
+            if any(solid.isInside(q, tol, True) for solid in s.Solids):
+                return True
+        elif s.distToShape(Part.Vertex(q))[0] < tol:
+            return True
+    return False
+
+
+def free_faces(study, group, body):
+    """The faces (edges in 2D) of the boundary of a cell object of group that face the free side: the Air Region
+    around the copies, free objects and the copies of other groups. Names of geometry.global_shape(body), in order.
+    The cell job holds nothing beyond them, so the real surface of the body there is these faces. A face counts when
+    the points just beyond it lie inside the Air Region, a free object or a copy of another group, and not in another
+    cell object of group or a copy of one of its cell objects (the body's own place excluded): those are seams and
+    contacts, which the cell job meshes. Beyond a cut of the domain (a side of the Air Region, a symmetry line of a
+    half model) lies nothing."""
+    shape = geometry.global_shape(body)
+    size = max(1.0, shape.BoundBox.DiagonalLength)
+    tol, step = 1e-6 * size, 1e-4 * size
+    box = shape.BoundBox
+    box.enlarge(2 * step)
+
+    def near(shapes):
+        return [s for s in shapes if box.intersect(s.BoundBox)]
+
+    mine = (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+    own = []  # the cells of group in every copy, the body where it is drawn left out
+    for cell in group.Cells:
+        cell_shape = geometry.global_shape(cell)
+        if cell_shape.isNull():  # _groups reports it
+            continue
+        cell_box = _box(cell_shape)
+        for t in objects.group_transforms(group):
+            here = max(abs(a - c) for a, c in zip(t, symmetry.ID)) < symmetry.TOL
+            if not (here and cell.Name == body.Name) and symmetry.boxes_meet(symmetry.moved_box(t, cell_box), mine):
+                own.append(cell_shape if here else cell_shape.transformed(App.Matrix(*t)))
+    cells = {c.Name for c in objects.cell_bodies(study)}
+    free = [b for b in geometry.study_geometry(study)[0] if b.Name not in cells and not objects.is_air(b)]
+    beside = near(geometry.global_shape(b) for b in free)
+    others = [g for g in objects.symmetric_groups(study) if g.Name != group.Name and not g.Shape.isNull()]
+    beside += near(p for g in others for p, _ in _elements(g)[0])
+    for air in objects.air_regions(study)[:1]:  # validation allows one
+        try:
+            beside += near([airshapes.air_shape(air, airshapes.study_plane(study))])
+        except ValueError:  # _air reports it
+            pass
+    three = study.Dimension == "3D"
+    if three:
+        walls, elements = [f for s in shape.Solids for f in s.Faces], shape.Faces
+    else:
+        walls, elements = [e for f in shape.Faces for e in f.Edges], shape.Edges
+    found = []
+    for n, element in enumerate(elements, 1):
+        if sum(element.isSame(w) for w in walls) != 1:  # inside the body, between two of its pieces
+            continue
+        points = _beyond(element, shape, step, tol)
+        if points and all(not _inside(q, own, tol) and _inside(q, beside, tol) for q in points):
+            found.append(f"{'Face' if three else 'Edge'}{n}")
+    return found
+
+
+def skinned_faces(study, group, body):
+    """Of free_faces(study, group, body), those against a body with a Skin Layer of its own (picked whole): a free
+    object, or a copy of a cell object of another group. A swept cell's end there is not graded (a terminal with a
+    skin, as in an ordinary Study)."""
+    layered = {b.Name for item in objects.skin_layers(study) for b, sub in objects.item_refs(item) if sub == ""}
+    if not layered:
+        return []
+    cells = {c.Name for c in objects.cell_bodies(study)}
+    skinned = [
+        geometry.global_shape(b)
+        for b in geometry.study_geometry(study)[0]
+        if b.Name in layered and b.Name not in cells and not objects.is_air(b)
+    ]
+    for g in objects.symmetric_groups(study):
+        if g.Name == group.Name:
+            continue
+        for cell in g.Cells:
+            if cell.Name in layered:
+                shape = geometry.global_shape(cell)
+                skinned += [shape.transformed(App.Matrix(*t)) for t in objects.group_transforms(g)]
+    shape = geometry.global_shape(body)
+    size = max(1.0, shape.BoundBox.DiagonalLength)
+    tol, step = 1e-6 * size, 1e-4 * size
+    found = []
+    for name in free_faces(study, group, body):
+        points = _beyond(shape.getElement(name), shape, step, tol)
+        if any(_inside(q, skinned, tol) for q in points):
+            found.append(name)
+    return found
+
+
+def _air_gradings(study, included, r):
+    """Air Grading items: each reference is an air (the Air Region, or a free object in a Study with Symmetric
+    Groups), picked whole, and an air has one item, the first in the tree."""
+    owners = {}  # air Name -> the first Air Grading that references it
+    for g in objects.air_gradings(study):
+        meshed = [(b, next((s for s in subs if s), "")) for b, subs in objects.subs_by_body(g) if b.Name in included]
+        if not meshed:
+            continue
+        if g.GrowthDistance.Value <= 0:
+            r.error(f"Air Grading {g.Label}: the growth distance must be greater than 0.", g)
+        for b, sub in meshed:
+            name = objects.display_name(b)
+            if not objects.is_air(b) and not (objects.is_grouped(study) and _is_free(study, b)):
+                r.error(
+                    f"Air Grading {g.Label}: {name} is not an air. Pick the Air Region (or, in a Study with Symmetric"
+                    " Groups, a free object that is air).",
+                    g,
+                    [(b, "")],
+                )
+            elif sub:
+                r.error(f"Air Grading {g.Label}: pick the whole air, not {b.Label}.{sub}.", g, [(b, sub)])
+            elif owners.setdefault(b.Name, g) is not g:
+                r.error(
+                    f"Air Grading {g.Label}: {name} already has Air Grading {owners[b.Name].Label}; one per air.",
+                    g,
+                    [(b, "")],
+                )
+
+
+def _is_free(study, body):
+    """True for a body that no Symmetric Group holds as a cell object and that is not a group's drawing."""
+    return any(p.startswith("free") for p in _mesh_part(study, body))
+
+
+def _free_picks_on_copies(study, n, free, r):
+    """Refine Near n in a Study with Symmetric Groups: the free model meshes without the copies, so the picks of free
+    bodies and of the Air Region (free: [(body, subs)]) do not refine where they meet the copies. A whole body is
+    refined only where it meets other free objects; a picked face or edge that lies on the copies is dropped from the
+    free model there."""
+    copies = None
+    for body, subs in free:
+        name = objects.display_name(body)
+        if "" in subs:
+            r.warning(
+                f"Refine Near {n.Label}: in a Study with Symmetric Groups, {name} is refined only where it meets other"
+                " free objects, not where it meets the copies of a Symmetric Group.",
+                n,
+            )
+            continue
+        shape = None
+        for sub in subs:
+            if not sub.startswith(("Face", "Edge")):
+                continue
+            if copies is None:  # worked out once, and only when a face or an edge is picked
+                copies = [p for g in objects.symmetric_groups(study) if not g.Shape.isNull() for p in _elements(g)[0]]
+            if shape is None:
+                plane = airshapes.study_plane(study)
+                try:
+                    shape = airshapes.air_shape(body, plane) if objects.is_air(body) else geometry.global_shape(body)
+                except ValueError:
+                    continue  # _air reports it
+            try:
+                element = shape.getElement(sub)
+            except Exception:  # a stale name: _links reports it
+                continue
+            if _lies_on(element, copies):
+                r.warning(
+                    f"Refine Near {n.Label}: {sub} of {name} lies on the copies of a Symmetric Group, which are meshed"
+                    " apart; it is not refined there.",
+                    n,
+                    [(body, sub)],
+                )
+
+
+def _lies_on(element, copies):
+    """True if a face or an edge shares an area (a length, for an edge) with the solids or faces copies, as
+    _elements gives them. A pair OCC cannot compute counts as not lying on."""
+    box = element.BoundBox
+    tol = 1e-6 * max(1.0, box.DiagonalLength)
+    box.enlarge(tol)
+    for piece, piece_box in copies:
+        if not box.intersect(piece_box):
+            continue
+        try:
+            if element.distToShape(piece)[0] > tol:
+                continue
+            common = element.common(piece)
+        except Part.OCCError:
+            continue
+        size = sum(f.Area for f in common.Faces) if element.ShapeType == "Face" else sum(e.Length for e in common.Edges)
+        if size > tol:
+            return True
+    return False
+
+
+def _mesh_part(study, body):
+    """The meshes body is in with Symmetric Groups, as a set: its group for a cell object (one per group that holds
+    it), "free fixed" or "free moving" for a free body by its side (the Air Region is on the fixed side), nothing for
+    a group's drawing, which no job meshes."""
+    if objects.is_air(body):
+        return {"free fixed"}
+    found = {f"group {g.Name}" for g in objects.symmetric_groups(study) if body in g.Cells}
+    if found:
+        return found
+    if body in objects.symmetric_groups(study):
+        return set()
+    return {"free moving" if body.Name in sides.moving(study) else "free fixed"}
 
 
 def thickness(shape):
     """About how thick a solid is, 4 V / A: the diameter of a long round wire."""
     return 4 * shape.Volume / shape.Area if shape.Area > 0 else 0.0
+
+
+def thickness_2d(face):
+    """About how thick a face is, 4 A / perimeter: the diameter of a round wire."""
+    perimeter = sum(e.Length for e in face.Edges)
+    return 4 * face.Area / perimeter if perimeter > 0 else 0.0
 
 
 def _coarse(study, bodies, r):

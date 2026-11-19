@@ -189,6 +189,343 @@ def _problems(study, severity=None):
     return [p for p in validation.validate(study) if severity in (None, p.severity)]
 
 
+def _cell(study, name="CoilCell"):
+    return next(b for b in objects.cell_bodies(study) if b.Name == name)
+
+
+def _free_ring(study):
+    """A free body on the fixed side, outside the stator."""
+    ring = Part.Face(Part.Wire(Part.makeCircle(110))).cut(Part.Face(Part.Wire(Part.makeCircle(100))))
+    return symcases.add_free(study, "FreeRing", ring, symcases.libraries(study)["Steel"])
+
+
+def _job_of(study):
+    with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _refine_keys(job):
+    sym = job["symmetric"]
+    return [g["job"].get("refine") for g in sym["groups"]], [f["job"].get("refine") for f in sym.get("free", [])]
+
+
+def test_air_grading_on_a_free_object_is_allowed_and_on_a_cell_refused(motor):
+    body = _free_ring(motor)
+    objects.make_air_grading(motor, [(body, "")], 5.0)
+    assert not [t for t in _texts(motor) if t.startswith("Air Grading")]
+    cell = _cell(motor)
+    item = objects.make_air_grading(motor, [(cell, "")], 5.0)
+    assert (
+        f"Air Grading {item.Label}: {objects.display_name(cell)} is not an air. Pick the Air Region (or, in a Study"
+        " with Symmetric Groups, a free object that is air)." in _texts(motor)
+    )
+
+
+def test_skin_layer_quads_on_a_free_object_warns(motor):
+    body = _free_ring(motor)
+    item = objects.make_skin_layer(motor, [(body, "")])
+    item.QuadLayers = True
+    assert [t for t in _texts(motor, "warning") if t.startswith(f"Skin Layer {item.Label}")] == [
+        f"Skin Layer {item.Label}: quad layers are not made on free objects of a Study with Symmetric Groups;"
+        f" {objects.display_name(body)} gets graded triangles."
+    ]
+
+
+def test_skin_layer_quads_on_a_cell_cut_by_a_seam_not(tmp_path):
+    """A half wire on the mirror seam, in an iron cell: its edge on the seam is a cut to the cell job, not a surface, so
+    the 90 degree corners where the seam meets the arc are not sharp corners of the layer."""
+    doc = App.newDocument("SeamSkin")
+    try:
+        study = objects.make_study(doc, "2D")
+        half = Part.Face(
+            Part.Wire(
+                [
+                    Part.makeCircle(5, App.Vector(20, 0, 0), App.Vector(0, 0, 1), 0, 180),
+                    Part.makeLine((15, 0, 0), (25, 0, 0)),
+                ]
+            )
+        )
+        wire = symcases.feature(doc, "WireCell", half)
+        iron = symcases.feature(doc, "IronCell", symcases.sector(10, 30, 0, 30).cut(half).Faces[0])
+        symcases.group(study, "G", [iron, wire], [symcases.mirror_rule(0), symcases.rotate_rule(60, 6)])
+        symcases.add_air_region(study, Center=App.Vector(), Length=100, Width=100)
+        item = objects.make_skin_layer(study, [(wire, "")])
+        item.QuadLayers = True
+        assert not [t for t in _texts(study, "warning") if t.startswith(f"Skin Layer {item.Label}")]
+    finally:
+        App.closeDocument(doc.Name)
+
+
+@pytest.fixture
+def bar_study(tmp_path):
+    """A 2D group (mirror at 0 degrees, six turns of 60) whose cell is iron r 10..30 over 0..30 degrees holding a bar
+    r 25..30 over 0..10 degrees (its arc r 30 faces the Air Region, its line at 0 degrees is a seam with its mirror
+    image, its other edges lie against the iron) and a round wire r 2 inside the iron, in a 100 mm Air Region box.
+    Yields (study, bar, wire)."""
+    doc = App.newDocument("BarSkin")
+    try:
+        study = objects.make_study(doc, "2D")
+        libs = symcases.libraries(study)
+        bar_face = symcases.sector(25, 30, 0, 10)
+        centre = App.Vector(18 * math.cos(math.radians(15)), 18 * math.sin(math.radians(15)), 0)
+        wire_face = Part.Face(Part.Wire(Part.makeCircle(2, centre)))
+        bar = symcases.feature(doc, "BarCell", bar_face)
+        wire = symcases.feature(doc, "WireCell", wire_face)
+        iron = symcases.feature(doc, "IronCell", symcases.sector(10, 30, 0, 30).cut(bar_face).cut(wire_face).Faces[0])
+        lib = {iron.Name: libs["Steel"], bar.Name: libs["Copper"], wire.Name: libs["Copper"]}
+        rows = {c.Name: {"mode": "table", "table": [c.Name[:-4]] * 12} for c in (iron, bar, wire)}
+        rules = [symcases.mirror_rule(0), symcases.rotate_rule(60, 6)]
+        symcases.group(study, "G", [iron, bar, wire], rules, rows=rows, lib=lib)
+        symcases.add_air_region(study, libs["Air"], Center=App.Vector(), Length=100, Width=100)
+        symcases.finish(study, str(tmp_path / "bar.FCStd"))
+        yield study, bar, wire
+    finally:
+        for name in list(App.listDocuments()):
+            App.closeDocument(name)
+
+
+def _arc_radius(shape):
+    (edge,) = shape.Edges
+    return getattr(edge.Curve, "Radius", None)
+
+
+def test_free_faces_of_a_cell_conductor(bar_study):
+    from emsolution import geometry, validation
+
+    study, bar, wire = bar_study
+    (group,) = objects.symmetric_groups(study)
+    edges = geometry.global_shape(bar).Edges
+    (outer,) = [f"Edge{i}" for i, e in enumerate(edges, 1) if getattr(e.Curve, "Radius", 0) == pytest.approx(30)]
+    assert validation.free_faces(study, group, bar) == [outer]
+    assert validation.free_faces(study, group, wire) == []
+    (air,) = objects.air_regions(study)
+    air.AirShape, air.InnerRadius, air.OuterRadius = "Sector", 30, 60  # round the copies: its inner arc meets the bar
+    study.Document.recompute()
+    assert validation.free_faces(study, group, bar) == [outer]
+    # a half model: three turns of the cell and its mirror image at 30 degrees, in a box above y = 0. The bar's line at
+    # 0 degrees lies on the box's side, a cut of the domain
+    objects.set_rules(group, [symcases.mirror_rule(30), symcases.rotate_rule(60, 3)])
+    air.AirShape, air.Center, air.Length, air.Width = "Box", App.Vector(0, 50, 0), 200, 100
+    study.Document.recompute()
+    assert validation.free_faces(study, group, bar) == [outer]
+    air.Center = App.Vector(0, 49, 0)  # the box reaches 1 mm below y = 0: that line now faces its air
+    study.Document.recompute()
+    line = next(f"Edge{i}" for i, e in enumerate(edges, 1) if abs(e.CenterOfMass.y) < 1e-9)
+    assert validation.free_faces(study, group, bar) == sorted([outer, line], key=lambda n: int(n[4:]))
+
+
+def test_skin_on_a_cell_conductor_lists_its_free_faces(bar_study):
+    study, bar, wire = bar_study
+    objects.make_skin_layer(study, [(bar, "")], 1.0)
+    objects.make_skin_layer(study, [(wire, "")], 1.0)
+    assert not _texts(study)
+    path = jobwriter.write_job(study)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    (group,) = objects.symmetric_groups(study)
+    on_bar, on_wire = job["symmetric"]["groups"][0]["job"]["skin"]
+    n = list(group.Cells).index(bar) + 1
+    (face,) = on_bar["faces"]
+    assert face["mat_id"] == n and on_bar["mat_ids"] == [n]
+    assert _arc_radius(Part.read(os.path.join(os.path.dirname(path), face["file"]))) == pytest.approx(30)
+    assert "faces" not in on_wire
+
+
+def test_refine_near_whole_cell_body_gets_its_free_faces(bar_study):
+    study, bar, _ = bar_study
+    objects.make_refine_near(study, [(bar, "")])
+    path = jobwriter.write_job(study)
+    with open(path, encoding="utf-8") as fh:
+        job = json.load(fh)
+    (group,) = objects.symmetric_groups(study)
+    (entry,) = job["symmetric"]["groups"][0]["job"]["refine"]
+    assert entry["whole"] == [list(group.Cells).index(bar) + 1]
+    (file,) = entry["files"]
+    assert _arc_radius(Part.read(os.path.join(os.path.dirname(path), file))) == pytest.approx(30)
+
+
+def test_skin_layer_quads_on_a_cell_conductor_facing_the_air(tmp_path):
+    """A lens-shaped bar at the iron's outer arc: its arc against the iron is smooth on its own, but where its free arc
+    r 30 meets it the surface turns sharply, so Validate warns as the mesher would find it."""
+    doc = App.newDocument("LensSkin")
+    try:
+        study = objects.make_study(doc, "2D")
+        centre = App.Vector(30 * math.cos(math.radians(15)), 30 * math.sin(math.radians(15)), 0)
+        sector = symcases.sector(10, 30, 0, 30)
+        disk = Part.Face(Part.Wire(Part.makeCircle(4, centre)))
+        lens = symcases.feature(doc, "LensCell", sector.common(disk).Faces[0])
+        iron = symcases.feature(doc, "IronCell", sector.cut(disk).Faces[0])
+        symcases.group(study, "G", [iron, lens], [symcases.mirror_rule(0), symcases.rotate_rule(60, 6)])
+        symcases.add_air_region(study, Center=App.Vector(), Length=100, Width=100)
+        item = objects.make_skin_layer(study, [(lens, "")], 0.5)
+        item.QuadLayers = True
+        assert [t for t in _texts(study, "warning") if t.startswith(f"Skin Layer {item.Label}")] == [
+            f"Skin Layer {item.Label}: {objects.display_name(lens)} has sharp corners on its surface; quad layers need"
+            " a smooth surface, so it gets graded triangles."
+        ]
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def test_air_grading_goes_to_the_free_job_of_its_air(motor):
+    air = symcases.add_air_region(
+        motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=130
+    )
+    body = _free_ring(motor)
+    objects.make_air_grading(motor, [(air, "")], 7.0, 3.0)
+    objects.make_air_grading(motor, [(body, "")], 9.0, 4.0)
+    assert not [t for t in _texts(motor) if t.startswith("Air Grading")]
+    job = _job_of(motor)
+    assert not any(g["job"].get("air_grading") for g in job["symmetric"]["groups"])
+    (free,) = [f["job"] for f in job["symmetric"]["free"] if f["side"] == "fixed"]
+    ids = motor.MatIds
+    assert free["air_grading"] == [
+        {"name": "AirGrading", "mat_ids": [int(ids[air.Name])], "growth": 7.0, "far": 3.0},
+        {"name": "AirGrading001", "mat_ids": [int(ids[body.Name])], "growth": 9.0, "far": 4.0},
+    ]
+
+
+def test_refine_near_on_a_cell_goes_to_the_cell_job(motor):
+    cell = _cell(motor)
+    objects.make_refine_near(motor, [(cell, "")])
+    assert not _texts(motor)
+    job = _job_of(motor)
+    cells, free = _refine_keys(job)
+    group = objects.symmetric_groups(motor)[0]
+    assert cells[0][0]["whole"] == [list(group.Cells).index(cell) + 1]
+    assert cells[1] is None and not any(free)
+
+
+def test_refine_near_on_a_free_body_goes_to_the_free_job(motor):
+    body = _free_ring(motor)
+    objects.make_refine_near(motor, [(body, "Edge1")])
+    assert not _texts(motor)
+    cells, free = _refine_keys(_job_of(motor))
+    assert not any(cells)
+    (entry,) = free[0]
+    assert len(entry["files"]) == 1 and entry["files"][0].startswith("geometry/free_fixed_refine_")
+
+
+def test_skin_goes_to_the_cell_job(motor):
+    cell = _cell(motor)
+    objects.make_skin_layer(motor, [(cell, "")], 2.0)
+    job = _job_of(motor)
+    group = objects.symmetric_groups(motor)[0]
+    skins = [g["job"].get("skin") for g in job["symmetric"]["groups"]]
+    n = list(group.Cells).index(cell) + 1
+    assert skins[0] == [
+        {"name": "SkinLayer", "mat_ids": [n], "depth": 2.0, "per_depth": 2.0, "layer": 3.0, "quads": False}
+    ]
+    assert skins[1] is None and not any(f["job"].get("skin") for f in job["symmetric"].get("free", []))
+
+
+def test_skin_on_a_free_object_has_no_quads(motor):
+    body = _free_ring(motor)
+    item = objects.make_skin_layer(motor, [(body, "")], 2.0)
+    item.QuadLayers = True
+    job = _job_of(motor)
+    assert not any(g["job"].get("skin") for g in job["symmetric"]["groups"])
+    (free,) = [f["job"] for f in job["symmetric"]["free"] if f["side"] == "fixed"]
+    mat_id = int(motor.MatIds[body.Name])
+    assert free["skin"] == [
+        {"name": "SkinLayer", "mat_ids": [mat_id], "depth": 2.0, "per_depth": 2.0, "layer": 3.0, "quads": False}
+    ]
+
+
+def test_refine_near_on_a_cell_and_a_free_body_goes_to_both_jobs(motor):
+    body = _free_ring(motor)
+    objects.make_refine_near(motor, [(_cell(motor), "Edge1"), (body, "Edge1")])
+    cells, free = _refine_keys(_job_of(motor))
+    assert len(cells[0]) == 1 and cells[1] is None and len(free[0]) == 1
+    files = cells[0][0]["files"] + free[0][0]["files"]
+    assert files and len(set(files)) == len(files)
+
+
+def test_refine_near_limit_to_across_parts_warns(motor):
+    air = symcases.add_air_region(
+        motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90
+    )
+    item = objects.make_refine_near(motor, [(_cell(motor), "Edge1")], limit_to=[air])
+    assert not _texts(motor)
+    assert (
+        f"Refine Near {item.Label}: no body in Limit to is meshed with its picks; the refinement is skipped."
+        in _texts(motor, "warning")
+    )
+    cells, free = _refine_keys(_job_of(motor))
+    assert not any(cells) and not any(free)
+
+
+def test_refine_near_limit_to_partly_across_parts_warns(motor):
+    cell = _cell(motor)
+    air = symcases.add_air_region(
+        motor, symcases.libraries(motor)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90
+    )
+    item = objects.make_refine_near(motor, [(cell, "Edge1")], limit_to=[cell, air])
+    assert (
+        f"Refine Near {item.Label}: {objects.display_name(air)} in Limit to is meshed apart from its picks (a Symmetric"
+        " Group's cell objects are meshed on their own); it has no effect there."
+    ) in _texts(motor, "warning")
+    cells, _ = _refine_keys(_job_of(motor))
+    assert cells[0][0]["limit_to"] == [list(objects.symmetric_groups(motor)[0].Cells).index(cell) + 1]
+
+
+def _sector_air(study):
+    return symcases.add_air_region(
+        study, symcases.libraries(study)["Air"], AirShape="Sector", InnerRadius=60, OuterRadius=90
+    )
+
+
+def _air_edge(air, radius):
+    """The name of the Air Region's arc at radius (its shape as the mesh gets it)."""
+    shape = jobwriter.meshed_shape(air)
+    return next(
+        f"Edge{i}"
+        for i, e in enumerate(shape.Edges, 1)
+        if hasattr(e.Curve, "Radius") and e.Curve.Radius == pytest.approx(radius)
+    )
+
+
+def test_refine_near_whole_free_body_warns_about_the_copies(motor):
+    air = _sector_air(motor)
+    item = objects.make_refine_near(motor, [(air, "")])
+    assert (
+        f"Refine Near {item.Label}: in a Study with Symmetric Groups, {objects.display_name(air)} is refined only where"
+        " it meets other free objects, not where it meets the copies of a Symmetric Group."
+    ) in _texts(motor, "warning")
+
+
+def test_refine_near_on_the_copies_warns(motor):
+    air = _sector_air(motor)
+    inner, outer = _air_edge(air, 60), _air_edge(air, 90)
+    item = objects.make_refine_near(motor, [(air, inner)])
+    text = (
+        f"Refine Near {item.Label}: {inner} of {objects.display_name(air)} lies on the copies of a Symmetric Group,"
+        " which are meshed apart; it is not refined there."
+    )
+    assert text in _texts(motor, "warning")
+    item.References = [(air, outer)]  # the outer arc meets no copy
+    assert not [t for t in _texts(motor, "warning") if t.startswith(f"Refine Near {item.Label}")]
+
+
+def test_refine_near_on_a_broken_air_region_leaves_it_to_its_error(motor):
+    air = _sector_air(motor)
+    objects.make_refine_near(motor, [(air, _air_edge(air, 60))])
+    air.AirShape = "Custom"  # and no Source: air_shape raises
+    motor.Document.recompute()
+    assert _has(motor, "choose a body for the Custom shape")
+
+
+def test_refine_near_pick_apart_from_every_limit_to_warns(motor):
+    body, cell = _free_ring(motor), _cell(motor)
+    item = objects.make_refine_near(motor, [(cell, "Edge1"), (body, "Edge1")], limit_to=[cell])
+    assert (
+        f"Refine Near {item.Label}: {objects.display_name(body)} is meshed apart from every body in Limit to; it has"
+        " no effect there."
+    ) in _texts(motor, "warning")
+    _, free = _refine_keys(_job_of(motor))
+    assert not any(free)  # the free job leaves the entry out
+
+
 def _texts(study, severity="error"):
     return [p.text for p in _problems(study, severity)]
 

@@ -17,13 +17,13 @@ Human-oriented setup details are in [BUILDING.md](BUILDING.md).
 ## FreeCAD add-on (`freecad_addon/`)
 
 - Workbench `EMSolution`, package `freecad_addon/emsolution/`. FreeCAD 1.1.0 is pinned in pixi; run it with `pixi run -e addon freecad` (the `addon` environment; the default one has no FreeCAD).
-- The mesher modules (`mesher.py`, `mesher2d.py`, `meshcommon.py`, `meshgroups.py`, `meshsym.py`, `meshfrozen.py`)
-  run in a separate Python process (gmsh) started by `runner.py`. Never import FreeCAD there; they import each other
-  by plain module name, not relative imports.
+- The mesher modules (`mesher.py`, `mesher2d.py`, `meshcommon.py`, `meshgroups.py`, `meshsym.py`, `meshfrozen.py`,
+  `meshsweep.py`, `meshlayers.py`) run in a separate Python process (gmsh) started by `runner.py`. Never import FreeCAD
+  there; they import each other by plain module name, not relative imports.
 - GUI code (FreeCADGui, Qt, coin) lives only in `commands.py`, `taskpanels.py`, `runner.py`, `labels.py`,
   `highlight.py` and `materialstandins.py`. Keep the other modules (`objects.py`, `geometry.py`, `jobwriter.py`,
-  `studymaterials.py`, `sides.py`, `validation.py`, `airshapes.py`, `symmetry.py`, `winding.py`) GUI-free, so the
-  unit tests can import them.
+  `studymaterials.py`, `sides.py`, `validation.py`, `airshapes.py`, `symmetry.py`, `winding.py`, `sweeps.py`)
+  GUI-free, so the unit tests can import them.
 - Unit tests: `pixi run -e addon test-addon`.
 - GUI changes also need the smoke test, which drives the real FreeCAD GUI (steps in the docstring of
   `tests/freecad_addon/gui_smoke.py`). Use `pixi run -e addon freecad tests\freecad_addon\gui_smoke.py`, then read the last

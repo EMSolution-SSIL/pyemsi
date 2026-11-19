@@ -2,20 +2,24 @@
 Run from the repo root: pixi run -e addon pytest tests/freecad_addon/test_study.py"""
 
 import json
+import math
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import FreeCAD as App
 import Part
 import gmsh
 from BOPTools import SplitAPI
 
-from emsolution import geometry, jobwriter, objects, validation
+from emsolution import geometry, jobwriter, objects, sweeps, validation
 
 from .materialdata import STEEL, record
+from .test_sweeps import helix_pipe, racetrack
+from .test_mesher import inner_free_faces
 
 MESHER = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher.py")
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -84,6 +88,25 @@ class StudyTest(unittest.TestCase):
         self.assertIn(text, str(ctx.exception))
 
     # --- IDs ---------------------------------------------------------------
+
+    def test_refine_near_defaults_and_row(self):
+        a = self.box("A")
+        self.study.MeshSizesGroup.DefaultMeshSize = 4.0
+        item = objects.make_refine_near(self.study, [(a, "Edge1")])
+        self.assertEqual((item.FineSize.Value, item.CoarseSize.Value, item.GrowthDistance.Value), (2.0, 4.0, 10.0))
+        self.assertEqual(item.FineDistance.Value, 0.0)
+        self.assertEqual(objects.refine_items(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.item_refs(item), [(a, "Edge1")])
+        self.assertEqual(
+            objects.mesh_size_rows(self.study),
+            [(item, [(a, "Edge1")], ["RefineNear", "2 → 4 mm over 10 mm", "A.Edge1"])],
+        )
+
+    def test_refine_near_row_names_its_limit(self):
+        a = self.box("A")
+        objects.make_refine_near(self.study, [(a, "Face2")], 0.4, 4, 10, limit_to=[a])
+        self.assertEqual(objects.mesh_size_rows(self.study)[0][2][1], "0.4 → 4 mm over 10 mm in A")
 
     def test_ids_follow_tree_order_and_stay_after_adding_a_body(self):
         for name, x in (("A", 0), ("B", 10), ("C", 20)):
@@ -341,6 +364,82 @@ class StudyTest(unittest.TestCase):
         objects.assign(self.study, [a], self.steel(), 0, name="Coil 1")
         objects.assign(self.study, [b], self.steel(), 0, name="Coil_1")
         self.assertTrue(any("group names are the same" in t for t in self.problems("error")))
+
+    def test_air_grading_defaults_and_row(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        self.study.MeshSizesGroup.DefaultMeshSize = 4.0
+        item = objects.make_air_grading(self.study)
+        self.assertEqual(objects.item_refs(item), [(air, "")])
+        self.assertEqual((item.GrowthDistance.Value, item.FarSize.Value), (40.0, 0.0))
+        self.assertEqual(objects.air_gradings(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "grows over 40 mm to 4 mm")
+
+    def test_air_grading_far_size_reads_the_air_size(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        objects.make_mesh_size(self.study, 12.0, [(air, "")])
+        item = objects.make_air_grading(self.study, growth=50.0)
+        self.assertEqual(objects.far_size(item), 12.0)
+        item.FarSize = 30.0
+        self.assertEqual(objects._size_text(item), "grows over 50 mm to 30 mm")
+
+    def test_skin_depth_formula(self):
+        self.assertAlmostEqual(objects.skin_depth(50, 5.8e7, 1), 9.35, places=2)
+        self.assertAlmostEqual(objects.skin_depth(1000, 3.5e7, 1), 2.69, places=2)
+
+    def test_skin_layer_defaults_and_row(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        self.assertEqual(item.SkinDepth.Value, 2.69)
+        self.assertEqual((item.ElementsPerDepth, item.LayerDepth, item.QuadLayers), (2.0, 3.0, False))
+        self.assertEqual((item.Frequency, item.Conductivity, item.RelativePermeability), (50.0, 5.8e7, 1.0))
+        self.assertEqual(objects.skin_layers(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "δ 2.69 mm, 2/δ, 3δ")
+        item.QuadLayers = True
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "δ 2.69 mm, 2/δ, 3δ, quads")
+
+    def test_skin_layer_refuses_the_air(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        self.assertEqual(
+            objects.air_refusal(objects.SkinLayer, [air]),
+            f"Air Region {objects.display_name(air)} cannot have a Skin Layer.",
+        )
+
+    def test_swept_body_defaults_and_row(self):
+        a = self.box("A")
+        item = objects.make_swept_body(self.study, [(a, "")])
+        self.assertEqual((item.PathSize.Value, item.SectionSize.Value), (0.0, 0.0))
+        self.assertEqual(list(item.StartFace), [])
+        self.assertEqual(objects.swept_bodies(self.study), [item])
+        self.assertTrue(objects.is_item(item))
+        self.assertEqual(objects.mesh_size_rows(self.study)[-1][2][1], "along body size")
+        item.PathSize = 2.0
+        item.SectionSize = 0.5
+        self.assertEqual(objects._size_text(item), "along 2 mm, section 0.5 mm")
+        objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        self.assertEqual(objects._size_text(item), "along 2 mm, section 0.5 mm, skin")
+
+    def test_swept_body_refuses_the_air(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        self.assertEqual(
+            objects.air_refusal(objects.SweptBody, [air]),
+            f"Air Region {objects.display_name(air)} cannot be a Swept Body.",
+        )
+
+    def test_skin_layer_mu_r_from_the_material(self):
+        a, b = self.box("A"), self.box("B", 10)
+        props = {"electromagnetic": {"relative_permeability": {"type": "scalar", "value": 1000, "unit": "1"}}}
+        lib = objects.make_library_material(self.study, json.dumps(record("user:iron", "Iron", "generic", props)))
+        objects.assign(self.study, [a], lib, 0)
+        self.assertEqual(objects.body_mu_r(self.study, a), 1000)
+        self.assertIsNone(objects.body_mu_r(self.study, b))
+        self.assertEqual(objects.make_skin_layer(self.study, [(a, "")]).RelativePermeability, 1000)
+        self.assertEqual(objects.make_skin_layer(self.study, [(b, "")]).RelativePermeability, 1)
 
     def test_air_keeps_its_own_mesh_name(self):
         self.box("A")
@@ -1030,6 +1129,304 @@ class StudyTest(unittest.TestCase):
         self.box("A")
         with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
             self.assertNotIn("recombine", json.load(fh))
+
+    def test_job_without_skin_has_no_skin_key(self):
+        self.box("A")
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("skin", json.load(fh))
+
+    def test_skin_goes_to_the_job(self):
+        a = self.box("A")
+        objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        mat_id = job["volumes"][0]["mat_id"]
+        self.assertEqual(
+            job["skin"],
+            [{"name": "SkinLayer", "mat_ids": [mat_id], "depth": 2.69, "per_depth": 2.0, "layer": 3.0, "quads": False}],
+        )
+
+    def test_skin_lists_a_body_once(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        item.References = [(a, ""), (a, "")]
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual(job["skin"][0]["mat_ids"], [job["volumes"][0]["mat_id"]])
+
+    def test_skin_quads_in_2d_and_3d(self):  # 3D: prism layers (Stage 5)
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 2.69)
+        item.QuadLayers = True
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertIs(json.load(fh)["skin"][0]["quads"], True)
+        f = self.face("F")
+        study = self.make_2d_study(f)
+        item = objects.make_skin_layer(study, [(f, "")], 2.69)
+        item.QuadLayers = True
+        with open(jobwriter.write_job(study), encoding="utf-8") as fh:
+            self.assertIs(json.load(fh)["skin"][0]["quads"], True)
+
+    def test_job_without_swept_has_no_swept_key(self):
+        self.box("A")
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("swept", json.load(fh))
+
+    def swept_job(self, shape=None, path_size=0):
+        bar = self.shape_body("Bar", shape or Part.makeBox(10, 4, 40))
+        self.study.MeshSizesGroup.DefaultMeshSize = 2
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        item.PathSize = path_size
+        return bar, item
+
+    def read_job(self):
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_swept_goes_to_the_job(self):
+        self.swept_job(path_size=4)
+        job = self.read_job()
+        (entry,) = job["swept"]
+        self.assertEqual(entry["mat_id"], job["volumes"][0]["mat_id"])
+        self.assertEqual((entry["path_size"], entry["section_size"], entry["skin"]), (4, 2, None))
+        self.assertIs(entry["recombine"], False)
+        (solid,) = entry["solids"]
+        (piece,) = solid["pieces"]
+        self.assertAlmostEqual(piece["advance"], 40)
+        self.assertEqual(piece["angle"], 0)
+        self.assertAlmostEqual(abs(piece["axis"][2]), 1)
+        self.assertEqual(len(piece["origin"]), 3)
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        self.assertEqual(len(face.Faces), 1)
+        self.assertTrue(isinstance(face.Faces[0].Surface, Part.Plane))
+        self.assertAlmostEqual(face.Area, 40)
+
+    def test_swept_takes_the_skin(self):
+        bar, _ = self.swept_job()
+        objects.make_skin_layer(self.study, [(bar, "")], 1)
+        job = self.read_job()
+        self.assertEqual(job["swept"][0]["skin"], {"depth": 1.0, "per_depth": 2.0, "layer": 3.0})
+        self.assertNotIn("skin", job)
+
+    def tube(self, outer=15, inner=10, height=8):
+        return Part.makeCylinder(outer, height).cut(Part.makeCylinder(inner, height))
+
+    def test_swept_ring_goes_to_the_job(self):
+        self.swept_job(self.tube())
+        (entry,) = self.read_job()["swept"]
+        (solid,) = entry["solids"]
+        self.assertIs(solid["closed"], True)
+        (piece,) = solid["pieces"]
+        self.assertEqual((piece["angle"], piece["advance"]), (360, 0))
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        self.assertEqual(len(face.Faces), 1)
+        plane = face.Faces[0].Surface
+        self.assertTrue(isinstance(plane, Part.Plane))
+        self.assertAlmostEqual(App.Vector(plane.Axis).dot(App.Vector(*piece["axis"])), 0)
+        self.assertAlmostEqual(face.Area, 5 * 8)
+
+    def test_swept_bend_goes_to_the_job(self):
+        pts = [App.Vector(x, 0, z) for x, z in [(10, 0), (14, 0), (14, 4), (10, 4), (10, 0)]]
+        bend = Part.Face(Part.makePolygon(pts)).revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 90)
+        self.swept_job(bend)
+        (entry,) = self.read_job()["swept"]
+        (solid,) = entry["solids"]
+        self.assertIs(solid["closed"], False)
+        (piece,) = solid["pieces"]
+        self.assertAlmostEqual(piece["angle"], 90)
+        self.assertEqual(piece["advance"], 0)
+
+    def test_swept_placed_bend_is_global(self):
+        pts = [App.Vector(x, 0, z) for x, z in [(10, 0), (14, 0), (14, 4), (10, 4), (10, 0)]]
+        bend = Part.Face(Part.makePolygon(pts)).revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 90)
+        body, _ = self.swept_job(bend)
+        body.Placement = App.Placement(App.Vector(100, 50, 0), App.Rotation(App.Vector(1, 0, 0), 30))
+        self.doc.recompute()
+        (solid,) = self.read_job()["swept"][0]["solids"]
+        (piece,) = solid["pieces"]
+        placement = body.Placement
+        axis = placement.Rotation.multVec(App.Vector(0, 0, 1))
+        self.assertLess((App.Vector(*piece["origin"]) - placement.multVec(App.Vector(0, 0, 2))).Length, 1e-6)
+        self.assertAlmostEqual(abs(App.Vector(*piece["axis"]).dot(axis)), 1)
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        ends = [f.CenterOfMass for f in body.Shape.Faces if isinstance(f.Surface, Part.Plane)]
+        self.assertTrue(any((face.Faces[0].CenterOfMass - c).Length < 1e-6 for c in ends))
+
+    def test_swept_straight_is_not_closed(self):
+        self.swept_job()
+        self.assertIs(self.read_job()["swept"][0]["solids"][0]["closed"], False)
+
+    def test_swept_tube_start_face_makes_it_straight(self):
+        tube, item = self.swept_job(self.tube(10, 8, 20))
+        face = next(k for k, f in enumerate(tube.Shape.Faces, 1) if isinstance(f.Surface, Part.Plane))
+        item.StartFace = [(tube, (f"Face{face}",))]
+        (piece,) = self.read_job()["swept"][0]["solids"][0]["pieces"]
+        self.assertAlmostEqual(piece["advance"], 20)
+        self.assertEqual(piece["angle"], 0)
+
+    def test_swept_two_solids(self):
+        shape = Part.makeCompound([Part.makeBox(10, 4, 40), Part.makeBox(10, 4, 40, App.Vector(30, 0, 0))])
+        self.swept_job(shape)
+        (entry,) = self.read_job()["swept"]
+        self.assertEqual(len(entry["solids"]), 2)
+        self.assertEqual(len({s["profile"] for s in entry["solids"]}), 2)
+
+    def test_swept_helix_goes_to_the_job(self):
+        self.swept_job(helix_pipe(10, 15, 1.2, ("circle", 0.45)))
+        (piece,) = self.read_job()["swept"][0]["solids"][0]["pieces"]
+        self.assertAlmostEqual(piece["angle"], 540, places=4)
+        self.assertAlmostEqual(piece["advance"], 15, places=5)
+        self.assertAlmostEqual(abs(piece["axis"][2]), 1, places=6)
+
+    def test_swept_chain_goes_to_the_job(self):
+        path = Part.Wire(
+            [
+                Part.makeLine(App.Vector(0, 0, 0), App.Vector(30, 0, 0)),
+                Part.Edge(
+                    Part.ArcOfCircle(Part.Circle(App.Vector(30, 20, 0), App.Vector(0, 0, 1), 20), -math.pi / 2, 0)
+                ),
+                Part.makeLine(App.Vector(50, 20, 0), App.Vector(50, 50, 0)),
+            ]
+        )
+        profile = Part.makePolygon([App.Vector(0, y, z) for y, z in ((-5, -2), (5, -2), (5, 2), (-5, 2), (-5, -2))])
+        bar, item = self.swept_job(path.makePipeShell([profile], True, True))
+        start = next(k for k, f in enumerate(bar.Shape.Faces, 1) if abs(f.CenterOfMass.x) < 1e-9)
+        item.StartFace = [(bar, (f"Face{start}",))]
+        first, arc, last = self.read_job()["swept"][0]["solids"][0]["pieces"]
+        self.assertEqual((first["angle"], arc["advance"], last["angle"]), (0, 0, 0))
+        self.assertAlmostEqual(arc["angle"], 90, places=6)
+        # the profile's centre, moved by each piece: piece 2 turns it from where piece 1 ended, piece 3 starts there
+        c = App.Vector(*first["origin"]) + App.Vector(*first["axis"]) * first["advance"]
+        o, d = App.Vector(*arc["origin"]), App.Vector(*arc["axis"])
+        self.assertLess(abs(d.dot(c - o)), 1e-6)
+        self.assertAlmostEqual((c - o).Length, 20, places=6)
+        c = o + App.Rotation(d, arc["angle"]).multVec(c - o)
+        self.assertLess((App.Vector(*last["origin"]) - c).Length, 1e-6)
+        c += App.Vector(*last["axis"]) * last["advance"]
+        self.assertLess((c - App.Vector(50, 50, 0)).Length, 1e-6)
+
+    def test_swept_racetrack_goes_to_the_job(self):
+        _, item = self.swept_job(racetrack())
+        objects.make_air_region(self.study)
+        self.assertFalse(self.swept_texts(item))
+        (solid,) = self.read_job()["swept"][0]["solids"]
+        self.assertIs(solid["closed"], True)
+        self.assertEqual([round(p["angle"], 6) for p in solid["pieces"]], [0, 180, 0, 180])
+        face = Part.read(os.path.join(jobwriter.scratch_folder(self.study), solid["profile"]))
+        self.assertAlmostEqual(face.Area, 8)
+
+    def test_swept_rebuilt_strand_exports_the_rebuilt_solid(self):
+        strand = helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False)
+        self.assertTrue(sweeps.recognise(strand).rebuild)
+        self.swept_job(strand)
+        job = self.read_job()
+        vol = Part.read(os.path.join(jobwriter.scratch_folder(self.study), job["volumes"][0]["file"]))
+        (solid,) = vol.Solids
+        sweep = sweeps.recognise(solid)
+        self.assertIsInstance(sweep, sweeps.Sweep)
+        self.assertFalse(sweep.rebuild)  # its seam follows the screw
+        self.assertAlmostEqual(sweep.pieces[0].angle, 540, places=3)
+        self.assertLess(abs(solid.Volume - strand.Volume), 1e-6 * strand.Volume)
+
+    def test_swept_job_recognises_and_rebuilds_once(self):
+        # validation's check and the job it then writes share one recognition and one rebuild of the body
+        self.swept_job(helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        with (
+            mock.patch.object(sweeps, "_recognise", wraps=sweeps._recognise) as recognise,
+            mock.patch.object(sweeps, "_rebuilt", wraps=sweeps._rebuilt) as rebuilt,
+        ):
+            self.read_job()
+        self.assertEqual((recognise.call_count, rebuilt.call_count), (1, 1))
+        self.assertIsNone(sweeps.memo)  # kept only while write_job writes the job
+        with mock.patch.object(sweeps, "_recognise", wraps=sweeps._recognise) as recognise:
+            self.read_job()
+        self.assertEqual(recognise.call_count, 1)  # a new job recognises it anew
+
+    def rebuilt_strand_with_excitation(self):
+        """A Standard-mode strand (its seam twists: rebuilt) with an excitation on the original body's far end face.
+        Returns the body and that face."""
+        bar, item = self.swept_job(helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        k, end = max(
+            ((k, f) for k, f in enumerate(bar.Shape.Faces, 1) if f.Surface.TypeId == "Part::GeomPlane"),
+            key=lambda kf: kf[1].CenterOfMass.z,
+        )
+        objects.make_excitation(self.study, "In", [(bar, f"Face{k}")])
+        return bar, item, end
+
+    def test_swept_rebuilt_strand_exports_faces_of_the_rebuild(self):
+        _, _, end = self.rebuilt_strand_with_excitation()
+        job = self.read_job()
+        folder = jobwriter.scratch_folder(self.study)
+        (solid,) = Part.read(os.path.join(folder, job["volumes"][0]["file"])).Solids
+        (face,) = Part.read(os.path.join(folder, job["surfaces"][0]["files"][0])).Faces
+        rebuilt = min(solid.Faces, key=lambda f: f.CenterOfMass.distanceToPoint(end.CenterOfMass))
+        # the seam vertex: the rebuild's follows the screw, the original's is 0.55 mm away (its seam twists)
+        (vertex,) = face.Vertexes
+        self.assertLess(vertex.Point.distanceToPoint(rebuilt.Vertexes[0].Point), 1e-9)
+        self.assertGreater(vertex.Point.distanceToPoint(end.Vertexes[0].Point), 0.1)
+
+    def test_swept_rebuilt_strand_excitation(self):
+        bar, item, end = self.rebuilt_strand_with_excitation()
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item.PathSize, item.SectionSize = 0.4, 0.2  # as the mesher's strand test, which gmsh meets every time
+        air = objects.make_air_region(self.study)
+        air.SizeMode = "Manual"
+        air.Center, air.Length, air.Width, air.Height = App.Vector(0, 0, 7.5), 6, 6, 25
+        self.doc.recompute()
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        smat_id = self.read_job()["surfaces"][0]["smat_id"]
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        tags, xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, smat_id)
+        self.assertGreater(len(tags), 10)
+        normal = end.normalAt(*end.Surface.parameter(end.CenterOfMass))
+        for k in range(0, len(xyz), 3):  # on the strand's end face: its plane, within its circle
+            p = App.Vector(*xyz[k : k + 3])
+            self.assertLess(abs((p - end.CenterOfMass).dot(normal)), 1e-4)
+            self.assertLess((p - end.CenterOfMass).Length, 0.45 + 1e-4)
+
+    def test_standard_coil_with_leads_rebuilt(self):
+        # a Standard-mode round coil of 2 turns (its seam twists) with a straight lead 5 long piped on at each end
+        coil = helix_pipe(10, 20, 1.2, ("circle", 0.45), frenet=False)
+        start, end = sorted(
+            (f for f in coil.Faces if isinstance(f.Surface, Part.Plane)), key=lambda f: f.CenterOfMass.z
+        )
+        tangent = App.Vector(0, 1.2, 10 / (2 * math.pi)).normalize()
+        (shape,) = coil.fuse([start.extrude(tangent * -5), end.extrude(tangent * 5)]).Solids
+        sweep = sweeps.recognise(shape)
+        self.assertTrue(sweep.rebuild)
+        self.assertEqual([round(p.angle, 3) for p in sweep.pieces], [0, 720, 0])
+        bar, item = self.swept_job(shape)
+        k, lead = max(
+            ((k, f) for k, f in enumerate(bar.Shape.Faces, 1) if isinstance(f.Surface, Part.Plane)),
+            key=lambda kf: kf[1].CenterOfMass.z,
+        )
+        objects.make_excitation(self.study, "In", [(bar, f"Face{k}")])
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item.PathSize, item.SectionSize = 0.4, 0.2  # as the rebuilt strand
+        air = objects.make_air_region(self.study)
+        air.SizeMode = "Manual"
+        air.Center, air.Length, air.Width, air.Height = App.Vector(0, 0, 10), 8, 12, 40
+        self.doc.recompute()
+        self.assertEqual(len(self.read_job()["swept"][0]["solids"][0]["pieces"]), 3)
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        smat_id = self.read_job()["surfaces"][0]["smat_id"]
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        tags, xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, smat_id)
+        self.assertGreater(len(tags), 10)
+        for k in range(0, len(xyz), 3):  # on the lead's end face: its plane, within its circle
+            p = App.Vector(*xyz[k : k + 3])
+            self.assertLess(abs((p - lead.CenterOfMass).dot(tangent)), 1e-4)
+            self.assertLess((p - lead.CenterOfMass).Length, 0.45 + 1e-4)
 
     def test_2d_job_gets_recombine_and_meshes_quads_only_there(self):
         a, b = self.face("A"), self.face("B")
@@ -1725,8 +2122,954 @@ class StudyTest(unittest.TestCase):
 
     # --- Validation -----------------------------------------------------------
 
-    def problems(self, severity):
-        return [p.text for p in validation.validate(self.study) if p.severity == severity]
+    def problems(self, severity=None):
+        return [p.text for p in validation.validate(self.study) if severity is None or p.severity == severity]
+
+    def test_refine_near_settings_are_checked(self):
+        a = self.box("A")
+        item = objects.make_refine_near(self.study, [(a, "Edge1")], 0.0, 1.0, 0.0)
+        texts = self.problems()
+        for end in ("the fine size must be greater than 0.", "the growth distance must be greater than 0."):
+            self.assertIn(f"Refine Near {item.Label}: {end}", texts)
+        item.FineSize, item.CoarseSize, item.GrowthDistance, item.FineDistance = 2.0, 1.0, 5.0, 0.0
+        self.assertIn(
+            f"Refine Near {item.Label}: the coarse size must not be smaller than the fine size.", self.problems()
+        )
+
+    def test_air_grading_settings_are_checked(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_air_grading(self.study, [(air, "")], 0.0)
+        self.assertIn(f"Air Grading {item.Label}: the growth distance must be greater than 0.", self.problems())
+        item.GrowthDistance = 5.0
+        self.assertFalse([t for t in self.problems() if t.startswith(f"Air Grading {item.Label}")])
+
+    def test_air_grading_on_a_body_is_refused(self):
+        a = self.box("A")
+        item = objects.make_air_grading(self.study, [(a, "")], 5.0)
+        self.assertIn(
+            f"Air Grading {item.Label}: A is not an air. Pick the Air Region (or, in a Study with Symmetric Groups,"
+            " a free object that is air).",
+            self.problems("error"),
+        )
+
+    def test_air_grading_on_an_air_face_is_refused(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_air_grading(self.study, [(air, "Face1")], 5.0)
+        self.assertIn(f"Air Grading {item.Label}: pick the whole air, not {air.Label}.Face1.", self.problems("error"))
+
+    def test_two_air_gradings_on_one_air(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        first = objects.make_air_grading(self.study, [(air, "")], 5.0)
+        second = objects.make_air_grading(self.study, [(air, "")], 6.0)
+        texts = self.problems("error")
+        self.assertIn(
+            f"Air Grading {second.Label}: {objects.display_name(air)} already has Air Grading {first.Label}; one per"
+            " air.",
+            texts,
+        )
+        self.assertFalse([t for t in texts if t.startswith(f"Air Grading {first.Label}:")])
+
+    def skin_texts(self, item, severity=None):
+        return [t for t in self.problems(severity) if t.startswith(f"Skin Layer {item.Label}")]
+
+    def shape_body(self, name, shape):
+        body = self.doc.addObject("Part::Feature", name)
+        body.Shape = shape
+        self.doc.recompute()
+        return body
+
+    def disk(self, name, radius):
+        return self.shape_body(name, Part.Face(Part.Wire(Part.makeCircle(radius))))
+
+    def test_skin_layer_settings_are_checked(self):
+        """The FloatConstraints stop ElementsPerDepth and LayerDepth at 0.01, so only the skin depth can reach 0."""
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")], 0.0)
+        self.assertIn(f"Skin Layer {item.Label}: the skin depth must be greater than 0.", self.problems("error"))
+        item.ElementsPerDepth = 0.0
+        self.assertEqual(item.ElementsPerDepth, 0.01)
+        item.SkinDepth = 1.0
+        self.assertFalse(self.skin_texts(item, "error"))
+
+    def test_skin_layer_on_a_face_is_refused(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "Face1")])
+        self.assertIn(f"Skin Layer {item.Label}: pick whole conductors, not A.Face1.", self.problems("error"))
+
+    def test_skin_layer_on_the_air_is_refused(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_skin_layer(self.study, [(air, "")])
+        self.assertIn(
+            f"Skin Layer {item.Label}: Air Region {objects.display_name(air)} cannot have a Skin Layer. Remove it from"
+            " the item.",
+            self.problems("error"),
+        )
+
+    def test_skin_layer_quads_in_3d_warns(self):
+        a = self.box("A")
+        item = objects.make_skin_layer(self.study, [(a, "")])
+        self.assertFalse(self.skin_texts(item))
+        item.QuadLayers = True  # 3D: prism layers; without an Air Region the box has no real surface
+        self.assertFalse([t for t in self.skin_texts(item) if "2D Studies only" in t])
+
+    def test_skin_layer_filling_the_body_warns(self):
+        self.make_2d_study()
+        wire = self.disk("Wire", 2)
+        item = objects.make_skin_layer(self.study, [(wire, "")])
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: the layer (3 mm) is deeper than half of Wire (about 4 mm thick); the whole"
+                " body is skin, so a Mesh Size of 0.5 mm on it does the same."
+            ],
+        )
+        item.LayerDepth = 1.0
+        self.assertFalse(self.skin_texts(item))
+
+    def test_skin_layer_quads_on_a_bar_warns_and_on_a_wire_not(self):
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        wire = self.disk("Wire", 5)
+        wire.Placement.Base = App.Vector(40, 5, 0)
+        objects.make_air_region(self.study, Center=App.Vector(20, 5, 0), Length=100, Width=60)
+        self.doc.recompute()
+        on_bar = objects.make_skin_layer(self.study, [(bar, "")])
+        on_wire = objects.make_skin_layer(self.study, [(wire, "")])
+        on_bar.QuadLayers = on_wire.QuadLayers = True
+        self.assertEqual(
+            self.skin_texts(on_bar),
+            [
+                f"Skin Layer {on_bar.Label}: Bar has sharp corners on its surface; quad layers need a smooth surface,"
+                " so it gets graded triangles."
+            ],
+        )
+        self.assertFalse(self.skin_texts(on_wire))
+        on_wire.LayerDepth = 6.0  # the wire's radius 5 is below the layer's 6 mm (and the layer fills the wire)
+        self.assertIn(
+            f"Skin Layer {on_wire.Label}: Wire has sharp corners on its surface; quad layers need a smooth surface, so"
+            " it gets graded triangles.",
+            self.skin_texts(on_wire),
+        )
+
+    def test_skin_layer_quads_on_a_half_wire_not(self):
+        self.make_2d_study()
+        half = Part.Face(
+            Part.Wire(
+                [Part.makeCircle(5, App.Vector(), App.Vector(0, 0, 1), 0, 180), Part.makeLine((-5, 0, 0), (5, 0, 0))]
+            )
+        )
+        wire = self.shape_body("Half", half)
+        objects.make_air_region(self.study, Center=App.Vector(0, 25, 0), Length=100, Width=50)
+        self.doc.recompute()
+        item = objects.make_skin_layer(self.study, [(wire, "")])
+        item.QuadLayers = True
+        self.assertFalse(self.skin_texts(item))
+
+    def test_skin_layer_quads_on_a_bar_beside_another_body_warns(self):
+        """Without an Air Region, the bar's edge shared with the other body is a layer edge; it meets no other one."""
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        self.shape_body("Other", Part.makePlane(20, 10, App.Vector(20, 0, 0)))
+        item = objects.make_skin_layer(self.study, [(bar, "")])
+        item.QuadLayers = True
+        self.assertFalse(self.skin_texts(item))
+        objects.make_air_region(self.study, Center=App.Vector(20, 5, 0), Length=100, Width=60)
+        self.doc.recompute()
+        self.assertTrue(self.skin_texts(item))
+
+    def test_skin_layer_on_a_structured_body_warns(self):
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        objects.make_transfinite_body(self.study, [bar])
+        item = objects.make_skin_layer(self.study, [(bar, "")])
+        self.assertEqual(
+            self.skin_texts(item),
+            [f"Skin Layer {item.Label}: Bar is structured, and that wins; the Skin Layer does nothing there."],
+        )
+
+    # --- 3D prism layers ---------------------------------------------------------
+
+    def prism_skin(self, body):
+        item = objects.make_skin_layer(self.study, [(body, "")])
+        item.LayerDepth = 1.0
+        item.QuadLayers = True
+        return item
+
+    def test_prism_layers_no_ignored_warning(self):
+        ball = self.shape_body("Ball", Part.makeSphere(10))
+        objects.make_air_region(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(ball)
+        self.assertFalse([t for t in self.skin_texts(item) if "2D Studies only" in t])
+
+    def test_prism_layers_sharp_edges(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(a)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: A has sharp edges on its surface; prism layers need a smooth surface, so it"
+                " gets graded tetrahedra."
+            ],
+        )
+        (problem,) = [p for p in validation.validate(self.study) if p.text.startswith(f"Skin Layer {item.Label}")]
+        self.assertEqual(problem.refs, [(a, "")])
+
+    def test_prism_layers_slanted_cut(self):
+        """A wire at 45° through the air, ending on its top and bottom: its cuts are 45° off square."""
+        objects.make_air_region(self.study, Length=100, Width=300, Height=100)
+        wire = Part.makeCylinder(5, 400, App.Vector(0, 0, -200))
+        wire.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 45)
+        body = self.shape_body("Wire", wire.common(Part.makeBox(100, 300, 100, App.Vector(-50, -150, -50))))
+        item = self.prism_skin(body)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Wire is cut by a curved face or at a slant; prism layers need flat cuts"
+                " square to its surface, so it gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_sweep_hint(self):
+        """A straight wire from the bottom of the air to its top: smooth, its cuts square, and a sweep."""
+        body = self.shape_body("Wire", Part.makeCylinder(5, 100, App.Vector(0, 0, -50)))
+        objects.make_air_region(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(body)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Wire is a sweep; a Swept Body on it gives fewer and better elements than"
+                " prism layers."
+            ],
+        )
+        objects.make_swept_body(self.study, [(body, "")])
+        self.assertFalse(self.skin_texts(item))
+
+    def test_prism_layers_cut_by_a_periodic_boundary(self):
+        """A wire along X from one end of a Box Air Region with a Linear interface to the other: its ends lie on the
+        two periodic boundaries, where the mesher makes no prism layers yet."""
+        body = self.shape_body("Wire", Part.makeCylinder(5, 100, App.Vector(-50, 0, 0), App.Vector(1, 0, 0)))
+        objects.make_air_region(self.study, Center=App.Vector(0, 0, 0), Length=100, Width=60, Height=60)
+        objects.make_sliding_interface(self.study)
+        self.doc.recompute()
+        item = self.prism_skin(body)
+        self.assertNotIn("periodic", " ".join(self.skin_texts(item)))  # no sliding motion: no periodic boundaries
+        self.study.Movement = "Sliding motion"
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Wire is cut by a periodic boundary; prism layers are not made there yet, so"
+                " it gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_free_object(self):
+        cell = self.ring_piece("Sector", 19, 21, -2, 2)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        ball = self.shape_body("Ball", Part.makeSphere(3, App.Vector(0, 0, 20)))
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        self.doc.recompute()
+        item = self.prism_skin(ball)
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: prism layers are not made on free objects of a Study with Symmetric Groups;"
+                " Ball gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_cell_on_a_copy(self):
+        """A round wire piece (0°..22.5°) and an iron sector at 67.5°..90°, cells of one group of 8 rotations by 45°:
+        the wire's two flat ends meet copies of the iron."""
+        disk = Part.Face(Part.Wire(Part.makeCircle(1, App.Vector(20, 0, 0), App.Vector(0, 1, 0))))
+        cell = self.shape_body("Strand", disk.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 22.5))
+        iron = self.ring_piece("Iron", 19, 21, -2, 2, start=67.5, angle=22.5)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell, iron], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        self.doc.recompute()
+        item = self.prism_skin(cell)
+        item.SkinDepth = 0.2  # the strand is 2 mm thick
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Strand meets a copy of another cell object on a cut; prism layers need its"
+                " cuts to be seams with its own copies, so it gets graded tetrahedra."
+            ],
+        )
+
+    def test_prism_layers_cell_seams_with_own_copies(self):
+        """The round wire piece alone, 16 rotations by 22.5°: its ends are seams with its own copies, so it is smooth
+        with square cuts, and only the sweep hint is left."""
+        disk = Part.Face(Part.Wire(Part.makeCircle(1, App.Vector(20, 0, 0), App.Vector(0, 1, 0))))
+        cell = self.shape_body("Strand", disk.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 22.5))
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 22.5, "count": 16}
+        objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        self.doc.recompute()
+        item = self.prism_skin(cell)
+        item.SkinDepth = 0.2
+        self.assertEqual(
+            self.skin_texts(item),
+            [
+                f"Skin Layer {item.Label}: Strand is a sweep; a Swept Body on it gives fewer and better elements than"
+                " prism layers."
+            ],
+        )
+
+    # --- Swept Body validation ---------------------------------------------------
+
+    def swept_texts(self, item, severity=None):
+        return [t for t in self.problems(severity) if t.startswith(f"Swept Body {item.Label}:")]
+
+    def block(self, name, size, base=(0, 0, 0)):
+        return self.shape_body(name, Part.makeBox(*size, App.Vector(*base)))
+
+    def test_swept_body_on_a_face_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "Face1")])
+        self.assertIn(f"Swept Body {item.Label}: pick whole bodies, not A.Face1.", self.problems("error"))
+
+    def test_swept_body_on_the_air_is_refused(self):
+        self.box("A")
+        air = objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(air, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: Air Region {objects.display_name(air)} cannot be a Swept Body. Remove it from"
+            " the item.",
+            self.problems("error"),
+        )
+
+    def test_swept_body_in_2d_is_refused(self):
+        self.make_2d_study()
+        bar = self.shape_body("Bar", Part.makePlane(20, 10))
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: a 2D Study is already a cross-section; Swept Body is for 3D Studies.",
+            self.problems("error"),
+        )
+
+    def test_swept_body_not_a_sweep(self):
+        sphere = self.shape_body("Ball", Part.makeSphere(5))
+        item = objects.make_swept_body(self.study, [(sphere, "")])
+        self.assertIn(f"Swept Body {item.Label}: Ball is not a sweep: {sweeps.NO_END}.", self.problems("error"))
+
+    def test_swept_body_rebuilt_unlike_the_original_is_refused(self):
+        strand = self.shape_body("Strand", helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        item = objects.make_swept_body(self.study, [(strand, "")])
+        self.assertFalse(self.swept_texts(item, "error"))  # the rebuild matches the strand
+        with mock.patch.object(sweeps, "rebuilt", return_value=None):
+            self.assertIn(f"Swept Body {item.Label}: Strand is not a sweep: {sweeps.TWISTS}.", self.problems("error"))
+
+    def test_swept_body_twice_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        first = objects.make_swept_body(self.study, [(a, "")])
+        second = objects.make_swept_body(self.study, [(a, "")])
+        self.assertIn(f"Swept Body {second.Label}: A is already in Swept Body {first.Label}.", self.problems("error"))
+        self.assertFalse(self.swept_texts(first, "error"))
+
+    def test_swept_body_with_transfinite_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        t = objects.make_transfinite_body(self.study, [a])
+        item = objects.make_swept_body(self.study, [(a, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: A also has Transfinite Body {t.Label}; a body is swept or structured, not both.",
+            self.problems("error"),
+        )
+
+    def test_swept_bodies_touching_are_refused(self):
+        a, b = self.box("A"), self.box("B", x=10)
+        objects.make_air_region(self.study)
+        first = objects.make_swept_body(self.study, [(a, "")])
+        second = objects.make_swept_body(self.study, [(b, "")])
+        texts = self.problems("error")
+        self.assertEqual(
+            [t for t in texts if "touches" in t],
+            [
+                f"Swept Body {first.Label}: A touches B, which is swept; a swept body may touch only the air and"
+                " unstructured bodies."
+            ],
+        )
+        self.assertFalse(self.swept_texts(second, "error"))
+
+    def test_swept_body_touching_a_structured_or_recombined_body_is_refused(self):
+        a, b = self.box("A"), self.box("B", x=10)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        t = objects.make_transfinite_body(self.study, [b])
+        text = (
+            f"Swept Body {item.Label}: A touches B, which is structured; a swept body may touch only the air and"
+            " unstructured bodies."
+        )
+        self.assertIn(text, self.problems("error"))
+        self.doc.removeObject(t.Name)
+        objects.make_recombine(self.study, [b])
+        self.assertIn(text.replace("structured", "recombined", 1), self.problems("error"))
+
+    def test_swept_body_touching_a_body_with_prism_layers_is_refused(self):
+        """A swept rod inside a tube with prism layers, both from the bottom of the air to its top: the tube's inner
+        face lies on the rod, and its layers would grow on the rod's quads. Without QuadLayers the tube is fine."""
+        rod = self.shape_body("Rod", Part.makeCylinder(3, 100, App.Vector(0, 0, -50)))
+        outer = Part.makeCylinder(5, 100, App.Vector(0, 0, -50))
+        tube = self.shape_body("Tube", outer.cut(Part.makeCylinder(3, 100, App.Vector(0, 0, -50))))
+        objects.make_air_region(self.study, Center=App.Vector(0, 0, 0), Length=60, Width=60, Height=100)
+        self.doc.recompute()
+        item = objects.make_swept_body(self.study, [(rod, "")])
+        skin = self.prism_skin(tube)
+        text = (
+            f"Swept Body {item.Label}: Rod touches Tube, which has prism layers; a swept body may touch only the air"
+            " and unstructured bodies without prism layers."
+        )
+        self.assertEqual([t for t in self.swept_texts(item, "error") if "touches" in t], [text])
+        skin.QuadLayers = False
+        self.assertFalse([t for t in self.swept_texts(item, "error") if "touches" in t])
+
+    def test_swept_body_solids_touching_each_other_are_refused(self):
+        shape = Part.makeCompound([Part.makeBox(10, 10, 10), Part.makeBox(10, 10, 10, App.Vector(10, 0, 0))])
+        both = self.shape_body("Pair", shape)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(both, "")])
+        self.assertIn(
+            f"Swept Body {item.Label}: Pair touches Pair, which is swept; a swept body may touch only the air and"
+            " unstructured bodies.",
+            self.problems("error"),
+        )
+
+    def test_swept_body_on_a_tet_block_is_fine(self):
+        self.block("Block", (30, 30, 10), (-10, -10, 0))
+        bar = self.block("Bar", (10, 4, 40), (0, 0, 10))
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_body_partial_contact_is_refused(self):
+        bar = self.block("Bar", (10, 4, 40))
+        self.block("Block", (10, 4, 20), (10, 0, 0))  # touches half of the bar's face x = 10
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertEqual(
+            [t for t in self.swept_texts(item, "error") if "touches only part" in t],
+            [
+                f"Swept Body {item.Label}: Block touches only part of Bar.Face2 of Bar; a swept body's faces must be"
+                " touched whole or not at all."
+            ],
+        )
+
+    def test_swept_body_alone_in_the_air_is_fine(self):
+        bar = self.block("Bar", (10, 4, 40))
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(bar, "")])
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_body_on_a_sliding_interface_is_refused(self):
+        a = self.box("A", x=-5)
+        objects.make_air_region(self.study, Center=App.Vector(0, 0, 5), Length=100, Width=100, Height=60)
+        iface = objects.make_sliding_interface(self.study)
+        self.study.Movement = "Sliding motion"
+        item = objects.make_swept_body(self.study, [(a, "")])
+        text = (
+            f"Swept Body {item.Label}: A touches the sliding interface {iface.Label}; swept bodies must keep clear of"
+            " it."
+        )
+        self.assertEqual([t for t in self.problems("error") if "sliding interface" in t], [text])
+
+    def test_swept_body_wins_over_mesh_size(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        size = objects.make_mesh_size(self.study, 2.0, [(a, "Face1")])
+        near = objects.make_refine_near(self.study, [(a, "Face1")])
+        texts = self.problems("warning")
+        self.assertIn(
+            f"Mesh Size {size.Label}: A is swept, and that wins; the Mesh Size does nothing inside it.", texts
+        )
+        self.assertIn(
+            f"Refine Near {near.Label}: A is swept, and that wins; the Refine Near does nothing inside it.", texts
+        )
+
+    def test_swept_body_wins_over_transfinite_edges(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        edges = objects.make_transfinite_edges(self.study, 4, [(a, "Edge1")])
+        self.assertIn(
+            f"Transfinite Edges {edges.Label}: A is swept, and that wins; the Transfinite Edges does nothing inside it.",
+            self.problems("warning"),
+        )
+
+    def test_swept_start_face_on_another_body_is_refused(self):
+        a, b = self.box("A"), self.box("B", x=30)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        item.StartFace = [(b, ("Face1",))]
+        self.assertIn(
+            f"Swept Body {item.Label}: the start face B.Face1 is not on one of its bodies.", self.problems("error")
+        )
+
+    def test_swept_stale_start_face_is_refused(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        item.StartFace = [(a, ("Face99",))]
+        texts = self.problems("error")  # no IndexError from recognise_body
+        self.assertIn(f"Swept Body {item.Label}: A has no Face99. Reselect the start face.", texts)
+        self.assertFalse([t for t in texts if "is not a sweep" in t])
+
+    def test_swept_ring_start_face_is_refused(self):
+        ring = self.shape_body("Ring", Part.makeTorus(20, 3))
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(ring, "")])
+        item.StartFace = [(ring, ("Face1",))]
+        self.assertIn(
+            f"Swept Body {item.Label}: Ring is a closed ring; it has no start face. Remove the start face.",
+            self.problems("error"),
+        )
+
+    def test_swept_start_face_beside_a_ring_is_not_called_a_ring(self):
+        # a torus and a cylinder in one body, the start face on the cylinder's side: only that solid is wrong
+        shape = Part.makeCompound([Part.makeTorus(20, 3), Part.makeCylinder(3, 20, App.Vector(50, 0, 0))])
+        body = self.shape_body("Ring", shape)
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(body, "")])
+        item.StartFace = [(body, ("Face2",))]
+        texts = self.problems("error")
+        self.assertFalse([t for t in texts if "closed ring" in t])
+        self.assertTrue([t for t in texts if t.startswith(f"Swept Body {item.Label}: Ring is not a sweep: solid 2:")])
+
+    def test_swept_ring_is_valid(self):
+        ring = self.shape_body("Ring", self.tube())
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(ring, "")])
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_body_whole_mesh_size_is_fine(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        objects.make_mesh_size(self.study, 2.0, [(a, "")])
+        self.assertFalse([t for t in self.problems("warning") if "is swept" in t])
+
+    def test_swept_body_with_skin_quads_has_no_3d_warning(self):
+        a, b = self.box("A"), self.box("B", x=30)
+        objects.make_air_region(self.study)
+        objects.make_swept_body(self.study, [(a, "")])
+        on_swept = objects.make_skin_layer(self.study, [(a, "")])
+        on_plain = objects.make_skin_layer(self.study, [(b, "")])
+        on_swept.QuadLayers = on_plain.QuadLayers = True
+        self.assertFalse([t for t in self.skin_texts(on_swept) if f"Skin Layer {on_swept.Label}:" in t])
+        self.assertFalse([t for t in self.skin_texts(on_plain) if "2D Studies only" in t])
+
+    def test_swept_body_recombine_is_fine(self):
+        a = self.box("A")
+        objects.make_air_region(self.study)
+        item = objects.make_swept_body(self.study, [(a, "")])
+        objects.make_recombine(self.study, [a])
+        self.assertFalse(self.swept_texts(item))
+        self.assertFalse([t for t in self.problems() if t.startswith("Recombine")])
+
+    def ring_piece(self, name, r0, r1, z0, z1, start=0, angle=45):
+        """A body: the rectangle r0..r1 × z0..z1 (radial × axial) revolved by angle about z from the angle start."""
+        pts = [App.Vector(r0, 0, z0), App.Vector(r1, 0, z0), App.Vector(r1, 0, z1), App.Vector(r0, 0, z1)]
+        face = Part.Face(Part.makePolygon(pts + pts[:1]))
+        face.rotate(App.Vector(0, 0, 0), App.Vector(0, 0, 1), start)
+        return self.shape_body(name, face.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), angle))
+
+    def swept_beside_iron(self):
+        """A swept 22.5° sector (0°..22.5°) and an iron sector of the same ring drawn at 67.5°..90°, cells of one group
+        of 8 rotations by 45°: the two touch only in other frames, the iron's copies filling the sector's gaps."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2, angle=22.5)
+        iron = self.ring_piece("Iron", 19, 21, -2, 2, start=67.5, angle=22.5)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell, iron], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        item = objects.make_swept_body(self.study, [(cell, "")])
+        self.doc.recompute()
+        return cell, iron, item
+
+    def test_swept_cell_beside_a_copy_of_another_cell_is_refused(self):
+        """The iron's copies fill the sector's gaps: the sector's two cuts (0° and 22.5°) meet copies of the iron,
+        whose own mesh the swept cell's hand-made section cannot share (the mesher refuses it after meshing)."""
+        cell, _, item = self.swept_beside_iron()
+        shape = geometry.global_shape(cell)
+        cuts = [
+            n
+            for n, f in enumerate(shape.Faces, 1)
+            if isinstance(f.Surface, Part.Plane) and abs(f.normalAt(0, 0).z) < 1e-6
+        ]
+        self.assertEqual(len(cuts), 2)
+        texts = self.swept_texts(item, "error")
+        for n in cuts:
+            self.assertIn(
+                f"Swept Body {item.Label}: Sector meets a copy of Iron on Sector.Face{n}; a swept cell can share faces"
+                " only with its own copies. Put the cell's boundary through the middle of Sector or of Iron instead.",
+                texts,
+            )
+        self.assertEqual(len(texts), 2)
+        (problem,) = [p for p in validation.validate(self.study) if f"Sector.Face{cuts[0]};" in p.text]
+        self.assertIn((cell, f"Face{cuts[0]}"), [(b, s) for b, s in problem.refs])
+
+    def test_swept_cell_beside_another_cell_where_drawn_is_fine(self):
+        """A second cell object touching the swept cell where both are drawn is a contact inside the cell model."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2, angle=22.5)
+        iron = self.ring_piece("Iron", 19, 21, -2, 2, start=22.5, angle=22.5)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 90, "count": 4}
+        objects.make_symmetric_group(self.study, [cell, iron], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        item = objects.make_swept_body(self.study, [(cell, "")])
+        self.doc.recompute()
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_cell_beside_a_copy_of_a_structured_cell_is_refused(self):
+        _, iron, item = self.swept_beside_iron()
+        objects.make_transfinite_body(self.study, [iron])
+        self.doc.recompute()
+        self.assertIn(
+            f"Swept Body {item.Label}: Sector touches Iron, which is structured; a swept body may touch only the air"
+            " and unstructured bodies.",
+            self.swept_texts(item, "error"),
+        )
+
+    def test_swept_cell_touched_in_part_by_a_free_object(self):
+        cell, item = self.swept_sector()
+        self.block("Lid", (2, 1, 2), (-3, 19.5, 2))  # on the top of the copy rotated by 90°, over part of it
+        shape = geometry.global_shape(cell)
+        (n,) = [n for n, f in enumerate(shape.Faces, 1) if abs(f.CenterOfMass.z - 2) < 1e-6]
+        self.assertIn(
+            f"Swept Body {item.Label}: Lid touches only part of Sector.Face{n} of Sector; a swept body's faces must be"
+            " touched whole or not at all.",
+            self.swept_texts(item, "error"),
+        )
+
+    def swept_sector(self):
+        """The cell of a group of 8 rotations by 45°: a 2 × 4 sector at rc 20, in a Padding Box air, swept."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        item = objects.make_swept_body(self.study, [(cell, "")])
+        self.doc.recompute()
+        return cell, item
+
+    def test_swept_cell_validates(self):
+        _, item = self.swept_sector()
+        self.assertFalse(self.swept_texts(item))
+
+    def test_swept_cell_job_has_free_faces(self):
+        """The sector's faces toward the free side are its inner, outer, top and bottom faces, not its two cuts."""
+        self.swept_sector()
+        (air,) = objects.air_regions(self.study)
+        for side in objects.SIDES:  # 6 mm of air all round: the top and bottom are no cuts of the domain
+            setattr(air, f"Pad{side}", 6)
+        (ring,) = objects.symmetric_groups(self.study)
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        (group,) = self.read_job()["symmetric"]["groups"]
+        (entry,) = group["job"]["swept"]
+        self.assertEqual(entry["free_faces"], [f"geometry/g1_swept_free_1_{n}.brep" for n in range(1, 5)])
+        folder = jobwriter.scratch_folder(self.study)
+        kinds = []
+        for rel in entry["free_faces"]:
+            (face,) = Part.read(os.path.join(folder, rel)).Faces
+            if isinstance(face.Surface, Part.Plane):
+                kinds.append(f"z {round(face.CenterOfMass.z)}")
+            else:
+                kinds.append(f"r {round(face.Surface.Radius)}")
+        self.assertEqual(sorted(kinds), ["r 19", "r 21", "z -2", "z 2"])
+
+    def sector_on_terminal(self):
+        """The 45° sector, cell of 4 rotations by 90°, swept; a free terminal 45°..55° on its end at 45°, the other end
+        (0°) in the air. Returns the terminal."""
+        cell = self.ring_piece("Sector", 19, 21, -2, 2)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 90, "count": 4}
+        ring = objects.make_symmetric_group(self.study, [cell], rules=[rotate], name="Ring")
+        terminal = self.ring_piece("Terminal", 19, 21, -2, 2, start=45, angle=10)
+        air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        for side in objects.SIDES:
+            setattr(air, f"Pad{side}", 6)
+        objects.make_swept_body(self.study, [(cell, "")])
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        return terminal
+
+    def test_swept_cell_job_has_skinned_faces(self):
+        """The sector's end on a terminal with a Skin Layer of its own is listed in "skinned_faces" (not graded)."""
+        terminal = self.sector_on_terminal()
+        (entry,) = self.read_job()["symmetric"]["groups"][0]["job"]["swept"]
+        self.assertEqual(entry["skinned_faces"], [])  # no Skin Layer on the terminal yet
+        objects.make_skin_layer(self.study, [(terminal, "")], 0.5)
+        self.doc.recompute()
+        (entry,) = self.read_job()["symmetric"]["groups"][0]["job"]["swept"]
+        self.assertEqual(entry["skinned_faces"], ["geometry/g1_swept_skinned_1_1.brep"])
+        (face,) = Part.read(os.path.join(jobwriter.scratch_folder(self.study), entry["skinned_faces"][0])).Faces
+        c = face.CenterOfMass
+        self.assertAlmostEqual(math.degrees(math.atan2(c.y, c.x)), 45, delta=1e-6)
+        self.assertEqual(len(entry["free_faces"]), 6)  # the skinned end is still one of the free faces
+
+    def test_swept_rebuilt_strand_cell_meshes(self):
+        """A Standard-mode strand (rebuilt: its seam twists) as the cell of 6 rotations by 60°: its faces toward the
+        free side come from the rebuild, and its copies mesh with the skin on them, conformal in the air."""
+        strand = self.shape_body("Strand", helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 60, "count": 6}
+        ring = objects.make_symmetric_group(self.study, [strand], rules=[rotate], name="Litz")
+        air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        for side in objects.SIDES:  # 3 mm of air all round: the strand's ends are no cuts of the domain
+            setattr(air, f"Pad{side}", 3)
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item = objects.make_swept_body(self.study, [(strand, "")])
+        item.PathSize, item.SectionSize = 0.4, 0.2
+        layer = objects.make_skin_layer(self.study, [(strand, "")], 0.2)
+        layer.LayerDepth = 2.0
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        path = jobwriter.write_job(self.study)
+        with open(path, encoding="utf-8") as fh:
+            (group,) = json.load(fh)["symmetric"]["groups"]
+        folder = jobwriter.scratch_folder(self.study)
+        (solid,) = Part.read(os.path.join(folder, group["job"]["volumes"][0]["file"])).Solids
+        (entry,) = group["job"]["swept"]
+        self.assertEqual(len(entry["free_faces"]), 3)  # its side and both ends
+        for rel in entry["free_faces"]:
+            (face,) = Part.read(os.path.join(folder, rel)).Faces
+            twin = min(solid.Faces, key=lambda f: f.CenterOfMass.distanceToPoint(face.CenterOfMass))
+            self.assertLess(twin.CenterOfMass.distanceToPoint(face.CenterOfMass), 1e-6)
+            self.assertAlmostEqual(twin.Area, face.Area, delta=1e-6 * face.Area)
+            for v in face.Vertexes:  # the rebuild's seam vertices, not the original's
+                self.assertLess(min(v.Point.distanceToPoint(w.Point) for w in solid.Vertexes), 1e-6)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        part = group["parts"][0]["mat_id"]
+        kinds = set()
+        for e in gmsh.model.getEntitiesForPhysicalGroup(3, part):
+            kinds |= {gmsh.model.mesh.getElementProperties(t)[0] for t in gmsh.model.mesh.getElements(3, e)[0]}
+        self.assertEqual(kinds, {"Hexahedron 8", "Prism 6"})  # the hexahedra: the skin on the free faces
+        xyz = gmsh.model.mesh.getNodes()[1].reshape(-1, 3)
+        lo, hi = xyz.min(axis=0), xyz.max(axis=0)
+        self.assertEqual(inner_free_faces([*lo, *(hi - lo)]), [])
+
+    def test_swept_rebuilt_strand_cell_excitation_on_every_copy(self):
+        """An Excitation on the far end faces of all 6 copies of a rebuilt (Standard-mode) strand cell, picked on the
+        group's drawing: it lands on the copied swept mesh's end quads of each copy."""
+        strand = self.shape_body("Strand", helix_pipe(10, 15, 1.2, ("circle", 0.45), frenet=False))
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 60, "count": 6}
+        ring = objects.make_symmetric_group(self.study, [strand], rules=[rotate], name="Litz")
+        air = objects.make_air_region(self.study, "Box", SizeMode="Padding")
+        for side in objects.SIDES:
+            setattr(air, f"Pad{side}", 3)
+        self.study.MeshSizesGroup.DefaultMeshSize = 0.6
+        item = objects.make_swept_body(self.study, [(strand, "")])
+        item.PathSize, item.SectionSize = 0.4, 0.2
+        layer = objects.make_skin_layer(self.study, [(strand, "")], 0.2)
+        layer.LayerDepth = 2.0
+        objects.set_row_material(self.study, ring, 0, self.steel())
+        objects.sync_parts(self.study)
+        self.doc.recompute()
+        top = max(f.CenterOfMass.z for f in ring.Shape.Faces)
+        ends = [
+            (i, f)
+            for i, f in enumerate(ring.Shape.Faces, 1)
+            if isinstance(f.Surface, Part.Plane) and abs(f.CenterOfMass.z - top) < 1e-6
+        ]
+        self.assertEqual(len(ends), 6)
+        exc = objects.make_excitation(self.study, "End", [(ring, f"Face{i}") for i, _ in ends])
+        self.doc.recompute()
+        self.assertFalse(validation.errors(validation.validate(self.study)))
+        path = jobwriter.write_job(self.study)
+        r = subprocess.run([sys.executable, MESHER, path], capture_output=True, encoding="utf-8", errors="replace")
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        smat_id = int(self.study.SmatIds[f"{exc.Name}|{ring.Name}"])
+        gmsh.initialize()
+        self.addCleanup(gmsh.finalize)
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.open(jobwriter.mesh_file(self.study))
+        kinds = {}
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, smat_id):
+            for t, tags in zip(*gmsh.model.mesh.getElements(2, e)[:2]):
+                name = gmsh.model.mesh.getElementProperties(t)[0]
+                kinds[name] = kinds.get(name, 0) + len(tags)
+        self.assertIn("Quadrilateral 4", kinds)  # the swept section's quads (the skin's), not new triangles
+        self.assertEqual(sum(kinds.values()) % 6, 0)
+        centres = [f.CenterOfMass for _, f in ends]
+        hits = set()
+        xyz = gmsh.model.mesh.getNodesForPhysicalGroup(2, smat_id)[1].reshape(-1, 3)
+        for p in xyz:
+            k = min(range(6), key=lambda c: (App.Vector(*p) - centres[c]).Length)
+            self.assertLess((App.Vector(*p) - centres[k]).Length, 0.45 + 1e-4)  # on the end disc of copy k
+            hits.add(k)
+        self.assertEqual(hits, set(range(6)))
+
+    def test_swept_entry_unchanged_outside_groups(self):
+        self.swept_job()
+        (entry,) = self.read_job()["swept"]
+        self.assertNotIn("free_faces", entry)
+
+    def test_skin_kept_for_unswept_body(self):
+        """A body of a Swept Body item that is no sweep gets no swept entry, so it keeps its Skin Layer entry."""
+        ball = self.shape_body("Ball", Part.makeSphere(5))
+        bar = self.shape_body("Bar", Part.makeBox(10, 4, 40))
+        objects.make_swept_body(self.study, [(ball, ""), (bar, "")])
+        objects.make_skin_layer(self.study, [(ball, ""), (bar, "")], 1)
+        (skin,) = jobwriter.skin_entries(self.study, {"Ball": [1], "Bar": [2]})
+        self.assertEqual(skin["mat_ids"], [1])
+
+    def test_swept_free_object_refused(self):
+        cell, item = self.swept_sector()
+        bar = self.block("Bar", (4, 4, 4), (40, 0, -2))
+        item.References = [(cell, ""), (bar, "")]
+        self.doc.recompute()
+        self.assertEqual(
+            self.swept_texts(item),
+            [
+                f"Swept Body {item.Label}: Bar is a free object; in a Study with Symmetric Groups only cell objects"
+                " are swept."
+            ],
+        )
+
+    def test_swept_cell_touching_part_of_a_copy(self):
+        cell, item = self.swept_sector()
+        # drawn at 45°..90°, so only its copy rotated by -45° touches the sector, over the half z < 0 of r = 21
+        tooth = self.ring_piece("Tooth", 21, 25, -2, 0, start=45)
+        rotate = {"kind": "rotate", "point": [0, 0, 0], "axis": [0, 0, 1], "step": 45, "count": 8}
+        objects.make_symmetric_group(self.study, [tooth], rules=[rotate], name="Teeth")
+        self.doc.recompute()
+        shape = geometry.global_shape(cell)
+        (n,) = [n for n, f in enumerate(shape.Faces, 1) if abs(getattr(f.Surface, "Radius", 0) - 21) < 1e-6]
+        self.assertIn(
+            f"Swept Body {item.Label}: Tooth touches only part of Sector.Face{n} of Sector; a swept body's faces must"
+            " be touched whole or not at all.",
+            self.swept_texts(item, "error"),
+        )
+
+    def test_skin_layer_quads_on_a_recombined_body_warns(self):
+        """A recombined body gets the graded layer as quads, so only quad layers are lost; the depth is checked too."""
+        self.make_2d_study()
+        wire = self.disk("Wire", 2)
+        objects.make_recombine(self.study, [wire])
+        item = objects.make_skin_layer(self.study, [(wire, "")])
+        item.LayerDepth = 1.0
+        self.assertFalse(self.skin_texts(item))
+        item.QuadLayers = True
+        self.assertEqual(
+            self.skin_texts(item),
+            [f"Skin Layer {item.Label}: Wire is recombined; it gets the graded layer but no quad layers."],
+        )
+        item.LayerDepth = 3.0
+        self.assertIn(
+            f"Skin Layer {item.Label}: the layer (3 mm) is deeper than half of Wire (about 4 mm thick); the whole body"
+            " is skin, so a Mesh Size of 0.5 mm on it does the same.",
+            self.skin_texts(item),
+        )
+
+    def test_skin_layer_on_a_body_of_another_skin_layer_warns(self):
+        self.make_2d_study()
+        wire = self.disk("Wire", 5)
+        first = objects.make_skin_layer(self.study, [(wire, "")])
+        second = objects.make_skin_layer(self.study, [(wire, "")])
+        self.assertFalse([t for t in self.problems() if t.startswith(f"Skin Layer {first.Label}:")])
+        self.assertEqual(
+            self.skin_texts(second),
+            [
+                f"Skin Layer {second.Label}: Wire already has Skin Layer {first.Label}; the smallest size wins, and"
+                " only the first makes quad layers."
+            ],
+        )
+
+    def test_refine_near_on_a_deleted_body_refers_to_nothing(self):
+        self.box("A")
+        b = self.box("B", 20)
+        item = objects.make_refine_near(self.study, [(b, "Edge1")])
+        self.doc.removeObject("B")
+        self.doc.recompute()
+        self.assertIn(
+            f"Refine Near {item.Label} refers to nothing (were its bodies deleted?). Pick again or delete it.",
+            self.problems(),
+        )
+
+    def test_refine_near_limit_to_an_unmeshed_body_warns(self):
+        a, b, c = self.box("A"), self.box("B", 20), self.box("C", 40)
+        self.assign([a])
+        self.exclude(b)
+        self.exclude(c)
+        item = objects.make_refine_near(self.study, [(a, "Edge1")], limit_to=[b, c])
+        warnings = self.problems(validation.WARNING)
+        skipped = f"Refine Near {item.Label}: no body in Limit to is meshed by the Study; the refinement is skipped."
+        self.assertEqual([w for w in warnings if w.startswith(f"Refine Near {item.Label}")], [skipped])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("refine", json.load(fh), "a Limit to with no meshed body would refine everywhere")
+        item.LimitTo = [a, b]
+        self.assertIn(
+            f"Refine Near {item.Label}: B in Limit to is not meshed by the Study; it has no effect there.",
+            self.problems(validation.WARNING),
+        )
+
+    def test_job_without_refine_near_has_no_refine_key(self):
+        a = self.box("A")
+        self.assign([a])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("refine", json.load(fh))
+
+    def test_refine_near_goes_to_the_job(self):
+        a, b = self.box("A"), self.box("B", 10)
+        self.assign([a, b])
+        objects.make_refine_near(self.study, [(a, "Edge1"), (a, "Vertex1"), (b, "")], 0.4, 4, 10, 0.5, limit_to=[a])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        ids = self.study.MatIds
+        (entry,) = job["refine"]
+        self.assertEqual(entry["name"], "RefineNear")
+        self.assertEqual(len(entry["files"]), 2)
+        self.assertTrue(all(os.path.exists(self.scratch(f)) for f in entry["files"]))
+        self.assertEqual(entry["whole"], [int(ids[b.Name])])
+        self.assertEqual(entry["limit_to"], [int(ids[a.Name])])
+        self.assertEqual(
+            (entry["fine"], entry["fine_distance"], entry["coarse"], entry["growth"]), (0.4, 0.5, 4.0, 10.0)
+        )
+
+    def test_job_without_air_grading_has_no_air_grading_key(self):
+        a = self.box("A")
+        self.assign([a])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            self.assertNotIn("air_grading", json.load(fh))
+
+    def test_air_grading_goes_to_the_job(self):
+        a = self.box("A")
+        self.assign([a])
+        air = objects.make_air_region(self.study, "Box", Center=App.Vector(5, 5, 5), Length=30, Width=30, Height=30)
+        self.doc.recompute()
+        objects.make_mesh_size(self.study, 12.0, [(air, "")])
+        objects.make_air_grading(self.study, growth=50.0)
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            job = json.load(fh)
+        self.assertEqual(
+            job["air_grading"],
+            [{"name": "AirGrading", "mat_ids": [int(self.study.MatIds[air.Name])], "growth": 50.0, "far": 12.0}],
+        )
+
+    def test_refine_near_leaves_out_limit_bodies_the_study_does_not_mesh(self):
+        a, b = self.box("A"), self.box("B", 20)
+        self.assign([a])
+        self.exclude(b)
+        objects.make_refine_near(self.study, [(a, "Edge1")], limit_to=[a, b])
+        with open(jobwriter.write_job(self.study), encoding="utf-8") as fh:
+            (entry,) = json.load(fh)["refine"]
+        self.assertEqual(entry["limit_to"], [int(self.study.MatIds[a.Name])])
 
     def test_deleting_a_body_leaves_empty_items_that_refuse_the_mesh(self):
         a, b = self.box("A"), self.box("B", 10)

@@ -542,9 +542,52 @@ def _options(values):
             gmsh.option.setNumber(name, value)
 
 
-def _region_3d(V, facets, rings):
+def _extend(grading, dim, tags):
+    """The Extend field that grows the size from the boundary entities tags (surfaces in 3D, lines in 2D) to
+    grading["far"] over grading["growth"]. Returns its tag."""
+    import gmsh
+
+    field = gmsh.model.mesh.field
+    extend = field.add("Extend")
+    field.setNumbers(extend, "SurfacesList" if dim == 3 else "CurvesList", tags)
+    field.setNumber(extend, "DistMax", grading["growth"])
+    field.setNumber(extend, "SizeMax", grading["far"])
+    field.setNumber(extend, "Power", 1)
+    return extend
+
+
+def _size_field(rules, points, *extra):
+    """Grade the size of the current gmsh model from the size rules (see mesh_region), as its background field.
+    points: the tags of the model points added at each rule's points, in order. Every rule has points: mesh_region
+    leaves out those without. extra: tags of other fields joined with the rules' thresholds."""
+    import gmsh
+
+    field = gmsh.model.mesh.field
+    thresholds = []
+    for rule, tags in zip(rules, points):
+        distance = field.add("Distance")
+        field.setNumbers(distance, "PointsList", tags)
+        threshold = field.add("Threshold")
+        field.setNumber(threshold, "InField", distance)
+        field.setNumber(threshold, "SizeMin", rule["fine"])
+        field.setNumber(threshold, "SizeMax", rule["coarse"])
+        field.setNumber(threshold, "DistMin", rule["fine_distance"])
+        field.setNumber(threshold, "DistMax", rule["fine_distance"] + rule["growth"])
+        field.setNumber(threshold, "StopAtDistMax", 1)
+        thresholds.append(threshold)
+    thresholds += extra
+    if len(thresholds) > 1:
+        joined = field.add("Min")
+        field.setNumbers(joined, "FieldsList", thresholds)
+        thresholds = [joined]
+    if thresholds:
+        field.setAsBackgroundMesh(thresholds[0])
+
+
+def _region_3d(V, facets, rings, rules, grading=None):
     """In the current, empty gmsh model: mesh the volume bounded by the triangles of the shells rings, the outer shell
-    first. The nodes' gmsh tags are their indexes in V + 1."""
+    first, graded by the size rules (with points) and by grading (see mesh_region). The nodes' gmsh tags are their
+    indexes in V + 1."""
     import gmsh
 
     triangles = facets[np.concatenate(rings)]
@@ -561,13 +604,23 @@ def _region_3d(V, facets, rings):
             surfaces[ring_of[tuple(sorted(int(n) for n in nodes[0][:3]))]].append(tag)
     loops = [gmsh.model.geo.addSurfaceLoop(tags) for tags in surfaces]
     gmsh.model.geo.addVolume(loops)
+    tag = max([t for _, t in gmsh.model.getEntities(0)], default=0)  # clear of the discrete points
+    points = []
+    for rule in rules:
+        points.append(list(range(tag + 1, tag + 1 + len(rule["points"]))))
+        for t, p in zip(points[-1], rule["points"].tolist()):
+            gmsh.model.geo.addPoint(*p, tag=t)
+        tag += len(rule["points"])
     gmsh.model.geo.synchronize()
+    extend = [_extend(grading, 3, [t for tags in surfaces for t in tags])] if grading else []
+    _size_field(rules, points, *extend)
     gmsh.model.mesh.generate(3)
 
 
-def _region_2d(V, facets, rings):
+def _region_2d(V, facets, rings, rules, grading=None):
     """In the current, empty gmsh model: mesh the plane surface bounded by the polygons of the shells rings, the outer
-    one first, through the nodes' real coordinates, each polygon line one element."""
+    one first, through the nodes' real coordinates, each polygon line one element, graded by the size rules (with
+    points) and by grading (see mesh_region)."""
     import gmsh
 
     occ = gmsh.model.occ
@@ -578,30 +631,47 @@ def _region_2d(V, facets, rings):
         loops.append(occ.addCurveLoop(ring))
         lines += ring
     occ.addPlaneSurface(loops)
+    points = [[occ.addPoint(*p) for p in rule["points"].tolist()] for rule in rules]
     occ.synchronize()
     for line in lines:
         gmsh.model.mesh.setTransfiniteCurve(line, 2)
+    extend = [_extend(grading, 2, lines)] if grading else []
+    _size_field(rules, points, *extend)
     gmsh.model.mesh.generate(2)
 
 
-def mesh_region(V, facets, outer, inners, size, dim):
+def mesh_region(V, facets, outer, inners, size, dim, rules=(), grading=None):
     """Mesh the region bounded by the shell outer (indexes into facets, whose node numbers refer to V), minus the
-    shells inners. Returns (V2, {etype: connectivity}): V with the new nodes appended, nodes 0 to len(V) - 1 unchanged,
-    connectivity into V2. A frozen node moved by gmsh raises FrozenError. The current gmsh model stays as it was."""
+    shells inners. Returns (V2, {etype: connectivity}): V with the new nodes the elements use appended, nodes 0 to
+    len(V) - 1 unchanged, connectivity into V2. A frozen node moved by gmsh raises FrozenError. The current gmsh model
+    stays as it was.
+    rules: size rules, each {"points": (n, 3), "fine", "fine_distance", "coarse", "growth"}: the size is fine within
+    fine_distance of the points and grows to coarse over growth beyond it. Points farther than fine_distance + growth
+    from the region's bounding box are left out, and so are the rules left without points.
+    grading: None, or {"growth", "far"}: the size grows from every boundary of the region, from the size of its facets
+    to far over the distance growth, and stays at far beyond it (size is then not used): see _extend."""
     import gmsh
 
     V = np.asarray(V, dtype=float).reshape(-1, 3)
     facets = np.asarray(facets, dtype=np.int64)
     rings = [np.asarray(outer, dtype=np.int64)] + [np.asarray(s, dtype=np.int64) for s in inners]
     used = np.unique(facets[np.concatenate(rings)])
+    lo, hi = V[used].min(axis=0), V[used].max(axis=0)
+    rules = [dict(r, points=np.asarray(r["points"], dtype=float).reshape(-1, 3)) for r in rules]
+    for r in rules:  # a point farther than its rule's reach from the region's box sizes nothing in it
+        reach = r["fine_distance"] + r["growth"]
+        r["points"] = r["points"][((r["points"] >= lo - reach) & (r["points"] <= hi + reach)).all(axis=1)]
+    rules = [r for r in rules if len(r["points"])]
     options = {"Mesh.Renumber": 0, "Mesh.MeshSizeMax": size, "Mesh.MeshSizeExtendFromBoundary": 1, "Mesh.Optimize": 1}
+    if grading:
+        options.update({"Mesh.MeshSizeMax": grading["far"], "Mesh.MeshSizeExtendFromBoundary": 0})
     if dim == 3:
         options["Mesh.Algorithm3D"] = 1
     current = gmsh.model.getCurrent()
     gmsh.model.add("region")
     try:
         with _options(options):
-            (_region_3d if dim == 3 else _region_2d)(V, facets, rings)
+            (_region_3d if dim == 3 else _region_2d)(V, facets, rings, rules, grading)
         tags, coords, _ = gmsh.model.mesh.getNodes()
         tags = np.asarray(tags, dtype=np.int64)
         xyz = np.asarray(coords, dtype=float).reshape(-1, 3)
@@ -628,7 +698,10 @@ def mesh_region(V, facets, outer, inners, size, dim):
         twin = first[labels[len(used) :]]
         kept = twin < len(used)
         index[tags[kept]] = used[twin[kept]]
-    fresh = np.flatnonzero(~kept)
+    meshed = np.zeros(len(index), dtype=bool)  # the rules' points come back as nodes no element uses
+    for a in found.values():
+        meshed[np.concatenate(a).ravel()] = True
+    fresh = np.flatnonzero(~kept & meshed[tags])
     fresh = fresh[np.argsort(tags[fresh], kind="stable")]
     index[tags[fresh]] = len(V) + np.arange(len(fresh))
     return np.vstack([V, xyz[fresh]]), {t: index[np.vstack(a)] for t, a in found.items()}

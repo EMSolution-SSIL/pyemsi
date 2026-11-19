@@ -387,13 +387,30 @@ class ViewProviderSlidingInterface(_ViewProvider):
         return True
 
 
-def _length_box(value, minimum=0.001, no_limit=False):
+def _factor_box(value):
+    """A spin box for a factor of at least 0.01, as a Skin Layer's elements per depth."""
+    box = QtWidgets.QDoubleSpinBox()
+    box.setDecimals(2)
+    box.setRange(0.01, 1000.0)
+    box.setValue(value)
+    return box
+
+
+def _float_text(edit, fallback):
+    """The number typed into a line edit (3.5e7 too), else fallback."""
+    try:
+        return float(edit.text())
+    except ValueError:
+        return fallback
+
+
+def _length_box(value, minimum=0.001, no_limit=False, zero_text="no limit"):
     box = QtWidgets.QDoubleSpinBox()
     box.setDecimals(3)
     box.setRange(0.0 if no_limit else minimum, 1e6)
     box.setSuffix(" mm")
     if no_limit:
-        box.setSpecialValueText("no limit")  # shown for 0
+        box.setSpecialValueText(zero_text)  # shown for 0
     box.setValue(value)
     return box
 
@@ -1196,6 +1213,13 @@ ITEM_PICKS = {
         "Click regions, edges or vertices in the 3D view.",
     ),
 }
+ITEM_PICKS[objects.RefineNear] = ITEM_PICKS[objects.MeshSize]
+AIR_HINT = "Select the Air Region in the tree (or, in a Study with Symmetric Groups, a free object that is air)."
+ITEM_PICKS[objects.AirGrading] = (picked_bodies, "Air", ("Body",), True, AIR_HINT, AIR_HINT)
+SKIN_HINT = "Select the conductors (whole bodies) in the 3D view or the tree."
+ITEM_PICKS[objects.SkinLayer] = (picked_bodies, "Conductors", ("Body",), True, SKIN_HINT, SKIN_HINT)
+SWEPT_HINT = "Select the bodies to sweep (whole bodies) in the 3D view or the tree."
+ITEM_PICKS[objects.SweptBody] = (picked_bodies, "Bodies", ("Face",), True, SWEPT_HINT, SWEPT_HINT)  # faces: Start face
 # in a 2D Study: (pick, list label, gate kinds, hint) replacing those of ITEM_PICKS
 ITEM_PICKS_2D = {
     objects.TransfiniteBody: (
@@ -1229,7 +1253,8 @@ class ItemPanel:
         if regions:
             self.pick, label, kinds, hint2d = ITEM_PICKS_2D[type(obj.Proxy)]
         self.takes = label.replace("\n", " ").lower()
-        air = isinstance(obj.Proxy, objects.MeshSize)  # the air is not recombined, structured or excited
+        # the air is not recombined, structured or excited
+        air = isinstance(obj.Proxy, (objects.MeshSize, objects.RefineNear, objects.AirGrading))
         self.gate = ItemGate(study, kinds, whole, air, regions)
         Gui.Selection.addSelectionGate(self.gate)  # replaces any filter the user set
         self.current = objects.item_refs(obj)
@@ -1250,6 +1275,64 @@ class ItemPanel:
         if isinstance(obj.Proxy, objects.MeshSize):
             self.size = _length_box(obj.Size.Value)
             layout.addRow("Size", self.size)
+        self.fine = self.fine_distance = self.coarse = self.growth = self.limit = None
+        self.limit_to = []
+        self.far = self.far_hint = None
+        self.depth = self.per_depth = self.layer_depth = self.quads = None
+        self.path_size = self.section_size = self.start_list = None
+        self.start = (
+            [(b, s) for b, subs in obj.StartFace for s in subs] if isinstance(obj.Proxy, objects.SweptBody) else []
+        )
+        if isinstance(obj.Proxy, objects.SkinLayer):
+            self.add_skin_rows(layout, study)
+        if isinstance(obj.Proxy, objects.SweptBody):
+            self.path_size = _length_box(obj.PathSize.Value, no_limit=True, zero_text="body size")
+            layout.addRow("Length along the path", self.path_size)
+            self.section_size = _length_box(obj.SectionSize.Value, no_limit=True, zero_text="body size")
+            layout.addRow("Section size", self.section_size)
+            self.start_list = QtWidgets.QListWidget()
+            self.start_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+            layout.addRow("Start face", self.start_list)
+            add_start = QtWidgets.QPushButton("Add selection")
+            remove_start = QtWidgets.QPushButton("Remove")
+            add_start.clicked.connect(self.add_start)
+            remove_start.clicked.connect(self.remove_start)
+            start_buttons = QtWidgets.QHBoxLayout()
+            start_buttons.addWidget(add_start)
+            start_buttons.addWidget(remove_start)
+            layout.addRow(start_buttons)
+            self.refresh_start()
+        if isinstance(obj.Proxy, objects.AirGrading):
+            self.growth = _length_box(obj.GrowthDistance.Value)
+            layout.addRow("Growth distance", self.growth)
+            self.far = _length_box(obj.FarSize.Value, minimum=0.0)
+            self.far_hint = QtWidgets.QLabel()
+            far_row = QtWidgets.QHBoxLayout()
+            far_row.addWidget(self.far)
+            far_row.addWidget(self.far_hint, 1)
+            layout.addRow("Far size", far_row)
+        if isinstance(obj.Proxy, objects.RefineNear):
+            self.fine = _length_box(obj.FineSize.Value)
+            layout.addRow("Fine size", self.fine)
+            self.fine_distance = _length_box(obj.FineDistance.Value, minimum=0.0)
+            layout.addRow("Fine distance", self.fine_distance)
+            self.coarse = _length_box(obj.CoarseSize.Value)
+            layout.addRow("Coarse size", self.coarse)
+            self.growth = _length_box(obj.GrowthDistance.Value)
+            layout.addRow("Growth distance", self.growth)
+            self.limit_to = list(obj.LimitTo)
+            self.limit = QtWidgets.QListWidget()
+            self.limit.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+            layout.addRow("Limit to", self.limit)
+            add_limit = QtWidgets.QPushButton("Add selection")
+            remove_limit = QtWidgets.QPushButton("Remove")
+            add_limit.clicked.connect(self.add_limit)
+            remove_limit.clicked.connect(self.remove_limit)
+            limit_buttons = QtWidgets.QHBoxLayout()
+            limit_buttons.addWidget(add_limit)
+            limit_buttons.addWidget(remove_limit)
+            layout.addRow(limit_buttons)
+            self.refresh_limit()
         self.elements = self.distribution = self.bump = None
         if isinstance(obj.Proxy, objects.TransfiniteEdges):
             self.elements = QtWidgets.QSpinBox()
@@ -1284,6 +1367,17 @@ class ItemPanel:
         for signal in (
             self.name.textChanged,
             self.size and self.size.valueChanged,
+            self.fine and self.fine.valueChanged,
+            self.fine_distance and self.fine_distance.valueChanged,
+            self.coarse and self.coarse.valueChanged,
+            self.growth and self.growth.valueChanged,
+            self.far and self.far.valueChanged,
+            self.depth and self.depth.valueChanged,
+            self.per_depth and self.per_depth.valueChanged,
+            self.layer_depth and self.layer_depth.valueChanged,
+            self.quads and self.quads.toggled,
+            self.path_size and self.path_size.valueChanged,
+            self.section_size and self.section_size.valueChanged,
             self.elements and self.elements.valueChanged,
             self.distribution and self.distribution.currentTextChanged,
         ):
@@ -1295,14 +1389,122 @@ class ItemPanel:
         values = {"Name": self.name.text().strip() or objects.display_name(self.obj)}
         if self.size is not None:
             values["Size"] = self.size.value()
+        if self.fine is not None:
+            values.update(
+                FineSize=self.fine.value(),
+                FineDistance=self.fine_distance.value(),
+                CoarseSize=self.coarse.value(),
+                GrowthDistance=self.growth.value(),
+            )
+        if self.far is not None:
+            values.update(GrowthDistance=self.growth.value(), FarSize=self.far.value())
+        if self.depth is not None:
+            values.update(
+                SkinDepth=self.depth.value(),
+                ElementsPerDepth=self.per_depth.value(),
+                LayerDepth=self.layer_depth.value(),
+                Frequency=_float_text(self.frequency, self.obj.Frequency),
+                Conductivity=_float_text(self.conductivity, self.obj.Conductivity),
+                RelativePermeability=_float_text(self.mu_r, self.obj.RelativePermeability),
+            )
+            if self.quads is not None:
+                values["QuadLayers"] = self.quads.isChecked()
+        if self.path_size is not None:
+            values.update(PathSize=self.path_size.value(), SectionSize=self.section_size.value())
         if self.elements is not None:
             values.update(Elements=self.elements.value(), Distribution=self.distribution.currentText())
         return values
+
+    def add_skin_rows(self, layout, study):
+        """A Skin Layer's settings and its skin depth calculator."""
+        obj = self.obj
+        self.depth = _length_box(obj.SkinDepth.Value)
+        layout.addRow("Skin depth δ", self.depth)
+        self.per_depth = _factor_box(obj.ElementsPerDepth)
+        layout.addRow("Elements per depth", self.per_depth)
+        self.layer_depth = _factor_box(obj.LayerDepth)
+        layout.addRow("Layer depth (× δ)", self.layer_depth)
+        self.quads = QtWidgets.QCheckBox("Quad layers" if study.Dimension == "2D" else "Prism layers")
+        self.quads.setChecked(obj.QuadLayers)
+        layout.addRow(self.quads)
+        mu_r = obj.RelativePermeability
+        if self.new and self.current:  # a material's permeability may be missing or not physical
+            found = objects.body_mu_r(study, self.current[0][0])
+            mu_r = found if found is not None and found > 0 else 1.0
+        box = QtWidgets.QGroupBox("Skin depth calculator")
+        form = QtWidgets.QFormLayout(box)
+        self.frequency = QtWidgets.QLineEdit(f"{obj.Frequency:g}")
+        form.addRow("Frequency (Hz)", self.frequency)
+        self.conductivity = QtWidgets.QLineEdit(f"{obj.Conductivity:g}")
+        form.addRow("Conductivity (S/m)", self.conductivity)
+        self.mu_r = QtWidgets.QLineEdit(f"{mu_r:g}")
+        form.addRow("Relative permeability", self.mu_r)
+        self.calculate = QtWidgets.QPushButton("Calculate")
+        self.calculate.clicked.connect(self.calculate_depth)
+        self.depth_result = QtWidgets.QLabel()
+        self.depth_result.setWordWrap(True)
+        form.addRow(self.calculate, self.depth_result)
+        layout.addRow(box)
+
+    def calculate_depth(self):
+        inputs = [_float_text(edit, 0.0) for edit in (self.frequency, self.conductivity, self.mu_r)]
+        if not all(v > 0 for v in inputs):
+            self.depth_result.setText("Frequency, conductivity and permeability must be greater than 0.")
+            return
+        d = objects.skin_depth(*inputs)
+        self.depth.setValue(d)
+        self.depth_result.setText(f"δ = {d:.3g} mm")
 
     def refresh(self):
         self.refs.clear()
         self.refs.addItems([objects.ref_label(b, f) for b, f in self.current])
         labels.set_refs(self.obj, self.current)
+        if self.far_hint is not None:
+            self.far_hint.setText(f"0 = the air's size ({objects.far_size(self.obj, 0, self.current):g} mm)")
+
+    def refresh_start(self):
+        self.start_list.clear()
+        self.start_list.addItems([objects.ref_label(b, f) for b, f in self.start])
+
+    def add_start(self):
+        """The faces picked are start faces; one per solid is checked by Validate."""
+        new = [(b, s) for b, s in selected_faces() if (b.Name, s) not in {(x.Name, y) for x, y in self.start}]
+        if not new:
+            warn("Nothing new to add: pick faces of the bodies in the 3D view.")
+        self.start += new
+        self.refresh_start()
+
+    def remove_start(self):
+        rows = {i.row() for i in self.start_list.selectedIndexes()}
+        self.start = [r for i, r in enumerate(self.start) if i not in rows]
+        self.refresh_start()
+
+    def refresh_limit(self):
+        self.limit.clear()
+        self.limit.addItems([objects.display_name(b) for b in self.limit_to])
+
+    def add_limit(self):
+        """Limit to the bodies picked, whole: any click on a body counts, an Air Region too."""
+        study = objects.owner_study(self.obj)
+        bodies = list(
+            dict.fromkeys(b for b in (objects.pick_body(s.Object) for s in Gui.Selection.getSelectionEx()) if b)
+        )
+        allowed = {b.Name for b in objects.assignable(study) + objects.cell_bodies(study)}
+        have = {b.Name for b in self.limit_to}
+        added = [b for b in bodies if b.Name in allowed and b.Name not in have]
+        skipped = [b for b in bodies if b.Name not in allowed or b.Name in have]
+        if not added:
+            warn("Nothing new to add: pick bodies the Study meshes that are not in the list yet.")
+        elif skipped:
+            names = ", ".join(objects.display_name(b) for b in skipped)
+            warn(f"Not added: {names}. They are not meshed by the Study, or already in the list.")
+        self.limit_to += added
+        self.refresh_limit()
+
+    def remove_limit(self):
+        rows = {i.row() for i in self.limit.selectedIndexes()}
+        self.limit_to = [b for i, b in enumerate(self.limit_to) if i not in rows]
+        self.refresh_limit()
 
     def highlight_rows(self):
         highlight.show([self.current[r] for r in sorted({i.row() for i in self.refs.selectedIndexes()})])
@@ -1362,10 +1564,27 @@ class ItemPanel:
                 self.obj.GroupName = name  # FreeCAD may have suffixed the Label
         if self.size is not None:
             self.obj.Size = self.size.value()
+        if self.fine is not None:
+            self.obj.FineSize = self.fine.value()
+            self.obj.FineDistance = self.fine_distance.value()
+            self.obj.CoarseSize = self.coarse.value()
+            self.obj.GrowthDistance = self.growth.value()
+            self.obj.LimitTo = list(self.limit_to)
+        if self.far is not None:
+            self.obj.GrowthDistance = self.growth.value()
+            self.obj.FarSize = self.far.value()
+        if self.depth is not None:
+            for prop, value in self.unsaved().items():
+                if prop != "Name":
+                    setattr(self.obj, prop, value)
         if self.elements is not None:
             self.obj.Elements = self.elements.value()
             self.obj.Distribution = self.distribution.currentText()
             self.obj.BumpCoefficient = self.bump.value()
+        if self.path_size is not None:
+            self.obj.PathSize = self.path_size.value()
+            self.obj.SectionSize = self.section_size.value()
+            self.obj.StartFace = [(b, (s,)) for b, s in self.start]
         if isinstance(self.obj.Proxy, objects.TransfiniteBody):
             self.obj.References, self.obj.Corners = objects.split_corners(self.current)
         else:

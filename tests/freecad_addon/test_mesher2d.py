@@ -13,7 +13,7 @@ import gmsh
 
 from emsolution import meshcommon
 
-from .test_mesher import write_line, write_point
+from .test_mesher import air_grading, band_edge, facets, simplices, write_line, write_point, skin, depth_edge
 from .meshreport import report
 
 MESHER2D = os.path.join(os.path.dirname(__file__), "..", "..", "freecad_addon", "emsolution", "mesher2d.py")
@@ -99,6 +99,19 @@ def write_sectors(path, *sectors):
         gmsh.option.setNumber("General.Terminal", 0)
         for s in sectors:
             add_sector(*s)
+        gmsh.model.occ.synchronize()
+        gmsh.write(path)
+    finally:
+        gmsh.finalize()
+
+
+def write_disks(path, *disks):
+    """One BREP holding the discs (x, y, r)."""
+    gmsh.initialize()
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        for x, y, r in disks:
+            gmsh.model.occ.addDisk(x, y, 0, r, r)
         gmsh.model.occ.synchronize()
         gmsh.write(path)
     finally:
@@ -212,6 +225,7 @@ class Mesher2DTest(unittest.TestCase):
         recombine=None,
         air=None,
         extra=None,
+        patch=None,
     ):
         job = {
             "dimension": "2D",
@@ -232,7 +246,15 @@ class Mesher2DTest(unittest.TestCase):
         path = os.path.join(self.dir, "job.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(job, fh)
-        return subprocess.run([sys.executable, MESHER2D, path], capture_output=True, encoding="utf-8", errors="replace")
+        cmd = [sys.executable, MESHER2D, path]
+        if patch:  # code run in the mesher process before it meshes, e.g. to replace a check
+            folder = os.path.dirname(os.path.abspath(MESHER2D))
+            code = (
+                f"import runpy, sys; sys.path.insert(0, {folder!r}); import meshcommon; {patch}; "
+                f"sys.argv = {cmd[1:]!r}; runpy.run_path({MESHER2D!r}, run_name='__main__')"
+            )
+            cmd = [sys.executable, "-c", code]
+        return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
 
     def open_msh(self):
         gmsh.initialize()
@@ -325,6 +347,83 @@ class Mesher2DTest(unittest.TestCase):
         finally:
             gmsh.finalize()
         return [tuple(c[i : i + 3]) for i in range(0, len(c), 3)]
+
+    def refine(self, files=(), whole=(), fine=0.05, coarse=0.5, growth=0.3, fine_distance=0.0, limit_to=()):
+        return {
+            "name": "Near",
+            "files": ["geometry/" + f for f in files],
+            "whole": list(whole),
+            "fine": fine,
+            "fine_distance": fine_distance,
+            "coarse": coarse,
+            "growth": growth,
+            "limit_to": list(limit_to),
+        }
+
+    def refined_nodes(self, entry, rects=((0, 0, 1, 1),), transfinite=None):
+        """Mesh the rectangles (one body each, size 0.5) with one refine entry; returns the node coordinates."""
+        bodies = []
+        for k, rect in enumerate(rects, 1):
+            write_rects(self.geo(f"vol_{k}.brep"), [rect])
+            bodies.append(self.body(k, f"Sq{k}", f"vol_{k}.brep"))
+        r = self.run_job(bodies, transfinite=transfinite, extra={"refine": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return list(read_nodes(os.path.join(self.dir, "pre_geom2D.msh")).values())
+
+    def test_refine_near_a_curve_grades_away_from_it_2d(self):
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (1, 0, 0))
+        nodes = self.refined_nodes(self.refine(["refine_1_1_1.brep"]))
+        near = sum(y < 0.1 for x, y, z in nodes)
+        far = sum(y > 0.9 for x, y, z in nodes)
+        self.assertGreater(near, 5 * max(far, 1), (near, far))
+
+    def test_refine_near_a_vertex_2d(self):
+        write_point(self.geo("refine_1_1_1.brep"), (0, 0, 0))
+        # a fine layer of 0.1: with none, only about 8 nodes fit within 0.1 of the corner however fine it is (growth 0.3)
+        nodes = self.refined_nodes(self.refine(["refine_1_1_1.brep"], fine=0.02, fine_distance=0.1))
+        self.assertGreaterEqual(sum(math.hypot(x, y) < 0.1 for x, y, z in nodes), 10)
+
+    def test_transfinite_edge_keeps_its_count_next_to_a_refinement(self):
+        write_line(self.geo("refine_1_1_1.brep"), (0, 0, 0), (0, 1, 0))  # the left edge
+        top = self.edge_item("tedge_1", [square_lines()[2]], 4)
+        nodes = self.refined_nodes(
+            self.refine(["refine_1_1_1.brep"], growth=2.0), transfinite={"bodies": [], "edges": [top]}
+        )
+        self.assertEqual(sum(abs(y - 1) < 1e-9 for x, y, z in nodes), 5)
+
+    def test_whole_body_pick_refines_only_shared_curves_2d(self):
+        nodes = self.refined_nodes(self.refine(whole=[1]), rects=((0, 0, 1, 1), (1, 0, 1, 1)))
+        shared = sum(abs(x - 1) < 0.1 for x, y, z in nodes)
+        outer = sum(x < 0.1 for x, y, z in nodes)
+        self.assertGreater(shared, 3 * outer, (shared, outer))
+
+    def test_whole_sliding_air_pick_leaves_out_the_surface_between_its_sides(self):
+        def nodes_by(entries, same_body):
+            """Squares x 0..1 and 1..2 (the two air sides, MAT_IDs 1 and 2) and a body x 2..3 (MAT_ID 3), size 0.5.
+            Returns the node counts within 0.1 of x = 1 (between the sides) and of x = 2 (the air's outer face)."""
+            gmsh.initialize()
+            try:
+                gmsh.option.setNumber("General.Terminal", 0)
+                occ = gmsh.model.occ
+                squares = [(2, occ.addRectangle(x, 0, 0, 1, 1)) for x in range(3)]
+                _, out_map = occ.fragment(squares[:1], squares[1:])
+                occ.synchronize()
+                tags = {k: [t for _, t in dimtags] for k, dimtags in enumerate(out_map, 1)}
+                meshcommon.apply_size_fields({0.5: {2: [t for v in tags.values() for t in v]}})
+                meshcommon.apply_refinements([(e, {}) for e in entries], tags, 2, same_body)
+                gmsh.model.mesh.generate(2)
+                c = gmsh.model.mesh.getNodes()[1]
+            finally:
+                gmsh.finalize()
+            xs = c[0::3]
+            return sum(abs(x - 1) < 0.1 for x in xs), sum(abs(x - 2) < 0.1 for x in xs)
+
+        plain = nodes_by([], [])
+        joined = nodes_by([self.refine(whole=[1, 2])], [[1, 2]])
+        apart = nodes_by([self.refine(whole=[1, 2])], [])
+        self.assertLess(joined[0], 1.5 * plain[0] + 2, (plain, joined))
+        self.assertGreater(joined[1], 5 * plain[1], (plain, joined))
+        self.assertGreater(apart[0], 5 * plain[0], "without same_body the surface between the sides is a pick")
 
     def test_face_size_refines_that_face(self):
         write_rects(self.geo("vol_1.brep"), [(0, 0, 1, 1)])
@@ -902,6 +1001,256 @@ class Mesher2DTest(unittest.TestCase):
         r = self.run_job([self.body(1, "Body", "vol_1.brep")], sizes=sizes, air=air)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    # ---- Air Grading. The numbers are the spike's (mean edge in bands 0-3 / 3-10 / 10-25 / 25-50 / 50-80 mm from the
+    # rectangle), rectangle size 2, air size 20, growth 60
+
+    def graded_rect(self, grading=None, rect=(-10, -5, 20, 10), square=(-100, -100, 200, 200), keys=None):
+        """The rectangle (MAT_ID 1, size 2) in an air square (MAT_ID 2, size 20), with one Air Grading entry if given.
+        keys: more job keys. Returns the triangles."""
+        write_rects(self.geo("vol_1.brep"), [rect])
+        write_rects(self.geo("air.brep"), [square])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        extra = dict(keys or {}, **({"air_grading": [grading]} if grading else {}))
+        r = self.run_job([self.body(1, "Rect", "vol_1.brep", size=2.0)], air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2)
+
+    def test_air_grading_grows_from_the_rectangle_2d(self):
+        # band 3-10: today 10.8, graded 3.55
+        half = (10, 5, 0)
+        today = band_edge(self.graded_rect(), half, 3, 10)
+        graded = self.graded_rect(air_grading())
+        self.assertLess(band_edge(graded, half, 3, 10), 0.7 * today, today)
+        self.assertGreater(band_edge(graded, half, 50, 80), 0.6 * 20)
+
+    def test_air_face_on_the_domain_boundary_grades_2d(self):
+        # a half model, the rectangle on the line y = 0; the air's line elements there: today 2.27 / 8.61 / 7.19 /
+        # 13.8 / 19.1, graded 2.11 / 3.22 / 6.51 / 12.8 / 18.0 (the line is meshed before any curve mesh exists to
+        # extend from: it needs the Distance on the points where it meets the rectangle)
+        def plane(grading):
+            triangles = self.graded_rect(grading, rect=(-10, 0, 20, 5), square=(-100, 0, 200, 100))
+            return facets(triangles, lambda p: abs(p[1]) < 1e-9)
+
+        half = (10, 0, 0)
+        today = band_edge(plane(None), half, 3, 10)
+        self.assertLess(band_edge(plane(air_grading()), half, 3, 10), 0.7 * today, today)
+
+    def test_air_grading_and_refine_near_on_the_air_both_apply(self):
+        write_line(self.geo("refine_1_1_1.brep"), (-100, -100, 0), (100, -100, 0))  # the air square's bottom edge
+        refine = self.refine(["refine_1_1_1.brep"], fine=2.0, coarse=20.0, growth=30.0)
+
+        def near_edge(keys):
+            self.graded_rect(air_grading(), keys=keys)
+            return sum(y < -95 for x, y, z in read_nodes(os.path.join(self.dir, "pre_geom2D.msh")).values())
+
+        alone = near_edge(None)
+        self.assertGreaterEqual(near_edge({"refine": [refine]}), 3 * alone, alone)
+
+    def test_mesh_size_face_inside_a_graded_air_keeps_its_size(self):
+        # the face splits the air, and its piece is one of the air's faces: it must keep the Mesh Size's 1, not get
+        # the grading's sizes (about 6-12 there)
+        write_rects(self.geo("size_1.brep"), [(30, -10, 20, 20)])
+        sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
+        triangles = self.graded_rect(air_grading(), keys={"sizes": sizes})
+        inside = [t for t in triangles if all(30 <= x <= 50 and -10 <= y <= 10 for x, y, z in t)]
+        mean = sum(math.dist(t[0], t[1]) for t in inside) / len(inside)
+        self.assertLess(mean, 1.5)
+
+    def test_air_grading_with_no_body_notes(self):
+        write_rects(self.geo("air.brep"), [(-100, -100, 200, 200)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 20.0}
+        r = self.run_job([], air=air, extra={"air_grading": [air_grading(far=40.0)]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: Air Grading Grow: the air touches no body; it is meshed at the far size", r.stderr)
+
+    # ---- Skin Layer: a round wire r 5 (MAT_ID 1), skin depth 1, body size 3, in an air square of 120 at size 6
+
+    def skin_wire(self, entry=None, size=3.0, sizes=(), half=False):
+        """The wire (the half above y = 0 when half) in the air, with one Skin Layer entry if given. Returns its
+        triangles."""
+        write_sectors(self.geo("vol_1.brep"), (0, 5, 0, 180) if half else (0, 5))
+        write_rects(self.geo("air.brep"), [(-60, 0, 120, 60) if half else (-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        extra = {"skin": [entry]} if entry else None
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=size)], sizes=sizes, air=air, extra=extra)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2, group=1)
+
+    @staticmethod
+    def wire_depth(c):
+        return 5 - math.hypot(c[0], c[1])
+
+    def test_skin_grades_the_wire_2d(self):
+        # mean edge 0-1 / 1-2 / 2-3 / beyond 3: 0.47 / 0.70 / 1.32 / 2.13; without the skin about 2.6 throughout
+        wire = self.skin_wire(skin())
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 1), 0.6)
+        self.assertGreater(depth_edge(wire, self.wire_depth, 3), 1.5)
+
+    def test_skin_stays_inside_the_conductor_2d(self):
+        # a bar 20 x 10 (MAT_ID 1) on an iron block (MAT_ID 3), both at size 3, in the air. Mean edge 0-1 / 1-2 mm from
+        # the shared edge: the bar 0.50 / 0.70, the block 0.85 / 2.55 (2.59 / 2.64 without the skin). The block's row on
+        # the edge must take the edge's 0.5 mm nodes; past it the block is at its own size (0.82 at 1-2 mm with no
+        # Limit to: the grading leaks into it)
+        write_rects(self.geo("vol_1.brep"), [(-10, 0, 20, 10)])
+        write_rects(self.geo("vol_3.brep"), [(-30, -20, 60, 20)])
+        write_rects(self.geo("air.brep"), [(-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        bodies = [self.body(1, "Bar", "vol_1.brep", size=3.0), self.body(3, "Iron", "vol_3.brep", size=3.0)]
+        r = self.run_job(bodies, air=air, extra={"skin": [skin()]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        path = os.path.join(self.dir, "pre_geom2D.msh")
+
+        def from_edge(sign):  # depth from the shared edge y = 0, |x| < 9, into the bar (1) or the block (-1)
+            return lambda c: sign * c[1] if abs(c[0]) < 9 else -1
+
+        self.assertGreater(depth_edge(simplices(path, 2, group=3), from_edge(-1), 1, 2), 1.5)
+        self.assertLess(depth_edge(simplices(path, 2, group=1), from_edge(1), 0, 1), 0.6)
+
+    def test_skin_skips_the_symmetry_plane_2d(self):
+        # the half wire on y = 0: the line there is not a surface, only the arc is. Its line elements: 0.48 within δ of the
+        # arc, 1.55 at 3δ and more (the middle 4 mm, its ends graded); all would be 0.5 if the line were a surface
+        on_plane = facets(self.skin_wire(skin(), half=True), lambda p: abs(p[1]) < 1e-9)
+        self.assertGreater(depth_edge(on_plane, self.wire_depth, 3), 1.2)
+        self.assertLess(depth_edge(on_plane, self.wire_depth, 0, 1), 0.75)
+
+    def test_skin_layer_thinner_than_delta(self):
+        # fine distance 0.5, no growth: 0.53 within 0.5, 0.78 at 0.5-1, 2.56 beyond 3
+        wire = self.skin_wire(skin(layer=0.5))
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 0.5), 0.75)
+
+    def test_skin_grows_to_the_body_mesh_size(self):
+        # beyond 3δ 1.76 at body size 2; with the whole wire at 0.3 the layer is 0.29
+        beyond = depth_edge(self.skin_wire(skin(), size=2.0), self.wire_depth, 3)
+        self.assertTrue(1.4 < beyond < 2.6, beyond)
+        write_sectors(self.geo("size_1.brep"), (0, 5))  # the whole wire at 0.3, below the skin's fine size
+        sizes = [{"name": "Fine", "size": 0.3, "files": ["geometry/size_1.brep"]}]
+        wire = self.skin_wire(skin(), size=2.0, sizes=sizes)
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 1), 0.4)
+
+    def test_skin_with_no_real_surface_notes(self):
+        write_sectors(self.geo("vol_1.brep"), (0, 5))
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], extra={"skin": [skin()]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        note = "Skin Layer Skin: MAT_ID 1 has no face shared with another region; it refines nothing"
+        self.assertIn(note, r.stderr)
+
+    # ---- quad layers: the Skin Layer with QuadLayers, a BoundaryLayer on smooth conductors (2D)
+
+    def quads_of(self, group):
+        """[(corner points)] of the quads of a physical group of the open mesh."""
+        tags, coords = gmsh.model.mesh.getNodes()[:2]
+        at = {int(t): tuple(coords[3 * k : 3 * k + 3]) for k, t in enumerate(tags)}
+        out = []
+        for e in gmsh.model.getEntitiesForPhysicalGroup(2, group):
+            for typ, _, nodes in zip(*gmsh.model.mesh.getElements(2, e)):
+                if gmsh.model.mesh.getElementProperties(typ)[0].startswith("Quadrilateral"):
+                    out += [tuple(at[int(n)] for n in nodes[k : k + 4]) for k in range(0, len(nodes), 4)]
+        return out
+
+    def quad_job(self, bodies, mat_ids=(1,), recombine=None, patch=None):
+        """Mesh the bodies [(mat_id, name, write(path))] in the air square of 120 at size 6, at body size 3, with a
+        Skin Layer with quad layers on mat_ids. Returns the run."""
+        made = []
+        for id_, name, write in bodies:
+            write(self.geo(f"vol_{id_}.brep"))
+            made.append(self.body(id_, name, f"vol_{id_}.brep", size=3.0))
+        write_rects(self.geo("air.brep"), [(-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        entry = dict(skin(mat_ids=mat_ids), quads=True)
+        return self.run_job(made, air=air, recombine=recombine, extra={"skin": [entry]}, patch=patch)
+
+    WIRE = (1, "Wire", lambda path: write_sectors(path, (0, 5)))
+    BAR = (1, "Bar", lambda path: write_rects(path, [(-10, -5, 20, 10)]))
+
+    @staticmethod
+    def bar_depth(c):  # below the surface of BAR
+        return min(5 - abs(c[1]), 10 - abs(c[0]))
+
+    def test_quad_layers_on_a_wire(self):
+        r = self.quad_job([self.WIRE])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        counts = self.element_counts(1)
+        self.assertGreater(counts.get("Quadrilateral 4", 0), 100, counts)  # spike: 252 quads, 95 triangles
+        self.assertNotIn("Quadrilateral 4", self.element_counts(2))
+        deepest = max(self.wire_depth(p) for q in self.quads_of(1) for p in q)
+        self.assertLess(deepest, 3 + 0.5)
+
+    def test_quad_layers_on_a_half_wire(self):
+        write_sectors(self.geo("vol_1.brep"), (0, 5, 0, 180))
+        write_rects(self.geo("air.brep"), [(-60, 0, 120, 60)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        entry = dict(skin(), quads=True)
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], air=air, extra={"skin": [entry]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        self.assertGreater(self.element_counts(1).get("Quadrilateral 4", 0), 50)  # spike: 128 quads
+
+    def test_quad_layers_fall_back_on_a_bar(self):
+        r = self.quad_job([self.BAR])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        note = "Skin Layer Skin: MAT_ID 1 has a sharp corner on its surface; graded triangles instead of quad layers"
+        self.assertIn(note, r.stderr)
+        bar = simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2, group=1)
+        self.assertLess(depth_edge(bar, self.bar_depth, 0, 1), 0.6)  # the graded band, as without quad layers
+        self.open_msh()
+        self.assertNotIn("Quadrilateral 4", self.element_counts(1))
+
+    def test_quad_layers_on_two_wires(self):
+        left = (1, "Left", lambda path: write_disks(path, (-15, 0, 5)))
+        right = (3, "Right", lambda path: write_disks(path, (15, 0, 5)))
+        r = self.quad_job([left, right], mat_ids=(1, 3))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.open_msh()
+        for group in (1, 3):
+            self.assertGreater(self.element_counts(group).get("Quadrilateral 4", 0), 100, group)
+
+    def test_quad_layers_of_two_skins_on_one_wire(self):
+        # two BoundaryLayer fields on the same curves leave the wire's core unmeshed (504 quads, no triangles): only the
+        # first skin makes quad layers
+        write_sectors(self.geo("vol_1.brep"), (0, 5))
+        write_rects(self.geo("air.brep"), [(-60, -60, 120, 120)])
+        air = {"name": "Air", "mat_id": 2, "file": "geometry/air.brep", "size": 6.0}
+        entry = dict(skin(), quads=True)
+        skins = [entry, dict(entry, name="Skin2")]
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], air=air, extra={"skin": skins})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Skin Layer Skin2: MAT_ID 1 already has quad layers from Skin Layer Skin; graded only", r.stderr)
+        self.open_msh()
+        counts = self.element_counts(1)
+        self.assertTrue(100 < counts.get("Quadrilateral 4", 0) < 400, counts)  # one skin: 252 quads
+        self.assertGreater(counts.get("Triangle 3", 0), 0, counts)
+
+    # the mesher's first gmsh.model.mesh.generate raises, as gmsh does when it cannot build a layer at a corner. A bar
+    # with its corners let through the smooth check does that only sometimes: as often it hangs in gmsh
+    FAIL_ONCE = "exec(%r)" % (
+        "import gmsh\n"
+        "real = gmsh.model.mesh.generate\n"
+        "def generate(dim):\n"
+        "    gmsh.model.mesh.generate = real\n"
+        "    raise Exception('Edge not recovered: 1 109 444444')\n"
+        "gmsh.model.mesh.generate = generate\n"
+    )
+
+    def test_quad_layers_retry(self):
+        r = self.quad_job([self.WIRE], patch=self.FAIL_ONCE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("NOTE: Skin Layer: gmsh could not make the quad layers; graded triangles instead", r.stderr)
+        wire = simplices(os.path.join(self.dir, "pre_geom2D.msh"), 2, group=1)
+        self.assertLess(depth_edge(wire, self.wire_depth, 0, 1), 0.6)  # the graded fields are still the background
+        self.open_msh()
+        self.assertNotIn("Quadrilateral 4", self.element_counts(1))
+
+    def test_a_gmsh_error_without_quad_layers_stays(self):
+        write_sectors(self.geo("vol_1.brep"), (0, 5))
+        r = self.run_job([self.body(1, "Wire", "vol_1.brep", size=3.0)], extra={"skin": [skin()]}, patch=self.FAIL_ONCE)
+        self.assertEqual(self.last_error(r), "ERROR: Edge not recovered: 1 109 444444")
+
+    def test_quad_layers_skip_a_recombined_wire(self):
+        r = self.quad_job([self.WIRE], recombine=[1])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Skin Layer Skin: MAT_ID 1 is structured or recombined; no quad layers", r.stderr)
+
     # ---- sliding motion: the fixed side goes to pre_geom2D.msh, the moving side to rotor_mesh2D.msh
 
     def files(self):
@@ -919,9 +1268,10 @@ class Mesher2DTest(unittest.TestCase):
             "full": full,
         }
 
-    def slide_job(self, bodies, moving, slides, periodic=None, fine=None):
+    def slide_job(self, bodies, moving, slides, periodic=None, fine=None, keys=None):
         """Run a slide job: air from geometry/air.brep (fixed ID 10, moving 11), moving cell geometry/cell_1.brep.
-        fine: (p, q), a line on the second periodic boundary meshed at size 1; the period must undo it."""
+        fine: (p, q), a line on the second periodic boundary meshed at size 1; the period must undo it.
+        keys: more job keys."""
         sides = {"fixed": {"mat_id": 10, "name": "Air_fixed"}, "moving": {"mat_id": 11, "name": "Air_moving"}}
         air = {"sides": sides, "file": "geometry/air.brep", "size": 5.0}
         extra = {
@@ -929,6 +1279,7 @@ class Mesher2DTest(unittest.TestCase):
             "moving": moving,
             "moving_cells": ["geometry/cell_1.brep"],
             "slides": slides,
+            **(keys or {}),
         }
         if periodic:
             extra["periodic"] = periodic
@@ -938,9 +1289,10 @@ class Mesher2DTest(unittest.TestCase):
             sizes = [{"name": "Fine", "size": 1.0, "files": ["geometry/size_1.brep"]}]
         return self.run_job(bodies, sizes=sizes, air=air, extra=extra)
 
-    def motor_job(self, tooth=None, rotor=40):
+    def motor_job(self, tooth=None, rotor=40, keys=None):
         """Full turn: stator ring 45..80 fixed (tooth: plus a tooth 42.5..45 between these two angles), rotor disc r 40
-        (rotor) moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0)."""
+        (rotor) moving, air disc r 100, slide circle r 42.5 in two halves with 72 divisions, slide point at (42.5, 0).
+        keys: more job keys."""
         write_sectors(self.geo("vol_1.brep"), (45, 80), *([(42.5, 45, *tooth)] if tooth else []))
         write_sectors(self.geo("vol_2.brep"), (0, rotor))
         write_sectors(self.geo("air.brep"), (0, 100))
@@ -949,7 +1301,8 @@ class Mesher2DTest(unittest.TestCase):
         write_arc(self.geo("slide_20_2.brep"), 42.5, 180, 360)
         write_point(self.geo("marker_20.brep"), (42.5, 0, 0))
         bodies = [self.body(1, "Stator", "vol_1.brep", 5), self.body(2, "Rotor", "vol_2.brep", 5)]
-        return self.slide_job(bodies, [2], [self.slide("Slide", 20, ["slide_20_1.brep", "slide_20_2.brep"], 72, True)])
+        slide = self.slide("Slide", 20, ["slide_20_1.brep", "slide_20_2.brep"], 72, True)
+        return self.slide_job(bodies, [2], [slide], keys=keys)
 
     def sector_job(self, stator=(82, 149, 0, 45)):
         """The 45° machine: shaft r < 30 and rotor 30..78 moving, stator fixed, air sector r 200, slide arc
@@ -983,6 +1336,16 @@ class Mesher2DTest(unittest.TestCase):
         self.assertEqual(fixed, moving)
         for got, want in zip(self.angles(fixed), range(0, 360, 5)):
             self.assertAlmostEqual(got, want, places=6)
+
+    def test_sliding_divisions_unchanged_with_air_grading(self):
+        def on_slide(keys):
+            r = self.motor_job(keys=keys)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return [len(self.on_circle(f, 42.5)) for f in self.files()]
+
+        plain = on_slide(None)
+        self.assertEqual(on_slide({"air_grading": [air_grading(mat_ids=(10, 11))]}), plain)
+        self.assertEqual(plain, [72, 72])
 
     def test_rotor_file_has_slide_point_at_start_angle(self):
         r = self.motor_job()

@@ -31,6 +31,12 @@ from meshcommon import (
     import_brep,
     slide_split,
     orient_faces,
+    apply_refinements,
+    skin_refinements,
+    graded_air,
+    apply_air_grading,
+    graded_ids,
+    apply_quad_layers,
 )
 import meshgroups
 
@@ -82,6 +88,22 @@ def build(job, folder):
         start = len(inputs)
         inputs += import_brep(path, FILE_DIMS[kind])
         tf_spans.append((start, len(inputs)))
+    refine_files = [(k, os.path.join(folder, f)) for k, e in enumerate(job.get("refine", [])) for f in e["files"]]
+    refine_spans = []
+    for _, path in refine_files:
+        start = len(inputs)
+        inputs += import_brep(path, 0, 1, 2)
+        refine_spans.append((start, len(inputs)))
+    skin_files = [  # a cell's edges toward the free side
+        (k, f["mat_id"], os.path.join(folder, f["file"]))
+        for k, e in enumerate(job.get("skin", []))
+        for f in e.get("faces", [])
+    ]
+    skin_spans = []
+    for _, _, path in skin_files:
+        start = len(inputs)
+        inputs += import_brep(path, 1)
+        skin_spans.append((start, len(inputs)))
 
     if len(inputs) == 1:  # Gmsh skips a fragment with no tools and returns no map
         out_map = [inputs]
@@ -124,19 +146,49 @@ def build(job, folder):
             gmsh.model.addPhysicalGroup(2, body_faces[b["mat_id"]], b["mat_id"], name=b["name"])
 
     by_size = {}  # size -> {dim: [tags]}
+    graded_mats = graded_ids(job)  # sized by apply_air_grading
     for b, size in [(b, b["size"]) for b in bodies] + [(a, air["size"]) for a in airs]:
-        by_size.setdefault(float(size), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
+        if b["mat_id"] not in graded_mats:
+            by_size.setdefault(float(size), {}).setdefault(2, []).extend(body_faces[b["mat_id"]])
     for (z, path), (start, end) in zip(size_files, size_spans):
         for dimtags in out_map[start:end]:
             for d, t in dimtags:
                 if not _on_bodies(d, t, placed):
                     raise JobError(f"mesh size {z['name']}: {os.path.basename(path)} did not merge with the bodies")
                 by_size.setdefault(float(z["size"]), {}).setdefault(d, []).append(t)
+    sliding_air = [[a["mat_id"] for a in airs]] if air and "sides" in air else []  # its two sides are one body
+    sizes = {x["mat_id"]: float(x["size"]) for x in bodies} | {a["mat_id"]: float(air["size"]) for a in airs}
+    graded = graded_air(by_size, job.get("air_grading", []), body_faces, sizes, 2, sliding_air)
     apply_size_fields(by_size)
     mapped = [
         (kind, item, os.path.basename(path), [dt for dimtags in out_map[start:end] for dt in dimtags])
         for (kind, item, path), (start, end) in zip(tf_files, tf_spans)
     ]
+    picks = [(e, {}) for e in job.get("refine", [])]  # (entry, {dim: [final tags]})
+    for (k, path), (start, end) in zip(refine_files, refine_spans):
+        e, picked = picks[k]
+        for dimtags in out_map[start:end]:
+            for d, t in dimtags:
+                if not _on_bodies(d, t, placed):
+                    raise JobError(f"refine near {e['name']}: {os.path.basename(path)} did not merge with the bodies")
+                picked.setdefault(d, []).append(t)
+    skin_faces = {}  # (skin entry index, MAT_ID) -> {dim: [final tags]}
+    for (k, m, path), (start, end) in zip(skin_files, skin_spans):
+        for dimtags in out_map[start:end]:
+            for d, t in dimtags:
+                if not _on_bodies(d, t, placed):
+                    name = job["skin"][k]["name"]
+                    raise JobError(f"skin layer {name}: {os.path.basename(path)} did not merge with the bodies")
+                skin_faces.setdefault((k, m), {}).setdefault(d, []).append(t)
+    picks += skin_refinements(job.get("skin", []), sizes, skin_faces)  # graded skins of conductors
+    apart = job.get("copies_apart", False)  # set by meshgroups.mesh_free
+    job["refine_fields"] = apply_refinements(picks, body_faces, 2, sliding_air, apart)  # (entry, Distance field) pairs
+    tf_bodies = [b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])]
+    recombined = set(job.get("recombine", [])) | {r["mat_id"] for r in job.get("recombine_faces", [])} | set(tf_bodies)
+    apply_quad_layers(job.get("skin", []), body_faces, recombined, skin_faces)  # quads in the smooth skins
+    job["air_grading_fields"] = apply_air_grading(
+        job.get("air_grading", []), graded, sizes, 2, apart
+    )  # (entry, Extend field) pairs
     tf = apply_transfinite(job, mapped, body_faces, 2)
     apply_recombine(job, body_faces, 2, tf, mapped)
     if job.get("periodic"):

@@ -214,6 +214,59 @@ class AddMeshSize(_StudyCommand):
             _create_and_edit(study, "Add Mesh Size", lambda: objects.make_mesh_size(study, size, refs))
 
 
+class AddRefineNear(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("refinenear"),
+            "MenuText": "Refine Near",
+            "ToolTip": "Fine elements at the selected faces, edges, vertices or bodies, growing to a coarse size",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
+        if gate(study, [b for b, _ in refs]):
+            _create_and_edit(study, "Add Refine Near", lambda: objects.make_refine_near(study, refs))
+
+
+class AddSkinLayer(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("skinlayer"),
+            "MenuText": "Skin Layer",
+            "ToolTip": "Fine elements inside conductors along their surface, sized from the skin depth",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        refs = taskpanels.picked_bodies(study)  # whole conductors, as the panel picks them
+        if gate(study, [b for b, _ in refs], objects.SkinLayer):
+            _create_and_edit(study, "Add Skin Layer", lambda: objects.make_skin_layer(study, refs))
+
+
+class AddAirGrading(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("airgrading"),
+            "MenuText": "Air Grading",
+            "ToolTip": "Grow the air's element size from the bodies' surface sizes to a far size",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        refs = objects.to_cells(study, taskpanels.selected_mesh_refs())
+        if not refs:  # nothing picked: the Study's Air Region
+            return _create_and_edit(study, "Add Air Grading", lambda: objects.make_air_grading(study))
+        if gate(study, [b for b, _ in refs]):
+            _create_and_edit(study, "Add Air Grading", lambda: objects.make_air_grading(study, refs))
+
+
 class AddAirRegion(_StudyCommand):
     def GetResources(self):
         return {
@@ -299,6 +352,24 @@ class AddTransfiniteBody(_StudyCommand):
                     return objects.make_transfinite_body(study, bodies, corners)
 
             _create_and_edit(study, "Add Transfinite Body", make)
+
+
+class AddSweptBody(_StudyCommand):
+    def GetResources(self):
+        return {
+            "Pixmap": icon("sweptbody"),
+            "MenuText": "Swept Body",
+            "ToolTip": "Mesh bodies that are a cross-section moved along a path: hexahedra and prisms, long along the"
+            " path and fine across",
+        }
+
+    def Activated(self):
+        study = assignment_study()
+        if study is None:
+            return
+        bodies = [b for b, _ in taskpanels.picked_bodies(study)]
+        if gate(study, bodies, objects.SweptBody):
+            _create_and_edit(study, "Add Swept Body", lambda: objects.make_swept_body(study, [(b, "") for b in bodies]))
 
 
 class AddTransfiniteEdges(_StudyCommand):
@@ -416,16 +487,21 @@ COMMANDS = {
     "EMS_Material": AssignMaterial(),
     "EMS_Excitation": AddExcitation(),
     "EMS_MeshSize": AddMeshSize(),
+    "EMS_RefineNear": AddRefineNear(),
+    "EMS_SkinLayer": AddSkinLayer(),
+    "EMS_AirGrading": AddAirGrading(),
     "EMS_AddAirRegion": AddAirRegion(),
     "EMS_AddSlidingInterface": AddSlidingInterface(),
     "EMS_TransfiniteBody": AddTransfiniteBody(),
+    "EMS_SweptBody": AddSweptBody(),
     "EMS_TransfiniteEdges": AddTransfiniteEdges(),
     "EMS_Recombine": AddRecombine(),
     "EMS_SymmetricGroup": AddSymmetricGroup(),
     "EMS_Validate": ValidateStudy(),
     "EMS_RunMesh": RunMesh(),
 }
-STRUCTURED = ("EMS_TransfiniteBody", "EMS_TransfiniteEdges", "EMS_Recombine")
+STRUCTURED = ("EMS_TransfiniteBody", "EMS_SweptBody", "EMS_TransfiniteEdges", "EMS_Recombine")
+REFINEMENTS = ("EMS_RefineNear", "EMS_SkinLayer", "EMS_AirGrading")
 
 
 class StructuredMesh:
@@ -438,13 +514,31 @@ class StructuredMesh:
         return 0
 
     def GetResources(self):
-        return {"MenuText": "Structured Mesh", "ToolTip": "Transfinite Body, Transfinite Edges or Recombine"}
+        return {
+            "MenuText": "Structured Mesh",
+            "ToolTip": "Transfinite Body, Swept Body, Transfinite Edges or Recombine",
+        }
 
     def IsActive(self):
         return active_study() is not None and not Gui.Control.activeDialog()
 
 
+class Refinement(StructuredMesh):
+    """Toolbar dropdown of the mesh refinements."""
+
+    def GetCommands(self):
+        return REFINEMENTS
+
+    def GetResources(self):
+        return {
+            "Pixmap": icon("refinement"),
+            "MenuText": "Refinement",
+            "ToolTip": "Refine Near, Skin Layer or Air Grading",
+        }
+
+
 COMMANDS["EMS_StructuredMesh"] = StructuredMesh()
+COMMANDS["EMS_Refinement"] = Refinement()
 for _name, _cmd in COMMANDS.items():
     Gui.addCommand(_name, _cmd)
 NAMES = list(COMMANDS)
@@ -452,35 +546,42 @@ NAMES = list(COMMANDS)
 TOOLBARS = (
     ("EMSolution Study", ["EMS_NewStudy", "EMS_Material", "EMS_Excitation"]),
     ("EMSolution Air", ["EMS_AddAirRegion", "EMS_AddSlidingInterface"]),
-    ("EMSolution Mesh", ["EMS_MeshSize", "EMS_StructuredMesh", "EMS_SymmetricGroup"]),
+    ("EMSolution Mesh", ["EMS_MeshSize", "EMS_Refinement", "EMS_StructuredMesh", "EMS_SymmetricGroup"]),
     ("EMSolution Run", ["EMS_Validate", "EMS_RunMesh"]),
 )
 # The toolbars' order, with the dropdown's commands listed one by one
 MENU = [
     *["EMS_NewStudy", "EMS_Material", "EMS_Excitation", "Separator"],
     *["EMS_AddAirRegion", "EMS_AddSlidingInterface", "Separator"],
-    *["EMS_MeshSize", *STRUCTURED, "EMS_SymmetricGroup", "Separator"],
+    *["EMS_MeshSize", *REFINEMENTS, *STRUCTURED, "EMS_SymmetricGroup", "Separator"],
     *["EMS_Validate", "EMS_RunMesh"],
 ]
 
 
 def context_names(study, kinds):
     """Commands for a right click, given the Study and the kinds of picks: "Body", "Face", "Edge", "Vertex", plus
-    "Air" when an Air Region is picked (it takes only a Material and a Mesh Size) and "Cell" when a model body is
-    picked as a whole (a Symmetric Group's cell object)."""
+    "Air" when an Air Region is picked (it takes only a Material, a Mesh Size, a Refine Near and an Air Grading) and
+    "Cell" when a model body is picked as a whole (a Symmetric Group's cell object)."""
     if study is None or not kinds:
         return []
     if "Air" in kinds:
-        return ["EMS_Material", "EMS_MeshSize"]
+        return ["EMS_Material", "EMS_MeshSize", "EMS_RefineNear", "EMS_AirGrading"]
     two_d = study.Dimension == "2D"
     out = []
     if kinds & {"Body", "Face"}:
         out.append("EMS_Material")
     if "Face" in kinds and not two_d:
         out.append("EMS_Excitation")
-    out += ["Separator", "EMS_MeshSize"] if out else ["EMS_MeshSize"]
+    out += ["Separator", "EMS_MeshSize", "EMS_RefineNear"] if out else ["EMS_MeshSize", "EMS_RefineNear"]
+    parts = {"Edge", "Vertex"} if two_d else {"Face", "Edge", "Vertex"}  # a click on a body in 2D is a Face
+    if (kinds & {"Body", "Cell"} or (two_d and "Face" in kinds)) and not kinds & parts:  # whole bodies: conductors
+        out.insert(out.index("EMS_RefineNear") + 1, "EMS_SkinLayer")
     if "Body" in kinds or (two_d and "Face" in kinds):
-        out += ["EMS_TransfiniteBody", "EMS_Recombine"]
+        out += (
+            ["EMS_TransfiniteBody", "EMS_Recombine"]
+            if two_d
+            else ["EMS_TransfiniteBody", "EMS_SweptBody", "EMS_Recombine"]
+        )
     if "Edge" in kinds:
         out.append("EMS_TransfiniteEdges")
     if "Cell" in kinds:

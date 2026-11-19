@@ -227,16 +227,16 @@ def set_periodic(name, dim, slave, master, m):
         ) from err
 
 
-def _periodic(sides, dim):
+def _periodic(sides, dim, skip=()):
     """Seams that a copy of the cell meets carry the same nodes: for seams c != d of a side's cells (curves in 2D,
     faces in 3D) with T(c) == d for one of the side's transforms T, d is meshed as a copy of c (gmsh periodic). A seam
     a transform maps onto itself (on a mirror) needs nothing. Each seam is copied from one master at most, and a
-    master is no copy."""
+    master is no copy. skip: seams left out, the faces of swept cells, whose hand-made mesh matches already."""
     box = gmsh.model.getBoundingBox(-1, -1)
     tol = 1e-6 * max(1.0, math.dist(box[:3], box[3:]))
-    masters, slaves = set(), set()
+    masters, slaves, skip = set(), set(), set(skip)
     for side in sides:
-        seams = _side_seams(side, dim)
+        seams = [s for s in _side_seams(side, dim) if s not in skip]
         for d in seams:
             if d in slaves or d in masters:
                 continue

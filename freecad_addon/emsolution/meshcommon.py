@@ -32,6 +32,312 @@ def apply_size_fields(by_size):
         gmsh.option.setNumber(opt, 0)
 
 
+def add_to_background(fields):
+    """Join fields to the background Min field that apply_size_fields made."""
+    field = gmsh.model.mesh.field
+    fmin = next(f for f in field.list() if field.getType(f) == "Min")
+    field.setNumbers(fmin, "FieldsList", [int(f) for f in field.getNumbers(fmin, "FieldsList")] + list(fields))
+
+
+def real_boundary(dim, tags):
+    """The (dim-1) boundary entities of tags that touch a dim-entity outside them: faces shared with the air or other
+    bodies. Faces on the domain boundary and between pieces of the same body are left out."""
+    inside = set(tags)
+    faces = dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary([(dim, t) for t in tags], oriented=False))
+    return [b for b in faces if any(t not in inside for t in gmsh.model.getAdjacencies(dim - 1, b)[0])]
+
+
+def _sampling(picked, fine):
+    """Points along each picked curve (per side of a surface grid): about two per fine size over the picks' extent."""
+    boxes = [gmsh.model.getBoundingBox(d, t) for d, tags in picked.items() for t in tags]
+    lo = [min(b[i] for b in boxes) for i in range(3)]
+    hi = [max(b[i + 3] for b in boxes) for i in range(3)]
+    n = math.ceil(math.dist(lo, hi) / (fine / 2))
+    low, high = (10, 100) if picked.get(2) else (20, 500)
+    return min(max(n, low), high)
+
+
+def apply_refinements(items, body_tags, dim, same_body=(), copies_apart=False):
+    """items: one (refine entry, {entity dim: [final tags]}) per job["refine"] entry. Each adds a size that grows from
+    fine at its picks to coarse at fine_distance + growth, and stops there; limit_to keeps it inside those bodies.
+    same_body: collections of MAT_IDs that a whole-body pick treats as one body (the two sides of a sliding air), so
+    the surface between them is not a pick. copies_apart: the model is a free job of a symmetric Study, whose copies
+    are meshed apart (only the notes say so). Returns [(entry, its Distance field)], one per field made."""
+    joined = {m: list(group) for group in same_body for m in group}
+    fields = []
+    made = []
+    for entry, picked in items:
+        item = f"{entry.get('label', 'Refine Near')} {entry['name']}"  # a Skin Layer's entries say so
+        picked = {d: list(tags) for d, tags in picked.items()}
+        for body in dict.fromkeys(tuple(joined.get(m, [m])) for m in entry["whole"]):
+            tags = [t for m in body for t in body_tags.get(m, [])]
+            faces = real_boundary(dim, tags)
+            own = {abs(t) for _, t in gmsh.model.getBoundary([(dim, t) for t in tags], combined=False, oriented=False)}
+            if not faces and not own & set(picked.get(dim - 1, [])):  # its picked faces (a cell's toward the free side)
+                other = "free object; the copies are meshed apart" if copies_apart else "region"
+                _note(
+                    f"{item}: MAT_ID {'/'.join(map(str, body))} has no face shared with another {other}; it refines"
+                    " nothing there"
+                )
+            picked.setdefault(dim - 1, []).extend(faces)
+        picked = {d: list(dict.fromkeys(tags)) for d, tags in picked.items() if tags}
+        if not picked:
+            continue
+        limit = [t for m in entry["limit_to"] for t in body_tags.get(m, [])]
+        if entry["limit_to"] and not limit:
+            _note(f"{item}: its Limit to bodies are not in this mesh; it refines nothing")
+            continue
+        field = gmsh.model.mesh.field
+        dist = field.add("Distance")
+        for d, tags in picked.items():
+            field.setNumbers(dist, FIELD_LISTS[d], tags)
+        field.setNumber(dist, "Sampling", _sampling(picked, entry["fine"]))
+        f = field.add("Threshold")
+        field.setNumber(f, "InField", dist)
+        field.setNumber(f, "SizeMin", entry["fine"])
+        field.setNumber(f, "SizeMax", entry["coarse"])
+        field.setNumber(f, "DistMin", entry["fine_distance"])
+        field.setNumber(f, "DistMax", entry["fine_distance"] + entry["growth"])
+        field.setNumber(f, "StopAtDistMax", 1)  # beyond its reach it sizes nothing, else coarse would cap the model
+        if limit:
+            restrict = field.add("Restrict")
+            field.setNumber(restrict, "InField", f)
+            field.setNumbers(restrict, FIELD_LISTS[dim], limit)
+            # the faces by name as well: the free model drops its volumes before it meshes their surfaces. Not combined:
+            # a face between two limit bodies (or two pieces of one) is theirs too
+            whole = gmsh.model.getBoundary([(dim, t) for t in limit], combined=False, oriented=False)
+            edge = dict.fromkeys(abs(t) for _, t in whole)
+            field.setNumbers(restrict, FIELD_LISTS[dim - 1], list(edge))
+            field.setNumber(restrict, "IncludeBoundary", 1)  # their faces and curves too: they are meshed first
+            f = restrict
+        fields.append(f)
+        made.append((entry, dist))
+    if fields:
+        add_to_background(fields)
+    return made
+
+
+def skin_refinements(entries, sizes, faces=None):
+    """(Refine Near entry, picks) pairs for apply_refinements, one per Skin Layer entry (job["skin"]) and MAT_ID: the
+    size is depth / per_depth within min(1, layer) skin depths of the body's real surface and grows to the body's own
+    size (sizes: {mat_id: size}) at layer skin depths, inside the body only. faces: {(index of the skin entry, MAT_ID):
+    {dim: [final tags]}}, the body's faces toward the free side in a cell job (the entry's "faces"): its picks, so the
+    surface is the real one and those."""
+    out, keys = [], []
+    for k, e in enumerate(entries):
+        depth = e["depth"]
+        fine_distance = min(1, e["layer"]) * depth
+        for m in e["mat_ids"]:
+            keys.append((k, m))
+            out.append(
+                {
+                    "name": e["name"],
+                    "label": "Skin Layer",
+                    "skin": True,
+                    "files": [],
+                    "whole": [m],
+                    "fine": depth / e["per_depth"],
+                    "fine_distance": fine_distance,
+                    "coarse": sizes[m],
+                    "growth": e["layer"] * depth - fine_distance,
+                    "limit_to": [m],
+                }
+            )
+    picks = [(faces or {}).get(key, {}) for key in keys]
+    return [(e, {d: list(tags) for d, tags in p.items()}) for e, p in zip(out, picks)]
+
+
+def _smooth(curves, radius):
+    """True when the layer curves turn by at most 15 degrees where two of them meet (never where three do) and none
+    has a radius of curvature below radius: at a corner a gmsh BoundaryLayer fails ("Edge not recovered") or hangs.
+    This check is the only guard against the hang: the generate retry catches only the exception, and a hung gmsh is
+    stopped only by Cancel in the progress dialog."""
+    ends = []  # (where, unit tangent leading away from there along the curve) at both ends of every curve
+    for c in curves:
+        lo, hi = (b[0] for b in gmsh.model.getParametrizationBounds(1, c))
+        for u, sign in ((lo, 1), (hi, -1)):
+            d = gmsh.model.getDerivative(1, c, [u])
+            size = math.hypot(*d)
+            ends.append((gmsh.model.getValue(1, c, [u]), [sign * x / size for x in d]))
+        samples = [lo + (hi - lo) * k / 19 for k in range(20)]
+        if max(gmsh.model.getCurvature(1, c, samples)) * radius > 1 + 1e-9:
+            return False
+    tol = 1e-6 * max(1.0, *(abs(x) for where, _ in ends for x in where))
+    for where, _ in ends:
+        meeting = [a for w, a in ends if math.dist(w, where) < tol]
+        if len(meeting) > 2:
+            return False
+        if len(meeting) == 2:  # coming in along one, going on along the other: -away of one against away of the other
+            turn = -sum(a * b for a, b in zip(*meeting))
+            if turn < math.cos(math.radians(15)) - 1e-9:
+                return False
+    return True
+
+
+def apply_quad_layers(entries, body_tags, recombined=(), faces=None):
+    """2D: quad layers in the skins with "quads" (job["skin"] entries), after apply_refinements made their graded
+    fields: one BoundaryLayer field per smooth body, growing from its real surface into the body only. A body with a
+    sharp corner on that surface, or structured or recombined (recombined: those MAT_IDs), keeps the graded triangles.
+    One BoundaryLayer per MAT_ID, the first skin's in job order: two on the same curves leave the body's core unmeshed.
+    faces: the faces toward the free side that skin_refinements takes; their curves are part of the surface. Returns
+    the BoundaryLayer fields."""
+    field = gmsh.model.mesh.field
+    surfaces = [t for _, t in gmsh.model.getEntities(2)]
+    made = []
+    layered = {}  # {MAT_ID: the name of the skin that made its quad layers}
+    for k, e in enumerate(entries):
+        if not e["quads"]:
+            continue
+        depth, layer = e["depth"], e["layer"]
+        for m in e["mat_ids"]:
+            tags = body_tags.get(m, [])
+            free = (faces or {}).get((k, m), {}).get(1, [])
+            curves = list(dict.fromkeys(real_boundary(2, tags) + free))
+            if not curves:  # apply_refinements said so
+                continue
+            if m in layered:
+                _note(
+                    f"Skin Layer {e['name']}: MAT_ID {m} already has quad layers from Skin Layer {layered[m]};"
+                    " graded only"
+                )
+                continue
+            if m in recombined:
+                _note(f"Skin Layer {e['name']}: MAT_ID {m} is structured or recombined; no quad layers")
+                continue
+            if not _smooth(curves, layer * depth):
+                _note(
+                    f"Skin Layer {e['name']}: MAT_ID {m} has a sharp corner on its surface; graded triangles instead"
+                    " of quad layers"
+                )
+                continue
+            inside = set(tags)
+            others = [s for s in surfaces if s not in inside]
+            f = _field(
+                "BoundaryLayer",
+                CurvesList=curves,
+                ExcludedSurfacesList=others,
+                Size=depth / e["per_depth"],
+                Ratio=1.2,
+                Thickness=layer * depth,
+                Quads=1,
+            )
+            field.setAsBoundaryLayer(f)
+            made.append(f)
+            layered[m] = e["name"]
+    return made
+
+
+def graded_air(by_size, entries, body_tags, sizes, dim, same_body=()):
+    """Air Grading, before apply_size_fields. entries: job["air_grading"]. The caller leaves each graded air's own size
+    out of by_size (see graded_ids): apply_air_grading sizes the air, and a Mesh Size item on it stays. The air's inner
+    boundary, the (dim-1) entities it shares with bodies, goes into by_size at the air's size (sizes[mat_id]), so a
+    shared face stays at the smaller of the body's size and the air's, as without the grading. sizes: {mat_id: size} of
+    every body and air side. same_body: as in apply_refinements (the two sides of a sliding air).
+    Returns {entry name: (the air's tags, inner boundary, outer boundary: the air's other (dim-1) entities)}."""
+    joined = {m: list(group) for group in same_body for m in group}
+    graded = {}
+    for entry in entries:
+        tags = [t for m in entry["mat_ids"] for t in body_tags.get(m, [])]
+        mats = dict.fromkeys(j for m in entry["mat_ids"] for j in joined.get(m, [m]))
+        inner = real_boundary(dim, [t for m in mats for t in body_tags.get(m, [])])
+        whole = gmsh.model.getBoundary([(dim, t) for t in tags], combined=False, oriented=False)
+        shared = set(inner)
+        outer = [b for b in dict.fromkeys(abs(t) for _, t in whole) if b not in shared]
+        if inner:
+            size = min(float(sizes[m]) for m in entry["mat_ids"])
+            by_size.setdefault(size, {}).setdefault(dim - 1, []).extend(inner)
+        graded[entry["name"]] = (tags, inner, outer)
+    return graded
+
+
+def graded_ids(job):
+    """The MAT_IDs of the airs and free objects used as air that have an Air Grading: their own size does not go into
+    by_size."""
+    return {m for entry in job.get("air_grading", []) for m in entry["mat_ids"]}
+
+
+def _curves(dim, tags):
+    """The curves of (dim-1) entities tags: their curves in 3D, the tags themselves in 2D."""
+    if dim == 2:
+        return list(tags)
+    faces = [(2, f) for f in tags]
+    return list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary(faces, combined=False, oriented=False)))
+
+
+def _ends(curves):
+    """The end points of curves."""
+    lines = [(1, c) for c in curves]
+    return list(dict.fromkeys(abs(t) for _, t in gmsh.model.getBoundary(lines, combined=False, oriented=False)))
+
+
+def _start_size(point, air_size, sizes, dim):
+    """The smallest size of the bodies whose boundary holds point (found by their physical groups, the MAT_IDs), and
+    air_size. Needs the bodies' physical groups (both builds add them before sizing)."""
+    above = {point}
+    for d in range(dim):  # up to the dim-entities that hold the point
+        above = {u for t in above for u in gmsh.model.getAdjacencies(d, t)[0]}
+    mats = {m for t in above for m in gmsh.model.getPhysicalGroupsForEntity(dim, t)}
+    return min([air_size] + [float(sizes[m]) for m in mats if m in sizes])
+
+
+def _field(kind, **values):
+    """A new field of kind with values (a list goes in with setNumbers)."""
+    field = gmsh.model.mesh.field
+    f = field.add(kind)
+    for key, value in values.items():
+        if isinstance(value, list):
+            field.setNumbers(f, key, value)
+        else:
+            field.setNumber(f, key, value)
+    return f
+
+
+def apply_air_grading(entries, graded, sizes, dim, copies_apart=False):
+    """The Air Grading fields, after apply_refinements. graded: what graded_air returned; sizes: the map it took.
+    Per entry: the far size on the air and on its outer boundary; an Extend that grows from the inner boundary's sizes
+    to the far size over the growth distance, inside the air and on its outer boundary; and along the outer curves a
+    Threshold from each point where they meet the inner boundary (a curve is meshed before any mesh exists to extend
+    from). copies_apart: a free job of a symmetric Study, whose copies bound the air too: an air that touches no body
+    still gets its Extend, for meshgroups adds the copies' frozen lines to it. Returns [(entry, its Extend field)]."""
+    fields, made = [], []
+    for entry in entries:
+        tags, inner, outer = graded[entry["name"]]
+        if not tags:
+            continue
+        far, growth = float(entry["far"]), float(entry["growth"])
+        fields.append(_field("Constant", VIn=far, IncludeBoundary=0, **{FIELD_LISTS[dim]: tags}))
+        if outer:
+            fields.append(_field("Constant", VIn=far, IncludeBoundary=1, **{FIELD_LISTS[dim - 1]: outer}))
+        if not inner and not copies_apart:
+            _note(f"Air Grading {entry['name']}: the air touches no body; it is meshed at the far size")
+            continue
+        inner_curves = _curves(dim, inner)
+        lists = {FIELD_LISTS[dim - 1]: inner}
+        if dim == 3:  # surfaces are meshed before any surface mesh exists to extend from
+            lists["CurvesList"] = inner_curves
+        extend = _field("Extend", DistMax=growth, SizeMax=far, Power=1, **lists)
+        within = {FIELD_LISTS[dim]: tags, FIELD_LISTS[dim - 1]: outer}
+        fields.append(_field("Restrict", InField=extend, IncludeBoundary=1, **within))
+        made.append((entry, extend))
+        on_inner = set(inner_curves)
+        free = [c for c in _curves(dim, outer) if c not in on_inner]  # the outer curves off the inner boundary
+        meets = set(_ends(inner_curves))
+        air_size = min(float(sizes[m]) for m in entry["mat_ids"])
+        starts = {}  # start size -> the points where the free curves meet the inner boundary
+        for p in _ends(free):
+            if p in meets:
+                starts.setdefault(_start_size(p, air_size, sizes, dim), []).append(p)
+        for size, points in starts.items():
+            dist = _field("Distance", PointsList=points)
+            grow = _field(
+                "Threshold", InField=dist, SizeMin=size, SizeMax=far, DistMin=0, DistMax=growth, StopAtDistMax=1
+            )
+            fields.append(_field("Restrict", InField=grow, CurvesList=free))
+    if fields:
+        add_to_background(fields)
+    return made
+
+
 def claim_air(air_tags, owner):
     """The air's final top-dimension tags that no body owns, sorted. air_tags: all the air's final tags.
     owner: {final tag: body name}. A body wins where it overlaps the air."""
@@ -86,8 +392,15 @@ def orient_faces():
             gmsh.model.mesh.setReverse(2, tag)
 
 
+_noted = set()  # the notes printed for this job: a retry builds again, and one MAT_ID may have several solids
+
+
 def _note(text):
-    """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view."""
+    """Something the mesher fixed by itself; the runner shows stderr in FreeCAD's Report view. Each text once per job
+    (run, check and meshgroups's run and check clear _noted)."""
+    if text in _noted:
+        return
+    _noted.add(text)
     print(f"NOTE: {text}", file=sys.stderr)
 
 
@@ -343,8 +656,11 @@ def apply_recombine(job, body_tags, dim, tf, mapped):
 
 
 def _recombine_3d(job, body_tags, tf_curves):
-    """Quad faces on the boundary of the chosen bodies, except where Gmsh could not build the pyramids."""
-    chosen = set(job.get("recombine", []))
+    """Quad faces on the boundary of the chosen bodies, except where Gmsh could not build the pyramids. A swept body
+    (job["swept"]) is left out: its Recombine is for its section (meshsweep)."""
+    swept = {e["mat_id"] for e in job.get("swept", [])}
+    recombined = [m for m in job.get("recombine", []) if m not in swept]
+    chosen = set(recombined)
     structured = {b["mat_id"] for b in (job.get("transfinite") or {}).get("bodies", [])}
     names = {v["mat_id"]: v["name"] for v in job["volumes"] + air_items(job)}
     mat_of = {t: m for m, tags in body_tags.items() for t in tags}
@@ -354,7 +670,7 @@ def _recombine_3d(job, body_tags, tf_curves):
         return "hex" if m in chosen & structured else "stet" if m in structured else "tet"
 
     candidates = {}
-    for m in job.get("recombine", []):
+    for m in recombined:
         for v in body_tags[m]:
             candidates.update(dict.fromkeys(_boundary(3, v)))
     kept, pairs, tet_side, plain = [], set(), None, []  # plain: (body, face) of kept faces with no hex side
@@ -384,7 +700,7 @@ def _recombine_3d(job, body_tags, tf_curves):
             f"recombine: faces between {a} and {b} stay triangles (a quad face there would need pyramids on both sides)"
         )
     kept_set = set(kept)
-    for m in job.get("recombine", []):
+    for m in recombined:
         if not kept_set & {f for v in body_tags[m] for f in _boundary(3, v)}:
             _note(f"recombine: {names[m]} has no face that can be recombined; it stays all triangles")
     if tet_side and job.get("options", {}).get("Mesh.Algorithm3D", 1) != 1:
@@ -743,21 +1059,164 @@ def slide_report(job):
     return lines
 
 
+def mesh_with_fallback(dim):
+    """Mesh the current model to dimension dim. When gmsh cannot make apply_quad_layers' BoundaryLayer quads, mesh
+    again with graded triangles instead; a transfinite face or volume that would fall back to unstructured is an error
+    (gmsh only warns). Returns gmsh's log of the meshing."""
+    gmsh.logger.start()
+    try:
+        try:
+            gmsh.model.mesh.generate(dim)
+        except Exception:
+            field = gmsh.model.mesh.field
+            layers = [f for f in field.list() if field.getType(f) == "BoundaryLayer"]  # apply_quad_layers'
+            if not layers:
+                raise
+            for f in layers:
+                field.remove(f)
+            gmsh.model.mesh.clear()
+            _note("Skin Layer: gmsh could not make the quad layers; graded triangles instead")
+            gmsh.model.mesh.generate(dim)
+        log = gmsh.logger.get()
+    finally:
+        gmsh.logger.stop()
+    failed = [m for m in log if "cannot be meshed using the transfinite" in m]
+    if failed:
+        raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
+    return log
+
+
 def generate(job, dim):
-    """Apply the user's mesh settings and mesh the current model to dimension dim; a transfinite face or volume
-    that would fall back to unstructured is an error."""
+    """Apply the user's mesh settings and mesh the current model to dimension dim (mesh_with_fallback). With swept
+    bodies (job["swept_tags"], meshsweep.apply_swept) or prism layers (job["layer_tags"], meshlayers.apply_layers)
+    their hand-made mesh goes in first, see _mesh_swept."""
     for name, value in job.get("options", {}).items():  # the user's mesh settings
         gmsh.option.setNumber(name, value)
     gmsh.option.setNumber("Mesh.ElementOrder", 1)  # set last: the settings may not change it
     gmsh.option.setNumber("Mesh.Optimize", 1)
-    gmsh.logger.start()  # Gmsh only warns when a transfinite face or volume falls back to unstructured
+    if job.get("swept_tags") or job.get("layer_tags"):
+        _mesh_swept(job, dim)
+    else:
+        mesh_with_fallback(dim)
+
+
+def _mesh_swept(job, dim):
+    """Mesh around the swept bodies (spike 7.1): gmsh meshes only the empty, visible entities, so the swept volumes
+    and their faces, curves and points are hidden and get their mesh one dimension at a time (generate(n) meshes the
+    lower dimensions again, wiping what was added there). Each swept volume is marked transfinite, which makes
+    Delaunay leave it empty; Delaunay (Algorithm3D 1) is the algorithm that puts pyramids on the quad faces. A layered
+    volume (job["layer_hidden"]: it and its cut faces) is hidden without its curves and real faces, which gmsh meshes;
+    its add(3) fills it, or shows it again for gmsh to mesh."""
+    if job.get("options", {}).get("Mesh.Algorithm3D", 1) != 1:
+        if job.get("swept_tags"):
+            _note("Swept Body: the 3D algorithm is set to Delaunay so the air can meet the swept bodies' quad faces")
+        else:
+            _note("Skin Layer: the 3D algorithm is set to Delaunay so the mesh can meet the prism layers")
+    for name, value in (
+        ("Mesh.Algorithm3D", 1),
+        # the apex pushed out: the best transition quality in the spike; 0 when run meshes again (PyramidsFailed)
+        ("Mesh.OptimizePyramids", job.get("optimize_pyramids", -0.6)),
+        ("Mesh.MeshOnlyEmpty", 1),
+        ("Mesh.MeshOnlyVisible", 1),
+        ("Mesh.Renumber", 0),  # the added nodes keep their tags; renumbered at the end
+    ):
+        gmsh.option.setNumber(name, value)
+    swept = [(3, t) for t in job.get("swept_tags", [])]
+    hidden = job.get("layer_hidden", [])
+    for _, t in swept:
+        gmsh.model.mesh.setTransfiniteVolume(t)
+    gmsh.model.setVisibility(swept, 0, recursive=True)
+    gmsh.model.setVisibility(hidden, 0)
     try:
-        gmsh.model.mesh.generate(dim)
-        failed = [m for m in gmsh.logger.get() if "cannot be meshed using the transfinite" in m]
+        log = _swept_stages(job, dim)
+        if dim == 3:
+            _check_filled(swept, log, job.get("swept_group"), layers_only(job))
     finally:
-        gmsh.logger.stop()
-    if failed:
-        raise JobError(failed[0].split(":", 1)[-1].strip() + "; it would not be structured")
+        gmsh.model.setVisibility(swept, 1, recursive=True)
+        gmsh.model.setVisibility(hidden, 1)
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
+        gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 0)
+    gmsh.model.mesh.renumberNodes()
+    gmsh.model.mesh.renumberElements()
+
+
+class AirFailed(JobError):
+    """gmsh failed to mesh the air around the swept bodies. Its result differs from run to run, so run meshes the job
+    once more from the start before it gives up."""
+
+
+class PyramidsFailed(Exception):
+    """gmsh failed to make the 3D mesh around the swept bodies with the pyramids' apex pushed out: run meshes the job
+    again from the start without that (meshing again in the same model leaves the volumes empty)."""
+
+
+def layers_only(job):
+    """True for a built job whose hand-made mesh is prism layers alone, no swept body: its texts say so."""
+    return bool(job.get("layer_tags")) and not job.get("swept_tags")
+
+
+def _swept_stages(job, dim):
+    """Add the swept mesh one dimension at a time and mesh the rest after each. Returns gmsh's log of the 3D mesh.
+    job["swept_periodic"], when given, is called once the swept points and curves are in, before gmsh meshes the
+    curves: gmsh finds no periodic counterpart for nodes added after a setPeriodic (meshgroups.mesh_cell).
+    job["swept_group"]: the group whose cell model this is (no air in it, so the advice is the sizes)."""
+    log = []
+    group = job.get("swept_group")
+    for d in range(dim + 1):
+        for add in job["swept_add"]:
+            add(d)
+        if d == 1 and job.get("swept_periodic"):
+            job["swept_periodic"]()
+        if d == 3:
+            try:
+                log = mesh_with_fallback(3)
+            except JobError:
+                raise
+            except Exception as exc:
+                if gmsh.option.getNumber("Mesh.OptimizePyramids"):
+                    raise PyramidsFailed(str(exc)) from exc
+                cell, around, advice = _around(layers_only(job))
+                if group is not None:
+                    raise AirFailed(f"group {group}: gmsh could not mesh around the {cell} ({exc}); {advice}")
+                raise AirFailed(
+                    f"gmsh could not mesh around the {around} ({exc}); give the air more room or use a finer size there"
+                ) from exc
+        elif d:  # points and curves go in together
+            mesh_with_fallback(d)
+    return log
+
+
+CELL_ADVICE = "make the cell objects' Mesh Size or the Swept Body's Path Size and Section Size smaller"
+
+
+def _around(layers):
+    """(the cell, the bodies, the advice in a cell model) of a failure around the hand-made mesh: in the prism layers'
+    words when layers (layers_only), else the swept bodies'."""
+    if layers:
+        return "layered cell", "prism layers", "make the cell objects' Mesh Size smaller"
+    return "swept cell", "swept bodies", CELL_ADVICE
+
+
+def _check_filled(swept, log, cell_group=None, layers=False):
+    """gmsh may log an error and leave a volume empty without raising (too little room beside a swept body): a volume
+    of a 3D physical group without elements is an error. cell_group: the group whose cell model this is, or None;
+    layers: the hand-made mesh is prism layers alone (layers_only)."""
+    for _, group in gmsh.model.getPhysicalGroups(3):
+        for t in gmsh.model.getEntitiesForPhysicalGroup(3, group):
+            if (3, t) not in swept and not sum(len(e) for e in gmsh.model.mesh.getElements(3, t)[1]):
+                errors = [m.split(":", 1)[-1].strip() for m in log if m.startswith("Error")]
+                why = f" ({errors[-1]})" if errors else ""
+                name = gmsh.model.getPhysicalName(3, group)
+                cell, around, advice = _around(layers)
+                if cell_group is not None:
+                    raise AirFailed(
+                        f"group {cell_group}: gmsh could not mesh {name} (MAT_ID {group}) around the {cell}{why};"
+                        f" {advice}"
+                    )
+                raise AirFailed(
+                    f"gmsh could not mesh {name} (MAT_ID {group}) around the {around}{why}; give the air more room"
+                    " or use a finer size there"
+                )
 
 
 def publish(outputs):
@@ -767,6 +1226,15 @@ def publish(outputs):
             os.replace(path, target)
         except PermissionError:
             raise JobError(f"Could not replace {target}: it is read-only or open in another program.") from None
+
+
+def retry_note(kind, layers):
+    """The note of a retry after PyramidsFailed (kind "pyramids") or AirFailed ("air"): in the prism layers' words when
+    layers (the hand-made mesh is prism layers alone), else the swept bodies'."""
+    who, what = ("Skin Layer", "prism layers") if layers else ("Swept Body", "swept bodies")
+    if kind == "pyramids":
+        return f"{who}: gmsh could not optimise the pyramids on the {what}' quad faces; meshed without"
+    return f"{who}: gmsh could not mesh the air around the {what}; meshing once more from the start"
 
 
 def run(job_path, build, dim):
@@ -780,12 +1248,33 @@ def run(job_path, build, dim):
         job = json.load(fh)
     msh = os.path.join(folder, "mesh.msh")
     outputs = [(msh, job["mesh_file"])]
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.model.add(job["model_name"])
         split = build(job, folder)
-        generate(job, dim)
+        retried = False
+        while True:  # at most once more without the pyramids pushed out and once more after a failed air mesh
+            try:
+                generate(job, dim)
+                break
+            except PyramidsFailed:  # it fails the same way around gmsh's own Transfinite Body, depending on OCC's faces
+                _note(retry_note("pyramids", layers_only(job)))
+                extra = {"optimize_pyramids": 0}
+            except AirFailed:  # only around swept bodies; its advice is for the final failure
+                if retried:
+                    raise
+                retried = True
+                _note(retry_note("air", layers_only(job)))
+                extra = {k: job[k] for k in ("optimize_pyramids",) if k in job}
+            gmsh.finalize()  # a fresh gmsh: meshing again after the failure leaves the volumes empty
+            gmsh.initialize()
+            gmsh.option.setNumber("General.Terminal", 1)
+            with open(job_path, encoding="utf-8") as fh:
+                job = json.load(fh) | extra
+            gmsh.model.add(job["model_name"])
+            split = build(job, folder)
         gmsh.option.setNumber("Mesh.MshFileVersion", MSH_VERSION)
         gmsh.option.setNumber("Mesh.Binary", 0)
         if split:
@@ -806,6 +1295,7 @@ def check(job_path, build):
     folder = os.path.dirname(os.path.abspath(job_path))
     with open(job_path, encoding="utf-8") as fh:
         job = json.load(fh)
+    _noted.clear()
     gmsh.initialize()
     try:
         gmsh.option.setNumber("General.Terminal", 0)

@@ -118,7 +118,10 @@ def main():
     bars = {b.objectName(): b for b in mw.findChildren(QtWidgets.QToolBar)}
     for title, names in commands.TOOLBARS:
         assert title in bars and bars[title].isVisible(), (title, sorted(bars))
-    assert set(commands.MENU) - {"Separator"} == set(commands.NAMES) - {"EMS_StructuredMesh"}, commands.MENU
+    assert set(commands.MENU) - {"Separator"} == set(commands.NAMES) - {
+        "EMS_StructuredMesh",
+        "EMS_Refinement",
+    }, commands.MENU
     assert Gui.Command.get("EMS_StructuredMesh") is not None and commands.COMMANDS["EMS_StructuredMesh"].IsActive()
     menus = []
     for sub in ("", "Face1", "Edge1"):
@@ -128,9 +131,12 @@ def main():
     Gui.Selection.clearSelection()
     menus.append(commands.context_menu())
     assert menus == [
-        ["EMS_Material", "Separator", "EMS_MeshSize", "EMS_TransfiniteBody", "EMS_Recombine", "EMS_SymmetricGroup"],
-        ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize"],
-        ["EMS_MeshSize", "EMS_TransfiniteEdges"],
+        [
+            *["EMS_Material", "Separator", "EMS_MeshSize", "EMS_RefineNear", "EMS_SkinLayer"],
+            *["EMS_TransfiniteBody", "EMS_SweptBody", "EMS_Recombine", "EMS_SymmetricGroup"],
+        ],
+        ["EMS_Material", "EMS_Excitation", "Separator", "EMS_MeshSize", "EMS_RefineNear"],
+        ["EMS_MeshSize", "EMS_RefineNear", "EMS_TransfiniteEdges"],
         [],
     ], menus
     log.append("toolbars and context menu ok")
@@ -210,6 +216,90 @@ def main():
     fine.References = [(doc.A, "Edge1"), (doc.B, "Vertex8"), (doc.B, "Face2")]
     log.append("mesh size panel ok")
 
+    from emsolution import validation, labels
+
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "A", "Edge1")
+    opened.clear()  # the Mesh Size panel above was opened by hand
+    Gui.runCommand("EMS_RefineNear")
+    assert len(opened) == 1, (
+        warned[-1:],
+        commands.COMMANDS["EMS_RefineNear"].IsActive(),
+        Gui.Control.activeDialog(),
+        commands.active_study(),
+    )
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog(), (panel.new, Gui.Control.activeDialog(), warned[-1:])
+    panel.fine.setValue(0.5)
+    overlay = next(iter(labels._overlays.values()))
+    overlay.tick()
+    assert overlay.tags[0]["text"] == "0.5 → 5 mm", overlay.tags  # the panel's unsaved fine size, first: in focus
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "B")
+    panel.add_limit()
+    assert panel.limit.count() == 1, panel.limit.count()
+    assert panel.accept()
+    (near,) = objects.refine_items(study)
+    assert near.FineSize.Value == 0.5 and near.LimitTo == [doc.B], (near.FineSize.Value, near.LimitTo)
+    assert near.References == [(doc.A, ("Edge1",))], near.References
+    refine_errors = [p.text for p in validation.errors(validation.validate(study)) if "Refine" in p.text]
+    assert not refine_errors, refine_errors
+    Gui.Selection.clearSelection()
+    log.append("refine near ok")
+
+    # Skin Layer: a whole body (a 3D-view click on a face picks it), its depth from the calculator (aluminium at 1 kHz).
+    Gui.Selection.addSelection(doc.Name, "B", "Face1")
+    Gui.runCommand("EMS_SkinLayer")
+    assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_SkinLayer"].IsActive())
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog() and panel.current == [(doc.B, "")], panel.current
+    assert panel.quads is not None and panel.quads.text() == "Prism layers", "no prism layers in a 3D Study"
+    panel.mu_r.setText("0")
+    panel.calculate.click()
+    assert panel.depth_result.text() == "Frequency, conductivity and permeability must be greater than 0."
+    assert panel.depth.value() == 1.0, panel.depth.value()
+    panel.frequency.setText("1000")
+    panel.conductivity.setText("3.5e7")
+    panel.mu_r.setText("1")
+    panel.calculate.click()
+    assert panel.depth_result.text() == "δ = 2.69 mm", panel.depth_result.text()
+    skin_tag = labels.tag_text(panel.obj, panel.unsaved())
+    assert skin_tag == "δ 2.69 mm, 2/δ, 3δ", skin_tag
+    assert panel.accept()
+    (skin,) = objects.skin_layers(study)
+    assert abs(skin.SkinDepth.Value - 2.69) < 0.01, skin.SkinDepth.Value
+    assert skin.Frequency == 1000 and skin.Conductivity == 3.5e7 and skin.References == [(doc.B, ("",))]
+    skin_errors = [p.text for p in validation.errors(validation.validate(study)) if "Skin Layer" in p.text]
+    assert not skin_errors, skin_errors
+    doc.removeObject(skin.Name)
+    Gui.Selection.clearSelection()
+    log.append("skin layer ok")
+
+    # Swept Body: a whole box body, its length along the path from the panel; a start face is a face pick.
+    Gui.Selection.addSelection(doc.Name, "B")
+    Gui.runCommand("EMS_SweptBody")
+    assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_SweptBody"].IsActive())
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog() and panel.current == [(doc.B, "")], panel.current
+    assert panel.path_size.value() == 0 and panel.section_size.value() == 0
+    panel.path_size.setValue(4)
+    sweep_tag = labels.tag_text(panel.obj, panel.unsaved())
+    assert sweep_tag == "along 4 mm", sweep_tag
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, "B", "Face1")
+    panel.add_start()
+    assert panel.start == [(doc.B, "Face1")], panel.start
+    panel.remove_start()  # nothing selected in the list: kept
+    assert panel.accept()
+    (swept,) = objects.swept_bodies(study)
+    assert swept.PathSize.Value == 4 and swept.SectionSize.Value == 0, swept.PathSize.Value
+    assert swept.References == [(doc.B, ("",))] and swept.StartFace == [(doc.B, ("Face1",))], swept.StartFace
+    swept_errors = [p.text for p in validation.errors(validation.validate(study)) if "Swept Body" in p.text]
+    assert not swept_errors, swept_errors
+    doc.removeObject(swept.Name)
+    Gui.Selection.clearSelection()
+    log.append("swept body ok")
+
     def task_buttons():
         boxes = Gui.getMainWindow().findChildren(QtWidgets.QDialogButtonBox)
         return sorted(b.text().replace("&", "") for box in boxes if box.isVisible() for b in box.buttons())
@@ -238,7 +328,7 @@ def main():
             if t.isVisible() and t.horizontalHeaderItem(0).text() in first_column
         }
 
-    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 2, "Air Regions": 0}
+    rows = {"Material Library": 0, "Materials": 2, "Excitations": 1, "Mesh Sizes": 3, "Air Regions": 0}
     for folder in (
         study.MaterialLibraryGroup,
         study.MaterialsGroup,
@@ -860,6 +950,32 @@ def main():
     assert Gui.Selection.getSelection() == [air], "the Mesh Size gate refused the Air Region"
     ok(size=4.0)
     air_size = objects.mesh_sizes(study)[-1]
+    # Air Grading: the right click of the Air Region offers it; with nothing selected the command takes the Air Region.
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(doc.Name, air.Name)
+    assert commands.context_menu() == ["EMS_Material", "EMS_MeshSize", "EMS_RefineNear", "EMS_AirGrading"], (
+        commands.context_menu()
+    )
+    Gui.Selection.clearSelection()
+    opened.clear()
+    Gui.runCommand("EMS_AirGrading")
+    assert len(opened) == 1, (warned[-1:], commands.COMMANDS["EMS_AirGrading"].IsActive())
+    panel = opened.pop()
+    assert panel.new and Gui.Control.activeDialog() and panel.current == [(air, "")], panel.current
+    assert any("the air's size (4 mm)" in w.text() for w in panel.form.findChildren(QtWidgets.QLabel)), "no far hint"
+    panel.growth.setValue(30)
+    panel.far.setValue(0)
+    assert panel.accept()
+    (grading,) = objects.air_gradings(study)
+    assert grading.GrowthDistance.Value == 30 and grading.FarSize.Value == 0, grading.GrowthDistance.Value
+    assert grading.References == [(air, ("",))], grading.References
+    from emsolution import labels as label_text
+
+    assert label_text.tag_text(grading, {}) == "→ 4 mm over 30", label_text.tag_text(grading, {})
+    grading_errors = [p.text for p in validation.errors(validation.validate(study)) if "Air Grading" in p.text]
+    assert not grading_errors, grading_errors
+    doc.removeObject(grading.Name)
+    log.append("air grading ok")
     # The air is not recombined or structured: the commands and an open Recombine panel refuse it.
     for command, sub in (("EMS_Recombine", ""), ("EMS_TransfiniteBody", ""), ("EMS_TransfiniteEdges", "Edge1")):
         Gui.Selection.clearSelection()
@@ -1148,6 +1264,12 @@ def main():
     assert os.path.basename(run2d.mesh_file) == "pre_geom2D.msh" and os.path.isfile(run2d.mesh_file)
     assert second.MeshResult.FemMesh.NodeCount > 0
     log.append("2D mesh ok")
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(sec.Name, section.Name, "Face1")  # a click on a 2D body: the Skin Layer is offered
+    menu2d = commands.context_menu()
+    assert "EMS_SkinLayer" in menu2d, menu2d
+    Gui.Selection.addSelection(sec.Name, section.Name, "Edge1")
+    assert "EMS_SkinLayer" not in commands.context_menu()
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sec.Name, section.Name)
     Gui.runCommand("EMS_TransfiniteBody")

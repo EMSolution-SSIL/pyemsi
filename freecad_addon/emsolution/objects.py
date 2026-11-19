@@ -1,6 +1,7 @@
 """Study tree objects and the ID table. No GUI code here, apart from attaching view providers."""
 
 import json
+import math
 import re
 
 from . import symmetry
@@ -326,6 +327,94 @@ class MeshSize(_Proxy):
             "References",
             "EMSolution",
             "Bodies (empty sub-element), faces, edges and vertices meshed with this size",
+        )
+
+
+class RefineNear(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "Faces, edges and vertices to refine around"
+        )
+        obj.addProperty("App::PropertyLength", "FineSize", "EMSolution", "Element size next to the references")
+        obj.addProperty("App::PropertyLength", "FineDistance", "EMSolution", "Distance over which the fine size holds")
+        obj.addProperty("App::PropertyLength", "CoarseSize", "EMSolution", "Element size far from the references")
+        obj.addProperty("App::PropertyLength", "GrowthDistance", "EMSolution", "Distance over which the size grows")
+        obj.addProperty("App::PropertyLinkListGlobal", "LimitTo", "EMSolution", "Bodies the refinement is limited to")
+
+
+class AirGrading(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "The air whose element size grows"
+        )
+        obj.addProperty(
+            "App::PropertyLength",
+            "GrowthDistance",
+            "EMSolution",
+            "Distance over which the air's size grows to the far size",
+        )
+        obj.addProperty(
+            "App::PropertyLength", "FarSize", "EMSolution", "Element size far from the bodies; 0 = the air's own size"
+        )
+
+
+class SkinLayer(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal", "References", "EMSolution", "Conductors with a skin layer (whole bodies)"
+        )
+        obj.addProperty("App::PropertyLength", "SkinDepth", "EMSolution", "Skin depth δ")
+        obj.addProperty(
+            "App::PropertyFloatConstraint",
+            "ElementsPerDepth",
+            "EMSolution",
+            "Elements per skin depth; fine size = δ / this",
+        )
+        obj.ElementsPerDepth = (2.0, 0.01, 1000.0, 0.5)
+        obj.addProperty(
+            "App::PropertyFloatConstraint", "LayerDepth", "EMSolution", "How deep the layer reaches, in skin depths"
+        )
+        obj.LayerDepth = (3.0, 0.01, 1000.0, 0.5)
+        obj.addProperty(
+            "App::PropertyBool",
+            "QuadLayers",
+            "EMSolution",
+            "Quad layers (2D) or prism layers (3D) along smooth surfaces",
+        )
+        obj.addProperty("App::PropertyFloat", "Frequency", "EMSolution", "Calculator: frequency in Hz")
+        obj.Frequency = 50.0
+        obj.addProperty("App::PropertyFloat", "Conductivity", "EMSolution", "Calculator: conductivity in S/m")
+        obj.Conductivity = 5.8e7
+        obj.addProperty("App::PropertyFloat", "RelativePermeability", "EMSolution", "Calculator: relative permeability")
+        obj.RelativePermeability = 1.0
+
+
+class SweptBody(_Proxy):
+    def __init__(self, obj):
+        obj.Proxy = self
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "References",
+            "EMSolution",
+            "Bodies meshed by sweeping their cross-section",
+        )
+        obj.addProperty(
+            "App::PropertyLinkSubListGlobal",
+            "StartFace",
+            "EMSolution",
+            "Optional: the flat end face to start from, one per solid",
+        )
+        obj.addProperty(
+            "App::PropertyLength", "PathSize", "EMSolution", "Element length along the path; 0 = the body's size"
+        )
+        obj.addProperty(
+            "App::PropertyLength",
+            "SectionSize",
+            "EMSolution",
+            "Element size in the cross-section away from the skin; 0 = the body's size",
         )
 
 
@@ -917,6 +1006,53 @@ def make_mesh_size(study, size, refs):
     return obj
 
 
+def make_refine_near(study, refs, fine=None, coarse=None, growth=None, fine_distance=0.0, limit_to=()):
+    """refs: list of (body, sub), sub = "FaceN", "EdgeN" or "VertexN". None takes the default: half and the whole of the
+    Study's DefaultMeshSize for the fine and coarse sizes, five fine sizes for the growth distance; 0.0 is a value."""
+    default = study.MeshSizesGroup.DefaultMeshSize.Value
+    fine = default / 2 if fine is None else fine
+    obj = _add(study, "MeshSizesGroup", RefineNear, "RefineNear")
+    obj.FineSize = fine
+    obj.CoarseSize = default if coarse is None else coarse
+    obj.GrowthDistance = 5 * fine if growth is None else growth
+    obj.FineDistance = fine_distance
+    obj.References = refs
+    obj.LimitTo = list(limit_to)
+    return obj
+
+
+def make_air_grading(study, refs=None, growth=None, far=0.0):
+    """refs: list of (air, ""); None takes the Study's Air Region. None growth takes ten default sizes; far 0 = the
+    air's own size."""
+    if refs is None:
+        refs = [(a, "") for a in air_regions(study)[:1]]
+    obj = _add(study, "MeshSizesGroup", AirGrading, "AirGrading")
+    obj.GrowthDistance = 10 * study.MeshSizesGroup.DefaultMeshSize.Value if growth is None else growth
+    obj.FarSize = far
+    obj.References = refs
+    return obj
+
+
+def make_skin_layer(study, refs, depth=1.0):
+    """refs: list of (body, ""), the conductors; depth: the skin depth in mm. The calculator's permeability starts at
+    the first body's material."""
+    obj = _add(study, "MeshSizesGroup", SkinLayer, "SkinLayer")
+    obj.SkinDepth = depth
+    obj.References = refs
+    mu_r = body_mu_r(study, refs[0][0]) if refs else None
+    obj.RelativePermeability = 1.0 if mu_r is None else mu_r
+    return obj
+
+
+def make_swept_body(study, refs, path_size=0.0):
+    """refs: list of (body, ""), the bodies meshed by sweeping; path_size: the element length along the path in mm,
+    0 = the body's size."""
+    obj = _add(study, "MeshSizesGroup", SweptBody, "SweptBody")
+    obj.PathSize = path_size
+    obj.References = refs
+    return obj
+
+
 def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
     """Adds a Symmetric Group of the cell objects, copied by rules (see symmetry.transforms), with a row for each cell
     object, all its solids (faces in 2D); split_row splits a row into blocks."""
@@ -933,6 +1069,57 @@ def make_symmetric_group(study, cells, rules=(), name="Symmetric Group"):
 
         taskpanels.attach_view_provider(obj)
     return obj
+
+
+def refine_items(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), RefineNear)]
+
+
+def air_gradings(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), AirGrading)]
+
+
+def skin_layers(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SkinLayer)]
+
+
+def swept_bodies(study):
+    return [o for o in study.MeshSizesGroup.Group if isinstance(getattr(o, "Proxy", None), SweptBody)]
+
+
+def skin_depth(frequency, conductivity, mu_r):
+    """The skin depth in mm of a conductor: 1000 * sqrt(2 / (2 pi f mu0 mu_r sigma))."""
+    return 1000 * math.sqrt(2 / (2 * math.pi * frequency * 4e-7 * math.pi * mu_r * conductivity))
+
+
+def body_mu_r(study, body):
+    """The scalar relative permeability in the library material of body's Material, else None."""
+    m = assignment_of(study).get(body.Name)
+    if m is None or m.LibraryMaterial is None:
+        return None
+    mu = json.loads(m.LibraryMaterial.Record)["properties"].get("electromagnetic", {}).get("relative_permeability", {})
+    return mu["value"] if mu.get("type") == "scalar" and isinstance(mu.get("value"), (int, float)) else None
+
+
+def whole_body_size(study, body):
+    """The smallest whole-body Mesh Size on body, else the Study's DefaultMeshSize."""
+    sizes = [
+        s.Size.Value for s in mesh_sizes(study) for b, subs in subs_by_body(s) if b.Name == body.Name and "" in subs
+    ]
+    return min(sizes, default=study.MeshSizesGroup.DefaultMeshSize.Value)
+
+
+def far_size(item, far=None, refs=None):
+    """An Air Grading's far size: its FarSize, or 0 = the size of its first referenced body (the air's own size), else
+    of the Study's Air Region, else the default size. far, refs: a panel's unsaved FarSize and picks, else the
+    item's."""
+    far = item.FarSize.Value if far is None else far
+    if far > 0:
+        return far
+    study = owner_study(item)
+    refs = item_refs(item) if refs is None else refs
+    air = refs[0][0] if refs else next(iter(air_regions(study)), None)
+    return whole_body_size(study, air) if air else study.MeshSizesGroup.DefaultMeshSize.Value
 
 
 def symmetric_groups(study):
@@ -1526,10 +1713,15 @@ def is_air(obj):
 
 def air_refusal(item_cls, bodies):
     """Why an item of class item_cls cannot take bodies, because some are Air Regions; "" when it can. The air
-    takes Materials and Mesh Sizes: it is not recombined or structured, and an excitation goes on a body."""
+    takes Materials, Mesh Sizes and Refine Nears: it is not recombined or structured, and an excitation goes on a
+    body."""
     airs = list(dict.fromkeys(display_name(b) for b in bodies if is_air(b)))
-    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine):
+    if not airs or item_cls not in (Excitation, TransfiniteBody, TransfiniteEdges, Recombine, SkinLayer, SweptBody):
         return ""
+    if item_cls is SkinLayer:
+        return f"Air Region {', '.join(airs)} cannot have a Skin Layer."
+    if item_cls is SweptBody:
+        return f"Air Region {', '.join(airs)} cannot be a Swept Body."
     what = "an Excitation" if item_cls is Excitation else "recombined or structured"
     return f"Air Region {', '.join(airs)} cannot be {what}."
 
@@ -1604,6 +1796,10 @@ def is_item(obj):
         Material,
         Excitation,
         MeshSize,
+        RefineNear,
+        AirGrading,
+        SkinLayer,
+        SweptBody,
         TransfiniteBody,
         TransfiniteEdges,
         Recombine,
@@ -1613,7 +1809,8 @@ def is_item(obj):
 
 
 def item_refs(item):
-    """[(body, sub)] of a Material, Excitation, Mesh Size, Recombine or transfinite item; sub "" = the whole body."""
+    """[(body, sub)] of a Material, Excitation, Mesh Size, Refine Near, Recombine or transfinite item; sub "" = the
+    whole body. A Refine Near's Limit to is not among them."""
     if isinstance(item.Proxy, Material):
         if getattr(item, "PartKey", ""):
             return part_refs(item)
@@ -1686,9 +1883,32 @@ def air_region_rows(study):
     return [(a, [(a, "")], [display_name(a), a.AirShape, _id_text(study, a)]) for a in air_regions(study)]
 
 
-def _size_text(item):
+def _size_text(item, values=None):
+    """The text of an item's sizes; values: what a panel has typed in but not saved ({property: value}), for a Swept
+    Body."""
     if isinstance(item.Proxy, MeshSize):
         return f"{item.Size.Value:g} mm"
+    if isinstance(item.Proxy, RefineNear):
+        text = f"{item.FineSize.Value:g} → {item.CoarseSize.Value:g} mm over {item.GrowthDistance.Value:g} mm"
+        if item.LimitTo:
+            text += f" in {', '.join(display_name(b) for b in item.LimitTo)}"
+        return text
+    if isinstance(item.Proxy, AirGrading):
+        return f"grows over {item.GrowthDistance.Value:g} mm to {far_size(item):g} mm"
+    if isinstance(item.Proxy, SkinLayer):
+        text = f"δ {item.SkinDepth.Value:g} mm, {item.ElementsPerDepth:g}/δ, {item.LayerDepth:g}δ"
+        return text + ", quads" if item.QuadLayers else text
+    if isinstance(item.Proxy, SweptBody):
+        values = values or {}
+        p, s = values.get("PathSize", item.PathSize.Value), values.get("SectionSize", item.SectionSize.Value)
+        text = f"along {p:g} mm" if p else "along body size"
+        if s > 0:
+            text += f", section {s:g} mm"
+        study = owner_study(item)
+        skinned = {b.Name for sk in skin_layers(study) for b, _ in sk.References} if study else set()
+        if any(b.Name in skinned for b, _ in item.References):
+            text += ", skin"
+        return text
     if isinstance(item.Proxy, TransfiniteBody):
         return "structured"
     if isinstance(item.Proxy, Recombine):

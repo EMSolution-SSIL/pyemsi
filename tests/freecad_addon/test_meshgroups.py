@@ -13,14 +13,15 @@ import gmsh
 import numpy as np
 
 from emsolution import meshfrozen
-from .test_mesher import MESHER, write_line
-from .test_mesher2d import MESHER2D, clockwise, turn_over, write_arc, write_sectors
+from .test_mesher import MESHER, write_line, write_point
+from .test_mesher2d import MESHER2D, clockwise, turn_over, write_arc, write_sectors, add_sector
 from .test_mesher2d import write_rects as write_plane_rects
 from .test_meshsym import chain, compose, mesh_check, mirror_line, rotation
 from .test_meshsym3d import mesh_check_3d, slide_nodes, surface_group, write_face, write_sector_solids
 from .meshreport import groups
 
 sys.path.insert(0, os.path.dirname(MESHER))  # meshgroups imports its neighbours by bare name, as in the mesher process
+import meshcommon  # noqa: E402 - needs the path above
 import meshgroups  # noqa: E402 - needs the path above
 
 ID = rotation(0)
@@ -1030,11 +1031,80 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(faces_in_three(mesh), 0)
         self.assertAlmostEqual(free_area(mesh), 2 * 10 - 2 * 1.5, delta=1e-6)
 
+    def test_swept_cell_touched_in_part_by_a_copy_is_refused(self):  # validation leaves its own copies to the mesher
+        write_boxes(self.geo("a.brep"), (0, 0, 0, 1, 1, 1))
+        write_boxes(self.geo("b.brep"), (1, 0, 0, 1, 1, 1))
+        up = [1, 0, 0, 0.5, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1]  # A's copy on half of A's top and half of B's
+        group = self.two_cells("Steps", "volumes", "geometry/a.brep", "geometry/b.brep", [ID, up], (0.3, 0.4))
+        group["job"]["swept"] = [{"name": "Iron", "mat_id": 1}]  # prepare_images reads only its MAT_ID
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            contacts = meshgroups.contact_table(group, group["job"], self.dir, 3)
+            with self.assertRaises(meshcommon.JobError) as err:
+                meshgroups.prepare_images(group, contacts, self.dir, 3)
+        finally:
+            gmsh.finalize()
+        self.assertEqual(
+            str(err.exception),
+            "group Steps: the swept cell Iron would have to be split where a copy touches part of its face; meshing"
+            " that is not handled yet, a limit of the tool, not of the drawing",
+        )
+        self.assertEqual([n for n in os.listdir(self.dir) if n.startswith("images_")], [])
+
     def test_curved_seam_is_not_refused(self):  # the mesh's chords are shorter than the arc they follow
         group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
         write_sector_curved_seams(os.path.join(self.dir, group["job"]["bodies"][0]["file"]), 10, 20, 30)
         mesh = self.meshed([group])
         self.assertEqual(mesh_check(mesh, ())[1], 0)
+
+    def refine_line(self, name, p, q, fine_distance=0.5):
+        """A cell job "refine" entry picking the line p..q (written as geometry/<name>.brep): fine 0.25, coarse 2."""
+        write_line(self.geo(f"{name}.brep"), (*p, 0), (*q, 0))
+        entry = {"name": name, "files": [f"geometry/{name}.brep"], "whole": [], "limit_to": []}
+        return dict(entry, fine=0.25, fine_distance=fine_distance, coarse=2.0, growth=3.0)
+
+    def refine_ends(self, name, p, q, fine_distance=5.0):
+        """refine_line's entry picking only the points p and q, reaching over the whole line between them."""
+        entry = self.refine_line(name, p, q, fine_distance)
+        entry["files"] = [f"geometry/{name}_{k}.brep" for k in range(2)]
+        for file, point in zip(entry["files"], (p, q)):
+            write_point(os.path.join(self.dir, file), (*point, 0))
+        return entry
+
+    @staticmethod
+    def nodes_on_ray(path, degrees, r0, r1):
+        """The nodes of the mesh on the ray at degrees from the origin with r0 <= r <= r1: in a ring of copies, the
+        seam that the cell (copy 0) shares with its neighbour there."""
+        xyz = read_mesh(path)[0]
+        u = np.array([math.cos(math.radians(degrees)), math.sin(math.radians(degrees))])
+        along = xyz[:, :2] @ u
+        off = np.abs(xyz[:, :2] @ np.array([-u[1], u[0]]))
+        return int(np.count_nonzero((off < 1e-6) & (along >= r0 - 1e-6) & (along <= r1 + 1e-6)))
+
+    def test_refine_on_either_seam_refines_both(self):  # gmsh copies one seam's mesh from the other
+        least = 10 / 0.25 * 0.8
+        # A picked line ends up the lower curve tag after the build's fragment, so _periodic makes it the master
+        # whichever seam it is on; the points at a seam's ends leave the curve tags alone and reach the copy too.
+        for how, refine in (("line", self.refine_line), ("ends", self.refine_ends)):
+            for degrees in (0, 30):
+                with self.subTest(pick=how, seam=degrees):
+                    entry = refine(f"{how}_{degrees}", _polar(10, degrees), _polar(20, degrees))
+                    group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, extra={"refine": [entry]})
+                    mesh = self.meshed([group])
+                    self.assertGreaterEqual(self.nodes_on_ray(mesh, 0, 10, 20), least)
+                    self.assertGreaterEqual(self.nodes_on_ray(mesh, 30, 10, 20), least)
+                    self.assertEqual(mesh_check(mesh, [10, 20])[1:], (0, 0))
+
+    def test_refine_in_a_cell_stays_in_the_cell(self):  # cell items never reach the free air around the copies
+        def air_elements(extra):  # a disc of air in the bore, 2 mm clear of the copies: within the pick's reach
+            write_disc(self.geo("air.brep"), 8)
+            group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, extra=extra)
+            return groups(self.meshed([group], free=[self.air_2d(size=2.0)]))[20][1]
+
+        without = air_elements(None)
+        seam = self.refine_line("seam", _polar(10, 0), _polar(20, 0))
+        self.assertEqual(air_elements({"refine": [seam]}), without)
 
     AIR = {"mat_id": 20, "name": "Air", "file": "geometry/air.brep", "size": 6.0}
 
@@ -1080,6 +1150,476 @@ class GroupJobTest(unittest.TestCase):
         self.assertAlmostEqual(shared_area(mesh, 20, 30), 2 * (8 * 8 + 8 * 3 + 3 * 8), delta=1e-6)  # the air wraps it
         self.assertEqual(faces_in_three(mesh), 0)
         self.assertEqual(mesh_check_3d(mesh, (), ())[1], 0)
+
+    NO_RULES = "meshgroups._free_rules = lambda built, dim: []"  # the free volumes graded from their surfaces only
+    SMALL_PLATE = (-2, -2, 1, 4, 4, 2)
+
+    @staticmethod
+    def free_refine(name, files=(), whole=(), limit_to=(), **sizes):
+        entry = {"name": name, "files": list(files), "whole": list(whole), "limit_to": list(limit_to)}
+        return dict(entry, fine=0.25, fine_distance=0.5, coarse=6.0, growth=20.0) | sizes
+
+    def plate_in_air(self, *refine):
+        """The ring of copies, the free plate SMALL_PLATE (MAT_ID 20, size 4) and the air BOX (MAT_ID 30, size 6)."""
+        write_boxes(self.geo("plate.brep"), self.SMALL_PLATE)
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": 4.0}
+        job = {"volumes": [plate], "surfaces": [], "sizes": [], "air": self.air_entry(self.BOX), "refine": list(refine)}
+        return [self.ring_3d(self.TWELVE, ())], [{"side": "fixed", "job": job}]
+
+    @staticmethod
+    def mean_edge(path, id_, distance, lo, hi):
+        """The mean element edge of physical group id_ over its elements whose centroid lies lo..hi from something:
+        distance(centroids) gives the distances."""
+        xyz, elements, dim = _physical_mesh(path, (id_,))
+        conn = elements[id_][4 if dim == 3 else 2]
+        centroid = xyz[conn].mean(axis=1)
+        d = distance(centroid)
+        chosen = conn[(d >= lo) & (d <= hi)]
+        pairs = [(a, b) for a in range(conn.shape[1]) for b in range(a + 1, conn.shape[1])]
+        return float(np.mean([np.linalg.norm(xyz[chosen[:, a]] - xyz[chosen[:, b]], axis=1) for a, b in pairs]))
+
+    def from_box(self, box):
+        low, high = np.array(box[:3], dtype=float), np.array(box[:3], dtype=float) + box[3:]
+        return lambda p: np.linalg.norm(np.maximum(np.maximum(low - p, p - high), 0), axis=1)
+
+    def test_free_refinement_grades_the_air_3d(self):  # the air grows from the plate at the growth asked, not faster
+        groups_, free = self.plate_in_air(self.free_refine("plate", whole=[20]))
+        graded = self.mean_edge(self.meshed(groups_, free=free, dim=3), 30, self.from_box(self.SMALL_PLATE), 2, 4)
+        self.assertEqual(faces_in_three(self.mesh_file()), 0)
+        ungraded = self.mean_edge(
+            self.meshed(groups_, free=free, dim=3, patch=self.NO_RULES), 30, self.from_box(self.SMALL_PLATE), 2, 4
+        )
+        self.assertLess(graded, 1.35)  # asked 0.97 at 3 mm; measured 1.15, and 1.60 without the rules
+        self.assertGreater(ungraded, 1.35)
+
+    def test_free_refinement_grades_the_air_2d(self):  # a pick on the air's own outer line, far from the copies
+        write_rects(self.geo("air.brep"), (-30, -30, 60, 60))
+        write_line(self.geo("bottom.brep"), (-30, -30, 0), (30, -30, 0))
+        refine = self.free_refine("bottom", files=["geometry/bottom.brep"], fine=0.5, coarse=4.0, growth=20.0)
+        free = self.air_2d(size=6.0)
+        free["job"]["refine"] = [refine]
+        group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON, size=6.0)
+        below = lambda p: np.where(np.abs(p[:, 0]) < 5, p[:, 1] + 30, np.inf)  # noqa: E731
+        graded = self.mean_edge(self.meshed([group], free=[free]), 20, below, 2, 4)
+        self.assertEqual(edges_in_three(self.mesh_file()), 0)
+        ungraded = self.mean_edge(self.meshed([group], free=[free], patch=self.NO_RULES), 20, below, 2, 4)
+        self.assertLess(graded, 1.2)  # asked 0.94 at 3 mm; measured 0.90, and 1.68 without the rules
+        self.assertGreater(ungraded, 1.2)
+
+    def test_free_refinement_limited_to_the_plate_leaves_the_air(self):
+        # The plate's faces are refined either way (the Restrict holds them), and the air grows from them; only the
+        # rule inside the air's own region is left out. Measured: 13458 elements both ways, 39684 with no Limit to.
+        def air_elements(limit_to, patch=""):
+            groups_, free = self.plate_in_air(self.free_refine("plate", whole=[20], limit_to=limit_to))
+            return groups(self.meshed(groups_, free=free, dim=3, patch=patch))[30][1]
+
+        limited = air_elements([20])
+        self.assertAlmostEqual(limited / air_elements([20], self.NO_RULES), 1, delta=0.05)
+        self.assertGreater(air_elements([]), 1.5 * limited)  # the rule reaches the air when nothing limits it
+
+    def test_free_pick_under_copies_meshes(self):  # the air's bottom face lies wholly on the copy: the carry empties it
+        write_face(self.geo("bottom.brep"), corners=[(-5, -5, 0), (25, -5, 0), (25, 5, 0), (-5, 5, 0)])
+        group = self.box_group((-5, -5, -5, 30, 10, 5), [ID], size=2.0)
+        free = self.air_3d(self.STRAND_BOX, size=3.0)
+        free["job"]["refine"] = [self.free_refine("bottom", files=["geometry/bottom.brep"], coarse=3.0)]
+        r = self.run_job([group], free=[free], dim=3)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(faces_in_three(self.mesh_file()), 0)
+
+    def test_free_pick_on_the_copies_refines_nothing_and_says_so(self):
+        # The air (a disc in the bore) meets the copies at r 10 only. The copies are meshed apart, so neither a whole
+        # pick on the air nor a pick on its line under the copies refines anything; the mesher says so.
+        write_disc(self.geo("air.brep"), 10)
+        write_arc(self.geo("inner.brep"), 10, 0, 30)
+
+        def air_elements(*refine):
+            free = self.air_2d(size=2.0)
+            free["job"]["refine"] = list(refine)
+            group = self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)
+            return groups(self.meshed([group], free=[free]))[20][1]
+
+        without = air_elements()
+        sizes = {"fine": 0.5, "coarse": 5.0, "growth": 10.0}
+        self.assertEqual(air_elements(self.free_refine("whole", whole=[20], **sizes)), without)
+        self.assertIn(
+            "NOTE: Refine Near whole: MAT_ID 20 has no face shared with another free object; the copies are meshed"
+            " apart",
+            self.result.stderr,
+        )
+        self.assertEqual(air_elements(self.free_refine("inner", files=["geometry/inner.brep"], **sizes)), without)
+        self.assertIn(
+            "NOTE: Refine Near inner: its picks lie under the copies of a Symmetric Group; it refines nothing there",
+            self.result.stderr,
+        )
+
+    @staticmethod
+    def skin(mat_id, depth=1.0):
+        """A job "skin" entry on MAT_ID mat_id: depth mm, 2 elements per depth, graded over 3 depths, no quads."""
+        return {"name": "Skin", "mat_ids": [mat_id], "depth": depth, "per_depth": 2, "layer": 3, "quads": False}
+
+    @staticmethod
+    def inside_box(box):  # the depth of points inside the box (x, y, dx, dy) or (x, y, z, dx, dy, dz) below its surface
+        n = len(box) // 2
+        low = np.array(box[:n], dtype=float)
+        high = low + box[n:]
+        return lambda p: np.min(np.minimum(p[:, :n] - low, high - p[:, :n]), axis=1)
+
+    def test_skin_on_a_cell_conductor_copies_2d(self):
+        # The cell: a conductor r 10..16 (skin on its real surface, the arc r 16) inside iron r 16..20, both size 1.
+        depth, size = 0.5, 1.0
+        write_sectors(self.geo("conductor.brep"), (10, 16, 0, 30))
+        write_sectors(self.geo("iron.brep"), (16, 20, 0, 30))
+        job = {
+            "bodies": [
+                {"mat_id": 1, "name": "Conductor", "file": "geometry/conductor.brep", "size": size},
+                {"mat_id": 2, "name": "Iron", "file": "geometry/iron.brep", "size": size},
+            ],
+            "sizes": [],
+            "skin": [self.skin(1, depth)],
+        }
+        group = {
+            "name": "Stator",
+            "side": "fixed",
+            "job": job,
+            "cells": [1, 2],
+            "transforms": self.TWELVE,
+            "parts": [{"mat_id": 4, "name": "Copper"}, {"mat_id": 7, "name": "Iron"}],
+            "rows": [{"cell": k, "file": None, "parts": [k - 1] * 12} for k in (1, 2)],
+        }
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, [10, 20])[1:], (0, 0))
+
+        def in_copy(k):  # the depth below the arc r 16 of the conductor of copy k, inf outside that copy
+            def distance(p):
+                angle = np.degrees(np.arctan2(p[:, 1], p[:, 0])) % 360
+                return np.where((angle > 30 * k) & (angle < 30 * (k + 1)), 16 - np.hypot(p[:, 0], p[:, 1]), np.inf)
+
+            return distance
+
+        bands = [self.mean_edge(mesh, 4, in_copy(k), 0, depth) for k in range(12)]
+        self.assertLess(bands[0], 0.6 * size)  # measured 0.24
+        for k, band in enumerate(bands):
+            self.assertAlmostEqual(band, bands[0], places=6, msg=f"copy {k}")
+        # the seam at 0 degrees: the conductor's edges on it, farther than 3 depths from the arc r 16
+        xyz, elements, _ = _physical_mesh(mesh, (4,))
+        tri = elements[4][2]
+        on_seam = (np.abs(xyz[:, 1]) < 1e-6) & (xyz[:, 0] > 0) & (xyz[:, 0] <= 16 - 3 * depth + 1e-6)
+        edges = [tri[:, [a, b]] for a, b in ((0, 1), (1, 2), (0, 2))]
+        seam = np.concatenate([e[on_seam[e].all(axis=1)] for e in edges])
+        self.assertGreater(len(seam), 0)
+        seam_edge = float(np.linalg.norm(xyz[seam[:, 0]] - xyz[seam[:, 1]], axis=1).mean())
+        self.assertGreater(seam_edge, 0.8 * size)  # measured 0.88
+
+    def test_quad_layers_on_a_cell_wire_copy(self):
+        # The cell: iron r 10..30 over 30 degrees (size 2) holding a round wire r 3 at radius 20 (size 1.5), its skin
+        # 0.5 deep with quad layers
+        centre = (20 * math.cos(math.radians(15)), 20 * math.sin(math.radians(15)))
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            for name, cut in (("wire", False), ("iron", True)):
+                occ = gmsh.model.occ
+                disk = [(2, occ.addDisk(*centre, 0, 3, 3))]
+                if cut:
+                    sector = add_sector(10, 30, 0, 30)
+                    occ.cut(sector, disk)
+                occ.synchronize()
+                gmsh.write(self.geo(f"{name}.brep"))
+                gmsh.clear()
+        finally:
+            gmsh.finalize()
+        skin = dict(self.skin(1, 0.5), quads=True)
+        job = {
+            "bodies": [
+                {"mat_id": 1, "name": "Wire", "file": "geometry/wire.brep", "size": 1.5},
+                {"mat_id": 2, "name": "Iron", "file": "geometry/iron.brep", "size": 2.0},
+            ],
+            "sizes": [],
+            "skin": [skin],
+        }
+        group = {
+            "name": "Stator",
+            "side": "fixed",
+            "job": job,
+            "cells": [1, 2],
+            "transforms": self.TWELVE,
+            "parts": [{"mat_id": 4, "name": "Copper"}, {"mat_id": 7, "name": "Iron"}],
+            "rows": [{"cell": k, "file": None, "parts": [k - 1] * 12} for k in (1, 2)],
+        }
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, [10, 30])[1:], (0, 0))
+        xyz, found = read_mesh(mesh)
+        centroids = xyz[found[3]].mean(axis=1)  # gmsh type 3: the 4-node quads
+        copy = (np.degrees(np.arctan2(centroids[:, 1], centroids[:, 0])) % 360 // 30).astype(int)
+        per_copy = np.bincount(copy, minlength=12)
+        self.assertGreater(per_copy[0], 50)
+        self.assertEqual(list(per_copy), [per_copy[0]] * 12)
+
+    def two_cell_group(self, conductor, iron, transforms, skin, dim=2, size=1.0, iron_size=1.0):
+        """A group of two cells, the conductor (MAT_ID 1, part Copper 4) and the iron (MAT_ID 2, part Iron 7), from
+        the BREPs geometry/<conductor> and geometry/<iron>; skin: the job's "skin" list."""
+        key = "bodies" if dim == 2 else "volumes"
+        job = {
+            key: [
+                {"mat_id": 1, "name": "Conductor", "file": f"geometry/{conductor}", "size": size},
+                {"mat_id": 2, "name": "Iron", "file": f"geometry/{iron}", "size": iron_size},
+            ],
+            "sizes": [],
+            "skin": skin,
+        }
+        if dim == 3:
+            job["surfaces"] = []
+        return {
+            "name": "Stator",
+            "side": "fixed",
+            "job": job,
+            "cells": [1, 2],
+            "transforms": transforms,
+            "parts": [{"mat_id": 4, "name": "Copper"}, {"mat_id": 7, "name": "Iron"}],
+            "rows": [{"cell": k, "file": None, "parts": [k - 1] * len(transforms)} for k in (1, 2)],
+        }
+
+    def test_skin_on_a_cell_conductor_facing_the_air_2d(self):
+        # The cell: iron r 10..16 under a conductor r 16..20 (both size 1). The conductor's arc r 16 is its real
+        # surface in the cell job; its arc r 20 faces the free side (the air around the copies), listed in "faces".
+        depth, size = 0.5, 1.0
+        write_sectors(self.geo("conductor.brep"), (16, 20, 0, 30))
+        write_sectors(self.geo("iron.brep"), (10, 16, 0, 30))
+        write_arc(self.geo("free.brep"), 20, 0, 30)
+        skin = dict(self.skin(1, depth), faces=[{"mat_id": 1, "file": "geometry/free.brep"}])
+        mesh = self.meshed([self.two_cell_group("conductor.brep", "iron.brep", self.TWELVE, [skin])])
+        self.assertEqual(mesh_check(mesh, [10, 20])[1:], (0, 0))
+
+        def in_copy(k):  # the depth below the arc r 20 of the conductor of copy k, inf outside that copy
+            def distance(p):
+                angle = np.degrees(np.arctan2(p[:, 1], p[:, 0])) % 360
+                return np.where((angle > 30 * k) & (angle < 30 * (k + 1)), 20 - np.hypot(p[:, 0], p[:, 1]), np.inf)
+
+            return distance
+
+        bands = [self.mean_edge(mesh, 4, in_copy(k), 0, depth) for k in range(12)]
+        self.assertLess(bands[0], 0.6 * size)  # measured 0.25; 0.90 before the free faces were picked
+        for k, band in enumerate(bands):
+            self.assertAlmostEqual(band, bands[0], places=6, msg=f"copy {k}")
+
+    def test_refine_near_whole_cell_with_only_free_faces_has_no_note(self):
+        # The cell is a conductor r 16..20 alone: in its cell job it shares no face with another region, and its whole
+        # pick refines its arc r 20 toward the free side (a file, as jobwriter writes it), so the mesher says nothing.
+        write_arc(self.geo("free.brep"), 20, 0, 30)
+        refine = self.free_refine("bar", files=["geometry/free.brep"], whole=[1], limit_to=[1], coarse=2.0)
+        group = self.sector_group((16, 20, 0, 30), self.TWELVE, self.IRON, extra={"refine": [refine]})
+        self.meshed([group])
+        self.assertNotIn("has no face shared", self.result.stderr)
+        group["job"]["refine"] = [self.free_refine("bar", whole=[1], limit_to=[1], coarse=2.0)]
+        self.meshed([group])
+        self.assertIn("NOTE: Refine Near bar: MAT_ID 1 has no face shared with another region", self.result.stderr)
+
+    def test_quad_layers_on_a_cell_conductor_facing_the_air_2d(self):
+        # The cell: iron r 10..20 over 30 degrees (size 2) and a round wire r 3 centred on its arc r 20 (size 1.5):
+        # half of the wire's circle lies against the iron, the other half faces the free side ("faces"). Together
+        # they are one smooth circle, so the quad layers go all round, the free half too.
+        centre = (20 * math.cos(math.radians(15)), 20 * math.sin(math.radians(15)))
+        half = math.acos(-9 / 120)  # the wire's circle crosses r 20 this far either side of its outward direction
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            occ = gmsh.model.occ
+            for name in ("wire", "iron", "free"):
+                if name == "free":
+                    a = math.radians(15)
+                    occ.addCircle(*centre, 0, 3, angle1=a - half, angle2=a + half)
+                else:
+                    disk = [(2, occ.addDisk(*centre, 0, 3, 3))]
+                    if name == "iron":
+                        occ.cut(add_sector(10, 20, 0, 30), disk)
+                occ.synchronize()
+                gmsh.write(self.geo(f"{name}.brep"))
+                gmsh.clear()
+        finally:
+            gmsh.finalize()
+        skin = dict(self.skin(1, 0.5), quads=True, faces=[{"mat_id": 1, "file": "geometry/free.brep"}])
+        group = self.two_cell_group("wire.brep", "iron.brep", self.TWELVE, [skin], size=1.5, iron_size=2.0)
+        mesh = self.meshed([group])
+        self.assertEqual(mesh_check(mesh, [10, 20])[1], 0)  # the free half of each wire is open: loose edges there
+        self.assertEqual(edges_in_three(mesh), 0)
+        xyz, found = read_mesh(mesh)
+        centroids = xyz[found[3]].mean(axis=1)  # gmsh type 3: the 4-node quads
+        outside = centroids[np.hypot(centroids[:, 0], centroids[:, 1]) > 20]  # along the free half
+        copy = (np.degrees(np.arctan2(outside[:, 1], outside[:, 0])) % 360 // 30).astype(int)
+        per_copy = np.bincount(copy, minlength=12)
+        self.assertGreater(per_copy[0], 100)  # measured 160; 6 before the free faces were picked
+        self.assertEqual(list(per_copy), [per_copy[0]] * 12)
+
+    def test_skin_on_a_cell_conductor_facing_the_air_3d(self):
+        # The cell: an iron block z 0..5 under a conductor block z 5..8 (both size 1), copied once 30 mm along x. The
+        # conductor's top face (z 8) faces the free side ("faces"); its bottom is its real surface in the cell job.
+        depth, size = 0.5, 1.0
+        write_boxes(self.geo("conductor.brep"), (0, 0, 5, 4, 4, 3))
+        write_boxes(self.geo("iron.brep"), (0, 0, 0, 4, 4, 5))
+        write_face(self.geo("free.brep"), corners=[(0, 0, 8), (4, 0, 8), (4, 4, 8), (0, 4, 8)])
+        skin = dict(self.skin(1, depth), faces=[{"mat_id": 1, "file": "geometry/free.brep"}])
+        group = self.two_cell_group("conductor.brep", "iron.brep", [ID, translation(30)], [skin], dim=3)
+        mesh = self.meshed([group], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+
+        def in_copy(k):  # the depth below the top face of the conductor of copy k, inf outside that copy
+            return lambda p: np.where(np.abs(p[:, 0] - 2 - 30 * k) < 2, 8 - p[:, 2], np.inf)
+
+        bands = [self.mean_edge(mesh, 4, in_copy(k), 0, depth) for k in range(2)]
+        self.assertLess(bands[0], 0.6 * size)  # measured 0.32; 1.02 before the free faces were picked
+        self.assertAlmostEqual(bands[1], bands[0], places=6)
+
+    SKIN_PLATE = (-6, -6, -4, 12, 12, 8)  # in the bore of the ring (radius 10), inside the air BOX
+
+    def test_skin_on_a_free_conductor_grades_its_volume_3d(self):
+        depth, size = 1.0, 2.0
+        write_boxes(self.geo("plate.brep"), self.SKIN_PLATE)
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": size}
+        job = {"volumes": [plate], "surfaces": [], "sizes": [], "air": self.air_entry(self.BOX)}
+        job["skin"] = [self.skin(20, depth)]
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[{"side": "fixed", "job": job}], dim=3)
+        self.assertEqual(faces_in_three(mesh), 0)
+        inside = self.inside_box(self.SKIN_PLATE)
+        self.assertLess(self.mean_edge(mesh, 20, inside, 0, depth), 0.75 * depth)  # measured 0.65
+        # measured 2.03; 0.67 when the free region took its size from its fine skin (Mesh.MeshSizeExtendFromBoundary)
+        self.assertGreater(self.mean_edge(mesh, 20, inside, 3 * depth, np.inf), 0.8 * size)
+
+    def test_skin_on_a_free_conductor_2d(self):
+        depth, size = 1.0, 2.0
+        plate_rect = (-6, -6, 12, 12)
+        write_rects(self.geo("plate.brep"), plate_rect)
+        write_rects(self.geo("air_region.brep"), (-30, -30, 60, 60))
+        plate = {"mat_id": 21, "name": "Plate", "file": "geometry/plate.brep", "size": size}
+        air = {"name": "Air", "mat_id": 30, "file": "geometry/air_region.brep", "size": 6.0}
+        free = {"side": "fixed", "job": {"bodies": [plate], "sizes": [], "air": air, "skin": [self.skin(21, depth)]}}
+        mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)], free=[free])
+        self.assertEqual(edges_in_three(mesh), 0)
+        inside = self.inside_box(plate_rect)
+        self.assertLess(self.mean_edge(mesh, 21, inside, 0, depth), 0.75 * depth)  # measured 0.50
+        # measured 1.94; 0.50 when the free region took its size from its fine skin
+        self.assertGreater(self.mean_edge(mesh, 21, inside, 3 * depth, np.inf), 0.8 * size)
+
+    @staticmethod
+    def air_grading(mat_id, far=12.0, growth=10.0):
+        return {"name": "AirGrading", "mat_ids": [mat_id], "growth": growth, "far": far}
+
+    AIR_BANDS = ((0, 2), (5, 10))  # mm from the copies: beside them, and past the air's size
+
+    def ring_in_air_region(self, *grading, box=BOX, size=6.0):
+        """The ring of copies (size 3) in the air BOX (MAT_ID 30, size size), no free body; grading: its Air Grading."""
+        job = {"volumes": [], "surfaces": [], "sizes": [], "air": self.air_entry(box, size=size)}
+        if grading:
+            job["air_grading"] = list(grading)
+        return [self.ring_3d(self.TWELVE, ())], [{"side": "fixed", "job": job}]
+
+    @staticmethod
+    def from_ring_3d(p):  # the distance from the solid ring of copies, r 10..20, z 0..5
+        r = np.hypot(p[:, 0], p[:, 1])
+        return np.hypot(np.maximum(np.maximum(10 - r, r - 20), 0), np.maximum(np.maximum(-p[:, 2], p[:, 2] - 5), 0))
+
+    @staticmethod
+    def from_ring_2d(p):  # the distance from the ring of copies, r 10..20
+        r = np.hypot(p[:, 0], p[:, 1])
+        return np.maximum(np.maximum(10 - r, r - 20), 0)
+
+    def test_air_grading_grades_the_air_around_copies_3d(self):  # the air grows from the copies' faces to the far size
+        def air(*grading):
+            groups_, free = self.ring_in_air_region(*grading)
+            mesh = self.meshed(groups_, free=free, dim=3)
+            return groups(mesh)[30][1], [
+                self.mean_edge(mesh, 30, self.from_ring_3d, lo, hi) for lo, hi in self.AIR_BANDS
+            ]
+
+        today, _ = air()
+        graded, (near, out) = air(self.air_grading(30))
+        self.assertEqual(faces_in_three(self.mesh_file()), 0)
+        # measured 2374 against 3743; 3044 when only the box's faces get the far size (mesh_region not graded)
+        self.assertLess(graded, 0.72 * today)
+        self.assertLess(near, 0.6 * 12)  # within 2 mm: measured 4.22, today 3.71
+        self.assertGreater(out, 7.5)  # 5 to 10 mm, past the air's size: measured 8.43, today 6.54 (capped at 6)
+
+    def test_air_grading_grades_the_air_around_copies_2d(self):
+        def air(*grading):
+            write_rects(self.geo("air.brep"), (-30, -30, 60, 60))
+            free = self.air_2d(size=6.0)
+            free["job"]["air_grading"] = list(grading)
+            mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)], free=[free])
+            return groups(mesh)[20][1], [
+                self.mean_edge(mesh, 20, self.from_ring_2d, lo, hi) for lo, hi in self.AIR_BANDS
+            ]
+
+        today, _ = air()
+        graded, (near, out) = air(self.air_grading(20))
+        self.assertEqual(edges_in_three(self.mesh_file()), 0)
+        self.assertLess(graded, today)  # measured 412 against 794
+        self.assertLess(near, 0.6 * 12)  # within 2 mm: measured 2.21, today 1.74
+        self.assertGreater(out, 4.5)  # 5 to 10 mm: measured 5.49, today 3.39
+
+    FROZEN_LINES_OFF = "meshgroups._grow_from_frozen = meshgroups._grow_from_ends = lambda gradings, lines: None"
+
+    def test_air_face_beside_a_copy_grades_3d(self):  # the copies stand on the air's bottom face, z = 0
+        # Triangles within 2 mm of the copies' edges (3 mm) are small either way: 2.91 graded, 3.59 without the frozen
+        # lines in the Extend. The face grows from them only with the lines: 5 to 10 mm away it is the band to watch.
+        def bottom_edge(patch=""):
+            grading = self.air_grading(30, far=12.0, growth=20.0)
+            groups_, free = self.ring_in_air_region(grading, box=(-30, -30, 0, 60, 60, 10), size=12.0)
+            xyz, elements, _ = _physical_mesh(self.meshed(groups_, free=free, dim=3, patch=patch), (30,))
+            tri = meshfrozen.boundary(xyz, [elements[30]], 3).tri
+            tri = tri[np.abs(xyz[tri][:, :, 2]).max(axis=1) < 1e-6]  # the air's own triangles on z = 0
+            r = np.hypot(*xyz[tri].mean(axis=1)[:, :2].T)
+            d = np.minimum(np.abs(r - 10), np.abs(r - 20))  # from the copies' frozen edges, r 10 and 20
+            near = tri[(d >= 5) & (d <= 10)]
+            pairs = [(0, 1), (1, 2), (0, 2)]
+            return float(np.mean([np.linalg.norm(xyz[near[:, a]] - xyz[near[:, b]], axis=1) for a, b in pairs]))
+
+        self.assertLess(bottom_edge(), 0.6 * 12)  # asked 6.4 at 7.5 mm; measured 5.82
+        self.assertGreater(bottom_edge(self.FROZEN_LINES_OFF), 0.6 * 12)  # measured 10.36
+
+    def test_far_size_reaches_the_faces_of_a_rebuilt_air_3d(self):  # the copies stand on the bottom face, z = 0
+        groups_, free = self.ring_in_air_region(self.air_grading(30), box=(-30, -30, 0, 60, 60, 30), size=6.0)
+        xyz, elements, _ = _physical_mesh(self.meshed(groups_, free=free, dim=3), (30,))
+        tri = meshfrozen.boundary(xyz, [elements[30]], 3).tri
+        top = tri[np.abs(xyz[tri][:, :, 2] - 30).max(axis=1) < 1e-6]  # 25 mm above the copies, past the growth
+        pairs = [(0, 1), (1, 2), (0, 2)]
+        edge = float(np.mean([np.linalg.norm(xyz[top[:, a]] - xyz[top[:, b]], axis=1) for a, b in pairs]))
+        self.assertGreater(edge, 6 * 1.3)  # far 12 against the air's 6: measured 11.17, 5.81 before the fix
+
+    def test_far_size_reaches_a_free_body_used_as_air_3d(
+        self,
+    ):  # the plate has no air around it, the copies don't touch it
+        write_boxes(self.geo("plate.brep"), (-6, -6, 0, 12, 12, 12))
+        plate = {"mat_id": 20, "name": "Plate", "file": "geometry/plate.brep", "size": 2.0}
+        job = {"volumes": [plate], "surfaces": [], "sizes": [], "air_grading": [self.air_grading(20, far=12.0)]}
+        mesh = self.meshed([self.ring_3d(self.TWELVE, ())], free=[{"side": "fixed", "job": job}], dim=3)
+        xyz, elements, _ = _physical_mesh(mesh, (20,))
+        tri = meshfrozen.boundary(xyz, [elements[20]], 3).tri
+        side = tri[np.abs(xyz[tri][:, :, 0] - 6).max(axis=1) < 1e-6]  # the outer face x = 6
+        pairs = [(0, 1), (1, 2), (0, 2)]
+        edge = float(np.mean([np.linalg.norm(xyz[side[:, a]] - xyz[side[:, b]], axis=1) for a, b in pairs]))
+        self.assertGreater(edge, 2 * 1.5)  # far 12 against the plate's 2: capped at the plate's own size before the fix
+
+    def test_air_line_beside_a_copy_grades_2d(self):  # the copies stand on the air's bottom line, y = 0, from below
+        def first_edges(patch=""):  # the air's edges on y = 0 that start at a copy's corner
+            group = self.rect_group((5, -6, 4, 6), [translation(20 * k) for k in range(3)])
+            write_rects(self.geo("air.brep"), (0, 0, 60, 20))
+            free = self.air_2d(size=12.0)
+            free["job"]["air_grading"] = [self.air_grading(20)]
+            xyz, elements, _ = _physical_mesh(self.meshed([group], free=[free], patch=patch), (20,))
+            edge = meshfrozen.boundary(xyz, [elements[20]], 2).edge
+            x = xyz[edge[np.abs(xyz[edge][:, :, 1]).max(axis=1) < 1e-6]][:, :, 0]
+            beside = np.all(np.abs(x.mean(axis=1)[:, None] - np.array([7, 27, 47])) > 2, axis=1)  # not on x 5..9 ...
+            corners = np.any(np.abs(x[:, :, None] - np.array([5, 9, 25, 29, 45, 49])) < 1e-6, axis=(1, 2))
+            return float(np.abs(x[beside & corners, 1] - x[beside & corners, 0]).mean())
+
+        self.assertLess(first_edges(), 0.6 * 12)  # measured 1.13 (the copies' edges are 1 mm)
+        self.assertGreater(first_edges(self.FROZEN_LINES_OFF), 0.6 * 12)  # measured 8.0
+
+    def test_no_air_grading_free_job_unchanged(self):  # the element counts of before the Air Grading
+        write_rects(self.geo("air.brep"), (-30, -30, 60, 60))
+        mesh = self.meshed([self.sector_group((10, 20, 0, 30), self.TWELVE, self.IRON)], free=[self.air_2d()])
+        self.assertEqual(groups(mesh)[20][1], 794)
+        groups_, free = self.plate_in_air()
+        self.assertEqual(groups(self.meshed(groups_, free=free, dim=3))[30][1], 3745)
 
     def test_air_region_alone_in_the_free_job_2d(self):  # a free job of no body, only the air
         write_rects(self.geo("air_region.brep"), (-25, -25, 50, 50))
@@ -1744,6 +2284,71 @@ class GroupJobTest(unittest.TestCase):
         self.assertEqual(sorted(slide_nodes(fixed, 20)), sorted(slide_nodes(rotor, 20)))
         self.assertIn("Air", {v[0] for v in groups(fixed).values()})
         self.assertEqual(faces_in_three(fixed), 0)
+
+
+class RefinementFieldsTest(unittest.TestCase):
+    """The refinement fields survive the free model's face replacement (in-process gmsh)."""
+
+    def setUp(self):
+        gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.occ.addBox(0, 0, 0, 10, 10, 10)
+        gmsh.model.occ.synchronize()
+        meshcommon.apply_size_fields({})  # the background Min field the refinements join
+
+    def tearDown(self):
+        gmsh.finalize()
+
+    @staticmethod
+    def entry(**more):
+        return dict(
+            {"name": "R", "whole": [], "limit_to": [], "fine": 1.0, "coarse": 5.0, "fine_distance": 1.0, "growth": 2.0},
+            **more,
+        )
+
+    def test_carry_retargets_refinement_fields(self):
+        field = gmsh.model.mesh.field
+        dist = field.add("Distance")
+        field.setNumbers(dist, "SurfacesList", [1])
+        restrict = field.add("Restrict")
+        field.setNumbers(restrict, "VolumesList", [1])
+        field.setNumbers(restrict, "SurfacesList", [1])
+        meshgroups._carry_size_picks({1: [7, 8]}, 2)
+        self.assertEqual([int(t) for t in field.getNumbers(dist, "SurfacesList")], [7, 8])
+        faces = [int(t) for t in field.getNumbers(restrict, "SurfacesList")]
+        self.assertIn(7, faces)
+        self.assertIn(8, faces)
+        self.assertNotIn(1, faces)
+
+    def test_restrict_keeps_faces_when_volumes_go(self):
+        field = gmsh.model.mesh.field
+        meshcommon.apply_refinements([(self.entry(limit_to=[5]), {0: [1]})], {5: [1]}, 3)
+        restrict = next(f for f in field.list() if field.getType(f) == "Restrict")
+        faces = sorted(int(t) for t in field.getNumbers(restrict, "SurfacesList"))
+        self.assertEqual(faces, [1, 2, 3, 4, 5, 6])
+        meshgroups._carry_size_picks({1: []}, 3)
+        self.assertEqual(list(field.getNumbers(restrict, "VolumesList")), [])
+        self.assertEqual(sorted(int(t) for t in field.getNumbers(restrict, "SurfacesList")), faces)
+
+    def test_restrict_keeps_the_face_between_two_limit_bodies(self):
+        occ = gmsh.model.occ
+        occ.addBox(10, 0, 0, 10, 10, 10)
+        occ.fragment([(3, 1)], [(3, 2)])
+        occ.synchronize()
+        (shared,) = set(gmsh.model.getAdjacencies(3, 1)[1]) & set(gmsh.model.getAdjacencies(3, 2)[1])
+        meshcommon.apply_refinements([(self.entry(limit_to=[5, 6]), {0: [1]})], {5: [1], 6: [2]}, 3)
+        field = gmsh.model.mesh.field
+        restrict = next(f for f in field.list() if field.getType(f) == "Restrict")
+        faces = [int(t) for t in field.getNumbers(restrict, "SurfacesList")]
+        self.assertIn(int(shared), faces)
+        self.assertEqual(len(faces), len(set(faces)))
+        self.assertEqual(len(faces), 11)
+
+    def test_apply_refinements_returns_its_distance_fields(self):
+        items = [(self.entry(name="A"), {2: [1]}), (self.entry(name="B"), {2: [2]})]
+        made = meshcommon.apply_refinements(items, {}, 3)
+        self.assertEqual([e["name"] for e, _ in made], ["A", "B"])
+        self.assertTrue(all(gmsh.model.mesh.field.getType(f) == "Distance" for _, f in made))
 
 
 if __name__ == "__main__":
